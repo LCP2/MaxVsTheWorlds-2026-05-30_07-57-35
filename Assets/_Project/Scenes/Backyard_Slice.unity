@@ -244,9 +244,10 @@ GameObject:
   - component: {fileID: 435318707}
   - component: {fileID: 435318706}
   - component: {fileID: 435318705}
-  - component: {fileID: 435318704}
+  - component: {fileID: 435318709}
+  - component: {fileID: 435318708}
   m_Layer: 0
-  m_Name: Subject (Placeholder Max)
+  m_Name: Max (Greybox)
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -267,20 +268,6 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &435318704
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 435318702}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 4ccf5234f163894418b26cace214048f, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.CameraRig.PlaceholderSubjectMover
-  speed: 1.2
-  extents: {x: 6, y: 4}
 --- !u!23 &435318705
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -361,6 +348,50 @@ MeshFilter:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 435318702}
   m_Mesh: {fileID: 10208, guid: 0000000000000000e000000000000000, type: 0}
+--- !u!114 &435318708
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 435318702}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0584fcc500d009b49860ee866a0ea654, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Player.PlayerController
+  moveSpeed: 6
+  rotationSpeed: 720
+  gravity: 20
+  dashSpeed: 18
+  dashDuration: 0.18
+  dashInvulnerable: 0.18
+  dashCooldown: 0.6
+--- !u!143 &435318709
+CharacterController:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 435318702}
+  m_Material: {fileID: 0}
+  m_IncludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_ExcludeLayers:
+    serializedVersion: 2
+    m_Bits: 0
+  m_LayerOverridePriority: 0
+  m_ProvidesContacts: 0
+  m_Enabled: 1
+  serializedVersion: 3
+  m_Height: 2
+  m_Radius: 0.5
+  m_SlopeLimit: 45
+  m_StepOffset: 0.3
+  m_SkinWidth: 0.08
+  m_MinMoveDistance: 0.001
+  m_Center: {x: 0, y: 0, z: 0}
 --- !u!1 &500010018
 GameObject:
   m_ObjectHideFlags: 0
