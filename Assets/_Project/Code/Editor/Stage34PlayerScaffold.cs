@@ -50,6 +50,21 @@ namespace MaxWorlds.Editor
                 subject.AddComponent<PlayerController>();
             }
 
+            // Forward "nose" marker so facing/aim is visible on the symmetric greybox.
+            if (subject.transform.Find("Nose") == null)
+            {
+                var nose = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                nose.name = "Nose";
+                var noseCol = nose.GetComponent<Collider>();
+                if (noseCol != null)
+                {
+                    Object.DestroyImmediate(noseCol); // don't let it fight the CharacterController
+                }
+                nose.transform.SetParent(subject.transform, worldPositionStays: false);
+                nose.transform.localPosition = new Vector3(0f, 0.4f, 0.55f);
+                nose.transform.localScale = new Vector3(0.25f, 0.25f, 0.6f);
+            }
+
             EditorUtility.SetDirty(subject);
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene);
