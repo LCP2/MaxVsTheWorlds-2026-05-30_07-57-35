@@ -169,3 +169,9 @@ Packages/packages-lock.json linguist-generated
 
 # Exceptions for .asset files such as lightning pre-baking
 LightingData.asset     binary
+
+# Shell/batch scripts — enforce platform-correct line endings
+# (cmd.exe requires CRLF; LF-only .bat mis-parses and fails to launch)
+*.bat text eol=crlf
+*.sh  text eol=lf
+*.ps1 text eol=crlf
