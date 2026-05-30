@@ -54,11 +54,13 @@ If it fails on a transient/flake, retry once. If it fails structurally, stop and
 
 ## Etiquette
 
+- **Timestamp every response.** Begin each chat reply with a wall-clock prefix in the format `[YYYY-MM-DD HH:MM AEST] ` read from the OS clock. Example: `[2026-05-30 14:23 AEST] Starting on YT-34.` Non-negotiable — Lee uses it to track when work happened across long async sessions.
 - Never push to `main`. PRs only. Squash-merge after review.
 - Commit messages prefixed with the ticket key: `YT-XX: imperative summary`.
 - Jira comments: concise. What was done, how to verify, what's next.
 - Don't author docs/READMEs unless the ticket asks.
 - If a spec is ambiguous in a way that affects implementation: stop, `needs-spec`, ask.
+- Before claiming any verification PASS, **run the verify command and read its real exit code**. Don't infer success from absence of errors.
 
 ## Project-specific notes
 
