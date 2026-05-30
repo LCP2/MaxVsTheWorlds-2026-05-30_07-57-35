@@ -1,0 +1,19 @@
+{
+    "name": "MaxWorlds.Editor",
+    "rootNamespace": "MaxWorlds.Editor",
+    "references": [
+        "MaxWorlds.Core",
+        "MaxWorlds.Gameplay"
+    ],
+    "includePlatforms": [
+        "Editor"
+    ],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": true,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
