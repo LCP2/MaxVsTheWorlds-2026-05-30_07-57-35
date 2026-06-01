@@ -3,7 +3,8 @@
     "rootNamespace": "MaxWorlds.Editor",
     "references": [
         "MaxWorlds.Core",
-        "MaxWorlds.Gameplay"
+        "MaxWorlds.Gameplay",
+        "Unity.Cinemachine"
     ],
     "includePlatforms": [
         "Editor"
