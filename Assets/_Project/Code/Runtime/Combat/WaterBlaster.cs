@@ -38,9 +38,23 @@ namespace MaxWorlds.Combat
 
         public EnergyPool Energy { get; private set; }
 
-        /// <summary>Fire gate. When no <see cref="aimSource"/> is set, drive this directly.
-        /// Defaults true so the gadget is verifiable in isolation.</summary>
-        public bool IsFiring { get; set; } = true;
+        /// <summary>Whether the trigger is currently held. Driven by <see cref="aimSource"/>'s
+        /// aim each frame when bound. Defaults <c>false</c> — an unbound/idle blaster never
+        /// auto-fires (YT-36 regression: it must NOT discharge with no aim input).</summary>
+        public bool IsFiring { get; private set; }
+
+        /// <summary>
+        /// Pure fire-gate decision (unit-testable): the stream emits only while the
+        /// trigger is actively held AND there is enough energy for a tick. With no
+        /// aim held (<paramref name="firingHeld"/> false) this is always false — no
+        /// emission, no damage tick, no VFX.
+        /// </summary>
+        public static bool ShouldEmit(bool firingHeld, bool hasEnergy) => firingHeld && hasEnergy;
+
+        /// <summary>Drive the trigger directly when there is no <see cref="aimSource"/>
+        /// (isolated testing / scripted fire). Ignored on frames where a bound aim source
+        /// overrides it in Update.</summary>
+        public void SetFiring(bool firing) => IsFiring = firing;
 
         private float _tickTimer;
         private ParticleSystem _stream;
@@ -58,7 +72,9 @@ namespace MaxWorlds.Combat
             float dt = Time.deltaTime;
             Energy.Tick(dt);
 
-            // If bound to a player, fire while aiming and orient along their facing.
+            // Trigger is held only while the player is actively aiming. When bound,
+            // orient along their facing too. If unbound, IsFiring stays false (no
+            // auto-discharge) unless a test/other system drives it via SetFiring.
             if (aimSource != null)
             {
                 IsFiring = aimSource.IsAiming;
@@ -69,7 +85,7 @@ namespace MaxWorlds.Combat
                 }
             }
 
-            bool emitting = IsFiring && Energy.CanSpend(energyPerTick);
+            bool emitting = ShouldEmit(IsFiring, Energy.CanSpend(energyPerTick));
             SetStreamEmitting(emitting);
             if (!emitting)
             {
