@@ -43,6 +43,12 @@ namespace MaxWorlds.Player
         /// <summary>True during the dash i-frame window — combat (YT-35/36) reads this to ignore contact hits.</summary>
         public bool IsInvulnerable => _iframeTimer > 0f;
 
+        /// <summary>True while the aim stick/keys are engaged — the gadget (YT-35) auto-fires while this holds.</summary>
+        public bool IsAiming { get; private set; }
+
+        /// <summary>Current planar facing (unit vector). The gadget fires along this.</summary>
+        public Vector3 Facing => _facing;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -96,7 +102,8 @@ namespace MaxWorlds.Player
 
             // Facing: aim takes priority, falling back to movement direction.
             Vector3 aimDir = new Vector3(aimInput.x, 0f, aimInput.y);
-            if (aimDir.sqrMagnitude > 0.04f)
+            IsAiming = aimDir.sqrMagnitude > 0.04f;
+            if (IsAiming)
             {
                 _facing = aimDir.normalized;
             }
