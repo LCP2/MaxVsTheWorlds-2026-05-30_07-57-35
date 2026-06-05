@@ -19,6 +19,12 @@ namespace MaxWorlds.Player
         [SerializeField] private float rotationSpeed = 720f; // deg/s
         [SerializeField] private float gravity = 20f;
 
+        [Header("Aim")]
+        [Tooltip("Aim-stick magnitude required to count as 'aiming' (gates gadget fire). " +
+                 "High enough that resting-stick drift never trips it.")]
+        [Range(0.2f, 0.9f)]
+        [SerializeField] private float aimActivateThreshold = 0.5f;
+
         [Header("Dash")]
         [SerializeField] private float dashSpeed = 18f;
         [SerializeField] private float dashDuration = 0.18f;
@@ -104,8 +110,10 @@ namespace MaxWorlds.Player
             }
 
             // Facing: aim takes priority, falling back to movement direction.
+            // Require a deliberate push (magnitude > aimActivate) so resting-stick
+            // drift never counts as aiming — this is what gates the gadget's fire.
             Vector3 aimDir = new Vector3(aimInput.x, 0f, aimInput.y);
-            IsAiming = aimDir.sqrMagnitude > 0.04f;
+            IsAiming = aimDir.sqrMagnitude > aimActivateThreshold * aimActivateThreshold;
             if (IsAiming)
             {
                 _facing = aimDir.normalized;

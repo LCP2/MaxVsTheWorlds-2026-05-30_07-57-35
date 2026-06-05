@@ -24,9 +24,13 @@ namespace MaxWorlds.Combat
 
         [Header("Energy")]
         [SerializeField] private float maxEnergy = 100f;
-        [SerializeField] private float energyPerTick = 2.5f;
-        [SerializeField] private float regenPerSec = 25f;
-        [SerializeField] private float regenDelay = 0.6f;
+        [SerializeField] private float energyPerTick = 1.5f;
+        [SerializeField] private float regenPerSec = 35f;
+        [SerializeField] private float regenDelay = 0.4f;
+        [Tooltip("After the tank empties, fire stays locked until energy recharges to " +
+                 "this fraction of max (hysteresis — prevents single-puff dribbling).")]
+        [Range(0.1f, 1f)]
+        [SerializeField] private float rechargeFraction = 0.35f;
 
         [Header("Feedback")]
         [SerializeField] private Color streamColor = new Color(0.4f, 0.75f, 1f, 1f);
@@ -57,6 +61,7 @@ namespace MaxWorlds.Combat
         public void SetFiring(bool firing) => IsFiring = firing;
 
         private float _tickTimer;
+        private bool _depleted;
         private ParticleSystem _stream;
         private readonly Collider[] _hits = new Collider[32];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
@@ -85,7 +90,14 @@ namespace MaxWorlds.Combat
                 }
             }
 
-            bool emitting = ShouldEmit(IsFiring, Energy.CanSpend(energyPerTick));
+            // Hysteresis: once the tank runs dry, lock fire out until it recharges to
+            // rechargeFraction of max. Without this, an empty tank dribbles a single
+            // puff every regenDelay (the "clouds of bubbles" stutter) instead of a
+            // clean stream → deplete → recharge → stream cycle.
+            if (_depleted && Energy.Normalized >= rechargeFraction) _depleted = false;
+            else if (!_depleted && !Energy.CanSpend(energyPerTick)) _depleted = true;
+
+            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick));
             SetStreamEmitting(emitting);
             if (!emitting)
             {
@@ -134,32 +146,38 @@ namespace MaxWorlds.Combat
             var ps = go.AddComponent<ParticleSystem>();
             ps.Stop();
 
+            // Fast, small, dense droplets reading as a continuous stream — not fat
+            // bubbles. Lifetime ~ range/speed so particles travel the stream length.
+            float speed = range / 0.35f;
             var main = ps.main;
-            main.startSpeed = range / 0.4f;
-            main.startLifetime = 0.4f;
-            main.startSize = radius;
+            main.startSpeed = speed;
+            main.startLifetime = range / speed;        // reaches stream end, no further
+            main.startSize = radius * 0.35f;           // droplets, not radius-wide bubbles
             main.startColor = streamColor;
-            main.maxParticles = 200;
+            main.maxParticles = 400;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
 
             var emission = ps.emission;
-            emission.rateOverTime = 120f;
+            emission.rateOverTime = 90f;               // dense enough to read as continuous
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 6f;
-            shape.radius = radius * 0.4f;
+            shape.angle = 3f;                          // tighter spray
+            shape.radius = radius * 0.2f;
 
             return ps;
         }
 
+        private bool _streamOn;
+
         private void SetStreamEmitting(bool on)
         {
-            if (_stream == null) return;
+            if (_stream == null || on == _streamOn) return; // only act on change — no per-frame churn
+            _streamOn = on;
             var emission = _stream.emission;
             emission.enabled = on;
-            if (on && !_stream.isPlaying) _stream.Play();
-            else if (!on && _stream.isPlaying) _stream.Stop(true, ParticleSystemStopBehavior.StopEmitting);
+            if (on) _stream.Play();
+            else _stream.Stop(true, ParticleSystemStopBehavior.StopEmitting); // existing particles fade
         }
 
 #if UNITY_EDITOR
