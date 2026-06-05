@@ -415,6 +415,7 @@ MonoBehaviour:
   moveSpeed: 6
   rotationSpeed: 720
   gravity: 20
+  aimActivateThreshold: 0.5
   dashSpeed: 18
   dashDuration: 0.18
   dashInvulnerable: 0.18
@@ -467,6 +468,7 @@ MonoBehaviour:
   energyPerTick: 2.5
   regenPerSec: 25
   regenDelay: 0.6
+  rechargeFraction: 0.35
   streamColor: {r: 0.4, g: 0.75, b: 1, a: 1}
   aimSource: {fileID: 435318708}
 --- !u!114 &435318711

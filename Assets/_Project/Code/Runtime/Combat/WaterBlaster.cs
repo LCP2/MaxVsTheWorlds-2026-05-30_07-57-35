@@ -35,6 +35,10 @@ namespace MaxWorlds.Combat
         [Header("Feedback")]
         [SerializeField] private Color streamColor = new Color(0.4f, 0.75f, 1f, 1f);
 
+        [Header("Debug")]
+        [Tooltip("Draw a live fire-state overlay (diagnostics). Turn off for release.")]
+        [SerializeField] private bool debugOverlay = true;
+
         [Header("Aim source")]
         [Tooltip("Optional. If set, fires while the player aims and orients to their facing. " +
                  "If null, IsFiring drives it directly (useful for isolated testing).")]
@@ -62,6 +66,7 @@ namespace MaxWorlds.Combat
 
         private float _tickTimer;
         private bool _depleted;
+        private bool _lastEmitting;
         private ParticleSystem _stream;
         private readonly Collider[] _hits = new Collider[32];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
@@ -70,6 +75,10 @@ namespace MaxWorlds.Combat
         {
             Energy = new EnergyPool(maxEnergy, regenPerSec, regenDelay);
             _stream = BuildStreamParticles();
+            // Guarantee the stream is genuinely stopped at start (bookkeeping + reality
+            // agree), so the "act only on change" guard in SetStreamEmitting is valid.
+            _streamOn = false;
+            _stream.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
         }
 
         private void Update()
@@ -98,6 +107,7 @@ namespace MaxWorlds.Combat
             else if (!_depleted && !Energy.CanSpend(energyPerTick)) _depleted = true;
 
             bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick));
+            _lastEmitting = emitting;
             SetStreamEmitting(emitting);
             if (!emitting)
             {
@@ -144,12 +154,15 @@ namespace MaxWorlds.Combat
             var go = new GameObject("WaterStreamVFX");
             go.transform.SetParent(transform, worldPositionStays: false);
             var ps = go.AddComponent<ParticleSystem>();
-            ps.Stop();
 
             // Fast, small, dense droplets reading as a continuous stream — not fat
             // bubbles. Lifetime ~ range/speed so particles travel the stream length.
             float speed = range / 0.35f;
             var main = ps.main;
+            // AddComponent<ParticleSystem> defaults playOnAwake=true, which made the
+            // stream emit continuously regardless of IsFiring (it piled onto any body
+            // touching Max = the stray "bubbles"). Force it off and start stopped.
+            main.playOnAwake = false;
             main.startSpeed = speed;
             main.startLifetime = range / speed;        // reaches stream end, no further
             main.startSize = radius * 0.35f;           // droplets, not radius-wide bubbles
@@ -178,6 +191,17 @@ namespace MaxWorlds.Combat
             emission.enabled = on;
             if (on) _stream.Play();
             else _stream.Stop(true, ParticleSystemStopBehavior.StopEmitting); // existing particles fade
+        }
+
+        private void OnGUI()
+        {
+            if (!debugOverlay) return;
+            bool aiming = aimSource != null && aimSource.IsAiming;
+            string s = $"Blaster: IsFiring={IsFiring}  aimSource.IsAiming={aiming}  " +
+                       $"emitting={_lastEmitting}  streamPlaying={(_stream != null && _stream.isPlaying)}  " +
+                       $"energy={Energy?.Normalized:0.00}  depleted={_depleted}";
+            GUI.color = _lastEmitting ? Color.cyan : Color.white;
+            GUI.Label(new Rect(12f, 64f, 900f, 24f), s);
         }
 
 #if UNITY_EDITOR
