@@ -145,7 +145,8 @@ namespace MaxWorlds.Combat
             {
                 var comp = d as Component;
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
-                d.TakeDamage(new DamageInfo(damagePerTick, point, dir, soak: true));
+                if (d.Team == Team.Player) continue; // never hit the wielder / allies
+                d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true));
             }
         }
 

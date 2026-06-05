@@ -24,6 +24,7 @@ namespace MaxWorlds.Combat
         private Color _baseColor = new Color(0.8f, 0.3f, 0.3f);
 
         public bool IsAlive => _health > 0f;
+        public Team Team => Team.Neutral; // always damageable (test target)
 
         private void Awake()
         {

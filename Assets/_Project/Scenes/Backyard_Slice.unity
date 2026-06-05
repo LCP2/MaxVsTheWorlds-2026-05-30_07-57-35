@@ -470,6 +470,7 @@ MonoBehaviour:
   regenDelay: 0.6
   rechargeFraction: 0.35
   streamColor: {r: 0.4, g: 0.75, b: 1, a: 1}
+  debugOverlay: 1
   aimSource: {fileID: 435318708}
 --- !u!114 &435318711
 MonoBehaviour:

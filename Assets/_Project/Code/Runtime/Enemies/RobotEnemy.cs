@@ -45,6 +45,7 @@ namespace MaxWorlds.Enemies
 
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
+        public Team Team => Team.Enemy;
 
         /// <summary>Fired on death (spawner decrements its live count). Arg = this enemy.</summary>
         public event Action<RobotEnemy> Died;
@@ -61,13 +62,16 @@ namespace MaxWorlds.Enemies
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
-            _health = maxHealth;
             _mpb = new MaterialPropertyBlock();
+            ResetState();
         }
 
-        private void OnEnable()
+        private void OnEnable() => ResetState(); // reset for pooling reuse
+
+        /// <summary>Reset to a fresh, alive Chase state. Called from Awake/OnEnable and
+        /// directly by tests (which don't get Unity lifecycle callbacks).</summary>
+        public void ResetState()
         {
-            // reset for pooling reuse
             _health = maxHealth;
             Current = State.Chase;
             _stateTimer = 0f;
@@ -173,7 +177,7 @@ namespace MaxWorlds.Enemies
                 if (_targetDamageable != null && _targetDamageable.IsAlive)
                 {
                     _targetDamageable.TakeDamage(
-                        new DamageInfo(contactDamage, transform.position, _lungeDir));
+                        new DamageInfo(contactDamage, transform.position, _lungeDir, Team.Enemy));
                 }
             }
         }
@@ -198,6 +202,13 @@ namespace MaxWorlds.Enemies
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
+            // Friendly-fire rejection: an enemy never damages another enemy, whatever
+            // path delivered the hit. Logged so any same-team source is visible.
+            if (!DamageRules.Applies(info.Attacker, Team))
+            {
+                Debug.Log($"[RobotEnemy] rejected same-team damage from {info.Attacker} at {info.Point}");
+                return;
+            }
             _health -= info.Amount;
             if (_health <= 0f) Die(info.Direction);
             else SetTell(Color.white); // brief hit flash; next state tick restores

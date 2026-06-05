@@ -20,6 +20,7 @@ namespace MaxWorlds.Player
         private float _health;
 
         public bool IsAlive => _health > 0f;
+        public Team Team => Team.Player;
         public float Max => maxHealth;
         public float Current => _health;
         public float Normalized => maxHealth > 0f ? _health / maxHealth : 0f;
@@ -36,6 +37,7 @@ namespace MaxWorlds.Player
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
+            if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
             if (_controller != null && _controller.IsInvulnerable) return; // dash dodge
             _health = Mathf.Max(0f, _health - info.Amount);
             Changed?.Invoke(_health);
