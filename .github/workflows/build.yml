@@ -1,0 +1,89 @@
+name: Build & Deploy (WebGL)
+
+# Runs on every push to main. Compiles the project, runs all tests, builds a
+# WebGL player, and publishes it to GitHub Pages so Lee can play the latest
+# build by clicking a link — no editor, no local build step.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {} # lets you trigger a build manually from the Actions tab
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true # a newer push cancels an in-flight build
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Compile + run EditMode and PlayMode tests. If this fails, no build ships.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto # reads ProjectSettings/ProjectVersion.txt
+          testMode: all
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 2. Build the WebGL player.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build WebGL
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: WebGL
+      # GameCI writes the player to build/WebGL/. If the first run 404s on Pages,
+      # the index.html is one level deeper (build/WebGL/WebGL) — adjust `path` below.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/WebGL
+
+  # ---------------------------------------------------------------------------
+  # 3. Publish the WebGL build to GitHub Pages -> the "play the latest" link.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Pages
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
