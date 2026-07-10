@@ -81,3 +81,4 @@ If it fails on a transient/flake, retry once. If it fails structurally, stop and
 - **`Application.targetFrameRate = 60` and `QualitySettings.vSyncCount = 0`** — both set in `Bootstrap.cs` Awake; don't change without reason.
 - **Repo location:** `C:\dev\MaxVsTheWorlds` — **not** in OneDrive (Unity `Library/` corrupts under sync).
 - **Build pipeline:** scenes added in `_Project/Scenes/`. Bootstrap is scene 0. Verify script builds Windows standalone to `Builds/cc-verify/` (gitignored).
+- **Scenes & wiring - code-driven only.** Follow `docs/CODE_DRIVEN_SCENES.md`: assemble scenes and prefabs in code (Bootstrap + ScriptableObjects), never via manual Inspector wiring. A feature that needs hand-wiring in the editor to run is not done - it must build headlessly in CI and show up on the WebGL play link.
