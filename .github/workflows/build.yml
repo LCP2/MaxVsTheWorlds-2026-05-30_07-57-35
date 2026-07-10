@@ -73,7 +73,7 @@ jobs:
       # the index.html is one level deeper (build/WebGL/WebGL) — adjust `path` below.
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: build/WebGL
+          path: build/WebGL/WebGL
 
   # ---------------------------------------------------------------------------
   # 3. Publish the WebGL build to GitHub Pages -> the "play the latest" link.
