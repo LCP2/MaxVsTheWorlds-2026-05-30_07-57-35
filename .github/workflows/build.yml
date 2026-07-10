@@ -15,6 +15,7 @@ concurrency:
 
 permissions:
   contents: read
+  checks: write
   pages: write
   id-token: write
 
