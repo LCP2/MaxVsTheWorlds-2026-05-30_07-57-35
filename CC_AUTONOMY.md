@@ -55,7 +55,7 @@ If it fails on a transient/flake, retry once. If it fails structurally, stop and
 ## Etiquette
 
 - **Timestamp every response.** Begin each chat reply with a wall-clock prefix in the format `[YYYY-MM-DD HH:MM AEST] ` read from the OS clock. Example: `[2026-05-30 14:23 AEST] Starting on YT-34.` Non-negotiable — Lee uses it to track when work happened across long async sessions.
-- Never push to `main`. PRs only. Squash-merge after review.
+- **Auto-merge on green — do NOT wait for Lee.** Work on a `feat/YT-XX-*` branch and open a PR for the record, but once `cc-verify` passes you squash-merge it to `main` yourself (`gh pr merge --squash --delete-branch <pr>`, or a plain git squash-merge + push if `gh` is unavailable). Do not park a verified ticket waiting for a human review/merge. The CI build that runs on `main` after the merge is the safety net — if it goes red, stop and set `needs-lee`. Hold for a human only when an AC is tagged `human-judgment` or a guardrail trips.
 - Commit messages prefixed with the ticket key: `YT-XX: imperative summary`.
 - Jira comments: concise. What was done, how to verify, what's next.
 - Don't author docs/READMEs unless the ticket asks.
@@ -80,5 +80,5 @@ If it fails on a transient/flake, retry once. If it fails structurally, stop and
 - **Asmdef layout:** root namespace `MaxWorlds`. Assemblies: `MaxWorlds.Core`, `MaxWorlds.Gameplay`, `MaxWorlds.Editor`, `MaxWorlds.Tests.EditMode`, `MaxWorlds.Tests.PlayMode`. Don't over-split for the slice.
 - **`Application.targetFrameRate = 60` and `QualitySettings.vSyncCount = 0`** — both set in `Bootstrap.cs` Awake; don't change without reason.
 - **Repo location:** `C:\dev\MaxVsTheWorlds` — **not** in OneDrive (Unity `Library/` corrupts under sync).
-- **Build pipeline:** scenes added in `_Project/Scenes/`. Bootstrap is scene 0. Verify script builds Windows standalone to `Builds/cc-verify/` (gitignored).
+- **Build pipeline / boot scene (IMPORTANT):** The WebGL build boots **scene 0** of `ProjectSettings/EditorBuildSettings.asset`, so scene 0 MUST be the current *playable* scene (currently `Assets/_Project/Scenes/Backyard_Slice.unity`) — NOT the empty `Bootstrap.unity` smoke-test scene. Whenever you add or reorder scenes, keep the playable scene at index 0 (or make `Bootstrap` load it via `SceneManager`), and after any change confirm the deployed WebGL link shows the playable scene, not a bare cube. Verify script builds Windows standalone to `Builds/cc-verify/` (gitignored).
 - **Scenes & wiring - code-driven only.** Follow `docs/CODE_DRIVEN_SCENES.md`: assemble scenes and prefabs in code (Bootstrap + ScriptableObjects), never via manual Inspector wiring. A feature that needs hand-wiring in the editor to run is not done - it must build headlessly in CI and show up on the WebGL play link.
