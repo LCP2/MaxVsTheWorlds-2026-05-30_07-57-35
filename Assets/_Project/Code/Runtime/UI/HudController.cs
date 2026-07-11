@@ -96,6 +96,8 @@ namespace MaxWorlds.UI
             HudSignals.DamageDealt += OnDamage;
             HudSignals.Pickup += OnPickup;
             HudSignals.EnemyKilled += OnEnemyKilled;
+            HudSignals.FactoryRegistered += OnFactoryRegistered;
+            HudSignals.FactoryDestroyed += OnFactoryDestroyed;
         }
 
         private void OnDisable()
@@ -103,6 +105,16 @@ namespace MaxWorlds.UI
             HudSignals.DamageDealt -= OnDamage;
             HudSignals.Pickup -= OnPickup;
             HudSignals.EnemyKilled -= OnEnemyKilled;
+            HudSignals.FactoryRegistered -= OnFactoryRegistered;
+            HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+        }
+
+        private void OnFactoryRegistered() => _model.UseExternalFactories();
+
+        private void OnFactoryDestroyed(Vector3 pos)
+        {
+            _model.RegisterFactoryDestroyed();
+            _floating?.Spawn(pos + Vector3.up * 2.2f, "FACTORY DOWN", XpColor, false, 1.4f, 34f);
         }
 
         // ---------- signal handlers ----------

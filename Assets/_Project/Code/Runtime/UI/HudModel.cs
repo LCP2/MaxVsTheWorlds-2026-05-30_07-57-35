@@ -37,6 +37,10 @@ namespace MaxWorlds.UI
         public int Kills { get; private set; }
         private bool _bossTriggered;
 
+        /// <summary>Once a real destructible factory (YT-37) registers, the kill-driven factory
+        /// stand-in switches off and the arena advances only on real destruction signals.</summary>
+        private bool _externalFactories;
+
         /// <summary>XP granted per kill (HUD shows it on the SPARKS pickup).</summary>
         public int XpPerKill => _xpPerKill;
 
@@ -48,7 +52,7 @@ namespace MaxWorlds.UI
 
         public HudModel(
             int subZonesTotal = 1,
-            int factoriesTotal = 3,
+            int factoriesTotal = 1, // the slice has one factory (Mower Hutch); real one drives it via YT-37
             int xpPerKill = 6,
             int killsPerFactory = 4,
             float ultimateChargePerKill = 0.12f,
@@ -87,8 +91,8 @@ namespace MaxWorlds.UI
                 return;
             }
 
-            // Destroy a factory every N kills; clearing all factories clears a sub-zone.
-            if (Kills % _killsPerFactory == 0 && Arena.FactoriesDestroyed < Arena.FactoriesTotal)
+            // Kill-driven factory stand-in — only while no real factory feeds the tracker.
+            if (!_externalFactories && Kills % _killsPerFactory == 0 && Arena.FactoriesDestroyed < Arena.FactoriesTotal)
             {
                 Arena.DestroyFactory();
                 if (Arena.FactoriesDestroyed >= Arena.FactoriesTotal)
@@ -97,7 +101,29 @@ namespace MaxWorlds.UI
                 }
             }
 
-            // Boss enters when the arena is fully cleared and it hasn't already run.
+            MaybeEngageBoss();
+        }
+
+        /// <summary>Switch the arena tracker to real factory-destruction signals (YT-37): the
+        /// kill-driven stand-in stops advancing factories from this point on.</summary>
+        public void UseExternalFactories() => _externalFactories = true;
+
+        /// <summary>A real factory was destroyed. Advances the arena, clears the sub-zone once
+        /// all factories are down, and engages the boss when the arena is fully cleared.</summary>
+        public void RegisterFactoryDestroyed()
+        {
+            _externalFactories = true;
+            if (Arena.FactoriesDestroyed >= Arena.FactoriesTotal) return;
+            Arena.DestroyFactory();
+            if (Arena.FactoriesDestroyed >= Arena.FactoriesTotal)
+            {
+                Arena.ClearSubZone();
+            }
+            MaybeEngageBoss();
+        }
+
+        private void MaybeEngageBoss()
+        {
             if (Arena.Complete && !_bossTriggered)
             {
                 _bossTriggered = true;
