@@ -24,6 +24,12 @@ namespace MaxWorlds.Bosses
         private static readonly Collider[] s_hits = new Collider[16];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
 
+        // Read-only windows into existing state, for the readability VFX (YT-53) to draw a
+        // danger indicator that fills as the zone arms. No behaviour change.
+        public float Radius => _radius;
+        public bool IsArming => _age < _armDelay;
+        public float ArmProgress => _armDelay <= 0f ? 1f : Mathf.Clamp01(_age / _armDelay);
+
         /// <summary>Spawn a damage zone at a world position.</summary>
         public static DamageZone Spawn(Vector3 pos, float radius, float damage, float life,
             float armDelay, Color color, float tickInterval = 0.4f)

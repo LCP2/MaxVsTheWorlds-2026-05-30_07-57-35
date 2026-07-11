@@ -46,6 +46,15 @@ namespace MaxWorlds.Enemies
 
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
+
+        /// <summary>How far through the wind-up this enemy is, 0..1 (0 when not telegraphing).
+        /// A read-only window into existing state so the readability VFX (YT-53) can draw a
+        /// dodge-window indicator on the ground — a colour tell on a small robot doesn't read at
+        /// the fixed ~72° camera with 20–30 enemies on screen. No behaviour change.</summary>
+        public float TelegraphProgress =>
+            Current == State.Telegraph && telegraphTime > 0f
+                ? Mathf.Clamp01(_stateTimer / telegraphTime)
+                : 0f;
         public Team Team => Team.Enemy;
 
         /// <summary>Fired on death (spawner decrements its live count). Arg = this enemy.</summary>
