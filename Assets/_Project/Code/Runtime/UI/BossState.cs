@@ -32,6 +32,15 @@ namespace MaxWorlds.UI
             ActiveChanged?.Invoke(true);
         }
 
+        /// <summary>Set the boss bar directly from a real boss's HP (YT-27). Defeats it at 0.</summary>
+        public void SetNormalized(float normalized)
+        {
+            if (!Active) return;
+            HpNormalized = Mathf.Clamp01(normalized);
+            Changed?.Invoke();
+            if (HpNormalized <= 0f) Defeat();
+        }
+
         /// <summary>Drain the boss by a fraction of its bar (0..1). Defeats it at 0.</summary>
         public void Damage(float fraction)
         {

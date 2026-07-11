@@ -98,6 +98,10 @@ namespace MaxWorlds.UI
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryRegistered += OnFactoryRegistered;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
+            HudSignals.BossRegistered += OnBossRegistered;
+            HudSignals.BossEngaged += OnBossEngaged;
+            HudSignals.BossHealthChanged += OnBossHealth;
+            HudSignals.BossDefeated += OnBossDefeated;
         }
 
         private void OnDisable()
@@ -107,7 +111,16 @@ namespace MaxWorlds.UI
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryRegistered -= OnFactoryRegistered;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+            HudSignals.BossRegistered -= OnBossRegistered;
+            HudSignals.BossEngaged -= OnBossEngaged;
+            HudSignals.BossHealthChanged -= OnBossHealth;
+            HudSignals.BossDefeated -= OnBossDefeated;
         }
+
+        private void OnBossRegistered() => _model.UseExternalBoss();
+        private void OnBossEngaged(string name, int phases) => _model.EngageBossExternal(name, phases);
+        private void OnBossHealth(float normalized) => _model.SetBossHealth(normalized);
+        private void OnBossDefeated() => _model.DefeatBossExternal();
 
         private void OnFactoryRegistered() => _model.UseExternalFactories();
 
