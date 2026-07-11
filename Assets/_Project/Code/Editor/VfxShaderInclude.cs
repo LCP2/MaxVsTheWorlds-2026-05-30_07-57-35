@@ -25,6 +25,7 @@ namespace MaxWorlds.Editor
         {
             "Universal Render Pipeline/Particles/Unlit",   // VfxMaterials (YT-47/48)
             "Universal Render Pipeline/Lit",               // MaterialLibrary (YT-50)
+            "MaxWorlds/StylizedCharacter",                 // MaterialLibrary.Character (YT-57)
         };
 
         [MenuItem("MaxWorlds/Include Runtime Shaders In Build (YT-47)")]

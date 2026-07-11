@@ -53,6 +53,41 @@ namespace MaxWorlds.Rendering
         /// <summary>The stylised material for a surface, in the current biome.</summary>
         public static Material Surface(SurfaceKind kind) => Variant(kind, Element.Neutral);
 
+        /// <summary>Name of the hand-written character shader (YT-57). Kept in Graphics Settings'
+        /// Always Included Shaders, since nothing but Shader.Find references it.</summary>
+        public const string CharacterShaderName = "MaxWorlds/StylizedCharacter";
+
+        /// <summary>
+        /// The stylised character material — outline, rim light, dissolve (YT-57).
+        ///
+        /// Shared by every character. Per-body state (the dissolve amount, hit-flash tints) is set
+        /// through MaterialPropertyBlocks, so one material serves the whole roster without an
+        /// instance per enemy.
+        /// </summary>
+        public static Material Character()
+        {
+            const string key = "character";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var shader = Shader.Find(CharacterShaderName);
+            if (shader == null || !shader.isSupported)
+            {
+                // Degrade to the plain lit look rather than to the magenta error shader: losing the
+                // outline is a cosmetic regression, rendering nothing is a broken build.
+                Debug.LogWarning($"[MaterialLibrary] '{CharacterShaderName}' unavailable; characters keep the plain lit material.");
+                return null;
+            }
+
+            var m = new Material(shader)
+            {
+                name = "Stylized_Character",
+                hideFlags = HideFlags.HideAndDontSave,
+            };
+            m.SetColor("_BaseColor", Color.white);   // gameplay's MaterialPropertyBlock tints drive this
+            s_cache[key] = m;
+            return m;
+        }
+
         /// <summary>
         /// The same surface, recoloured toward an element — the hook that makes future
         /// enemy/world recolours data-driven instead of hand-made. See docs/ELEMENTAL_VARIANTS.md.
