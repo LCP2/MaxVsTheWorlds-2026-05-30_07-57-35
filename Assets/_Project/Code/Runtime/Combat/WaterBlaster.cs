@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Combat
 {
@@ -9,9 +10,12 @@ namespace MaxWorlds.Combat
     /// Slice gadget (YT-35) — Spray archetype. While <see cref="IsFiring"/> is
     /// driven true (player holds aim), auto-fires a short-range stream: ticks at
     /// a fixed cadence, spends energy, sphere-casts forward, and applies damage
-    /// (+soak tag) to every <see cref="IDamageable"/> in the stream. Firing VFX is
-    /// code-driven (a ParticleSystem built at runtime), per the "no authored asset"
-    /// rule. Energy binds to the HUD (YT-30) via <see cref="Energy"/>.
+    /// (+soak tag) to every <see cref="IDamageable"/> in the stream. Energy binds
+    /// to the HUD (YT-30) via <see cref="Energy"/>.
+    ///
+    /// All firing visuals live in <see cref="WaterVfx"/> (YT-47), which this attaches
+    /// to itself at Awake and drives with cosmetic-only calls. The VFX never feeds back
+    /// into fire gating, energy, or damage.
     /// </summary>
     public sealed class WaterBlaster : MonoBehaviour
     {
@@ -31,9 +35,6 @@ namespace MaxWorlds.Combat
                  "this fraction of max (hysteresis — prevents single-puff dribbling).")]
         [Range(0.1f, 1f)]
         [SerializeField] private float rechargeFraction = 0.35f;
-
-        [Header("Feedback")]
-        [SerializeField] private Color streamColor = new Color(0.4f, 0.75f, 1f, 1f);
 
         [Header("Debug")]
         [Tooltip("Draw a live fire-state overlay (diagnostics). Turn off for release.")]
@@ -67,18 +68,21 @@ namespace MaxWorlds.Combat
         private float _tickTimer;
         private bool _depleted;
         private bool _lastEmitting;
-        private ParticleSystem _stream;
+        private WaterVfx _vfx;
         private readonly Collider[] _hits = new Collider[32];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
+        // Collider that produced each buffered hit, parallel to s_buffer. Cosmetic use
+        // only — it gives the splash a contact point on the target's surface.
+        private static readonly List<Collider> s_contacts = new List<Collider>(8);
 
         private void Awake()
         {
             Energy = new EnergyPool(maxEnergy, regenPerSec, regenDelay);
-            _stream = BuildStreamParticles();
-            // Guarantee the stream is genuinely stopped at start (bookkeeping + reality
-            // agree), so the "act only on change" guard in SetStreamEmitting is valid.
-            _streamOn = false;
-            _stream.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
+
+            // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
+            _vfx = GetComponent<WaterVfx>();
+            if (_vfx == null) _vfx = gameObject.AddComponent<WaterVfx>();
+            _vfx.Init(range, radius);
         }
 
         private void Update()
@@ -108,7 +112,7 @@ namespace MaxWorlds.Combat
 
             bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick));
             _lastEmitting = emitting;
-            SetStreamEmitting(emitting);
+            if (_vfx != null) _vfx.SetStreaming(emitting);
             if (!emitting)
             {
                 _tickTimer = 0f;
@@ -132,66 +136,44 @@ namespace MaxWorlds.Combat
                 origin, origin + dir * range, radius, _hits, hitMask, QueryTriggerInteraction.Ignore);
 
             s_buffer.Clear();
+            s_contacts.Clear();
             for (int i = 0; i < count; i++)
             {
                 if (_hits[i] == null) continue;
                 if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && !s_buffer.Contains(d))
                 {
                     s_buffer.Add(d);
+                    s_contacts.Add(_hits[i]);
                 }
             }
 
-            foreach (var d in s_buffer)
+            for (int i = 0; i < s_buffer.Count; i++)
             {
+                var d = s_buffer[i];
                 var comp = d as Component;
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
                 if (d.Team == Team.Player) continue; // never hit the wielder / allies
                 d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true));
+
+                // Cosmetic: splash on the target's surface facing the blaster, not at its
+                // centre (which is what the damage event reports). Nothing below feeds damage.
+                if (_vfx != null)
+                {
+                    _vfx.Splash(ContactPoint(origin, dir, s_contacts[i], point), dir, damagePerTick);
+                }
             }
         }
 
-        private ParticleSystem BuildStreamParticles()
+        /// <summary>Where the stream visually lands on a body: the point on its collider
+        /// closest to the stream's axis. Falls back to <paramref name="fallback"/> if the
+        /// collider can't answer (non-convex mesh colliders reject ClosestPoint).</summary>
+        private static Vector3 ContactPoint(Vector3 origin, Vector3 dir, Collider col, Vector3 fallback)
         {
-            var go = new GameObject("WaterStreamVFX");
-            go.transform.SetParent(transform, worldPositionStays: false);
-            var ps = go.AddComponent<ParticleSystem>();
-
-            // Fast, small, dense droplets reading as a continuous stream — not fat
-            // bubbles. Lifetime ~ range/speed so particles travel the stream length.
-            float speed = range / 0.35f;
-            var main = ps.main;
-            // AddComponent<ParticleSystem> defaults playOnAwake=true, which made the
-            // stream emit continuously regardless of IsFiring (it piled onto any body
-            // touching Max = the stray "bubbles"). Force it off and start stopped.
-            main.playOnAwake = false;
-            main.startSpeed = speed;
-            main.startLifetime = range / speed;        // reaches stream end, no further
-            main.startSize = radius * 0.35f;           // droplets, not radius-wide bubbles
-            main.startColor = streamColor;
-            main.maxParticles = 400;
-            main.simulationSpace = ParticleSystemSimulationSpace.World;
-
-            var emission = ps.emission;
-            emission.rateOverTime = 90f;               // dense enough to read as continuous
-
-            var shape = ps.shape;
-            shape.shapeType = ParticleSystemShapeType.Cone;
-            shape.angle = 3f;                          // tighter spray
-            shape.radius = radius * 0.2f;
-
-            return ps;
-        }
-
-        private bool _streamOn;
-
-        private void SetStreamEmitting(bool on)
-        {
-            if (_stream == null || on == _streamOn) return; // only act on change — no per-frame churn
-            _streamOn = on;
-            var emission = _stream.emission;
-            emission.enabled = on;
-            if (on) _stream.Play();
-            else _stream.Stop(true, ParticleSystemStopBehavior.StopEmitting); // existing particles fade
+            if (col == null) return fallback;
+            Vector3 onAxis = WaterVfxTuning.NearestPointOnRay(origin, dir, float.MaxValue, col.bounds.center);
+            var mesh = col as MeshCollider;
+            if (mesh != null && !mesh.convex) return col.ClosestPointOnBounds(onAxis);
+            return col.ClosestPoint(onAxis);
         }
 
         private void OnGUI()
@@ -199,7 +181,7 @@ namespace MaxWorlds.Combat
             if (!debugOverlay) return;
             bool aiming = aimSource != null && aimSource.IsAiming;
             string s = $"Blaster: IsFiring={IsFiring}  aimSource.IsAiming={aiming}  " +
-                       $"emitting={_lastEmitting}  streamPlaying={(_stream != null && _stream.isPlaying)}  " +
+                       $"emitting={_lastEmitting}  " +
                        $"energy={Energy?.Normalized:0.00}  depleted={_depleted}";
             GUI.color = _lastEmitting ? Color.cyan : Color.white;
             GUI.Label(new Rect(12f, 64f, 900f, 24f), s);
@@ -208,7 +190,7 @@ namespace MaxWorlds.Combat
 #if UNITY_EDITOR
         private void OnDrawGizmosSelected()
         {
-            Gizmos.color = streamColor;
+            Gizmos.color = new Color(0.31f, 0.76f, 0.97f, 1f);
             Gizmos.DrawWireSphere(transform.position + transform.forward * range, radius);
         }
 #endif
