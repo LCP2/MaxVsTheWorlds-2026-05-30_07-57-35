@@ -95,6 +95,28 @@ namespace MaxWorlds.VFX
             });
         }
 
+        /// <summary>
+        /// A soft, irregular blob — ground scorch and wet patches (YT-56). Irregular on purpose:
+        /// a perfect circle on the ground reads as a decal someone stamped there, an uneven one
+        /// reads as a mark something left behind.
+        /// </summary>
+        public static Texture2D Splat(int size = 128)
+        {
+            return Tex($"splat{size}", size, (nx, ny) =>
+            {
+                float d = Mathf.Sqrt(nx * nx + ny * ny) * 2f;
+                float angle = Mathf.Atan2(ny, nx);
+
+                // Wobble the radius with a couple of harmonics so the edge is lumpy, not round.
+                float wobble = 0.82f
+                             + 0.12f * Mathf.Sin(angle * 3f)
+                             + 0.06f * Mathf.Sin(angle * 7f + 1.3f);
+
+                if (d >= wobble) return 0f;
+                return 1f - Edge(wobble * 0.45f, wobble, d);   // solid centre, feathered edge
+            });
+        }
+
         /// <summary>Soft radial glow, no hard core — additive flashes and the muzzle bloom.</summary>
         public static Texture2D Glow(int size = 64)
         {
