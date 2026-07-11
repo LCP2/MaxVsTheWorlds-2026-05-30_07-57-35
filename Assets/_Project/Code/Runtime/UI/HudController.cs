@@ -42,6 +42,20 @@ namespace MaxWorlds.UI
 
         // Status strip
         private Image _hpFill, _xpFill, _energyFill;
+        private Image _hpGhost;
+
+        // YT-54 presentation state. None of this feeds the model — it only animates what the model
+        // already says.
+        private static readonly Color HpGhostColor = new Color(1f, 0.72f, 0.62f, 0.55f);
+        private readonly BarState _hpBar = new BarState();
+        private readonly BarState _energyBar = new BarState();
+        private readonly BarState _xpBar = new BarState();
+        private readonly DamageNumberAggregator _damageNumbers = new DamageNumberAggregator();
+        private readonly System.Collections.Generic.List<DamageNumberAggregator.Entry> _damageBuffer =
+            new System.Collections.Generic.List<DamageNumberAggregator.Entry>(16);
+        private readonly float[] _slotReadyFlash = new float[3];
+        private readonly bool[] _slotWasReady = new bool[3];
+        private int _lastLevel = 1;
         private Text _hpLabel, _xpLabel, _energyLabel;
 
         // Ability slots (0 Dash, 1 Bomb, 2 Ultimate)
@@ -134,9 +148,27 @@ namespace MaxWorlds.UI
 
         private void OnDamage(Vector3 pos, float amount, bool crit)
         {
+            // Accumulated, not spawned (YT-54). A sustained stream lands a tick every 0.1s on every
+            // enemy it touches, so spawning a number per event buries the screen at 20-30 enemies.
+            // The aggregator merges them into one number per enemy per window; see FlushDamageNumbers.
+            _damageNumbers.Add(pos, amount, crit, Time.time);
+        }
+
+        private void FlushDamageNumbers()
+        {
             if (_floating == null) return;
-            Color c = crit ? XpColor : Color.white;
-            _floating.Spawn(pos + Vector3.up * 1.4f, Mathf.RoundToInt(amount).ToString(), c, crit, 0.4f, 26f);
+
+            _damageBuffer.Clear();
+            _damageNumbers.Flush(Time.time, _damageBuffer);
+
+            foreach (var e in _damageBuffer)
+            {
+                Color c = e.Crit ? XpColor : Color.white;
+                // Bigger accumulated hits get a bigger number — the size carries the weight.
+                float size = Mathf.Lerp(24f, 38f, Mathf.InverseLerp(4f, 60f, e.Amount));
+                _floating.Spawn(e.Position + Vector3.up * 1.4f,
+                    Mathf.RoundToInt(e.Amount).ToString(), c, e.Crit, 0.55f, size);
+            }
         }
 
         private void OnPickup(Vector3 pos, string label, Color color)
@@ -169,28 +201,57 @@ namespace MaxWorlds.UI
             _model.Bomb.Tick(dt);
             if (_model.Bomb.Ready) _model.Bomb.Trigger();
 
-            UpdateStatusStrip();
+            UpdateStatusStrip(dt);
             UpdateAbilitySlots(dt);
             UpdateJoysticks();
             UpdateArena(dt);
             UpdateBoss();
             UpdateWarnings(dt);
+            FlushDamageNumbers();
+            CheckLevelUp();
         }
 
-        private void UpdateStatusStrip()
+        private void UpdateStatusStrip(float dt)
         {
             if (_health != null)
             {
-                _hpFill.fillAmount = _health.Normalized;
+                _hpBar.Update(_health.Normalized, dt);
+                _hpFill.fillAmount = _hpBar.Fill;
+                if (_hpGhost != null)
+                {
+                    // The chip bar: holds where the health WAS, then drains. It shows you how much
+                    // you just lost, which a bar that snaps to its new value never tells you.
+                    _hpGhost.fillAmount = _hpBar.Ghost;
+                    var gc = HpGhostColor; gc.a *= Mathf.Clamp01(_hpBar.Ghost - _hpBar.Fill) > 0.001f ? 1f : 0f;
+                    _hpGhost.color = gc;
+                }
+                _hpFill.color = Color.Lerp(HpColor, Color.white, _hpBar.Flash);
                 _hpLabel.text = Mathf.CeilToInt(_health.Current).ToString();
             }
             if (_blaster != null && _blaster.Energy != null)
             {
-                _energyFill.fillAmount = _blaster.Energy.Normalized;
+                // Energy drains and refills constantly while firing, so it gets smoothing but no
+                // ghost — a chip bar on a bar that's always moving would just be noise.
+                _energyBar.Update(_blaster.Energy.Normalized, dt, fillSpeed: 6f, hold: 0f);
+                _energyFill.fillAmount = _energyBar.Fill;
                 _energyLabel.text = Mathf.CeilToInt(_blaster.Energy.Current).ToString();
             }
-            _xpFill.fillAmount = _model.Xp.Normalized;
+            _xpBar.Update(_model.Xp.Normalized, dt, fillSpeed: 2.2f, hold: 0f);
+            _xpFill.fillAmount = _xpBar.Fill;
             _xpLabel.text = $"Lv {_model.Xp.Level}";
+        }
+
+        private void CheckLevelUp()
+        {
+            int level = _model.Xp.Level;
+            if (level == _lastLevel) return;
+
+            if (level > _lastLevel && _player != null)
+            {
+                _floating?.Spawn(_player.transform.position + Vector3.up * 2.6f,
+                    $"LEVEL {level}", XpColor, crit: true, life: 1.3f, fontSize: 38f);
+            }
+            _lastLevel = level;
         }
 
         private void UpdateAbilitySlots(float dt)
@@ -206,10 +267,21 @@ namespace MaxWorlds.UI
         private void SetSlot(int i, float radialFill, bool ready)
         {
             _slotRadial[i].fillAmount = radialFill;
-            // Glowing border only when the slot is ready (spec: Ultimate glows when ready).
+
+            // A one-shot bright flash at the MOMENT the slot comes off cooldown, decaying into the
+            // steady ready-pulse. The steady glow alone tells you the slot is ready; it doesn't tell
+            // you that it *just became* ready, which is the moment the player is waiting for.
+            if (ready && !_slotWasReady[i]) _slotReadyFlash[i] = 1f;
+            _slotWasReady[i] = ready;
+            _slotReadyFlash[i] = Mathf.Max(0f, _slotReadyFlash[i] - Time.deltaTime * 3.2f);
+
             float pulse = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f));
-            var c = ReadyGlow; c.a = ready ? pulse : 0f;
+            var c = Color.Lerp(ReadyGlow, Color.white, _slotReadyFlash[i] * 0.7f);
+            c.a = ready ? Mathf.Clamp01(pulse + _slotReadyFlash[i]) : 0f;
             _slotGlow[i].color = c;
+
+            float pop = 1f + 0.12f * _slotReadyFlash[i];
+            _slotGlow[i].rectTransform.localScale = new Vector3(pop, pop, 1f);
         }
 
         private void UpdateJoysticks()
@@ -337,6 +409,19 @@ namespace MaxWorlds.UI
             var bg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform);
             bg.type = Image.Type.Sliced;
+
+            // The chip/ghost bar sits BETWEEN the background and the fill, so the fill draws over
+            // it and only the difference between them is visible — that difference is the damage
+            // you just took. (YT-54; only the HP bar uses it.)
+            var ghostImg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), HpGhostColor, "Ghost");
+            Stretch(ghostImg.rectTransform, -3f);
+            ghostImg.type = Image.Type.Filled;
+            ghostImg.fillMethod = Image.FillMethod.Horizontal;
+            ghostImg.fillOrigin = (int)Image.OriginHorizontal.Left;
+            ghostImg.fillAmount = 1f;
+            ghostImg.raycastTarget = false;
+            if (name == "HP") _hpGhost = ghostImg;
+            else ghostImg.gameObject.SetActive(false);
 
             var fillImg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), fill, "Fill");
             Stretch(fillImg.rectTransform, -3f); // inset inside the bg for a bordered look
