@@ -41,6 +41,10 @@ namespace MaxWorlds.UI
         /// stand-in switches off and the arena advances only on real destruction signals.</summary>
         private bool _externalFactories;
 
+        /// <summary>Once a real boss (YT-27) registers, the boss bar is driven by its actual HP
+        /// rather than engaged/drained by the kill + arena stand-in.</summary>
+        private bool _externalBoss;
+
         /// <summary>XP granted per kill (HUD shows it on the SPARKS pickup).</summary>
         public int XpPerKill => _xpPerKill;
 
@@ -87,7 +91,8 @@ namespace MaxWorlds.UI
 
             if (Boss.Active)
             {
-                Boss.Damage(_bossDamagePerKill);
+                // A real boss (YT-27) owns its own HP; kills only drain the stand-in boss.
+                if (!_externalBoss) Boss.Damage(_bossDamagePerKill);
                 return;
             }
 
@@ -124,11 +129,37 @@ namespace MaxWorlds.UI
 
         private void MaybeEngageBoss()
         {
+            if (_externalBoss) return; // a real boss engages itself via signals
             if (Arena.Complete && !_bossTriggered)
             {
                 _bossTriggered = true;
                 Boss.Engage(_bossName, _bossPhases);
             }
+        }
+
+        // --- Real boss (YT-27) drives the boss bar via signals instead of the stand-in ---
+
+        /// <summary>A real boss exists — never engage/drain the stand-in boss.</summary>
+        public void UseExternalBoss() => _externalBoss = true;
+
+        /// <summary>Engage the boss bar from a real boss (name + phase count for the segments).</summary>
+        public void EngageBossExternal(string name, int phases)
+        {
+            _externalBoss = true;
+            _bossTriggered = true;
+            Boss.Engage(name, phases);
+        }
+
+        /// <summary>Update the boss bar from the real boss's HP fraction.</summary>
+        public void SetBossHealth(float normalized)
+        {
+            if (Boss.Active) Boss.SetNormalized(normalized);
+        }
+
+        /// <summary>Force-defeat the boss bar (real boss died).</summary>
+        public void DefeatBossExternal()
+        {
+            if (Boss.Active) Boss.Defeat();
         }
 
         /// <summary>Spend the Ultimate if charged. Returns true if it fired.</summary>

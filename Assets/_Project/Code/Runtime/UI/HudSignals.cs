@@ -28,6 +28,18 @@ namespace MaxWorlds.UI
         /// <summary>A factory was destroyed — HUD advances the arena tracker for real. (worldPos)</summary>
         public static event Action<Vector3> FactoryDestroyed;
 
+        /// <summary>A real boss exists — HUD stops driving the boss bar off the kill stand-in (YT-27).</summary>
+        public static event Action BossRegistered;
+
+        /// <summary>The boss engaged — show the bar + name card. (name, phases)</summary>
+        public static event Action<string, int> BossEngaged;
+
+        /// <summary>The boss's HP changed. (normalized 0..1)</summary>
+        public static event Action<float> BossHealthChanged;
+
+        /// <summary>The boss was defeated — hide the bar.</summary>
+        public static event Action BossDefeated;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -42,5 +54,17 @@ namespace MaxWorlds.UI
 
         public static void EmitFactoryDestroyed(Vector3 worldPos)
             => FactoryDestroyed?.Invoke(worldPos);
+
+        public static void EmitBossRegistered()
+            => BossRegistered?.Invoke();
+
+        public static void EmitBossEngaged(string name, int phases)
+            => BossEngaged?.Invoke(name, phases);
+
+        public static void EmitBossHealth(float normalized)
+            => BossHealthChanged?.Invoke(normalized);
+
+        public static void EmitBossDefeated()
+            => BossDefeated?.Invoke();
     }
 }
