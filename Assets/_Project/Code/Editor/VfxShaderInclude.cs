@@ -23,10 +23,11 @@ namespace MaxWorlds.Editor
     {
         private static readonly string[] Required =
         {
-            "Universal Render Pipeline/Particles/Unlit",
+            "Universal Render Pipeline/Particles/Unlit",   // VfxMaterials (YT-47/48)
+            "Universal Render Pipeline/Lit",               // MaterialLibrary (YT-50)
         };
 
-        [MenuItem("MaxWorlds/Include VFX Shaders In Build (YT-47)")]
+        [MenuItem("MaxWorlds/Include Runtime Shaders In Build (YT-47)")]
         public static void Apply()
         {
             var settings = GraphicsSettings.GetGraphicsSettings();
