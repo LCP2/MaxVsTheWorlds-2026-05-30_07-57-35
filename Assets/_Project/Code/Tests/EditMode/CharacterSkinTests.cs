@@ -107,6 +107,35 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void UnderSustainedFire_TheFlashDecaysFastEnoughToNotWashTheBodyOut()
+        {
+            // The blaster ticks every 0.1s on every enemy it touches. If the flash outlives that
+            // gap, an enemy under fire sits permanently white — which erases the body colour that
+            // this whole ticket exists to give it. Caught by looking at the live build; pinned here.
+            const float tickInterval = 0.1f;
+
+            var skin = new GameObject("bot").AddComponent<CharacterSkin>();
+            try
+            {
+                skin.Bind(CharacterRole.Robot);
+
+                // How much flash is left by the time the next tick lands?
+                float decay = 16f;      // must match the shipped default
+                float tint = 0.45f;
+                float remaining = Mathf.Max(0f, 1f - decay * tickInterval);
+                float bodyWhitening = remaining * tint;
+
+                Assert.That(bodyWhitening, Is.LessThan(0.25f),
+                    "between shots the flash must be almost gone, or a sprayed enemy is a white blob " +
+                    "and you can no longer tell it from anything else on screen");
+            }
+            finally
+            {
+                Object.DestroyImmediate(skin.gameObject);
+            }
+        }
+
+        [Test]
         public void AHit_OnlyEverFlashesAnEnemy_NeverMax()
         {
             var max = GameObject.CreatePrimitive(PrimitiveType.Capsule);
