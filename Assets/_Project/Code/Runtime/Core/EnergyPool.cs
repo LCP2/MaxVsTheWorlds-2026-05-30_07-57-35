@@ -43,6 +43,15 @@ namespace MaxWorlds.Core
             return true;
         }
 
+        /// <summary>Top the tank straight back up. Used by dev/filming mode (YT-60) so the stream
+        /// can be held indefinitely; nothing in a normal session calls it.</summary>
+        public void Refill()
+        {
+            if (Current >= Max) return;
+            Current = Max;
+            Changed?.Invoke(Current);
+        }
+
         /// <summary>Advance regen. Call once per frame with deltaTime.</summary>
         public void Tick(float dt)
         {
