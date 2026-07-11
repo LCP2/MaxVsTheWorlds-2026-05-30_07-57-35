@@ -5,6 +5,7 @@
         "MaxWorlds.Core",
         "MaxWorlds.Gameplay",
         "MaxWorlds.Rendering",
+        "MaxWorlds.Editor",
         "Unity.RenderPipelines.Core.Runtime",
         "Unity.RenderPipelines.Universal.Runtime",
         "UnityEngine.TestRunner",
