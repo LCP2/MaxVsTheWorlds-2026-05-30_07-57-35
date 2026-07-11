@@ -20,26 +20,13 @@ namespace MaxWorlds.Rendering
     [DisallowMultipleComponent]
     public sealed class CharacterMaterials : MonoBehaviour
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install()
-        {
-            if (FindFirstObjectByType<CharacterMaterials>() != null) return;
-            new GameObject("CharacterMaterials").AddComponent<CharacterMaterials>();
-        }
-
-        private float _rescanTimer;
-
-        private void Update()
-        {
-            // Enemies are pooled and spawn continuously through a run, so new bodies keep arriving.
-            // A periodic sweep is far cheaper than a per-spawn hook into the spawner (which is
-            // gameplay-owned anyway).
-            _rescanTimer -= Time.deltaTime;
-            if (_rescanTimer > 0f) return;
-            _rescanTimer = 1f;
-
-            Apply();
-        }
+        // NOTE (YT-61): this no longer installs or sweeps on a timer. CharacterSkinDirector owns
+        // dressing characters now, because the timer was the bug: it swept once a second, and a
+        // pooled robot is created and activated on the SAME frame — so a new enemy could charge at
+        // you for up to a second still wearing Unity's default material, which has no URP subshader
+        // and draws as the magenta error colour. A skin now applies itself in OnEnable.
+        //
+        // The class stays for Apply()/IsCharacter(), which the tests and the skins both use.
 
         /// <summary>Dress every character renderer. Returns how many were newly dressed.</summary>
         public int Apply()
