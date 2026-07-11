@@ -181,7 +181,24 @@ namespace MaxWorlds.Rendering
 
         // --- camera ---
 
-        private static void EnablePostProcessingOnCamera()
+        private bool _postEnabled;
+
+        /// <summary>
+        /// Keep trying until the camera exists.
+        ///
+        /// The original version gave up silently if Camera.main was null at Awake — and the camera
+        /// is built by the Cinemachine rig, so "not there yet" is a real possibility. One missed
+        /// frame and post-processing stays off for the entire session, with nothing logged. That is
+        /// exactly the kind of silent failure that made YT-49 look fine in the editor and do nothing
+        /// on the web build, so it now retries and says so out loud.
+        /// </summary>
+        private void Update()
+        {
+            if (_postEnabled) return;
+            EnablePostProcessingOnCamera();
+        }
+
+        private void EnablePostProcessingOnCamera()
         {
             var cam = Camera.main;
             if (cam == null) return;
@@ -192,6 +209,16 @@ namespace MaxWorlds.Rendering
             if (data == null) return;
             data.renderPostProcessing = true;
             data.antialiasing = AntialiasingMode.FastApproximateAntialiasing;
+            _postEnabled = true;
+
+            // Logged so the truth is readable from a browser console on the deployed build. The
+            // whole YT-49 pass can be silently inert on WebGL, and "it looks right in the editor"
+            // is not evidence.
+            var urp = UniversalRenderPipeline.asset;
+            Debug.Log($"[BackyardLighting] post-processing ON for camera '{cam.name}' — " +
+                      $"volume overrides={(_profile != null ? _profile.components.Count : 0)}, " +
+                      $"renderScale={(urp != null ? urp.renderScale : -1f)}, " +
+                      $"upscaler={(urp != null ? urp.upscalingFilter.ToString() : "?")}");
         }
 
         private void OnDestroy()
