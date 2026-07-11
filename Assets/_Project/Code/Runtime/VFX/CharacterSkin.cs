@@ -65,8 +65,18 @@ namespace MaxWorlds.VFX
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
         [SerializeField] private CharacterRole role = CharacterRole.Robot;
-        [Tooltip("Seconds for the hit flash to fall away.")]
-        [SerializeField] private float flashDecay = 7f;
+
+        [Tooltip("How fast the hit flash falls away, in flash-units per second. This has to be FAST. " +
+                 "The blaster is a sustained stream that lands a tick every 0.1s on every enemy it " +
+                 "touches, so a slow flash never gets back to zero between hits and the enemy sits " +
+                 "permanently washed white — which erases the very body colour that makes it " +
+                 "readable as a threat. It must read as a shimmer under fire, not a white-out.")]
+        [SerializeField] private float flashDecay = 16f;
+
+        [Tooltip("How much of the flash bleeds into the body colour. Kept low on purpose: the flash " +
+                 "lives mostly in emission, so a hit reads hot WITHOUT the body losing its identity.")]
+        [Range(0f, 1f)]
+        [SerializeField] private float flashTint = 0.45f;
 
         private MeshRenderer _renderer;
         private MaterialPropertyBlock _mpb;
@@ -148,12 +158,12 @@ namespace MaxWorlds.VFX
             if (_flash > 0f)
             {
                 _flash = Mathf.Max(0f, _flash - flashDecay * Time.deltaTime);
-                body = Color.Lerp(body, FlashColor, _flash);
+                body = Color.Lerp(body, FlashColor, _flash * flashTint);
             }
 
-            // Emission carries the flash and the wind-up glow, so the body reads hot without
-            // washing its base colour out to white.
-            Color emission = FlashColor * (_flash * 0.85f) + WarnColor * (windup * 0.35f);
+            // Emission carries most of the flash, so a hit reads hot without the body losing the
+            // colour that tells you what it is.
+            Color emission = FlashColor * (_flash * 0.9f) + WarnColor * (windup * 0.35f);
             Write(body, emission);
         }
 
