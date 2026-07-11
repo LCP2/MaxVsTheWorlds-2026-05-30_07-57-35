@@ -223,7 +223,7 @@ namespace MaxWorlds.Bosses
             HudSignals.EmitBossHealth(0f);
             HudSignals.EmitBossDefeated();
             HudSignals.EmitPickup(transform.position + Vector3.up * 2.5f, "RARE SHARD", new Color(0.5f, 0.85f, 1f));
-            SpawnDeathBurst();
+            // The death spectacle hangs off the BossDefeated signal (BossSpectacle, YT-55).
             gameObject.SetActive(false);
         }
 
@@ -265,21 +265,5 @@ namespace MaxWorlds.Bosses
             _renderer.SetPropertyBlock(_mpb);
         }
 
-        private void SpawnDeathBurst()
-        {
-            var go = new GameObject("BigBermudaWreck");
-            go.transform.position = transform.position + Vector3.up;
-            var ps = go.AddComponent<ParticleSystem>();
-            var main = ps.main;
-            main.startLifetime = 1.1f;
-            main.startSpeed = 10f;
-            main.startSize = 0.6f;
-            main.startColor = new Color(0.5f, 0.8f, 0.3f, 1f);
-            main.stopAction = ParticleSystemStopAction.Destroy;
-            var emission = ps.emission;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 60) });
-            emission.rateOverTime = 0f;
-            ps.Play();
-        }
     }
 }

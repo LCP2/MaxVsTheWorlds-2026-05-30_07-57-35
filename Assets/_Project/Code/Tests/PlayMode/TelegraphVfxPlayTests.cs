@@ -46,9 +46,15 @@ namespace MaxWorlds.Tests.PlayMode
             if (zone != null) Object.Destroy(zone.gameObject);
         }
 
+        /// <summary>Only TelegraphVfx's own rings. Other systems (the boss shockwave) also use
+        /// GroundRing, and picking one of those up would make this test lie about what it's
+        /// measuring.</summary>
         private static GroundRing FindVisibleRing()
         {
-            foreach (var r in Object.FindObjectsByType<GroundRing>(FindObjectsSortMode.None))
+            var telegraph = Object.FindFirstObjectByType<TelegraphVfx>();
+            if (telegraph == null) return null;
+
+            foreach (var r in telegraph.GetComponentsInChildren<GroundRing>(includeInactive: true))
             {
                 if (r.Visible) return r;
             }

@@ -20,8 +20,12 @@ namespace MaxWorlds.VFX
         private readonly int _perFrameCap;
         private int _usedThisFrame;
 
+        /// <param name="unscaledTime">Keep simulating while the game is frozen. The boss-defeat
+        /// spectacle needs this: the run ends the instant the boss dies and the result screen
+        /// pauses with timeScale = 0, so a scaled-time explosion would be frozen solid before the
+        /// player ever saw it.</param>
         public VfxBurst(string name, Material material, int maxParticles, float gravity,
-                        int perFrameCap, bool stretched = false)
+                        int perFrameCap, bool stretched = false, bool unscaledTime = false)
         {
             _perFrameCap = perFrameCap;
 
@@ -34,6 +38,7 @@ namespace MaxWorlds.VFX
             main.startSpeed = 0f;          // velocity is supplied per particle
             main.maxParticles = maxParticles;
             main.gravityModifier = gravity;
+            main.useUnscaledTime = unscaledTime;
 
             var emission = _ps.emission;
             emission.enabled = false;      // Emit()-driven only
