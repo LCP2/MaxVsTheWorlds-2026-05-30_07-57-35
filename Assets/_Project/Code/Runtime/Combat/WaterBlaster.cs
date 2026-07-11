@@ -147,6 +147,7 @@ namespace MaxWorlds.Combat
                 }
             }
 
+            bool hitSomething = false;
             for (int i = 0; i < s_buffer.Count; i++)
             {
                 var d = s_buffer[i];
@@ -154,6 +155,7 @@ namespace MaxWorlds.Combat
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
                 if (d.Team == Team.Player) continue; // never hit the wielder / allies
                 d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true));
+                hitSomething = true;
 
                 // Cosmetic: splash on the target's surface facing the blaster, not at its
                 // centre (which is what the damage event reports). Nothing below feeds damage.
@@ -161,6 +163,15 @@ namespace MaxWorlds.Combat
                 {
                     _vfx.Splash(ContactPoint(origin, dir, s_contacts[i], point), dir, damagePerTick);
                 }
+            }
+
+            // Cosmetic (YT-53 readability): with nothing hit, a hitscan weapon gives the player no
+            // landing point at all — the stream just stops in mid-air. Splash where the water meets
+            // the ground so it's always obvious where the shot actually went.
+            if (!hitSomething && _vfx != null)
+            {
+                Vector3 end = origin + dir * range;
+                _vfx.Splash(new Vector3(end.x, 0f, end.z), dir, damagePerTick * 0.5f);
             }
         }
 

@@ -72,6 +72,29 @@ namespace MaxWorlds.VFX
             });
         }
 
+        /// <summary>
+        /// A filled danger disc with a bright rim — the ground telegraph (YT-53).
+        /// The rim is what makes it legible at a glance: a plain soft disc on grass reads as a
+        /// smudge, while a hard edge reads as a boundary you can stand outside of.
+        /// </summary>
+        public static Texture2D Ring(int size = 128)
+        {
+            return Tex($"ring{size}", size, (nx, ny) =>
+            {
+                float d = Mathf.Sqrt(nx * nx + ny * ny) * 2f;   // 0 centre -> 1 edge
+                if (d >= 1f) return 0f;
+
+                // Dim interior wash, faded out before the boundary. Without the fade the disc
+                // would hard-cut from 0.3 alpha to 0 at d=1 and the outer edge would alias badly.
+                float fill = 0.3f * (1f - Edge(0.62f, 0.98f, d));
+
+                // Bright rim, comfortably inside the boundary so it too has room to fall off.
+                float rim = Edge(0.66f, 0.84f, d) * (1f - Edge(0.84f, 0.96f, d));
+
+                return Mathf.Clamp01(fill + rim);
+            });
+        }
+
         /// <summary>Soft radial glow, no hard core — additive flashes and the muzzle bloom.</summary>
         public static Texture2D Glow(int size = 64)
         {
@@ -133,6 +156,21 @@ namespace MaxWorlds.VFX
         {
             if (m.HasProperty("_BaseMap")) m.SetTexture("_BaseMap", tex);   // URP
             if (m.HasProperty("_MainTex")) m.SetTexture("_MainTex", tex);   // built-in fallbacks
+        }
+
+        /// <summary>
+        /// The GLSL-style smoothstep edge function: 0 below <paramref name="e0"/>, 1 above
+        /// <paramref name="e1"/>, smoothly ramped between.
+        ///
+        /// NOT the same as UnityEngine.Mathf.SmoothStep(from, to, t), which interpolates BETWEEN
+        /// from and to — passing edges to that returns a value in [from, to] rather than in [0, 1],
+        /// which is a very easy way to get a shape that looks nothing like the one you drew.
+        /// </summary>
+        private static float Edge(float e0, float e1, float x)
+        {
+            if (e1 <= e0) return x >= e1 ? 1f : 0f;
+            float t = Mathf.Clamp01((x - e0) / (e1 - e0));
+            return t * t * (3f - 2f * t);
         }
 
         private delegate float Falloff(float nx, float ny);
