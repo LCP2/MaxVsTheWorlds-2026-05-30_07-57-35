@@ -1297,6 +1297,7 @@ GameObject:
   - component: {fileID: 1405620307}
   - component: {fileID: 1405620306}
   - component: {fileID: 1405620305}
+  - component: {fileID: 1405620308}
   m_Layer: 0
   m_Name: CM FixedAngle
   m_TagString: Untagged
@@ -1322,7 +1323,7 @@ MonoBehaviour:
     AngularDampingMode: 0
     RotationDamping: {x: 1, y: 1, z: 1}
     QuaternionDamping: 1
-  FollowOffset: {x: 0, y: 13, z: -4.22}
+  FollowOffset: {x: 0, y: 19.496658, z: -6.334848}
 --- !u!114 &1405620306
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1381,6 +1382,20 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1405620308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1405620304}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4affc334dc5f98d40b1b44484d3be7fb, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.CameraRig.FixedAngleCameraRig
+  pitchDegrees: 72
+  cameraDistance: 20.5
 --- !u!1 &1419767784
 GameObject:
   m_ObjectHideFlags: 0
