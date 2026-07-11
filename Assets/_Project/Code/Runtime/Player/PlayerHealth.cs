@@ -37,6 +37,7 @@ namespace MaxWorlds.Player
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
+            if (DevMode.IsInvincible) return;                      // dev/filming only; off by default (YT-60)
             if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
             if (_controller != null && _controller.IsInvulnerable) return; // dash dodge
             _health = Mathf.Max(0f, _health - info.Amount);

@@ -103,6 +103,10 @@ namespace MaxWorlds.Combat
                 }
             }
 
+            // Dev/filming only; both are false in a normal session (YT-60).
+            if (DevMode.IsAutoFiring) IsFiring = true;
+            if (DevMode.IsInfiniteEnergy) Energy.Refill();
+
             // Hysteresis: once the tank runs dry, lock fire out until it recharges to
             // rechargeFraction of max. Without this, an empty tank dribbles a single
             // puff every regenDelay (the "clouds of bubbles" stutter) instead of a
