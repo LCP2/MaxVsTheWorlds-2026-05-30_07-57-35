@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Enemies
 {
@@ -210,6 +211,8 @@ namespace MaxWorlds.Enemies
                 return;
             }
             _health -= info.Amount;
+            // Floating damage number (YT-30 HUD). No-op if nothing is listening (tests).
+            HudSignals.EmitDamage(transform.position, info.Amount);
             if (_health <= 0f) Die(info.Direction);
             else SetTell(Color.white); // brief hit flash; next state tick restores
         }
@@ -218,6 +221,8 @@ namespace MaxWorlds.Enemies
         {
             Current = State.Dead;
             SpawnDeathPop();
+            // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
+            HudSignals.EmitEnemyKilled(transform.position);
             Died?.Invoke(this);
             gameObject.SetActive(false);
         }
