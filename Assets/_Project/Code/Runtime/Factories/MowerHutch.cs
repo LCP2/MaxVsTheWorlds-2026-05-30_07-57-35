@@ -63,9 +63,9 @@ namespace MaxWorlds.Factories
         {
             if (_spawner != null) _spawner.enabled = false;       // spawns stop
             if (gate != null) gate.Open();                        // path opens
+            // The destruction VFX hangs off this signal (CombatVfx, YT-48).
             HudSignals.EmitFactoryDestroyed(transform.position);
             HudSignals.EmitPickup(transform.position + Vector3.up * 2.4f, "GATE OPEN", barColor);
-            SpawnDestructionBurst();
 
             // The source is gone: hide the body, collider, and bar — but keep the GameObject
             // ALIVE, because the robots it already spawned are parented here and must keep
@@ -140,21 +140,5 @@ namespace MaxWorlds.Factories
             return img;
         }
 
-        private void SpawnDestructionBurst()
-        {
-            var go = new GameObject("MowerHutchWreck");
-            go.transform.position = transform.position + Vector3.up;
-            var ps = go.AddComponent<ParticleSystem>();
-            var main = ps.main;
-            main.startLifetime = 0.8f;
-            main.startSpeed = 8f;
-            main.startSize = 0.4f;
-            main.startColor = new Color(0.9f, 0.6f, 0.2f, 1f);
-            main.stopAction = ParticleSystemStopAction.Destroy;
-            var emission = ps.emission;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 40) });
-            emission.rateOverTime = 0f;
-            ps.Play();
-        }
     }
 }

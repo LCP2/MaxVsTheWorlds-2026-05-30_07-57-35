@@ -220,8 +220,8 @@ namespace MaxWorlds.Enemies
         private void Die(Vector3 fromDir)
         {
             Current = State.Dead;
-            SpawnDeathPop();
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
+            // The death VFX also hangs off this signal (CombatVfx, YT-48).
             HudSignals.EmitEnemyKilled(transform.position);
             Died?.Invoke(this);
             gameObject.SetActive(false);
@@ -236,21 +236,5 @@ namespace MaxWorlds.Enemies
             tellRenderer.SetPropertyBlock(_mpb);
         }
 
-        private void SpawnDeathPop()
-        {
-            var go = new GameObject("RobotDeathPop");
-            go.transform.position = transform.position;
-            var ps = go.AddComponent<ParticleSystem>();
-            var main = ps.main;
-            main.startLifetime = 0.4f;
-            main.startSpeed = 5f;
-            main.startSize = 0.25f;
-            main.startColor = new Color(0.9f, 0.75f, 0.25f, 1f);
-            main.stopAction = ParticleSystemStopAction.Destroy;
-            var emission = ps.emission;
-            emission.SetBursts(new[] { new ParticleSystem.Burst(0f, 18) });
-            emission.rateOverTime = 0f;
-            ps.Play();
-        }
     }
 }
