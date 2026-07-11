@@ -503,7 +503,7 @@ MonoBehaviour:
   target: {fileID: 0}
   liveCap: 24
   spawnInterval: 0.4
-  spawnRadius: 12
+  spawnRadius: 3.5
 --- !u!23 &260902205
 MeshRenderer:
   m_ObjectHideFlags: 0
@@ -785,7 +785,6 @@ MonoBehaviour:
   regenPerSec: 25
   regenDelay: 0.6
   rechargeFraction: 0.35
-  streamColor: {r: 0.4, g: 0.75, b: 1, a: 1}
   debugOverlay: 1
   aimSource: {fileID: 435318708}
 --- !u!114 &435318711
@@ -839,6 +838,59 @@ Transform:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 500010018}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!1 &532247391
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 532247393}
+  - component: {fileID: 532247392}
+  m_Layer: 0
+  m_Name: Backyard Path
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &532247392
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 532247391}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0285e114fe62c5e45b153f66357d044c, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Arena.BackyardPath
+  layout:
+    StartZ: -8
+    GateZ: 18
+    ArenaEndZ: 38
+    LaneHalfWidth: 4.5
+    ArenaHalfWidth: 13
+    WallHeight: 3.5
+    WallThickness: 1
+  shedZ: 10
+--- !u!4 &532247393
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 532247391}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -1281,7 +1333,7 @@ Transform:
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 1.6, z: 18}
-  m_LocalScale: {x: 8, y: 3.2, z: 0.6}
+  m_LocalScale: {x: 11, y: 3.2, z: 0.6}
   m_ConstrainProportionsScale: 0
   m_Children: []
   m_Father: {fileID: 0}
@@ -1504,3 +1556,4 @@ SceneRoots:
   - {fileID: 260902208}
   - {fileID: 75355772}
   - {fileID: 53510057}
+  - {fileID: 532247393}
