@@ -55,6 +55,23 @@ namespace MaxWorlds.Player
         /// <summary>Current planar facing (unit vector). The gadget fires along this.</summary>
         public Vector3 Facing => _facing;
 
+        /// <summary>Latest movement input (left stick / WASD), clamped to the unit disc.
+        /// The HUD (YT-30) reads this to light the movement joystick + direction arrow.</summary>
+        public Vector2 MoveInput { get; private set; }
+
+        /// <summary>Dash cooldown as a 0..1 wipe (1 = just dashed, 0 = ready) for the HUD dash slot.</summary>
+        public float DashCooldownNormalized
+        {
+            get
+            {
+                float total = dashCooldown + dashDuration;
+                return total > 0f ? Mathf.Clamp01(_cooldownTimer / total) : 0f;
+            }
+        }
+
+        /// <summary>True when the dash is off cooldown (HUD dash slot "ready" glow).</summary>
+        public bool DashReady => _cooldownTimer <= 0f;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -108,6 +125,7 @@ namespace MaxWorlds.Player
             {
                 moveDir.Normalize();
             }
+            MoveInput = new Vector2(moveDir.x, moveDir.z);
 
             // Facing: aim takes priority, falling back to movement direction.
             // Require a deliberate push (magnitude > aimActivate) so resting-stick

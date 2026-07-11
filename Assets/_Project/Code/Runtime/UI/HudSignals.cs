@@ -1,0 +1,33 @@
+using System;
+using UnityEngine;
+
+namespace MaxWorlds.UI
+{
+    /// <summary>
+    /// Fire-and-forget event hub the HUD (YT-30) listens on for combat overlays, so
+    /// gameplay can announce hits/kills without depending on any HUD type. Emitters
+    /// (e.g. <c>RobotEnemy</c>) call the <c>Emit*</c> helpers; the <c>HudController</c>
+    /// subscribes while enabled and unsubscribes on teardown. All events are null-safe
+    /// with no subscribers (so headless tests that damage enemies stay silent).
+    /// </summary>
+    public static class HudSignals
+    {
+        /// <summary>A damageable took a hit. (worldPos, amount, crit)</summary>
+        public static event Action<Vector3, float, bool> DamageDealt;
+
+        /// <summary>A pickup/reward dropped. (worldPos, label, colour)</summary>
+        public static event Action<Vector3, string, Color> Pickup;
+
+        /// <summary>An enemy died — HUD converts to XP + a SPARKS pickup. (worldPos)</summary>
+        public static event Action<Vector3> EnemyKilled;
+
+        public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
+            => DamageDealt?.Invoke(worldPos, amount, crit);
+
+        public static void EmitPickup(Vector3 worldPos, string label, Color color)
+            => Pickup?.Invoke(worldPos, label, color);
+
+        public static void EmitEnemyKilled(Vector3 worldPos)
+            => EnemyKilled?.Invoke(worldPos);
+    }
+}
