@@ -26,6 +26,19 @@ namespace MaxWorlds.Editor
             "Universal Render Pipeline/Particles/Unlit",   // VfxMaterials (YT-47/48)
             "Universal Render Pipeline/Lit",               // MaterialLibrary (YT-50)
             "MaxWorlds/StylizedCharacter",                 // MaterialLibrary.Character (YT-57)
+
+            // YT-59. URP builds its post-processing material library EAGERLY — it creates the FSR
+            // upscaling material whether or not FSR is ever selected. If that shader is stripped
+            // from the build it reports "not supported", and URP's response is not to skip FSR but
+            // to skip POST-PROCESSING ENTIRELY:
+            //
+            //   "Shader 'Hidden/.../Edge Adaptive Spatial Upsampling' is not supported
+            //    (in 'Blit FSR Upscaling'). PostProcessing render passes will not execute."
+            //
+            // Setting render scale to 1 does NOT prevent this (we tried; the warning survived),
+            // because the material is built regardless of the setting. The shader simply has to be
+            // in the build.
+            "Hidden/Universal Render Pipeline/Edge Adaptive Spatial Upsampling",
         };
 
         [MenuItem("MaxWorlds/Include Runtime Shaders In Build (YT-47)")]
