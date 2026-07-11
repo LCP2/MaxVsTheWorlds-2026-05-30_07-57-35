@@ -3,6 +3,7 @@
     "rootNamespace": "MaxWorlds",
     "references": [
         "MaxWorlds.Core",
+        "MaxWorlds.Rendering",
         "Unity.InputSystem",
         "Unity.Cinemachine",
         "Unity.TextMeshPro"
