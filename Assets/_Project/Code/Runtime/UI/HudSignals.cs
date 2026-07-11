@@ -21,6 +21,13 @@ namespace MaxWorlds.UI
         /// <summary>An enemy died — HUD converts to XP + a SPARKS pickup. (worldPos)</summary>
         public static event Action<Vector3> EnemyKilled;
 
+        /// <summary>A real factory came online — HUD stops driving the arena tracker off kills
+        /// and waits for <see cref="FactoryDestroyed"/> instead (YT-37).</summary>
+        public static event Action FactoryRegistered;
+
+        /// <summary>A factory was destroyed — HUD advances the arena tracker for real. (worldPos)</summary>
+        public static event Action<Vector3> FactoryDestroyed;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -29,5 +36,11 @@ namespace MaxWorlds.UI
 
         public static void EmitEnemyKilled(Vector3 worldPos)
             => EnemyKilled?.Invoke(worldPos);
+
+        public static void EmitFactoryRegistered()
+            => FactoryRegistered?.Invoke();
+
+        public static void EmitFactoryDestroyed(Vector3 worldPos)
+            => FactoryDestroyed?.Invoke(worldPos);
     }
 }
