@@ -15,7 +15,7 @@ namespace MaxWorlds.Enemies
     /// NavMesh is the YT-38 upgrade.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public sealed class RobotEnemy : MonoBehaviour, IDamageable
+    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable
     {
         public enum State { Chase, Telegraph, Lunge, Recover, Dead }
 
@@ -69,6 +69,9 @@ namespace MaxWorlds.Enemies
         private Vector3 _lungeDir;
         private bool _dealtThisLunge;
         private MaterialPropertyBlock _mpb;
+        private Vector3 _knockback;
+        [Tooltip("How fast a spray shove bleeds off (m/s²). Higher = a shorter shove (YT-64).")]
+        [SerializeField] private float knockbackDecay = 28f;
 
         private void Awake()
         {
@@ -114,7 +117,23 @@ namespace MaxWorlds.Enemies
                 case State.Recover:  TickRecover(dt);  break;
             }
 
+            ApplyKnockback(dt);
             ApplyGravity(dt);
+        }
+
+        /// <summary>Spray knockback (YT-64): a shove that decays over ~0.2s. Applied on top of the
+        /// state machine so being pushed doesn't cancel the chase/lunge, it just displaces.</summary>
+        public void ApplyKnockback(Vector3 impulse)
+        {
+            if (Current == State.Dead) return;
+            _knockback += impulse;
+        }
+
+        private void ApplyKnockback(float dt)
+        {
+            if (_knockback.sqrMagnitude < 0.0004f) { _knockback = Vector3.zero; return; }
+            _cc.Move(_knockback * dt);
+            _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, knockbackDecay * dt);
         }
 
         private void TickChase(float dt)
