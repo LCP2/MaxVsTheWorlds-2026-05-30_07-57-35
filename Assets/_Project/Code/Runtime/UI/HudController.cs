@@ -28,6 +28,9 @@ namespace MaxWorlds.UI
         private static readonly Color BiomeTint = new Color(0.96f, 0.62f, 0.20f, 0.06f); // warm orange overlay
         private static readonly Color BossColor = new Color(0.85f, 0.12f, 0.12f);
         private static readonly Color BoneWhite = new Color(0.96f, 0.94f, 0.86f);
+        /// <summary>The power-up shout (YT-67). Hot cyan-white: it has to out-shout the golden
+        /// SPARKS numbers flying around it, or the one moment that matters gets lost in them.</summary>
+        private static readonly Color BoostColor = new Color(0.45f, 0.95f, 1f);
 
         private const float RefW = 1920f, RefH = 1080f;
 
@@ -246,10 +249,18 @@ namespace MaxWorlds.UI
             int level = _model.Xp.Level;
             if (level == _lastLevel) return;
 
-            if (level > _lastLevel && _player != null)
+            if (level > _lastLevel)
             {
-                _floating?.Spawn(_player.transform.position + Vector3.up * 2.6f,
+                Vector3 at = _player != null ? _player.transform.position : Vector3.zero;
+
+                // The level-up used to be a number and nothing else. Say what was actually won,
+                // and tell gameplay so Max genuinely gets stronger (YT-67).
+                _floating?.Spawn(at + Vector3.up * 2.6f,
                     $"LEVEL {level}", XpColor, crit: true, life: 1.3f, fontSize: 38f);
+                _floating?.Spawn(at + Vector3.up * 3.4f,
+                    PowerRamp.BoostLabel(level), BoostColor, crit: true, life: 1.5f, fontSize: 32f);
+
+                HudSignals.EmitLevelUp(level, at);
             }
             _lastLevel = level;
         }
