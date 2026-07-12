@@ -48,6 +48,17 @@ namespace MaxWorlds.Core
         void TakeDamage(in DamageInfo info);
     }
 
+    /// <summary>
+    /// Something that can be shoved by a hit — the Spray gadget's knockback (YT-64). Kept separate
+    /// from <see cref="IDamageable"/> so only things that should move react (robots do; the boss and
+    /// the fixed factory don't), and the gadget stays decoupled from any concrete enemy type.
+    /// </summary>
+    public interface IKnockbackable
+    {
+        /// <summary>Add a velocity impulse (m/s), decayed by the receiver.</summary>
+        void ApplyKnockback(Vector3 impulse);
+    }
+
     /// <summary>Shared friendly-fire rule: damage applies unless attacker and target
     /// share a (non-neutral) team. Pure + unit-testable.</summary>
     public static class DamageRules

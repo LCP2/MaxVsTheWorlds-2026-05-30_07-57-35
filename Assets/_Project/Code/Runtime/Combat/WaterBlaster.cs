@@ -26,6 +26,14 @@ namespace MaxWorlds.Combat
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
         [SerializeField] private LayerMask hitMask = ~0;
 
+        [Header("Spray archetype (YT-64) — a threatening arc, not a thin dribble")]
+        [Tooltip("Half-angle of the spray cone, degrees. Everything in this arc within range is hit.")]
+        [SerializeField] private float coneHalfAngle = 35f;
+        [Tooltip("Velocity (m/s) each hit shoves an enemy back — sells 'pushing the swarm back'.")]
+        [SerializeField] private float knockbackForce = 5f;
+        [Tooltip("Visual width of the stream, so it reads as a spray fan (cosmetic only).")]
+        [SerializeField] private float streamVisualRadius = 1.1f;
+
         [Header("Energy")]
         [SerializeField] private float maxEnergy = 100f;
         [SerializeField] private float energyPerTick = 1.5f;
@@ -82,7 +90,7 @@ namespace MaxWorlds.Combat
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();
             if (_vfx == null) _vfx = gameObject.AddComponent<WaterVfx>();
-            _vfx.Init(range, radius);
+            _vfx.Init(range, Mathf.Max(radius, streamVisualRadius)); // fatter = reads as a spray fan
         }
 
         private void Update()
@@ -135,16 +143,19 @@ namespace MaxWorlds.Combat
         {
             Vector3 origin = transform.position;
             Vector3 dir = transform.forward;
-            // Spherecast volume along the stream; gather unique damageables.
-            int count = Physics.OverlapCapsuleNonAlloc(
-                origin, origin + dir * range, radius, _hits, hitMask, QueryTriggerInteraction.Ignore);
+            // Spray: gather everything within range, then keep only what's inside the cone arc —
+            // so one tick can wash a whole knot of robots, not a single-file tube (YT-64).
+            int count = Physics.OverlapSphereNonAlloc(
+                origin, range, _hits, hitMask, QueryTriggerInteraction.Ignore);
 
             s_buffer.Clear();
             s_contacts.Clear();
             for (int i = 0; i < count; i++)
             {
                 if (_hits[i] == null) continue;
-                if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && !s_buffer.Contains(d))
+                if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && d.Team != Team.Player
+                    && !s_buffer.Contains(d)
+                    && SprayHit.InCone(origin, dir, _hits[i].transform.position, range, coneHalfAngle))
                 {
                     s_buffer.Add(d);
                     s_contacts.Add(_hits[i]);
@@ -157,9 +168,15 @@ namespace MaxWorlds.Combat
                 var d = s_buffer[i];
                 var comp = d as Component;
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
-                if (d.Team == Team.Player) continue; // never hit the wielder / allies
                 d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true));
                 hitSomething = true;
+
+                // Light knockback — shove robots away from Max so the swarm visibly gives ground.
+                if (comp is IKnockbackable kb)
+                {
+                    Vector3 push = point - origin; push.y = 0f;
+                    if (push.sqrMagnitude > 1e-4f) kb.ApplyKnockback(push.normalized * knockbackForce);
+                }
 
                 // Cosmetic: splash on the target's surface facing the blaster, not at its
                 // centre (which is what the damage event reports). Nothing below feeds damage.
