@@ -24,7 +24,8 @@ namespace MaxWorlds.Enemies
         [SerializeField] private Transform target;
 
         [Header("Movement")]
-        [SerializeField] private float moveSpeed = 3.2f;
+        // ~70% of Max's 6 m/s so the swarm is kiteable, not an instant overrun (YT-63). Tunable.
+        [SerializeField] private float moveSpeed = 4.2f;
         [SerializeField] private float gravity = 20f;
 
         [Header("Lunge")]
