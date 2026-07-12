@@ -73,6 +73,41 @@ namespace MaxWorlds.Combat
         /// overrides it in Update.</summary>
         public void SetFiring(bool firing) => IsFiring = firing;
 
+        // --- Power ramp (YT-67) ---------------------------------------------------------------
+        // The authored numbers, captured before any level-up scales them. Multipliers are always
+        // applied to these, never compounded onto the live values, so re-applying is harmless.
+        private float _baseDamage;
+        private float _baseInterval;
+        private float _baseEnergyPerSecond;
+
+        /// <summary>Damage one tick of the stream deals, after the power ramp.</summary>
+        public float DamagePerTick => damagePerTick;
+        /// <summary>Seconds between ticks, after the power ramp.</summary>
+        public float FireInterval => fireInterval;
+        /// <summary>Energy one tick costs, after the power ramp.</summary>
+        public float EnergyPerTick => energyPerTick;
+        /// <summary>What the stream actually outputs per second — the number the player feels.</summary>
+        public float DamagePerSecond => fireInterval > 0f ? damagePerTick / fireInterval : 0f;
+        /// <summary>What holding the trigger actually costs per second. Held CONSTANT by the ramp.</summary>
+        public float EnergyPerSecond => fireInterval > 0f ? energyPerTick / fireInterval : 0f;
+
+        /// <summary>
+        /// Scale the stream by the power ramp (YT-67).
+        ///
+        /// The energy cost is re-derived so that holding the trigger costs the same PER SECOND as
+        /// it always did. That's the whole trick, and without it a fire-rate boost is a lie: more
+        /// ticks per second at the same cost per tick just drains the tank proportionally faster,
+        /// so the player fires more often, runs dry sooner, and ends up doing the same damage per
+        /// tankful. The upgrade would have felt like nothing. Now the pump gets faster, not
+        /// thirstier, and the boost is real damage rather than a shuffled cost.
+        /// </summary>
+        public void ApplyPower(float damageMultiplier, float fireRateMultiplier)
+        {
+            damagePerTick = _baseDamage * Mathf.Max(0f, damageMultiplier);
+            fireInterval = _baseInterval / Mathf.Max(0.01f, fireRateMultiplier);
+            energyPerTick = _baseEnergyPerSecond * fireInterval;
+        }
+
         private float _tickTimer;
         private bool _depleted;
         private bool _lastEmitting;
@@ -87,10 +122,18 @@ namespace MaxWorlds.Combat
         {
             Energy = new EnergyPool(maxEnergy, regenPerSec, regenDelay);
 
+            // Capture the authored numbers before anything scales them (YT-67).
+            _baseDamage = damagePerTick;
+            _baseInterval = fireInterval;
+            _baseEnergyPerSecond = fireInterval > 0f ? energyPerTick / fireInterval : energyPerTick;
+
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();
             if (_vfx == null) _vfx = gameObject.AddComponent<WaterVfx>();
             _vfx.Init(range, Mathf.Max(radius, streamVisualRadius)); // fatter = reads as a spray fan
+
+            // The level-up ramp rides along with the gadget, same self-attaching rule as the VFX.
+            if (GetComponent<PlayerPower>() == null) gameObject.AddComponent<PlayerPower>();
         }
 
         private void Update()
