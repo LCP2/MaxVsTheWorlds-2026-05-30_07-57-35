@@ -30,6 +30,17 @@ namespace MaxWorlds.Factories
         [Tooltip("The pulsing 'vulnerable core' — the thing to shoot (spec §7 Robot Factory).")]
         [SerializeField] private Color coreColor = new Color(0.35f, 0.9f, 1f);
 
+        // --- World bar (YT-71): sizes in metres, so the bar reads as a label on the factory rather
+        // than a banner across the sky. The bar is deliberately narrower than the 3 m body: it's a
+        // readout of the damage you're doing, not a piece of architecture. ---
+        private const float BarWorldWidth = 1.8f;        // metres, vs a 3 m body
+        private const float BarHeightAboveCentre = 1.7f; // metres above the body's centre (top is 1 m up)
+        private const float BarPixelWidth = 180f;
+        private const float BarPixelHeight = 22f;
+        private const float LabelPixelWidth = 260f;
+        private const float LabelPixelHeight = 28f;
+        private const int LabelFontSize = 22;
+
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
         private Camera _camera;
@@ -129,15 +140,22 @@ namespace MaxWorlds.Factories
             var pivotGo = new GameObject("FactoryHealthBar");
             _barPivot = pivotGo.transform;
             _barPivot.SetParent(transform, false);
-            _barPivot.localPosition = Vector3.up * 3.2f;
+
+            // The body is a cube scaled (3, 2, 3), and a child inherits that. Cancel it here so
+            // everything below is authored in plain metres — otherwise the bar's own scale gets
+            // multiplied by the body's and it renders many metres wide (YT-71).
+            Vector3 body = transform.lossyScale;
+            _barPivot.localScale = WorldBar.Unscale(body);
+            _barPivot.localPosition = new Vector3(
+                0f, WorldBar.LocalOffsetY(BarHeightAboveCentre, body.y), 0f);
 
             var canvasGo = new GameObject("Canvas", typeof(Canvas));
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
             var crt = (RectTransform)canvasGo.transform;
             crt.SetParent(_barPivot, false);
-            crt.sizeDelta = new Vector2(220f, 28f);
-            crt.localScale = Vector3.one * 0.02f; // world units per UI px
+            crt.sizeDelta = new Vector2(BarPixelWidth, BarPixelHeight);
+            crt.localScale = Vector3.one * WorldBar.CanvasScaleFor(BarWorldWidth, BarPixelWidth);
             _barCanvas = crt;
 
             var bg = NewImage(crt, HudTextures.RoundedBox(24, 0.5f), new Color(0f, 0f, 0f, 0.6f));
@@ -192,12 +210,12 @@ namespace MaxWorlds.Factories
             rect.SetParent(_barCanvas, false);
             rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
             rect.pivot = new Vector2(0.5f, 0f);
-            rect.sizeDelta = new Vector2(320f, 34f);
-            rect.anchoredPosition = new Vector2(0f, 6f);
+            rect.sizeDelta = new Vector2(LabelPixelWidth, LabelPixelHeight);
+            rect.anchoredPosition = new Vector2(0f, 5f);
             var t = go.AddComponent<Text>();
             t.font = HudFont.Get();
             t.text = "MOWER HUTCH";
-            t.fontSize = 22;
+            t.fontSize = LabelFontSize;
             t.fontStyle = FontStyle.Bold;
             t.alignment = TextAnchor.MiddleCenter;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;

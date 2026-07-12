@@ -562,15 +562,21 @@ namespace MaxWorlds.UI
             _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
         }
 
+        /// <summary>Slim boss bar + name card (YT-71). It was a 60%-wide, 34 px slab that read as a
+        /// piece of furniture rather than a readout. A boss bar earns attention by being the only
+        /// red thing on screen, not by being big.</summary>
+        private const float BossBarWidth = RefW * 0.40f;
+        private const float BossBarHeight = 16f;
+
         private void BuildBossBar()
         {
             _bossRoot = NewRect("Boss Bar", Root);
             Anchor(_bossRoot, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _bossRoot.sizeDelta = new Vector2(RefW * 0.6f, 34f);
+            _bossRoot.sizeDelta = new Vector2(BossBarWidth, BossBarHeight);
             _bossRoot.anchoredPosition = new Vector2(0f, 300f);
 
             var bg = AddImage(_bossRoot, HudTextures.RoundedBox(24, 0.4f), PanelColor, "BG");
-            Stretch(bg.rectTransform, -4f); bg.type = Image.Type.Sliced;
+            Stretch(bg.rectTransform, -3f); bg.type = Image.Type.Sliced;
 
             _bossFill = AddImage(_bossRoot, HudTextures.RoundedBox(24, 0.4f), BossColor, "Fill");
             Stretch(_bossFill.rectTransform); _bossFill.type = Image.Type.Filled;
@@ -581,10 +587,10 @@ namespace MaxWorlds.UI
             _bossSegments = NewRect("Segments", _bossRoot);
             Stretch(_bossSegments);
 
-            _bossName = AddText(_bossRoot, 30f, BoneWhite, TextAnchor.MiddleCenter);
+            _bossName = AddText(_bossRoot, 22f, BoneWhite, TextAnchor.MiddleCenter);
             Anchor(_bossName.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f));
-            _bossName.rectTransform.sizeDelta = new Vector2(RefW * 0.6f, 40f);
-            _bossName.rectTransform.anchoredPosition = new Vector2(0f, 26f);
+            _bossName.rectTransform.sizeDelta = new Vector2(BossBarWidth, 28f);
+            _bossName.rectTransform.anchoredPosition = new Vector2(0f, 16f);
             _bossName.fontStyle = FontStyle.Bold;
 
             _bossRoot.gameObject.SetActive(false);
