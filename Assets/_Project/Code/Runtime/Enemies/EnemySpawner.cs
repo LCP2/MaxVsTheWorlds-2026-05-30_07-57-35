@@ -38,7 +38,17 @@ namespace MaxWorlds.Enemies
                  "narrow enough that nothing appears behind the shed.")]
         [SerializeField] private float mouthHalfAngle = 55f;
 
-        private readonly Stack<RobotEnemy> _pool = new Stack<RobotEnemy>();
+        [Header("Mix (YT-66) — two enemy types, so the fight has texture")]
+        [Tooltip("Every Nth robot is a bruiser. 1 in 4 keeps them a punctuation mark, not the norm.")]
+        [SerializeField] private int bruiserEvery = 4;
+        [Tooltip("No bruisers until this many robots have come out — the opening teaches the rusher " +
+                 "first, and the bruiser lands as an escalation.")]
+        [SerializeField] private int firstBruiserAt = 3;
+
+        // One pool PER KIND. A single pool would hand a dead bruiser back as the next rusher, still
+        // wearing its box body and its collider — the classic pooling bug.
+        private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _pools =
+            new Dictionary<EnemyKind, Stack<RobotEnemy>>();
         private readonly List<RobotEnemy> _live = new List<RobotEnemy>(32);
         private float _timer;
         private float _elapsed;
@@ -46,6 +56,14 @@ namespace MaxWorlds.Enemies
         private Transform _target;
 
         public int LiveCount => _live.Count;
+
+        /// <summary>Live count of one kind — lets a test prove the mix actually reaches the field.</summary>
+        public int LiveCountOf(EnemyKind kind)
+        {
+            int n = 0;
+            for (int i = 0; i < _live.Count; i++) if (_live[i].Kind == kind) n++;
+            return n;
+        }
 
         /// <summary>Current seconds-between-spawns for the run time so far.</summary>
         public float CurrentInterval =>
@@ -63,16 +81,25 @@ namespace MaxWorlds.Enemies
 
         private void SpawnOne()
         {
-            RobotEnemy e = _pool.Count > 0 ? _pool.Pop() : CreateInstance();
+            EnemyKind kind = EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt);
+            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            RobotEnemy e = Take(kind, archetype);
 
             // Out of the mouth, fanned, facing the way it's about to run.
             Vector3 dir = FactoryMouth.ExitDirection(
                 ToTarget(), -transform.forward, _emitted++, mouthHalfAngle);
 
-            e.transform.position = FactoryMouth.ExitPoint(transform.position, dir, spawnRadius, 1f);
+            e.transform.position = FactoryMouth.ExitPoint(
+                transform.position, dir, spawnRadius, archetype.SpawnHeight);
             e.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
             e.gameObject.SetActive(true);
             _live.Add(e);
+        }
+
+        private RobotEnemy Take(EnemyKind kind, in EnemyArchetype archetype)
+        {
+            if (_pools.TryGetValue(kind, out var pool) && pool.Count > 0) return pool.Pop();
+            return CreateInstance(archetype);
         }
 
         /// <summary>Direction from the factory to Max — the way the stream flows. Zero if there's
@@ -88,21 +115,39 @@ namespace MaxWorlds.Enemies
             return _target != null ? _target.position - transform.position : Vector3.zero;
         }
 
-        private RobotEnemy CreateInstance()
+        /// <summary>Builds one robot of the given kind. The body is the archetype's silhouette, and
+        /// the CharacterController is sized to match what you can see — a controller inherits the
+        /// transform's scale, so a bigger body with a default controller would fight a collider
+        /// that's the wrong shape for it.</summary>
+        private RobotEnemy CreateInstance(in EnemyArchetype a)
         {
             RobotEnemy e;
             if (prefab != null)
             {
+                // Stats still differ, but both kinds wear the prefab's body. Fine while the prefab
+                // is unset (the greybox path below is what ships); revisit when Phase C art lands
+                // and each kind needs its own prefab.
                 e = Instantiate(prefab, transform);
             }
             else
             {
-                var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
-                go.name = "RobotEnemy (stand-in)";
+                var go = GameObject.CreatePrimitive(
+                    a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
+                go.name = $"RobotEnemy {a.Kind} (stand-in)";
                 go.transform.SetParent(transform);
-                go.AddComponent<CharacterController>();
+                go.transform.localScale = a.BodyScale;
+
+                var cc = go.AddComponent<CharacterController>();
+                // Undo the transform scale so the metres asked for are the metres you get.
+                float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);
+                cc.height = a.ColliderHeight / Mathf.Max(a.BodyScale.y, 1e-4f);
+                cc.radius = a.ColliderRadius / Mathf.Max(lateral, 1e-4f);
+                cc.center = Vector3.zero;   // primitives are centred on their origin
+
                 e = go.AddComponent<RobotEnemy>();
             }
+
+            e.Apply(a);                 // stats — after Awake, which seeded the defaults
             e.Died += OnEnemyDied;
             e.gameObject.SetActive(false);
             return e;
@@ -111,7 +156,12 @@ namespace MaxWorlds.Enemies
         private void OnEnemyDied(RobotEnemy e)
         {
             _live.Remove(e);
-            _pool.Push(e); // returns to pool; reused on next spawn (no leak)
+            if (!_pools.TryGetValue(e.Kind, out var pool))
+            {
+                pool = new Stack<RobotEnemy>();
+                _pools[e.Kind] = pool;
+            }
+            pool.Push(e); // back to its OWN pool; reused on the next spawn of this kind (no leak)
         }
     }
 }

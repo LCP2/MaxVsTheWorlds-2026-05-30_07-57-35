@@ -49,6 +49,29 @@ namespace MaxWorlds.Enemies
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
 
+        /// <summary>Which robot this is (YT-66). Set by <see cref="Apply"/>; the spawner pools by it,
+        /// so a dead bruiser is never recycled as a rusher wearing the wrong body.</summary>
+        public EnemyKind Kind { get; private set; } = EnemyKind.Rusher;
+
+        /// <summary>Stamp this robot with an archetype's stats and reset it to fresh. Must be called
+        /// after the component exists (Awake has already run and seeded the old defaults), so it
+        /// re-runs <see cref="ResetState"/> to pick the new health up.</summary>
+        public void Apply(in EnemyArchetype a)
+        {
+            Kind = a.Kind;
+            moveSpeed = a.MoveSpeed;
+            maxHealth = a.MaxHealth;
+            contactDamage = a.ContactDamage;
+            contactRadius = a.ContactRadius;
+            lungeRange = a.LungeRange;
+            telegraphTime = a.TelegraphTime;
+            lungeSpeed = a.LungeSpeed;
+            lungeTime = a.LungeTime;
+            recoverTime = a.RecoverTime;
+            knockbackDecay = a.KnockbackDecay;
+            ResetState();
+        }
+
         /// <summary>How far through the wind-up this enemy is, 0..1 (0 when not telegraphing).
         /// A read-only window into existing state so the readability VFX (YT-53) can draw a
         /// dodge-window indicator on the ground — a colour tell on a small robot doesn't read at
