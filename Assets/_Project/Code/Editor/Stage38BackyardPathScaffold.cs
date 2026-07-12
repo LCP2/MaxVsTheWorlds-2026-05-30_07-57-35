@@ -28,14 +28,14 @@ namespace MaxWorlds.Editor
                 new GameObject("Backyard Path").AddComponent<BackyardPath>();
             }
 
-            // Robots must spawn inside the corridor, not out through the fences. Ring radius that
-            // keeps them within the lane half-width.
+            // Robots must spawn inside the room, not out through the fences. Ring radius that
+            // keeps them within the lawn (the room the shed stands in — YT-68).
             var spawner = Object.FindFirstObjectByType<EnemySpawner>();
             if (spawner != null)
             {
                 var so = new SerializedObject(spawner);
                 var radius = so.FindProperty("spawnRadius");
-                if (radius != null) radius.floatValue = Mathf.Min(3.5f, layout.LaneHalfWidth - 1f);
+                if (radius != null) radius.floatValue = Mathf.Min(3.5f, layout.LawnHalfWidth - 1f);
                 so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(spawner);
             }
