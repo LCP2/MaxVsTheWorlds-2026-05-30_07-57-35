@@ -21,14 +21,21 @@ namespace MaxWorlds.Factories
         [SerializeField] private float maxHealth = 240f;
         [Tooltip("Gate opened when the factory dies. Optional — the path/gate is placed by YT-38.")]
         [SerializeField] private SubZoneGate gate;
-        [SerializeField] private Color bodyColor = new Color(0.45f, 0.42f, 0.40f);
+        // Industrial hazard-orange so the factory reads as the objective, not another grey fence
+        // in the greybox path (YT-38 QA: players couldn't tell the Mower Hutch from the scenery).
+        [SerializeField] private Color bodyColor = new Color(0.72f, 0.34f, 0.10f);
         [SerializeField] private Color barColor = new Color(0.85f, 0.55f, 0.15f);
+        [Tooltip("The pulsing 'vulnerable core' — the thing to shoot (spec §7 Robot Factory).")]
+        [SerializeField] private Color coreColor = new Color(0.35f, 0.9f, 1f);
 
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
         private Camera _camera;
         private Transform _barPivot;
+        private RectTransform _barCanvas;
         private Image _barFill;
+        private Renderer _core;
+        private MaterialPropertyBlock _coreMpb;
 
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
@@ -42,6 +49,8 @@ namespace MaxWorlds.Factories
             _camera = Camera.main;
             TintBody();
             BuildHealthBar();
+            BuildCore();
+            BuildLabel();
         }
 
         private void Start()
@@ -75,6 +84,7 @@ namespace MaxWorlds.Factories
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
             if (_barPivot != null) _barPivot.gameObject.SetActive(false);
+            if (_core != null) _core.gameObject.SetActive(false);
         }
 
         private void LateUpdate()
@@ -86,6 +96,20 @@ namespace MaxWorlds.Factories
                 _barPivot.rotation = Quaternion.LookRotation(
                     _barPivot.position - _camera.transform.position, Vector3.up);
             }
+            PulseCore();
+        }
+
+        private void PulseCore()
+        {
+            if (_core == null) return;
+            // Bright, breathing emission so the eye is pulled to "shoot here". Beats faster as the
+            // factory nears death to sell that it's about to blow.
+            float urgency = Mathf.Lerp(2f, 7f, 1f - Normalized);
+            float pulse = 0.5f + 0.5f * Mathf.Abs(Mathf.Sin(Time.time * urgency));
+            _core.GetPropertyBlock(_coreMpb);
+            _coreMpb.SetColor("_BaseColor", coreColor);
+            _coreMpb.SetColor("_EmissionColor", coreColor * (1.5f + 2.5f * pulse));
+            _core.SetPropertyBlock(_coreMpb);
         }
 
         private void TintBody()
@@ -112,6 +136,7 @@ namespace MaxWorlds.Factories
             crt.SetParent(_barPivot, false);
             crt.sizeDelta = new Vector2(220f, 28f);
             crt.localScale = Vector3.one * 0.02f; // world units per UI px
+            _barCanvas = crt;
 
             var bg = NewImage(crt, HudTextures.RoundedBox(24, 0.5f), new Color(0f, 0f, 0f, 0.6f));
             bg.type = Image.Type.Sliced;
@@ -140,5 +165,43 @@ namespace MaxWorlds.Factories
             return img;
         }
 
+        /// <summary>The glowing 'vulnerable core' on the front face — the thing to shoot. It has
+        /// NO collider, so the Water Blaster passes through it to the body's collider behind (a
+        /// collider here with no IDamageable would silently eat shots without dealing damage).</summary>
+        private void BuildCore()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = "VulnerableCore";
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);
+            go.transform.SetParent(transform, false);
+            go.transform.localPosition = new Vector3(0f, 0.05f, -0.52f); // on the player-facing face
+            go.transform.localScale = new Vector3(0.55f, 0.6f, 0.1f);
+            _core = go.GetComponent<Renderer>();
+            _coreMpb = new MaterialPropertyBlock();
+        }
+
+        /// <summary>Floating name so the objective is unmistakable in the greybox path.</summary>
+        private void BuildLabel()
+        {
+            if (_barCanvas == null) return;
+            var go = new GameObject("Label", typeof(RectTransform));
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(_barCanvas, false);
+            rect.anchorMin = rect.anchorMax = new Vector2(0.5f, 1f);
+            rect.pivot = new Vector2(0.5f, 0f);
+            rect.sizeDelta = new Vector2(320f, 34f);
+            rect.anchoredPosition = new Vector2(0f, 6f);
+            var t = go.AddComponent<Text>();
+            t.font = HudFont.Get();
+            t.text = "MOWER HUTCH";
+            t.fontSize = 22;
+            t.fontStyle = FontStyle.Bold;
+            t.alignment = TextAnchor.MiddleCenter;
+            t.horizontalOverflow = HorizontalWrapMode.Overflow;
+            t.verticalOverflow = VerticalWrapMode.Overflow;
+            t.color = new Color(1f, 0.85f, 0.4f);
+            t.raycastTarget = false;
+        }
     }
 }
