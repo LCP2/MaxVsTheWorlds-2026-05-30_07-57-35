@@ -36,22 +36,35 @@ namespace MaxWorlds.Rendering
         public float Smoothness;      // stylised = matte; a shiny greybox looks like plastic
 
         /// <summary>
-        /// Backyard — grass going dry in patches.
+        /// Backyard — cut grass at golden hour (YT-69).
         ///
-        /// These are knocked well back from the Art Bible's identity swatches (#7CB342 grass,
-        /// #F4C95D golden). Those are UI/key-art colours; used raw on a big ground plane, under a
-        /// warm key and a saturation boost, they come out as loud yellow-green camouflage. The
-        /// direction is "stylised but grounded — NOT flat cartoon", so the surface stays muted and
-        /// the golden identity comes from the light, not from neon paint.
+        /// The previous pass read as "vomit": a mustard-olive. The mistake was in the ACCENT, not the
+        /// base. It was a khaki (0.45, 0.42, 0.25) — red and green almost equal, which is the
+        /// definition of mustard. Mottled through a dark olive base and then pushed by a warm key and
+        /// a saturation boost, the whole floor landed in the one part of the spectrum that reads as
+        /// bile. Nothing about it was grass.
+        ///
+        /// The fix is to keep BOTH tones unambiguously green (green channel clearly dominant) and put
+        /// the variation in VALUE — shaded turf vs sunlit turf — rather than swinging the hue toward
+        /// yellow. The Biomes doc asks for "golden hour, saturated yellow-greens": that's a sunlit
+        /// green, and the gold belongs to the LIGHT. Paint the grass green; let the key make it
+        /// golden.
+        ///
+        /// Kept mid-value on purpose: Max is warm red and the robots are cold steel, and both need to
+        /// pop against the floor rather than fight it.
         /// </summary>
         public static BiomePalette Backyard => new BiomePalette
         {
             Tint = Color.white,                              // neutral: the palette below is already on-model
-            GroundBase = new Color(0.26f, 0.31f, 0.16f),     // deep grass
-            GroundAccent = new Color(0.45f, 0.42f, 0.25f),   // dry khaki patches
-            Wall = new Color(0.34f, 0.29f, 0.23f),           // fence/soil browns
+            // Deliberately a LAWN, not AstroTurf. The first pass at these was brighter and read as
+            // fluorescent — under a 2.2-intensity warm key with a saturation boost on top, a vivid
+            // albedo doesn't stay vivid, it goes neon. The paint stays a touch restrained precisely
+            // so the lighting can make it sing.
+            GroundBase = new Color(0.15f, 0.29f, 0.12f),     // shaded turf — green, not olive
+            GroundAccent = new Color(0.32f, 0.50f, 0.18f),   // sunlit turf — brighter, still clearly green
+            Wall = new Color(0.36f, 0.27f, 0.18f),           // fence/soil browns
             Prop = new Color(0.46f, 0.44f, 0.40f),
-            GroundTiling = 8f,
+            GroundTiling = 5f,
             Smoothness = 0.06f,
         };
 

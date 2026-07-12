@@ -109,6 +109,53 @@ namespace MaxWorlds.Tests.EditMode
                 "the biome tint must actually move every surface");
         }
 
+        // --- YT-69: the floor must read as grass, not as bile ---
+
+        [Test]
+        public void BothGroundTones_AreUnambiguouslyGreen()
+        {
+            var p = BiomePalette.Backyard;
+
+            foreach (var (name, c) in new[] { ("base", p.GroundBase), ("accent", p.GroundAccent) })
+            {
+                Assert.That(c.g, Is.GreaterThan(c.r + 0.1f),
+                    $"the {name} tone is not clearly green. When red creeps up to meet green you get " +
+                    "mustard, and a whole floor of mustard is what got called 'vomit'.");
+                Assert.That(c.g, Is.GreaterThan(c.b + 0.1f), $"the {name} tone should read green, not teal");
+            }
+        }
+
+        [Test]
+        public void TheGroundVariesByValue_NotByASwingIntoYellow()
+        {
+            var p = BiomePalette.Backyard;
+
+            // Sunlit turf must be brighter than shaded turf...
+            Assert.That(ElementPalette.Luminance(p.GroundAccent),
+                Is.GreaterThan(ElementPalette.Luminance(p.GroundBase) + 0.08f),
+                "the mottling needs real value contrast or the floor reads flat");
+
+            // ...but it must not achieve that by turning yellow. Yellow = red catching up with green.
+            float baseGap = p.GroundBase.g - p.GroundBase.r;
+            float accentGap = p.GroundAccent.g - p.GroundAccent.r;
+            Assert.That(accentGap, Is.GreaterThan(0.12f),
+                "the bright tone must stay green-dominant; letting red close the gap is exactly how " +
+                "the old accent became khaki");
+            Assert.That(baseGap, Is.GreaterThan(0.12f));
+        }
+
+        [Test]
+        public void TheFloorLeavesRoomForMaxAndTheRobotsToPop()
+        {
+            float floor = ElementPalette.Luminance(BiomePalette.Backyard.GroundBase);
+            float sunlit = ElementPalette.Luminance(BiomePalette.Backyard.GroundAccent);
+
+            // Mid-value: bright enough to be a sunny lawn, dark enough that a red hero and steel
+            // enemies read against it instead of fighting it.
+            Assert.That(floor, Is.InRange(0.10f, 0.35f), "shaded turf should sit in the lower mids");
+            Assert.That(sunlit, Is.LessThan(0.70f), "sunlit turf must not blow out to near-white");
+        }
+
         [Test]
         public void Textures_TileSeamlessly()
         {
