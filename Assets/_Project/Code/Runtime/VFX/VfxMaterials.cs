@@ -95,6 +95,13 @@ namespace MaxWorlds.VFX
             });
         }
 
+        /// <summary>Flat white. For surfaces whose colour comes entirely from _BaseColor — e.g. the
+        /// boss's damage zones, which set their own tint and alpha.</summary>
+        public static Texture2D Solid(int size = 4)
+        {
+            return Tex($"solid{size}", size, (nx, ny) => 1f);
+        }
+
         /// <summary>
         /// A soft, irregular blob — ground scorch and wet patches (YT-56). Irregular on purpose:
         /// a perfect circle on the ground reads as a decal someone stamped there, an uneven one
