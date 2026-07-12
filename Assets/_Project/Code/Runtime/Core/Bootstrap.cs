@@ -25,6 +25,9 @@ namespace MaxWorlds.Core
 
         private void Awake()
         {
+            // First line in the log, so a browser console immediately answers "which build is this?"
+            Debug.Log($"[Build] {Application.version}  ({Application.platform})");
+
             QualitySettings.vSyncCount = 0;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
@@ -51,7 +54,10 @@ namespace MaxWorlds.Core
             if (now - _lastLogAt < 2f) return;
             _lastLogAt = now;
 
-            Debug.Log($"[FPS] {_meter.Fps:0.0} fps");
+            // Frame time as well as rate: at a genuinely bad frame rate the millisecond figure is
+            // what tells you whether you're looking at a stall or a throttle.
+            float ms = _meter.Fps > 0f ? 1000f / _meter.Fps : 0f;
+            Debug.Log($"[FPS] {_meter.Fps:0.0} fps  ({ms:0.0} ms/frame)");
         }
 
         private void OnGUI()
@@ -64,13 +70,21 @@ namespace MaxWorlds.Core
                 normal = { textColor = Color.white }
             };
 
-            // "measuring…" rather than "0" until the first window closes. A confident "0 fps" on a
-            // plainly-animating game is what sent QA hunting for a stall that wasn't there.
-            string text = _meter.HasReading
-                ? $"{_meter.Fps:0.} fps   (target {targetFrameRate})"
-                : $"measuring…   (target {targetFrameRate})";
+            // Two rules here, both learned the hard way:
+            //
+            //  * Never render a bare "0". "measuring…" until the first window closes, and one
+            //    decimal below 10 fps — so a genuinely bad 0.4 fps reads as "0.4 fps", not as a
+            //    broken counter. The old readout could not tell those two apart, and we spent a
+            //    review cycle not knowing which one we were looking at.
+            //
+            //  * Always show WHICH BUILD this is. "Is the fix even deployed?" cost us a whole
+            //    round trip; a browser can serve a cached build with no sign that it has.
+            string fps = !_meter.HasReading ? "measuring…"
+                       : _meter.Fps < 10f ? $"{_meter.Fps:0.0} fps"
+                       : $"{_meter.Fps:0} fps";
 
-            GUI.Label(new Rect(12f, 8f, 480f, 60f), text, _fpsStyle);
+            GUI.Label(new Rect(12f, 8f, 640f, 60f),
+                $"{fps}   (target {targetFrameRate})   build {Application.version}", _fpsStyle);
         }
     }
 }
