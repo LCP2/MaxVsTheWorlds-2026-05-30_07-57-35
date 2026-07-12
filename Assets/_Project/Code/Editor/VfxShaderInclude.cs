@@ -26,6 +26,7 @@ namespace MaxWorlds.Editor
             "Universal Render Pipeline/Particles/Unlit",   // VfxMaterials (YT-47/48)
             "Universal Render Pipeline/Lit",               // MaterialLibrary (YT-50)
             "MaxWorlds/StylizedCharacter",                 // MaterialLibrary.Character (YT-57)
+            "MaxWorlds/StylizedGround",                    // MaterialLibrary ground (YT-69)
 
             // YT-59. URP builds its post-processing material library EAGERLY — it creates the FSR
             // upscaling material whether or not FSR is ever selected. If that shader is stripped
