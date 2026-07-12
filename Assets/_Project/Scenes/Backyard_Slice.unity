@@ -197,7 +197,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Bosses.BigBermudaBoss
   bossName: BIG BERMUDA
-  maxHealth: 800
+  bossHealth: 1200
   moveSpeed: 3.6
   desiredRange: 6
   chargeSpeed: 16
@@ -331,7 +331,7 @@ Transform:
   m_GameObject: {fileID: 75355766}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 2, z: 26}
+  m_LocalPosition: {x: 0, y: 2, z: 33}
   m_LocalScale: {x: 3.5, y: 3, z: 3.5}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -483,10 +483,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 82fb8c8100025c441b9a1c1ba6134313, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Factories.MowerHutch
-  maxHealth: 240
+  factoryHealth: 140
   gate: {fileID: 1395039861}
   bodyColor: {r: 0.45, g: 0.42, b: 0.4, a: 1}
   barColor: {r: 0.85, g: 0.55, b: 0.15, a: 1}
+  coreColor: {r: 0.35, g: 0.9, b: 1, a: 1}
 --- !u!114 &260902204
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -501,8 +502,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Enemies.EnemySpawner
   prefab: {fileID: 0}
   target: {fileID: 0}
-  liveCap: 24
-  spawnInterval: 0.4
+  maxLiveEnemies: 12
+  spawnIntervalStart: 1.8
+  spawnIntervalMin: 1.2
+  rampSeconds: 45
   spawnRadius: 3.5
 --- !u!23 &260902205
 MeshRenderer:
@@ -591,7 +594,7 @@ Transform:
   m_GameObject: {fileID: 260902202}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1, z: 10}
+  m_LocalPosition: {x: 0, y: 1, z: 15}
   m_LocalScale: {x: 3, y: 2, z: 3}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -780,6 +783,9 @@ MonoBehaviour:
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
+  coneHalfAngle: 35
+  knockbackForce: 5
+  streamVisualRadius: 1.1
   maxEnergy: 100
   energyPerTick: 2.5
   regenPerSec: 25
@@ -831,6 +837,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: MaxWorlds.Core::MaxWorlds.Core.Bootstrap
   targetFrameRate: 60
   showFps: 1
+  logFps: 1
 --- !u!4 &500010020
 Transform:
   m_ObjectHideFlags: 0
@@ -876,14 +883,18 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Arena.BackyardPath
   layout:
-    StartZ: -8
-    GateZ: 18
-    ArenaEndZ: 38
-    LaneHalfWidth: 4.5
-    ArenaHalfWidth: 13
+    StartZ: -14
+    LawnStartZ: -5
+    GateZ: 22
+    ArenaEndZ: 44
+    PatioHalfWidth: 5.5
+    LawnHalfWidth: 12
+    GateHalfWidth: 4.5
+    ArenaHalfWidth: 15
     WallHeight: 3.5
     WallThickness: 1
-  shedZ: 10
+  shedZ: 15
+  shedSpawnRadius: 3.5
 --- !u!4 &532247393
 Transform:
   m_ObjectHideFlags: 0
@@ -1332,7 +1343,7 @@ Transform:
   m_GameObject: {fileID: 1395039860}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.6, z: 18}
+  m_LocalPosition: {x: 0, y: 1.6, z: 22}
   m_LocalScale: {x: 11, y: 3.2, z: 0.6}
   m_ConstrainProportionsScale: 0
   m_Children: []

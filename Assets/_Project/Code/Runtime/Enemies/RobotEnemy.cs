@@ -10,9 +10,10 @@ namespace MaxWorlds.Enemies
     /// Chase (direct steering toward Max) → Telegraph (wind-up tell) → Lunge
     /// (committed burst that deals contact damage) → Recover → back to Chase.
     /// Implements <see cref="IDamageable"/> (dies to the Water Blaster). Death pop +
-    /// hit reaction are code-driven. Direct steering is used rather than NavMesh
-    /// because the slice arena is an obstacle-free plane until the greybox (YT-38);
-    /// NavMesh is the YT-38 upgrade.
+    /// hit reaction are code-driven. Steering is direct rather than NavMesh: the arena is a
+    /// hand-authored greybox with a handful of cover props, so a beeline plus
+    /// <see cref="ObstacleSteering"/> (walk along what you bump into) gets around them for a
+    /// fraction of a NavMesh's cost. Revisit if the levels ever get maze-like.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable
@@ -73,10 +74,19 @@ namespace MaxWorlds.Enemies
         [Tooltip("How fast a spray shove bleeds off (m/s²). Higher = a shorter shove (YT-64).")]
         [SerializeField] private float knockbackDecay = 28f;
 
+        [Tooltip("How long a wall stays 'in the way' after touching it — long enough to walk clear " +
+                 "of the corner rather than re-hugging it every frame (YT-68).")]
+        [SerializeField] private float wallMemory = 0.2f;
+
+        private Vector3 _wallNormal;
+        private float _wallTimer;
+        private float _preferSign = 1f;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
             _mpb = new MaterialPropertyBlock();
+            _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
             ResetState();
         }
 
@@ -89,6 +99,8 @@ namespace MaxWorlds.Enemies
             _health = maxHealth;
             Current = State.Chase;
             _stateTimer = 0f;
+            _wallTimer = 0f;          // a pooled robot doesn't inherit the last one's wall
+            _knockback = Vector3.zero;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -142,7 +154,16 @@ namespace MaxWorlds.Enemies
             Vector3 to = target.position - transform.position;
             to.y = 0f;
             float dist = to.magnitude;
-            FaceAndMove(to.normalized, moveSpeed, dt);
+
+            // The lawn has cover in it (YT-68). Beelining into a prop just presses against it, so
+            // while a wall is remembered, walk along it and round the corner instead.
+            Vector3 dir = to.normalized;
+            if (_wallTimer > 0f)
+            {
+                _wallTimer -= dt;
+                dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
+            }
+            FaceAndMove(dir, moveSpeed, dt);
 
             if (dist <= lungeRange)
             {
@@ -219,6 +240,18 @@ namespace MaxWorlds.Enemies
                 transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
                 _cc.Move(dir * speed * dt);
             }
+        }
+
+        /// <summary>Remember the last piece of world geometry we walked into, so the chase can steer
+        /// along it (YT-68). Ground contacts are ignored (they're not in the way), and so is anything
+        /// with a CharacterController — Max, the boss and other robots are things to walk INTO, not
+        /// around.</summary>
+        private void OnControllerColliderHit(ControllerColliderHit hit)
+        {
+            if (Mathf.Abs(hit.normal.y) >= 0.5f) return;                       // floor/ramp, not a wall
+            if (hit.collider.TryGetComponent<CharacterController>(out _)) return; // a character
+            _wallNormal = hit.normal;
+            _wallTimer = wallMemory;
         }
 
         private void ApplyGravity(float dt)
