@@ -21,8 +21,10 @@ namespace MaxWorlds.Bosses
 
         [Header("Identity")]
         [SerializeField] private string bossName = "BIG BERMUDA";
-        [Tooltip("HP tuned for the spec's 2–3 minute fight — a playtest/feel target (needs-lee).")]
-        [SerializeField] private float maxHealth = 800f;
+        // ~45–75 s slice duel (YT-65), not a 2-3 min slog. Renamed from maxHealth so the new
+        // value takes effect on the existing scene instance. Tunable feel knob.
+        [Tooltip("Boss HP — tuned for a ~45–75s slice fight (YT-65). Feel knob.")]
+        [SerializeField] private float bossHealth = 1200f;
 
         [Header("Movement")]
         [SerializeField] private float moveSpeed = 3.6f;
@@ -78,7 +80,7 @@ namespace MaxWorlds.Bosses
             _cc = GetComponent<CharacterController>();
             _renderer = GetComponent<Renderer>();
             _mpb = new MaterialPropertyBlock();
-            _health = new DestructibleHealth(maxHealth);
+            _health = new DestructibleHealth(bossHealth);
             _health.Destroyed += OnDeath;
             _brain = new BigBermudaBrain();
             AcquireTarget();

@@ -18,7 +18,9 @@ namespace MaxWorlds.Factories
     [RequireComponent(typeof(EnemySpawner))]
     public sealed class MowerHutch : MonoBehaviour, IDamageable
     {
-        [SerializeField] private float maxHealth = 240f;
+        // ~4 s of focused fire to kill, so destroying it lands as a decisive beat (YT-65). Tunable.
+        // Renamed from maxHealth so the lower value takes effect on the existing scene instance.
+        [SerializeField] private float factoryHealth = 140f;
         [Tooltip("Gate opened when the factory dies. Optional — the path/gate is placed by YT-38.")]
         [SerializeField] private SubZoneGate gate;
         // Industrial hazard-orange so the factory reads as the objective, not another grey fence
@@ -43,7 +45,7 @@ namespace MaxWorlds.Factories
 
         private void Awake()
         {
-            _health = new DestructibleHealth(maxHealth);
+            _health = new DestructibleHealth(factoryHealth);
             _health.Destroyed += OnDestroyed;
             _spawner = GetComponent<EnemySpawner>();
             _camera = Camera.main;
