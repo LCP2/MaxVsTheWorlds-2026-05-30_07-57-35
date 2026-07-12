@@ -14,20 +14,36 @@ namespace MaxWorlds.Enemies
     {
         [SerializeField] private RobotEnemy prefab;
         [SerializeField] private Transform target;
-        [SerializeField] private int liveCap = 24;
-        [SerializeField] private float spawnInterval = 0.4f;
+
+        [Header("Swarm tuning (YT-63 kiteability — dense but survivable)")]
+        [Tooltip("Max robots alive at once. Kept modest so the player can kite instead of drown.")]
+        [SerializeField] private int maxLiveEnemies = 12;
+        [Tooltip("Seconds between spawns at run start (breathable).")]
+        [SerializeField] private float spawnIntervalStart = 1.8f;
+        [Tooltip("Seconds between spawns at steady state (peak pressure).")]
+        [SerializeField] private float spawnIntervalMin = 1.2f;
+        [Tooltip("Seconds over which the cadence ramps from start to min.")]
+        [SerializeField] private float rampSeconds = 45f;
+
         [SerializeField] private float spawnRadius = 12f;
 
         private readonly Stack<RobotEnemy> _pool = new Stack<RobotEnemy>();
         private readonly List<RobotEnemy> _live = new List<RobotEnemy>(32);
         private float _timer;
+        private float _elapsed;
 
         public int LiveCount => _live.Count;
 
+        /// <summary>Current seconds-between-spawns for the run time so far.</summary>
+        public float CurrentInterval =>
+            SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, spawnIntervalMin, rampSeconds);
+
         private void Update()
         {
-            _timer += Time.deltaTime;
-            if (_timer < spawnInterval || _live.Count >= liveCap) return;
+            float dt = Time.deltaTime;
+            _elapsed += dt;
+            _timer += dt;
+            if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies) return;
             _timer = 0f;
             SpawnOne();
         }
