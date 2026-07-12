@@ -159,16 +159,128 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void Textures_TileSeamlessly()
         {
-            var tex = StylizedTextures.Ground(64);
+            // Tested at the size actually shipped, not a toy 64px. Seamlessness here means the noise
+            // is PERIODIC, and a periodic function only *looks* continuous once the texture resolves
+            // its lattice: at 64px the grass layers land only a third of a cell from the wrap, so
+            // opposite edges legitimately differ even though the tiling is exact. At 512 they land
+            // within a twentieth of a cell and converge, which is the case the ground actually runs in.
+            const int size = 512;
+            var tex = StylizedTextures.Ground(size);
 
             // Opposite edges must agree, or the ground shows a grid of seams once it's tiled.
-            for (int i = 0; i < 64; i++)
+            for (int i = 0; i < size; i++)
             {
-                Assert.That(tex.GetPixel(0, i).r, Is.EqualTo(tex.GetPixel(63, i).r).Within(0.08f),
+                Assert.That(tex.GetPixel(0, i).r, Is.EqualTo(tex.GetPixel(size - 1, i).r).Within(0.08f),
                     $"vertical seam at row {i}");
-                Assert.That(tex.GetPixel(i, 0).r, Is.EqualTo(tex.GetPixel(i, 63).r).Within(0.08f),
+                Assert.That(tex.GetPixel(i, 0).r, Is.EqualTo(tex.GetPixel(i, size - 1).r).Within(0.08f),
                     $"horizontal seam at column {i}");
             }
+        }
+
+        // --- YT-69 (second pass): the floor must read as a SURFACE, not as a picture of one ---
+
+        [Test]
+        public void TheGroundHasRelief_NotJustColour()
+        {
+            var mat = MaterialLibrary.Surface(SurfaceKind.Ground);
+
+            // The whole diagnosis of "flat and textureless, artificial" in one assertion. An albedo
+            // on a flat plane gives the key light nothing to break across, so every pixel of the lawn
+            // shades identically and the eye calls it a fill. Relief is the fix; lose the normal map
+            // and the floor goes straight back to looking painted on.
+            Assert.IsNotNull(mat.GetTexture("_BumpMap"),
+                "the ground has no normal map — it is a flat plane wearing a picture of grass");
+        }
+
+        [Test]
+        public void TheGroundNormalMap_ActuallyPerturbsTheLight()
+        {
+            var n = StylizedTextures.GroundNormal(64);
+
+            // A normal map that is entirely (0,0,1) is a normal map that does nothing — it would pass
+            // "is not null" and still leave the ground dead flat.
+            float maxTilt = 0f;
+            for (int y = 0; y < 64; y++)
+            for (int x = 0; x < 64; x++)
+            {
+                var c = n.GetPixel(x, y);
+                float tilt = Mathf.Abs(c.r - 0.5f) + Mathf.Abs(c.g - 0.5f);
+                maxTilt = Mathf.Max(maxTilt, tilt);
+            }
+
+            Assert.That(maxTilt, Is.GreaterThan(0.08f),
+                "the normal map is flat — the grass would have no light response at all");
+        }
+
+        [Test]
+        public void TheTiledTexture_CarriesGrain_NotBlotches()
+        {
+            const int size = 512, block = 64;   // blocks an eighth of a tile across
+            var tex = StylizedTextures.Ground(size);
+            var px = tex.GetPixels();
+
+            // Total variation across the tile...
+            float mean = 0f;
+            foreach (var c in px) mean += c.r;
+            mean /= px.Length;
+            float total = 0f;
+            foreach (var c in px) total += (c.r - mean) * (c.r - mean);
+            total = Mathf.Sqrt(total / px.Length);
+
+            // ...versus the variation that survives blurring it down to eighth-of-a-tile blocks,
+            // which is the low-frequency content.
+            int blocks = size / block;
+            float lowVar = 0f;
+            for (int by = 0; by < blocks; by++)
+            for (int bx = 0; bx < blocks; bx++)
+            {
+                float bm = 0f;
+                for (int y = 0; y < block; y++)
+                for (int x = 0; x < block; x++)
+                    bm += px[(by * block + y) * size + (bx * block + x)].r;
+                bm /= block * block;
+                lowVar += (bm - mean) * (bm - mean);
+            }
+            float low = Mathf.Sqrt(lowVar / (blocks * blocks));
+
+            // This is the anti-wallpaper invariant. The eye cannot see a 4 cm speckle repeating, but
+            // it spots a metre-wide blotch appearing on a grid immediately — so the LOW frequencies
+            // are the ones that betray a tiled texture, and they belong in the shader's world-space
+            // passes (which never repeat), not in the tile. Let big soft blobs back into this texture
+            // and the lawn goes back to reading as wallpaper, however nice the grain is.
+            Assert.That(low / total, Is.LessThan(0.4f),
+                $"the tile's low-frequency content is {low / total:P0} of its variation — too blotchy; " +
+                "those blobs will repeat visibly across the yard");
+        }
+
+        [Test]
+        public void TheDryTone_MayGoStrawy_ButNotMustard()
+        {
+            var dry = BiomePalette.Backyard.GroundDry;
+
+            // The macro pass drifts the lawn toward this tone across the yard. It is *meant* to be
+            // warmer and paler — sun-bleached grass is. But "warmer" is the exact road that ended in
+            // vomit last time: mustard is what you get when red catches up with green. The dry tone
+            // is allowed to walk toward it and not allowed to arrive.
+            Assert.That(dry.g, Is.GreaterThan(dry.r + 0.1f),
+                "the dry tone has gone mustard — this is precisely how the floor became 'vomit'");
+            Assert.That(dry.g, Is.GreaterThan(dry.b + 0.1f), "the dry tone should read green, not teal");
+        }
+
+        [Test]
+        public void TheMacroPass_VariesTheYard_WithoutRepaintingIt()
+        {
+            var p = BiomePalette.Backyard;
+
+            // Long wavelength: this is the "not one uniform slab" knob, and it has to be measured in
+            // metres. Push it up and the yard stops reading as a lawn and starts reading as a texture.
+            Assert.That(1f / p.GroundMacroScale, Is.InRange(8f, 40f),
+                "the across-the-yard variation should cycle over metres, not centimetres");
+
+            // But it must not be so strong that it undoes the colour verdict that was already signed
+            // off, or repaints the floor light enough to stop Max and the robots popping against it.
+            Assert.That(p.GroundMacroStrength, Is.InRange(0.05f, 0.6f));
+            Assert.That(p.GroundLushShade, Is.InRange(0.6f, 1f));
         }
 
         [Test]

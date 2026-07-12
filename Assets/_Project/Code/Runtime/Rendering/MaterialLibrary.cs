@@ -25,6 +25,8 @@ namespace MaxWorlds.Rendering
 
         private static readonly Dictionary<string, Material> s_cache = new Dictionary<string, Material>();
         private static Shader s_shader;
+        private static Shader s_groundShader;
+        private static bool s_groundShaderResolved;
         private static BiomePalette s_palette = BiomePalette.Backyard;
 
         /// <summary>The biome currently in force. Setting it clears the cache, so the single
@@ -56,6 +58,11 @@ namespace MaxWorlds.Rendering
         /// <summary>Name of the hand-written character shader (YT-57). Kept in Graphics Settings'
         /// Always Included Shaders, since nothing but Shader.Find references it.</summary>
         public const string CharacterShaderName = "MaxWorlds/StylizedCharacter";
+
+        /// <summary>Name of the hand-written ground shader (YT-69) — grass relief plus the
+        /// across-the-yard macro variation. Same deal: nothing but Shader.Find references it, so it
+        /// lives in Always Included Shaders or the build strips it.</summary>
+        public const string GroundShaderName = "MaxWorlds/StylizedGround";
 
         /// <summary>
         /// The stylised character material — outline, rim light, dissolve (YT-57).
@@ -97,7 +104,11 @@ namespace MaxWorlds.Rendering
             string key = $"{kind}:{element}";
             if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
 
-            var shader = SurfaceShader;
+            bool isGround = kind == SurfaceKind.Ground;
+
+            // The ground gets the shader that can actually make it look like ground. Everything else
+            // stays on plain URP/Lit: a wall doesn't need grass relief or a macro pass.
+            var shader = isGround ? GroundShader ?? SurfaceShader : SurfaceShader;
             if (shader == null)
             {
                 Debug.LogWarning("[MaterialLibrary] no usable surface shader; greybox keeps its default material.");
@@ -109,8 +120,6 @@ namespace MaxWorlds.Rendering
                 name = $"Stylized_{key}",
                 hideFlags = HideFlags.HideAndDontSave,
             };
-
-            bool isGround = kind == SurfaceKind.Ground;
 
             // The surface's two tones, both recoloured toward the element so a variant keeps its
             // internal contrast instead of collapsing to one flat colour.
@@ -127,8 +136,16 @@ namespace MaxWorlds.Rendering
             // default) — a coloured _BaseColor here would multiply the tones a second time.
             SetColor(m, s_palette.Tint);
 
-            float tiling = isGround ? Mathf.Max(1f, s_palette.GroundTiling) : 1f;
-            m.mainTextureScale = new Vector2(tiling, tiling);
+            if (isGround && shader == GroundShader)
+            {
+                // World-space scaled: the ground shader doesn't read mesh UVs at all.
+                DressGround(m, element);
+            }
+            else
+            {
+                float tiling = isGround ? Mathf.Max(1f, s_palette.GroundTiling) : 1f;
+                m.mainTextureScale = new Vector2(tiling, tiling);
+            }
 
             if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", s_palette.Smoothness);
             if (m.HasProperty("_Glossiness")) m.SetFloat("_Glossiness", s_palette.Smoothness);
@@ -137,6 +154,51 @@ namespace MaxWorlds.Rendering
 
             s_cache[key] = m;
             return m;
+        }
+
+        /// <summary>The hand-written ground shader, or null if it isn't in this build. Resolved once
+        /// and remembered — a failed Shader.Find is remembered too, via the sentinel.</summary>
+        public static Shader GroundShader
+        {
+            get
+            {
+                if (s_groundShaderResolved) return s_groundShader;
+                s_groundShaderResolved = true;
+
+                var sh = Shader.Find(GroundShaderName);
+                if (sh == null || !sh.isSupported)
+                {
+                    // Degrade to the flat-but-correct URP/Lit ground rather than to magenta (YT-58).
+                    // The floor loses its relief; it does not lose its colour or disappear.
+                    Debug.LogWarning($"[MaterialLibrary] '{GroundShaderName}' unavailable; " +
+                                     "the ground falls back to plain lit (no grass relief).");
+                    return null;
+                }
+
+                Debug.Log($"[MaterialLibrary] ground shader: {sh.name}");
+                s_groundShader = sh;
+                return s_groundShader;
+            }
+        }
+
+        /// <summary>Hand the ground shader the grass relief and the macro-variation knobs. The
+        /// albedo and the normal map come from one shared height field, so the light breaks where
+        /// the paint is dark (see <see cref="StylizedTextures"/>).</summary>
+        private static void DressGround(Material m, Element element)
+        {
+            m.SetTexture("_BumpMap", StylizedTextures.GroundNormal());
+
+            m.SetFloat("_DetailScale", Mathf.Max(0.01f, s_palette.GroundDetailScale));
+            m.SetFloat("_NormalStrength", s_palette.GroundNormalStrength);
+            m.SetFloat("_MacroScale", s_palette.GroundMacroScale);
+            m.SetFloat("_MacroStrength", s_palette.GroundMacroStrength);
+            m.SetFloat("_LushShade", s_palette.GroundLushShade);
+            m.SetFloat("_ClumpScale", s_palette.GroundClumpScale);
+            m.SetFloat("_ClumpDepth", s_palette.GroundClumpDepth);
+
+            // The dry tone follows the element too, or an ice-variant lawn would drift toward a
+            // strawy green in its dry patches and the variant would read as two materials.
+            m.SetColor("_DryColor", ElementPalette.Recolor(s_palette.GroundDry * s_palette.Tint, element));
         }
 
         /// <summary>Drop every cached material — call after changing the palette.</summary>
@@ -149,6 +211,10 @@ namespace MaxWorlds.Rendering
                 else Object.DestroyImmediate(m);
             }
             s_cache.Clear();
+
+            // The albedos are baked FROM the palette's colours, so a stale texture cache would hand
+            // the new materials the old lawn back. Materials first, then the textures they held.
+            StylizedTextures.Clear();
         }
 
         private static void SetColor(Material m, Color c)

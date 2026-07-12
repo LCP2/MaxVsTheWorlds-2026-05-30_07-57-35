@@ -29,8 +29,44 @@ namespace MaxWorlds.Rendering
         public Color Wall;
         public Color Prop;
 
-        /// <summary>How many times the ground texture repeats across the plane. Low enough that
-        /// the mottling reads as terrain, not as wallpaper.</summary>
+        /// <summary>The third ground tone: sun-bleached, drier turf. The macro pass drifts toward
+        /// this across the yard, so the variation is a HUE shift as well as a value one — a lawn
+        /// that only varies in brightness still reads as one material under a coloured light.</summary>
+        public Color GroundDry;
+
+        /// <summary>Grass texture repeats per METRE of world (YT-69), not per UV. The floor is two
+        /// objects — a 30 m scene plane and a 34 m box spawned by BackyardPath — whose UVs are
+        /// scaled differently, so a UV-space tiling factor makes the grass change size across the
+        /// seam between them. Scaling off world position is immune to that, and to gameplay
+        /// reshaping the arena (YT-68).</summary>
+        public float GroundDetailScale;
+
+        /// <summary>Wavelength of the across-the-yard variation, in cycles per metre. Low: this is
+        /// the "not one uniform slab" knob, and it wants to be measured in metres, not centimetres.</summary>
+        public float GroundMacroScale;
+
+        /// <summary>How far the dry patches drift toward <see cref="GroundDry"/> (0 = a uniform
+        /// lawn again).</summary>
+        public float GroundMacroStrength;
+
+        /// <summary>How deeply the lush patches sit below the base tone. Together with the dry drift
+        /// this is the whole macro range: lush/shaded at one end, dry/bleached at the other.</summary>
+        public float GroundLushShade;
+
+        /// <summary>How hard the light breaks across the grass relief. 0 = back to a flat fill.</summary>
+        public float GroundNormalStrength;
+
+        /// <summary>Size of the turf clumps, in cycles per metre. Generated in world space rather
+        /// than baked into the tiling texture, because clump scale is precisely the scale at which a
+        /// repeat becomes visible — a metre-wide blotch appearing on a grid is what makes a floor
+        /// read as wallpaper.</summary>
+        public float GroundClumpScale;
+
+        /// <summary>How pronounced the clumping is.</summary>
+        public float GroundClumpDepth;
+
+        /// <summary>How many times the ground texture repeats across the plane. Only used by the
+        /// URP/Lit fallback path, for when the stylised ground shader is unavailable.</summary>
         public float GroundTiling;
 
         public float Smoothness;      // stylised = matte; a shiny greybox looks like plastic
@@ -52,6 +88,10 @@ namespace MaxWorlds.Rendering
         ///
         /// Kept mid-value on purpose: Max is warm red and the robots are cold steel, and both need to
         /// pop against the floor rather than fight it.
+        ///
+        /// YT-69, second pass: the colour was right and the floor still read as artificial, because
+        /// colour was ALL it had. A flat plane wearing a picture of grass has no light response, so
+        /// it looks like a fill. The tones below are unchanged — the surface underneath them is not.
         /// </summary>
         public static BiomePalette Backyard => new BiomePalette
         {
@@ -62,9 +102,26 @@ namespace MaxWorlds.Rendering
             // so the lighting can make it sing.
             GroundBase = new Color(0.15f, 0.29f, 0.12f),     // shaded turf — green, not olive
             GroundAccent = new Color(0.32f, 0.50f, 0.18f),   // sunlit turf — brighter, still clearly green
+            // Sun-bleached turf. Warmer and paler than the accent, but still green-dominant — the
+            // "vomit" was made of exactly this kind of drift, so the dry tone is allowed to go
+            // strawy WITHOUT being allowed to go mustard. The tests hold that line.
+            GroundDry = new Color(0.36f, 0.50f, 0.20f),
             Wall = new Color(0.36f, 0.27f, 0.18f),           // fence/soil browns
             Prop = new Color(0.46f, 0.44f, 0.40f),
-            GroundTiling = 5f,
+
+            // One tile per ~1.8 m. Fine enough that a blade-scale streak is a few centimetres, coarse
+            // enough that the mip chain still has something to average at the far end of the yard.
+            GroundDetailScale = 0.55f,
+            // ~17 m per cycle: one or two big patches across the arena, which is the scale the eye
+            // reads as "a lawn with history" rather than "a texture".
+            GroundMacroScale = 0.06f,
+            GroundMacroStrength = 0.35f,
+            GroundLushShade = 0.78f,
+            GroundNormalStrength = 0.85f,
+            GroundClumpScale = 0.65f,       // tufts about 1.5 m across
+            GroundClumpDepth = 0.12f,
+
+            GroundTiling = 5f,                               // fallback path only
             Smoothness = 0.06f,
         };
 

@@ -23,6 +23,33 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void GroundShader_CompilesAndIsSupported()
+        {
+            var shader = Shader.Find(MaterialLibrary.GroundShaderName);
+
+            Assert.IsNotNull(shader, $"'{MaterialLibrary.GroundShaderName}' not found — a shader " +
+                                     "with a compile error can disappear from Shader.Find entirely");
+            Assert.IsTrue(shader.isSupported, "the shader failed to compile on this platform");
+            Assert.That(shader.name, Does.Not.Contain("InternalErrorShader"));
+        }
+
+        [Test]
+        public void GroundMaterial_ExposesTheGrassControls()
+        {
+            var mat = MaterialLibrary.Surface(SurfaceKind.Ground);
+
+            // These are the knobs the ground's whole look hangs off. _DetailScale in particular is
+            // load-bearing: it is metres-per-tile, and it is what makes the grass immune to gameplay
+            // rescaling the arena mesh (YT-68) or to the floor being two objects with different UVs.
+            Assert.IsTrue(mat.HasProperty("_DetailScale"), "no grass scale control");
+            Assert.IsTrue(mat.HasProperty("_NormalStrength"), "no relief control");
+            Assert.IsTrue(mat.HasProperty("_MacroScale"), "no across-the-yard variation control");
+            Assert.IsTrue(mat.HasProperty("_ClumpScale"), "no clump control");
+            Assert.IsTrue(mat.HasProperty("_BaseColor"),
+                "_BaseColor is the biome tint — the single knob YT-50 promised over every surface");
+        }
+
+        [Test]
         public void CharacterMaterial_KeepsThePropertiesGameplayTintsThrough()
         {
             var mat = MaterialLibrary.Character();
