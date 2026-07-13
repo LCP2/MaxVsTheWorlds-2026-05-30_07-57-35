@@ -577,10 +577,10 @@ namespace MaxWorlds.UI
             Map = go.AddComponent<MapScreen>();
             Map.Build(Root, RefW, RefH);
 
-            // Directly under the MAP button, which sits at (28, -28) and is 72 tall.
+            // Below the utility icon column (P / ? / S), which owns the top-left down to y = -208.
             var mini = new GameObject("Minimap", typeof(RectTransform));
             Minimap = mini.AddComponent<Minimap>();
-            Minimap.Build(Root, Map, new Vector2(28f, -112f));
+            Minimap.Build(Root, Map, new Vector2(24f, -228f));
         }
 
         /// <summary>Slim boss bar + name card (YT-71). It was a 60%-wide, 34 px slab that read as a

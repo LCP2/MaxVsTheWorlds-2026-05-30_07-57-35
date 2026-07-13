@@ -51,17 +51,20 @@ namespace MaxWorlds.UI
             _toggle?.Dispose();
         }
 
-        /// <summary>Top-left. The bottom corners belong to the twin sticks and the top-right to the
-        /// ability buttons — this is the one corner a thumb can reach without letting go of the
-        /// fight.</summary>
+        /// <summary>
+        /// Top-left, but to the RIGHT of the utility icon column (P / ? / S), which already owns
+        /// x 24–80 down to y −208. The bottom corners belong to the twin sticks and the top-right to
+        /// the ability slots, so this strip is the only free ground — and it's the one a thumb can
+        /// reach without letting go of the fight.
+        /// </summary>
         private void BuildButton(RectTransform root)
         {
             var go = new GameObject("Map Button", typeof(RectTransform), typeof(Image), typeof(Button));
             var rt = (RectTransform)go.transform;
             rt.SetParent(root, false);
             rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(28f, -28f);
-            rt.sizeDelta = new Vector2(96f, 72f);
+            rt.anchoredPosition = new Vector2(96f, -24f);   // clear of the utility icons
+            rt.sizeDelta = new Vector2(88f, 64f);
 
             var img = go.GetComponent<Image>();
             img.sprite = HudTextures.RoundedBox(24, 0.3f);
