@@ -567,12 +567,20 @@ namespace MaxWorlds.UI
         /// renderer at a different scale rather than the HUD growing a second copy of it.</summary>
         public MapScreen Map { get; private set; }
 
+        /// <summary>The always-on minimap (YT-73) — the same renderer, small and see-through.</summary>
+        public Minimap Minimap { get; private set; }
+
         private void BuildMap()
         {
             var go = new GameObject("Map Screen");
             go.transform.SetParent(Root, false);
             Map = go.AddComponent<MapScreen>();
             Map.Build(Root, RefW, RefH);
+
+            // Directly under the MAP button, which sits at (28, -28) and is 72 tall.
+            var mini = new GameObject("Minimap", typeof(RectTransform));
+            Minimap = mini.AddComponent<Minimap>();
+            Minimap.Build(Root, Map, new Vector2(28f, -112f));
         }
 
         /// <summary>Slim boss bar + name card (YT-71). It was a 60%-wide, 34 px slab that read as a
