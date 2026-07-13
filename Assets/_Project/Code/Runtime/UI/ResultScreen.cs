@@ -74,7 +74,7 @@ namespace MaxWorlds.UI
 
             var panel = AddImage(root, HudTextures.RoundedBox(48, 0.12f), Panel, "Panel");
             panel.type = Image.Type.Sliced;
-            Center(panel.rectTransform, 720f, 560f);
+            Center(panel.rectTransform, ResultLayout.PanelWidth, ResultLayout.PanelHeight);
 
             bool win = stats.Outcome == RunOutcome.Victory;
             var title = AddText(panel.rectTransform, 78f, win ? Gold : Red, TextAnchor.MiddleCenter, FontStyle.Bold);
@@ -92,23 +92,30 @@ namespace MaxWorlds.UI
             AddStatRow(panel.rectTransform, "FACTORY DESTROYED", stats.FactoryDestroyed ? "YES" : "NO", ref y);
             AddStatRow(panel.rectTransform, "DIFFICULTY", "NORMAL", ref y);
 
-            // CTAs.
+            // CTAs. Both sit on the same content column as the stat rows above (YT-81) — REPLAY used
+            // to be placed at a bare -300, which with a centred pivot put its left edge 90px outside
+            // the panel entirely.
             var replayBtn = AddButton(panel.rectTransform, "REPLAY  (R)", Green, true, Replay);
-            Bottom(replayBtn, -300f, 40f, 300f, 64f);
+            Bottom(replayBtn, ResultLayout.LeftButtonX, 40f,
+                   ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
+
             var nextBtn = AddButton(panel.rectTransform, "NEXT WORLD", new Color(0.3f, 0.34f, 0.4f), false, null);
-            Bottom(nextBtn, 20f, 40f, 300f, 64f);
+            Bottom(nextBtn, ResultLayout.RightButtonX, 40f,
+                   ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
+
             var lockNote = AddText(panel.rectTransform, 16f, new Color(1, 1, 1, 0.5f), TextAnchor.MiddleCenter, FontStyle.Normal);
-            Bottom((RectTransform)lockNote.transform, 20f, 14f, 300f, 20f);
+            Bottom((RectTransform)lockNote.transform, ResultLayout.RightButtonX, 14f,
+                   ResultLayout.ButtonWidth, 20f);
             lockNote.text = "locked in the slice";
         }
 
         private void AddStatRow(RectTransform panel, string label, string value, ref float y)
         {
             var l = AddText(panel, 24f, new Color(1, 1, 1, 0.7f), TextAnchor.MiddleLeft, FontStyle.Normal);
-            Top(l.rectTransform, -160f, y, 320f, 34f);
+            Top(l.rectTransform, ResultLayout.StatLabelX, y, ResultLayout.StatCellWidth, 34f);
             l.text = label;
             var v = AddText(panel, 26f, Bone, TextAnchor.MiddleRight, FontStyle.Bold);
-            Top(v.rectTransform, 160f, y, 320f, 34f);
+            Top(v.rectTransform, ResultLayout.StatValueX, y, ResultLayout.StatCellWidth, 34f);
             v.text = value;
             y -= 42f;
         }
