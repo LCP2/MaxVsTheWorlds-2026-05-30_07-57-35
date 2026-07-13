@@ -28,7 +28,14 @@ namespace MaxWorlds.Rendering
 
         [SerializeField] private BackyardLook look = BackyardLook.Default;
 
+        /// <summary>The hand-written sky shader (YT-76). Nothing but Shader.Find references it, so
+        /// it has to be in Always Included Shaders or the build strips it and the yard goes back to
+        /// rendering against a grey void — in the build only, which is the worst place to find out.
+        /// See <c>Editor/VfxShaderInclude.cs</c>.</summary>
+        public const string SkyShaderName = "MaxWorlds/StylizedSky";
+
         private VolumeProfile _profile;
+        private Material _sky;
 
         private void Awake() => Apply(look);
 
@@ -37,6 +44,7 @@ namespace MaxWorlds.Rendering
         {
             look = l;
             ApplyLights(l);
+            ApplySky(l);
             ApplyAmbient(l);
             ApplyVolume(l);
             EnablePostProcessingOnCamera();
@@ -44,6 +52,9 @@ namespace MaxWorlds.Rendering
 
         /// <summary>The profile this built, so tests (and a future tuning UI) can inspect it.</summary>
         public VolumeProfile Profile => _profile;
+
+        /// <summary>The sky material this built, so tests can look at it without a camera.</summary>
+        public Material Sky => _sky;
 
         // --- lights ---
 
@@ -97,6 +108,52 @@ namespace MaxWorlds.Rendering
             var go = new GameObject(name);
             go.transform.SetParent(transform, worldPositionStays: false);
             return go.AddComponent<Light>();
+        }
+
+        // --- sky ---
+
+        /// <summary>
+        /// The sky (YT-76). Without one, everything the yard's geometry doesn't cover renders as
+        /// Unity's default flat grey — and at a camera that looks 72° DOWN, what isn't covered is
+        /// the ground past the edge of the world. That grey is why the arena reads as a slab
+        /// floating in a void, and it is the single most "unfinished" thing left in the frame.
+        ///
+        /// Built in code from the look, like everything else here — so it's a tunable, not an asset
+        /// somebody has to author and remember to assign to the scene.
+        /// </summary>
+        private void ApplySky(BackyardLook l)
+        {
+            var shader = Shader.Find(SkyShaderName);
+            if (shader == null || !shader.isSupported)
+            {
+                // A missing sky is a grey background — ugly, not broken. Say so and carry on; the
+                // one thing we never do is leave a magenta dome over the game (YT-58).
+                Debug.LogWarning($"[BackyardLighting] '{SkyShaderName}' unavailable; the yard keeps " +
+                                 "the default background.");
+                return;
+            }
+
+            if (_sky == null)
+            {
+                _sky = new Material(shader) { name = "BackyardSky", hideFlags = HideFlags.HideAndDontSave };
+            }
+
+            _sky.SetColor("_Zenith", l.SkyZenith);
+            _sky.SetColor("_Horizon", l.SkyHorizon);
+            _sky.SetColor("_GroundHaze", l.SkyGroundHaze);
+            _sky.SetColor("_SunColor", l.SkySun);
+            _sky.SetColor("_CloudColor", l.SkyCloud);
+            _sky.SetFloat("_SunGlow", l.SkySunGlow);
+            _sky.SetFloat("_SunIntensity", l.SkySunIntensity);
+            _sky.SetFloat("_CloudAmount", l.SkyCloudAmount);
+            _sky.SetFloat("_CloudScale", l.SkyCloudScale);
+
+            // The sun in the sky has to be the sun in the scene, or the shadows point one way and
+            // the glare comes from the other — the cheapest possible way to look fake.
+            Vector3 toSun = -(Quaternion.Euler(l.KeyEuler) * Vector3.forward);
+            _sky.SetVector("_SunDir", toSun.normalized);
+
+            RenderSettings.skybox = _sky;
         }
 
         // --- ambient ---
@@ -223,6 +280,13 @@ namespace MaxWorlds.Rendering
 
         private void OnDestroy()
         {
+            if (_sky != null)
+            {
+                if (RenderSettings.skybox == _sky) RenderSettings.skybox = null;
+                if (Application.isPlaying) Destroy(_sky);
+                else DestroyImmediate(_sky);
+            }
+
             if (_profile == null) return;
             if (Application.isPlaying) Destroy(_profile);
             else DestroyImmediate(_profile);
