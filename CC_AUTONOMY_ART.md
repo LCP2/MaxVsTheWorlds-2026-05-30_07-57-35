@@ -3,6 +3,12 @@
 > Kickoff: `Follow CC_AUTONOMY_ART.md.`
 > This is the SECOND, parallel workstream — code-side technical art. The gameplay stream runs separately under `CC_AUTONOMY.md`. Do NOT do gameplay-logic work; that's the other stream's job.
 
+## Design standard — READ FIRST, applies to every ticket
+
+Before claiming or working any ticket, read the **Design Principles & Craft Bible**: https://codynamics.atlassian.net/wiki/spaces/Games/pages/25002019
+
+It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship must comply with it — the Look & Feel and Juice sections are especially yours. If a ticket's acceptance criteria conflict with the Craft Bible, flag it in a ticket comment instead of shipping. When principles tension against each other, the tie-breaker order is: readability > game feel > visual richness. Non-negotiable on every build: 60fps on iOS/WebGL, and readable on a 6-inch screen.
+
 ## Shared rules
 Follow ALL of `CC_AUTONOMY.md` for conventions: auto-merge on green (squash-merge your own verified branch to `main`, don't wait for Lee), run `cc-verify` before merge, the code-driven scene/prefab convention (`docs/CODE_DRIVEN_SCENES.md`), the boot-scene rule, commit/Jira etiquette, and "run the verify command — never infer success."
 
