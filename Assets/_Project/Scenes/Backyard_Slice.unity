@@ -1454,7 +1454,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.CameraRig.FixedAngleCameraRig
   pitchDegrees: 72
-  cameraDistance: 20.5
+  cameraDistance: 25.1
 --- !u!1 &1419767784
 GameObject:
   m_ObjectHideFlags: 0
