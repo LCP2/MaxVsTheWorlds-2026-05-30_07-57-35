@@ -88,6 +88,19 @@ namespace MaxWorlds.Rendering
         /// <summary>How pronounced the clumping is.</summary>
         public float GroundClumpDepth;
 
+        /// <summary>How far the blades LEAN, in metres, at the peak of a gust (YT-78). The lawn is a
+        /// flat plane and cannot sway, so the wind moves where its grass texture is sampled instead —
+        /// which leans every blade in the yard. Zero for a biome with no weather in it.</summary>
+        public float GroundWindLean;
+
+        /// <summary>How fast a gust crosses the yard.</summary>
+        public float GroundWindSpeed;
+
+        /// <summary>How much the grass lightens and darkens as it leans. A blade turning its edge to
+        /// the sun is darker than one turning its face; without this the lawn slides rather than
+        /// moves.</summary>
+        public float GroundWindShimmer;
+
         /// <summary>How many times the ground texture repeats across the plane. Only used by the
         /// URP/Lit fallback path, for when the stylised ground shader is unavailable.</summary>
         public float GroundTiling;
@@ -157,6 +170,13 @@ namespace MaxWorlds.Rendering
             GroundNormalStrength = 0.85f,
             GroundClumpScale = 0.65f,       // tufts about 1.5 m across
             GroundClumpDepth = 0.12f,
+
+            // A breeze, not a storm. 6 cm of lean is about a blade's width at this scale — enough that
+            // the lawn is visibly moving from thirty metres up, nowhere near enough to pull the eye off
+            // a telegraph. The gust rolls across the yard roughly every eight seconds.
+            GroundWindLean = 0.06f,
+            GroundWindSpeed = 0.9f,
+            GroundWindShimmer = 0.045f,
 
             GroundTiling = 5f,                               // fallback path only
             Smoothness = 0.06f,

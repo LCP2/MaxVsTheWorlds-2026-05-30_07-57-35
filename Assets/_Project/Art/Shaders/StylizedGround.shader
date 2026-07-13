@@ -43,6 +43,13 @@ Shader "MaxWorlds/StylizedGround"
         [Header(Clumping)]
         _ClumpScale      ("Clump Scale (cycles/m)", Range(0.1, 3)) = 0.65
         _ClumpDepth      ("Clump Depth", Range(0, 0.4)) = 0.12
+
+        [Header(Wind YT78)]
+        // METRES the blades lean at the peak of a gust. The lawn is a plane and cannot sway; this
+        // leans the grass by moving where the blade texture is sampled. See GroundFrag.
+        _WindStrength    ("Wind Blade Lean (m)", Range(0, 0.4)) = 0.06
+        _WindSpeed       ("Wind Speed", Range(0, 4)) = 0.9
+        _WindShimmer     ("Wind Shimmer", Range(0, 0.15)) = 0.045
     }
 
     SubShader
@@ -80,6 +87,9 @@ Shader "MaxWorlds/StylizedGround"
                 float4 _DryColor;
                 float  _ClumpScale;
                 float  _ClumpDepth;
+                float  _WindStrength;
+                float  _WindSpeed;
+                float  _WindShimmer;
             CBUFFER_END
 
             TEXTURE2D(_BaseMap);   SAMPLER(sampler_BaseMap);
@@ -144,10 +154,36 @@ Shader "MaxWorlds/StylizedGround"
                 // a grid — the eye finds an axis-aligned repeat far more readily than a skew one.
                 const float2 rot = float2(0.857, 0.515);   // (cos, sin) of ~31 degrees
                 float2 wp = IN.positionWS.xz;
-                float2 uv = float2(wp.x * rot.x - wp.y * rot.y,
-                                   wp.x * rot.y + wp.y * rot.x) * _DetailScale;
+
+                // --- wind across the lawn (YT-78) ---
+                //
+                // The lawn cannot sway. It is a flat plane with almost no vertices in it, so there is
+                // nothing for a vertex shader to bend — and it is also, at a camera thirty metres up,
+                // most of what is on the screen. Swaying the bushes alone left the yard technically
+                // breathing and visibly dead: the plants that CAN bend cover a tenth of the frame.
+                //
+                // So the wind bends the BLADES instead. The grass here is a texture with a directional
+                // grain, and shifting where that texture is sampled leans every blade in the yard a
+                // few centimetres. Rolling that shift across the lawn as a long, slow gust — metres
+                // wide, moving — is a wind crossing a field, and it costs two sines.
+                //
+                // The clump and macro passes below deliberately do NOT get this offset. They are the
+                // lawn's own history — wear, shade, dry patches — and history does not blow about.
+                const float2 windDir = float2(0.86, 0.51);
+                float gustT = _Time.y * _WindSpeed;
+                float gust = sin(dot(wp, windDir) * 0.42 - gustT) * 0.62
+                           + sin(dot(wp, windDir) * 0.13 - gustT * 0.55 + 1.7) * 0.38;
+
+                float2 bent = wp + windDir * gust * _WindStrength;
+                float2 uv = float2(bent.x * rot.x - bent.y * rot.y,
+                                   bent.x * rot.y + bent.y * rot.x) * _DetailScale;
 
                 float3 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, uv).rgb;
+
+                // Grass changes colour as it leans — a blade turning its edge to the sun is darker
+                // than one turning its face. Tiny: this is the difference between a lawn that is
+                // moving and a lawn with a shadow sliding over it.
+                albedo *= 1.0 + gust * _WindShimmer;
 
                 // Unpacked by hand rather than through UnpackNormalScale: that helper branches on
                 // UNITY_NO_DXT5nm and expects a DXT5nm-swizzled map. This normal map is built at

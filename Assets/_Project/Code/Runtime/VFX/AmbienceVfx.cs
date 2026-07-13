@@ -1,18 +1,19 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.UI;
-using MaxWorlds.Core;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Environment ambience (YT-56): drifting motes in the air, scorch marks left where things die,
-    /// and a slow sway on set-dressing props.
+    /// Environment ambience (YT-56): drifting motes in the air, and scorch marks left where things die.
     ///
     /// The brief is "alive, never distracting". Everything here is deliberately below the threshold
     /// of attention: it should make the arena feel inhabited without ever competing with a
     /// telegraph or a damage number for the player's eye. Combat feedback is loud; ambience is not.
+    ///
+    /// It used to sway the set dressing as well. It doesn't any more (YT-78) — that sway had never
+    /// moved a single prop, and the wind now lives in the vertices where it can. See below.
     ///
     /// Self-installing; reads state and signals, writes nothing.
     /// </summary>
@@ -38,17 +39,10 @@ namespace MaxWorlds.VFX
         [SerializeField] private Color scorchColor = new Color(0.10f, 0.09f, 0.07f, 0.62f);
         [SerializeField] private Color wreckColor = new Color(0.13f, 0.10f, 0.07f, 0.75f);
 
-        [Header("Prop sway")]
-        [Tooltip("Degrees of sway on set-dressing props. Tiny — this is a breath, not an animation.")]
-        [SerializeField] private float swayDegrees = 0.7f;
-        [SerializeField] private float swaySpeed = 0.5f;
-
         private ParticleSystem _motes;
         private Transform _player;
 
         private readonly List<Decal> _decals = new List<Decal>(32);
-        private readonly List<SwayProp> _props = new List<SwayProp>(16);
-        private float _propScanTimer;
 
         private struct Decal
         {
@@ -58,13 +52,6 @@ namespace MaxWorlds.VFX
             public Color Color;
             public float Age;
             public float Life;
-        }
-
-        private struct SwayProp
-        {
-            public Transform Tr;
-            public Quaternion Base;
-            public float Phase;
         }
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -215,49 +202,18 @@ namespace MaxWorlds.VFX
             }
         }
 
-        // --- prop sway ---
-
-        /// <summary>Set-dressing only: anything that can be damaged is a combatant, and swaying it
-        /// would look like a tell.</summary>
-        private void RescanProps()
-        {
-            _props.Clear();
-            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
-            {
-                if (r.GetComponentInParent<IDamageable>() != null) continue;
-                if (r.GetComponentInParent<AmbienceVfx>() != null) continue;   // our own decals
-                if (r.GetComponent<GroundRing>() != null) continue;
-
-                var t = r.transform;
-                // Skip the ground itself — a swaying floor would be a bug, not ambience.
-                if (t.localScale.x > 8f || t.name.Contains("Ground")) continue;
-
-                // Skip anything static. That's the architecture — walls, fence panels, the shed —
-                // which has no business breathing, and it is also what gets static-batched (YT-75):
-                // a batched renderer's vertices are baked in world space, so nudging its transform
-                // moves nothing and just costs. Wind on the foliage is YT-78's job, and wants a
-                // shader, not a rotated transform.
-                if (r.gameObject.isStatic) continue;
-
-                _props.Add(new SwayProp
-                {
-                    Tr = t,
-                    Base = t.rotation,
-                    Phase = Random.Range(0f, Mathf.PI * 2f),
-                });
-            }
-        }
-
-        private void TickSway()
-        {
-            float t = Time.time * swaySpeed;
-            foreach (var p in _props)
-            {
-                if (p.Tr == null) continue;
-                float a = Mathf.Sin(t + p.Phase) * swayDegrees;
-                p.Tr.rotation = p.Base * Quaternion.Euler(0f, 0f, a);
-            }
-        }
+        // --- prop sway: gone, and it never worked (YT-78) ---
+        //
+        // This used to rotate set-dressing transforms a fraction of a degree. It has been swaying
+        // NOTHING since the yard was dressed: every kit prop is marked static, the scan skipped
+        // anything static (rightly — a static-batched renderer's vertices are baked into world space,
+        // so pushing its transform moves nothing), and after YT-75 every prop in the yard IS static.
+        // So the list was empty, the sway was a no-op, and a FindObjectsByType<MeshRenderer>() over
+        // the whole scene ran every two seconds to keep it empty.
+        //
+        // The wind now lives where it can actually move a plant: in the vertices, in
+        // StylizedSurface.shader, driven by MaterialLibrary's Foliage profile. Only plants have a
+        // wind strength, so only plants bend.
 
         // --- update ---
 
@@ -277,14 +233,6 @@ namespace MaxWorlds.VFX
             }
 
             TickDecals(dt);
-
-            _propScanTimer -= dt;
-            if (_propScanTimer <= 0f)
-            {
-                _propScanTimer = 2f;   // props are static; no need to scan every frame
-                RescanProps();
-            }
-            TickSway();
         }
     }
 }
