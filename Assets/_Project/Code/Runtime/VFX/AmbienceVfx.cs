@@ -232,6 +232,13 @@ namespace MaxWorlds.VFX
                 // Skip the ground itself — a swaying floor would be a bug, not ambience.
                 if (t.localScale.x > 8f || t.name.Contains("Ground")) continue;
 
+                // Skip anything static. That's the architecture — walls, fence panels, the shed —
+                // which has no business breathing, and it is also what gets static-batched (YT-75):
+                // a batched renderer's vertices are baked in world space, so nudging its transform
+                // moves nothing and just costs. Wind on the foliage is YT-78's job, and wants a
+                // shader, not a rotated transform.
+                if (r.gameObject.isStatic) continue;
+
                 _props.Add(new SwayProp
                 {
                     Tr = t,

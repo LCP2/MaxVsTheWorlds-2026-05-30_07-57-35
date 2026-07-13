@@ -1,7 +1,22 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaxWorlds.Arena
 {
+    /// <summary>A cover prop as it ended up in the world: the authored data, and the primitive that
+    /// carries its collider. The art pass (YT-75) needs both — the data to know what the piece is
+    /// meant to be, the object to hide once a real model stands in its place.</summary>
+    public readonly struct CoverPiece
+    {
+        public readonly ArenaCover Cover;
+        public readonly GameObject Body;
+
+        public CoverPiece(ArenaCover cover, GameObject body)
+        {
+            Cover = cover; Body = body;
+        }
+    }
+
     /// <summary>
     /// Builds the greybox Backyard critical path in code (YT-38, reshaped by YT-68): a narrow patio
     /// that opens out into the lawn — a wide fight room with cover to circle and kite around — which
@@ -28,7 +43,14 @@ namespace MaxWorlds.Arena
 
         public BackyardPathLayout Layout => layout;
         public float ShedZ => shedZ;
+        public float ShedSpawnRadius => shedSpawnRadius;
 
+        /// <summary>The cover that actually got built — empty if the set failed validation. The
+        /// dressing layer reads this rather than <see cref="BackyardCover.Default"/>, so it can never
+        /// plant a tree where no cover was placed.</summary>
+        public IReadOnlyList<CoverPiece> CoverPieces => _cover;
+
+        private readonly List<CoverPiece> _cover = new List<CoverPiece>(4);
         private Transform _root;
 
         private void Awake()
@@ -122,8 +144,10 @@ namespace MaxWorlds.Arena
                 Vector3 scale = c.Shape == CoverShape.Cylinder
                     ? new Vector3(c.Size.x, c.Size.y * 0.5f, c.Size.z)
                     : c.Size;
-                Spawn(c.Name, c.Shape == CoverShape.Cylinder ? PrimitiveType.Cylinder : PrimitiveType.Cube,
+                var body = Spawn(c.Name,
+                    c.Shape == CoverShape.Cylinder ? PrimitiveType.Cylinder : PrimitiveType.Cube,
                     c.Center, scale);
+                _cover.Add(new CoverPiece(c, body));
             }
         }
 

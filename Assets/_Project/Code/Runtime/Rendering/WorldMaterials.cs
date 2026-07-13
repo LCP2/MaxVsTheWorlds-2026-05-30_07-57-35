@@ -47,11 +47,15 @@ namespace MaxWorlds.Rendering
             return dressed;
         }
 
-        /// <summary>World surfaces are the things gameplay never recolours. Anything damageable is
-        /// owned by gameplay's tint logic — see the class summary.</summary>
+        /// <summary>World surfaces are the things gameplay never recolours, and that don't already
+        /// have a look of their own. Anything damageable is owned by gameplay's tint logic (see the
+        /// class summary); anything marked <see cref="KeepsOwnMaterial"/> is imported art that
+        /// arrived with its materials attached, and repainting a tree in flat lawn-green is the
+        /// opposite of what the art pass is for.</summary>
         public static bool IsWorldSurface(Renderer r)
         {
             if (r == null) return false;
+            if (r.GetComponentInParent<KeepsOwnMaterial>() != null) return false;
             return r.GetComponentInParent<IDamageable>() == null;
         }
 
