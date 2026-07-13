@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
 using MaxWorlds.VFX;
@@ -201,7 +202,13 @@ namespace MaxWorlds.Combat
                 if (_hits[i] == null) continue;
                 if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && d.Team != Team.Player
                     && !s_buffer.Contains(d)
-                    && SprayHit.InCone(origin, dir, _hits[i].transform.position, range, coneHalfAngle))
+                    && SprayHit.InCone(origin, dir, _hits[i].transform.position, range, coneHalfAngle)
+                    // Water does not go through the shed (YT-83). This is not decoration — it is what
+                    // keeps cover a DECISION instead of an exploit. If the tree broke the robots'
+                    // sight of Max but not Max's spray of them, hiding would be strictly dominant:
+                    // stand behind cover, kill everything in perfect safety, never come out. Cover
+                    // has to cost you your shot too, or it isn't cover, it's a turret nest.
+                    && LineOfSight.Clear(origin, _hits[i].transform.position, _hits[i].transform))
                 {
                     s_buffer.Add(d);
                     s_contacts.Add(_hits[i]);

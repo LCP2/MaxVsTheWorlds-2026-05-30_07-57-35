@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.UI;
 
@@ -7,7 +8,8 @@ namespace MaxWorlds.Enemies
 {
     /// <summary>
     /// Domestic-robot enemy v0 (YT-36), "pure machine" tier. State machine:
-    /// Chase (direct steering toward Max) → Telegraph (wind-up tell) → Lunge
+    /// Chase (steering toward where it last SAW Max — YT-83) → Search (it has lost him and casts
+    /// about; regains Chase the moment the sight-line comes back) → Telegraph (wind-up tell) → Lunge
     /// (committed burst that deals contact damage) → Recover → back to Chase.
     /// Implements <see cref="IDamageable"/> (dies to the Water Blaster). Death pop +
     /// hit reaction are code-driven. Steering is direct rather than NavMesh: the arena is a
@@ -18,7 +20,7 @@ namespace MaxWorlds.Enemies
     [RequireComponent(typeof(CharacterController))]
     public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable
     {
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead }
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -42,6 +44,17 @@ namespace MaxWorlds.Enemies
 
         [Header("Health")]
         [SerializeField] private float maxHealth = 24f;
+
+        [Header("Sight (YT-83)")]
+        [Tooltip("Seconds of searching a stale spot before it accepts it has lost Max. This is the " +
+                 "price of hiding: too short and stepping behind cover and straight back out is a " +
+                 "free reset, too long and cover isn't an escape at all.")]
+        [SerializeField] private float searchTime = 2.5f;
+        [Tooltip("How close it has to get to the last place it saw Max before it starts casting about.")]
+        [SerializeField] private float arriveRadius = 1.2f;
+        [Tooltip("Speed while hunting a spot it can't see Max at. Slower than a chase — it has lost " +
+                 "him, and a robot that searches at full sprint reads as one that hasn't.")]
+        [SerializeField] private float searchSpeedScale = 0.55f;
 
         [Header("Tells (gold-ring / lens)")]
         [SerializeField] private Renderer tellRenderer; // optional; the gold-ring/eye
@@ -105,6 +118,11 @@ namespace MaxWorlds.Enemies
 
         private Vector3 _wallNormal;
         private float _wallTimer;
+
+        /// <summary>What this robot knows about where Max is — which, since YT-83, is no longer the
+        /// same thing as where he is. Read-only outside; the state machine drives it.</summary>
+        public Perception Sight => _sight;
+        private readonly Perception _sight = new Perception();
         private float _preferSign = 1f;
 
         private void Awake()
@@ -138,6 +156,11 @@ namespace MaxWorlds.Enemies
                 if (p != null) target = p.transform;
             }
             _targetDamageable = target != null ? target.GetComponent<IDamageable>() : null;
+
+            // A robot is dispatched toward the fight, not born knowing where it is. Without a seed
+            // it has never seen anything, has nowhere to go, and stands in the factory mouth — which
+            // is precisely what happens now that the hutch it just walked out of blocks its view.
+            if (target != null) _sight.Spawn(target.position);
         }
 
         private void Update()
@@ -146,9 +169,15 @@ namespace MaxWorlds.Enemies
             float dt = Time.deltaTime;
             _stateTimer += dt;
 
+            // Look, once, before deciding anything. Everything below reads the memory, never the
+            // transform — the robot no longer knows where Max is, only where it last saw him.
+            if (target != null)
+                _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
+
             switch (Current)
             {
                 case State.Chase:    TickChase(dt);    break;
+                case State.Search:   TickSearch(dt);   break;
                 case State.Telegraph: TickTelegraph(dt); break;
                 case State.Lunge:    TickLunge(dt);    break;
                 case State.Recover:  TickRecover(dt);  break;
@@ -176,7 +205,11 @@ namespace MaxWorlds.Enemies
         private void TickChase(float dt)
         {
             if (target == null) { AcquireTarget(); return; }
-            Vector3 to = target.position - transform.position;
+
+            // The destination is MEMORY, not Max. While it can see him the two are the same thing;
+            // the moment it can't, this is where cover starts paying — it commits to a stale spot.
+            Vector3 goal = _sight.Destination(target.position);
+            Vector3 to = goal - transform.position;
             to.y = 0f;
             float dist = to.magnitude;
 
@@ -188,9 +221,23 @@ namespace MaxWorlds.Enemies
                 _wallTimer -= dt;
                 dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
             }
-            FaceAndMove(dir, moveSpeed, dt);
 
-            if (dist <= lungeRange)
+            bool hunting = !_sight.HasSight;
+            FaceAndMove(dir, hunting ? moveSpeed * searchSpeedScale : moveSpeed, dt);
+
+            // It reached the spot, or it has been hunting long enough. Either way it is now standing
+            // somewhere Max isn't, and it has to admit that.
+            if (hunting && (dist <= arriveRadius || _sight.HasLostHim(searchTime)))
+            {
+                Current = State.Search;
+                _stateTimer = 0f;
+                SetTell(idleTell);
+                return;
+            }
+
+            // Only wind up at something you can actually SEE. Without this a robot lunges at the
+            // tree Max is standing behind, which looks broken and is free damage for the player.
+            if (_sight.HasSight && dist <= lungeRange)
             {
                 Current = State.Telegraph;
                 _stateTimer = 0f;
@@ -198,10 +245,40 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>
+        /// It has lost him. It stands where it last had him and casts about, and it does NOT get to
+        /// walk to wherever he really is — that would be the omniscience this ticket removed, wearing
+        /// a different name. Contact is broken until Max shows himself again.
+        ///
+        /// This is the beat the loop was missing. Duck behind the tree, the pack commits to an empty
+        /// patch of lawn, your health starts trickling back (YT-80's out-of-combat regen), and you
+        /// choose when to re-engage. Pressure, relief, pressure.
+        /// </summary>
+        private void TickSearch(float dt)
+        {
+            if (target == null) { AcquireTarget(); return; }
+
+            if (_sight.HasSight)
+            {
+                Current = State.Chase;     // there he is
+                _stateTimer = 0f;
+                return;
+            }
+
+            // Scan: turn on the spot so it reads as looking rather than as a statue someone left.
+            // Gravity is applied for every state at the end of Update — don't do it twice here.
+            transform.Rotate(Vector3.up, 70f * dt, Space.World);
+        }
+
         private void TickTelegraph(float dt)
         {
             // Wind-up: hold, face the target, do not move — this is the dodge window.
-            if (target != null)
+            //
+            // Only re-aim while it can still SEE him. Duck behind the tree mid-wind-up and the robot
+            // keeps the angle it committed to, rather than tracking you through solid timber — which
+            // is what it did before, and which quietly made cover useless in the one moment it
+            // mattered most.
+            if (target != null && _sight.HasSight)
             {
                 Vector3 to = target.position - transform.position; to.y = 0f;
                 if (to.sqrMagnitude > 0.001f)
