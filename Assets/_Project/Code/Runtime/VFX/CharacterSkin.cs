@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
 
@@ -192,8 +193,16 @@ namespace MaxWorlds.VFX
         /// same shader is right. Rather than ship a factory that is quietly wrong, the machine's
         /// colour lives in its material, where the shader demonstrably reads it: paint the material
         /// red and the Hutch goes red.
+        ///
+        /// The <see cref="IDamageable"/> check is what keeps this to the machine's BODY. A Structure's
+        /// CHILDREN are skinned too — CharacterSkinDirector claims every renderer under a damageable —
+        /// and one of them is the Mower Hutch's VulnerableCore, the pulsing "shoot here" tell that
+        /// gameplay drives through a property block of its own, every frame. Clearing that would be a
+        /// fight over the same renderer that neither side could win: whichever of the two LateUpdates
+        /// happened to run second would decide, frame by frame, whether the core glowed. The core is
+        /// not the machine — it keeps the character path and its property block, exactly as it had them.
         /// </summary>
-        private bool IsMachine => role == CharacterRole.Structure;
+        private bool IsMachine => role == CharacterRole.Structure && GetComponent<IDamageable>() != null;
 
         /// <summary>
         /// The material a body wears. Everything that FIGHTS gets the character shader — outline, rim
@@ -209,7 +218,7 @@ namespace MaxWorlds.VFX
         /// </summary>
         private Material MaterialFor(CharacterRole r)
         {
-            if (r == CharacterRole.Structure)
+            if (IsMachine)
             {
                 // Painted steel with panels, rivets and worn paint, in the machine's own colour — the
                 // colour is baked into the albedo, exactly as it is for the timber and the paving, so

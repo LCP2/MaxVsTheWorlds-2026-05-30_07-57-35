@@ -1,6 +1,7 @@
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
 
@@ -319,12 +320,22 @@ namespace MaxWorlds.Tests.EditMode
 
         // ------------------------------------------------------------------ the machine
 
+        /// <summary>A stand-in for the Mower Hutch: a damageable body, which is what makes a renderer
+        /// the MACHINE rather than one of its children.</summary>
+        private sealed class FakeMachine : MonoBehaviour, IDamageable
+        {
+            public bool IsAlive => true;
+            public Team Team => Team.Enemy;
+            public void TakeDamage(in DamageInfo info) { }
+        }
+
         [Test]
         public void TheFactory_IsMadeOfPaintedMetal_AndCarriesNoPropertyBlock()
         {
             var go = new GameObject("Hutch", typeof(MeshFilter), typeof(MeshRenderer));
             try
             {
+                go.AddComponent<FakeMachine>();
                 var skin = go.AddComponent<CharacterSkin>().Bind(CharacterRole.Structure);
                 var r = go.GetComponent<MeshRenderer>();
 
@@ -341,6 +352,40 @@ namespace MaxWorlds.Tests.EditMode
             finally
             {
                 Object.DestroyImmediate(go);
+            }
+        }
+
+        /// <summary>
+        /// A Structure's CHILDREN are not the machine.
+        ///
+        /// CharacterSkinDirector skins every renderer under a damageable, so the Mower Hutch's
+        /// VulnerableCore — the pulsing "shoot here" tell (spec §7) — is skinned as a Structure too.
+        /// If it were treated as the machine, its property block would be cleared every frame while
+        /// MowerHutch.PulseCore wrote to it every frame, and whichever LateUpdate ran second would
+        /// decide whether the core glowed. It is not the machine; it keeps what it had.
+        /// </summary>
+        [Test]
+        public void AChildOfTheFactory_IsNotTheFactory()
+        {
+            var body = new GameObject("Hutch", typeof(MeshFilter), typeof(MeshRenderer));
+            try
+            {
+                body.AddComponent<FakeMachine>();
+
+                var core = new GameObject("VulnerableCore", typeof(MeshFilter), typeof(MeshRenderer));
+                core.transform.SetParent(body.transform, false);
+
+                core.AddComponent<CharacterSkin>().Bind(CharacterRole.Structure);
+                var r = core.GetComponent<MeshRenderer>();
+
+                Assert.AreEqual(MaterialLibrary.CharacterShaderName, r.sharedMaterial.shader.name,
+                    "the glowing core was re-skinned as painted metal. It is a light, not a panel.");
+                Assert.IsTrue(r.HasPropertyBlock(),
+                    "the core lost the property block gameplay pulses it through — the tell goes dark.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(body);
             }
         }
 
