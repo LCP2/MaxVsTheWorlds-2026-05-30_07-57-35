@@ -25,8 +25,10 @@ namespace MaxWorlds.Enemies
         [SerializeField] private Transform target;
 
         [Header("Movement")]
-        // ~70% of Max's 6 m/s so the swarm is kiteable, not an instant overrun (YT-63). Tunable.
-        [SerializeField] private float moveSpeed = 4.2f;
+        // Fallback only — Apply() stamps the real number from EnemyArchetype, which is where you
+        // tune it. Kept in step with Rusher (60% of Max's 6 m/s) so a robot built without an
+        // archetype isn't a different animal (YT-80).
+        [SerializeField] private float moveSpeed = 3.6f;
         [SerializeField] private float gravity = 20f;
 
         [Header("Lunge")]
