@@ -243,24 +243,16 @@ namespace MaxWorlds.Rendering
             if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
             if (m.HasProperty("_SpecularHighlights")) m.SetFloat("_SpecularHighlights", 0f);
 
-            // NO GPU instancing here, and it cost a day to learn why (YT-77).
+            // No GPU instancing. It buys nothing here: the kit props are static-batched
+            // (BackyardDressing), and static batching and instancing are mutually exclusive, so the
+            // flag was doing no work on the only 217 objects in the yard that could have used it.
             //
-            // With enableInstancing on, Unity draws through the instanced path — and in that path the
-            // per-material constant buffer is not what feeds the shader; the per-INSTANCE buffer is.
-            // A shader that declares no instanced properties (this one, and every hand-written shader
-            // in the project) therefore reads _BaseColor as ZERO, and a MaterialPropertyBlock written
-            // to that renderer is dropped on the floor.
-            //
-            // A black albedo is not an obvious failure, which is what made it so expensive: the Mower
-            // Hutch didn't go black, it went a dark mauve — the sky's specular and the fog, which is
-            // all that is left of a surface with no albedo — and it sat there IGNORING every change to
-            // its colour, its texture, its normal map and its shadows, because none of them were being
-            // read. MaterialLibrary.Character() never set this flag, which is precisely why the hit
-            // flashes and damage tints have always worked on characters and would not have worked here.
-            //
-            // Nothing is lost. The kit props are static-batched (BackyardDressing), and static batching
-            // and instancing are mutually exclusive anyway — the flag was doing no work even where it
-            // wasn't doing harm.
+            // It is explicitly NOT off because of the Mower Hutch bug. Instancing was my first suspect
+            // when a property-blocked renderer on this shader came out four times too dark, and
+            // turning it off changed precisely nothing — the renderer was still wrong. Whatever that
+            // interaction is, it is between the property block and this shader, and it is written up
+            // where it is actually handled, in CharacterSkin.IsMachine. A wrong cause left in a comment
+            // is worse than no comment: the next person to hit this would spend their day here.
             m.enableInstancing = false;
             return m;
         }
