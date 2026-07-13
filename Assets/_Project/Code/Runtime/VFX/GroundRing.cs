@@ -13,14 +13,23 @@ namespace MaxWorlds.VFX
     /// </summary>
     public sealed class GroundRing : MonoBehaviour
     {
-        /// <summary>Lifted just clear of the ground plane: co-planar with it, it z-fights.</summary>
-        private const float GroundLift = 0.03f;
+        /// <summary>Default lift: clear of the ground plane, because co-planar with it, it z-fights.
+        /// The danger telegraph keeps this height and therefore always draws OVER the always-on
+        /// anchors (YT-85), which sit lower — if a ground anchor could cover a telegraph, the anchor
+        /// would be hiding the one mark the player has to react to.</summary>
+        public const float GroundLift = 0.03f;
+
+        /// <summary>Height above the ground this ring draws at. Ground marks are coplanar quads, so
+        /// what stacks on top of what is decided here and nowhere else.</summary>
+        public float Lift { get; set; } = GroundLift;
 
         private MeshRenderer _renderer;
         private MaterialPropertyBlock _mpb;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        public static GroundRing Create(string name)
+        /// <summary>Create a ground-hugging quad. <paramref name="texture"/> defaults to the filled
+        /// danger disc (YT-53); pass another to make a different kind of mark.</summary>
+        public static GroundRing Create(string name, Texture2D texture = null)
         {
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = name;
@@ -35,7 +44,8 @@ namespace MaxWorlds.VFX
             var ring = quad.AddComponent<GroundRing>();
             ring._renderer = quad.GetComponent<MeshRenderer>();
             ring._mpb = new MaterialPropertyBlock();
-            ring._renderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Ring());
+            ring._renderer.sharedMaterial =
+                VfxMaterials.AlphaBlend(texture != null ? texture : VfxMaterials.Ring());
             ring._renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             ring._renderer.receiveShadows = false;
             quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // lie flat
@@ -50,7 +60,7 @@ namespace MaxWorlds.VFX
         {
             if (!gameObject.activeSelf) gameObject.SetActive(true);
 
-            transform.position = new Vector3(groundPos.x, groundPos.y + GroundLift, groundPos.z);
+            transform.position = new Vector3(groundPos.x, groundPos.y + Lift, groundPos.z);
             transform.rotation = Quaternion.Euler(90f, 0f, 0f);
             transform.localScale = new Vector3(radius * 2f, radius * 2f, 1f);
 

@@ -95,6 +95,38 @@ namespace MaxWorlds.VFX
             });
         }
 
+        /// <summary>
+        /// The always-on ground anchor under an actor (YT-85): a clean annulus — a bright rim and an
+        /// almost-empty middle.
+        ///
+        /// Deliberately NOT <see cref="Ring"/>, even though a ring is a ring. Ring is the DANGER
+        /// telegraph: it is filled, and it means "an attack is landing here, move". If every actor
+        /// in the arena wore one permanently, that meaning would be worn away within a minute of
+        /// play, and the one indicator whose whole job is to make you flinch would stop working.
+        /// So the anchor is hollow and the telegraph is filled, and they never read as each other.
+        ///
+        /// The hollow middle is also what lets this sit under an actor without tinting the ground it
+        /// is standing on — an anchor should separate the figure from the ground, not paint it.
+        /// </summary>
+        public static Texture2D Annulus(int size = 128)
+        {
+            return Tex($"annulus{size}", size, (nx, ny) =>
+            {
+                float d = Mathf.Sqrt(nx * nx + ny * ny) * 2f;   // 0 centre -> 1 edge
+                if (d >= 1f) return 0f;
+
+                // A trace of fill, so the ring still reads as enclosing something rather than as a
+                // loose hoop lying on the grass — but nowhere near enough to wash the ground out.
+                float fill = 0.08f * (1f - Edge(0.55f, 0.9f, d));
+
+                // The rim does the work. Feathered on both sides: a hard edge aliases into a dashed
+                // line once the actor is small on screen, which is exactly the case this is for.
+                float rim = Edge(0.70f, 0.86f, d) * (1f - Edge(0.86f, 0.99f, d));
+
+                return Mathf.Clamp01(fill + rim);
+            });
+        }
+
         /// <summary>Flat white. For surfaces whose colour comes entirely from _BaseColor — e.g. the
         /// boss's damage zones, which set their own tint and alpha.</summary>
         public static Texture2D Solid(int size = 4)
