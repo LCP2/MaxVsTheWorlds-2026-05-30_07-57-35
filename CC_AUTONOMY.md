@@ -2,6 +2,12 @@
 
 > CC's kickoff prompt is *"Follow `CC_AUTONOMY.md`."* Everything below.
 
+
+## Design standard — READ FIRST, applies to every ticket
+
+Before claiming or working any ticket, read the **Design Principles & Craft Bible**: https://codynamics.atlassian.net/wiki/spaces/Games/pages/25002019
+
+It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship must comply with it. If a ticket's acceptance criteria conflict with the Craft Bible, flag it in a ticket comment instead of shipping. When principles tension against each other, the tie-breaker order is: readability > game feel > visual richness. Non-negotiable on every build: 60fps on iOS/WebGL, and readable on a 6-inch screen.
 ## Variables
 
 - **Project key:** `YT`
