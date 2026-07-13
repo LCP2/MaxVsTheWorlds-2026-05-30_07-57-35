@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.UI;
@@ -60,6 +61,15 @@ namespace MaxWorlds.Factories
             _health.Destroyed += OnDestroyed;
             _spawner = GetComponent<EnemySpawner>();
             _camera = Camera.main;
+
+            // The hutch breaks sight-lines (YT-83), and it has to — the shed (YT-75) is 2.4 m of
+            // plank wall built AROUND it as pure scenery with no collider of its own. It is the most
+            // obviously hideable-behind object in the yard, and without this it would be the one
+            // thing that didn't work. Players would call that a bug and they'd be right. Note that
+            // LineOfSight lets you see the thing you're aiming AT, so putting the factory on the
+            // cover layer doesn't make it immune to the blaster that has to destroy it.
+            CoverLayer.Assign(gameObject);
+
             TintBody();
             BuildHealthBar();
             BuildCore();

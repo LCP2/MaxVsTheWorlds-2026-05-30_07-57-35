@@ -82,7 +82,8 @@ namespace MaxWorlds.Arena
             float floorMinZ = 15f, floorMaxZ = layout.ArenaEndZ + 2f;
             Box("Arena Floor",
                 new Vector3(0f, -0.05f, (floorMinZ + floorMaxZ) * 0.5f),
-                new Vector3((arena + 2f) * 2f, 0.1f, floorMaxZ - floorMinZ));
+                new Vector3((arena + 2f) * 2f, 0.1f, floorMaxZ - floorMinZ),
+                blocksSight: false);   // you can't hide behind the ground (YT-83)
 
             // --- Patio: the narrow entry. Side walls + a back wall so there's no retreating off
             // the path. It stays tight on purpose — the lawn beyond it reads as a release. ---
@@ -147,14 +148,22 @@ namespace MaxWorlds.Arena
                 var body = Spawn(c.Name,
                     c.Shape == CoverShape.Cylinder ? PrimitiveType.Cylinder : PrimitiveType.Cube,
                     c.Center, scale);
+
+                // This is the line that turns three props from scenery into a mechanic (YT-83).
+                CoverLayer.Assign(body);
+
                 _cover.Add(new CoverPiece(c, body));
             }
         }
 
-        private void Box(string name, Vector3 center, Vector3 size)
+        /// <summary>A solid slab. <paramref name="blocksSight"/> puts it on the cover layer — true for
+        /// every wall (you should not be able to see, or be seen, through the fence), false for the
+        /// floor.</summary>
+        private void Box(string name, Vector3 center, Vector3 size, bool blocksSight = true)
         {
             var go = Spawn(name, PrimitiveType.Cube, center, size);
             go.isStatic = true;
+            if (blocksSight) CoverLayer.Assign(go);
         }
 
         private GameObject Spawn(string name, PrimitiveType type, Vector3 center, Vector3 scale)
