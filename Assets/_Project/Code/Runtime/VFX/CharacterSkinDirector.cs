@@ -64,7 +64,17 @@ namespace MaxWorlds.VFX
 
             if (r.GetComponentInParent<PlayerHealth>() != null) return CharacterRole.Player;
             if (r.GetComponentInParent<BigBermudaBoss>() != null) return CharacterRole.Boss;
-            if (r.GetComponentInParent<RobotEnemy>() != null) return CharacterRole.Robot;
+
+            // A robot is not just "a robot" any more (YT-86): the rusher and the bruiser are opposites
+            // — one is small, fast and dies quickly, the other is a fridge that takes three seconds of
+            // held spray — and if they wear the same colour the player has to work out which is which
+            // from the shape of a twenty-pixel blob while being chased by both. They get their own.
+            var robot = r.GetComponentInParent<RobotEnemy>();
+            if (robot != null)
+            {
+                return robot.Kind == EnemyKind.Bruiser ? CharacterRole.Bruiser : CharacterRole.Robot;
+            }
+
             if (r.GetComponentInParent<MowerHutch>() != null) return CharacterRole.Structure;
 
             return CharacterRole.Robot;
@@ -80,7 +90,11 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void OnDamage(Vector3 pos, float amount, bool crit)
         {
-            var skin = CharacterSkin.NearestTo(pos, hitMatchRadius, CharacterRole.Robot);
+            // Any ENEMY, not just a rusher. Asking for one specific role was survivable while there was
+            // only one enemy role in the game; the moment the bruiser got its own (YT-86) it would have
+            // meant the toughest thing in the fight took three seconds of spray without ever once
+            // flashing to say the water was landing.
+            var skin = CharacterSkin.NearestEnemy(pos, hitMatchRadius);
             if (skin != null) skin.Flash();
         }
     }

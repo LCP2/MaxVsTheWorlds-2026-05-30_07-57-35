@@ -117,9 +117,56 @@ namespace MaxWorlds.Rendering
                 hideFlags = HideFlags.HideAndDontSave,
             };
             m.SetColor("_BaseColor", Color.white);   // gameplay's MaterialPropertyBlock tints drive this
+
+            // THE EDGE (YT-86). Set here rather than left to the shader's defaults, because this is
+            // the one place a human or an AI would come looking to turn the actors up, and a number
+            // that only exists inside an HLSL Properties block is a number nobody will ever find.
+            //
+            // The rim is the readability workhorse at a fixed top-down camera: a character's SILHOUETTE
+            // is most of what you can see of it, so lighting the edge is what separates it from the
+            // ground. It was warm and gentle, which is the one thing it must not be in this yard — the
+            // whole scene is lit by a warm key, so a warm rim on a small body just reads as more
+            // sunlight. It is now bright and slightly cool, and it is loud.
+            m.SetColor("_RimColor", RimColor);
+            m.SetFloat("_RimStrength", RimStrength);
+            m.SetFloat("_RimPower", RimPower);
+
+            // The outline is a screen-space extrusion, so it holds the same PIXEL width however far
+            // away the camera is — which is exactly what the ticket asks for ("actors stay crisp when
+            // the camera is zoomed out", YT-82). It only has to be thick enough to survive a phone.
+            m.SetColor("_OutlineColor", OutlineColor);
+            m.SetFloat("_OutlineWidth", OutlineWidth);
+
             s_cache[key] = m;
             return m;
         }
+
+        /// <summary>Bright and slightly COOL. The Backyard's key light is warm, so a warm rim on a
+        /// 20-pixel body reads as sunlight rather than as an edge; a cool one reads as an edge.</summary>
+        private static readonly Color RimColor = new Color(0.86f, 0.94f, 1f);
+
+        /// <summary>Loud. It was 0.55 and the actors read as flat blobs at gameplay zoom.</summary>
+        private const float RimStrength = 1.25f;
+
+        /// <summary>
+        /// How TIGHT the rim is to the silhouette. Higher is narrower.
+        ///
+        /// This is the number that has to be right, and the first cut got it badly wrong: at 2.2 the
+        /// rim was a wide wash rather than an edge, and on a body seen from almost directly above it
+        /// spilled across most of the visible surface. Max stopped being orange and became a pale
+        /// smear with an orange middle — the rim ate the very colour it exists to frame.
+        ///
+        /// An edge is an EDGE. Keep it hard against the silhouette, and let the albedo own the body.
+        /// </summary>
+        private const float RimPower = 4.6f;
+
+        /// <summary>Near-black, and not pure black: a true black edge against a dark bruiser is no edge
+        /// at all, and the whole point of the line is that it works on ANY background.</summary>
+        private static readonly Color OutlineColor = new Color(0.05f, 0.05f, 0.07f);
+
+        /// <summary>Screen-space, so it is a constant number of pixels at any zoom. Chunky on purpose
+        /// — this is the Brawl Stars idea and Brawl Stars does not draw hairlines.</summary>
+        private const float OutlineWidth = 0.013f;
 
         /// <summary>
         /// The same surface, recoloured toward an element — the hook that makes future
