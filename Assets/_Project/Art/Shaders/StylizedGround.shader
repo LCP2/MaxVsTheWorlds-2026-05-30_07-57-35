@@ -50,6 +50,20 @@ Shader "MaxWorlds/StylizedGround"
         _WindStrength    ("Wind Blade Lean (m)", Range(0, 0.4)) = 0.06
         _WindSpeed       ("Wind Speed", Range(0, 4)) = 0.9
         _WindShimmer     ("Wind Shimmer", Range(0, 0.15)) = 0.045
+
+        [Header(Wear YT79)]
+        // The ground the mowers have driven over, and the oil they have dropped on it. Painted into
+        // the grass rather than projected as decals — see GroundFrag.
+        _WearColor       ("Worn Earth", Color) = (0.24, 0.19, 0.13, 1)
+        _WearAmount      ("Wear Amount", Range(0, 1)) = 0.8
+        _TrackGauge      ("Track Gauge (m, half)", Range(0.1, 2)) = 0.62
+        _TrackWidth      ("Rut Width (m)", Range(0.02, 0.6)) = 0.20
+        _TrackLength     ("Track Length (m)", Range(1, 40)) = 17
+        // Reaches well past the Hutch's own 3 m footprint, or all of it is hidden underneath it.
+        _ApronRadius     ("Turning Apron (m)", Range(0.5, 10)) = 4.4
+        _OilColor        ("Oil", Color) = (0.09, 0.08, 0.07, 1)
+        _OilAmount       ("Oil Amount", Range(0, 1)) = 0.88
+        _OilRadius       ("Oil Reach (m)", Range(0.3, 8)) = 3.3
     }
 
     SubShader
@@ -90,7 +104,25 @@ Shader "MaxWorlds/StylizedGround"
                 float  _WindStrength;
                 float  _WindSpeed;
                 float  _WindShimmer;
+                float4 _WearColor;
+                float  _WearAmount;
+                float  _TrackGauge;
+                float  _TrackWidth;
+                float  _TrackLength;
+                float  _ApronRadius;
+                float4 _OilColor;
+                float  _OilAmount;
+                float  _OilRadius;
             CBUFFER_END
+
+            // Where the Mower Hutch stands (xy), and whether there IS one (z). A GLOBAL, deliberately
+            // outside UnityPerMaterial: it is a property of the scene, not of the material, and the
+            // ground material is built long before anyone knows where the factory ended up.
+            //
+            // Zero until BackyardWear says otherwise, and the wear is gated on z — so a scene with no
+            // factory in it (every test fixture that builds a bare arena) grows no tyre tracks through
+            // its origin.
+            float4 _MowerWear;
 
             TEXTURE2D(_BaseMap);   SAMPLER(sampler_BaseMap);
             TEXTURE2D(_BumpMap);   SAMPLER(sampler_BumpMap);
@@ -220,6 +252,72 @@ Shader "MaxWorlds/StylizedGround"
                 float3 lush = albedo * _LushShade;
                 float3 dry = lerp(albedo, _DryColor.rgb, _MacroStrength);
                 albedo = lerp(lush, dry, macro);
+
+                // --- wear: the yard has been USED (YT-79) ---
+                //
+                // Painted here rather than projected as decals, and that is the whole reason it is
+                // affordable. URP's decal system is a render pass and a projector per mark; this is a
+                // handful of ALU on a surface that was already being shaded, on the MOBILE tier that
+                // WebGL actually ships. It also never pops, never sorts wrong, and never z-fights with
+                // the grass it is supposed to be worn into — it IS the grass.
+                //
+                // _MowerWear.xy is where the Hutch stands; .z is 0 until something tells us it exists,
+                // which is what keeps a bare test scene from growing tyre tracks through the origin.
+                if (_MowerWear.z > 0.5)
+                {
+                    float2 d = wp - _MowerWear.xy;
+
+                    // The ruts. The robo-mowers come out of the Hutch and drive down the yard at Max,
+                    // over and over, and grass driven over by the same machine on the same line stops
+                    // being grass. They wander a little, because nothing drives in a perfectly straight
+                    // line, and they fade out down the lawn as the traffic spreads.
+                    float alongLane = saturate(-d.y / _TrackLength);          // 0 at the Hutch, 1 far away
+                    float wander = sin(d.y * 0.42) * 0.22 + sin(d.y * 0.13) * 0.35;
+                    float offAxis = abs(abs(d.x + wander) - _TrackGauge);      // distance to nearer rut
+                    float rut = (1.0 - smoothstep(0.0, _TrackWidth, offAxis))
+                              * (1.0 - smoothstep(0.55, 1.0, alongLane))
+                              * step(d.y, 0.0);                                 // only in FRONT of it
+
+                    float r = length(d);
+
+                    // The turning apron. Everything that comes out of a shed has to swing round to line
+                    // up, and the ground immediately outside one is always the deadest on the property.
+                    //
+                    // It has to reach PAST the machine to be worth anything: the Hutch is a 3 m box, so
+                    // the first metre and a half of this is underneath it and will never be seen by
+                    // anyone. The apron is sized to the grass, not to the maths.
+                    float apron = 1.0 - smoothstep(_ApronRadius * 0.6, _ApronRadius, r);
+
+                    // Break both up, or they read as paint rather than as wear.
+                    float mottle = 0.55 + 0.45 * noise21(wp * 1.7);
+                    float worn = saturate(max(rut, apron * 0.9) * mottle) * _WearAmount;
+
+                    albedo = lerp(albedo, _WearColor.rgb, worn);
+
+                    // Oil — and where it can be SEEN. Under the machine is under the machine; a spill
+                    // painted on the grass beneath a solid box is a spill nobody will ever look at.
+                    // So it soaks out around the Hutch's skirt, and pools at its mouth, which is the
+                    // one place a machine that makes machines would actually be dripping.
+                    float skirt = smoothstep(1.45, 2.0, r) * (1.0 - smoothstep(2.4, _OilRadius, r));
+
+                    // The pool sits WELL clear of the machine, and that is not a taste decision. The
+                    // Hutch is a 2 m box seen from 72 degrees, so it hides about 0.65 m of ground in
+                    // front of its own front face — and the first cut put the pool's core exactly
+                    // there. The stain was rendering perfectly; the machine was standing on it.
+                    float pool = 1.0 - smoothstep(0.9, 2.3, length(d - float2(0.0, -3.4)));
+
+                    float spill = max(skirt * 0.75, pool);
+
+                    // Blotches, not a disc. The threshold sits BELOW the noise's own average on
+                    // purpose: put it AT the average and the typical stain comes out as a fourteen
+                    // percent darkening — technically oil, visibly nothing. This is a spill. It is
+                    // allowed to be the darkest thing on the lawn.
+                    spill *= smoothstep(0.30, 0.55, noise21(wp * 2.6 + 11.3));
+                    albedo = lerp(albedo, _OilColor.rgb, saturate(spill) * _OilAmount);
+
+                    // Worn ground has no blades left standing to catch the light.
+                    normalWS = normalize(lerp(normalWS, N, saturate(worn + spill)));
+                }
 
                 albedo *= _BaseColor.rgb;
 
