@@ -56,8 +56,43 @@ namespace MaxWorlds.Tests.EditMode
             // Pillar 4: you must read which is which from the fixed ~72° camera, so the silhouettes
             // differ in SHAPE and in SIZE, not just in stats.
             Assert.AreNotEqual(Rusher.Shape, Bruiser.Shape);
-            Assert.Greater(Bruiser.BodyScale.x, Rusher.BodyScale.x * 1.5f, "not visibly bigger");
-            Assert.Greater(Bruiser.ColliderRadius, Rusher.ColliderRadius * 1.5f);
+            Assert.Greater(Bruiser.BodyScale.x, Rusher.BodyScale.x * 1.25f, "not visibly bigger");
+            Assert.Greater(Bruiser.ColliderRadius, Rusher.ColliderRadius * 1.2f);
+        }
+
+        // --- Size relative to Max (YT-74) -------------------------------------------------------
+
+        [Test]
+        public void NothingInTheSwarmOutSizesMax()
+        {
+            // A crowd of things bigger than the player stops reading as a swarm and starts reading
+            // as a moving wall. This is the regression that made the game unplayable.
+            foreach (var a in new[] { Rusher, Bruiser })
+            {
+                Assert.LessOrEqual(a.ColliderRadius, EnemyArchetype.PlayerRadius * 1.2f,
+                    $"the {a.Kind} is wider than Max");
+                Assert.LessOrEqual(a.ColliderHeight, EnemyArchetype.PlayerHeight,
+                    $"the {a.Kind} is taller than Max");
+                Assert.LessOrEqual(Mathf.Max(a.BodyScale.x, a.BodyScale.z), 1.25f,
+                    $"the {a.Kind}'s body is oversized");
+            }
+        }
+
+        [Test]
+        public void TheRusherIsNoticeablySmallerThanMax()
+        {
+            // He's the hero. A swarm of knee-high machines reads as a swarm.
+            Assert.Less(Rusher.ColliderRadius, EnemyArchetype.PlayerRadius);
+            Assert.Less(Rusher.ColliderHeight, EnemyArchetype.PlayerHeight * 0.8f);
+        }
+
+        [Test]
+        public void TheBruisersThreatIsItsHealth_NotItsFootprint()
+        {
+            // It's allowed to be chunkier than a rusher, but its danger has to come from soaking
+            // fire and hitting hard — not from being big enough to block a doorway.
+            Assert.Greater(Bruiser.MaxHealth, Rusher.MaxHealth * 3f);
+            Assert.LessOrEqual(Bruiser.ColliderRadius, EnemyArchetype.PlayerRadius * 1.2f);
         }
 
         [Test]
