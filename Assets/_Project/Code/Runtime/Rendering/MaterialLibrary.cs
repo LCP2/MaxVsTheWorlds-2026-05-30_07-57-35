@@ -273,7 +273,6 @@ namespace MaxWorlds.Rendering
 
             m.SetFloat("_DetailScale", p.DetailScale);
             m.SetFloat("_NormalStrength", p.NormalStrength);
-            m.SetFloat("_Sharpness", p.Sharpness);
         }
 
         /// <summary>What a material is physically like, as opposed to what colour the biome painted
@@ -285,16 +284,13 @@ namespace MaxWorlds.Rendering
             public readonly float NormalStrength;
             public readonly float Smoothness;
             public readonly float Contrast;         // how far the grain swings either side of the tone
-            public readonly float Sharpness;        // how hard the triplanar snaps to one axis
 
-            public SurfaceProfile(float detailScale, float normalStrength, float smoothness,
-                                  float contrast, float sharpness = 6f)
+            public SurfaceProfile(float detailScale, float normalStrength, float smoothness, float contrast)
             {
                 DetailScale = detailScale;
                 NormalStrength = normalStrength;
                 Smoothness = smoothness;
                 Contrast = contrast;
-                Sharpness = sharpness;
             }
         }
 
@@ -313,20 +309,18 @@ namespace MaxWorlds.Rendering
                 case SurfaceKind.Stone:
                     return new SurfaceProfile(0.4f, 1.1f, 0.16f, 0.20f);
 
-                // Soil is the roughest thing in the yard and the only one with no direction to it, so
-                // it gets the deepest relief and the softest triplanar blend.
+                // Soil is the roughest thing in the yard, so it gets the deepest relief.
                 case SurfaceKind.Dirt:
-                    return new SurfaceProfile(1.2f, 1.25f, 0.02f, 0.26f, sharpness: 3f);
+                    return new SurfaceProfile(1.2f, 1.25f, 0.02f, 0.26f);
 
                 // Panels about a metre across, to match the Hutch's 3 m body. Weathered paint, so a
                 // little more sheen than timber and nowhere near a mirror.
                 case SurfaceKind.Metal:
                     return new SurfaceProfile(0.45f, 0.8f, 0.28f, 0.20f);
 
-                // Leaves: soft, round, and blended across the axes, because a hedge has no flat faces
-                // to snap to. Gentle — a carved-looking bush is worse than a flat one.
+                // Leaves: soft and round. Gentle — a carved-looking bush is worse than a flat one.
                 case SurfaceKind.Foliage:
-                    return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f, sharpness: 2f);
+                    return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f);
 
                 default:
                     return new SurfaceProfile(1.0f, 0.5f, 0.06f, 0.10f);
