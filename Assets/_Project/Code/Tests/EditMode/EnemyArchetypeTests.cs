@@ -23,9 +23,39 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void Bruiser_CanNeverCatchMax_SoItIsAlwaysKiteable()
         {
-            const float maxSpeed = 6f; // PlayerController.moveSpeed
-            Assert.Less(Bruiser.MoveSpeed, maxSpeed,
+            Assert.Less(Bruiser.MoveSpeed, MaxSpeed,
                 "if it can outrun Max it stops being a positioning problem and becomes an unfair one");
+        }
+
+        // --- Kiteability (YT-80) --------------------------------------------------------------
+
+        /// <summary>PlayerController.moveSpeed.</summary>
+        private const float MaxSpeed = 6f;
+
+        [Test]
+        public void MovingAwayFromTheSwarmActuallyOpensAGap()
+        {
+            // Not just "slower than Max" — slower by enough that retreating BUYS something. The
+            // rusher used to run at 4.2 against Max's 6, and a 1.8 m/s edge means crossing the arena
+            // to shake one off; it read as being chased rather than as out-manoeuvring anything.
+            // Every robot must now cede at least a third of Max's speed.
+            foreach (var a in new[] { Rusher, Bruiser })
+                Assert.LessOrEqual(a.MoveSpeed, MaxSpeed * 0.65f,
+                    $"the {a.Kind} is too fast to out-position — kiting it isn't a real option");
+        }
+
+        [Test]
+        public void ButTheyStillCloseOnAMaxWhoStandsStill()
+        {
+            // The other edge. Shaving speed must not turn the swarm into scenery: a robot that can't
+            // reach a stationary player is no longer a threat, and there's nothing to dodge.
+            foreach (var a in new[] { Rusher, Bruiser })
+                Assert.Greater(a.MoveSpeed, 0f, $"the {a.Kind} would never reach Max at all");
+
+            // And the rusher specifically still has to feel like a rusher — quick enough to pressure
+            // you into moving, not a second bruiser.
+            Assert.GreaterOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.5f,
+                "the rusher has stopped rushing");
         }
 
         [Test]

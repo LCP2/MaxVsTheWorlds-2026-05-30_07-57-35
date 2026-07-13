@@ -61,14 +61,20 @@ namespace MaxWorlds.Enemies
         public const float PlayerRadius = 0.5f;
         public const float PlayerHeight = 2f;
 
-        /// <summary>The original robot (YT-36/YT-63): a small capsule at ~70% of Max's speed. Fast
+        /// <summary>The original robot (YT-36/YT-63): a small capsule at 60% of Max's speed. Fast
         /// enough to pressure, slow enough to kite. Dies quickly; hurts a little. Deliberately
         /// SMALLER than Max — he's the hero, and a swarm of knee-high machines reads as a swarm
-        /// (YT-74).</summary>
+        /// (YT-74).
+        ///
+        /// Was 4.2 (70% of Max) until YT-80, and that last 10% was the difference between kiting and
+        /// merely delaying: at a 1.8 m/s deficit a rusher took ~7 s to cross a 12 m arena's worth of
+        /// gap, so backing off never actually bought space, it just moved the fight. At 3.6 the gap
+        /// opens at 2.4 m/s and retreating is a real option — but standing still still ends with the
+        /// swarm on top of you, because they never stop closing.</summary>
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 4.2f, maxHealth: 24f,
+            moveSpeed: 3.6f, maxHealth: 24f,
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -95,7 +101,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Bruiser => new EnemyArchetype(
             EnemyKind.Bruiser, EnemyShape.Box, new Vector3(1.15f, 1.15f, 1.15f),
             colliderHeight: 1.15f, colliderRadius: 0.55f,
-            moveSpeed: 2.2f, maxHealth: 100f,
+            moveSpeed: 1.8f, maxHealth: 100f,
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,

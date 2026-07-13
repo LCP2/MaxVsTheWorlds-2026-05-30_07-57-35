@@ -34,15 +34,12 @@ namespace MaxWorlds.Combat
         [Tooltip("Visual width of the stream, so it reads as a spray fan (cosmetic only).")]
         [SerializeField] private float streamVisualRadius = 1.1f;
 
-        [Header("Energy")]
-        [SerializeField] private float maxEnergy = 100f;
-        [SerializeField] private float energyPerTick = 1.5f;
-        [SerializeField] private float regenPerSec = 35f;
-        [SerializeField] private float regenDelay = 0.4f;
-        [Tooltip("After the tank empties, fire stays locked until energy recharges to " +
-                 "this fraction of max (hysteresis — prevents single-puff dribbling).")]
-        [Range(0.1f, 1f)]
-        [SerializeField] private float rechargeFraction = 0.35f;
+        // Energy is authored in BlasterTuning, NOT here. These were [SerializeField]s until YT-80,
+        // and the values baked into Backyard_Slice.unity quietly overrode every one of them — the
+        // gun the code described was not the gun anyone played. Tune it there; the scene can't
+        // shadow a static.
+        private float energyPerTick;
+        private float rechargeFraction;
 
         [Header("Debug")]
         [Tooltip("Draw a live fire-state overlay (diagnostics). Turn off for release.")]
@@ -120,12 +117,18 @@ namespace MaxWorlds.Combat
 
         private void Awake()
         {
-            Energy = new EnergyPool(maxEnergy, regenPerSec, regenDelay);
+            Energy = new EnergyPool(
+                BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
+            rechargeFraction = BlasterTuning.RechargeFraction;
+
+            // Per-tick cost is derived from the per-second cost, because per-second is the number
+            // that was authored and the one the ramp holds constant (YT-67/YT-80).
+            energyPerTick = BlasterTuning.EnergyPerSecond * fireInterval;
 
             // Capture the authored numbers before anything scales them (YT-67).
             _baseDamage = damagePerTick;
             _baseInterval = fireInterval;
-            _baseEnergyPerSecond = fireInterval > 0f ? energyPerTick / fireInterval : energyPerTick;
+            _baseEnergyPerSecond = BlasterTuning.EnergyPerSecond;
 
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();

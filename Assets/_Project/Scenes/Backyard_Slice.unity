@@ -787,11 +787,6 @@ MonoBehaviour:
   coneHalfAngle: 35
   knockbackForce: 5
   streamVisualRadius: 1.1
-  maxEnergy: 100
-  energyPerTick: 2.5
-  regenPerSec: 25
-  regenDelay: 0.6
-  rechargeFraction: 0.35
   debugOverlay: 1
   aimSource: {fileID: 435318708}
 --- !u!114 &435318711
