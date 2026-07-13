@@ -25,16 +25,78 @@ namespace MaxWorlds.Tests.EditMode
                 "the two rings are too close to tell apart in a crowd, which is the one thing they exist to do");
         }
 
+        /// <summary>
+        /// THE RING AND THE BODY STANDING IN IT MUST BE ON THE SAME SIDE.
+        ///
+        /// This test replaces one that asserted the exact opposite — "you are cool and they are warm"
+        /// — and that older test was not careless: on the day it was written, Max's ring was cyan and
+        /// the swarm's was orange, and it passed for a good reason. Then YT-86 gave Max a hot orange
+        /// BODY and the robots cold turquoise and violet ones. Both systems were internally coherent,
+        /// both were tested, and between them the game shipped with every actor standing in the other
+        /// team's colour (YT-87) — Max's body 9 deg from the enemy ring, the rusher's body 11 deg
+        /// from Max's. Nothing failed, because nothing tested the two systems against EACH OTHER.
+        ///
+        /// So this test does. It is the binding that was missing. Blue-vs-orange (the pair that
+        /// survives colour blindness, unlike red-vs-green) is still the axis — it just has to be
+        /// pointing the same way in both places, and now a change to either end breaks the build.
+        /// </summary>
         [Test]
-        public void YouAreCool_AndTheyAreWarm()
+        public void EachSidesRing_IsOnTheSameSideOfTheWarmColdAxisAsThatSidesBody()
         {
-            // Blue-vs-orange, not red-vs-green: it's the high-contrast pair that survives the common
-            // forms of colour blindness. Getting this backwards would look fine to most people and
-            // be unplayable for some.
-            Assert.Greater(GroundAnchorTuning.PlayerRing.b, GroundAnchorTuning.PlayerRing.r,
-                "Max's ring has gone warm — it now reads as a threat marker");
-            Assert.Greater(GroundAnchorTuning.EnemyRing.r, GroundAnchorTuning.EnemyRing.b,
-                "the enemy ring has gone cool — it now reads as friendly");
+            Color max = CharacterSkin.BaseColorFor(CharacterRole.Player);
+            var ring = GroundAnchorTuning.PlayerRing;
+
+            Assert.Greater(max.r, Mathf.Max(max.g, max.b),
+                "Max's BODY has gone cold. The rings below are built on him being the warm one.");
+            Assert.Greater(ring.r, ring.b,
+                "Max's body is warm and his ring is cold — the ring under the player is wearing the " +
+                "enemies' colour, and the one blob you must never lose is now camouflaged as a robot.");
+
+            foreach (var role in new[] { CharacterRole.Robot, CharacterRole.Bruiser, CharacterRole.Boss })
+            {
+                Color body = CharacterSkin.BaseColorFor(role);
+                Assert.Greater(Mathf.Max(body.g, body.b), body.r,
+                    $"the {role}'s BODY has gone warm — it is competing with Max for the one cue " +
+                    "that still works when the screen is full.");
+            }
+
+            Assert.Greater(GroundAnchorTuning.EnemyRing.b, GroundAnchorTuning.EnemyRing.r,
+                "the enemy bodies are cold and their ring is warm. Warm is Max. Every robot on the " +
+                "field is now haloed in the player's own colour — that is not a missing cue, it is " +
+                "a lying one, and it is worse than having no rings at all.");
+        }
+
+        /// <summary>
+        /// The same rule again, measured the way an eye measures it. The polarity test above is the
+        /// coarse guard; this is the one that catches a ring drifting to within a few degrees of the
+        /// wrong body while still technically staying on its own half of the wheel.
+        /// </summary>
+        [Test]
+        public void NoRingWearsTheColourOfTheBodiesOnTheOtherSide()
+        {
+            foreach (var (ringName, ring, opponents) in new[]
+            {
+                ("Max's", GroundAnchorTuning.PlayerRing,
+                    new[] { CharacterRole.Robot, CharacterRole.Bruiser, CharacterRole.Boss }),
+                ("the enemy", GroundAnchorTuning.EnemyRing,
+                    new[] { CharacterRole.Player }),
+            })
+            {
+                Color.RGBToHSV(ring, out float ringHue, out _, out _);
+
+                foreach (var role in opponents)
+                {
+                    Color.RGBToHSV(CharacterSkin.BaseColorFor(role), out float bodyHue, out _, out _);
+
+                    float apart = Mathf.Abs(ringHue - bodyHue) * 360f;
+                    if (apart > 180f) apart = 360f - apart;
+
+                    Assert.Greater(apart, 90f,
+                        $"{ringName} ring is {apart:0} deg from the {role}'s body colour. A ring exists " +
+                        "to say whose side something is on; a ring wearing the opposing side's colour " +
+                        "says the wrong one, and it says it under every actor, all game.");
+                }
+            }
         }
 
         [Test]
