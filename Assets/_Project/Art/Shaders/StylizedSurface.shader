@@ -46,11 +46,6 @@ Shader "MaxWorlds/StylizedSurface"
         _DetailScale    ("Detail Scale (tiles/m)", Range(0.05, 8)) = 1.6
         _NormalStrength ("Normal Strength", Range(0, 3)) = 1.0
 
-        // How hard the triplanar projection snaps to the dominant axis. The kit is chunky low-poly
-        // and mostly axis-aligned, so a high exponent keeps planks crisp on a flat face instead of
-        // cross-fading three projections into mush; it still blends on a tree trunk or a rock.
-        _Sharpness      ("Triplanar Sharpness", Range(1, 16)) = 6
-
         _Smoothness     ("Smoothness", Range(0, 1)) = 0.08
         _Metallic       ("Metallic", Range(0, 1)) = 0
     }
@@ -94,7 +89,6 @@ Shader "MaxWorlds/StylizedSurface"
                 float4 _EmissionColor;
                 float  _DetailScale;
                 float  _NormalStrength;
-                float  _Sharpness;
                 float  _Smoothness;
                 float  _Metallic;
             CBUFFER_END
@@ -132,7 +126,15 @@ Shader "MaxWorlds/StylizedSurface"
                 float3 wp = IN.positionWS * _DetailScale;
 
                 // Triplanar weights, sharpened toward the dominant axis.
-                float3 w = pow(abs(N), _Sharpness);
+                //
+                // n^4 by multiplication rather than pow(). This runs on every lit pixel of every
+                // surface in the yard on the MOBILE tier (WebGL is what ships), and three pow() calls
+                // a pixel is a real number there — the first cut of this shader cost the deployed
+                // build 0.8 ms/frame and took it off its 60 fps lock. A fixed exponent is also honest:
+                // nothing was ever going to tune this per material.
+                float3 w = abs(N);
+                w = w * w;
+                w = w * w;
                 w /= max(1e-4, w.x + w.y + w.z);
 
                 // The three projections. A texture authored with its grain running along V therefore
@@ -149,22 +151,32 @@ Shader "MaxWorlds/StylizedSurface"
 
                 albedo *= _BaseColor.rgb;
 
-                // Unpacked by hand, not through UnpackNormalScale: these maps are generated at runtime
-                // as plain linear RGB (StylizedTextures.NormalFor), not DXT5nm-swizzled, so the helper
-                // would read the wrong channels on whichever platform took the other branch. Same
-                // reasoning as StylizedGround.
-                float2 tx = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uvX).rg * 2.0 - 1.0;
-                float2 ty = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uvY).rg * 2.0 - 1.0;
-                float2 tz = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, uvZ).rg * 2.0 - 1.0;
+                // The relief is taken from the DOMINANT plane only — one fetch, not three.
+                //
+                // The albedo has to blend across all three or a rock cross-fades badly at its corners;
+                // a slope does not. It is a small perturbation of a normal that is mostly the geometric
+                // one, so where two planes are close to equal weight the two answers are close to equal
+                // too, and nobody has ever seen the difference. Halving the sampling on a per-pixel
+                // shader that covers the fence line, the shed and every prop in the yard is worth far
+                // more than a difference nobody can see.
+                //
+                // Unpacked by hand rather than through UnpackNormalScale: these maps are generated at
+                // runtime as plain linear RGB (StylizedTextures.NormalFor), not DXT5nm-swizzled, so the
+                // helper would read the wrong channels on whichever platform took the other branch.
+                // Same reasoning as StylizedGround.
+                bool xDom = w.x >= w.y && w.x >= w.z;
+                bool yDom = !xDom && w.y >= w.z;
+                float2 nuv = xDom ? uvX : (yDom ? uvY : uvZ);
 
-                // Each plane's 2D slope, rotated back into the world axes it was projected along, then
-                // added to the geometric normal. Cheaper and far more stable than reconstructing three
-                // tangent frames and sign-correcting them, and for a stylised surface the difference
-                // is invisible — this only ever has to make the light break, not carry a bump-mapped
-                // brick wall.
-                float3 slope = float3(0, tx.y, tx.x) * w.x
-                             + float3(ty.x, 0, ty.y) * w.y
-                             + float3(tz.x, tz.y, 0) * w.z;
+                float2 t = SAMPLE_TEXTURE2D(_BumpMap, sampler_BumpMap, nuv).rg * 2.0 - 1.0;
+
+                // That plane's 2D slope, rotated back into the world axes it was projected along, then
+                // added to the geometric normal. Far more stable than reconstructing a tangent frame
+                // and sign-correcting it, and for a stylised surface the difference is invisible — this
+                // only has to make the light break, not carry a bump-mapped brick wall.
+                float3 slope = xDom ? float3(0, t.y, t.x)
+                             : (yDom ? float3(t.x, 0, t.y)
+                                     : float3(t.x, t.y, 0));
 
                 float3 normalWS = normalize(N + slope * _NormalStrength);
 

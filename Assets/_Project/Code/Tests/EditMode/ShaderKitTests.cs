@@ -54,7 +54,6 @@ namespace MaxWorlds.Tests.EditMode
             // rescaled at runtime, so mesh UVs can carry no detail at all.
             Assert.IsTrue(mat.HasProperty("_DetailScale"), "no grain scale control");
             Assert.IsTrue(mat.HasProperty("_NormalStrength"), "no relief control");
-            Assert.IsTrue(mat.HasProperty("_Sharpness"), "no triplanar control");
 
             // Kept for the same reason StylizedCharacter keeps them: the Mower Hutch wears this shader,
             // and gameplay's tells are written to these names.
