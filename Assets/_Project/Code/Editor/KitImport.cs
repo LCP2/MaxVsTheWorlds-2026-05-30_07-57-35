@@ -188,25 +188,84 @@ namespace MaxWorlds.Editor
         }
 
         /// <summary>
-        /// The two kit colours we overrule, and nothing else.
+        /// The brightest albedo the Backyard's sun can take. Above this, a surface stops being a
+        /// colour and becomes a highlight.
         ///
-        /// Kenney's Nature Kit paints all its foliage a mint turquoise (#29C9AB / #2CD8B8). It is a
-        /// lovely palette and it is not a back garden — dropped on this lawn it reads as an alien
-        /// planet, which is the one thing the ticket asks the yard NOT to do. So the two greens are
-        /// pulled onto the biome's own green, and every other colour the kit author chose — the woods,
-        /// the dirt, the stone, the flowers — is left exactly alone.
+        /// The key light is <see cref="BackyardLook.KeyIntensity"/> = 2.2 and URP/Lit multiplies
+        /// albedo by it, so anything much past 0.6 per channel is clipped to white before the
+        /// tonemapper ever sees it. Kenney paints his kit in bright pastels for an unlit look —
+        /// <c>wood</c> is (1.00, 0.56, 0.38) — and under this sun every fence panel facing the light
+        /// came out bleached cream while the same panel in shadow stayed brown. Same material, two
+        /// completely different fences.
+        /// </summary>
+        public const float SunlitAlbedoCeiling = 0.6f;
+
+        /// <summary>
+        /// The kit's colours, pulled onto the Backyard's palette AND under its sun.
         ///
-        /// Green channel clearly dominant, red kept well below it. That is the line YT-69 drew when
-        /// the lawn came out mustard, and foliage sitting on that lawn has to hold it too.
+        /// Two separate problems, one table:
+        ///
+        ///  * HUE. Kenney's Nature Kit paints all its foliage a mint turquoise (#29C9AB / #2CD8B8).
+        ///    It is a lovely palette and it is not a back garden — dropped on this lawn it reads as
+        ///    an alien planet. Green channel clearly dominant, red kept well below it: the line
+        ///    YT-69 drew when the lawn came out mustard, which foliage standing on that lawn has to
+        ///    hold too.
+        ///
+        ///  * BRIGHTNESS. The rest of the kit's colours are hue-correct and far too bright to
+        ///    survive a 2.2× key (see <see cref="SunlitAlbedoCeiling"/>). Timber, stone, soil and
+        ///    flowers are all brought under the ceiling here. They look too dark in a colour picker.
+        ///    That is the point: the sun supplies the rest, and <see cref="BiomePalette.Backyard"/>
+        ///    already holds the lawn to exactly the same restraint, for exactly the same reason.
         /// </summary>
         private static readonly Dictionary<string, Color> Recolour = new Dictionary<string, Color>
         {
             { "leafsGreen", new Color(0.24f, 0.45f, 0.17f) },   // tree canopy: deeper than the turf
             { "grass", new Color(0.35f, 0.56f, 0.21f) },        // shrubs, tufts, stems: lusher than it
+
+            // Timber: the fence line, the shed's walls, the planters. The most of the yard by area,
+            // and the worst of the blow-out — kit wood is (1.00, 0.56, 0.38).
+            { "wood", new Color(0.34f, 0.24f, 0.15f) },
+            { "woodDark", new Color(0.24f, 0.17f, 0.11f) },
+            { "woodBark", new Color(0.22f, 0.16f, 0.12f) },
+            { "woodBarkDark", new Color(0.16f, 0.12f, 0.09f) },
+            { "woodInner", new Color(0.42f, 0.33f, 0.22f) },    // a cut log's pale face — the light one
+
+            { "dirt", new Color(0.26f, 0.19f, 0.12f) },
+            { "dirtDark", new Color(0.18f, 0.13f, 0.09f) },
+
+            // Kit stone is a pale blue-white (0.72, 0.89, 0.91) — it read as snow on the lawn.
+            { "stone", new Color(0.36f, 0.35f, 0.33f) },
+            { "stoneDark", new Color(0.26f, 0.25f, 0.24f) },
+
+            // Flowers keep their saturation and lose their glare: they are the only strong colours in
+            // the yard, and they are tiny — Max (orange) and the robots still have to be the loudest
+            // things on the screen.
+            { "colorRed", new Color(0.42f, 0.13f, 0.14f) },
+            { "colorYellow", new Color(0.52f, 0.42f, 0.12f) },
+            { "colorPurple", new Color(0.30f, 0.18f, 0.42f) },
+            { "colorWhite", new Color(0.55f, 0.54f, 0.52f) },
+
+            { "_defaultMat", new Color(0.30f, 0.29f, 0.27f) },  // the odd bracket, rim and edging
         };
 
+        /// <summary>The colour a kit material is painted: ours if we chose one, otherwise the kit's
+        /// own — dimmed if it would clip. The dimming is a backstop, not a policy: a prop whose
+        /// material we never classified should look dull, not blown out, and a new kit dropped in
+        /// tomorrow can't paint a white fence across the yard before anyone notices.</summary>
         private static Color Recoloured(string material, Color kit) =>
-            Recolour.TryGetValue(material, out Color c) ? c : kit;
+            Recolour.TryGetValue(material, out Color c) ? c : UnderTheSun(kit);
+
+        /// <summary>Scale a colour down until nothing in it clips, keeping its hue and its internal
+        /// contrast — dividing by the peak, rather than clamping each channel, is what stops a
+        /// too-bright orange from turning into a washed-out yellow on the way.</summary>
+        public static Color UnderTheSun(Color c)
+        {
+            float peak = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+            if (peak <= SunlitAlbedoCeiling) return c;
+
+            float k = SunlitAlbedoCeiling / peak;
+            return new Color(c.r * k, c.g * k, c.b * k, c.a);
+        }
 
         private static Material Solid(string name, Color color, Dictionary<string, Material> cache)
         {

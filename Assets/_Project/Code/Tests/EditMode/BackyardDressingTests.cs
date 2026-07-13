@@ -2,9 +2,12 @@ using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEditor;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Editor;
 using MaxWorlds.Models;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -189,6 +192,54 @@ namespace MaxWorlds.Tests.EditMode
                 BackyardDressingSet.Validate(Layout, bad, BackyardCover.Default, ShedZ, SpawnRadius,
                                              out string why));
             StringAssert.Contains("garden_gnome", why);
+        }
+
+        // --- the kit survives the yard's sunlight ------------------------------------------------
+
+        [Test]
+        public void NoKitMaterialClipsToCreamInTheSun()
+        {
+            // The yard's key light is 2.2× and URP/Lit multiplies albedo by it, so an albedo much
+            // past 0.6 is white before the tonemapper sees it. Kenney paints his kit in bright
+            // pastels for an UNLIT look — wood is (1.00, 0.56, 0.38) — and the first import kept
+            // them: every sunlit fence panel came out bleached cream while the same panel in shadow
+            // stayed brown. One material, two fences. This is what stops that coming back, and it
+            // asserts on the COMMITTED .mat assets, because those are what actually ship.
+            float key = BackyardLook.Default.KeyIntensity;
+            Assert.Greater(key, 1f, "this test only means anything under a key brighter than 1×");
+
+            var materials = AssetDatabase.FindAssets("t:Material", new[] { KitImport.MaterialDir })
+                                         .Select(AssetDatabase.GUIDToAssetPath)
+                                         .Select(AssetDatabase.LoadAssetAtPath<Material>)
+                                         .Where(m => m != null)
+                                         .ToList();
+
+            Assert.IsNotEmpty(materials, $"no kit materials found in {KitImport.MaterialDir}");
+
+            foreach (var m in materials)
+            {
+                Assert.IsTrue(m.HasProperty("_BaseColor"), $"{m.name} has no _BaseColor to check");
+
+                Color c = m.GetColor("_BaseColor");
+                Assert.LessOrEqual(c.maxColorComponent, KitImport.SunlitAlbedoCeiling + 1e-4f,
+                    $"{m.name} is albedo {c.maxColorComponent:0.00} — under a {key:0.0}× key it renders " +
+                    "as a highlight, not as a colour. Give it a tone in KitImport.Recolour.");
+            }
+        }
+
+        [Test]
+        public void AKitColourWeNeverClassified_IsDimmedRatherThanBlownOut()
+        {
+            // The backstop for the next kit, or the next prop in this one: a material nobody chose a
+            // colour for should come out dull, not white. Hue and internal contrast survive; only the
+            // brightness is pulled down.
+            Color blinding = KitImport.UnderTheSun(new Color(1f, 0.56f, 0.38f));
+
+            Assert.LessOrEqual(blinding.maxColorComponent, KitImport.SunlitAlbedoCeiling + 1e-4f);
+            Assert.That(blinding.g / blinding.r, Is.EqualTo(0.56f).Within(0.01f), "the hue drifted");
+
+            Color safe = new Color(0.3f, 0.2f, 0.1f);
+            Assert.AreEqual(safe, KitImport.UnderTheSun(safe), "a colour already under the ceiling is left alone");
         }
 
         // --- the kit is really in the project --------------------------------------------------
