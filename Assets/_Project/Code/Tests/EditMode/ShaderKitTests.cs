@@ -34,6 +34,35 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void SurfaceShader_CompilesAndIsSupported()
+        {
+            var shader = Shader.Find(MaterialLibrary.StylizedSurfaceShaderName);
+
+            Assert.IsNotNull(shader, $"'{MaterialLibrary.StylizedSurfaceShaderName}' not found — a shader " +
+                                     "with a compile error can disappear from Shader.Find entirely");
+            Assert.IsTrue(shader.isSupported, "the shader failed to compile on this platform");
+            Assert.That(shader.name, Does.Not.Contain("InternalErrorShader"));
+        }
+
+        [Test]
+        public void SurfaceMaterial_ExposesTheGrainControls()
+        {
+            var mat = MaterialLibrary.Surface(SurfaceKind.Wood);
+
+            // _DetailScale is tiles per METRE of world, not per UV, and it is the reason this shader
+            // exists: the kit's FBXs are UV-mapped to swatches in a palette atlas, and its props are
+            // rescaled at runtime, so mesh UVs can carry no detail at all.
+            Assert.IsTrue(mat.HasProperty("_DetailScale"), "no grain scale control");
+            Assert.IsTrue(mat.HasProperty("_NormalStrength"), "no relief control");
+            Assert.IsTrue(mat.HasProperty("_Sharpness"), "no triplanar control");
+
+            // Kept for the same reason StylizedCharacter keeps them: the Mower Hutch wears this shader,
+            // and gameplay's tells are written to these names.
+            Assert.IsTrue(mat.HasProperty("_BaseColor"), "no base colour");
+            Assert.IsTrue(mat.HasProperty("_EmissionColor"), "no emission — the factory's tells go silent");
+        }
+
+        [Test]
         public void GroundMaterial_ExposesTheGrassControls()
         {
             var mat = MaterialLibrary.Surface(SurfaceKind.Ground);
