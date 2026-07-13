@@ -51,7 +51,29 @@ namespace MaxWorlds.VFX
         private static readonly Color PlayerBody = new Color(0.78f, 0.22f, 0.18f);   // Max's red hoodie
         private static readonly Color RobotBody = new Color(0.42f, 0.47f, 0.55f);    // cold steel
         private static readonly Color BossBody = new Color(0.24f, 0.28f, 0.32f);     // darker, heavier
-        private static readonly Color StructureBody = new Color(0.40f, 0.34f, 0.27f);
+
+        /// <summary>
+        /// The Mower Hutch: painted steel, the same cold family as the robots it builds (YT-77).
+        ///
+        /// It was a warm taupe (0.40, 0.34, 0.27), and that was survivable while the yard was
+        /// greybox. It stopped being survivable the moment the shed around it became actual timber:
+        /// a brown box standing inside a brown timber shed is a crate, and the one thing the factory
+        /// must never be is scenery — QA already failed once to find the objective (YT-38).
+        ///
+        /// So it goes to weathered galvanised steel: PALE, and a touch warm.
+        ///
+        /// Both of those are deliberate and were arrived at by looking. A neutral mid-grey machine
+        /// came out INDIGO — it was the darkest large surface in the yard, so the grade's shadow tint
+        /// (which leans firmly blue, by design) and the saturation boost on top of it took a grey box
+        /// and made it violet. Paint that is lighter than the lawn and slightly warm sits above that
+        /// tint instead of underneath it, and reads as metal rather than as plastic.
+        ///
+        /// Being the palest thing in the yard is also what makes it findable — it is now the one
+        /// bright, cold, hard-edged object in a warm garden full of timber and leaves. Max stays the
+        /// only warm-red thing on the screen; the robots stay cold steel, which is exactly the family
+        /// their factory should belong to.
+        /// </summary>
+        private static readonly Color StructureBody = new Color(0.47f, 0.46f, 0.44f);
 
         /// <summary>Bright white — deliberately NOT magenta or any saturated hue. A hit flash has to
         /// read instantly as "that landed" and must never be mistakable for a render error.</summary>
@@ -136,11 +158,68 @@ namespace MaxWorlds.VFX
             if (_renderer == null) return;
             if (_mpb == null) _mpb = new MaterialPropertyBlock();
 
-            var mat = MaterialLibrary.Character();
+            if (_body == default) _body = BaseColorFor(role);
+
+            var mat = MaterialFor(role);
             if (mat != null && _renderer.sharedMaterial != mat) _renderer.sharedMaterial = mat;
 
-            if (_body == default) _body = BaseColorFor(role);
+            if (IsMachine)
+            {
+                // A machine's colour is IN its material, so there is nothing to tint — and the block
+                // has to go, or the Hutch's own Awake-time tint (MowerHutch.TintBody) multiplies
+                // against an albedo that already carries the colour. See MaterialFor.
+                _renderer.SetPropertyBlock(null);
+                return;
+            }
+
             Write(_body, Color.black);
+        }
+
+        /// <summary>
+        /// Structures don't flash and don't telegraph, so they don't need a property block — and are
+        /// much better off without one.
+        ///
+        /// Nothing routes a hit flash to a structure: CharacterSkinDirector only ever calls
+        /// <see cref="NearestTo"/> with <see cref="CharacterRole.Robot"/>, and the wind-up tell reads
+        /// a <see cref="RobotEnemy"/> that a factory doesn't have. So every frame, the Hutch's block
+        /// was writing the same constant colour it wrote last frame.
+        ///
+        /// Dropping it is what lets the Hutch wear a real material (YT-77). It is also, bluntly, the
+        /// safe side of a rendering bug I could not get to the bottom of: with a property block on the
+        /// renderer, the triplanar shader lights this one object roughly four times too dark, while
+        /// reporting — through every probe I could put in the shader — a correct base colour, a
+        /// correct texture sample, full NdotL and no shadow. Every other surface in the yard on the
+        /// same shader is right. Rather than ship a factory that is quietly wrong, the machine's
+        /// colour lives in its material, where the shader demonstrably reads it: paint the material
+        /// red and the Hutch goes red.
+        /// </summary>
+        private bool IsMachine => role == CharacterRole.Structure;
+
+        /// <summary>
+        /// The material a body wears. Everything that FIGHTS gets the character shader — outline, rim
+        /// light, the things that make a body read as a body at a fixed top-down camera.
+        ///
+        /// The Mower Hutch is the exception, and YT-77 is where that stops being glossed over: it is
+        /// not a character, it is a MACHINE. It doesn't move, it has no silhouette to protect, and it
+        /// is the only structure in the yard — so it gets worn painted metal, with panels, rivets and
+        /// thinning paint. Everything the skin does on top still works untouched: the wear is a
+        /// GREYSCALE albedo, so <see cref="Write"/> continues to decide the hutch's colour, its
+        /// damage state and its hit flash through exactly the same property block, on a shader that
+        /// keeps _BaseColor and _EmissionColor for precisely that reason.
+        /// </summary>
+        private Material MaterialFor(CharacterRole r)
+        {
+            if (r == CharacterRole.Structure)
+            {
+                // Painted steel with panels, rivets and worn paint, in the machine's own colour — the
+                // colour is baked into the albedo, exactly as it is for the timber and the paving, so
+                // no property block is needed to put it there (see IsMachine).
+                var metal = MaterialLibrary.Tinted(SurfaceKind.Metal, _body);
+                if (metal != null) return metal;
+                // No surface shader in this build — a factory with no grain still has to be visible.
+            }
+
+            return MaterialLibrary.Character();
         }
 
         /// <summary>Flash the body. Called when this character takes a hit.</summary>
@@ -149,6 +228,15 @@ namespace MaxWorlds.VFX
         private void LateUpdate()
         {
             if (_renderer == null) return;
+
+            // A machine has no flash and no tell (see IsMachine), and MowerHutch re-tints itself in
+            // its own Awake — so keep clearing the block, or that tint comes back and multiplies
+            // against an albedo that already carries the colour.
+            if (IsMachine)
+            {
+                if (_renderer.HasPropertyBlock()) _renderer.SetPropertyBlock(null);
+                return;
+            }
 
             // Wind-up: the body heats toward the warn colour as the strike lands, backing up the
             // ground ring. Reading the enemy's own state — nothing is written back to it.

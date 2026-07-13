@@ -191,14 +191,19 @@ namespace MaxWorlds.Editor
         /// The brightest albedo the Backyard's sun can take. Above this, a surface stops being a
         /// colour and becomes a highlight.
         ///
-        /// The key light is <see cref="BackyardLook.KeyIntensity"/> = 2.2 and URP/Lit multiplies
-        /// albedo by it, so anything much past 0.6 per channel is clipped to white before the
-        /// tonemapper ever sees it. Kenney paints his kit in bright pastels for an unlit look —
-        /// <c>wood</c> is (1.00, 0.56, 0.38) — and under this sun every fence panel facing the light
-        /// came out bleached cream while the same panel in shadow stayed brown. Same material, two
-        /// completely different fences.
+        /// The key light is <see cref="BackyardLook.KeyIntensity"/> (1.8× since YT-76, and it was
+        /// 2.2× when this was found) and URP/Lit multiplies albedo by it, so anything much past 0.6
+        /// per channel is clipped to white before the tonemapper ever sees it. Kenney paints his kit
+        /// in bright pastels for an unlit look — <c>wood</c> is (1.00, 0.56, 0.38) — and under this
+        /// sun every fence panel facing the light came out bleached cream while the same panel in
+        /// shadow stayed brown. Same material, two completely different fences.
+        ///
+        /// The rule itself now lives in <see cref="SunlitAlbedo"/>, because YT-77 needed it again at
+        /// runtime: it bakes albedo textures, and the bright end of a wood grain crosses this line
+        /// long before the colour it was grown from does. This is an alias, kept because it reads
+        /// naturally at the call sites here and the tests name it.
         /// </summary>
-        public const float SunlitAlbedoCeiling = 0.6f;
+        public const float SunlitAlbedoCeiling = SunlitAlbedo.Ceiling;
 
         /// <summary>
         /// The kit's colours, pulled onto the Backyard's palette AND under its sun.
@@ -258,14 +263,7 @@ namespace MaxWorlds.Editor
         /// <summary>Scale a colour down until nothing in it clips, keeping its hue and its internal
         /// contrast — dividing by the peak, rather than clamping each channel, is what stops a
         /// too-bright orange from turning into a washed-out yellow on the way.</summary>
-        public static Color UnderTheSun(Color c)
-        {
-            float peak = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
-            if (peak <= SunlitAlbedoCeiling) return c;
-
-            float k = SunlitAlbedoCeiling / peak;
-            return new Color(c.r * k, c.g * k, c.b * k, c.a);
-        }
+        public static Color UnderTheSun(Color c) => SunlitAlbedo.Clamp(c);
 
         private static Material Solid(string name, Color color, Dictionary<string, Material> cache)
         {

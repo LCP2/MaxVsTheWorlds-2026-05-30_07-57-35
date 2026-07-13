@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Models;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Arena
 {
@@ -77,11 +78,16 @@ namespace MaxWorlds.Arena
             foreach (DressingProp prop in set) Place(prop);
             foreach (CoverPiece piece in path.CoverPieces) DressCover(piece);
 
+            // Timber gets wood grain, paving gets stone, the beds get turned soil (YT-77). Strictly
+            // before the batch below: batching bakes each renderer's material into the combined mesh,
+            // so a material swapped in afterwards is a swap that doesn't land.
+            int surfaced = KitSurfaces.Dress(_props);
+
             // One draw call per material instead of one per prop. The props never move, so there is
             // nothing to give up by baking them together.
             StaticBatchingUtility.Combine(_props.gameObject);
 
-            Debug.Log($"[BackyardDressing] {PropCount} kit props placed.");
+            Debug.Log($"[BackyardDressing] {PropCount} kit props placed, {surfaced} re-surfaced.");
         }
 
         /// <summary>The ground beyond the fence. Not a kit model and deliberately not marked as
