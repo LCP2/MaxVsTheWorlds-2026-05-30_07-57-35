@@ -5,6 +5,11 @@ namespace MaxWorlds.Arena
 {
     public enum CoverShape { Box, Cylinder }
 
+    /// <summary>What a cover piece looks like once the art pass has been through (YT-75). The BOX is
+    /// what the game reasons about — it is the collider, and none of these change it. This only says
+    /// which kit models get built inside it.</summary>
+    public enum CoverDressing { None, Tree, Hedge, Planter }
+
     /// <summary>One free-standing cover prop in the lawn (YT-68). Sits on the floor by construction:
     /// only its XZ centre is authored, the height follows from the size, so a prop can never be
     /// authored half-buried or floating.</summary>
@@ -15,10 +20,12 @@ namespace MaxWorlds.Arena
         public Vector2 CenterXz;
         public Vector3 Size;      // full world size (a cylinder's X/Z are its diameter)
         public CoverShape Shape;
+        public CoverDressing Dressing;
 
-        public ArenaCover(string name, Vector2 centerXz, Vector3 size, CoverShape shape)
+        public ArenaCover(string name, Vector2 centerXz, Vector3 size, CoverShape shape,
+                          CoverDressing dressing = CoverDressing.None)
         {
-            Name = name; CenterXz = centerXz; Size = size; Shape = shape;
+            Name = name; CenterXz = centerXz; Size = size; Shape = shape; Dressing = dressing;
         }
 
         /// <summary>World centre — Y derived so the prop rests on the ground plane (y=0).</summary>
@@ -74,9 +81,9 @@ namespace MaxWorlds.Arena
         /// covering the right-hand approach to the shed.</summary>
         public static ArenaCover[] Default => new[]
         {
-            new ArenaCover("Cover Planter", new Vector2(7f, 2f),     new Vector3(3.5f, 1.6f, 3.5f), CoverShape.Box),
-            new ArenaCover("Cover Tree",    new Vector2(-6.5f, 8f),  new Vector3(2.4f, 4.4f, 2.4f), CoverShape.Cylinder),
-            new ArenaCover("Cover Hedge",   new Vector2(6.5f, 11f),  new Vector3(6f, 1.8f, 1.2f),  CoverShape.Box),
+            new ArenaCover("Cover Planter", new Vector2(7f, 2f),     new Vector3(3.5f, 1.6f, 3.5f), CoverShape.Box,      CoverDressing.Planter),
+            new ArenaCover("Cover Tree",    new Vector2(-6.5f, 8f),  new Vector3(2.4f, 4.4f, 2.4f), CoverShape.Cylinder, CoverDressing.Tree),
+            new ArenaCover("Cover Hedge",   new Vector2(6.5f, 11f),  new Vector3(6f, 1.8f, 1.2f),   CoverShape.Box,      CoverDressing.Hedge),
         };
 
         /// <summary>Widest continuous gap a player can run through at depth <paramref name="z"/>,

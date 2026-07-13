@@ -54,6 +54,7 @@ namespace MaxWorlds.VFX
                 if (r.GetComponent<CharacterSkin>() != null) continue;    // a body; CharacterSkinDirector owns it
                 if (r.GetComponentInParent<IDamageable>() != null) continue;
                 if (r.GetComponent<GroundRing>() != null) continue;       // brings its own material
+                if (r.GetComponentInParent<KeepsOwnMaterial>() != null) continue;   // imported art (YT-75)
 
                 var mat = MaterialFor(r);
                 if (mat == null) continue;
