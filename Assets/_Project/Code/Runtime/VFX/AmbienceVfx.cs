@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.UI;
 using MaxWorlds.Player;
 
@@ -35,7 +36,13 @@ namespace MaxWorlds.VFX
 
         [Header("Decals")]
         [SerializeField] private int maxDecals = 24;
-        [SerializeField] private float decalLife = 9f;
+
+        [Tooltip("How long a mark stays on the lawn. It used to be 9 seconds, which is a scorch mark " +
+                 "with somewhere else to be: you kill a robot, you turn to face the next one, and by " +
+                 "the time you look back the ground has forgotten it happened. A run leaves a HISTORY " +
+                 "— the lawn should show where the fight has been. Bounded by maxDecals, not by time: " +
+                 "the oldest mark is recycled, so a long run cannot grow this without limit (YT-79).")]
+        [SerializeField] private float decalLife = 50f;
         [SerializeField] private Color scorchColor = new Color(0.10f, 0.09f, 0.07f, 0.62f);
         [SerializeField] private Color wreckColor = new Color(0.13f, 0.10f, 0.07f, 0.75f);
 
@@ -56,7 +63,25 @@ namespace MaxWorlds.VFX
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        private void Awake() => _motes = BuildMotes();
+        private void Awake()
+        {
+            // The marks this layer burns into the lawn bring their own material, and until YT-79
+            // nothing said so — so they didn't keep it.
+            //
+            // RuntimeSurfaceDirector (YT-61) sweeps every frame and re-materials anything it doesn't
+            // recognise, and it did not recognise a decal: no CharacterSkin, no IDamageable, no
+            // GroundRing, no KeepsOwnMaterial. Every scorch mark was picked up on the very next frame,
+            // classified BY SHAPE — a flat quad, therefore ground — and repainted as a lit patch of
+            // grass. A transparent black splat became an opaque green tile sitting on the green tile
+            // it was drawn on, which is why nobody ever noticed the marks were missing: they had been
+            // turned into more lawn.
+            //
+            // The sweep is right to be greedy. That greed is what stopped the boss's damage zones
+            // rendering magenta. The decals just have to say what they are.
+            gameObject.AddComponent<KeepsOwnMaterial>();
+
+            _motes = BuildMotes();
+        }
 
         private void OnEnable()
         {
