@@ -76,5 +76,73 @@ namespace MaxWorlds.Tests.PlayMode
             var texts = canvas.GetComponentsInChildren<UnityEngine.UI.Text>(true);
             Assert.IsTrue(texts.Any(t => t.text == "DEFEAT"), "Death should read DEFEAT.");
         }
+
+        /// <summary>
+        /// YT-81: on the DEFEAT card the REPLAY button hung outside the panel's left edge. Asserted
+        /// against the REAL built canvas in rendered world space — not against the layout arithmetic,
+        /// which is capable of being perfectly self-consistent while the screen still builds itself
+        /// wrong. This is the test that would have caught the original bug.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator DefeatScreen_BothCtasAreContainedByThePanel()
+        {
+            _tracker = new GameObject("RunTracker Test");
+            var health = _tracker.AddComponent<MaxWorlds.Player.PlayerHealth>();
+            _tracker.AddComponent<RunTracker>();
+            yield return null;
+
+            health.TakeDamage(new MaxWorlds.Core.DamageInfo(9999f, Vector3.zero, Vector3.forward,
+                MaxWorlds.Core.Team.Enemy));
+            yield return null;
+
+            Canvas.ForceUpdateCanvases();
+            yield return null;
+
+            var canvas = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None)
+                .FirstOrDefault(c => c.name == "Result Canvas");
+            Assert.IsNotNull(canvas, "Result canvas should appear on death.");
+
+            var panel = canvas.GetComponentsInChildren<RectTransform>(true)
+                .FirstOrDefault(r => r.name == "Panel");
+            Assert.IsNotNull(panel, "the results panel should exist");
+
+            var buttons = canvas.GetComponentsInChildren<UnityEngine.UI.Button>(true);
+            Assert.AreEqual(2, buttons.Length, "expected exactly the REPLAY and NEXT WORLD CTAs");
+
+            var panelCorners = new Vector3[4];
+            panel.GetWorldCorners(panelCorners);   // 0 = bottom-left, 2 = top-right
+            float panelLeft = panelCorners[0].x, panelRight = panelCorners[2].x;
+            float panelBottom = panelCorners[0].y, panelTop = panelCorners[2].y;
+
+            foreach (var button in buttons)
+            {
+                var corners = new Vector3[4];
+                ((RectTransform)button.transform).GetWorldCorners(corners);
+                float left = corners[0].x, right = corners[2].x;
+                float bottom = corners[0].y, top = corners[2].y;
+
+                Assert.GreaterOrEqual(left, panelLeft - 0.01f,
+                    $"'{button.name}' overhangs the panel's LEFT edge — YT-81 is back");
+                Assert.LessOrEqual(right, panelRight + 0.01f,
+                    $"'{button.name}' overhangs the panel's RIGHT edge");
+                Assert.GreaterOrEqual(bottom, panelBottom - 0.01f,
+                    $"'{button.name}' hangs below the panel");
+                Assert.LessOrEqual(top, panelTop + 0.01f,
+                    $"'{button.name}' pokes out of the top of the panel");
+            }
+
+            // …and they line up with each other, rather than merely both being inside.
+            var a = new Vector3[4]; var b = new Vector3[4];
+            ((RectTransform)buttons[0].transform).GetWorldCorners(a);
+            ((RectTransform)buttons[1].transform).GetWorldCorners(b);
+            Assert.AreEqual(a[0].y, b[0].y, 0.01f, "the two CTAs sit on different baselines");
+            Assert.AreEqual(a[2].y - a[0].y, b[2].y - b[0].y, 0.01f, "the CTAs are different heights");
+
+            // Even margins: the gap from each button to its nearest panel edge should match.
+            float leftInset = Mathf.Min(a[0].x, b[0].x) - panelLeft;
+            float rightInset = panelRight - Mathf.Max(a[2].x, b[2].x);
+            Assert.AreEqual(leftInset, rightInset, 0.5f,
+                "the CTA row isn't centred in the panel — one side has more air than the other");
+        }
     }
 }
