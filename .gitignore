@@ -106,6 +106,10 @@ InitTestScene*.unity*
 # Auto-generated scenes by play mode tests
 /[Aa]ssets/[Ii]nit[Tt]est[Ss]cene*.unity*
 
-# Playwright MCP screenshots (WebGL build inspection) — never part of the game
-webgl-*.png
+# Playwright MCP screenshots (WebGL build inspection) — never part of the game.
+# The pattern is the REPO ROOT, not a prefix: Playwright writes its screenshot to the CWD
+# under whatever name it was given, and a `git add -A` will happily commit it. One already
+# got in (yt77-live.png, YT-77). No .png belongs at the root of a Unity project anyway --
+# the game's own art lives under Assets/.
+/*.png
 .playwright-mcp/
