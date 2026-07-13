@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 
@@ -19,6 +20,10 @@ namespace MaxWorlds.Dev
     ///
     /// With it off, nothing here changes any behaviour: the guards in PlayerHealth and WaterBlaster
     /// read false and the game plays exactly as it shipped.
+    ///
+    /// It has since picked up a second job (YT-82): it's where the camera framing gets tuned. Hold
+    /// <c>[</c> / <c>]</c> to pull the camera in and out live and the overlay reports the distance,
+    /// so the framing can be found by eye on the play link rather than guessed at and rebuilt.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DevModeController : MonoBehaviour
@@ -74,7 +79,23 @@ namespace MaxWorlds.Dev
             if (kb.f3Key.wasPressedThisFrame) DevMode.PauseSpawns = !DevMode.PauseSpawns;
             if (kb.f4Key.wasPressedThisFrame) ClearEnemies();
 
+            // Live zoom (YT-82). Framing is a feel call and nobody gets it right by arithmetic, so
+            // the point of this is that Lee dials it in on the play link — ?dev=1, hold a bracket
+            // key until the yard looks right — and reads the number straight off the overlay. Held,
+            // not tapped, because you find the framing by sweeping past it and coming back.
+            if (kb.leftBracketKey.isPressed) NudgeZoom(-ZoomNudgePerSecond * Time.unscaledDeltaTime);
+            if (kb.rightBracketKey.isPressed) NudgeZoom(ZoomNudgePerSecond * Time.unscaledDeltaTime);
+
             ApplySpawnPause();
+        }
+
+        /// <summary>Metres per second of pull-back while a bracket key is held.</summary>
+        private const float ZoomNudgePerSecond = 8f;
+
+        private void NudgeZoom(float delta)
+        {
+            var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+            if (rig != null) rig.Nudge(delta);
         }
 
         /// <summary>The spawner is a plain MonoBehaviour, so pausing it needs nothing from the
@@ -106,7 +127,7 @@ namespace MaxWorlds.Dev
             if (!DevMode.Enabled) return;
 
             const float w = 430f;
-            var rect = new Rect(Screen.width - w - 12f, 12f, w, 96f);
+            var rect = new Rect(Screen.width - w - 12f, 12f, w, 118f);
             GUI.color = new Color(1f, 0.9f, 0.3f);
             GUI.Box(rect, "");
             GUI.Label(new Rect(rect.x + 10f, rect.y + 6f, w - 20f, 22f),
@@ -114,7 +135,16 @@ namespace MaxWorlds.Dev
             GUI.Label(new Rect(rect.x + 10f, rect.y + 28f, w - 20f, 22f),
                 $"F2 auto-fire: {(DevMode.AutoFire ? "ON" : "off")}   " +
                 $"F3 spawns: {(DevMode.PauseSpawns ? "PAUSED" : "on")}   F4 clear");
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 50f, w - 20f, 22f),
+
+            // The zoom readout is the deliverable, not a debug line: dial the framing with the
+            // brackets, then paste this number into FixedAngleCameraRig.cameraDistance (YT-82).
+            var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+            string zoom = rig != null
+                ? $"[ / ] zoom: {rig.Distance:0.0} m  ({CameraFraming.AreaScaleForDistance(CameraFraming.PreviousDistance, rig.Distance):0.00}x arena)"
+                : "[ / ] zoom: no camera rig in scene";
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 50f, w - 20f, 22f), zoom);
+
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 72f, w - 20f, 22f),
                 "Ctrl+Shift+D to turn off");
         }
     }
