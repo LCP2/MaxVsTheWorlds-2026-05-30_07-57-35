@@ -6,11 +6,12 @@ using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
 {
-    /// <summary>What a body is, for colouring purposes.</summary>
+    /// <summary>What a body is, for colouring purposes. One role, one colour, one silhouette.</summary>
     public enum CharacterRole
     {
         Player,
-        Robot,
+        Robot,      // the rusher: small, fast, a capsule
+        Bruiser,    // the fridge on legs: slow, tough, a box (YT-86)
         Boss,
         Structure,
     }
@@ -47,11 +48,33 @@ namespace MaxWorlds.VFX
         /// without a physics query or an allocation.</summary>
         public static readonly List<CharacterSkin> Active = new List<CharacterSkin>(64);
 
-        // Warm vs cold is the axis that survives being small, busy and half-occluded. Max owns
-        // warm; everything that wants to kill him owns cold.
-        private static readonly Color PlayerBody = new Color(0.78f, 0.22f, 0.18f);   // Max's red hoodie
-        private static readonly Color RobotBody = new Color(0.42f, 0.47f, 0.55f);    // cold steel
-        private static readonly Color BossBody = new Color(0.24f, 0.28f, 0.32f);     // darker, heavier
+        // THE ACTORS ARE THE ONLY LOUD THING ON THE SCREEN (YT-86).
+        //
+        // The yard spends nothing on contrast: the grass is a restrained mid-green, the timber is a
+        // restrained brown, the whole palette is held under a sunlit ceiling so nothing clips. That is
+        // deliberate (YT-69, YT-77) and it is only half a plan. The other half is that the things you
+        // have to READ — the ones that shoot, chase and die — get the entire contrast budget.
+        //
+        // They didn't have it. "Cold steel" was a grey with NO SATURATION AT ALL, and grey is what a
+        // garden is full of: measured off the shipped build, a robot rendered (160,159,160) and a
+        // stepping stone rendered (125,109,101). The enemies were the same colour as the scenery they
+        // were walking over. At a glance, on a phone, in a fight, they read as rocks.
+        //
+        // So the swarm is now a colour a garden does not contain. Nothing outdoors is turquoise.
+        private static readonly Color PlayerBody = new Color(0.92f, 0.26f, 0.08f);   // Max: hot orange-red
+
+        /// <summary>The rusher: bright, hard turquoise. Small and quick, so it is the LIGHTEST actor —
+        /// value carries as far as hue does when a thing is twenty pixels across.</summary>
+        private static readonly Color RobotBody = new Color(0.08f, 0.62f, 0.70f);
+
+        /// <summary>The bruiser: deep violet. Not a tint of the rusher — a different hue AND a much
+        /// darker value, so the two separate from each other by colour alone even before you notice
+        /// that one is a capsule and the other is a box. Heavy things should look heavy.</summary>
+        private static readonly Color BruiserBody = new Color(0.38f, 0.10f, 0.62f);
+
+        /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
+        /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
+        private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
 
         /// <summary>
         /// The Mower Hutch: painted steel, the same cold family as the robots it builds (YT-77).
@@ -136,11 +159,17 @@ namespace MaxWorlds.VFX
             switch (r)
             {
                 case CharacterRole.Player: return PlayerBody;
+                case CharacterRole.Bruiser: return BruiserBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
             }
         }
+
+        /// <summary>Every role that is trying to kill Max. The hit flash is routed to these and only
+        /// these — a hit must never be able to flash the player.</summary>
+        public static bool IsEnemy(CharacterRole r) =>
+            r == CharacterRole.Robot || r == CharacterRole.Bruiser || r == CharacterRole.Boss;
 
         private void OnEnable()
         {
@@ -158,6 +187,23 @@ namespace MaxWorlds.VFX
             if (_renderer == null) _renderer = GetComponent<MeshRenderer>();
             if (_renderer == null) return;
             if (_mpb == null) _mpb = new MaterialPropertyBlock();
+            if (_enemy == null) _enemy = GetComponent<RobotEnemy>();
+
+            // A robot's KIND is re-read every time it is switched on, and that is not belt-and-braces:
+            // the enemies are POOLED. A body is a rusher, dies, goes back in the pool, and comes out
+            // again as a bruiser — same GameObject, same CharacterSkin, new archetype. Bind the colour
+            // once at spawn and the yard fills up with turquoise fridges and violet rushers, each one
+            // lying about what it is and how hard it hits. The kind is the source of truth; the colour
+            // follows it (YT-86).
+            if (_enemy != null)
+            {
+                var kind = _enemy.Kind == EnemyKind.Bruiser ? CharacterRole.Bruiser : CharacterRole.Robot;
+                if (kind != role)
+                {
+                    role = kind;
+                    _body = BaseColorFor(role);
+                }
+            }
 
             if (_body == default) _body = BaseColorFor(role);
 
@@ -284,6 +330,36 @@ namespace MaxWorlds.VFX
             {
                 var s = Active[i];
                 if (s == null || s.role != role) continue;
+
+                float d = (s.transform.position - point).sqrMagnitude;
+                if (d > bestSqr) continue;
+                bestSqr = d;
+                best = s;
+            }
+            return best;
+        }
+
+        /// <summary>
+        /// The nearest thing that is trying to kill Max — ANY of them.
+        ///
+        /// The hit flash used to be routed by asking for the nearest body of one specific role, and
+        /// that role was hard-coded to the rusher. The moment the bruiser became a role of its own
+        /// (YT-86) that would have silently stopped every bruiser in the game from flashing when hit:
+        /// you would be pouring water into the toughest enemy in the fight — the one that takes three
+        /// seconds of held spray — with no confirmation that any of it was landing.
+        ///
+        /// It asks for an ENEMY now, not for a rusher. Max is not one, and a hit can still never flash
+        /// him.
+        /// </summary>
+        public static CharacterSkin NearestEnemy(Vector3 point, float maxDistance)
+        {
+            CharacterSkin best = null;
+            float bestSqr = maxDistance * maxDistance;
+
+            for (int i = 0; i < Active.Count; i++)
+            {
+                var s = Active[i];
+                if (s == null || !IsEnemy(s.role)) continue;
 
                 float d = (s.transform.position - point).sqrMagnitude;
                 if (d > bestSqr) continue;
