@@ -104,6 +104,7 @@ namespace MaxWorlds.UI
             BuildBossBar();
             BuildWarning();
             BuildFloatingLayer();
+            BuildMap();
 
             _model.Boss.ActiveChanged += OnBossActiveChanged;
         }
@@ -560,6 +561,18 @@ namespace MaxWorlds.UI
         {
             var a = _model.Arena;
             _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+        }
+
+        /// <summary>The in-run map (YT-72) — its own component, so the minimap can reuse the same
+        /// renderer at a different scale rather than the HUD growing a second copy of it.</summary>
+        public MapScreen Map { get; private set; }
+
+        private void BuildMap()
+        {
+            var go = new GameObject("Map Screen");
+            go.transform.SetParent(Root, false);
+            Map = go.AddComponent<MapScreen>();
+            Map.Build(Root, RefW, RefH);
         }
 
         /// <summary>Slim boss bar + name card (YT-71). It was a 60%-wide, 34 px slab that read as a
