@@ -78,6 +78,15 @@ namespace MaxWorlds.Combat
         private float _baseInterval;
         private float _baseEnergyPerSecond;
 
+        /// <summary>How far the stream actually reaches, in metres. Public so the aim reticle (YT-84)
+        /// is drawn from the number the hit test uses, rather than from a shape someone drew — the
+        /// moment those two disagree, the reticle is a lie the player has been taught to trust.</summary>
+        public float Range => range;
+
+        /// <summary>HALF the spray's total spread, in degrees — the same convention
+        /// <see cref="SprayHit.InCone"/> uses.</summary>
+        public float ConeHalfAngle => coneHalfAngle;
+
         /// <summary>Damage one tick of the stream deals, after the power ramp.</summary>
         public float DamagePerTick => damagePerTick;
         /// <summary>Seconds between ticks, after the power ramp.</summary>
@@ -110,6 +119,7 @@ namespace MaxWorlds.Combat
         private bool _depleted;
         private bool _lastEmitting;
         private WaterVfx _vfx;
+        private AimReticle _reticle;
         private readonly Collider[] _hits = new Collider[32];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
         // Collider that produced each buffered hit, parallel to s_buffer. Cosmetic use
@@ -138,6 +148,12 @@ namespace MaxWorlds.Combat
 
             // The level-up ramp rides along with the gadget, same self-attaching rule as the VFX.
             if (GetComponent<PlayerPower>() == null) gameObject.AddComponent<PlayerPower>();
+
+            // The aim reticle (YT-84) is built from THIS gadget's real reach and spread, so a future
+            // Beam or Lob draws its own shape without anyone authoring one.
+            _reticle = GetComponent<AimReticle>();
+            if (_reticle == null) _reticle = gameObject.AddComponent<AimReticle>();
+            _reticle.Init(transform, range, coneHalfAngle);
         }
 
         private void Update()
@@ -157,6 +173,11 @@ namespace MaxWorlds.Combat
                     transform.rotation = Quaternion.LookRotation(f, Vector3.up);
                 }
             }
+
+            // The reticle brightens while the player aims and stays as a whisper otherwise, so reach
+            // is always legible without the lawn being permanently painted (YT-84). Cosmetic: it is
+            // told what the gadget is doing and never gets a say in it.
+            if (_reticle != null) _reticle.SetAiming(IsFiring);
 
             // Dev/filming only; both are false in a normal session (YT-60).
             if (DevMode.IsAutoFiring) IsFiring = true;
