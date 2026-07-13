@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.UI;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
 {
@@ -227,6 +228,12 @@ namespace MaxWorlds.VFX
                 if (r.GetComponentInParent<IDamageable>() != null) continue;
                 if (r.GetComponentInParent<AmbienceVfx>() != null) continue;   // our own decals
                 if (r.GetComponent<GroundRing>() != null) continue;
+
+                // Set-dressing says for itself whether it's the kind of thing wind moves (YT-75).
+                // Guessing from the shape was fine when every prop was a box; it isn't once the
+                // yard has both a shrub and the fence post next to it.
+                var dressing = r.GetComponentInParent<DressingSkin>();
+                if (dressing != null && !dressing.Sways) continue;
 
                 var t = r.transform;
                 // Skip the ground itself — a swaying floor would be a bug, not ambience.

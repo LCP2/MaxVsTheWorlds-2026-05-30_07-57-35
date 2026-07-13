@@ -215,6 +215,10 @@ namespace MaxWorlds.Rendering
             // The albedos are baked FROM the palette's colours, so a stale texture cache would hand
             // the new materials the old lawn back. Materials first, then the textures they held.
             StylizedTextures.Clear();
+
+            // The set-dressing's materials are tinted by the same palette, so they go with it —
+            // otherwise a biome change re-colours the arena and leaves the fence in the old one.
+            KitMaterials.Clear();
         }
 
         private static void SetColor(Material m, Color c)

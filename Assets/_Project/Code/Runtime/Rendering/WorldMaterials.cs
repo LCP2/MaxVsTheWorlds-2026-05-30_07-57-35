@@ -48,10 +48,13 @@ namespace MaxWorlds.Rendering
         }
 
         /// <summary>World surfaces are the things gameplay never recolours. Anything damageable is
-        /// owned by gameplay's tint logic — see the class summary.</summary>
+        /// owned by gameplay's tint logic — see the class summary. Set-dressing is excluded too
+        /// (YT-75): a kit prop already carries its own materials, and painting a tree with one flat
+        /// "prop" colour would turn it back into the lump it was imported to stop being.</summary>
         public static bool IsWorldSurface(Renderer r)
         {
             if (r == null) return false;
+            if (r.GetComponentInParent<DressingSkin>() != null) return false;
             return r.GetComponentInParent<IDamageable>() == null;
         }
 
