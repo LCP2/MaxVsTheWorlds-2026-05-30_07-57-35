@@ -128,10 +128,13 @@ Shader "MaxWorlds/StylizedSurface"
                 // Triplanar weights, sharpened toward the dominant axis.
                 //
                 // n^4 by multiplication rather than pow(). This runs on every lit pixel of every
-                // surface in the yard on the MOBILE tier (WebGL is what ships), and three pow() calls
-                // a pixel is a real number there — the first cut of this shader cost the deployed
-                // build 0.8 ms/frame and took it off its 60 fps lock. A fixed exponent is also honest:
+                // surface in the yard on the MOBILE tier (WebGL is what ships), so it is worth not
+                // spending three pow() calls a pixel on it; a fixed exponent is also honest, because
                 // nothing was ever going to tune this per material.
+                //
+                // It is NOT here because the shader was too slow. It wasn't: WebGL builds of the
+                // commit before this ticket and of this one, run back to back in the same browser,
+                // both hold ~57 fps. This is a cheaper way to get the same pixels, nothing more.
                 float3 w = abs(N);
                 w = w * w;
                 w = w * w;
@@ -156,9 +159,8 @@ Shader "MaxWorlds/StylizedSurface"
                 // The albedo has to blend across all three or a rock cross-fades badly at its corners;
                 // a slope does not. It is a small perturbation of a normal that is mostly the geometric
                 // one, so where two planes are close to equal weight the two answers are close to equal
-                // too, and nobody has ever seen the difference. Halving the sampling on a per-pixel
-                // shader that covers the fence line, the shed and every prop in the yard is worth far
-                // more than a difference nobody can see.
+                // too, and nobody has ever seen the difference. Two fetches a pixel saved, over the
+                // fence line, the shed and every prop in the yard, for output that is pixel-identical.
                 //
                 // Unpacked by hand rather than through UnpackNormalScale: these maps are generated at
                 // runtime as plain linear RGB (StylizedTextures.NormalFor), not DXT5nm-swizzled, so the
