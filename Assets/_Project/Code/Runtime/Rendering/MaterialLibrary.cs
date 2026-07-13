@@ -265,6 +265,10 @@ namespace MaxWorlds.Rendering
 
             m.SetFloat("_DetailScale", p.DetailScale);
             m.SetFloat("_NormalStrength", p.NormalStrength);
+
+            // Wind (YT-78). Zero on everything that isn't a plant — the yard's WALLS wear this shader,
+            // and a fence that breathes is a bug, not ambience.
+            m.SetFloat("_WindStrength", p.Wind);
         }
 
         /// <summary>What a material is physically like, as opposed to what colour the biome painted
@@ -276,13 +280,16 @@ namespace MaxWorlds.Rendering
             public readonly float NormalStrength;
             public readonly float Smoothness;
             public readonly float Contrast;         // how far the grain swings either side of the tone
+            public readonly float Wind;             // metres of sway at full height; 0 = it doesn't move
 
-            public SurfaceProfile(float detailScale, float normalStrength, float smoothness, float contrast)
+            public SurfaceProfile(float detailScale, float normalStrength, float smoothness,
+                                  float contrast, float wind = 0f)
             {
                 DetailScale = detailScale;
                 NormalStrength = normalStrength;
                 Smoothness = smoothness;
                 Contrast = contrast;
+                Wind = wind;
             }
         }
 
@@ -311,8 +318,15 @@ namespace MaxWorlds.Rendering
                     return new SurfaceProfile(0.45f, 0.8f, 0.28f, 0.20f);
 
                 // Leaves: soft and round. Gentle — a carved-looking bush is worse than a flat one.
+                //
+                // The one surface in the yard that MOVES (YT-78). 11 cm at the top of a bush, which
+                // sounds like a lot and is not: the game is played from thirty metres up at a fixed
+                // 72 deg, and the first cut of this at 4 cm moved 1.6% of the pixels on screen — the
+                // yard was technically breathing and no human being could have told. It is still far
+                // below the threshold where it competes with a telegraph or a damage number, which is
+                // the line ambience must never cross.
                 case SurfaceKind.Foliage:
-                    return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f);
+                    return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f, wind: 0.11f);
 
                 default:
                     return new SurfaceProfile(1.0f, 0.5f, 0.06f, 0.10f);
@@ -384,6 +398,12 @@ namespace MaxWorlds.Rendering
             m.SetFloat("_LushShade", s_palette.GroundLushShade);
             m.SetFloat("_ClumpScale", s_palette.GroundClumpScale);
             m.SetFloat("_ClumpDepth", s_palette.GroundClumpDepth);
+
+            // Wind across the lawn (YT-78). The lawn is most of what is on the screen, so this is most
+            // of what makes the yard stop looking like a photograph.
+            m.SetFloat("_WindStrength", s_palette.GroundWindLean);
+            m.SetFloat("_WindSpeed", s_palette.GroundWindSpeed);
+            m.SetFloat("_WindShimmer", s_palette.GroundWindShimmer);
 
             // The dry tone follows the element too, or an ice-variant lawn would drift toward a
             // strawy green in its dry patches and the variant would read as two materials.

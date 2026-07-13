@@ -59,6 +59,67 @@ namespace MaxWorlds.Tests.EditMode
             // and gameplay's tells are written to these names.
             Assert.IsTrue(mat.HasProperty("_BaseColor"), "no base colour");
             Assert.IsTrue(mat.HasProperty("_EmissionColor"), "no emission — the factory's tells go silent");
+
+            Assert.IsTrue(mat.HasProperty("_WindStrength"), "no wind control (YT-78)");
+        }
+
+        /// <summary>
+        /// The wind moves the vertex, so the SHADOW pass has to move it the same way.
+        ///
+        /// This shader used to inherit ShadowCaster and DepthOnly from its URP/Lit fallback, and those
+        /// know nothing about the wind: the bush swayed and its shadow stayed nailed to the lawn. It
+        /// was invisible while the sway was a centimetre and became the first thing you noticed the
+        /// moment the sway was big enough to be worth having. If these passes ever go away, the wind
+        /// has to go with them.
+        /// </summary>
+        /// <summary>
+        /// Every pass that decides WHERE a plant is must bend it the same way.
+        ///
+        /// The surface shader used to inherit ShadowCaster and DepthOnly from its URP/Lit fallback,
+        /// and those know nothing about the wind: the bush swayed and its shadow stayed nailed to the
+        /// lawn. It was invisible while the sway was a centimetre and became the first thing you saw
+        /// the moment the sway was big enough to be worth having. So the shader now owns those passes,
+        /// and all three call Wind().
+        ///
+        /// This reads the source, which is not how anyone would prefer to test a shader — but the
+        /// behavioural check isn't available: pass enumeration needs a graphics device and the whole
+        /// verify runs headless. The invariant is still exactly the one that matters, and it is the
+        /// one that will break: someone deletes a pass, or adds a fourth that forgets the wind.
+        /// </summary>
+        [Test]
+        public void EveryPassThatPositionsAPlant_BendsItTheSameWay()
+        {
+            string src = System.IO.File.ReadAllText("Assets/_Project/Art/Shaders/StylizedSurface.shader");
+
+            foreach (var pass in new[] { "ForwardLit", "ShadowCaster", "DepthOnly" })
+            {
+                Assert.That(src, Does.Contain($"Name \"{pass}\""),
+                    $"the surface shader has no {pass} pass of its own, so it is inheriting one that " +
+                    "cannot see the wind — the plant and its shadow will part company.");
+            }
+
+            // Three call sites: the lit pass, the shadow pass, the depth pass. If a pass positions a
+            // vertex without going through Wind(), that pass disagrees with the other two about where
+            // the plant is.
+            int windCalls = System.Text.RegularExpressions.Regex.Matches(src, @"Wind\(TransformObjectToWorld").Count
+                          + System.Text.RegularExpressions.Regex.Matches(src, @"Wind\(OUT\.texWS\)").Count;
+
+            Assert.GreaterOrEqual(windCalls, 3,
+                $"only {windCalls} of the shader's passes bend the plant. Every pass that decides where " +
+                "a vertex IS — lit, shadow, depth — has to apply the same wind, or the bush moves and " +
+                "its shadow doesn't.");
+        }
+
+        [Test]
+        public void GroundMaterial_ExposesTheWindControls()
+        {
+            var mat = MaterialLibrary.Surface(SurfaceKind.Ground);
+
+            // The lawn cannot sway — it is a plane. The wind leans its blades by moving where the
+            // grass texture is sampled, which is why the knob is on the ground shader at all.
+            Assert.IsTrue(mat.HasProperty("_WindStrength"), "no blade-lean control (YT-78)");
+            Assert.IsTrue(mat.HasProperty("_WindSpeed"), "no gust-speed control");
+            Assert.IsTrue(mat.HasProperty("_WindShimmer"), "no shimmer control");
         }
 
         [Test]

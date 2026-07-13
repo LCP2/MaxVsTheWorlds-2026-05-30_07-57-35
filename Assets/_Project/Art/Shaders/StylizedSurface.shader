@@ -48,6 +48,13 @@ Shader "MaxWorlds/StylizedSurface"
 
         _Smoothness     ("Smoothness", Range(0, 1)) = 0.08
         _Metallic       ("Metallic", Range(0, 1)) = 0
+
+        [Header(Wind YT78)]
+        // METRES of sway at full height. Zero for everything that isn't a plant — a fence that
+        // breathes is a bug, and the yard's walls wear this same shader.
+        _WindStrength   ("Wind Strength (m)", Range(0, 0.5)) = 0
+        _WindSpeed      ("Wind Speed", Range(0, 4)) = 1.1
+        _WindHeight     ("Wind Full-Bend Height (m)", Range(0.2, 8)) = 2.5
     }
 
     SubShader
@@ -58,6 +65,62 @@ Shader "MaxWorlds/StylizedSurface"
             "RenderType" = "Opaque"
             "Queue" = "Geometry"
         }
+
+        // Shared by every pass, and it HAS to be shared: the wind moves the vertex, so the shadow
+        // pass and the depth pass must move it the same way or a bush parts company with its own
+        // shadow. That was the whole reason this shader stopped inheriting those passes from the
+        // fallback — see the note at the bottom.
+        HLSLINCLUDE
+        #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Core.hlsl"
+
+        CBUFFER_START(UnityPerMaterial)
+            float4 _BaseColor;
+            float4 _EmissionColor;
+            float  _DetailScale;
+            float  _NormalStrength;
+            float  _Smoothness;
+            float  _Metallic;
+            float  _WindStrength;
+            float  _WindSpeed;
+            float  _WindHeight;
+        CBUFFER_END
+
+        /// Wind (YT-78). Bends a plant; leaves everything else exactly where it stands.
+        ///
+        /// A VERTEX shader, and it has to be one. The ambience layer used to sway props by rotating
+        /// their transforms (YT-56), and that had been doing nothing at all: every kit prop is marked
+        /// static and BackyardDressing static-batches them, which bakes their vertices into world
+        /// space and leaves the transform with nothing to push. The vertices are the only thing left
+        /// that can move.
+        ///
+        /// Batching is also why the phase is hashed out of WORLD POSITION rather than taken from the
+        /// object's transform: after the combine, every prop shares one identity object-to-world
+        /// matrix, so where a plant stands is the only identity it has left.
+        float3 Wind(float3 posWS)
+        {
+            if (_WindStrength <= 0.0) return posWS;   // uniform branch — most of the yard isn't a plant
+
+            // ~1.4 m cells: one bush, one phase. Neighbours bend out of step, so a hedge reads as many
+            // plants in one wind rather than as one object wobbling.
+            float2 cell = floor(posWS.xz * 0.7);
+            float phase = frac(sin(dot(cell, float2(12.9898, 78.233))) * 43758.5453) * 6.2831;
+
+            float t = _Time.y * _WindSpeed;
+
+            // A gust, not a metronome. A pure sine at one frequency reads as machinery.
+            float gust = 0.65 + 0.35 * sin(t * 0.31 + phase * 0.5);
+
+            // Taller bends further, and the base stays put — a tuft of grass pivots at the soil.
+            // Height above the LAWN (y = 0): after batching, object space IS world space, so this is
+            // the only height there is, and it happens to be exactly the one worth having.
+            float h = saturate(posWS.y / _WindHeight);
+            float amp = _WindStrength * lerp(0.15, 1.0, h) * gust;
+
+            posWS.x += sin(t + phase) * amp;
+            posWS.z += cos(t * 0.83 + phase * 1.3) * amp * 0.6;
+            return posWS;
+        }
+        ENDHLSL
 
         Pass
         {
@@ -84,15 +147,6 @@ Shader "MaxWorlds/StylizedSurface"
 
             #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Lighting.hlsl"
 
-            CBUFFER_START(UnityPerMaterial)
-                float4 _BaseColor;
-                float4 _EmissionColor;
-                float  _DetailScale;
-                float  _NormalStrength;
-                float  _Smoothness;
-                float  _Metallic;
-            CBUFFER_END
-
             TEXTURE2D(_BaseMap);   SAMPLER(sampler_BaseMap);
             TEXTURE2D(_BumpMap);   SAMPLER(sampler_BumpMap);
 
@@ -105,15 +159,24 @@ Shader "MaxWorlds/StylizedSurface"
             struct Varyings
             {
                 float4 positionCS : SV_POSITION;
-                float3 positionWS : TEXCOORD0;
-                float3 normalWS   : TEXCOORD1;
-                float  fogCoord   : TEXCOORD2;
+                float3 positionWS : TEXCOORD0;   // where the vertex IS — lighting, shadows, fog
+                float3 texWS      : TEXCOORD1;   // where it RESTS — the triplanar's material coordinate
+                float3 normalWS   : TEXCOORD2;
+                float  fogCoord   : TEXCOORD3;
             };
 
             Varyings SurfaceVert(Attributes IN)
             {
                 Varyings OUT;
-                OUT.positionWS = TransformObjectToWorld(IN.positionOS.xyz);
+
+                // The RESTING position is the material coordinate, and that is not a subtlety — this
+                // shader maps its texture from world position, so if the grain were sampled at the
+                // BENT position it would slide across the leaves every time the plant moved. Sampling
+                // where the vertex rests glues the texture to the plant, which is what a texture is
+                // supposed to do.
+                OUT.texWS = TransformObjectToWorld(IN.positionOS.xyz);
+
+                OUT.positionWS = Wind(OUT.texWS);
                 OUT.positionCS = TransformWorldToHClip(OUT.positionWS);
                 OUT.normalWS = TransformObjectToWorldNormal(IN.normalOS);
                 OUT.fogCoord = ComputeFogFactor(OUT.positionCS.z);
@@ -123,7 +186,7 @@ Shader "MaxWorlds/StylizedSurface"
             half4 SurfaceFrag(Varyings IN) : SV_Target
             {
                 float3 N = normalize(IN.normalWS);
-                float3 wp = IN.positionWS * _DetailScale;
+                float3 wp = IN.texWS * _DetailScale;   // where the surface RESTS — see SurfaceVert
 
                 // Triplanar weights, sharpened toward the dominant axis.
                 //
@@ -206,10 +269,123 @@ Shader "MaxWorlds/StylizedSurface"
             }
             ENDHLSL
         }
+
+        // The shadow the plant casts, bending with it (YT-78).
+        //
+        // This pass exists ONLY because of the wind. Without it the shader inherits ShadowCaster from
+        // the fallback below — which knows nothing about the wind, so the bush swayed and its shadow
+        // stayed nailed to the lawn. At a sway of a centimetre or two that is invisible and not worth
+        // a pass; at a sway anyone can actually SEE, which is what the ticket asks for, a plant
+        // sliding out of its own shadow is the first thing you notice. The wind had to be big enough
+        // to read, so the shadow had to move with it.
+        Pass
+        {
+            Name "ShadowCaster"
+            Tags { "LightMode" = "ShadowCaster" }
+
+            ZWrite On
+            ZTest LEqual
+            ColorMask 0
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex ShadowVert
+            #pragma fragment ShadowFrag
+            #pragma multi_compile_vertex _ _CASTING_PUNCTUAL_LIGHT_SHADOW
+
+            #include "Packages/com.unity.render-pipelines.universal/ShaderLibrary/Shadows.hlsl"
+
+            float3 _LightDirection;
+            float3 _LightPosition;
+
+            struct ShadowAttributes
+            {
+                float4 positionOS : POSITION;
+                float3 normalOS   : NORMAL;
+            };
+
+            struct ShadowVaryings
+            {
+                float4 positionCS : SV_POSITION;
+            };
+
+            ShadowVaryings ShadowVert(ShadowAttributes IN)
+            {
+                ShadowVaryings OUT;
+
+                float3 positionWS = Wind(TransformObjectToWorld(IN.positionOS.xyz));
+                float3 normalWS = TransformObjectToWorldNormal(IN.normalOS);
+
+            #if _CASTING_PUNCTUAL_LIGHT_SHADOW
+                float3 lightDirectionWS = normalize(_LightPosition - positionWS);
+            #else
+                float3 lightDirectionWS = _LightDirection;
+            #endif
+
+                float4 positionCS = TransformWorldToHClip(
+                    ApplyShadowBias(positionWS, normalWS, lightDirectionWS));
+
+            #if UNITY_REVERSED_Z
+                positionCS.z = min(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+            #else
+                positionCS.z = max(positionCS.z, UNITY_NEAR_CLIP_VALUE);
+            #endif
+
+                OUT.positionCS = positionCS;
+                return OUT;
+            }
+
+            half4 ShadowFrag(ShadowVaryings IN) : SV_Target
+            {
+                return 0;
+            }
+            ENDHLSL
+        }
+
+        // Same reason, for the depth buffer: the SSAO added in YT-76 reads depth, and a bush whose
+        // depth silhouette doesn't move would drag a smear of contact shading around with it.
+        Pass
+        {
+            Name "DepthOnly"
+            Tags { "LightMode" = "DepthOnly" }
+
+            ZWrite On
+            ColorMask 0
+            Cull Back
+
+            HLSLPROGRAM
+            #pragma vertex DepthVert
+            #pragma fragment DepthFrag
+
+            struct DepthAttributes
+            {
+                float4 positionOS : POSITION;
+            };
+
+            struct DepthVaryings
+            {
+                float4 positionCS : SV_POSITION;
+            };
+
+            DepthVaryings DepthVert(DepthAttributes IN)
+            {
+                DepthVaryings OUT;
+                OUT.positionCS = TransformWorldToHClip(Wind(TransformObjectToWorld(IN.positionOS.xyz)));
+                return OUT;
+            }
+
+            half4 DepthFrag(DepthVaryings IN) : SV_Target
+            {
+                return 0;
+            }
+            ENDHLSL
+        }
     }
 
-    // Supplies ShadowCaster/DepthOnly/DepthNormals, and is the safety net if this SubShader is ever
-    // unsupported — a fence that falls back to plain Lit is a look regression, a magenta fence is a
-    // broken build (YT-58).
+    // Still the safety net: if this SubShader is ever unsupported, a fence that falls back to plain
+    // Lit is a look regression, and a magenta fence is a broken build (YT-58). It also still supplies
+    // DepthNormals, which nothing in this project reads — the SSAO is configured off DEPTH, not
+    // normals (Stage76RenderScaffold) — so it is left inherited rather than hand-written for a
+    // consumer that doesn't exist.
     Fallback "Universal Render Pipeline/Lit"
 }
