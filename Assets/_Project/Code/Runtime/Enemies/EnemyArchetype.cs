@@ -55,11 +55,19 @@ namespace MaxWorlds.Enemies
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
         public float SpawnHeight => ColliderHeight * 0.5f;
 
-        /// <summary>The original robot (YT-36/YT-63): a slim capsule at ~70% of Max's speed. Fast
-        /// enough to pressure, slow enough to kite. Dies quickly; hurts a little.</summary>
+        /// <summary>Max's own size, for comparison. He is a 1 m-wide, 2 m-tall capsule. Nothing in
+        /// the swarm may out-size him: a crowd of things bigger than the player reads as terrain,
+        /// not as enemies (YT-74).</summary>
+        public const float PlayerRadius = 0.5f;
+        public const float PlayerHeight = 2f;
+
+        /// <summary>The original robot (YT-36/YT-63): a small capsule at ~70% of Max's speed. Fast
+        /// enough to pressure, slow enough to kite. Dies quickly; hurts a little. Deliberately
+        /// SMALLER than Max — he's the hero, and a swarm of knee-high machines reads as a swarm
+        /// (YT-74).</summary>
         public static EnemyArchetype Rusher => new EnemyArchetype(
-            EnemyKind.Rusher, EnemyShape.Capsule, Vector3.one,
-            colliderHeight: 2f, colliderRadius: 0.5f,
+            EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
+            colliderHeight: 1.4f, colliderRadius: 0.4f,
             moveSpeed: 4.2f, maxHealth: 24f,
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
@@ -78,15 +86,18 @@ namespace MaxWorlds.Enemies
         /// window to punish. It barely notices the blaster's knockback, so the shove that scatters
         /// rushers does not save you from this.
         ///
-        /// A wide box against the rushers' slim capsules: at the fixed ~72° camera the two are
-        /// unmistakable at a glance, which is the point (Pillar 4).
+        /// A chunky box against the rushers' small capsules: at the fixed ~72° camera the two are
+        /// unmistakable at a glance, which is the point (Pillar 4). Its threat is its HEALTH and its
+        /// hit, not its footprint — it's half again the rusher's width but still no bigger than Max,
+        /// because a swarm of things larger than the player stops reading as a swarm and starts
+        /// reading as a moving wall (YT-74).
         /// </summary>
         public static EnemyArchetype Bruiser => new EnemyArchetype(
-            EnemyKind.Bruiser, EnemyShape.Box, new Vector3(1.9f, 1.9f, 1.9f),
-            colliderHeight: 1.9f, colliderRadius: 0.9f,
+            EnemyKind.Bruiser, EnemyShape.Box, new Vector3(1.15f, 1.15f, 1.15f),
+            colliderHeight: 1.15f, colliderRadius: 0.55f,
             moveSpeed: 2.2f, maxHealth: 100f,
-            contactDamage: 28f, contactRadius: 1.7f,
-            lungeRange: 3.0f, telegraphTime: 1.0f,
+            contactDamage: 28f, contactRadius: 1.4f,
+            lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
             knockbackDecay: 70f);
 

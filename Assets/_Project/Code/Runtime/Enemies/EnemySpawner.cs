@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Enemies
 {
@@ -54,6 +55,8 @@ namespace MaxWorlds.Enemies
         private float _elapsed;
         private int _emitted;
         private Transform _target;
+        private Transform _bodies;          // metre-space container (YT-74)
+        private Collider[] _playerColliders;
 
         public int LiveCount => _live.Count;
 
@@ -93,7 +96,43 @@ namespace MaxWorlds.Enemies
                 transform.position, dir, spawnRadius, archetype.SpawnHeight);
             e.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
             e.gameObject.SetActive(true);
+
+            // Re-applied on every spawn, not just on creation: Unity drops an ignored collider pair
+            // when the collider is disabled, and pooling disables it on every death (YT-74).
+            LetThePlayerThrough(e.gameObject);
+
             _live.Add(e);
+        }
+
+        /// <summary>
+        /// Robots must never be able to WALL MAX IN (YT-74). They still collide with the world and
+        /// with each other — so cover still breaks them up and they still jostle — but the player
+        /// walks through their bodies. Contact damage is a distance check, not a collision, so they
+        /// keep hurting him exactly as before; what they lose is the ability to pin him in a corner
+        /// and hold him there while the rest of the swarm eats him.
+        ///
+        /// This is a rule about bodies, not about sizes: even correctly-sized robots can box a
+        /// player in when a dozen of them converge, and being unable to move is never fun.
+        /// </summary>
+        private void LetThePlayerThrough(GameObject enemy)
+        {
+            if (_playerColliders == null || _playerColliders.Length == 0)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return;
+                _playerColliders = p.GetComponents<Collider>();   // CharacterController is a Collider
+            }
+
+            var enemyColliders = enemy.GetComponents<Collider>();
+            foreach (var ec in enemyColliders)
+            {
+                if (ec == null) continue;
+                foreach (var pc in _playerColliders)
+                {
+                    if (pc == null) continue;
+                    Physics.IgnoreCollision(ec, pc, true);
+                }
+            }
         }
 
         private RobotEnemy Take(EnemyKind kind, in EnemyArchetype archetype)
@@ -115,10 +154,24 @@ namespace MaxWorlds.Enemies
             return _target != null ? _target.position - transform.position : Vector3.zero;
         }
 
+        /// <summary>
+        /// The container the robots live in. It exists to CANCEL this spawner's own scale: the
+        /// spawner rides on the Mower Hutch, whose body is a cube scaled (3, 2, 3), and anything
+        /// parented to it inherits that. A 1.9 m bruiser spawned as a 5.7 m cube with a collider to
+        /// match, and walled the player in (YT-74). Robots are authored in metres and must stay in
+        /// metres, whatever they happen to be emitted from.
+        /// </summary>
+        private Transform Bodies()
+        {
+            if (_bodies == null)
+                _bodies = ParentScale.MakeMetreSpace(new GameObject("Robots").transform, transform);
+            return _bodies;
+        }
+
         /// <summary>Builds one robot of the given kind. The body is the archetype's silhouette, and
-        /// the CharacterController is sized to match what you can see — a controller inherits the
-        /// transform's scale, so a bigger body with a default controller would fight a collider
-        /// that's the wrong shape for it.</summary>
+        /// the CharacterController is sized to match what you can see — a controller multiplies its
+        /// height/radius by the transform's scale, so a scaled body with a default controller fights
+        /// a collider that is the wrong shape for it.</summary>
         private RobotEnemy CreateInstance(in EnemyArchetype a)
         {
             RobotEnemy e;
@@ -127,18 +180,19 @@ namespace MaxWorlds.Enemies
                 // Stats still differ, but both kinds wear the prefab's body. Fine while the prefab
                 // is unset (the greybox path below is what ships); revisit when Phase C art lands
                 // and each kind needs its own prefab.
-                e = Instantiate(prefab, transform);
+                e = Instantiate(prefab, Bodies());
             }
             else
             {
                 var go = GameObject.CreatePrimitive(
                     a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
                 go.name = $"RobotEnemy {a.Kind} (stand-in)";
-                go.transform.SetParent(transform);
+                go.transform.SetParent(Bodies(), false);   // metre space — see Bodies()
                 go.transform.localScale = a.BodyScale;
 
                 var cc = go.AddComponent<CharacterController>();
-                // Undo the transform scale so the metres asked for are the metres you get.
+                // Undo the BODY's scale so the metres asked for are the metres you get. The parent
+                // contributes nothing now, by construction.
                 float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);
                 cc.height = a.ColliderHeight / Mathf.Max(a.BodyScale.y, 1e-4f);
                 cc.radius = a.ColliderRadius / Mathf.Max(lateral, 1e-4f);
