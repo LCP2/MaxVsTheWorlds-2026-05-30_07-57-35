@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Factories
@@ -214,6 +215,16 @@ namespace MaxWorlds.Factories
             go.AddComponent<SelfDrivenTint>();
 
             _core = go.GetComponent<Renderer>();
+
+            // ...but telling the director to keep off also means nobody else hands the core a real
+            // material, and a primitive's default one is not in the build's shader set — so it
+            // rendered MAGENTA on the deploy. Being skinned was, accidentally, the only thing that
+            // had been giving it a shader that ships. Take the material from the library directly:
+            // it's on the always-included list, and its shader keeps _BaseColor and _EmissionColor,
+            // which is exactly what PulseCore drives.
+            var mat = MaterialLibrary.Character();
+            if (mat != null) _core.sharedMaterial = mat;
+
             _coreMpb = new MaterialPropertyBlock();
         }
 
