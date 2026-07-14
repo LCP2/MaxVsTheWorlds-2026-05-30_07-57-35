@@ -243,10 +243,14 @@ namespace MaxWorlds.VFX
         /// The <see cref="IDamageable"/> check is what keeps this to the machine's BODY. A Structure's
         /// CHILDREN are skinned too — CharacterSkinDirector claims every renderer under a damageable —
         /// and one of them is the Mower Hutch's VulnerableCore, the pulsing "shoot here" tell that
-        /// gameplay drives through a property block of its own, every frame. Clearing that would be a
-        /// fight over the same renderer that neither side could win: whichever of the two LateUpdates
-        /// happened to run second would decide, frame by frame, whether the core glowed. The core is
-        /// not the machine — it keeps the character path and its property block, exactly as it had them.
+        /// gameplay drives through a property block of its own, every frame.
+        ///
+        /// Not clearing the core's block is NOT enough to keep out of its way, and believing it was is
+        /// what shipped a dead grey panel where the tell should be: falling through to the character
+        /// path still writes the structure's grey into that same block from <see cref="Write"/>, so the
+        /// two LateUpdates fought and script order picked the winner — the editor glowed, the build did
+        /// not. The core now carries <see cref="SelfDrivenTint"/> and the director never claims it, so
+        /// there is no second writer to lose to.
         /// </summary>
         private bool IsMachine => role == CharacterRole.Structure && GetComponent<IDamageable>() != null;
 

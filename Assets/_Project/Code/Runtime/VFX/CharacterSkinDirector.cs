@@ -60,6 +60,11 @@ namespace MaxWorlds.VFX
         /// WorldMaterials and must not be claimed here.</summary>
         private static CharacterRole? RoleOf(Renderer r)
         {
+            // Gameplay already owns this renderer's property block (the Hutch's pulsing core is the
+            // one that matters). Skinning it would put two LateUpdates on the same block and let
+            // script order decide whether the "shoot here" tell glows. See SelfDrivenTint.
+            if (r.GetComponent<SelfDrivenTint>() != null) return null;
+
             if (r.GetComponentInParent<IDamageable>() == null) return null;
 
             if (r.GetComponentInParent<PlayerHealth>() != null) return CharacterRole.Player;
