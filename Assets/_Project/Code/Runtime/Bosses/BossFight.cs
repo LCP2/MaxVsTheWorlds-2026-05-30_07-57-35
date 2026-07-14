@@ -91,19 +91,23 @@ namespace MaxWorlds.Bosses
         /// <summary>What the blaster actually does to the boss, per second, in the hands of the player
         /// who gets there: the gun's raw output, ramped by his level, cut by the tank running dry, and
         /// cut again by all the time he spends not pointing it at anything.</summary>
-        public static float PlayerDps(int level)
+        public static float PlayerDps(int level, float engagement)
         {
             const float RawDps = 40f;   // 4 damage a tick, a tick every 0.1 s (WaterBlaster)
 
             return RawDps
                  * PowerRamp.DpsMultiplier(level)
                  * BlasterTuning.WorstCaseUptime
-                 * Engagement;
+                 * Mathf.Clamp01(engagement);
         }
 
+        public static float PlayerDps(int level) => PlayerDps(level, Engagement);
+
         /// <summary>Seconds to put the boss down.</summary>
-        public static float SecondsToKill(int level) =>
-            BossTuning.Health / Mathf.Max(0.01f, PlayerDps(level));
+        public static float SecondsToKill(int level, float engagement) =>
+            BossTuning.Health / Mathf.Max(0.01f, PlayerDps(level, engagement));
+
+        public static float SecondsToKill(int level) => SecondsToKill(level, Engagement);
 
         // ---------------------------------------------------------------- can you survive it?
 

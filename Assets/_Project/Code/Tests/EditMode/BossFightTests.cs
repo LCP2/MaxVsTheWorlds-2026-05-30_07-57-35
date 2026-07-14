@@ -73,6 +73,36 @@ namespace MaxWorlds.Tests.EditMode
                 "slog, whatever its health bar says.");
         }
 
+        /// <summary>
+        /// …and it stays a fight whoever turns up.
+        ///
+        /// The length hangs on ONE guess — how much of the fight the player spends actually pointing
+        /// the gun at the boss — and I do not know that number, I estimated it. So rather than pretend
+        /// the point estimate is a fact, this asserts the fight survives being wrong about it: across
+        /// every plausible player, from a cautious level 6 who fires a third of the time to a
+        /// well-levelled aggressor who fires two thirds, the boss is never a pushover and never a slog.
+        ///
+        /// If Lee reports it as either, the number to move is <see cref="BossTuning.Health"/>, and this
+        /// is the test that says what moving it costs.
+        /// </summary>
+        [Test]
+        public void TheFightIsNeverAPushover_AndNeverASlog_WhoeverTurnsUp()
+        {
+            foreach (int level in new[] { 6, 7, 9 })
+            foreach (float engagement in new[] { 0.3f, 0.45f, 0.6f })
+            {
+                float seconds = BossFight.SecondsToKill(level, engagement);
+
+                Assert.Greater(seconds, 60f,
+                    $"a level-{level} player firing {engagement:P0} of the time melts the boss in " +
+                    $"{seconds:0}s");
+
+                Assert.Less(seconds, 220f,
+                    $"a level-{level} player firing {engagement:P0} of the time is still hosing the " +
+                    $"boss {seconds:0}s later — that is a health bar, not a fight");
+            }
+        }
+
         // ---------------------------------------------------------------- can you win it?
 
         /// <summary>
