@@ -94,6 +94,27 @@ namespace MaxWorlds.VFX
             if (b?.GameObject != null) Destroy(b.GameObject);
         }
 
+        /// <summary>
+        /// Give the bursts their frame budget back. This was missing, and it meant the boss's whole
+        /// spectacle had a LIFETIME budget rather than a per-frame one.
+        ///
+        /// <see cref="VfxBurst"/> caps how many bursts it will fire in a frame — an uncapped
+        /// burst-per-event is how a particle spike happens — and it refills that budget when its owner
+        /// calls <see cref="VfxBurst.EndFrame"/> in LateUpdate. <see cref="CombatVfx"/> does. This did
+        /// not. So the counter only ever went UP: four bursts of dust, six of fire, and then the boss
+        /// woke up in silence and died without an explosion for the rest of the process.
+        ///
+        /// It survived a single playthrough by one emission — an intro, a phase turn and a defeat spend
+        /// exactly five of the fire budget's six — which is why nobody caught it. Anything that engages
+        /// a boss twice without a fresh scene falls off the cliff.
+        /// </summary>
+        private void LateUpdate()
+        {
+            _dust.EndFrame();
+            _fire.EndFrame();
+            _debris.EndFrame();
+        }
+
         private Vector3 BossPos()
         {
             if (_boss == null)

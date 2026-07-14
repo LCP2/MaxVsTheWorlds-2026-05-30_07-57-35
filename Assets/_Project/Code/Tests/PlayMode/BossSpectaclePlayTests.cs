@@ -57,6 +57,40 @@ namespace MaxWorlds.Tests.PlayMode
                 "the boss waking up should kick dust off the ground");
         }
 
+        /// <summary>
+        /// The spectacle has to still be there the SECOND time, and the twentieth.
+        ///
+        /// It wasn't. VfxBurst caps how many bursts it fires per frame and refills that budget when its
+        /// owner calls EndFrame() in LateUpdate — CombatVfx does; BossSpectacle never did. So the cap
+        /// was not per-frame at all, it was per-PROCESS: four bursts of dust and six of fire, ever.
+        /// After that the boss woke up in silence and died without an explosion, for good.
+        ///
+        /// A single playthrough spends five of the fire budget's six (one phase turn, three defeat
+        /// flashes, one big one) and squeaks under it, which is exactly why this was never seen. It was
+        /// found by a test suite that engaged the boss more than once.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheSpectacle_StillFires_AfterTheBudgetWouldHaveRunOut()
+        {
+            yield return null;
+
+            var dust = FindSystem("BossDust");
+            Assert.IsNotNull(dust);
+
+            // Comfortably past the old lifetime cap of four.
+            for (int i = 0; i < 8; i++)
+            {
+                HudSignals.EmitBossEngaged("BIG BERMUDA", 2);
+                yield return null;
+                yield return null;
+            }
+
+            Assert.That(dust.particleCount, Is.GreaterThan(0),
+                "the boss woke up and kicked no dust at all. The burst budget is a PER-FRAME cap that " +
+                "has to be refilled every frame (VfxBurst.EndFrame); without that it is a lifetime cap, " +
+                "and the boss's spectacle is spent after the first few bursts of the process.");
+        }
+
         private static ParticleSystem FindSystem(string name)
         {
             foreach (var ps in Object.FindObjectsByType<ParticleSystem>(FindObjectsSortMode.None))
