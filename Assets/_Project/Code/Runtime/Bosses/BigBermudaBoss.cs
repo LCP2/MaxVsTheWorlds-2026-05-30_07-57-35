@@ -75,6 +75,28 @@ namespace MaxWorlds.Bosses
         public bool IsAlive => _phase == Phase.Fight && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
 
+        // --- read-only fight state, for the art layer (YT-90) ---
+        //
+        // Big Bermuda is a MACHINE with moving parts, and what those parts are doing has to agree with
+        // what the fight is doing: the reel spins up as it winds up, the eyes go hot as it commits, the
+        // whole thing goes red when it enrages. None of that is inferable from the outside — a boss
+        // standing still is winding up OR recovering, and those are opposite things to a player.
+        //
+        // So the fight says what it is doing, out loud. These are getters over state this class already
+        // holds; nothing here decides anything, and nothing outside this file can write to the fight.
+        // Same shape as MowerHutch.Normalized, which is what lets FactoryLife run the factory without
+        // reaching into it.
+
+        /// <summary>What the boss is doing this frame — drives the tells on the model (BigBermudaRig).</summary>
+        public BossAction Action => _brain != null ? _brain.Current : BossAction.Reposition;
+
+        /// <summary>True below the enrage threshold: phase 2, blade-rain, everything faster.</summary>
+        public bool Enraged => _brain != null && _brain.Enraged;
+
+        /// <summary>True from the moment it wakes until it dies. Dormant beyond the gate before that —
+        /// the machine is standing there the whole time, and it should look asleep, not switched off.</summary>
+        public bool Engaged => _phase == Phase.Intro || _phase == Phase.Fight;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
