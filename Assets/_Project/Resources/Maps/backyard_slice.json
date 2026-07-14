@@ -8,35 +8,53 @@
             "name": "Patio & Back Door",
             "type": "entry",
             "x": 0.0,
-            "z": -9.5,
-            "width": 11.0,
-            "depth": 9.0
+            "z": -10.0,
+            "width": 12.0,
+            "depth": 10.0
         },
         {
             "id": "lawn",
             "name": "The Lawn",
             "type": "open",
             "x": 0.0,
-            "z": 8.5,
-            "width": 24.0,
-            "depth": 27.0
+            "z": 9.0,
+            "width": 32.0,
+            "depth": 28.0
         },
         {
             "id": "nook",
             "name": "The Beds",
             "type": "cover",
-            "x": -16.5,
-            "z": 7.5,
-            "width": 9.0,
-            "depth": 9.0
+            "x": -24.0,
+            "z": 6.0,
+            "width": 16.0,
+            "depth": 12.0
         },
         {
             "id": "shed",
             "name": "The Shed",
             "type": "interior",
-            "x": 19.0,
-            "z": 15.0,
-            "width": 14.0,
+            "x": 25.0,
+            "z": 14.0,
+            "width": 18.0,
+            "depth": 14.0
+        },
+        {
+            "id": "orchard",
+            "name": "The Orchard",
+            "type": "open",
+            "x": 0.0,
+            "z": 36.0,
+            "width": 30.0,
+            "depth": 26.0
+        },
+        {
+            "id": "greenhouse",
+            "name": "The Greenhouse",
+            "type": "interior",
+            "x": -23.0,
+            "z": 34.0,
+            "width": 16.0,
             "depth": 14.0
         },
         {
@@ -44,18 +62,18 @@
             "name": "The Boss Gate",
             "type": "interior",
             "x": 0.0,
-            "z": 25.0,
-            "width": 12.0,
-            "depth": 6.0
+            "z": 51.0,
+            "width": 14.0,
+            "depth": 4.0
         },
         {
             "id": "compost",
             "name": "Compost Clearing",
             "type": "boss",
             "x": 0.0,
-            "z": 39.0,
-            "width": 30.0,
-            "depth": 22.0
+            "z": 66.0,
+            "width": 34.0,
+            "depth": 26.0
         }
     ],
     "links": [
@@ -74,11 +92,23 @@
         {
             "from": "lawn",
             "to": "shed",
-            "doorway": 5.0,
+            "doorway": 6.0,
             "gate": ""
         },
         {
             "from": "lawn",
+            "to": "orchard",
+            "doorway": 10.0,
+            "gate": ""
+        },
+        {
+            "from": "orchard",
+            "to": "greenhouse",
+            "doorway": 6.0,
+            "gate": ""
+        },
+        {
+            "from": "orchard",
             "to": "gatehouse",
             "doorway": 9.0,
             "gate": "boss_gate"
@@ -106,8 +136,20 @@
         {
             "id": "mower_hutch",
             "kind": "factory",
-            "x": 19.0,
-            "z": 15.0,
+            "x": 25.0,
+            "z": 14.0,
+            "width": 3.0,
+            "height": 2.0,
+            "depth": 3.0,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        },
+        {
+            "id": "greenhouse_hutch",
+            "kind": "factory",
+            "x": -23.0,
+            "z": 34.0,
             "width": 3.0,
             "height": 2.0,
             "depth": 3.0,
@@ -119,19 +161,19 @@
             "id": "boss_gate",
             "kind": "gate",
             "x": 0.0,
-            "z": 22.0,
+            "z": 49.0,
             "width": 11.0,
             "height": 3.2,
             "depth": 0.6,
             "shape": "box",
             "dressing": "none",
-            "opensOn": "mower_hutch"
+            "opensOn": "mower_hutch, greenhouse_hutch"
         },
         {
             "id": "big_bermuda",
             "kind": "boss",
             "x": 0.0,
-            "z": 39.0,
+            "z": 66.0,
             "width": 3.5,
             "height": 3.0,
             "depth": 3.5,
@@ -142,7 +184,7 @@
         {
             "id": "Cover Planter",
             "kind": "cover",
-            "x": 6.5,
+            "x": 7.0,
             "z": 1.0,
             "width": 3.5,
             "height": 1.6,
@@ -154,7 +196,7 @@
         {
             "id": "Cover Tree",
             "kind": "cover",
-            "x": -6.5,
+            "x": -7.0,
             "z": 8.0,
             "width": 2.4,
             "height": 4.4,
@@ -166,8 +208,8 @@
         {
             "id": "Cover Hedge",
             "kind": "cover",
-            "x": 5.5,
-            "z": 11.0,
+            "x": 6.0,
+            "z": 12.0,
             "width": 6.0,
             "height": 1.8,
             "depth": 1.2,
@@ -178,8 +220,8 @@
         {
             "id": "Cover Bins",
             "kind": "cover",
-            "x": -7.0,
-            "z": 16.0,
+            "x": -8.0,
+            "z": 17.0,
             "width": 3.0,
             "height": 2.0,
             "depth": 3.0,
@@ -190,8 +232,8 @@
         {
             "id": "Cover Log Pile",
             "kind": "cover",
-            "x": 8.0,
-            "z": 18.5,
+            "x": 9.0,
+            "z": 19.0,
             "width": 2.5,
             "height": 1.4,
             "depth": 2.5,
@@ -200,13 +242,85 @@
             "opensOn": ""
         },
         {
+            "id": "Cover Beds",
+            "kind": "cover",
+            "x": -25.0,
+            "z": 5.0,
+            "width": 3.0,
+            "height": 1.6,
+            "depth": 3.0,
+            "shape": "box",
+            "dressing": "planter",
+            "opensOn": ""
+        },
+        {
             "id": "Cover Workbench",
             "kind": "cover",
-            "x": 23.5,
-            "z": 20.0,
+            "x": 31.0,
+            "z": 19.0,
             "width": 3.0,
             "height": 1.5,
             "depth": 2.0,
+            "shape": "box",
+            "dressing": "planter",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Apple Tree",
+            "kind": "cover",
+            "x": -6.0,
+            "z": 30.0,
+            "width": 2.4,
+            "height": 4.4,
+            "depth": 2.4,
+            "shape": "cylinder",
+            "dressing": "tree",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Compost Bin",
+            "kind": "cover",
+            "x": 7.0,
+            "z": 33.0,
+            "width": 3.0,
+            "height": 2.0,
+            "depth": 3.0,
+            "shape": "box",
+            "dressing": "planter",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Woodpile",
+            "kind": "cover",
+            "x": -4.0,
+            "z": 42.0,
+            "width": 5.0,
+            "height": 1.4,
+            "depth": 1.4,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Rain Tank",
+            "kind": "cover",
+            "x": 8.0,
+            "z": 44.0,
+            "width": 2.6,
+            "height": 2.2,
+            "depth": 2.6,
+            "shape": "cylinder",
+            "dressing": "planter",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Potting Bench",
+            "kind": "cover",
+            "x": -29.0,
+            "z": 39.0,
+            "width": 2.5,
+            "height": 1.5,
+            "depth": 1.5,
             "shape": "box",
             "dressing": "planter",
             "opensOn": ""

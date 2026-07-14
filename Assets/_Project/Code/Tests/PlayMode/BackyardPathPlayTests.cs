@@ -152,16 +152,38 @@ namespace MaxWorlds.Tests.PlayMode
             yield return BuildPath();
             MapData map = Shipped();
 
-            Doorway(map, "lawn", "gatehouse", out bool alongX, out float coord, out Span hole);
+            // WHICH rooms the gate stands between is asked of the map, not typed in. The run grew a
+            // second fight room (YT-92) and the gate moved to the far side of it; a test that names the
+            // rooms is a test that has to be edited every time the level is, which is exactly the
+            // coupling the map engine exists to remove.
+            MapLink link = GateLink(map);
+            Doorway(map, link.from, link.to, out bool alongX, out float coord, out Span hole);
 
             // Open in the middle…
             Assert.IsFalse(BlockedAt(Mouth(alongX, coord, hole.Mid)), "the gate doorway is walled shut");
 
             // …and shouldered off to the sides, so the boss arena is sealed until the gate opens —
-            // including out past the gatehouse, with no slipping round the end of the lawn's wall.
+            // with no slipping round the end of the approach room's wall.
             Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Min - 1.5f)), "no left gate shoulder");
             Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Max + 1.5f)), "no right gate shoulder");
-            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, map.Zone("lawn").XMax - 2f)), "gap beside the lawn wall");
+
+            MapZone a = map.Zone(link.from), b = map.Zone(link.to);
+            MapZone approach = a.width >= b.width ? a : b;   // the room you cross to reach the gate
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, approach.XMax - 2f)),
+                $"gap beside the wall the gate sits in, out at the edge of '{approach.id}'");
+        }
+
+        /// <summary>The link the boss gate fills — the one the map names it in.</summary>
+        private static MapLink GateLink(MapData map)
+        {
+            MapEntity gate = map.First(EntityKind.Gate);
+            Assert.IsNotNull(gate, "the map has no gate");
+
+            foreach (MapLink link in map.links)
+                if (link.gate == gate.id) return link;
+
+            Assert.Fail($"no link names the gate '{gate.id}' — it fills no doorway");
+            return null;
         }
 
         [UnityTest]

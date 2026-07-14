@@ -41,6 +41,10 @@ namespace MaxWorlds.UI
         /// stand-in switches off and the arena advances only on real destruction signals.</summary>
         private bool _externalFactories;
 
+        /// <summary>How many real factories have registered — the tracker's total once the level has
+        /// built itself (YT-92).</summary>
+        private int _realFactories;
+
         /// <summary>Once a real boss (YT-27) registers, the boss bar is driven by its actual HP
         /// rather than engaged/drained by the kill + arena stand-in.</summary>
         private bool _externalBoss;
@@ -112,6 +116,22 @@ namespace MaxWorlds.UI
         /// <summary>Switch the arena tracker to real factory-destruction signals (YT-37): the
         /// kill-driven stand-in stops advancing factories from this point on.</summary>
         public void UseExternalFactories() => _externalFactories = true;
+
+        /// <summary>
+        /// A real factory came online. The first one switches the kill-driven stand-in off (YT-37);
+        /// every one of them raises the count the tracker is working toward (YT-92).
+        ///
+        /// The count is DISCOVERED rather than passed in, and that is deliberate: the HUD is built
+        /// before the map is, so at construction time nobody can yet say how many factories this level
+        /// has. The factories themselves say so, as they wake. A HUD reading "FACTORIES 0 / 1" in a
+        /// two-factory level would have the player at the gate wondering why it was still shut.
+        /// </summary>
+        public void RegisterFactory()
+        {
+            _externalFactories = true;
+            _realFactories++;
+            Arena.SetFactoriesTotal(_realFactories);
+        }
 
         /// <summary>A real factory was destroyed. Advances the arena, clears the sub-zone once
         /// all factories are down, and engages the boss when the arena is fully cleared.</summary>

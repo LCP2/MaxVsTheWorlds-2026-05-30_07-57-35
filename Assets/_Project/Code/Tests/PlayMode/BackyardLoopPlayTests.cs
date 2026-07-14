@@ -11,11 +11,17 @@ using MaxWorlds.UI;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// Proves the core slice loop wiring (YT-38 QA): destroying the Mower Hutch must fire the HUD
-    /// factory-destroyed signal (which ticks FACTORIES → arena → boss on the real HUD), open the
-    /// boss gate it references, and engage Big Bermuda. Builds the real gameplay components and the
-    /// factory→gate reference exactly as the scene does, but without loading the full scene (a
-    /// scene load leaves RuntimeInitialize singletons behind that break other PlayMode tests).
+    /// Proves the core slice loop wiring (YT-38 QA) in the simplest level there is — ONE factory:
+    /// destroying the Mower Hutch must fire the HUD factory-destroyed signal (which ticks FACTORIES →
+    /// arena → boss on the real HUD), open the boss gate it references, and engage Big Bermuda. Builds
+    /// the real gameplay components without loading the full scene (a scene load leaves
+    /// RuntimeInitialize singletons behind that break other PlayMode tests).
+    ///
+    /// The one-factory case still has to work, and it is not the trivial half of YT-92: the gate is
+    /// keyed by the map, and a gate nobody keyed has to open on the first kill or a hand-built level
+    /// (this fixture, and any test that builds a factory) would have a door that never opens. The
+    /// two-factory case — the gate that waits, and the boss that sleeps through the first kill — is
+    /// asserted in MapPlayTests, against the shipped map.
     /// </summary>
     public sealed class BackyardLoopPlayTests
     {
@@ -32,11 +38,16 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator DestroyingFactory_FiresHudSignal_OpensGate_EngagesBoss()
         {
+            // The census is static and a test run is one process. This yard has exactly one factory in
+            // it, whatever the fixture before it built.
+            FactoryCensus.Reset();
+
             // Gate with a real collider (what physically blocks the corridor).
             _gateGo = new GameObject("SubZone Gate", typeof(BoxCollider), typeof(SubZoneGate));
             var gate = _gateGo.GetComponent<SubZoneGate>();
 
-            // Boss — dormant until the factory dies (subscribes to FactoryDestroyed in OnEnable).
+            // Boss — dormant until every factory is down (subscribes to FactoryCensus.Cleared in
+            // OnEnable). Here there is one, so the first kill IS the last one.
             _bossGo = new GameObject("Big Bermuda", typeof(BigBermudaBoss));
             var boss = _bossGo.GetComponent<BigBermudaBoss>();
 

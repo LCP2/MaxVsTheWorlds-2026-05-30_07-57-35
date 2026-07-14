@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
+using MaxWorlds.Factories;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
@@ -22,6 +23,7 @@ namespace MaxWorlds.Tests.PlayMode
         private GameObject _boss;
         private GameObject _player;
         private GameObject _rigHost;
+        private GameObject _hutch;
 
         private BigBermudaBoss Boss => _boss.GetComponent<BigBermudaBoss>();
         private BigBermudaRig Rig => _rigHost.GetComponent<BigBermudaRig>();
@@ -46,9 +48,8 @@ namespace MaxWorlds.Tests.PlayMode
         [TearDown]
         public void TearDown()
         {
-            if (_rigHost != null) Object.Destroy(_rigHost);
-            if (_boss != null) Object.Destroy(_boss);
-            if (_player != null) Object.Destroy(_player);
+            foreach (GameObject go in new[] { _rigHost, _boss, _player, _hutch })
+                if (go != null) Object.Destroy(go);
         }
 
         /// <summary>Self-installs at AfterSceneLoad in the game; that moment is long gone inside a test,
@@ -60,10 +61,25 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
         }
 
-        /// <summary>Kill the factory. That is what wakes it (BigBermudaBoss.OnFactoryDestroyed).</summary>
+        /// <summary>
+        /// Kill the yard's factories. That is what wakes the boss — the LAST of them, since YT-92, so
+        /// this can no longer be faked with a bare "a factory died" signal: it needs a factory, and it
+        /// needs that factory to be the only one standing.
+        ///
+        /// The census is wiped first because it is static and a test run is one process: whatever the
+        /// previous fixture built, this yard has exactly one factory in it.
+        /// </summary>
         private IEnumerator Wake()
         {
-            HudSignals.EmitFactoryDestroyed(Vector3.zero);
+            FactoryCensus.Reset();
+
+            _hutch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _hutch.name = "Mower Hutch";
+            _hutch.transform.position = new Vector3(0f, 1f, 0f);
+            var hutch = _hutch.AddComponent<MowerHutch>();
+            yield return null;
+
+            hutch.TakeDamage(new DamageInfo(100000f, _hutch.transform.position, Vector3.forward, Team.Player));
 
             // Through the 1.6 s intro and the 0.9 s wake flicker, into the fight proper.
             float t = 0f;

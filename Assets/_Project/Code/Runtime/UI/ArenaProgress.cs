@@ -14,7 +14,12 @@ namespace MaxWorlds.UI
     public sealed class ArenaProgress
     {
         public int SubZonesTotal { get; }
-        public int FactoriesTotal { get; }
+
+        /// <summary>How many factories this run has. Not readonly, because the run does not know until
+        /// the level is built: the map decides how many sources it has, and the HUD is constructed
+        /// before the map has said (YT-92). <see cref="SetFactoriesTotal"/> is how it finds out.</summary>
+        public int FactoriesTotal { get; private set; }
+
         public int SubZonesCleared { get; private set; }
         public int FactoriesDestroyed { get; private set; }
 
@@ -48,6 +53,14 @@ namespace MaxWorlds.UI
             if (SubZonesCleared >= SubZonesTotal) return;
             SubZonesCleared++;
             Changed?.Invoke(true);
+        }
+
+        /// <summary>Tell the tracker how many factories the level actually has. Clamped at the number
+        /// already destroyed, so a total can never be set below the progress the player has made.</summary>
+        public void SetFactoriesTotal(int total)
+        {
+            FactoriesTotal = Mathf.Max(FactoriesDestroyed, total);
+            Changed?.Invoke(false);
         }
 
         /// <summary>Register a destroyed factory (quiet tick). Clamped at the total.</summary>

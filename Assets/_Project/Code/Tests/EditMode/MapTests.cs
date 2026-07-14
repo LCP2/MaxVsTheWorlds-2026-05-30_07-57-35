@@ -64,17 +64,19 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
         }
 
-        /// <summary>The shape the slice is now: six rooms, not three, and not in one straight line.
+        /// <summary>The shape the slice is now: eight rooms, not three, and not in one straight line.
         /// This is the thing the engine was built to make cheap, so it is the thing that gets
         /// pinned.</summary>
         [Test]
-        public void TheShippedMap_IsSixRooms_WithPocketsOffTheLawn()
+        public void TheShippedMap_IsEightRooms_WithPocketsOffBothFightRooms()
         {
             MapData map = Shipped();
 
-            Assert.AreEqual(6, map.zones.Length, "the slice is six rooms — patio, lawn, nook, shed, gatehouse, compost");
+            Assert.AreEqual(8, map.zones.Length,
+                "the slice is eight rooms — patio, lawn, nook, shed, orchard, greenhouse, gatehouse, compost");
 
-            foreach (string id in new[] { "patio", "lawn", "nook", "shed", "gatehouse", "compost" })
+            foreach (string id in new[] { "patio", "lawn", "nook", "shed", "orchard", "greenhouse",
+                                          "gatehouse", "compost" })
                 Assert.IsNotNull(map.Zone(id), $"the map has no '{id}'");
 
             // The turn is the point. A nook off the lawn's left and a shed off its right mean the
@@ -82,19 +84,49 @@ namespace MaxWorlds.Tests.EditMode
             MapZone lawn = map.Zone("lawn");
             Assert.Less(map.Zone("nook").x, lawn.XMin, "the nook is not off the lawn's left");
             Assert.Greater(map.Zone("shed").x, lawn.XMax, "the shed is not off the lawn's right");
+
+            // And the orchard is a SECOND fight room past the lawn, with the second factory off it —
+            // which is what puts a run between the first kill and the gate (YT-92).
+            MapZone orchard = map.Zone("orchard");
+            Assert.Greater(orchard.ZMin, lawn.ZMin, "the orchard is not up-field of the lawn");
+            Assert.Less(map.Zone("greenhouse").x, orchard.XMin, "the greenhouse is not off the orchard");
         }
 
-        /// <summary>The factory has moved out of the lawn and into a room of its own — which is the
-        /// whole reason the mission line now turns.</summary>
+        /// <summary>The run is noticeably bigger than the one-factory slice it grew out of (YT-92).
+        /// Pinned as an area, because "bigger" is a claim about how much ground there is to fight
+        /// across, and a map could grow one long thin corridor and satisfy anything less.</summary>
         [Test]
-        public void TheShippedMap_PutsTheFactoryInTheShed()
+        public void TheShippedMap_IsMuchBiggerThanTheOldOneFactorySlice()
+        {
+            Rect bounds = Shipped().Bounds();
+            float area = bounds.width * bounds.height;
+
+            // The shipped slice was ~47 x 64 m = ~3,000 m². The playtest verdict was that you reach
+            // the boss before the fight has any build-up, and the arena being small is half of why.
+            Assert.Greater(area, 5000f,
+                $"the arena is {bounds.width:0} x {bounds.height:0} m — barely bigger than the one you " +
+                "could cross before the fight started");
+        }
+
+        /// <summary>Two factories, each standing in a room of its own, at opposite ends of the run —
+        /// so clearing them is a sequence you fight your way through, not one beat (YT-92).</summary>
+        [Test]
+        public void TheShippedMap_HasTwoFactories_OneOffEachFightRoom()
         {
             MapData map = Shipped();
-            MapEntity factory = map.First(EntityKind.Factory);
+            var factories = MapValidation.Kind(map, EntityKind.Factory);
 
-            Assert.IsNotNull(factory, "the map has no factory — there is nothing to destroy");
-            Assert.AreEqual("shed", map.ZoneAt(factory.x, factory.z)?.id,
-                "the factory is not in the shed — the objective is standing in the open again");
+            Assert.AreEqual(2, factories.Count, "the run does not have two sources of pressure");
+
+            Assert.AreEqual("shed", map.ZoneAt(factories[0].x, factories[0].z)?.id,
+                "the first factory is not in the shed — the objective is standing in the open again");
+            Assert.AreEqual("greenhouse", map.ZoneAt(factories[1].x, factories[1].z)?.id,
+                "the second factory is not in the greenhouse");
+
+            // The second one is genuinely FURTHER IN. Two factories side by side in the same room
+            // would be twice the pressure and none of the build-up.
+            Assert.Greater(factories[1].z, factories[0].z + 10f,
+                "the second factory is not deep enough into the run to be a second objective");
         }
 
         [Test]
@@ -118,16 +150,23 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>The whole mission in one assertion: the gate into the boss arena is opened by
-        /// destroying the factory, and that link is stated in the map.</summary>
+        /// destroying BOTH factories, and that is stated in the map rather than coded anywhere
+        /// (YT-92). One key would put the boss behind a door the player opens halfway through.</summary>
         [Test]
-        public void TheShippedMap_OpensTheBossGateByKillingTheFactory()
+        public void TheShippedMap_OpensTheBossGateOnlyWhenBothFactoriesAreDown()
         {
             MapData map = Shipped();
             MapEntity gate = map.First(EntityKind.Gate);
 
             Assert.IsNotNull(gate);
-            Assert.AreEqual("mower_hutch", gate.opensOn);
-            Assert.AreEqual(EntityKind.Factory, map.Entity(gate.opensOn).Kind);
+            Assert.AreEqual(2, gate.Keys.Length, "the boss gate is not waiting on both factories");
+
+            foreach (string key in gate.Keys)
+            {
+                MapEntity factory = map.Entity(key);
+                Assert.IsNotNull(factory, $"the gate opens on '{key}', which is not in the map");
+                Assert.AreEqual(EntityKind.Factory, factory.Kind, $"'{key}' is not a factory");
+            }
         }
 
         [Test]
@@ -135,8 +174,10 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // Straight up the middle from the patio to the gate: never walled.
-            for (float z = -13f; z <= 21f; z += 1f)
+            // Straight up the middle from the patio, through the lawn and the orchard, to the boss
+            // gate: never walled. The doorways between the rooms are on this line, which is what makes
+            // it the line.
+            for (float z = -13f; z <= 48f; z += 1f)
                 Assert.IsFalse(WalledAt(map, 0f, z), $"the mission line is walled at z={z}");
         }
 
@@ -194,13 +235,14 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // z = 0 is below the nook's doorway, so this stretch of the lawn's left edge is solid wall.
-            Assert.IsTrue(WalledAt(map, -12.5f, 0f), "the lawn's left wall is not where it started");
+            // The lawn spans x −16..16, so its left wall stands just outside that. z = 20 is above the
+            // nook's doorway, so this stretch of the edge is solid wall.
+            Assert.IsTrue(WalledAt(map, -16.5f, 20f), "the lawn's left wall is not where it started");
 
             map.Zone("lawn").x += 5f;   // slide the fight room right
 
-            Assert.IsFalse(WalledAt(map, -12.5f, 0f), "the old wall is still standing where the lawn used to be");
-            Assert.IsTrue(WalledAt(map, -7.5f, 0f), "no wall was built along the lawn's new edge");
+            Assert.IsFalse(WalledAt(map, -16.5f, 20f), "the old wall is still standing where the lawn used to be");
+            Assert.IsTrue(WalledAt(map, -11.5f, 20f), "no wall was built along the lawn's new edge");
         }
 
         [Test]
@@ -306,12 +348,42 @@ namespace MaxWorlds.Tests.EditMode
 
             var withCover = new List<MapEntity>(map.entities)
             {
-                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 33f, width = 2f, height = 2f, depth = 2f },
+                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 66f, width = 2f, height = 2f, depth = 2f },
             };
             map.entities = withCover.ToArray();
 
             Assert.IsFalse(MapValidation.Validate(map, out string why));
             StringAssert.Contains("boss", why);
+        }
+
+        /// <summary>A gate can be keyed to several factories (YT-92) — and every one of the names has
+        /// to be real. A gate that names two factories and misspells one is a gate that can never open,
+        /// which plays as a finished level that simply refuses to end.</summary>
+        [Test]
+        public void Validation_RejectsAGateKeyedToSomethingThatIsNotAFactory()
+        {
+            MapData map = TwoRooms();
+            map.Entity("g").opensOn = "f, start";   // 'start' is the player spawn
+
+            Assert.IsFalse(MapValidation.Validate(map, out string why));
+            StringAssert.Contains("not a factory", why);
+        }
+
+        [Test]
+        public void Validation_AcceptsAGateKeyedToEveryFactoryInTheMap()
+        {
+            MapData map = TwoRooms();
+
+            var withTwo = new List<MapEntity>(map.entities)
+            {
+                new MapEntity { id = "f2", kind = "factory", x = 6f, z = -14f },
+            };
+            map.entities = withTwo.ToArray();
+            map.Entity("g").opensOn = "f, f2";
+
+            Assert.IsTrue(MapValidation.Validate(map, out string why), why);
+            Assert.AreEqual(new[] { "f", "f2" }, map.Entity("g").Keys,
+                "a hand-written key list has to read the way it looks");
         }
 
         [Test]

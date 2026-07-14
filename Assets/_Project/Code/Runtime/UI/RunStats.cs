@@ -15,7 +15,12 @@ namespace MaxWorlds.UI
     {
         public RunOutcome Outcome { get; private set; } = RunOutcome.InProgress;
         public int Kills { get; private set; }
-        public bool FactoryDestroyed { get; private set; }
+
+        /// <summary>How many factories the run broke. A count, not a flag: a level can have more than
+        /// one (YT-92), and "YES" is a poor answer to "how did the run go" when there were two.</summary>
+        public int FactoriesDestroyed { get; private set; }
+
+        public bool FactoryDestroyed => FactoriesDestroyed > 0;
         public float Elapsed { get; private set; }
 
         public bool IsOver => Outcome != RunOutcome.InProgress;
@@ -32,7 +37,7 @@ namespace MaxWorlds.UI
             if (!IsOver) Kills++;
         }
 
-        public void MarkFactoryDestroyed() => FactoryDestroyed = true;
+        public void MarkFactoryDestroyed() => FactoriesDestroyed++;
 
         /// <summary>Set the final outcome. First call wins; later calls are ignored so a death
         /// after the boss dies (or vice-versa) can't flip the result.</summary>

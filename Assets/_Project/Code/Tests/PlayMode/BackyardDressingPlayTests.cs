@@ -144,9 +144,15 @@ namespace MaxWorlds.Tests.PlayMode
 
                 Assert.Greater(placed, 8, $"'{id}' was left bare — the dressing is not following the map");
 
-                // …and the middle of the room is still somewhere you can stand.
-                Assert.IsFalse(BlockedAt(new Vector3(zone.x, 1f, zone.z)),
-                    $"the dressing is standing in the middle of '{id}'");
+                // …and nothing the DRESSING placed is standing in the middle of the room.
+                //
+                // Asked of the dressing specifically, not of "is anything there". The shed has a
+                // machine standing in the middle of it — that is the objective, it arrived with the
+                // map (YT-92), and it is supposed to be in the way. What must never be in the way is a
+                // shrub.
+                foreach (Collider c in Physics.OverlapSphere(new Vector3(zone.x, 1f, zone.z), 0.4f))
+                    Assert.IsFalse(c.transform.IsChildOf(_dressing.transform),
+                        $"'{c.name}' is a piece of dressing standing in the middle of '{id}'");
             }
         }
 

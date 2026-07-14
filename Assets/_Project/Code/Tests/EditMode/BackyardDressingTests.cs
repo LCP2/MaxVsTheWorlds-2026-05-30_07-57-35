@@ -209,16 +209,47 @@ namespace MaxWorlds.Tests.EditMode
             return best;
         }
 
+        /// <summary>
+        /// Every shed's clutter stays inside THAT shed's spawn ring — a plank wall or a woodpile
+        /// reaching the ring would have robots born standing in it.
+        ///
+        /// Measured against the nearest factory, because the yard has two of them now (YT-92) and each
+        /// shed's props belong to the machine they were built around. Measuring the greenhouse's
+        /// woodpile against the mower hutch forty metres away would say it was "outside the ring",
+        /// which is true and useless.
+        /// </summary>
         [Test]
-        public void TheShedDressingStaysInsideTheSpawnRing()
+        public void EveryShedsDressingStaysInsideThatShedsSpawnRing()
         {
-            Vector2 ring = Map.First(EntityKind.Factory).CenterXz;
+            List<Vector2> rings = MapValidation.Kind(Map, EntityKind.Factory)
+                                               .Select(f => f.CenterXz).ToList();
 
-            foreach (DressingProp prop in Set().Where(p => p.Zone == DressingZone.Factory))
+            Assert.GreaterOrEqual(rings.Count, 2, "the yard has lost its second factory");
+
+            var shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
+            Assert.IsNotEmpty(shedProps, "no shed was dressed at all");
+
+            foreach (DressingProp prop in shedProps)
             {
-                Assert.LessOrEqual(prop.FarthestFrom(ring),
+                Assert.LessOrEqual(rings.Min(ring => prop.FarthestFrom(ring)),
                     MapValidation.SpawnRadius - BackyardDressingSet.SpawnClearance,
-                    $"{prop.Key} reaches the ring the factory spawns robots on");
+                    $"{prop.Key} reaches the ring its factory spawns robots on");
+            }
+        }
+
+        /// <summary>Both sheds get built, not just the first. A machine standing in a plank shed and
+        /// another standing bare in a room would read as two different things, and they are the same
+        /// thing.</summary>
+        [Test]
+        public void EveryFactoryGetsAShed()
+        {
+            List<DressingProp> shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
+
+            foreach (MapEntity factory in MapValidation.Kind(Map, EntityKind.Factory))
+            {
+                Assert.IsTrue(
+                    shedProps.Any(p => (p.CenterXz - factory.CenterXz).magnitude < MapValidation.SpawnRadius),
+                    $"'{factory.id}' is standing in the open — nothing was built around it");
             }
         }
 
@@ -251,13 +282,32 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ABushInTheDoorwayIntoTheShedIsRejected()
         {
-            // The doorway the corridor-shaped dressing did not know existed.
+            // The doorway the corridor-shaped dressing did not know existed. ASKED of the map rather
+            // than typed in: a doorway's position is a thing the level decides, and a hardcoded one
+            // silently stops testing anything the day a room moves.
+            MapData map = Map;
             var bad = Set();
-            bad.Add(new DressingProp(PropCatalog.BushDetailed, new Vector2(12f, 15f),
+
+            bad.Add(new DressingProp(PropCatalog.BushDetailed, DoorwayMouth(map, "lawn", "shed"),
                                      PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 1f)));
 
-            Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));
+            Assert.IsFalse(BackyardDressingSet.Validate(map, bad, Cover, out string why));
             StringAssert.Contains("doorway", why);
+        }
+
+        /// <summary>The middle of the way through between two rooms.</summary>
+        private static Vector2 DoorwayMouth(MapData map, string from, string to)
+        {
+            foreach (MapLink link in map.links)
+            {
+                bool joins = (link.from == from && link.to == to) || (link.from == to && link.to == from);
+                if (!joins) continue;
+
+                if (MapGeometry.Doorway(map, link, out bool alongX, out float coord, out Span hole))
+                    return new Vector2(alongX ? hole.Mid : coord, alongX ? coord : hole.Mid);
+            }
+
+            throw new AssertionException($"the map has no doorway between '{from}' and '{to}'");
         }
 
         [Test]

@@ -23,8 +23,13 @@ namespace MaxWorlds.Enemies
         [SerializeField] private Transform target;
 
         [Header("Swarm tuning (YT-63 kiteability — dense but survivable)")]
-        [Tooltip("Max robots alive at once. Kept modest so the player can kite instead of drown.")]
-        [SerializeField] private int maxLiveEnemies = 12;
+        [Tooltip("Max robots alive at once, FROM THIS FACTORY. Kept modest so the player can kite " +
+                 "instead of drown — and a level with two factories has two of these (YT-92).")]
+        // 8, not the 12 a single factory ran: the yard now has two sources, and the number that has to
+        // stay survivable is the number of robots on the field, not the number one shed made. Two at 8
+        // is a real escalation over one at 12 — more pressure, from two directions — without becoming
+        // the wall of bodies that kiteability tuning (YT-63/YT-80) exists to prevent.
+        [SerializeField] private int maxLiveEnemies = 8;
         [Tooltip("Seconds between spawns at run start (breathable).")]
         [SerializeField] private float spawnIntervalStart = 1.8f;
         [Tooltip("Seconds between spawns at steady state (peak pressure).")]

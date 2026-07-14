@@ -165,17 +165,28 @@ namespace MaxWorlds.Arena
 
             foreach (MapEntity gate in Kind(map, EntityKind.Gate))
             {
-                if (string.IsNullOrEmpty(gate.opensOn))
+                string[] keys = gate.Keys;
+                if (keys.Length == 0)
                 {
                     reason = $"gate '{gate.id}' has no opensOn — a locked door with no key is a dead end";
                     return false;
                 }
 
-                MapEntity key = map.Entity(gate.opensOn);
-                if (key == null || key.Kind != EntityKind.Factory)
+                // Every key, not just the first: a gate that names two factories and gets one of the
+                // names wrong is a gate that can never open, and it would play as a finished level
+                // that simply refuses to end.
+                var named = new HashSet<string>();
+                foreach (string id in keys)
                 {
-                    reason = $"gate '{gate.id}' opens on '{gate.opensOn}', which is not a factory in this map";
-                    return false;
+                    MapEntity key = map.Entity(id);
+                    if (key == null || key.Kind != EntityKind.Factory)
+                    {
+                        reason = $"gate '{gate.id}' opens on '{id}', which is not a factory in this map";
+                        return false;
+                    }
+
+                    if (!named.Add(id))
+                    { reason = $"gate '{gate.id}' names factory '{id}' twice"; return false; }
                 }
             }
 
