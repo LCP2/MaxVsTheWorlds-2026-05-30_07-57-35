@@ -1,0 +1,158 @@
+{
+    "name": "Backyard Slice",
+    "wallHeight": 3.5,
+    "wallThickness": 1.0,
+    "zones": [
+        {
+            "id": "patio",
+            "name": "Patio & Back Door",
+            "type": "entry",
+            "x": 0.0,
+            "z": -9.5,
+            "width": 11.0,
+            "depth": 9.0
+        },
+        {
+            "id": "lawn",
+            "name": "The Lawn",
+            "type": "open",
+            "x": 0.0,
+            "z": 8.5,
+            "width": 24.0,
+            "depth": 27.0
+        },
+        {
+            "id": "compost",
+            "name": "Compost Clearing",
+            "type": "boss",
+            "x": 0.0,
+            "z": 33.0,
+            "width": 30.0,
+            "depth": 22.0
+        }
+    ],
+    "links": [
+        {
+            "from": "patio",
+            "to": "lawn",
+            "doorway": 0.0,
+            "gate": ""
+        },
+        {
+            "from": "lawn",
+            "to": "compost",
+            "doorway": 9.0,
+            "gate": "boss_gate"
+        }
+    ],
+    "entities": [
+        {
+            "id": "max_start",
+            "kind": "playerSpawn",
+            "x": 0.0,
+            "z": -3.0,
+            "width": 1.0,
+            "height": 1.0,
+            "depth": 1.0,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        },
+        {
+            "id": "mower_hutch",
+            "kind": "factory",
+            "x": 0.0,
+            "z": 15.0,
+            "width": 3.0,
+            "height": 2.0,
+            "depth": 3.0,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        },
+        {
+            "id": "boss_gate",
+            "kind": "gate",
+            "x": 0.0,
+            "z": 22.0,
+            "width": 11.0,
+            "height": 3.2,
+            "depth": 0.6,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": "mower_hutch"
+        },
+        {
+            "id": "big_bermuda",
+            "kind": "boss",
+            "x": 0.0,
+            "z": 33.0,
+            "width": 3.5,
+            "height": 3.0,
+            "depth": 3.5,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Planter",
+            "kind": "cover",
+            "x": 7.0,
+            "z": 2.0,
+            "width": 3.5,
+            "height": 1.6,
+            "depth": 3.5,
+            "shape": "box",
+            "dressing": "planter",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Tree",
+            "kind": "cover",
+            "x": -6.5,
+            "z": 8.0,
+            "width": 2.4,
+            "height": 4.4,
+            "depth": 2.4,
+            "shape": "cylinder",
+            "dressing": "tree",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Hedge",
+            "kind": "cover",
+            "x": 6.5,
+            "z": 11.0,
+            "width": 6.0,
+            "height": 1.8,
+            "depth": 1.2,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Shed Post L",
+            "kind": "prop",
+            "x": -2.6,
+            "z": 15.0,
+            "width": 0.4,
+            "height": 2.5,
+            "depth": 0.4,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        },
+        {
+            "id": "Shed Post R",
+            "kind": "prop",
+            "x": 2.6,
+            "z": 15.0,
+            "width": 0.4,
+            "height": 2.5,
+            "depth": 0.4,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        }
+    ]
+}

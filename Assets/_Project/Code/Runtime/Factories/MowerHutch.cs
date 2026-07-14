@@ -56,6 +56,15 @@ namespace MaxWorlds.Factories
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
         public float Normalized => _health?.Normalized ?? 0f;
 
+        /// <summary>Wire the gate this factory's destruction opens. The map engine (YT-89) calls this
+        /// at load time from the map's <c>opensOn</c>, so "kill the source and the way opens" is a
+        /// property of the level data. The serialized slot below still works for the scene the slice
+        /// shipped with, but it is no longer how the link is made — a slot a human drags is a link
+        /// that silently comes undone the next time the object is rebuilt.
+        ///
+        /// Safe to call at any point before the factory dies: <c>gate</c> is only read on death.</summary>
+        public void Bind(SubZoneGate door) => gate = door;
+
         private void Awake()
         {
             _health = new DestructibleHealth(factoryHealth);
