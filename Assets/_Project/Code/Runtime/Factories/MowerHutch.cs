@@ -207,6 +207,12 @@ namespace MaxWorlds.Factories
             go.transform.SetParent(transform, false);
             go.transform.localPosition = new Vector3(0f, 0.05f, -0.52f); // on the player-facing face
             go.transform.localScale = new Vector3(0.55f, 0.6f, 0.1f);
+
+            // The core is driven by PulseCore every frame, so the skin director must leave it alone;
+            // without this it gets skinned as a character and its cyan is overwritten with the
+            // structure's grey, which is what put a dead grey panel on the build instead of a tell.
+            go.AddComponent<SelfDrivenTint>();
+
             _core = go.GetComponent<Renderer>();
             _coreMpb = new MaterialPropertyBlock();
         }
