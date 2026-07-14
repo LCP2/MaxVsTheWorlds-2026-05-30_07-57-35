@@ -316,7 +316,19 @@ namespace MaxWorlds.Rendering
             // Wind (YT-78). Zero on everything that isn't a plant — the yard's WALLS wear this shader,
             // and a fence that breathes is a bug, not ambience.
             m.SetFloat("_WindStrength", p.Wind);
+
+            // How tall a plant has to be to bend all the way. Set here rather than left to the
+            // shader's default, and it is half the reason the first cut was invisible: at 2.5 m the
+            // curve was scaled for a tree, and the yard is mostly shrubs and tufts a knee high. They
+            // reached a fifth of the sway they were given. This is the height of the plants that are
+            // actually in the yard, so the plants that are actually in the yard actually bend.
+            m.SetFloat("_WindHeight", FoliageBendHeight);
         }
+
+        /// <summary>Metres of height over which a plant works up to its full bend (YT-78). The yard's
+        /// greenery is shrubs, tufts and flower beds, not a forest — a bend curve scaled for a 2.5 m
+        /// tree left all of them nearly still.</summary>
+        public const float FoliageBendHeight = 1.4f;
 
         /// <summary>What a material is physically like, as opposed to what colour the biome painted
         /// it. Timber and stone are the same brown-ish family in this yard and are told apart by the
@@ -366,14 +378,23 @@ namespace MaxWorlds.Rendering
 
                 // Leaves: soft and round. Gentle — a carved-looking bush is worse than a flat one.
                 //
-                // The one surface in the yard that MOVES (YT-78). 11 cm at the top of a bush, which
-                // sounds like a lot and is not: the game is played from thirty metres up at a fixed
-                // 72 deg, and the first cut of this at 4 cm moved 1.6% of the pixels on screen — the
-                // yard was technically breathing and no human being could have told. It is still far
-                // below the threshold where it competes with a telegraph or a damage number, which is
-                // the line ambience must never cross.
+                // The one surface in the yard that MOVES (YT-78), and the number is now argued in the
+                // only unit that decides whether a thing moves: PIXELS ON LEE'S SCREEN.
+                //
+                // At the rig the game is played from — 25.1 m back, 40 deg vertical FOV — a metre of
+                // lawn is about 59 pixels tall on a 1080p frame. The sway that shipped was 11 cm at
+                // FULL bend, and the bend was normalised over 2.5 m of height, so an ordinary knee-high
+                // shrub reached about a fifth of it: two centimetres, one pixel and a half, a whole
+                // wind you could not see. I shipped that and called it done because I had measured
+                // "pixels that changed at all" rather than "pixels that changed enough to notice".
+                //
+                // 26 cm, normalised over 1.4 m — the height of the yard's actual shrubs rather than of
+                // an imaginary tree — puts the top of a typical bush through about 13 px of travel and
+                // a tree canopy through about 20. That is a plant in a breeze. It is still nowhere near
+                // a telegraph, which is a hard ring that appears; this is a slow lean that never
+                // resolves into an edge. WindTests holds both ends of that in pixels, not in metres.
                 case SurfaceKind.Foliage:
-                    return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f, wind: 0.11f);
+                    return new SurfaceProfile(2.0f, 0.65f, 0.05f, 0.14f, wind: 0.26f);
 
                 default:
                     return new SurfaceProfile(1.0f, 0.5f, 0.06f, 0.10f);

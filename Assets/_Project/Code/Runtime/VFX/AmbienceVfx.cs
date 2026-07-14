@@ -31,8 +31,14 @@ namespace MaxWorlds.VFX
         [Header("Motes")]
         [Tooltip("Volume of drifting motes around the player, in world units.")]
         [SerializeField] private float moteVolume = 26f;
-        [SerializeField] private float moteRate = 14f;
-        [SerializeField] private Color moteColor = new Color(1f, 0.94f, 0.76f, 0.30f);
+
+        [Tooltip("Motes per second. 14 through a 26 m box is roughly one seed head every two metres " +
+                 "of yard, which at the play camera is an empty sky (YT-78).")]
+        [SerializeField] private float moteRate = 26f;
+
+        [Tooltip("Warm and translucent. The alpha carries the whole 'never distracting' clause — it " +
+                 "is what keeps these from reading as projectiles.")]
+        [SerializeField] private Color moteColor = new Color(1f, 0.94f, 0.76f, 0.42f);
 
         [Header("Decals")]
         [SerializeField] private int maxDecals = 24;
@@ -112,10 +118,15 @@ namespace MaxWorlds.VFX
             main.playOnAwake = false;
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.startLifetime = new ParticleSystem.MinMaxCurve(3.5f, 7f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.08f, 0.35f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.04f, 0.12f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.10f, 0.42f);
+
+            // 4-12 cm was pollen seen from thirty metres: two to seven pixels of a 30%-alpha dot,
+            // which is nothing. 11-26 cm is a drifting seed head — still small, still soft-edged, and
+            // now actually on the screen. This is the cheapest "the air is moving" cue in the yard and
+            // the only one that keeps working wherever the camera happens to be pointing (YT-78).
+            main.startSize = new ParticleSystem.MinMaxCurve(0.11f, 0.26f);
             main.startColor = moteColor;
-            main.maxParticles = 140;
+            main.maxParticles = 180;          // AmbiencePlayTests holds this at or under 200
             main.gravityModifier = -0.008f;   // they drift very slightly upward, like dust in sun
 
             var emission = ps.emission;

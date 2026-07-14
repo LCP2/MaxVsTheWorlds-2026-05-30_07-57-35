@@ -52,18 +52,24 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>The sway has to be big enough to see and small enough to ignore. The first cut was
-        /// 4 cm and moved 1.6% of the pixels on screen from the camera the game is actually played
-        /// at — the yard was technically breathing and nobody could have told.</summary>
+        /// <summary>
+        /// The sway has to be big enough to see and small enough to ignore.
+        ///
+        /// This test used to hold the wind between 6 and 20 CENTIMETRES, and it passed for a wind
+        /// nobody could see. Metres are the wrong unit for the question: what decides whether a plant
+        /// moves is how many PIXELS it crosses at the play camera, and that depends on how tall the
+        /// plant is as much as on the number here. The range is kept as a sanity rail — see
+        /// WindVisibilityTests for the test that actually answers the question.
+        /// </summary>
         [Test]
         public void TheFoliageWind_IsAGentleOne()
         {
             float wind = MaterialLibrary.Surface(SurfaceKind.Foliage).GetFloat("_WindStrength");
 
-            Assert.That(wind, Is.InRange(0.06f, 0.2f),
-                $"the wind is {wind:0.00} m. Under about 6 cm nobody sees it from thirty metres up; " +
-                "over about 20 cm the bushes are waving, and ambience that pulls the eye off a " +
-                "telegraph has stopped being ambience.");
+            Assert.That(wind, Is.InRange(0.1f, 0.4f),
+                $"the wind is {wind:0.00} m at full bend. Well under this and no plant in the yard " +
+                "moves a pixel; well over it and the bushes are waving, and ambience that pulls the " +
+                "eye off a telegraph has stopped being ambience.");
         }
 
         /// <summary>
@@ -91,9 +97,10 @@ namespace MaxWorlds.Tests.EditMode
         {
             float lean = MaterialLibrary.Surface(SurfaceKind.Ground).GetFloat("_WindStrength");
 
-            Assert.That(lean, Is.InRange(0.02f, 0.15f),
-                $"the grass leans {lean:0.00} m. Much past this and the texture is no longer a blade " +
-                "bending, it is the whole lawn sliding sideways under the player's feet.");
+            Assert.That(lean, Is.InRange(0.1f, 0.3f),
+                $"the grass leans {lean:0.00} m. Much under this and the lawn — most of the screen — " +
+                "is a photograph; much past it and the texture is no longer a blade bending, it is " +
+                "the whole lawn sliding sideways under the player's feet.");
         }
 
         /// <summary>The wind is a look, so it lives with the rest of the biome's look — one struct,

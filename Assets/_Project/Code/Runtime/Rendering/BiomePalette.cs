@@ -174,9 +174,15 @@ namespace MaxWorlds.Rendering
             // A breeze, not a storm. 6 cm of lean is about a blade's width at this scale — enough that
             // the lawn is visibly moving from thirty metres up, nowhere near enough to pull the eye off
             // a telegraph. The gust rolls across the yard roughly every eight seconds.
-            GroundWindLean = 0.06f,
-            GroundWindSpeed = 0.9f,
-            GroundWindShimmer = 0.045f,
+            // The lawn's weather (YT-78). 6 cm of lean was under two pixels at the play camera —
+            // a wind that existed only in the shader. 18 cm slides the blade detail about 10 px as the
+            // gust rolls over it, which is a lawn leaning; the shimmer is what stops it reading as the
+            // whole floor sliding sideways instead. The shimmer stays small on purpose: the ground is
+            // supposed to be the quiet half of the frame (Craft Bible, figure-ground), so it may MOVE
+            // as much as it likes but it may not gain contrast.
+            GroundWindLean = 0.18f,
+            GroundWindSpeed = 1.0f,
+            GroundWindShimmer = 0.085f,
 
             GroundTiling = 5f,                               // fallback path only
             Smoothness = 0.06f,
