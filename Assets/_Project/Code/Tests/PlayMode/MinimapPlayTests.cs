@@ -110,11 +110,43 @@ namespace MaxWorlds.Tests.PlayMode
         [Test]
         public void TheMinimapIsTheShapeOfTheArena()
         {
-            // The Backyard is long and narrow. A minimap that isn't is lying about the space.
-            float arena = ArenaMap.AspectRatio(ArenaMap.Bounds(BackyardPathLayout.Default));
+            // The Backyard is long and narrow. A minimap that isn't is lying about the space — so the
+            // shape is taken from the map the level is actually built from, not from a struct that can
+            // only describe a corridor.
+            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+            float arena = ArenaMap.AspectRatio(ArenaMap.Bounds(map));
             float panel = Minimap.PanelWidth / Minimap.PanelHeight;
+
             Assert.Less(arena, 1f, "the arena should be taller than it is wide");
             Assert.Less(panel, 1f, "so the minimap panel should be too");
+        }
+
+        /// <summary>The map draws the rooms the level HAS. The shed and the nook are rooms Max can walk
+        /// into and get lost in, and a map that leaves them out is a map that lies about where he can
+        /// go — which is the one thing a map exists not to do.</summary>
+        [Test]
+        public void TheMapDrawsEveryRoomInTheLevel_IncludingTheShedAndTheNook()
+        {
+            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+            MapRoom[] rooms = ArenaMap.Rooms(map);
+
+            Assert.AreEqual(map.zones.Length, rooms.Length, "a room of the level is missing from the map");
+
+            foreach (MapZone zone in map.zones)
+                Assert.AreEqual(zone.name, rooms[System.Array.IndexOf(map.zones, zone)].Name,
+                    "the map renamed a room the author named");
+
+            Assert.AreNotEqual(-1, ArenaMap.RoomAt(new Vector2(19f, 15f), rooms), "the shed is not on the map");
+            Assert.AreNotEqual(-1, ArenaMap.RoomAt(new Vector2(-16.5f, 7.5f), rooms), "the nook is not on the map");
+
+            Rect bounds = ArenaMap.Bounds(map);
+            foreach (MapRoom room in rooms)
+            {
+                Assert.GreaterOrEqual(room.Xz.xMin, bounds.xMin - 1e-3f, $"{room.Name} falls off the map");
+                Assert.LessOrEqual(room.Xz.xMax, bounds.xMax + 1e-3f, $"{room.Name} falls off the map");
+                Assert.GreaterOrEqual(room.Xz.yMin, bounds.yMin - 1e-3f, $"{room.Name} falls off the map");
+                Assert.LessOrEqual(room.Xz.yMax, bounds.yMax + 1e-3f, $"{room.Name} falls off the map");
+            }
         }
     }
 }

@@ -5,7 +5,10 @@ using MaxWorlds.Arena;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>Unit tests for the Backyard greybox layout (YT-38, reshaped by YT-68): a coherent
-    /// path whose middle room is a fight arena you can circle in, not a corridor.</summary>
+    /// path whose middle room is a fight arena you can circle in, not a corridor. The layout struct
+    /// is a VIEW of the map now (<see cref="MapLayoutBridge"/>), so what it says about a path still
+    /// has to hold; the cover section below asks the map itself, because that is where cover
+    /// lives.</summary>
     public sealed class BackyardPathTests
     {
         private const float ShedZ = 15f;          // BackyardPath.shedZ
@@ -114,64 +117,95 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         // --- Cover ----------------------------------------------------------------------------
+        //
+        // Cover is authored in the MAP now, and the map is no longer a corridor: pieces stand in the
+        // shed as well as the lawn, and the shed is off to one side. So these ask the same questions
+        // they always asked — is there enough of it, does it rest on the floor, does it leave the
+        // player somewhere to run, does it keep off the ring the factory spawns robots on — of the
+        // shipped map, rather than of a straight lane along Z.
+
+        private static MapData Shipped() => MapLibrary.Load(MapLibrary.BackyardSlice);
 
         [Test]
         public void Cover_IsAValidSet()
         {
-            var l = BackyardPathLayout.Default;
-            Assert.IsTrue(BackyardCover.Validate(l, BackyardCover.Default, ShedZ, SpawnRadius, out string why), why);
+            Assert.IsTrue(MapValidation.Validate(Shipped(), out string why), why);
         }
 
         [Test]
         public void Cover_HasEnoughPiecesToCreateAngles()
         {
-            // The ticket asks for 2–3 obstacles: enough to break the beeline, not a maze.
-            Assert.GreaterOrEqual(BackyardCover.Default.Length, 2);
-            Assert.LessOrEqual(BackyardCover.Default.Length, 3);
+            MapData map = Shipped();
+            var cover = MapValidation.Kind(map, EntityKind.Cover);
+
+            // Enough to break the beeline, not so much it is a maze — and the fight room itself has
+            // to hold several of them, or the lawn is an empty box again.
+            Assert.GreaterOrEqual(cover.Count, 3);
+            Assert.LessOrEqual(cover.Count, 10);
+
+            int inTheLawn = 0;
+            foreach (MapEntity c in cover)
+                if (map.ZoneAt(c.x, c.z)?.id == "lawn") inTheLawn++;
+
+            Assert.GreaterOrEqual(inTheLawn, 2, "the lawn is the fight room and it has nothing to fight around");
         }
 
         [Test]
         public void Cover_SitsOnTheFloor()
         {
-            foreach (var c in BackyardCover.Default)
-                Assert.AreEqual(c.Size.y * 0.5f, c.Center.y, 1e-4, $"{c.Name} is not resting on the ground");
+            foreach (MapEntity c in MapValidation.Kind(Shipped(), EntityKind.Cover))
+                Assert.AreEqual(c.height * 0.5f, c.GroundedCenter.y, 1e-4,
+                    $"{c.id} is not resting on the ground");
         }
 
         [Test]
-        public void Cover_LeavesTheMissionLineClear()
+        public void Cover_LeavesTheCentreLineClear()
         {
-            var l = BackyardPathLayout.Default;
-            // Walk the centre line from the patio mouth to the gate — it must never be blocked, so
-            // the route patio → shed → gate always reads at the fixed camera.
-            for (float z = l.LawnStartZ; z <= l.GateZ; z += 0.5f)
+            MapData map = Shipped();
+            MapEntity spawn = map.First(EntityKind.PlayerSpawn);
+            MapEntity gate = map.First(EntityKind.Gate);
+
+            // Straight up the middle, from where Max starts to the gate he has to open. Cover breaks
+            // the beeline by standing BESIDE it; a piece standing ON it would hide the way through,
+            // which at a fixed 72° camera is the one thing the level must never do.
+            for (float z = spawn.z; z <= gate.z; z += 0.5f)
             {
-                foreach (var c in BackyardCover.Default)
-                    Assert.Greater(c.DistanceTo(new Vector2(0f, z)), 0f, $"{c.Name} sits on the centre line at z={z}");
+                foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
+                    Assert.Greater(c.ToCover().DistanceTo(new Vector2(spawn.x, z)), 0f,
+                        $"{c.id} sits on the centre line at z={z}");
             }
         }
 
         [Test]
-        public void Cover_NeverPinchesTheLawnShut()
+        public void Cover_NeverPinchesAnyRoomShut()
         {
-            var l = BackyardPathLayout.Default;
-            for (float z = l.LawnStartZ; z <= l.GateZ; z += 0.5f)
+            MapData map = Shipped();
+            var cover = MapValidation.Kind(map, EntityKind.Cover);
+
+            foreach (MapZone zone in map.zones)
             {
-                Assert.GreaterOrEqual(
-                    BackyardCover.FreeChannelAt(l, BackyardCover.Default, z),
-                    BackyardCover.MinFreeChannel,
-                    $"nowhere to run at z={z}");
+                if (zone.width < MapValidation.MinFreeChannel) continue;
+
+                for (float z = zone.ZMin; z <= zone.ZMax; z += 0.5f)
+                    Assert.GreaterOrEqual(MapValidation.FreeChannelAt(zone, cover, z),
+                        MapValidation.MinFreeChannel,
+                        $"nowhere to run in '{zone.id}' at z={z}");
             }
         }
 
         [Test]
         public void Cover_StaysOffTheShedsSpawnRing()
         {
-            // Robots appear on a ring around the shed. A prop in that ring spawns them inside it —
-            // and a robot has a body, so tangent isn't good enough.
-            foreach (var c in BackyardCover.Default)
-                Assert.GreaterOrEqual(c.DistanceTo(new Vector2(0f, ShedZ)),
-                    SpawnRadius + BackyardCover.SpawnClearance,
-                    $"{c.Name} crowds the spawn ring");
+            // Robots appear on a ring around the factory. A prop in that ring spawns them inside it —
+            // and a robot has a body, so tangent isn't good enough. The factory is in the shed now, so
+            // the ring is where the shed is, not on the centre line.
+            MapData map = Shipped();
+            Vector2 ring = map.First(EntityKind.Factory).CenterXz;
+
+            foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
+                Assert.GreaterOrEqual(c.ToCover().DistanceTo(ring),
+                    MapValidation.SpawnRadius + MapValidation.SpawnClearance,
+                    $"{c.id} crowds the spawn ring");
         }
 
         [Test]

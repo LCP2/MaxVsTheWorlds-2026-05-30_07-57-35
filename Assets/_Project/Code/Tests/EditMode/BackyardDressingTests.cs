@@ -12,34 +12,86 @@ using MaxWorlds.Rendering;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The Backyard set dressing (YT-75).
+    /// The Backyard set dressing (YT-75), now generated FROM THE MAP.
     ///
     /// The ticket's acceptance is "the yard reads as a real backyard, and the props don't obstruct
     /// movement or the mission path". The first half is Lee's eye. The second half is arithmetic, and
-    /// this is where it gets checked — before a build, not after a playtest. Two claims:
+    /// this is where it gets checked — before a build, not after a playtest. Three claims:
     ///
-    ///   * nothing the dressing places can affect the fight, and
+    ///   * the dressing follows the level's own walls, so a room the map grows is a room the garden
+    ///     grows with it — that is the whole of this change, and it is asserted, not assumed;
+    ///   * nothing the dressing places can affect the fight; and
     ///   * the kit it places is actually in the project, at the size the placement maths assumed.
     /// </summary>
     public sealed class BackyardDressingTests
     {
-        private const float ShedZ = 15f;          // BackyardPath.shedZ
-        private const float SpawnRadius = 3.5f;   // BackyardPath.shedSpawnRadius
+        private static MapData Map => MapLibrary.Load(MapLibrary.BackyardSlice);
 
-        private static BackyardPathLayout Layout => BackyardPathLayout.Default;
+        private static List<DressingProp> Set() => BackyardDressingSet.Build(Map);
 
-        private static List<DressingProp> Set() =>
-            BackyardDressingSet.Build(Layout, ShedZ, SpawnRadius);
+        private static ArenaCover[] Cover => BackyardCover.Default;
+
+        // --- the art follows the map ------------------------------------------------------------
+
+        /// <summary>
+        /// The point of the whole change. The yard used to be thirteen hand-listed fence runs along a
+        /// straight corridor; the map now has a nook off the lawn's left and a shed off its right, and
+        /// a hand-listed fence would have left both of them bare while fencing walls that no longer
+        /// exist. So: EVERY face of every wall that looks into a room gets a fence. No exceptions, no
+        /// list.
+        /// </summary>
+        [Test]
+        public void EveryInnerWallFaceIsFenced_IncludingTheRoomsThatAreNew()
+        {
+            MapData map = Map;
+            var panels = Set()
+                .Where(p => p.Key == PropCatalog.FencePanel || p.Key == PropCatalog.FenceGate)
+                .ToList();
+
+            foreach (WallFace face in MapGeometry.Faces(map))
+            {
+                if (!face.FacesRoom) continue;
+
+                Vector2 mid = (face.A + face.B) * 0.5f;
+                Assert.IsTrue(panels.Any(p => p.DistanceTo(mid) < 0.5f),
+                    $"the wall face at {mid} looks into a room and has no fence on it — the dressing " +
+                    "is still following something other than the map");
+            }
+        }
+
+        /// <summary>Named rather than counted: it is the shed and the nook — the rooms that did not
+        /// exist when the fence was written out by hand — that this has to cover.</summary>
+        [Test]
+        public void TheShedAndTheNookAreBothFenced()
+        {
+            MapData map = Map;
+            var set = Set();
+
+            foreach (string id in new[] { "shed", "nook", "gatehouse", "compost" })
+            {
+                MapZone zone = map.Zone(id);
+                Assert.IsTrue(
+                    set.Any(p => p.Key == PropCatalog.FencePanel && Near(zone, p.CenterXz, 1.5f)),
+                    $"'{id}' has no fence on it");
+            }
+        }
+
+        /// <summary>Inside the room, within <paramref name="band"/> of one of its edges.</summary>
+        private static bool Near(MapZone zone, Vector2 at, float band)
+        {
+            if (at.x < zone.XMin - band || at.x > zone.XMax + band) return false;
+            if (at.y < zone.ZMin - band || at.y > zone.ZMax + band) return false;
+
+            return at.x <= zone.XMin + band || at.x >= zone.XMax - band
+                || at.y <= zone.ZMin + band || at.y >= zone.ZMax - band;
+        }
 
         // --- the set itself -------------------------------------------------------------------
 
         [Test]
         public void TheShippedYard_ClearsEveryPlacementRule()
         {
-            Assert.IsTrue(
-                BackyardDressingSet.Validate(Layout, Set(), BackyardCover.Default, ShedZ, SpawnRadius,
-                                             out string why),
-                why);
+            Assert.IsTrue(BackyardDressingSet.Validate(Map, Set(), Cover, out string why), why);
         }
 
         [Test]
@@ -47,7 +99,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             var set = Set();
 
-            // Not an arbitrary number — a fence line round three rooms plus planting is dozens of
+            // Not an arbitrary number — a fence line round six rooms plus planting is dozens of
             // props. A handful would mean a generator that silently produced almost nothing.
             Assert.Greater(set.Count, 100, "the yard is barely dressed");
 
@@ -89,7 +141,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void NothingTallStandsInTheFightSpace()
         {
-            Rect[] interiors = BackyardDressingSet.Interiors(Layout);
+            Rect[] interiors = BackyardDressingSet.Interiors(Map);
 
             foreach (DressingProp prop in Set())
             {
@@ -104,7 +156,11 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void NothingTallStandsInADoorway()
         {
-            Rect[] doors = BackyardDressingSet.Doorways(Layout);
+            Rect[] doors = BackyardDressingSet.Doorways(Map);
+
+            // Every link cuts one — including the ways into the nook and the shed, which the old
+            // hand-listed pair of doorways knew nothing about.
+            Assert.AreEqual(Map.links.Length, doors.Length, "a link in the map cut no doorway");
 
             foreach (DressingProp prop in Set())
             {
@@ -117,26 +173,51 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void TheSteppingStonesRunUpTheMissionLine()
+        public void TheSteppingStonesFollowTheRouteToTheFactory()
         {
+            MapData map = Map;
+            List<Vector2> route = BackyardDressingSet.Route(map);
             var stones = Set().Where(p => p.Key == PropCatalog.PathStone).ToList();
 
+            // The route turns now — spawn, up the lawn, right into the shed — so "near the centre
+            // line" is no longer a thing to assert. Near THE ROUTE is.
             Assert.Greater(stones.Count, 5, "the path is a few scattered rocks, not a path");
+            Assert.GreaterOrEqual(route.Count, 3, "the route to the factory does not go through a room");
+
             foreach (DressingProp s in stones)
             {
                 Assert.IsTrue(s.IsFlat, "a stepping stone you can hide behind is not a stepping stone");
-                Assert.Less(Mathf.Abs(s.CenterXz.x), 1.5f, "the path has wandered off the mission line");
+                Assert.Less(DistanceToRoute(route, s.CenterXz), 1.5f,
+                    $"a stone at {s.CenterXz} has wandered off the mission line");
             }
+
+            // …and the line it paints ends at the thing the player came to break.
+            MapEntity factory = map.First(EntityKind.Factory);
+            Assert.Less(stones.Min(s => (s.CenterXz - factory.CenterXz).magnitude), 6f,
+                "the path stops short of the factory");
+        }
+
+        private static float DistanceToRoute(List<Vector2> route, Vector2 p)
+        {
+            float best = float.MaxValue;
+            for (int i = 0; i + 1 < route.Count; i++)
+            {
+                Vector2 a = route[i], ab = route[i + 1] - route[i];
+                float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(1e-4f, ab.sqrMagnitude));
+                best = Mathf.Min(best, (p - (a + ab * t)).magnitude);
+            }
+            return best;
         }
 
         [Test]
         public void TheShedDressingStaysInsideTheSpawnRing()
         {
-            var ring = new Vector2(0f, ShedZ);
+            Vector2 ring = Map.First(EntityKind.Factory).CenterXz;
 
             foreach (DressingProp prop in Set().Where(p => p.Zone == DressingZone.Factory))
             {
-                Assert.LessOrEqual(prop.FarthestFrom(ring), SpawnRadius - BackyardDressingSet.SpawnClearance,
+                Assert.LessOrEqual(prop.FarthestFrom(ring),
+                    MapValidation.SpawnRadius - BackyardDressingSet.SpawnClearance,
                     $"{prop.Key} reaches the ring the factory spawns robots on");
             }
         }
@@ -150,9 +231,7 @@ namespace MaxWorlds.Tests.EditMode
             bad.Add(new DressingProp(PropCatalog.TreeDefault, new Vector2(0f, 8f),
                                      PropCatalog.ScaleToHeight(PropCatalog.TreeDefault, 4f)));
 
-            Assert.IsFalse(
-                BackyardDressingSet.Validate(Layout, bad, BackyardCover.Default, ShedZ, SpawnRadius,
-                                             out string why));
+            Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));
             StringAssert.Contains("fight space", why);
         }
 
@@ -160,25 +239,38 @@ namespace MaxWorlds.Tests.EditMode
         public void ABushInTheBossGateIsRejected()
         {
             var bad = Set();
-            bad.Add(new DressingProp(PropCatalog.BushDetailed, new Vector2(0f, Layout.GateZ),
+            MapEntity gate = Map.First(EntityKind.Gate);
+
+            bad.Add(new DressingProp(PropCatalog.BushDetailed, gate.CenterXz,
                                      PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 1f)));
 
-            Assert.IsFalse(
-                BackyardDressingSet.Validate(Layout, bad, BackyardCover.Default, ShedZ, SpawnRadius,
-                                             out string why));
-            Assert.IsNotNull(why);
+            Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));
+            StringAssert.Contains("doorway", why);
+        }
+
+        [Test]
+        public void ABushInTheDoorwayIntoTheShedIsRejected()
+        {
+            // The doorway the corridor-shaped dressing did not know existed.
+            var bad = Set();
+            bad.Add(new DressingProp(PropCatalog.BushDetailed, new Vector2(12f, 15f),
+                                     PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 1f)));
+
+            Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));
+            StringAssert.Contains("doorway", why);
         }
 
         [Test]
         public void ShedDressingThatReachesTheSpawnRingIsRejected()
         {
             var bad = Set();
-            bad.Add(new DressingProp(PropCatalog.LogStack, new Vector2(0f, ShedZ + SpawnRadius),
+            Vector2 factory = Map.First(EntityKind.Factory).CenterXz;
+
+            bad.Add(new DressingProp(PropCatalog.LogStack,
+                                     factory + new Vector2(0f, MapValidation.SpawnRadius),
                                      Vector3.one, 0f, DressingZone.Factory));
 
-            Assert.IsFalse(
-                BackyardDressingSet.Validate(Layout, bad, BackyardCover.Default, ShedZ, SpawnRadius,
-                                             out string why));
+            Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));
             StringAssert.Contains("spawn ring", why);
         }
 
@@ -188,9 +280,7 @@ namespace MaxWorlds.Tests.EditMode
             var bad = Set();
             bad.Add(new DressingProp("garden_gnome", Vector2.zero, Vector3.one));
 
-            Assert.IsFalse(
-                BackyardDressingSet.Validate(Layout, bad, BackyardCover.Default, ShedZ, SpawnRadius,
-                                             out string why));
+            Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));
             StringAssert.Contains("garden_gnome", why);
         }
 

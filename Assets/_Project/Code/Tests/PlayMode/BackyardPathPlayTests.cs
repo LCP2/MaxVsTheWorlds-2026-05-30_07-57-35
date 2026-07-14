@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Collections.Generic;
 using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
@@ -8,15 +9,20 @@ using MaxWorlds.Arena;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// PlayMode checks that the generated Backyard blockout (YT-38, reshaped by YT-68) is actually
-    /// the space the design asks for: a walled patio that opens into a wide, cover-strewn lawn you
-    /// can circle in, a gate doorway, and an enclosed boss arena. Guards against a coordinate
-    /// mistake in the blockout that the pure layout test can't catch — that a room is walled where
-    /// it should be open, or open where it should be walled.
+    /// PlayMode checks that the Backyard the map builds is actually the space the design asks for: a
+    /// walled patio that opens into a wide lawn you can circle in, a nook and a shed hanging off its
+    /// sides, a gate doorway, and an enclosed boss arena.
+    ///
+    /// Every probe here is read OFF THE SHIPPED MAP rather than typed in. That is not tidiness: the
+    /// arena has just been reshaped, and a test that carries its own copy of the level's coordinates
+    /// is a test that keeps passing about a level nobody is playing. Ask the map where the doorway is
+    /// and the test is still asking the right question after the next reshape.
     /// </summary>
     public sealed class BackyardPathPlayTests
     {
         private GameObject _go;
+
+        private static MapData Shipped() => MapLibrary.Load(MapLibrary.BackyardSlice);
 
         [UnityTearDown]
         public IEnumerator TearDown()
@@ -37,100 +43,174 @@ namespace MaxWorlds.Tests.PlayMode
         private static bool BlockedAt(Vector3 p) =>
             Physics.OverlapSphere(p, 0.4f).Any(c => c.bounds.size.y >= 1.5f);
 
+        private static Vector3 At(Vector2 xz) => new Vector3(xz.x, 1f, xz.y);
+
         [Test]
-        public void CoverIsAuthoredOffTheCentreLine()
+        public void TheShippedMapIsPlayable()
         {
             // Cheap guard on the data itself, so a failure below is unambiguously a geometry bug.
-            var l = BackyardPathLayout.Default;
-            Assert.IsTrue(BackyardCover.Validate(l, BackyardCover.Default, 15f, 3.5f, out string why), why);
+            Assert.IsTrue(MapValidation.Validate(Shipped(), out string why), why);
         }
 
         [UnityTest]
-        public IEnumerator TheMissionLineIsWalkableEndToEnd()
+        public IEnumerator TheRouteFromTheSpawnUpTheLawnIsWalkable()
         {
             yield return BuildPath();
-            var l = BackyardPathLayout.Default;
 
-            // Patio mouth → gate along the centre: the route Max takes must never be blocked.
-            for (float z = l.StartZ + 1f; z <= l.GateZ - 1f; z += 2f)
-                Assert.IsFalse(BlockedAt(new Vector3(0f, 1f, z)), $"mission line blocked at z={z}");
-        }
+            MapData map = Shipped();
+            MapEntity spawn = map.First(EntityKind.PlayerSpawn);
+            MapEntity gate = map.First(EntityKind.Gate);
 
-        [UnityTest]
-        public IEnumerator ThePatioIsNarrowAndWalled()
-        {
-            yield return BuildPath();
-            var l = BackyardPathLayout.Default;
-            float z = (l.StartZ + l.LawnStartZ) * 0.5f;
-
-            Assert.IsTrue(BlockedAt(new Vector3(-(l.PatioHalfWidth + 0.6f), 1f, z)), "no left patio wall");
-            Assert.IsTrue(BlockedAt(new Vector3(l.PatioHalfWidth + 0.6f, 1f, z)), "no right patio wall");
-            Assert.IsTrue(BlockedAt(new Vector3(0f, 1f, l.StartZ - 0.6f)), "no patio back wall");
+            // Straight up the middle from where Max starts to the gate he has to open: the route he
+            // takes must never be blocked.
+            for (float z = spawn.z + 1f; z <= gate.z - 1f; z += 1f)
+                Assert.IsFalse(BlockedAt(new Vector3(spawn.x, 1f, z)), $"the mission line is blocked at z={z}");
         }
 
         [UnityTest]
         public IEnumerator TheLawnOpensOutIntoARoomYouCanCircleIn()
         {
             yield return BuildPath();
-            var l = BackyardPathLayout.Default;
 
-            // The heart of YT-68. At a cover-free depth just inside the lawn, sweep the full width:
-            // where the old corridor had walls at ±4.5, there must now be open floor all the way out.
-            float z = l.LawnStartZ + 2f;
-            for (float x = -(l.LawnHalfWidth - 0.6f); x <= l.LawnHalfWidth - 0.6f; x += 1f)
+            MapZone lawn = Shipped().Zone("lawn");
+
+            // At a cover-free depth just inside the lawn, sweep the full width: where the old corridor
+            // had walls at ±4.5, there must now be open floor all the way out.
+            float z = lawn.ZMin + 2f;
+            for (float x = lawn.XMin + 0.6f; x <= lawn.XMax - 0.6f; x += 1f)
                 Assert.IsFalse(BlockedAt(new Vector3(x, 1f, z)),
                     $"the lawn is still walled in at x={x} — it's a corridor, not a fight room");
 
-            // …and it IS a room: walls at its edges, not open ground running off to nowhere.
-            float mid = (l.LawnStartZ + l.GateZ) * 0.5f;
-            Assert.IsTrue(BlockedAt(new Vector3(-(l.LawnHalfWidth + 0.6f), 1f, mid)), "no left lawn wall");
-            Assert.IsTrue(BlockedAt(new Vector3(l.LawnHalfWidth + 0.6f, 1f, mid)), "no right lawn wall");
+            Assert.GreaterOrEqual(lawn.InscribedRadius, 8f, "no room for a circling loop");
         }
 
+        /// <summary>
+        /// The invariant that says every room really IS a room: from anywhere inside one, the only way
+        /// out is into another one. Walk the outside of every zone's edge — if the point is not in a
+        /// neighbouring room, it must be solid wall.
+        ///
+        /// This is the check that would have caught the yard's art being hard-coded to the old
+        /// corridor, and it is the one that catches the next reshape too: it names no coordinate.
+        /// </summary>
         [UnityTest]
-        public IEnumerator TheLawnHasCoverToBreakTheBeeline()
+        public IEnumerator EveryRoomIsWalledWhereItDoesNotOpenIntoAnother()
         {
             yield return BuildPath();
+            MapData map = Shipped();
 
-            foreach (var c in BackyardCover.Default)
+            foreach (MapZone zone in map.zones)
+            foreach (Vector2 p in JustOutside(zone))
             {
-                var probe = new Vector3(c.CenterXz.x, 1f, c.CenterXz.y);
-                Assert.IsTrue(Physics.OverlapSphere(probe, 0.3f).Length > 0,
-                    $"{c.Name} has no collider — you'd run straight through it");
+                if (map.ZoneAt(p.x, p.y) != null) continue;   // a shared edge: you walk into the next room
+
+                Assert.IsTrue(BlockedAt(At(p)),
+                    $"'{zone.id}' leaks at {p} — that is not a doorway and it is not a wall");
+            }
+        }
+
+        /// <summary>Points 0.6 m beyond a room's edges, a metre apart, held clear of the corners
+        /// (where two walls meet and "which wall is this" stops being a question worth asking).</summary>
+        private static IEnumerable<Vector2> JustOutside(MapZone zone)
+        {
+            const float Step = 1f;
+            const float Out = 0.6f;
+            const float Corner = 0.5f;
+
+            for (float x = zone.XMin + Corner; x <= zone.XMax - Corner; x += Step)
+            {
+                yield return new Vector2(x, zone.ZMin - Out);
+                yield return new Vector2(x, zone.ZMax + Out);
             }
 
-            var names = _go.GetComponentsInChildren<Transform>().Select(t => t.name).ToArray();
-            foreach (var c in BackyardCover.Default)
-                Assert.Contains(c.Name, names, "cover piece missing from the blockout");
+            for (float z = zone.ZMin + Corner; z <= zone.ZMax - Corner; z += Step)
+            {
+                yield return new Vector2(zone.XMin - Out, z);
+                yield return new Vector2(zone.XMax + Out, z);
+            }
         }
 
         [UnityTest]
-        public IEnumerator TheGateIsADoorwayInAWall()
+        public IEnumerator TheDoorwayIntoTheShedIsOpen_AndTheWallEitherSideOfItIsSolid()
         {
             yield return BuildPath();
-            var l = BackyardPathLayout.Default;
+            MapData map = Shipped();
+
+            Doorway(map, "lawn", "shed", out bool alongX, out float coord, out Span hole);
+            Assert.IsFalse(alongX, "the shed is meant to be off the lawn's SIDE — this doorway faces the wrong way");
+
+            Assert.IsFalse(BlockedAt(Mouth(alongX, coord, hole.Mid)), "the way into the shed is bricked up");
+
+            // …and the wall resumes either side of it, so the shed is a room with a door and not an
+            // open end of the lawn.
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Min - 1.5f)), "no shoulder below the shed doorway");
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Max + 1.5f)), "no shoulder above the shed doorway");
+        }
+
+        [UnityTest]
+        public IEnumerator TheBossGateIsADoorwayInAWall()
+        {
+            yield return BuildPath();
+            MapData map = Shipped();
+
+            Doorway(map, "lawn", "gatehouse", out bool alongX, out float coord, out Span hole);
 
             // Open in the middle…
-            Assert.IsFalse(BlockedAt(new Vector3(0f, 1f, l.GateZ)), "the gate doorway is walled shut");
-            // …and shouldered off to the sides, so the boss arena is sealed until the gate opens.
-            Assert.IsTrue(BlockedAt(new Vector3(l.GateHalfWidth + 1.5f, 1f, l.GateZ)), "no right gate shoulder");
-            Assert.IsTrue(BlockedAt(new Vector3(-(l.GateHalfWidth + 1.5f), 1f, l.GateZ)), "no left gate shoulder");
-            // Including the step out to the wider arena — no slipping round the lawn wall's end.
-            Assert.IsTrue(BlockedAt(new Vector3(l.LawnHalfWidth + 1.5f, 1f, l.GateZ)), "gap beside the lawn wall");
+            Assert.IsFalse(BlockedAt(Mouth(alongX, coord, hole.Mid)), "the gate doorway is walled shut");
+
+            // …and shouldered off to the sides, so the boss arena is sealed until the gate opens —
+            // including out past the gatehouse, with no slipping round the end of the lawn's wall.
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Min - 1.5f)), "no left gate shoulder");
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Max + 1.5f)), "no right gate shoulder");
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, map.Zone("lawn").XMax - 2f)), "gap beside the lawn wall");
         }
 
         [UnityTest]
-        public IEnumerator TheBossArenaIsEnclosed()
+        public IEnumerator TheBossArenaIsEnclosedAndEmpty()
         {
             yield return BuildPath();
-            var l = BackyardPathLayout.Default;
 
-            Assert.IsTrue(BlockedAt(new Vector3(0f, 1f, l.ArenaEndZ + 0.6f)), "no arena back wall");
-            float az = l.ArenaCenter.z;
-            Assert.IsTrue(BlockedAt(new Vector3(-(l.ArenaHalfWidth + 0.6f), 1f, az)), "no left arena wall");
-            Assert.IsTrue(BlockedAt(new Vector3(l.ArenaHalfWidth + 0.6f, 1f, az)), "no right arena wall");
+            MapZone arena = Shipped().Zone("compost");
+
+            Assert.IsTrue(BlockedAt(new Vector3(arena.x, 1f, arena.ZMax + 0.6f)), "no arena back wall");
+            Assert.IsTrue(BlockedAt(new Vector3(arena.XMin - 0.6f, 1f, arena.z)), "no left arena wall");
+            Assert.IsTrue(BlockedAt(new Vector3(arena.XMax + 0.6f, 1f, arena.z)), "no right arena wall");
+
             // And it's clear inside — the boss needs room to charge and drop AoEs.
-            Assert.IsFalse(BlockedAt(new Vector3(0f, 1f, az)), "something is standing in the boss arena");
+            Assert.IsFalse(BlockedAt(new Vector3(arena.x, 1f, arena.z)), "something is standing in the boss arena");
         }
+
+        [UnityTest]
+        public IEnumerator EveryPieceOfCoverInTheMapIsSomethingYouRunInto()
+        {
+            yield return BuildPath();
+            MapData map = Shipped();
+
+            var names = _go.GetComponentsInChildren<Transform>().Select(t => t.name).ToArray();
+
+            foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
+            {
+                Assert.IsTrue(Physics.OverlapSphere(At(c.CenterXz), 0.3f).Length > 0,
+                    $"{c.id} has no collider — you'd run straight through it");
+
+                Assert.Contains(c.id, names, "cover piece missing from the blockout");
+            }
+        }
+
+        private static void Doorway(MapData map, string from, string to,
+                                    out bool alongX, out float coord, out Span hole)
+        {
+            foreach (MapLink link in map.links)
+            {
+                bool joins = (link.from == from && link.to == to) || (link.from == to && link.to == from);
+                if (joins && MapGeometry.Doorway(map, link, out alongX, out coord, out hole)) return;
+            }
+
+            Assert.Fail($"the map has no doorway between '{from}' and '{to}'");
+            alongX = false; coord = 0f; hole = default;
+        }
+
+        /// <summary>A point on a doorway's wall line, <paramref name="along"/> the line.</summary>
+        private static Vector3 Mouth(bool alongX, float coord, float along) =>
+            alongX ? new Vector3(along, 1f, coord) : new Vector3(coord, 1f, along);
     }
 }

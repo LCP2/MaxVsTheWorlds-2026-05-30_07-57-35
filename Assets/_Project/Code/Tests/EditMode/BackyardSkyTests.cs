@@ -166,17 +166,40 @@ namespace MaxWorlds.Tests.EditMode
 
         // --- the neighbourhood --------------------------------------------------------------------
 
-        private static BackyardPathLayout Layout => BackyardPathLayout.Default;
+        private static MapData Map => MapLibrary.Load(MapLibrary.BackyardSlice);
 
         [Test]
         public void TheNeighbourhood_IsEntirelyOutsideTheArena()
         {
-            var pieces = BackyardBackdrop.Build(Layout);
+            MapData map = Map;
+            var pieces = BackyardBackdrop.Build(map);
 
             Assert.Greater(pieces.Count, 20, "there's barely anything over the fence");
             Assert.Less(pieces.Count, 200, "the backdrop has grown into a frame budget");
 
-            Assert.IsTrue(BackyardBackdrop.Validate(Layout, pieces, out string why), why);
+            Assert.IsTrue(BackyardBackdrop.Validate(map, pieces, out string why), why);
+        }
+
+        /// <summary>The backdrop now wraps the MAP's bounds rather than a corridor's three bands, so
+        /// the rooms that hang off the side of the lawn are inside the ring rather than out past it —
+        /// which is what would happen if the neighbourhood were still drawn around a straight
+        /// path.</summary>
+        [Test]
+        public void TheNeighbourhood_WrapsTheWholeMap_IncludingTheRoomsOffToTheSide()
+        {
+            MapData map = Map;
+            Rect bounds = map.Bounds();
+
+            foreach (var p in BackyardBackdrop.Build(map))
+            {
+                Rect f = p.Footprint;
+                bool outside = f.xMax <= bounds.xMin || f.xMin >= bounds.xMax
+                            || f.yMax <= bounds.yMin || f.yMin >= bounds.yMax;
+
+                Assert.IsTrue(outside,
+                    $"{p.Paint} at {p.Center} is standing inside the map's footprint — the backdrop is " +
+                    "wrapped around something other than the level");
+            }
         }
 
         [Test]
@@ -184,12 +207,29 @@ namespace MaxWorlds.Tests.EditMode
         {
             // Scenery that reaches into the yard is not scenery: it is an obstacle the player can't
             // shoot and can walk straight through.
-            var bad = BackyardBackdrop.Build(Layout);
+            MapData map = Map;
+            var bad = BackyardBackdrop.Build(map);
             bad.Add(new BackyardBackdrop.BackdropPiece(
                 new Vector3(0f, 0f, 8f), new Vector3(6f, 7f, 6f),
                 BackyardBackdrop.Surface.HouseWall));
 
-            Assert.IsFalse(BackyardBackdrop.Validate(Layout, bad, out string why));
+            Assert.IsFalse(BackyardBackdrop.Validate(map, bad, out string why));
+            StringAssert.Contains("reaches into the arena", why);
+        }
+
+        [Test]
+        public void AHouseInTheShedIsRejected()
+        {
+            // The room the corridor-shaped backdrop had never heard of.
+            MapData map = Map;
+            MapZone shed = map.Zone("shed");
+
+            var bad = BackyardBackdrop.Build(map);
+            bad.Add(new BackyardBackdrop.BackdropPiece(
+                new Vector3(shed.x, 0f, shed.z), new Vector3(6f, 7f, 6f),
+                BackyardBackdrop.Surface.HouseWall));
+
+            Assert.IsFalse(BackyardBackdrop.Validate(map, bad, out string why));
             StringAssert.Contains("reaches into the arena", why);
         }
 
@@ -198,9 +238,12 @@ namespace MaxWorlds.Tests.EditMode
         {
             // Not just "outside the rooms" — outside them by a margin, so nothing out there can ever
             // be mistaken for cover you could hide behind.
-            Rect[] rooms = BackyardBackdrop.Rooms(Layout);
+            MapData map = Map;
+            Rect[] rooms = BackyardBackdrop.Rooms(map);
 
-            foreach (var p in BackyardBackdrop.Build(Layout))
+            Assert.AreEqual(map.zones.Length, rooms.Length, "a room of the map is not being kept clear");
+
+            foreach (var p in BackyardBackdrop.Build(map))
             foreach (Rect room in rooms)
                 Assert.IsFalse(room.Overlaps(p.Footprint),
                     $"{p.Paint} at {p.Center} is inside the arena's clearance");
@@ -212,7 +255,7 @@ namespace MaxWorlds.Tests.EditMode
             // A long green box, seen from directly above, is not a hedge. It is a canal. The fix was
             // to build them out of the same kit foliage the yard's own hedge uses — and this is what
             // stops somebody quietly turning them back into boxes.
-            var foliage = BackyardBackdrop.Build(Layout)
+            var foliage = BackyardBackdrop.Build(Map)
                                           .Where(p => p.Paint == BackyardBackdrop.Surface.Foliage)
                                           .ToList();
 

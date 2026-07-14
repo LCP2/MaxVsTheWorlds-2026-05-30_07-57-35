@@ -11,7 +11,7 @@ namespace MaxWorlds.UI
     /// Draws <see cref="ArenaMap"/> into a UI rect (YT-72 / YT-73). ONE renderer, used at two
     /// scales: the always-on minimap in the corner and the full-screen map. Both show the same
     /// rooms and the same live markers, so they can never disagree with each other or with the
-    /// level — all three come from <see cref="BackyardPathLayout"/>.
+    /// level — all three come from the <see cref="MapData"/> the level was built from.
     ///
     /// The floor plan is drawn from data rather than captured with a second camera: a render-texture
     /// minimap costs a whole extra render pass every frame, and this arena is a handful of
@@ -28,7 +28,7 @@ namespace MaxWorlds.UI
         private static readonly Color GateOpen = new Color(0.35f, 0.95f, 0.55f);
         private static readonly Color Dead = new Color(0.35f, 0.35f, 0.35f, 0.6f);
 
-        private BackyardPathLayout _layout;
+        private MapRoom[] _rooms = new MapRoom[0];
         private Rect _bounds;
         private RectTransform _plan;      // the aspect-correct area the arena is drawn inside
         private float _markerScale = 1f;
@@ -57,9 +57,24 @@ namespace MaxWorlds.UI
         {
             _markerScale = markerScale;
 
+            // Straight from the level's own data when there is a level: the map then shows the rooms
+            // that are actually there — the shed, the nook — rather than the three the corridor-shaped
+            // layout can describe. Without a path in the scene (a bare UI test fixture) there is
+            // nothing to read, so the layout stands in.
             var path = FindFirstObjectByType<BackyardPath>();
-            _layout = path != null ? path.Layout : BackyardPathLayout.Default;
-            _bounds = ArenaMap.Bounds(_layout);
+            MapData map = path != null ? path.Map : null;
+
+            if (map != null)
+            {
+                _rooms = ArenaMap.Rooms(map);
+                _bounds = ArenaMap.Bounds(map);
+            }
+            else
+            {
+                BackyardPathLayout layout = path != null ? path.Layout : BackyardPathLayout.Default;
+                _rooms = ArenaMap.Rooms(layout);
+                _bounds = ArenaMap.Bounds(layout);
+            }
 
             var rt = (RectTransform)transform;
             rt.SetParent(parent, false);
@@ -73,7 +88,7 @@ namespace MaxWorlds.UI
             _plan.anchorMin = _plan.anchorMax = _plan.pivot = new Vector2(0.5f, 0.5f);
             _plan.sizeDelta = plan;
 
-            foreach (var room in ArenaMap.Rooms(_layout)) BuildRoom(room, opacity);
+            foreach (MapRoom room in _rooms) BuildRoom(room, opacity);
 
             _gate = BuildMarker("Gate", GateShut, 0.055f, out _gateImg);
             _factory = BuildMarker("Factory", FactoryDot, 0.075f, out _factoryImg);
@@ -143,9 +158,12 @@ namespace MaxWorlds.UI
 
             if (_playerT != null)
             {
+                // The rooms were built once, in Build. Re-deriving them here ran the whole floor plan
+                // through a fresh allocation every frame, on the minimap AND the full map, to answer
+                // a question whose answer never changes.
                 Vector2 xz = Flatten(_playerT.position);
                 PlayerNormalized = ArenaMap.Normalize(xz, _bounds);
-                PlayerRoom = ArenaMap.RoomAt(xz, ArenaMap.Rooms(_layout));
+                PlayerRoom = ArenaMap.RoomAt(xz, _rooms);
                 Place(_player, PlayerNormalized);
             }
 

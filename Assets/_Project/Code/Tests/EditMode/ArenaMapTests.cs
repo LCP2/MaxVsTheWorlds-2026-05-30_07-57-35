@@ -1,15 +1,78 @@
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
 
 namespace MaxWorlds.Tests.EditMode
 {
-    /// <summary>The map is derived from the same layout that builds the level (YT-72/YT-73), so it
-    /// cannot drift from it. These pin the projection — a map that lies about where you are is worse
-    /// than no map.</summary>
+    /// <summary>The map is derived from the level (YT-72/YT-73), so it cannot drift from it. These pin
+    /// the projection — a map that lies about where you are is worse than no map. The first section
+    /// reads the level's own <see cref="MapData"/>, which is what the minimap draws now; the rest pin
+    /// the layout projection the UI falls back to when there is no level in the scene.</summary>
     public sealed class ArenaMapTests
     {
         private static readonly BackyardPathLayout L = BackyardPathLayout.Default;
+
+        private static MapData Map => MapLibrary.Load(MapLibrary.BackyardSlice);
+
+        // --- drawn from the map ------------------------------------------------------------------
+
+        [Test]
+        public void FromAMap_ThereIsARoomOnTheMapForEveryRoomInTheLevel()
+        {
+            MapData map = Map;
+            MapRoom[] rooms = ArenaMap.Rooms(map);
+
+            Assert.AreEqual(map.zones.Length, rooms.Length);
+
+            // Named the way the author named them: a map that says "Room 4" tells you nothing.
+            Assert.IsTrue(rooms.Any(r => r.Name == "The Shed"), "the shed is not on the map");
+            Assert.IsTrue(rooms.Any(r => r.Name == "The Beds"), "the nook is not on the map");
+        }
+
+        [Test]
+        public void FromAMap_EveryRoomPlotsWhereItStands()
+        {
+            MapData map = Map;
+            MapRoom[] rooms = ArenaMap.Rooms(map);
+
+            foreach (MapZone zone in map.zones)
+            {
+                int at = ArenaMap.RoomAt(new Vector2(zone.x, zone.z), rooms);
+                Assert.AreNotEqual(-1, at, $"'{zone.id}' is not on the map at all");
+                Assert.AreEqual(zone.name, rooms[at].Name, $"'{zone.id}' plots as another room");
+            }
+        }
+
+        [Test]
+        public void FromAMap_TheBoundsHoldEveryRoomAndItsWalls()
+        {
+            MapData map = Map;
+            Rect bounds = ArenaMap.Bounds(map);
+
+            foreach (MapRoom room in ArenaMap.Rooms(map))
+            {
+                Assert.GreaterOrEqual(room.Xz.xMin, bounds.xMin + map.wallThickness - 1e-3f);
+                Assert.LessOrEqual(room.Xz.xMax, bounds.xMax - map.wallThickness + 1e-3f);
+                Assert.GreaterOrEqual(room.Xz.yMin, bounds.yMin + map.wallThickness - 1e-3f);
+                Assert.LessOrEqual(room.Xz.yMax, bounds.yMax - map.wallThickness + 1e-3f);
+            }
+        }
+
+        [Test]
+        public void FromAMap_MovingARoomMovesItOnTheMap()
+        {
+            // The whole reason the map is derived and not drawn: reshape the level and it follows.
+            MapData map = Map;
+            Rect before = ArenaMap.Rooms(map).First(r => r.Name == "The Shed").Xz;
+
+            map.Zone("shed").x += 4f;
+            Rect after = ArenaMap.Rooms(map).First(r => r.Name == "The Shed").Xz;
+
+            Assert.AreEqual(before.xMin + 4f, after.xMin, 1e-3, "the map didn't follow the level");
+        }
+
+        // --- the layout projection the bare UI falls back to --------------------------------------
 
         [Test]
         public void TheMapHasTheRoomsThePlayerWalks()
