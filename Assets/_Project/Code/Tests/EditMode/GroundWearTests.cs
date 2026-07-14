@@ -45,6 +45,32 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(ground.HasProperty("_TrackGauge"), "no rut spacing — the mowers have no wheels");
             Assert.IsTrue(ground.HasProperty("_ApronRadius"), "no turning apron");
             Assert.IsTrue(ground.HasProperty("_OilColor"), "no oil");
+            Assert.IsTrue(ground.HasProperty("_TrafficWear"), "the lawn cannot be worn anywhere but " +
+                                                              "under the mowers");
+        }
+
+        /// <summary>
+        /// The wear away from the mowers' lanes is the QUIET half (YT-79, second pass).
+        ///
+        /// It covers most of the lawn, and the lawn is most of the screen — so it is the one piece of
+        /// this ticket that could break figure-ground. The Craft Bible's tie-breaker is readability
+        /// over richness: the ground may be as detailed as it likes provided it recedes. So the broad
+        /// thinning has to stay well under the strength of the ruts, which are small and local and can
+        /// afford to be dark.
+        /// </summary>
+        [Test]
+        public void TheLawnsGeneralWear_StaysQuieterThanTheRuts()
+        {
+            var ground = MaterialLibrary.Surface(SurfaceKind.Ground);
+
+            float traffic = ground.GetFloat("_TrafficWear");
+            float ruts = ground.GetFloat("_WearAmount");
+
+            Assert.Greater(traffic, 0f, "the yard outside the mowers' lanes is a bowling green.");
+            Assert.Less(traffic, ruts,
+                $"the general wear ({traffic:0.00}) is as strong as the ruts ({ruts:0.00}). It covers " +
+                "most of the lawn — at that strength it stops being the quiet half of the frame and " +
+                "starts competing with the actors standing on it.");
         }
 
         /// <summary>

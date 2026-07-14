@@ -55,15 +55,24 @@ Shader "MaxWorlds/StylizedGround"
         // The ground the mowers have driven over, and the oil they have dropped on it. Painted into
         // the grass rather than projected as decals — see GroundFrag.
         _WearColor       ("Worn Earth", Color) = (0.24, 0.19, 0.13, 1)
-        _WearAmount      ("Wear Amount", Range(0, 1)) = 0.8
+        _WearAmount      ("Wear Amount", Range(0, 1)) = 0.9
         _TrackGauge      ("Track Gauge (m, half)", Range(0.1, 2)) = 0.62
-        _TrackWidth      ("Rut Width (m)", Range(0.02, 0.6)) = 0.20
-        _TrackLength     ("Track Length (m)", Range(1, 40)) = 17
+
+        // Widened with the second pass (YT-79 review: "dial it up a notch"). A 20 cm rut is 12 px at
+        // the play camera — a pencil line. 28 cm is a wheel.
+        _TrackWidth      ("Rut Width (m)", Range(0.02, 0.6)) = 0.28
+        _TrackLength     ("Track Length (m)", Range(1, 40)) = 26
+
         // Reaches well past the Hutch's own 3 m footprint, or all of it is hidden underneath it.
-        _ApronRadius     ("Turning Apron (m)", Range(0.5, 10)) = 4.4
+        _ApronRadius     ("Turning Apron (m)", Range(0.5, 10)) = 5.6
+
+        /// How much of the lawn is thin from being lived on, away from the mowers' lanes. The quiet,
+        /// wide half of the wear — see GroundFrag.
+        _TrafficWear     ("General Traffic", Range(0, 1)) = 0.34
+
         _OilColor        ("Oil", Color) = (0.09, 0.08, 0.07, 1)
-        _OilAmount       ("Oil Amount", Range(0, 1)) = 0.88
-        _OilRadius       ("Oil Reach (m)", Range(0.3, 8)) = 3.3
+        _OilAmount       ("Oil Amount", Range(0, 1)) = 0.95
+        _OilRadius       ("Oil Reach (m)", Range(0.3, 8)) = 4.4
     }
 
     SubShader
@@ -109,6 +118,7 @@ Shader "MaxWorlds/StylizedGround"
                 float  _TrackGauge;
                 float  _TrackWidth;
                 float  _TrackLength;
+                float  _TrafficWear;
                 float  _ApronRadius;
                 float4 _OilColor;
                 float  _OilAmount;
@@ -155,6 +165,29 @@ Shader "MaxWorlds/StylizedGround"
             float macroFbm(float2 p)
             {
                 return noise21(p) * 0.667 + noise21(p * 2.17 + 19.3) * 0.333;
+            }
+
+            /// Rotate a Hutch-relative position, so one lane of ruts can be driven at an angle out of
+            /// the same doorway (YT-79). Cheaper than a second set of tunables, and it keeps every lane
+            /// anchored to the machine that made it.
+            float2 Turn(float2 d, float radians)
+            {
+                float s, c;
+                sincos(radians, s, c);
+                return float2(d.x * c - d.y * s, d.x * s + d.y * c);
+            }
+
+            /// One mower's pair of ruts, running out in front of the Hutch (-y) and fading down the
+            /// lawn as the traffic spreads. They wander, because nothing drives in a straight line.
+            float Ruts(float2 d, float gauge, float width, float len)
+            {
+                float alongLane = saturate(-d.y / len);                  // 0 at the Hutch, 1 far away
+                float wander = sin(d.y * 0.42) * 0.22 + sin(d.y * 0.13) * 0.35;
+                float offAxis = abs(abs(d.x + wander) - gauge);          // distance to the nearer rut
+
+                return (1.0 - smoothstep(0.0, width, offAxis))
+                     * (1.0 - smoothstep(0.55, 1.0, alongLane))
+                     * step(d.y, 0.0);                                    // only in FRONT of it
             }
 
             struct Attributes
@@ -261,22 +294,44 @@ Shader "MaxWorlds/StylizedGround"
                 // WebGL actually ships. It also never pops, never sorts wrong, and never z-fights with
                 // the grass it is supposed to be worn into — it IS the grass.
                 //
+                // The lawn is used EVERYWHERE, not only where the mowers drive (YT-79, second pass).
+                //
+                // The first cut put all of its wear in one place — a corridor out of the Hutch — so the
+                // rest of the yard stayed a bowling green with a dirt road through it. A lawn that gets
+                // lived on is thin in patches: where it is walked over, where a thing was parked, where
+                // the sun bakes it hardest. This is the coverage the review asked for.
+                //
+                // It is deliberately the LOW-CONTRAST half of the wear. The ground's job is to recede
+                // (Craft Bible: figure-ground — the contrast budget belongs to the actors), so this may
+                // cover as much of the lawn as it likes provided it never turns into an edge. Big soft
+                // patches, well under the strength of the ruts.
+                float traffic = smoothstep(0.56, 0.95, macroFbm(wp * 0.085 + 5.7)) * _TrafficWear;
+                albedo = lerp(albedo, _WearColor.rgb, traffic);
+
                 // _MowerWear.xy is where the Hutch stands; .z is 0 until something tells us it exists,
                 // which is what keeps a bare test scene from growing tyre tracks through the origin.
                 if (_MowerWear.z > 0.5)
                 {
                     float2 d = wp - _MowerWear.xy;
 
-                    // The ruts. The robo-mowers come out of the Hutch and drive down the yard at Max,
-                    // over and over, and grass driven over by the same machine on the same line stops
-                    // being grass. They wander a little, because nothing drives in a perfectly straight
-                    // line, and they fade out down the lawn as the traffic spreads.
-                    float alongLane = saturate(-d.y / _TrackLength);          // 0 at the Hutch, 1 far away
-                    float wander = sin(d.y * 0.42) * 0.22 + sin(d.y * 0.13) * 0.35;
-                    float offAxis = abs(abs(d.x + wander) - _TrackGauge);      // distance to nearer rut
-                    float rut = (1.0 - smoothstep(0.0, _TrackWidth, offAxis))
-                              * (1.0 - smoothstep(0.55, 1.0, alongLane))
-                              * step(d.y, 0.0);                                 // only in FRONT of it
+                    // THE LANES (YT-79, second pass).
+                    //
+                    // One pair of ruts down one line was a machine that has driven the same errand
+                    // every day of its life and never once turned the wheel. It read as a road, not as
+                    // a yard that gets mowed. A mower covers GROUND — it comes out, it fans out, and
+                    // over a season the whole lawn in front of the shed is combed.
+                    //
+                    // So there are three passes now, splayed out of the same doorway, and the two outer
+                    // ones are lighter because they get driven less often. Every one of them is the
+                    // same maths on a rotated d, which costs a couple of multiplies each — this is
+                    // still cheaper than one URP decal projector, and it is still IN the grass rather
+                    // than sorted on top of it.
+                    float rut = Ruts(d, _TrackGauge, _TrackWidth, _TrackLength);
+
+                    rut = max(rut, Ruts(Turn(d,  0.42), _TrackGauge, _TrackWidth * 0.85,
+                                        _TrackLength * 0.75) * 0.72);
+                    rut = max(rut, Ruts(Turn(d, -0.55), _TrackGauge, _TrackWidth * 0.85,
+                                        _TrackLength * 0.62) * 0.66);
 
                     float r = length(d);
 
@@ -318,6 +373,10 @@ Shader "MaxWorlds/StylizedGround"
                     // Worn ground has no blades left standing to catch the light.
                     normalWS = normalize(lerp(normalWS, N, saturate(worn + spill)));
                 }
+
+                // Same for the thin patches, and outside the factory's gate: a yard with no machine in
+                // it still gets walked on.
+                normalWS = normalize(lerp(normalWS, N, saturate(traffic)));
 
                 albedo *= _BaseColor.rgb;
 
