@@ -70,16 +70,14 @@ namespace MaxWorlds.Enemies
         public Vector3 Destination(Vector3 targetNow) =>
             HasSight ? targetNow : (HasTrail ? LastKnown : targetNow);
 
-        /// <summary>
-        /// It has been looking for <paramref name="searchSeconds"/> and found nothing: contact is
-        /// broken and it stops hunting.
-        ///
-        /// This is the moment the player is actually paying for when they duck behind the tree — and
-        /// it's also why the timer exists at all rather than "gives up on arrival at LastKnown". A
-        /// robot that gave up the instant it reached an empty spot would be trivially exploitable
-        /// (step behind cover, step straight back out, it's already forgotten you); one that never
-        /// gave up would make cover pointless. The delay is the cost of hiding.
-        /// </summary>
-        public bool HasLostHim(float searchSeconds) => !HasSight && TimeSinceSeen >= searchSeconds;
+        // There is deliberately no "has it given up" here any more (YT-93).
+        //
+        // There used to be: !HasSight && TimeSinceSeen >= searchTime. It read as a fact about
+        // perception and it isn't one — it is a decision about the CHASE, and taken on the wrong
+        // evidence. Every robot is born out of sight of Max, in a shed on the far side of the yard, so
+        // "hasn't seen him for 2.5 s" was true of every robot 2.5 s into a thirty-second walk, and they
+        // all stopped dead in the shed. What actually means "I have lost him" is "I am not getting any
+        // closer to the place I am hunting", and only the thing doing the walking knows that. It lives
+        // in RobotEnemy, where the walking is.
     }
 }

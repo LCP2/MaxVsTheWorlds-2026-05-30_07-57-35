@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Bosses;
+using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 
 namespace MaxWorlds.Arena
@@ -57,6 +58,11 @@ namespace MaxWorlds.Arena
             // order of two Awakes in one scene load is nobody's to promise).
             RetireSceneFactories();
             FactoryCensus.Reset();
+
+            // A new level is a new set of directions. The robots cache the map they navigate (YT-93),
+            // and a cache that outlives its level would route this yard's robots around the last one's
+            // walls.
+            EnemyNavigation.Reset();
 
             var root = new GameObject($"Map: {map.name}").transform;
             root.SetParent(parent, false);

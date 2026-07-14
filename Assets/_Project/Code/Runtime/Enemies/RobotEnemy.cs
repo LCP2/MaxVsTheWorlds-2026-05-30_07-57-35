@@ -12,10 +12,16 @@ namespace MaxWorlds.Enemies
     /// about; regains Chase the moment the sight-line comes back) → Telegraph (wind-up tell) → Lunge
     /// (committed burst that deals contact damage) → Recover → back to Chase.
     /// Implements <see cref="IDamageable"/> (dies to the Water Blaster). Death pop +
-    /// hit reaction are code-driven. Steering is direct rather than NavMesh: the arena is a
-    /// hand-authored greybox with a handful of cover props, so a beeline plus
-    /// <see cref="ObstacleSteering"/> (walk along what you bump into) gets around them for a
-    /// fraction of a NavMesh's cost. Revisit if the levels ever get maze-like.
+    /// hit reaction are code-driven.
+    ///
+    /// It steers on two scales, and the split is the point (YT-93). WALLS are routed around: the level
+    /// is a graph of rooms and doorways and <see cref="EnemyNavigation"/> reads the way through it, so
+    /// a robot leaving the shed walks out of the shed door rather than into the side of the shed —
+    /// which is what a beeline did, and which had them piling up against fences while the player walked
+    /// away. COVER is not routed around: it is sparse, it sits inside a room, and
+    /// <see cref="ObstacleSteering"/> already rounds it by walking along whatever it bumps into. Still
+    /// no NavMesh, and now for a better reason than cost: the map already knows the way, and a baked
+    /// mesh would be a second, drifting copy of an answer we author.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable
@@ -46,10 +52,16 @@ namespace MaxWorlds.Enemies
         [SerializeField] private float maxHealth = 24f;
 
         [Header("Sight (YT-83)")]
-        [Tooltip("Seconds of searching a stale spot before it accepts it has lost Max. This is the " +
-                 "price of hiding: too short and stepping behind cover and straight back out is a " +
-                 "free reset, too long and cover isn't an escape at all.")]
+        [Tooltip("Seconds of GETTING NOWHERE before it accepts it has lost Max. This is the price of " +
+                 "hiding: too short and stepping behind cover and straight back out is a free reset, " +
+                 "too long and cover isn't an escape at all. Measured from the last time it got closer " +
+                 "to the spot it is hunting — not from the last time it saw him (YT-93).")]
         [SerializeField] private float searchTime = 2.5f;
+
+        /// <summary>How much closer it has to get to count as having got closer. Slack enough that a
+        /// robot rounding a corner — briefly moving away from the spot to get to it — is still making
+        /// progress, tight enough that one grinding on a fence is not.</summary>
+        private const float Progress = 0.15f;
         [Tooltip("How close it has to get to the last place it saw Max before it starts casting about.")]
         [SerializeField] private float arriveRadius = 1.2f;
         [Tooltip("Speed while hunting a spot it can't see Max at. Slower than a chase — it has lost " +
@@ -119,6 +131,12 @@ namespace MaxWorlds.Enemies
         private Vector3 _wallNormal;
         private float _wallTimer;
 
+        /// <summary>The closest it has got to the spot it is hunting, and how long since it last got
+        /// closer. This is what "it has lost him" means now (YT-93) — not "it hasn't seen him lately",
+        /// which is true of every robot the moment it is born.</summary>
+        private float _closest = float.MaxValue;
+        private float _stallTimer;
+
         /// <summary>What this robot knows about where Max is — which, since YT-83, is no longer the
         /// same thing as where he is. Read-only outside; the state machine drives it.</summary>
         public Perception Sight => _sight;
@@ -143,6 +161,8 @@ namespace MaxWorlds.Enemies
             Current = State.Chase;
             _stateTimer = 0f;
             _wallTimer = 0f;          // a pooled robot doesn't inherit the last one's wall
+            _closest = float.MaxValue; // ...nor its idea of how well the last one was doing
+            _stallTimer = 0f;
             _knockback = Vector3.zero;
             AcquireTarget();
             SetTell(idleTell);
@@ -211,11 +231,26 @@ namespace MaxWorlds.Enemies
             Vector3 goal = _sight.Destination(target.position);
             Vector3 to = goal - transform.position;
             to.y = 0f;
-            float dist = to.magnitude;
+            float dist = to.magnitude;   // to the GOAL — what "arrived" and "close enough to lunge" mean
+
+            // Ask the level the way (YT-93). In the same room this is the goal itself and the chase is
+            // the beeline it always was; from another room it is the next doorway, so a robot leaving
+            // the shed walks out of the shed instead of into the side of it. The route is computed to
+            // the goal it BELIEVES in, never to Max — a robot that could be routed to a player it
+            // cannot see would be omniscient again, and cover would stop working (YT-83).
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal);
+
+            // Its own lane, so a pack arrives as a fan rather than a queue. Only on the last leg: a
+            // doorway is a metre wide and taking it at a personal angle just walks into the frame.
+            bool lastLeg = (waypoint - goal).sqrMagnitude < 0.01f;
+            if (lastLeg) waypoint = EnemyFormation.ApproachPoint(goal, transform.position, GetInstanceID());
+
+            Vector3 step = waypoint - transform.position;
+            step.y = 0f;
 
             // The lawn has cover in it (YT-68). Beelining into a prop just presses against it, so
             // while a wall is remembered, walk along it and round the corner instead.
-            Vector3 dir = to.normalized;
+            Vector3 dir = step.normalized;
             if (_wallTimer > 0f)
             {
                 _wallTimer -= dt;
@@ -225,9 +260,22 @@ namespace MaxWorlds.Enemies
             bool hunting = !_sight.HasSight;
             FaceAndMove(dir, hunting ? moveSpeed * searchSpeedScale : moveSpeed, dt);
 
-            // It reached the spot, or it has been hunting long enough. Either way it is now standing
-            // somewhere Max isn't, and it has to admit that.
-            if (hunting && (dist <= arriveRadius || _sight.HasLostHim(searchTime)))
+            // Is it getting anywhere? Seeing Max is a new spot to walk to, so the clock starts again.
+            if (_sight.HasSight) { _closest = float.MaxValue; _stallTimer = 0f; }
+
+            if (dist < _closest - Progress) { _closest = dist; _stallTimer = 0f; }
+            else _stallTimer += dt;
+
+            // It reached the spot, or it has stopped getting closer to it. Either way it is now
+            // standing somewhere Max isn't, and it has to admit that.
+            //
+            // "Stopped getting closer" — not "hasn't seen him for a while", which is what this used to
+            // ask (YT-93). Every robot is now born out of sight of Max, in a shed on the other side of
+            // the yard, so it had never seen him and the clock was already running: it gave up two and
+            // a half seconds into a thirty-second walk, every time, and stood there spinning in the
+            // shed. That is the pile-up the playtest found. A robot that is still closing has not lost
+            // anything and does not stop; one grinding on a fence gets nowhere and does.
+            if (hunting && (dist <= arriveRadius || _stallTimer >= searchTime))
             {
                 Current = State.Search;
                 _stateTimer = 0f;

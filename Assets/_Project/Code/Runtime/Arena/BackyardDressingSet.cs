@@ -373,7 +373,10 @@ namespace MaxWorlds.Arena
             MapZone to = map.ZoneAt(factory.x, factory.z);
             if (from == null || to == null) return route;
 
-            List<MapZone> rooms = ShortestPath(map, from, to);
+            // The same room-by-room route the ROBOTS walk (YT-93). One definition, deliberately: the
+            // stones paint the mission line, and if the stones and the robots disagreed about the way
+            // through the yard, one of them would be lying to the player.
+            List<MapZone> rooms = MapRoutes.Rooms(map, from, to);
 
             route.Add(spawn.CenterXz);
             for (int i = 1; i < rooms.Count - 1; i++)
@@ -381,41 +384,6 @@ namespace MaxWorlds.Arena
             route.Add(factory.CenterXz);
 
             return route;
-        }
-
-        /// <summary>Breadth-first over the map's links: the fewest doorways from one room to another.
-        /// Empty if there is no way through at all — which validation has already refused, so a caller
-        /// getting one back is looking at a map that never built.</summary>
-        private static List<MapZone> ShortestPath(MapData map, MapZone from, MapZone to)
-        {
-            var cameFrom = new Dictionary<string, string> { { from.id, null } };
-            var queue = new Queue<string>();
-            queue.Enqueue(from.id);
-
-            while (queue.Count > 0 && !cameFrom.ContainsKey(to.id))
-            {
-                string here = queue.Dequeue();
-                if (map.links == null) break;
-
-                foreach (MapLink link in map.links)
-                {
-                    if (link == null) continue;
-                    string next = link.from == here ? link.to
-                                : link.to == here ? link.from
-                                : null;
-
-                    if (next == null || cameFrom.ContainsKey(next)) continue;
-                    cameFrom[next] = here;
-                    queue.Enqueue(next);
-                }
-            }
-
-            var path = new List<MapZone>();
-            if (!cameFrom.ContainsKey(to.id)) return path;
-
-            for (string id = to.id; id != null; id = cameFrom[id]) path.Add(map.Zone(id));
-            path.Reverse();
-            return path;
         }
 
         private static float RouteLength(List<Vector2> route)
