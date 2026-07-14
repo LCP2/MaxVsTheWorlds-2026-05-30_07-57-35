@@ -4,6 +4,7 @@
     "references": [
         "MaxWorlds.Core",
         "MaxWorlds.Gameplay",
+        "MaxWorlds.Rendering",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],

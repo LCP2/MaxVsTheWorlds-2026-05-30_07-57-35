@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
+using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.PlayMode
@@ -64,6 +65,28 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(core.GetComponent<CharacterSkin>(), Is.Null,
                 "the core drives its own property block — skinning it puts a second writer on the " +
                 "same renderer and script order decides whether the tell glows");
+        }
+
+        /// <summary>
+        /// Telling the skin director to keep off the core also took away the only thing that had been
+        /// handing it a material that ships: a primitive's default material is not in the build's
+        /// shader set, so the first cut of the fix rendered the core MAGENTA on the deploy. Colour
+        /// assertions can't see that — they passed while the build was magenta — so this asserts the
+        /// core wears a MaterialLibrary shader, which is what being on the always-included list means.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator VulnerableCore_WearsAShaderThatShips_NotThePrimitiveDefault()
+        {
+            yield return BuildFactoryAndDirector();
+
+            var core = CoreOf(_hutchGo);
+            var library = MaterialLibrary.Character();
+            if (library == null) Assert.Ignore("no character shader in this project — nothing to compare against");
+
+            Assert.That(core.sharedMaterial, Is.Not.Null, "the core must have a material");
+            Assert.That(core.sharedMaterial.shader, Is.EqualTo(library.shader),
+                "the core must wear the library's shader — a primitive's default is not in the " +
+                "build's shader set and renders as magenta on the deploy");
         }
 
         /// <summary>
