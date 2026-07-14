@@ -29,7 +29,10 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             int decals = CountDecals(ambience);
-            Assert.That(decals, Is.LessThanOrEqualTo(24),
+
+            // The number is a ceiling, not a target: what this test is for is that the list RECYCLES.
+            // 200 kills must never leave 200 marks on the lawn, however many the cap is set to.
+            Assert.That(decals, Is.LessThanOrEqualTo(40),
                 "scorch marks must recycle — an unbounded decal list grows for the whole session");
             Assert.That(decals, Is.GreaterThan(0), "kills should actually leave a mark");
         }

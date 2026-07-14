@@ -41,7 +41,11 @@ namespace MaxWorlds.VFX
         [SerializeField] private Color moteColor = new Color(1f, 0.94f, 0.76f, 0.42f);
 
         [Header("Decals")]
-        [SerializeField] private int maxDecals = 24;
+        [Tooltip("How many marks the lawn can hold at once. 24 was a fight that tidies up after " +
+                 "itself: in a long run the oldest scorch was being recycled while the player could " +
+                 "still see where it had been. 40 lets a run leave a history you can read off the " +
+                 "ground, and is still a hard ceiling — no unbounded growth (YT-79).")]
+        [SerializeField] private int maxDecals = 40;
 
         [Tooltip("How long a mark stays on the lawn. It used to be 9 seconds, which is a scorch mark " +
                  "with somewhere else to be: you kill a robot, you turn to face the next one, and by " +
