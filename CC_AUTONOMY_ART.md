@@ -21,10 +21,18 @@ project = YT AND labels = needs-cc-art AND statusCategory != Done ORDER BY prior
 
 Claim the top ticket (add label `cc-active`). If the `needs-cc-art` queue is empty, STOP and report — do NOT fall back to gameplay (`needs-cc`) tickets. Those belong to the other stream.
 
+### Handing a ticket back — REMOVE `needs-cc-art`
+
+`needs-cc-art` is what puts a ticket in the queue above, so **the ticket does not leave the queue until you remove that label.** Whenever you let go of a ticket — shipped, blocked, or handed to Lee — drop BOTH `cc-active` AND `needs-cc-art`, then add whatever label says who holds it next (`needs-lee`, `needs-spec`, `blocked-*`). Setting `needs-lee` on its own is not a handoff; it just means the ticket is now waiting for Lee *and* still claimable by you.
+
+Before you claim, sanity-check the top ticket against `git log --grep=YT-XX`. If it is already merged, the label is the bug, not the ticket — fix the label and move to the next one rather than re-implementing shipped work.
+
+Why this rule exists: YT-76/77/78/79/87 were each shipped and merged, kept `needs-cc-art`, and so sat at the top of the queue afterwards looking exactly like unstarted work. A session that trusts the queue will redo finished tickets and can regress them.
+
 ## Scope — code-side technical art ONLY
 You own: VFX & particles, materials & shaders, lighting & post-processing, camera/render polish, LODs/atlasing, elemental-recolor variant tooling, and the AI-asset import pipeline (GLB -> rigged load-by-key prefab).
 You do NOT touch: gameplay logic, combat rules, enemy AI, HUD behaviour, player controls — that's the gameplay stream.
-When a ticket's success is visual, do the work, ship it to the WebGL link, and set `needs-lee` for Lee's eye — do NOT mark Done on a pure-visual AC yourself.
+When a ticket's success is visual, do the work, ship it to the WebGL link, and hand it to Lee's eye per the handoff rule above (drop `cc-active` + `needs-cc-art`, add `needs-lee`) — do NOT mark Done on a pure-visual AC yourself.
 
 ## Staying out of the other stream's way
 - Work in art/render file areas: `Assets/_Project/Art`, materials, VFX, rendering/URP settings, and `Assets/_Project/Code/Editor` (import tooling). Read gameplay files if needed but let the gameplay stream own `Assets/_Project/Code/Runtime/Player`, `/Combat`, `/CameraRig` behaviour, and enemy AI.
