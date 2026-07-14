@@ -53,11 +53,13 @@ namespace MaxWorlds.VFX
         [SerializeField] private float ventPulseSpeed = 1.6f;
 
         [Header("Exhaust")]
-        [SerializeField] private float exhaustRate = 5f;
-        [SerializeField] private Color exhaustColor = new Color(0.62f, 0.60f, 0.58f, 0.42f);
+        [SerializeField] private float exhaustRate = 11f;
+        [SerializeField] private Color exhaustColor = new Color(0.66f, 0.64f, 0.61f, 0.55f);
 
-        /// <summary>How hard it coughs when a robot comes out. Particles, in one burst.</summary>
-        [SerializeField] private int coughParticles = 14;
+        /// <summary>How hard it coughs when a robot comes out. Particles, in one burst. This is the
+        /// beat that ties the thing chasing you to the thing that made it, so it is the one moment the
+        /// factory is allowed to be loud.</summary>
+        [SerializeField] private int coughParticles = 22;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -130,6 +132,12 @@ namespace MaxWorlds.VFX
             hub.transform.position = new Vector3(b.center.x, top + 0.06f, b.center.z);
             _impeller = hub.transform;
 
+            // Sized in PIXELS, not in taste (YT-78). At the play rig a metre is about 59 px on a 1080p
+            // frame, and the impeller that shipped was 84 cm across its blades — a 50 px disc whose
+            // blades were 4 px wide. It was turning at 150 deg/s and it may as well not have been
+            // there. This one spans 1.5 m of a 3 m roof: a disc you can see, with blades thick enough
+            // to strobe as they go round. It is the factory's single clearest "I am running" tell, and
+            // the Hutch is often near the top edge of the frame, so it has to survive being small.
             for (int i = 0; i < 3; i++)
             {
                 var blade = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -137,8 +145,8 @@ namespace MaxWorlds.VFX
                 Strip(blade);
                 blade.transform.SetParent(_impeller, worldPositionStays: false);
                 blade.transform.localRotation = Quaternion.Euler(0f, i * 120f, 0f);
-                blade.transform.localPosition = blade.transform.localRotation * new Vector3(0.42f, 0f, 0f);
-                blade.transform.localScale = new Vector3(0.84f, 0.06f, 0.18f);
+                blade.transform.localPosition = blade.transform.localRotation * new Vector3(0.38f, 0f, 0f);
+                blade.transform.localScale = new Vector3(1.5f, 0.09f, 0.34f);
                 Paint(blade, SurfaceKind.Metal);
             }
 
@@ -146,7 +154,7 @@ namespace MaxWorlds.VFX
             cap.name = "Hub";
             Strip(cap);
             cap.transform.SetParent(_impeller, worldPositionStays: false);
-            cap.transform.localScale = new Vector3(0.26f, 0.05f, 0.26f);
+            cap.transform.localScale = new Vector3(0.42f, 0.06f, 0.42f);
             Paint(cap, SurfaceKind.Metal);
 
             // Vents, flanking the impeller on the roof. Additive, so they read as HEAT rather than as
@@ -198,12 +206,17 @@ namespace MaxWorlds.VFX
             var main = ps.main;
             main.playOnAwake = false;
             main.simulationSpace = ParticleSystemSimulationSpace.World;   // puffs stay where they were coughed
-            main.startLifetime = new ParticleSystem.MinMaxCurve(1.1f, 2.2f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.35f, 0.8f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.22f, 0.5f);
+            // A PLUME, not a wisp (YT-78). The exhaust that shipped was 22-50 cm of 42%-alpha grey at
+            // 5 puffs a second: from 25 m that is a smudge of about a dozen pixels, over a machine
+            // that is already half off the top of the frame. Smoke is the one part of the factory that
+            // gets BIGGER as it climbs and drifts clear of the roof, so it is the part most worth
+            // paying for — it says "something is running over there" from anywhere in the yard.
+            main.startLifetime = new ParticleSystem.MinMaxCurve(1.6f, 3.0f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.45f, 1.0f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.45f, 1.0f);
             main.startColor = exhaustColor;
-            main.gravityModifier = -0.03f;      // smoke rises
-            main.maxParticles = 60;             // ambience budget: AmbiencePlayTests holds this under 200
+            main.gravityModifier = -0.05f;      // smoke rises
+            main.maxParticles = 90;             // ambience budget: AmbiencePlayTests holds this under 200
 
             var emission = ps.emission;
             emission.rateOverTime = exhaustRate;
