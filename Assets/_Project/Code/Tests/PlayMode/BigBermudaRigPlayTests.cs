@@ -310,7 +310,9 @@ namespace MaxWorlds.Tests.PlayMode
             yield return SampleDuring(BossAction.Reposition, c => idle = c);
             Assert.Greater(idle.g, idle.r, "it is not idling in its own colour.");
 
-            Hit(Boss, 700f);   // 1200 HP, enrage at 50%
+            // Past the enrage threshold — asked of the tuning rather than typed in, because the fight's
+            // health is a knob now (YT-94) and a hardcoded 700 stopped enraging the day it moved.
+            Hit(Boss, BossTuning.Health * (BossTuning.EnrageThreshold + 0.1f));
 
             // A frame, because Enraged is recomputed by the brain's Tick and the brain ticks in Update.
             // Asserting on it in the same frame as the hit asks the fight a question it has not been

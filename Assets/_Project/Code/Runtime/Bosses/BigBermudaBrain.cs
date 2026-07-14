@@ -19,8 +19,12 @@ namespace MaxWorlds.Bosses
         private static readonly BossAction[] Cycle =
             { BossAction.Reposition, BossAction.ChargeWindup, BossAction.Charge, BossAction.Recover };
 
-        // Base seconds per phase (index matches Cycle).
-        private static readonly float[] BaseDuration = { 1.3f, 0.75f, 0.9f, 1.0f };
+        // Base seconds per phase (index matches Cycle), from BossTuning (YT-94) — the wind-up is the
+        // dodge window, and it is not a number that should live in two places.
+        private static readonly float[] BaseDuration =
+        {
+            BossTuning.Reposition, BossTuning.ChargeWindup, BossTuning.ChargeTime, BossTuning.Recover,
+        };
 
         private readonly float _enrageThreshold;
         private readonly float _enrageTimeScale;
@@ -37,7 +41,11 @@ namespace MaxWorlds.Bosses
         /// <summary>True while HP is at/below the enrage threshold — drives blade-rain + speed.</summary>
         public bool Enraged { get; private set; }
 
-        public BigBermudaBrain(float enrageThreshold = 0.5f, float enrageTimeScale = 0.65f)
+        /// <summary>Defaults come from <see cref="BossTuning"/> — the enrage used to scale the TELL
+        /// down along with the attack (0.65), which made the fight harder to read exactly as it got
+        /// harder to survive (YT-94).</summary>
+        public BigBermudaBrain(float enrageThreshold = BossTuning.EnrageThreshold,
+                               float enrageTimeScale = BossTuning.EnrageTimeScale)
         {
             _enrageThreshold = Mathf.Clamp01(enrageThreshold);
             _enrageTimeScale = Mathf.Clamp(enrageTimeScale, 0.2f, 1f);
