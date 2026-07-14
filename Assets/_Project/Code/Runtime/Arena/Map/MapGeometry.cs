@@ -19,17 +19,64 @@ namespace MaxWorlds.Arena
         public override string ToString() => $"[{Min:0.##}, {Max:0.##}]";
     }
 
-    /// <summary>A generated wall: a solid slab, ready to become a primitive.</summary>
+    /// <summary>A generated wall: a solid slab, ready to become a primitive.
+    ///
+    /// It also remembers WHICH SIDE OF IT IS A ROOM, which is what lets the art layer dress it: a
+    /// fence goes on the faces that look into a room, the neighbours' trees go on the faces that look
+    /// out at nothing. Without that the dressing has to be told the level's shape a second time, by
+    /// hand — which is exactly how the yard ended up hard-coded to one straight corridor.</summary>
     public readonly struct WallSegment
     {
         public readonly string Name;
         public readonly Vector3 Center;   // world; Y is already half the wall height
         public readonly Vector3 Size;
 
-        public WallSegment(string name, Vector3 center, Vector3 size)
+        /// <summary>True if the wall runs along X (it sits on a constant-Z line).</summary>
+        public readonly bool AlongX;
+
+        /// <summary>A room on the −X (or −Z) side of the line.</summary>
+        public readonly bool RoomLower;
+
+        /// <summary>A room on the +X (or +Z) side of the line.</summary>
+        public readonly bool RoomUpper;
+
+        public WallSegment(string name, Vector3 center, Vector3 size,
+                           bool alongX, bool roomLower, bool roomUpper)
         {
             Name = name; Center = center; Size = size;
+            AlongX = alongX; RoomLower = roomLower; RoomUpper = roomUpper;
         }
+    }
+
+    /// <summary>
+    /// One side of a wall: the line you would run a fence along, and which way is into the room.
+    ///
+    /// This is the seam between the level and the art. Everything the yard is dressed with — the
+    /// paling fence, the planting at its foot, the neighbours' trees behind it — is "walk this line,
+    /// place things at this offset", and every one of those lines is a wall face. Hand the art layer
+    /// these and it can dress ANY map; hand it a corridor's dimensions and it can only ever dress a
+    /// corridor.
+    /// </summary>
+    public readonly struct WallFace
+    {
+        /// <summary>Start of the face, in XZ (x, z) — on the wall's surface, not its centre.</summary>
+        public readonly Vector2 A;
+        public readonly Vector2 B;
+
+        /// <summary>Unit vector pointing away from the wall on this side: into the room for an inner
+        /// face, out at the neighbours for an outer one.</summary>
+        public readonly Vector2 Out;
+
+        /// <summary>Is there a room on this side? False means this face looks out of the yard.</summary>
+        public readonly bool FacesRoom;
+
+        public WallFace(Vector2 a, Vector2 b, Vector2 outward, bool facesRoom)
+        {
+            A = a; B = b; Out = outward; FacesRoom = facesRoom;
+        }
+
+        public float Length => (B - A).magnitude;
+        public Vector2 Direction => Length > 0.001f ? (B - A) / Length : Vector2.right;
     }
 
     /// <summary>The floor slab. One piece, cut to the map's bounds — not one per room, so there are no
@@ -137,20 +184,59 @@ namespace MaxWorlds.Arena
             }
 
             foreach (WallLine line in alongX)
-                foreach (var (span, offset) in Solids(line, t))
+                foreach (var run in Solids(line, t))
                     walls.Add(new WallSegment(
-                        $"Wall Z{line.Coord:0.#} [{span.Min:0.#},{span.Max:0.#}]",
-                        new Vector3(span.Mid, h * 0.5f, line.Coord + offset),
-                        new Vector3(span.Length, h, t)));
+                        $"Wall Z{line.Coord:0.#} [{run.Span.Min:0.#},{run.Span.Max:0.#}]",
+                        new Vector3(run.Span.Mid, h * 0.5f, line.Coord + run.Offset),
+                        new Vector3(run.Span.Length, h, t),
+                        alongX: true, run.Lower, run.Upper));
 
             foreach (WallLine line in alongZ)
-                foreach (var (span, offset) in Solids(line, t))
+                foreach (var run in Solids(line, t))
                     walls.Add(new WallSegment(
-                        $"Wall X{line.Coord:0.#} [{span.Min:0.#},{span.Max:0.#}]",
-                        new Vector3(line.Coord + offset, h * 0.5f, span.Mid),
-                        new Vector3(t, h, span.Length)));
+                        $"Wall X{line.Coord:0.#} [{run.Span.Min:0.#},{run.Span.Max:0.#}]",
+                        new Vector3(line.Coord + run.Offset, h * 0.5f, run.Span.Mid),
+                        new Vector3(t, h, run.Span.Length),
+                        alongX: false, run.Lower, run.Upper));
 
             return walls;
+        }
+
+        /// <summary>Both sides of every wall — the lines the art layer dresses. An inner face
+        /// (<see cref="WallFace.FacesRoom"/>) gets the fence and the planting at its foot; an outer one
+        /// gets the neighbours' trees.</summary>
+        public static List<WallFace> Faces(MapData map)
+        {
+            var faces = new List<WallFace>();
+            if (map == null) return faces;
+
+            float half = map.wallThickness * 0.5f;
+
+            foreach (WallSegment w in Walls(map))
+            {
+                Vector2 lowerOut, upperOut, a, b;
+
+                if (w.AlongX)
+                {
+                    a = new Vector2(w.Center.x - w.Size.x * 0.5f, w.Center.z);
+                    b = new Vector2(w.Center.x + w.Size.x * 0.5f, w.Center.z);
+                    lowerOut = new Vector2(0f, -1f);
+                    upperOut = new Vector2(0f, 1f);
+                }
+                else
+                {
+                    a = new Vector2(w.Center.x, w.Center.z - w.Size.z * 0.5f);
+                    b = new Vector2(w.Center.x, w.Center.z + w.Size.z * 0.5f);
+                    lowerOut = new Vector2(-1f, 0f);
+                    upperOut = new Vector2(1f, 0f);
+                }
+
+                // The face sits on the wall's surface, half a thickness off its centre line.
+                faces.Add(new WallFace(a + lowerOut * half, b + lowerOut * half, lowerOut, w.RoomLower));
+                faces.Add(new WallFace(a + upperOut * half, b + upperOut * half, upperOut, w.RoomUpper));
+            }
+
+            return faces;
         }
 
         /// <summary>Where a link cuts its doorway. False if the two rooms do not actually share an
@@ -201,6 +287,23 @@ namespace MaxWorlds.Arena
             return true;
         }
 
+        /// <summary>A stretch of solid wall on a line: where it runs, which side of the line it sits
+        /// on, and which of its sides are rooms.</summary>
+        private readonly struct Run
+        {
+            public readonly Span Span;
+            public readonly float Offset;
+            public readonly bool Lower;
+            public readonly bool Upper;
+
+            public Run(Span span, float offset, bool lower, bool upper)
+            {
+                Span = span; Offset = offset; Lower = lower; Upper = upper;
+            }
+
+            public Run With(Span span) => new Run(span, Offset, Lower, Upper);
+        }
+
         /// <summary>
         /// The solid stretches of one line, each with the offset that puts it on the right side of
         /// the line.
@@ -211,9 +314,9 @@ namespace MaxWorlds.Arena
         /// no room at all / a doorway (no wall). Neighbouring stretches that agree are merged back
         /// together, so a long wall is one slab and not twenty.
         /// </summary>
-        private static List<(Span Span, float Offset)> Solids(WallLine line, float t)
+        private static List<Run> Solids(WallLine line, float t)
         {
-            var result = new List<(Span, float)>();
+            var result = new List<Run>();
 
             var cuts = new List<float>();
             foreach (Span s in line.Lower) { cuts.Add(s.Min); cuts.Add(s.Max); }
@@ -226,6 +329,7 @@ namespace MaxWorlds.Arena
             float half = t * 0.5f;
             bool open = false;         // is a run of wall currently being accumulated?
             float runMin = 0f, runMax = 0f, runOffset = 0f;
+            bool runLower = false, runUpper = false;
 
             for (int i = 0; i < cuts.Count - 1; i++)
             {
@@ -245,20 +349,29 @@ namespace MaxWorlds.Arena
                              : lower ? half     // room below → wall goes above the line
                              : -half;           // room above → wall goes below the line
 
-                if (solid && open && Geo.Same(offset, runOffset) && Geo.Same(a, runMax))
+                // Merge only into a run that agrees about BOTH its side and its rooms — a stretch with
+                // a room behind it and one without are different walls to the art layer, even where
+                // they are collinear.
+                if (solid && open && Geo.Same(offset, runOffset) && Geo.Same(a, runMax)
+                    && lower == runLower && upper == runUpper)
                 {
-                    runMax = b;   // same wall, keep growing it
+                    runMax = b;
                     continue;
                 }
 
-                if (open) { result.Add((new Span(runMin, runMax), runOffset)); open = false; }
+                if (open)
+                {
+                    result.Add(new Run(new Span(runMin, runMax), runOffset, runLower, runUpper));
+                    open = false;
+                }
 
                 if (solid)
                 {
                     open = true; runMin = a; runMax = b; runOffset = offset;
+                    runLower = lower; runUpper = upper;
                 }
             }
-            if (open) result.Add((new Span(runMin, runMax), runOffset));
+            if (open) result.Add(new Run(new Span(runMin, runMax), runOffset, runLower, runUpper));
 
             return Cap(result, line.Holes, t);
         }
@@ -268,15 +381,14 @@ namespace MaxWorlds.Arena
         /// every configuration (overshooting into another wall is invisible — they are both solid and
         /// wear the same material). Ends that are a DOORWAY edge are left exactly where they are:
         /// grow one of those and you narrow the door.</summary>
-        private static List<(Span Span, float Offset)> Cap(List<(Span Span, float Offset)> runs,
-                                                           List<Span> holes, float t)
+        private static List<Run> Cap(List<Run> runs, List<Span> holes, float t)
         {
-            var capped = new List<(Span, float)>(runs.Count);
-            foreach ((Span s, float offset) in runs)
+            var capped = new List<Run>(runs.Count);
+            foreach (Run run in runs)
             {
-                float min = AtHoleEdge(s.Min, holes) ? s.Min : s.Min - t;
-                float max = AtHoleEdge(s.Max, holes) ? s.Max : s.Max + t;
-                capped.Add((new Span(min, max), offset));
+                float min = AtHoleEdge(run.Span.Min, holes) ? run.Span.Min : run.Span.Min - t;
+                float max = AtHoleEdge(run.Span.Max, holes) ? run.Span.Max : run.Span.Max + t;
+                capped.Add(run.With(new Span(min, max)));
             }
             return capped;
         }

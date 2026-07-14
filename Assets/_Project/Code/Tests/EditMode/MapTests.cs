@@ -9,9 +9,11 @@ namespace MaxWorlds.Tests.EditMode
     /// The map engine (YT-89): the format, the wall solver, the validator, and the shipped Backyard
     /// map itself.
     ///
-    /// The load-bearing test here is <see cref="TheShippedMap_IsTheArenaTheSliceAlreadyShipped"/> —
-    /// it is the proof that moving the level from hand-written geometry into data changed the source
-    /// of truth and nothing else. The arena Lee has been QAing does not move a centimetre.
+    /// The shipped map is no longer the straight corridor the slice first shipped as — it has a nook
+    /// off the lawn, a shed housing the factory, a gatehouse and a boss clearing, and it TURNS. That
+    /// was the point of reshaping it. So what is pinned here is the new shape, room by room: the
+    /// proof that the engine derives a level with rooms hanging off it just as happily as it derived
+    /// a hallway, and that the run through it can still be finished.
     /// </summary>
     public sealed class MapTests
     {
@@ -62,36 +64,57 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
         }
 
-        /// <summary>The migration proof (YT-89 ← YT-38). The map must describe the SAME arena the
-        /// hand-built path shipped — same rooms, same gate, same walls. If this drifts, the level
-        /// silently changed shape on the way into data, and Lee's QA of the old one means nothing.</summary>
+        /// <summary>The shape the slice is now: six rooms, not three, and not in one straight line.
+        /// This is the thing the engine was built to make cheap, so it is the thing that gets
+        /// pinned.</summary>
         [Test]
-        public void TheShippedMap_IsTheArenaTheSliceAlreadyShipped()
+        public void TheShippedMap_IsSixRooms_WithPocketsOffTheLawn()
         {
-            BackyardPathLayout was = BackyardPathLayout.Default;
-            BackyardPathLayout now = MapLayoutBridge.ToLayout(Shipped());
+            MapData map = Shipped();
 
-            Assert.AreEqual(was.StartZ, now.StartZ, 1e-3, "patio back wall moved");
-            Assert.AreEqual(was.LawnStartZ, now.LawnStartZ, 1e-3, "the lawn starts somewhere else");
-            Assert.AreEqual(was.GateZ, now.GateZ, 1e-3, "the gate moved");
-            Assert.AreEqual(was.ArenaEndZ, now.ArenaEndZ, 1e-3, "the arena's back wall moved");
-            Assert.AreEqual(was.PatioHalfWidth, now.PatioHalfWidth, 1e-3, "the patio changed width");
-            Assert.AreEqual(was.LawnHalfWidth, now.LawnHalfWidth, 1e-3, "the fight room changed width");
-            Assert.AreEqual(was.GateHalfWidth, now.GateHalfWidth, 1e-3, "the doorway changed width");
-            Assert.AreEqual(was.ArenaHalfWidth, now.ArenaHalfWidth, 1e-3, "the boss arena changed width");
-            Assert.AreEqual(was.WallHeight, now.WallHeight, 1e-3);
-            Assert.AreEqual(was.WallThickness, now.WallThickness, 1e-3);
+            Assert.AreEqual(6, map.zones.Length, "the slice is six rooms — patio, lawn, nook, shed, gatehouse, compost");
+
+            foreach (string id in new[] { "patio", "lawn", "nook", "shed", "gatehouse", "compost" })
+                Assert.IsNotNull(map.Zone(id), $"the map has no '{id}'");
+
+            // The turn is the point. A nook off the lawn's left and a shed off its right mean the
+            // route is no longer "walk up Z", which is what every hard-coded thing in the yard assumed.
+            MapZone lawn = map.Zone("lawn");
+            Assert.Less(map.Zone("nook").x, lawn.XMin, "the nook is not off the lawn's left");
+            Assert.Greater(map.Zone("shed").x, lawn.XMax, "the shed is not off the lawn's right");
         }
 
+        /// <summary>The factory has moved out of the lawn and into a room of its own — which is the
+        /// whole reason the mission line now turns.</summary>
         [Test]
-        public void TheShippedMap_KeepsTheFactoryAtTheFarEndOfTheLawn()
+        public void TheShippedMap_PutsTheFactoryInTheShed()
         {
             MapData map = Shipped();
             MapEntity factory = map.First(EntityKind.Factory);
 
             Assert.IsNotNull(factory, "the map has no factory — there is nothing to destroy");
-            Assert.AreEqual(15f, factory.z, 1e-3, "the shed moved off the far end of the lawn");
-            Assert.AreEqual("lawn", map.ZoneAt(factory.x, factory.z)?.id);
+            Assert.AreEqual("shed", map.ZoneAt(factory.x, factory.z)?.id,
+                "the factory is not in the shed — the objective is standing in the open again");
+        }
+
+        [Test]
+        public void TheShippedMap_LetsYouWalkToTheShedAndOnToTheBoss()
+        {
+            MapData map = Shipped();
+
+            Assert.IsTrue(Linked(map, "lawn", "shed"), "the shed cannot be entered from the lawn");
+            Assert.IsTrue(Linked(map, "lawn", "nook"), "the nook is walled off");
+            Assert.IsTrue(Linked(map, "gatehouse", "compost"), "the boss arena cannot be reached");
+
+            // And the engine agrees: validation refuses a boss you cannot walk to.
+            Assert.IsTrue(MapValidation.Validate(map, out string why), why);
+        }
+
+        private static bool Linked(MapData map, string a, string b)
+        {
+            foreach (MapLink link in map.links)
+                if ((link.from == a && link.to == b) || (link.from == b && link.to == a)) return true;
+            return false;
         }
 
         /// <summary>The whole mission in one assertion: the gate into the boss arena is opened by
@@ -171,12 +194,13 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            Assert.IsTrue(WalledAt(map, -12.5f, 8.5f), "the lawn's left wall is not where it started");
+            // z = 0 is below the nook's doorway, so this stretch of the lawn's left edge is solid wall.
+            Assert.IsTrue(WalledAt(map, -12.5f, 0f), "the lawn's left wall is not where it started");
 
             map.Zone("lawn").x += 5f;   // slide the fight room right
 
-            Assert.IsFalse(WalledAt(map, -12.5f, 8.5f), "the old wall is still standing where the lawn used to be");
-            Assert.IsTrue(WalledAt(map, -7.5f, 8.5f), "no wall was built along the lawn's new edge");
+            Assert.IsFalse(WalledAt(map, -12.5f, 0f), "the old wall is still standing where the lawn used to be");
+            Assert.IsTrue(WalledAt(map, -7.5f, 0f), "no wall was built along the lawn's new edge");
         }
 
         [Test]
@@ -196,9 +220,9 @@ namespace MaxWorlds.Tests.EditMode
             MapEntity gate = map.First(EntityKind.Gate);
 
             foreach (MapLink link in map.links)
-                if (link.gate == gate.id) link.doorway = 13f;
+                if (link.gate == gate.id) link.doorway = 11f;
 
-            Assert.AreEqual(15f, MapRuntime.SealWidth(map, gate), 1e-3,
+            Assert.AreEqual(13f, MapRuntime.SealWidth(map, gate), 1e-3,
                 "the gate did not follow its doorway — it would leave a gap beside itself");
         }
 

@@ -47,6 +47,27 @@ namespace MaxWorlds.Tests.PlayMode
                 "nothing was built beyond the fence — the yard is a diorama again");
         }
 
+        /// <summary>The backdrop rings the whole MAP now. Nothing it builds may stand inside a room —
+        /// including the rooms that hang off the side of the lawn, which a neighbourhood drawn around
+        /// a straight corridor would have built a house on top of.</summary>
+        [UnityTest]
+        public IEnumerator NothingInTheNeighbourhood_StandsInARoom()
+        {
+            yield return BuildYard();
+
+            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+
+            foreach (var r in _backdrop.GetComponentsInChildren<MeshRenderer>())
+            {
+                Bounds b = r.bounds;
+                MapZone standing = map.ZoneAt(b.center.x, b.center.z);
+
+                Assert.IsNull(standing,
+                    $"{r.name} is standing in '{standing?.id}' — the backdrop is wrapped around " +
+                    "something other than the level");
+            }
+        }
+
         [UnityTest]
         public IEnumerator NothingInTheNeighbourhood_CanBeTouched()
         {

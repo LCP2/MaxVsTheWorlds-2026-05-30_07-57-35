@@ -56,20 +56,27 @@ namespace MaxWorlds.Arena
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null) return;
 
-            BackyardPathLayout layout = path.Layout;
-            var set = BackyardDressingSet.Build(layout, path.ShedZ, path.ShedSpawnRadius);
+            MapData map = path.Map;
+            if (map == null)
+            {
+                // The dressing follows the map's own walls now. With no map there is nothing to
+                // follow, and falling back to the old corridor would fence a level that isn't there.
+                Debug.LogWarning("[BackyardDressing] no map loaded — the yard stays undressed.");
+                return;
+            }
+
+            var set = BackyardDressingSet.Build(map);
 
             var cover = new List<ArenaCover>(path.CoverPieces.Count);
             foreach (CoverPiece piece in path.CoverPieces) cover.Add(piece.Cover);
 
-            if (!BackyardDressingSet.Validate(layout, set, cover, path.ShedZ, path.ShedSpawnRadius,
-                                              out string reason))
+            if (!BackyardDressingSet.Validate(map, set, cover, out string reason))
             {
                 Debug.LogWarning($"[BackyardDressing] yard left undressed: {reason}");
                 return;
             }
 
-            Surround(layout);
+            Surround(map);
 
             _props = new GameObject("Kit Props").transform;
             _props.SetParent(transform, false);
@@ -90,22 +97,26 @@ namespace MaxWorlds.Arena
             Debug.Log($"[BackyardDressing] {PropCount} kit props placed, {surfaced} re-surfaced.");
         }
 
-        /// <summary>The ground beyond the fence. Not a kit model and deliberately not marked as
+        /// <summary>The ground beyond the fence, cut to the MAP's bounds rather than to a corridor's
+        /// three bands — the yard turns now, and a rectangle around the old straight path would leave
+        /// the nook's trees hanging over the void. Not a kit model and deliberately not marked as
         /// bringing its own material: it wants the biome's ground surface, same as the lawn, so the
         /// yard doesn't end in a hard edge with the skybox showing under the neighbours' trees.</summary>
-        private void Surround(BackyardPathLayout layout)
+        private void Surround(MapData map)
         {
-            float halfWidth = layout.ArenaHalfWidth + layout.WallThickness + SurroundMargin;
-            float zMin = layout.StartZ - layout.WallThickness - SurroundMargin;
-            float zMax = layout.ArenaEndZ + layout.WallThickness + SurroundMargin;
+            Rect b = map.Bounds();
+            float margin = map.wallThickness + SurroundMargin;
+            float width = b.width + margin * 2f;
+            float depth = b.height + margin * 2f;
 
             // A Plane, not a Cube: the material layer classifies a surface by its mesh, and a mesh
-            // called "Plane" is ground by definition — no guessing from its proportions.
+            // called "Plane" is ground by definition — no guessing from its proportions. Unity's Plane
+            // is 10 m across at unit scale, hence the tenths.
             var go = GameObject.CreatePrimitive(PrimitiveType.Plane);
             go.name = "Yard Surround";
             go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, -0.05f, (zMin + zMax) * 0.5f);
-            go.transform.localScale = new Vector3(halfWidth * 0.2f, 1f, (zMax - zMin) * 0.1f);
+            go.transform.localPosition = new Vector3(b.center.x, -0.05f, b.center.y);
+            go.transform.localScale = new Vector3(width * 0.1f, 1f, depth * 0.1f);
             go.isStatic = true;
 
             // It sits under the arena floor purely to be looked at. A collider here would be a second,

@@ -81,19 +81,29 @@ namespace MaxWorlds.Arena
 
     /// <summary>
     /// The Backyard's set dressing (YT-75): the fence line, the trees over it, the flower beds, the
-    /// stepping-stone path, the woodpile by the shed — everything that turns three grey rooms into
+    /// stepping-stone path, the woodpile by the shed — everything that turns grey rooms into
     /// somebody's back garden.
     ///
-    /// Generated FROM <see cref="BackyardPathLayout"/> rather than hand-listed, so it cannot drift
-    /// out of step with the arena: reshape the lawn and the fence reshapes with it. Pure data, so
-    /// where every prop lands is decided — and checked — without instantiating anything;
-    /// <see cref="BackyardDressing"/> turns it into GameObjects.
+    /// THE ART FOLLOWS THE MAP. Every driver here is a loop over the level's own geometry — over
+    /// <see cref="MapGeometry.Faces"/> (both sides of every wall the map derives), over its zones,
+    /// over the chain of links from the spawn to the factory. Nothing is hand-listed. That is the
+    /// whole of this file's design, and it is not a tidiness argument: the yard used to be written
+    /// out as thirteen fence runs along a straight corridor, so the day the map grew a nook and a
+    /// shed off the side of the lawn, the fences would have stood along walls that no longer existed
+    /// and the new walls would have had none at all. Now a room that appears in the map appears in
+    /// the garden, fenced and planted, with nothing to re-author.
+    ///
+    /// An INNER face (one with a room behind it) gets the paling fence and the planting at its foot;
+    /// an OUTER one gets the neighbours' trees. That is the whole seam.
+    ///
+    /// Pure data, so where every prop lands is decided — and checked — without instantiating
+    /// anything; <see cref="BackyardDressing"/> turns it into GameObjects.
     ///
     /// THE RULE THIS FILE EXISTS TO KEEP: dressing is scenery, never geometry. Nothing here carries a
     /// collider, and <see cref="Validate"/> refuses any prop tall enough to matter that stands where
-    /// the fight needs the space — the middle of a room, a doorway, or the ring the factory spawns
-    /// robots on. So the yard can be made as busy as we like and the answer to "could the dressing
-    /// have broken the fight?" stays no, by construction rather than by playtest.
+    /// the fight needs the space — the middle of a room, a doorway, the cover, or the ring the
+    /// factory spawns robots on. So the yard can be made as busy as we like and the answer to "could
+    /// the dressing have broken the fight?" stays no, by construction rather than by playtest.
     /// </summary>
     public static class BackyardDressingSet
     {
@@ -105,9 +115,9 @@ namespace MaxWorlds.Arena
         /// room is the fight.</summary>
         public const float EdgeBand = 1.9f;
 
-        /// <summary>Depth of the doorway passages — the gate and the patio mouth — that no tall prop
-        /// may reach into. Deliberately the clear passage, not the door frame: the fence panels that
-        /// FORM the doorway are supposed to be there.</summary>
+        /// <summary>Depth of the doorway passages that no tall prop may reach into. Deliberately the
+        /// clear passage, not the door frame: the fence panels that FORM the doorway are supposed to
+        /// be there.</summary>
         public const float DoorwayClearance = 2.5f;
 
         /// <summary>How far inside the spawn ring a factory-zone prop has to stop, so a robot is never
@@ -118,71 +128,87 @@ namespace MaxWorlds.Arena
         private const float PanelDepth = 0.28f;
         private const float ShedWallHeight = 2.4f;
 
+        /// <summary>A wall face shorter than this is a corner, a doorway shoulder or a stub. Planting
+        /// it out puts a shrub in every crevice of the level and reads as clutter, not as a garden.</summary>
+        private const float MinPlantedFace = 5f;
+
+        /// <summary>Planting starts this far in from each end of a wall, so the corners stay swept and
+        /// a chasing robot never has a shrub-lined pocket to wedge itself into.</summary>
+        private const float CornerInset = 2f;
+
         // ---------------------------------------------------------------- build
 
-        /// <summary>The whole dressing set for a layout. Deterministic.</summary>
-        public static List<DressingProp> Build(BackyardPathLayout layout, float shedZ, float spawnRadius)
+        /// <summary>The whole dressing set for a map. Deterministic.</summary>
+        public static List<DressingProp> Build(MapData map)
         {
             var props = new List<DressingProp>(256);
-            var rng = new System.Random(Seed);
+            if (map == null) return props;
 
-            Fence(props, layout);
-            OutsideFoliage(props, layout, rng);
-            SteppingStones(props, layout, shedZ, rng);
-            EdgePlanting(props, layout, rng);
-            FlowerBeds(props, layout);
-            ShedYard(props, shedZ);
+            var rng = new System.Random(Seed);
+            List<ArenaCover> cover = CoverIn(map);
+            var keepout = new Keepout(map, cover);
+            List<WallFace> faces = MapGeometry.Faces(map);
+
+            Fence(props, map, faces);
+            OutsideFoliage(props, map, faces, rng);
+            SteppingStones(props, map, cover, rng);
+            EdgePlanting(props, map, faces, keepout, rng);
+            FlowerBeds(props, map, keepout);
+            ShedYard(props, Factory(map));
 
             return props;
         }
 
         // ---------------------------------------------------------------- fence
 
-        /// <summary>Panels along the inner face of every wall, tall enough to BE the wall. The greybox
-        /// slab stays — it is what stops the player — but what you see is a paling fence, which is
-        /// what a back garden is bounded by.</summary>
-        private static void Fence(List<DressingProp> into, BackyardPathLayout L)
+        /// <summary>Panels along the inner face of every wall the map derives, tall enough to BE the
+        /// wall. The greybox slab stays — it is what stops the player — but what you see is a paling
+        /// fence, which is what a back garden is bounded by. Every room gets one, including the ones
+        /// that did not exist when this was written.</summary>
+        private static void Fence(List<DressingProp> into, MapData map, List<WallFace> faces)
         {
-            float t = L.WallThickness;
-            float patio = L.PatioHalfWidth, lawn = L.LawnHalfWidth;
-            float gate = L.GateHalfWidth, arena = L.ArenaHalfWidth;
+            int gate = GardenGate(map, faces);
 
-            // Patio: the way in. The garden gate goes in the middle of the back wall.
-            FenceRun(into, L, new Vector2(-patio, L.StartZ), new Vector2(-patio, L.LawnStartZ), Vector2.right);
-            FenceRun(into, L, new Vector2(patio, L.StartZ), new Vector2(patio, L.LawnStartZ), Vector2.left);
-            FenceRun(into, L, new Vector2(-patio, L.StartZ), new Vector2(patio, L.StartZ), Vector2.up,
-                     gateAtCentre: true);
-
-            // Lawn: the fight room, and the shoulders it opens out through.
-            FenceRun(into, L, new Vector2(-lawn, L.LawnStartZ), new Vector2(-lawn, L.GateZ), Vector2.right);
-            FenceRun(into, L, new Vector2(lawn, L.LawnStartZ), new Vector2(lawn, L.GateZ), Vector2.left);
-            float mouthZ = L.LawnStartZ + t * 0.5f;
-            FenceRun(into, L, new Vector2(-lawn, mouthZ), new Vector2(-patio, mouthZ), Vector2.up);
-            FenceRun(into, L, new Vector2(patio, mouthZ), new Vector2(lawn, mouthZ), Vector2.up);
-
-            // The gate wall, from both sides: the lawn sees its back, the arena sees its face.
-            float lawnSide = L.GateZ - t * 0.5f;
-            float arenaSide = L.GateZ + t * 0.5f;
-            FenceRun(into, L, new Vector2(-lawn, lawnSide), new Vector2(-gate, lawnSide), Vector2.down);
-            FenceRun(into, L, new Vector2(gate, lawnSide), new Vector2(lawn, lawnSide), Vector2.down);
-            FenceRun(into, L, new Vector2(-arena, arenaSide), new Vector2(-gate, arenaSide), Vector2.up);
-            FenceRun(into, L, new Vector2(gate, arenaSide), new Vector2(arena, arenaSide), Vector2.up);
-
-            // Boss arena: the bottom of the garden.
-            FenceRun(into, L, new Vector2(-arena, L.GateZ), new Vector2(-arena, L.ArenaEndZ), Vector2.right);
-            FenceRun(into, L, new Vector2(arena, L.GateZ), new Vector2(arena, L.ArenaEndZ), Vector2.left);
-            FenceRun(into, L, new Vector2(-arena, L.ArenaEndZ), new Vector2(arena, L.ArenaEndZ), Vector2.down);
+            for (int i = 0; i < faces.Count; i++)
+            {
+                if (!faces[i].FacesRoom) continue;
+                FenceRun(into, map, faces[i], gateAtCentre: i == gate);
+            }
         }
 
-        /// <summary>Panels along a wall's inner face from <paramref name="a"/> to <paramref name="b"/>.
-        /// <paramref name="inward"/> points into the room, and the panel is sunk into the wall behind
-        /// it — it shows its face and nothing else, so the fence is never something the player clips
-        /// into on the way past.</summary>
-        private static void FenceRun(List<DressingProp> into, BackyardPathLayout L,
-                                     Vector2 a, Vector2 b, Vector2 inward, bool gateAtCentre = false)
+        /// <summary>The face the garden gate goes in: the inner face of the wall the player has his
+        /// back to when the run starts, looking the way he is about to walk. FOUND, not named — move
+        /// the spawn to another room and the way in moves with it.</summary>
+        private static int GardenGate(MapData map, List<WallFace> faces)
         {
-            Vector2 span = b - a;
-            float length = span.magnitude;
+            MapEntity spawn = map.First(EntityKind.PlayerSpawn);
+            if (spawn == null) return -1;
+
+            Vector2 at = spawn.CenterXz;
+            int best = -1;
+            float nearest = float.MaxValue;
+
+            for (int i = 0; i < faces.Count; i++)
+            {
+                WallFace f = faces[i];
+
+                // Faces up-field (so it is a wall he turns his back on) and stands behind him.
+                if (!f.FacesRoom || f.Out.y < 0.5f || f.A.y > at.y) continue;
+
+                float d = (Midpoint(f) - at).sqrMagnitude;
+                if (d < nearest) { nearest = d; best = i; }
+            }
+
+            return best;
+        }
+
+        /// <summary>Panels along a wall's inner face, from <see cref="WallFace.A"/> to
+        /// <see cref="WallFace.B"/>. The panel is sunk into the wall behind it — it shows its face and
+        /// nothing else, so the fence is never something the player clips into on the way past.</summary>
+        private static void FenceRun(List<DressingProp> into, MapData map, in WallFace face,
+                                     bool gateAtCentre)
+        {
+            float length = face.Length;
             if (length < 0.5f) return;
 
             int n = Mathf.Max(1, Mathf.RoundToInt(length / PanelWidth));
@@ -191,21 +217,21 @@ namespace MaxWorlds.Arena
             if (gateAtCentre && n % 2 == 0) n++;
 
             float step = length / n;
-            Vector2 dir = span / length;
-            float yaw = Mathf.Atan2(inward.x, inward.y) * Mathf.Rad2Deg;
+            Vector2 dir = face.Direction;
+            float yaw = Mathf.Atan2(face.Out.x, face.Out.y) * Mathf.Rad2Deg;
 
             // 2 cm proud of the wall face: enough never to z-fight the slab behind it, far too little
             // to stand on.
-            Vector2 sink = inward * (PanelDepth * 0.5f - 0.02f);
+            Vector2 sink = face.Out * (PanelDepth * 0.5f - 0.02f);
             int centreIndex = gateAtCentre ? Mathf.FloorToInt(n / 2f) : -1;
 
             for (int i = 0; i < n; i++)
             {
                 string key = i == centreIndex ? PropCatalog.FenceGate : PropCatalog.FencePanel;
                 Vector3 kit = PropCatalog.Size(key);
-                var scale = new Vector3(step / kit.x, L.WallHeight / kit.y, PanelDepth / kit.z);
+                var scale = new Vector3(step / kit.x, map.wallHeight / kit.y, PanelDepth / kit.z);
 
-                into.Add(new DressingProp(key, a + dir * (step * (i + 0.5f)) - sink, scale, yaw));
+                into.Add(new DressingProp(key, face.A + dir * (step * (i + 0.5f)) - sink, scale, yaw));
             }
         }
 
@@ -217,88 +243,204 @@ namespace MaxWorlds.Arena
             PropCatalog.TreeThin, PropCatalog.TreeSmall,
         };
 
-        /// <summary>Trees and scrub OUTSIDE the fence — the neighbours' yards, the bottom of the
-        /// garden. They give the fence line something to be in front of, and they cannot touch the
-        /// fight, because they are on the far side of a wall.</summary>
-        private static void OutsideFoliage(List<DressingProp> into, BackyardPathLayout L, System.Random rng)
+        /// <summary>Trees and scrub on every face that looks OUT of the level — the neighbours' yards,
+        /// the bottom of the garden. They give the fence line something to be in front of, and they
+        /// cannot touch the fight, because they are on the far side of a wall.</summary>
+        private static void OutsideFoliage(List<DressingProp> into, MapData map, List<WallFace> faces,
+                                           System.Random rng)
         {
-            float t = L.WallThickness;
-
-            SideTrees(into, rng, -1f, L.LawnHalfWidth + t, L.LawnStartZ - 2f, L.GateZ + 2f);
-            SideTrees(into, rng, +1f, L.LawnHalfWidth + t, L.LawnStartZ - 2f, L.GateZ + 2f);
-            SideTrees(into, rng, -1f, L.ArenaHalfWidth + t, L.GateZ + 2f, L.ArenaEndZ);
-            SideTrees(into, rng, +1f, L.ArenaHalfWidth + t, L.GateZ + 2f, L.ArenaEndZ);
-            SideTrees(into, rng, -1f, L.PatioHalfWidth + t, L.StartZ - 3f, L.LawnStartZ - 2f);
-            SideTrees(into, rng, +1f, L.PatioHalfWidth + t, L.StartZ - 3f, L.LawnStartZ - 2f);
-
-            BackTrees(into, rng, L.ArenaEndZ + t, +1f, -L.ArenaHalfWidth, L.ArenaHalfWidth);
-            BackTrees(into, rng, L.StartZ - t, -1f, -L.PatioHalfWidth - 4f, L.PatioHalfWidth + 4f);
-        }
-
-        /// <summary>Trees down the outside of one wall. <paramref name="wallOuter"/> is the wall's far
-        /// face; everything is planted clear of it, so nothing leans back over the fence.</summary>
-        private static void SideTrees(List<DressingProp> into, System.Random rng, float side,
-                                      float wallOuter, float zFrom, float zTo)
-        {
-            for (float z = zFrom; z < zTo; z += Range(rng, 4.5f, 7f))
+            foreach (WallFace face in faces)
             {
-                float depth = Range(rng, 2.2f, 5.5f);
-                Grove(into, rng, side, wallOuter, depth, z, alongZ: true);
-            }
-        }
+                if (face.FacesRoom || face.Length < 1f) continue;
 
-        private static void BackTrees(List<DressingProp> into, System.Random rng, float wallOuter,
-                                      float side, float xFrom, float xTo)
-        {
-            for (float x = xFrom; x < xTo; x += Range(rng, 4.5f, 7f))
-            {
-                float depth = Range(rng, 2.2f, 5f);
-                Grove(into, rng, side, wallOuter, depth, x, alongZ: false);
+                for (float along = 0f; along < face.Length; along += Range(rng, 4.5f, 7f))
+                    Grove(into, map, rng, face, along);
             }
         }
 
         /// <summary>A tree with a bush or two at its foot, so it isn't a lollipop on a lawn. The whole
-        /// grove is pushed out from the wall by <paramref name="depth"/> and the undergrowth is
-        /// jittered along the fence, never back across it.</summary>
-        private static void Grove(List<DressingProp> into, System.Random rng, float side, float wallOuter,
-                                  float depth, float along, bool alongZ)
+        /// grove is pushed out from the wall and the undergrowth is jittered along it, never back
+        /// across it.</summary>
+        private static void Grove(List<DressingProp> into, MapData map, System.Random rng,
+                                  WallFace face, float along)
         {
-            Vector2 At(float outward, float slide) => alongZ
-                ? new Vector2(side * (wallOuter + outward), along + slide)
-                : new Vector2(along + slide, wallOuter + side * outward);
+            float depth = Range(rng, 2.2f, 5.5f);
+            Vector2 dir = face.Direction;
+            Vector2 away = face.Out;
+            Vector2 foot = face.A + dir * along;
+
+            Vector2 At(float outward, float slide) => foot + away * outward + dir * slide;
 
             string tree = Trees[rng.Next(Trees.Length)];
-            into.Add(new DressingProp(tree, At(depth, 0f),
-                                      PropCatalog.ScaleToHeight(tree, Range(rng, 3.8f, 6.4f)),
-                                      Range(rng, 0f, 360f)));
+            Plant(into, map, tree, At(depth, 0f),
+                  PropCatalog.ScaleToHeight(tree, Range(rng, 3.8f, 6.4f)), Range(rng, 0f, 360f));
 
             int bushes = rng.Next(0, 3);
             for (int i = 0; i < bushes; i++)
             {
                 string bush = rng.Next(2) == 0 ? PropCatalog.BushDetailed : PropCatalog.Bush;
                 Vector2 at = At(Mathf.Max(0.8f, depth + Range(rng, -1.2f, 1.6f)), Range(rng, -2f, 2f));
-                into.Add(new DressingProp(bush, at, PropCatalog.ScaleToHeight(bush, Range(rng, 0.6f, 1f)),
-                                          Range(rng, 0f, 360f)));
+                Plant(into, map, bush, at, PropCatalog.ScaleToHeight(bush, Range(rng, 0.6f, 1f)),
+                      Range(rng, 0f, 360f));
             }
+        }
+
+        /// <summary>Plants a neighbour's tree only where it is genuinely a neighbour's — clear of every
+        /// room, footprint and all. The wall solver grows a wall's ends to close the corners, so a face
+        /// that looks OUT of one room can overhang the floor of the next; without this, the shed would
+        /// have a wood growing through it.</summary>
+        private static void Plant(List<DressingProp> into, MapData map, string key, Vector2 at,
+                                  Vector3 scale, float yaw)
+        {
+            var prop = new DressingProp(key, at, scale, yaw);
+            Rect footprint = prop.Footprint;
+
+            foreach (MapZone zone in map.zones)
+                if (zone != null && zone.Footprint.Overlaps(footprint)) return;
+
+            into.Add(prop);
         }
 
         // ---------------------------------------------------------------- ground
 
-        /// <summary>Stepping stones from the patio door up the lawn. Flat, so they are pure paint —
-        /// but what they paint is the mission line, which is the one thing a player must never
-        /// lose.</summary>
-        private static void SteppingStones(List<DressingProp> into, BackyardPathLayout L, float shedZ,
-                                           System.Random rng)
+        /// <summary>
+        /// Stepping stones from where Max starts to the factory he is here to break, through the
+        /// middle of every room on the way. Flat, so they are pure paint — but what they paint is the
+        /// mission line, which is the one thing a player must never lose.
+        ///
+        /// The line is no longer a straight run up the lawn: the shed is off to one side and the path
+        /// turns to reach it. So the route is WALKED — the shortest chain of links between the two —
+        /// rather than typed as a Z from and a Z to.
+        ///
+        /// Where the route runs behind a piece of cover it skips a stone rather than paving under it.
+        /// A stone is flat and could not obstruct anything if it tried, but half a paving slab poking
+        /// out of the foot of a hedge is the sort of thing that reads as a bug even when it isn't.
+        /// </summary>
+        private static void SteppingStones(List<DressingProp> into, MapData map,
+                                           List<ArenaCover> cover, System.Random rng)
         {
-            var scale = PropCatalog.ScaleToHeight(PropCatalog.PathStone, 0.06f);
-            for (float z = L.StartZ + 1.8f; z < shedZ - 3f; z += 1.8f)
+            List<Vector2> route = Route(map);
+            if (route.Count < 2) return;
+
+            const float Spacing = 1.8f;
+            const float Start = 1.8f;   // clear of Max's own feet
+            const float Stop = 3f;      // and short of the factory: the last stretch is the shed's yard
+
+            Vector3 scale = PropCatalog.ScaleToHeight(PropCatalog.PathStone, 0.06f);
+            float total = RouteLength(route);
+
+            for (float d = Start; d < total - Stop; d += Spacing)
             {
-                into.Add(new DressingProp(PropCatalog.PathStone, new Vector2(Range(rng, -0.4f, 0.4f), z),
-                                          scale, Range(rng, -14f, 14f)));
+                Vector2 at = PointAlong(route, d, out Vector2 dir);
+                var sideways = new Vector2(-dir.y, dir.x);
+
+                var stone = new DressingProp(PropCatalog.PathStone,
+                                             at + sideways * Range(rng, -0.4f, 0.4f),
+                                             scale, Range(rng, -14f, 14f));
+
+                if (!Under(cover, stone)) into.Add(stone);
             }
 
-            into.Add(new DressingProp(PropCatalog.PathStoneCircle, new Vector2(0f, L.StartZ + 0.7f),
+            into.Add(new DressingProp(PropCatalog.PathStoneCircle, PointAlong(route, 0.7f, out _),
                                       PropCatalog.ScaleToHeight(PropCatalog.PathStoneCircle, 0.06f) * 1.6f));
+        }
+
+        private static bool Under(List<ArenaCover> cover, in DressingProp prop)
+        {
+            Rect footprint = prop.Footprint;
+
+            foreach (ArenaCover c in cover)
+                if (c.Footprint.Overlaps(footprint)) return true;
+
+            return false;
+        }
+
+        /// <summary>The mission line, as a polyline: the player spawn, the centre of every room between
+        /// it and the factory, and the factory itself.</summary>
+        public static List<Vector2> Route(MapData map)
+        {
+            var route = new List<Vector2>();
+            if (map == null) return route;
+
+            MapEntity spawn = map.First(EntityKind.PlayerSpawn);
+            MapEntity factory = map.First(EntityKind.Factory);
+            if (spawn == null || factory == null) return route;
+
+            MapZone from = map.ZoneAt(spawn.x, spawn.z);
+            MapZone to = map.ZoneAt(factory.x, factory.z);
+            if (from == null || to == null) return route;
+
+            List<MapZone> rooms = ShortestPath(map, from, to);
+
+            route.Add(spawn.CenterXz);
+            for (int i = 1; i < rooms.Count - 1; i++)
+                route.Add(new Vector2(rooms[i].x, rooms[i].z));
+            route.Add(factory.CenterXz);
+
+            return route;
+        }
+
+        /// <summary>Breadth-first over the map's links: the fewest doorways from one room to another.
+        /// Empty if there is no way through at all — which validation has already refused, so a caller
+        /// getting one back is looking at a map that never built.</summary>
+        private static List<MapZone> ShortestPath(MapData map, MapZone from, MapZone to)
+        {
+            var cameFrom = new Dictionary<string, string> { { from.id, null } };
+            var queue = new Queue<string>();
+            queue.Enqueue(from.id);
+
+            while (queue.Count > 0 && !cameFrom.ContainsKey(to.id))
+            {
+                string here = queue.Dequeue();
+                if (map.links == null) break;
+
+                foreach (MapLink link in map.links)
+                {
+                    if (link == null) continue;
+                    string next = link.from == here ? link.to
+                                : link.to == here ? link.from
+                                : null;
+
+                    if (next == null || cameFrom.ContainsKey(next)) continue;
+                    cameFrom[next] = here;
+                    queue.Enqueue(next);
+                }
+            }
+
+            var path = new List<MapZone>();
+            if (!cameFrom.ContainsKey(to.id)) return path;
+
+            for (string id = to.id; id != null; id = cameFrom[id]) path.Add(map.Zone(id));
+            path.Reverse();
+            return path;
+        }
+
+        private static float RouteLength(List<Vector2> route)
+        {
+            float total = 0f;
+            for (int i = 0; i + 1 < route.Count; i++) total += (route[i + 1] - route[i]).magnitude;
+            return total;
+        }
+
+        /// <summary>The point <paramref name="distance"/> along the route, and the direction of travel
+        /// there. Past the end it clamps to the end, which is what a stone spacing that does not divide
+        /// the route neatly needs it to do.</summary>
+        private static Vector2 PointAlong(List<Vector2> route, float distance, out Vector2 direction)
+        {
+            direction = Vector2.up;
+
+            for (int i = 0; i + 1 < route.Count; i++)
+            {
+                Vector2 leg = route[i + 1] - route[i];
+                float length = leg.magnitude;
+                if (length < 0.001f) continue;
+
+                direction = leg / length;
+                if (distance <= length) return route[i] + direction * distance;
+                distance -= length;
+            }
+
+            return route[route.Count - 1];
         }
 
         // ---------------------------------------------------------------- planting
@@ -338,49 +480,106 @@ namespace MaxWorlds.Arena
         };
 
         /// <summary>Planting at the foot of the fence, inside the rooms — hard against the boundary,
-        /// out of the fight.</summary>
-        private static void EdgePlanting(List<DressingProp> into, BackyardPathLayout L, System.Random rng)
+        /// out of the fight. Every inner face long enough to read as a wall gets a run.</summary>
+        private static void EdgePlanting(List<DressingProp> into, MapData map, List<WallFace> faces,
+                                         Keepout keepout, System.Random rng)
         {
-            EdgeRun(into, rng, -1f, L.LawnHalfWidth, L.LawnStartZ + 2f, L.GateZ - 2f);
-            EdgeRun(into, rng, +1f, L.LawnHalfWidth, L.LawnStartZ + 2f, L.GateZ - 2f);
-            EdgeRun(into, rng, -1f, L.ArenaHalfWidth, L.GateZ + 4f, L.ArenaEndZ - 2f);
-            EdgeRun(into, rng, +1f, L.ArenaHalfWidth, L.GateZ + 4f, L.ArenaEndZ - 2f);
-            EdgeRun(into, rng, -1f, L.PatioHalfWidth, L.StartZ + 1.5f, L.LawnStartZ - 4f);
-            EdgeRun(into, rng, +1f, L.PatioHalfWidth, L.StartZ + 1.5f, L.LawnStartZ - 4f);
+            foreach (WallFace face in faces)
+            {
+                if (!face.FacesRoom || face.Length < MinPlantedFace) continue;
+
+                MapZone room = RoomBehind(map, face);
+                if (room != null) EdgeRun(into, keepout, rng, face, room);
+            }
         }
 
         /// <summary>
-        /// One run of planting along a wall.
+        /// One run of planting along a wall face, inside the room it looks into.
         ///
         /// The prop is sized FIRST and placed SECOND, from its own footprint: it goes hard against
         /// the fence with a small gap, so however wide the model turns out to be, its inner edge
         /// stays inside the edge band. A prop too wide to fit the band at the height it wanted is
         /// scaled down until it does. That's the difference between an invariant and a convention —
         /// nobody has to remember that pots are three times wider than they are tall.
+        ///
+        /// The band is measured from the ROOM's edge, not from the face. A party wall — one with a
+        /// room on both sides — straddles the line the rooms share, so its face already stands half a
+        /// wall inside the room, and a shrub planted the full band's depth beyond THAT is a shrub in
+        /// the fight space.
         /// </summary>
-        private static void EdgeRun(List<DressingProp> into, System.Random rng, float side,
-                                    float wallInner, float zFrom, float zTo)
+        private static void EdgeRun(List<DressingProp> into, Keepout keepout, System.Random rng,
+                                    in WallFace face, MapZone room)
         {
-            const float Gap = 0.15f;                          // breathing room off the fence face
-            float widest = EdgeBand - Gap * 2f;               // must fit, footprint and all
+            const float Gap = 0.15f;                             // breathing room off the fence face
 
-            for (float z = zFrom; z < zTo; z += Range(rng, 1.8f, 3.4f))
+            float widest = EdgeBand - FaceInset(room, face) - Gap * 2f;
+            if (widest < 0.25f) return;                          // no band left to plant in
+
+            Vector2 span = Overlap(room, face);
+            Vector2 dir = face.Direction;
+
+            for (float t = span.x + CornerInset; t < span.y - CornerInset; t += Range(rng, 1.8f, 3.4f))
             {
                 EdgeItem item = EdgeItems[rng.Next(EdgeItems.Length)];
                 float yaw = Range(rng, 0f, 360f);
                 Vector3 scale = PropCatalog.ScaleToHeight(item.Key,
                                                           Range(rng, item.MinHeight, item.MaxHeight));
 
-                float width = new DressingProp(item.Key, Vector2.zero, scale, yaw).Footprint.width;
+                float width = Across(new DressingProp(item.Key, Vector2.zero, scale, yaw), face);
                 if (width > widest)
                 {
-                    scale *= widest / width;                  // too broad for the band: plant a smaller one
+                    scale *= widest / width;                     // too broad for the band: plant a smaller one
                     width = widest;
                 }
 
-                var at = new Vector2(side * (wallInner - Gap - width * 0.5f), z);
-                into.Add(new DressingProp(item.Key, at, scale, yaw));
+                Vector2 at = face.A + dir * t + face.Out * (Gap + width * 0.5f);
+                var prop = new DressingProp(item.Key, at, scale, yaw);
+
+                // A room's edge is not always free: a doorway may open through it, a cover block may
+                // stand against it. Ask before planting rather than plant and be refused — one shrub
+                // that cannot go anywhere must not cost the yard its whole dressing.
+                if (keepout.Objection(prop) == null) into.Add(prop);
             }
+        }
+
+        /// <summary>The room a face looks into, or null. Read from the geometry (a step off the face,
+        /// the way it points) rather than carried around, so it is right even where a wall's capped end
+        /// overhangs the room next door.</summary>
+        private static MapZone RoomBehind(MapData map, in WallFace face)
+        {
+            Vector2 inside = Midpoint(face) + face.Out * 0.25f;
+            return map.ZoneAt(inside.x, inside.y);
+        }
+
+        /// <summary>How far a face stands INSIDE the room it looks into: nothing for an exterior wall,
+        /// half a wall for a party wall the two rooms share.</summary>
+        private static float FaceInset(MapZone room, in WallFace face)
+        {
+            if (face.Out.x > 0.5f) return Mathf.Max(0f, face.A.x - room.XMin);
+            if (face.Out.x < -0.5f) return Mathf.Max(0f, room.XMax - face.A.x);
+            if (face.Out.y > 0.5f) return Mathf.Max(0f, face.A.y - room.ZMin);
+            return Mathf.Max(0f, room.ZMax - face.A.y);
+        }
+
+        /// <summary>The stretch of a face — as distance from <see cref="WallFace.A"/> — that actually
+        /// runs alongside a room. Walls are capped past their ends to close the corners, so a face is
+        /// routinely longer than the room behind it.</summary>
+        private static Vector2 Overlap(MapZone room, in WallFace face)
+        {
+            bool alongX = Mathf.Abs(face.Direction.x) > 0.5f;
+
+            float from = alongX ? room.XMin : room.ZMin;
+            float to = alongX ? room.XMax : room.ZMax;
+            float origin = alongX ? face.A.x : face.A.y;
+
+            return new Vector2(Mathf.Max(0f, from - origin), Mathf.Min(face.Length, to - origin));
+        }
+
+        /// <summary>A prop's footprint measured ACROSS a face — the direction the edge band runs in.</summary>
+        private static float Across(in DressingProp prop, in WallFace face)
+        {
+            Rect f = prop.Footprint;
+            return Mathf.Abs(face.Direction.x) > 0.5f ? f.height : f.width;
         }
 
         private static readonly string[] Flowers =
@@ -389,36 +588,78 @@ namespace MaxWorlds.Arena
             PropCatalog.FlowerRedB, PropCatalog.FlowerPurpleC,
         };
 
-        /// <summary>Two tilled beds down the sides of the lawn, planted out. The dirt rows are flat
-        /// paint; the flowers standing in them are what actually reads at this camera angle.</summary>
-        private static void FlowerBeds(List<DressingProp> into, BackyardPathLayout L)
+        private const float RowLength = 2.2f;
+        private const float BedInset = 1.1f;
+
+        /// <summary>Two tilled beds down the sides of every open room, planted out. The dirt rows are
+        /// flat paint; the flowers standing in them are what actually reads at this camera angle.</summary>
+        private static void FlowerBeds(List<DressingProp> into, MapData map, Keepout keepout)
         {
-            Bed(into, L, -1f, L.LawnStartZ + 3.5f);
-            Bed(into, L, +1f, L.GateZ - 7.5f);
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null || zone.Kind != ZoneKind.Open) continue;
+
+                Bed(into, keepout, zone, -1f);
+                Bed(into, keepout, zone, +1f);
+            }
         }
 
-        private static void Bed(List<DressingProp> into, BackyardPathLayout L, float side, float zStart)
+        /// <summary>
+        /// A bed against one side of a room, at the first depth along it that clears the fight.
+        ///
+        /// The beds used to be at two hand-picked depths, which worked only because the lawn was a
+        /// corridor with nothing else along its edges. A room with a doorway in its side has to be
+        /// ASKED where a bed fits, not told — so the near bed walks up from the near end and the far
+        /// bed walks down from the far end, and each takes the first slot it is allowed.
+        /// </summary>
+        private static void Bed(List<DressingProp> into, Keepout keepout, MapZone room, float side)
         {
-            const float RowLength = 2.2f;
-            const float Inset = 1.1f;
+            float x = room.x + side * (room.width * 0.5f - BedInset);
+            float first = room.ZMin + 2.5f;
+            float last = room.ZMax - 2.5f - RowLength;
+            if (last < first) return;
 
-            Vector3 kit = PropCatalog.Size(PropCatalog.DirtRow);
-            float row = RowLength / kit.x;
-            var rowScale = new Vector3(row, 0.09f / kit.y, row);
-            float x = side * (L.LawnHalfWidth - Inset);
+            float step = side < 0f ? 0.5f : -0.5f;
 
-            for (int i = 0; i < 2; i++)
+            for (float z = side < 0f ? first : last; z >= first && z <= last; z += step)
             {
-                float z = zStart + i * RowLength;
-                into.Add(new DressingProp(PropCatalog.DirtRow, new Vector2(x, z), rowScale, 90f));
+                if (!Fits(keepout, room, x, z, side)) continue;
 
-                for (int f = 0; f < 3; f++)
+                Vector3 kit = PropCatalog.Size(PropCatalog.DirtRow);
+                float row = RowLength / kit.x;
+                var rowScale = new Vector3(row, 0.09f / kit.y, row);
+
+                for (int i = 0; i < 2; i++)
                 {
-                    string key = Flowers[(i * 3 + f) % Flowers.Length];
-                    var at = new Vector2(x + side * 0.2f, z + (f - 1) * RowLength * 0.32f);
-                    into.Add(new DressingProp(key, at, PropCatalog.ScaleToHeight(key, 0.75f), f * 47f));
+                    into.Add(new DressingProp(PropCatalog.DirtRow, new Vector2(x, z + i * RowLength),
+                                              rowScale, 90f));
+
+                    for (int f = 0; f < 3; f++)
+                        into.Add(Flower(x, z, side, i, f));
                 }
+                return;
             }
+        }
+
+        private static bool Fits(Keepout keepout, MapZone room, float x, float z, float side)
+        {
+            for (int i = 0; i < 2; i++)
+            for (int f = 0; f < 3; f++)
+            {
+                DressingProp flower = Flower(x, z, side, i, f);
+                if (!room.Contains(flower.CenterXz.x, flower.CenterXz.y)) return false;
+                if (keepout.Objection(flower) != null) return false;
+            }
+            return true;
+        }
+
+        private static DressingProp Flower(float x, float z, float side, int row, int index)
+        {
+            string key = Flowers[(row * 3 + index) % Flowers.Length];
+            var at = new Vector2(x + side * 0.2f,
+                                 z + row * RowLength + (index - 1) * RowLength * 0.32f);
+
+            return new DressingProp(key, at, PropCatalog.ScaleToHeight(key, 0.75f), index * 47f);
         }
 
         // ---------------------------------------------------------------- the shed
@@ -433,10 +674,12 @@ namespace MaxWorlds.Arena
         /// straight down. So the shed is built AROUND it: plank walls at its back and sides, open to
         /// the front and to the sky, with the machine sitting inside.
         ///
-        /// Everything here stays well inside the spawn ring. That is what guarantees robots emerge in
-        /// front of the shed and walk away from it, and never out of a wall.
+        /// Everything is placed RELATIVE to the factory, because the factory no longer stands on the
+        /// centre line — it is off in a room of its own. And everything stays well inside the spawn
+        /// ring, which is what guarantees robots emerge in front of the shed and walk away from it,
+        /// and never out of a wall.
         /// </summary>
-        private static void ShedYard(List<DressingProp> into, float shedZ)
+        private static void ShedYard(List<DressingProp> into, Vector2 factory)
         {
             Vector3 panel = PropCatalog.Size(PropCatalog.FencePanel);
             const float HalfWidth = 1.7f;    // just clear of the 3 m hutch body
@@ -446,21 +689,21 @@ namespace MaxWorlds.Arena
             Vector3 Wall(float width) =>
                 new Vector3(width / panel.x, ShedWallHeight / panel.y, PanelDepth / panel.z);
 
-            into.Add(new DressingProp(PropCatalog.FencePanel, new Vector2(0f, shedZ + BackZ),
+            into.Add(new DressingProp(PropCatalog.FencePanel, factory + new Vector2(0f, BackZ),
                                       Wall(HalfWidth * 2f), 180f, DressingZone.Factory));
             into.Add(new DressingProp(PropCatalog.FencePanel,
-                                      new Vector2(-HalfWidth, shedZ + BackZ - WingLength * 0.5f),
+                                      factory + new Vector2(-HalfWidth, BackZ - WingLength * 0.5f),
                                       Wall(WingLength), 90f, DressingZone.Factory));
             into.Add(new DressingProp(PropCatalog.FencePanel,
-                                      new Vector2(HalfWidth, shedZ + BackZ - WingLength * 0.5f),
+                                      factory + new Vector2(HalfWidth, BackZ - WingLength * 0.5f),
                                       Wall(WingLength), -90f, DressingZone.Factory));
 
             // The woodpile and pots you'd expect beside a garden shed — tucked in behind the corners,
             // where they dress the silhouette without ever standing between the player and the core.
-            Clutter(into, PropCatalog.LogStack, new Vector2(-2.2f, shedZ + 0.8f), 0.5f, 0f);
-            Clutter(into, PropCatalog.Stump, new Vector2(-2.05f, shedZ + 1.4f), 0.35f, 0f);
-            Clutter(into, PropCatalog.PotLarge, new Vector2(2.1f, shedZ + 0.7f), 0.35f, 0f);
-            Clutter(into, PropCatalog.PotSmall, new Vector2(2f, shedZ + 1.3f), 0.42f, 30f);
+            Clutter(into, PropCatalog.LogStack, factory + new Vector2(-2.2f, 0.8f), 0.5f, 0f);
+            Clutter(into, PropCatalog.Stump, factory + new Vector2(-2.05f, 1.4f), 0.35f, 0f);
+            Clutter(into, PropCatalog.PotLarge, factory + new Vector2(2.1f, 0.7f), 0.35f, 0f);
+            Clutter(into, PropCatalog.PotSmall, factory + new Vector2(2f, 1.3f), 0.42f, 30f);
         }
 
         private static void Clutter(List<DressingProp> into, string key, Vector2 at, float height, float yaw)
@@ -472,6 +715,19 @@ namespace MaxWorlds.Arena
         private static float Range(System.Random rng, float a, float b) =>
             a + (float)rng.NextDouble() * (b - a);
 
+        private static Vector2 Midpoint(in WallFace face) => (face.A + face.B) * 0.5f;
+
+        /// <summary>Where the factory stands. The spawn ring is around THIS, not around x=0.</summary>
+        private static Vector2 Factory(MapData map) =>
+            map.First(EntityKind.Factory)?.CenterXz ?? Vector2.zero;
+
+        private static List<ArenaCover> CoverIn(MapData map)
+        {
+            var cover = new List<ArenaCover>();
+            foreach (MapEntity e in MapValidation.Kind(map, EntityKind.Cover)) cover.Add(e.ToCover());
+            return cover;
+        }
+
         // ---------------------------------------------------------------- validation
 
         /// <summary>
@@ -482,13 +738,12 @@ namespace MaxWorlds.Arena
         /// keeps off the factory's spawn ring. Factory props are judged the other way round: they must
         /// stay INSIDE the ring, so nothing is ever spawned standing in them.
         /// </summary>
-        public static bool Validate(BackyardPathLayout layout, IReadOnlyList<DressingProp> props,
-                                    IReadOnlyList<ArenaCover> cover, float shedZ, float spawnRadius,
-                                    out string reason)
+        public static bool Validate(MapData map, IReadOnlyList<DressingProp> props,
+                                    IReadOnlyList<ArenaCover> cover, out string reason)
         {
-            var ring = new Vector2(0f, shedZ);
-            Rect[] interiors = Interiors(layout);
-            Rect[] doorways = Doorways(layout);
+            if (map == null) { reason = "there is no map to dress"; return false; }
+
+            var keepout = new Keepout(map, cover);
 
             foreach (DressingProp prop in props)
             {
@@ -498,77 +753,109 @@ namespace MaxWorlds.Arena
                 if (prop.Scale.x <= 0f || prop.Scale.y <= 0f || prop.Scale.z <= 0f)
                 { reason = $"{prop.Key} has a non-positive scale"; return false; }
 
-                if (prop.Zone == DressingZone.Factory)
-                {
-                    if (prop.FarthestFrom(ring) > spawnRadius - SpawnClearance)
-                    {
-                        reason = $"{prop.Key} by the shed reaches the spawn ring — " +
-                                 "robots would be born inside it";
-                        return false;
-                    }
-                    continue;
-                }
-
-                if (prop.IsFlat) continue;   // walked over, not around
-
-                Rect footprint = prop.Footprint;
-
-                foreach (Rect room in interiors)
-                {
-                    if (room.Overlaps(footprint))
-                    { reason = $"{prop.Key} at {prop.CenterXz} stands in the middle of the fight space"; return false; }
-                }
-
-                foreach (Rect door in doorways)
-                {
-                    if (door.Overlaps(footprint))
-                    { reason = $"{prop.Key} at {prop.CenterXz} stands in a doorway"; return false; }
-                }
-
-                if (prop.DistanceTo(ring) < spawnRadius + SpawnClearance)
-                { reason = $"{prop.Key} at {prop.CenterXz} crowds the shed's spawn ring"; return false; }
-
-                if (cover == null) continue;
-                foreach (ArenaCover c in cover)
-                {
-                    if (c.Footprint.Overlaps(footprint))
-                    { reason = $"{prop.Key} at {prop.CenterXz} grows through the {c.Name}"; return false; }
-                }
+                reason = keepout.Objection(prop);
+                if (reason != null) return false;
             }
 
             reason = null;
             return true;
         }
 
-        /// <summary>Each room minus the band a prop may stand in — i.e. the space the fight needs.
-        /// Nothing tall may touch these.</summary>
-        public static Rect[] Interiors(BackyardPathLayout L)
+        /// <summary>
+        /// Everywhere a prop tall enough to matter may not stand, and why.
+        ///
+        /// The drivers ask this BEFORE they place anything, and <see cref="Validate"/> asks it again
+        /// afterwards. That is deliberate: the rule is stated once, so the yard cannot be generated
+        /// against one idea of "clear" and then judged against another — and a shrub with nowhere to
+        /// go costs the map a shrub, not its entire dressing.
+        /// </summary>
+        private sealed class Keepout
         {
-            return new[]
+            private readonly Rect[] _interiors;
+            private readonly Rect[] _doorways;
+            private readonly List<ArenaCover> _cover = new List<ArenaCover>();
+            private readonly Vector2 _ring;
+
+            public Keepout(MapData map, IReadOnlyList<ArenaCover> cover)
             {
-                Deflate(Room(L.PatioHalfWidth, L.StartZ, L.LawnStartZ), EdgeBand),
-                Deflate(Room(L.LawnHalfWidth, L.LawnStartZ, L.GateZ), EdgeBand),
-                Deflate(Room(L.ArenaHalfWidth, L.GateZ, L.ArenaEndZ), EdgeBand),
-            };
+                _interiors = Interiors(map);
+                _doorways = Doorways(map);
+                _ring = Factory(map);
+
+                if (cover != null) _cover.AddRange(cover);
+            }
+
+            /// <summary>Why this prop may not stand where it does, or null if it may.</summary>
+            public string Objection(in DressingProp prop)
+            {
+                if (prop.Zone == DressingZone.Factory)
+                {
+                    return prop.FarthestFrom(_ring) > MapValidation.SpawnRadius - SpawnClearance
+                        ? $"{prop.Key} by the shed reaches the spawn ring — robots would be born inside it"
+                        : null;
+                }
+
+                if (prop.IsFlat) return null;   // walked over, not around
+
+                Rect footprint = prop.Footprint;
+
+                foreach (Rect room in _interiors)
+                    if (room.Overlaps(footprint))
+                        return $"{prop.Key} at {prop.CenterXz} stands in the middle of the fight space";
+
+                foreach (Rect door in _doorways)
+                    if (door.Overlaps(footprint))
+                        return $"{prop.Key} at {prop.CenterXz} stands in a doorway";
+
+                if (prop.DistanceTo(_ring) < MapValidation.SpawnRadius + SpawnClearance)
+                    return $"{prop.Key} at {prop.CenterXz} crowds the shed's spawn ring";
+
+                foreach (ArenaCover c in _cover)
+                    if (c.Footprint.Overlaps(footprint))
+                        return $"{prop.Key} at {prop.CenterXz} grows through the {c.Name}";
+
+                return null;
+            }
         }
 
-        /// <summary>The two ways through — the patio mouth and the boss gate — as the passages you
-        /// walk down, inset from the frames the fence panels form.</summary>
-        public static Rect[] Doorways(BackyardPathLayout L)
+        /// <summary>Each room of the map minus the band a prop may stand in — i.e. the space the fight
+        /// needs. Nothing tall may touch these.</summary>
+        public static Rect[] Interiors(MapData map)
+        {
+            if (map?.zones == null) return new Rect[0];
+
+            var rooms = new List<Rect>(map.zones.Length);
+            foreach (MapZone zone in map.zones)
+                if (zone != null) rooms.Add(Deflate(zone.Footprint, EdgeBand));
+
+            return rooms.ToArray();
+        }
+
+        /// <summary>Every way through, as the passage you walk down: the doorway the map's link cuts,
+        /// inset from the frame the fence panels form, and reaching
+        /// <see cref="DoorwayClearance"/> either side of the wall line.</summary>
+        public static Rect[] Doorways(MapData map)
         {
             const float FrameInset = 0.6f;
-            float patio = Mathf.Max(0.5f, L.PatioHalfWidth - FrameInset);
-            float gate = Mathf.Max(0.5f, L.GateHalfWidth - FrameInset);
 
-            return new[]
+            var doors = new List<Rect>();
+            if (map?.links == null) return doors.ToArray();
+
+            foreach (MapLink link in map.links)
             {
-                new Rect(-patio, L.LawnStartZ - DoorwayClearance, patio * 2f, DoorwayClearance * 2f),
-                new Rect(-gate, L.GateZ - DoorwayClearance, gate * 2f, DoorwayClearance * 2f),
-            };
-        }
+                if (link == null) continue;
+                if (!MapGeometry.Doorway(map, link, out bool alongX, out float coord, out Span hole))
+                    continue;
 
-        private static Rect Room(float halfWidth, float zFrom, float zTo) =>
-            new Rect(-halfWidth, zFrom, halfWidth * 2f, zTo - zFrom);
+                float half = Mathf.Max(0.5f, hole.Length * 0.5f - FrameInset);
+
+                doors.Add(alongX
+                    ? new Rect(hole.Mid - half, coord - DoorwayClearance, half * 2f, DoorwayClearance * 2f)
+                    : new Rect(coord - DoorwayClearance, hole.Mid - half, DoorwayClearance * 2f, half * 2f));
+            }
+
+            return doors.ToArray();
+        }
 
         private static Rect Deflate(Rect r, float by)
         {

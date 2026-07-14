@@ -27,6 +27,41 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class ArenaMap
     {
+        /// <summary>
+        /// The rooms of a MAP — one per zone, named the way the author named it.
+        ///
+        /// This is what the minimap draws now. The layout overloads below say a level in four
+        /// numbers, which was enough while a level was a corridor; a room hanging off the side of the
+        /// lawn cannot be said in them at all, and a map that quietly leaves out the shed and the nook
+        /// is a map that lies about where you can go. So: a room in the level is a room on the map,
+        /// with nothing to re-author.
+        /// </summary>
+        public static MapRoom[] Rooms(MapData map)
+        {
+            if (map?.zones == null) return new MapRoom[0];
+
+            var rooms = new List<MapRoom>(map.zones.Length);
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null) continue;
+
+                string name = string.IsNullOrWhiteSpace(zone.name) ? zone.id : zone.name;
+                rooms.Add(new MapRoom(name, zone.Footprint));
+            }
+
+            return rooms.ToArray();
+        }
+
+        /// <summary>Everything a map has to contain, walls included.</summary>
+        public static Rect Bounds(MapData map)
+        {
+            if (map == null) return new Rect(0f, 0f, 0f, 0f);
+
+            Rect b = map.Bounds();
+            float t = map.wallThickness;
+            return new Rect(b.xMin - t, b.yMin - t, b.width + t * 2f, b.height + t * 2f);
+        }
+
         /// <summary>The rooms, in the order the player walks them.</summary>
         public static MapRoom[] Rooms(in BackyardPathLayout l)
         {

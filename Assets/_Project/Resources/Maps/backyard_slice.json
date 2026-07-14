@@ -22,11 +22,38 @@
             "depth": 27.0
         },
         {
+            "id": "nook",
+            "name": "The Beds",
+            "type": "cover",
+            "x": -16.5,
+            "z": 7.5,
+            "width": 9.0,
+            "depth": 9.0
+        },
+        {
+            "id": "shed",
+            "name": "The Shed",
+            "type": "interior",
+            "x": 19.0,
+            "z": 15.0,
+            "width": 14.0,
+            "depth": 14.0
+        },
+        {
+            "id": "gatehouse",
+            "name": "The Boss Gate",
+            "type": "interior",
+            "x": 0.0,
+            "z": 25.0,
+            "width": 12.0,
+            "depth": 6.0
+        },
+        {
             "id": "compost",
             "name": "Compost Clearing",
             "type": "boss",
             "x": 0.0,
-            "z": 33.0,
+            "z": 39.0,
             "width": 30.0,
             "depth": 22.0
         }
@@ -40,9 +67,27 @@
         },
         {
             "from": "lawn",
-            "to": "compost",
+            "to": "nook",
+            "doorway": 0.0,
+            "gate": ""
+        },
+        {
+            "from": "lawn",
+            "to": "shed",
+            "doorway": 5.0,
+            "gate": ""
+        },
+        {
+            "from": "lawn",
+            "to": "gatehouse",
             "doorway": 9.0,
             "gate": "boss_gate"
+        },
+        {
+            "from": "gatehouse",
+            "to": "compost",
+            "doorway": 0.0,
+            "gate": ""
         }
     ],
     "entities": [
@@ -50,7 +95,7 @@
             "id": "max_start",
             "kind": "playerSpawn",
             "x": 0.0,
-            "z": -3.0,
+            "z": -10.0,
             "width": 1.0,
             "height": 1.0,
             "depth": 1.0,
@@ -61,7 +106,7 @@
         {
             "id": "mower_hutch",
             "kind": "factory",
-            "x": 0.0,
+            "x": 19.0,
             "z": 15.0,
             "width": 3.0,
             "height": 2.0,
@@ -86,7 +131,7 @@
             "id": "big_bermuda",
             "kind": "boss",
             "x": 0.0,
-            "z": 33.0,
+            "z": 39.0,
             "width": 3.5,
             "height": 3.0,
             "depth": 3.5,
@@ -97,8 +142,8 @@
         {
             "id": "Cover Planter",
             "kind": "cover",
-            "x": 7.0,
-            "z": 2.0,
+            "x": 6.5,
+            "z": 1.0,
             "width": 3.5,
             "height": 1.6,
             "depth": 3.5,
@@ -121,7 +166,7 @@
         {
             "id": "Cover Hedge",
             "kind": "cover",
-            "x": 6.5,
+            "x": 5.5,
             "z": 11.0,
             "width": 6.0,
             "height": 1.8,
@@ -131,27 +176,39 @@
             "opensOn": ""
         },
         {
-            "id": "Shed Post L",
-            "kind": "prop",
-            "x": -2.6,
-            "z": 15.0,
-            "width": 0.4,
-            "height": 2.5,
-            "depth": 0.4,
+            "id": "Cover Bins",
+            "kind": "cover",
+            "x": -7.0,
+            "z": 16.0,
+            "width": 3.0,
+            "height": 2.0,
+            "depth": 3.0,
             "shape": "box",
-            "dressing": "none",
+            "dressing": "planter",
             "opensOn": ""
         },
         {
-            "id": "Shed Post R",
-            "kind": "prop",
-            "x": 2.6,
-            "z": 15.0,
-            "width": 0.4,
-            "height": 2.5,
-            "depth": 0.4,
+            "id": "Cover Log Pile",
+            "kind": "cover",
+            "x": 8.0,
+            "z": 18.5,
+            "width": 2.5,
+            "height": 1.4,
+            "depth": 2.5,
             "shape": "box",
-            "dressing": "none",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Workbench",
+            "kind": "cover",
+            "x": 23.5,
+            "z": 20.0,
+            "width": 3.0,
+            "height": 1.5,
+            "depth": 2.0,
+            "shape": "box",
+            "dressing": "planter",
             "opensOn": ""
         }
     ]

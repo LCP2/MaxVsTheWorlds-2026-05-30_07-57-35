@@ -54,9 +54,16 @@ namespace MaxWorlds.Arena
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null) return;
 
-            List<BackdropPiece> pieces = Build(path.Layout);
+            MapData map = path.Map;
+            if (map == null)
+            {
+                Debug.LogWarning("[BackyardBackdrop] no map loaded — nothing to stand behind.");
+                return;
+            }
 
-            if (!Validate(path.Layout, pieces, out string reason))
+            List<BackdropPiece> pieces = Build(map);
+
+            if (!Validate(map, pieces, out string reason))
             {
                 Debug.LogWarning($"[BackyardBackdrop] not built: {reason}");
                 return;
@@ -113,58 +120,117 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>The neighbourhood, derived from the arena so it moves when the arena does.</summary>
-        public static List<BackdropPiece> Build(in BackyardPathLayout l)
+        /// <summary>
+        /// The neighbourhood, wrapped around the MAP's bounds so it moves when the level does.
+        ///
+        /// It used to be threaded down the sides of a straight corridor, band by band — which is a
+        /// thing you can only write once you know the level is a corridor. The yard turns now, and it
+        /// has rooms hanging off it, so the backdrop goes round the rectangle the whole map sits in.
+        /// The four sides get the same pieces they always got: the neighbours' hedge, their fence
+        /// beyond it, their houses beyond that, and trees to break up the rooflines.
+        ///
+        /// Everything is positioned by how far its INNER FACE stands off the yard, never by its
+        /// centre. Place a house by its centre and it grows into the arena the day somebody makes it
+        /// bigger; place it by its near edge and it cannot.
+        /// </summary>
+        public static List<BackdropPiece> Build(MapData map)
         {
-            var pieces = new List<BackdropPiece>(48);
+            var pieces = new List<BackdropPiece>(160);
+            if (map == null) return pieces;
 
-            float lawnEdge = l.LawnHalfWidth + l.WallThickness;     // outer face of the lawn's wall
-            float arenaEdge = l.ArenaHalfWidth + l.WallThickness;
+            Rect b = map.Bounds();
 
-            foreach (float side in new[] { -1f, 1f })
+            // The four lines the yard ends on, and which way is "away" from each.
+            var sides = new[]
             {
-                // The neighbours' fence, parallel to ours and a garden's width away. This is the
-                // piece that does the most work: two fence lines with a gap between them is what
-                // makes the yard read as one of several, rather than as the only place there is.
-                Fence(pieces, side * (lawnEdge + Standoff + 2.5f), l.StartZ - 4f, l.GateZ + 2f);
-                Fence(pieces, side * (arenaEdge + Standoff + 2f), l.GateZ + 2f, l.ArenaEndZ + 6f);
+                new Side(alongX: false, at: b.xMin, outward: -1f, from: b.yMin, to: b.yMax),
+                new Side(alongX: false, at: b.xMax, outward: +1f, from: b.yMin, to: b.yMax),
+                new Side(alongX: true, at: b.yMin, outward: -1f, from: b.xMin, to: b.xMax),
+                new Side(alongX: true, at: b.yMax, outward: +1f, from: b.xMin, to: b.xMax),
+            };
 
-                // A hedge along it, softening the line. It stops short of the gate: past there the
-                // boss arena is 6 m wider than the lawn, and a hedge that ran the full length would
-                // have to jog outward to clear it — which is a fence's job, not a hedge's.
-                Hedge(pieces, side * (lawnEdge + Standoff + 1.6f), l.StartZ - 2f, l.GateZ - 3f, 2.4f);
+            foreach (Side side in sides)
+            {
+                // A hedge first, closest in, softening the line our own fence draws.
+                Hedge(pieces, side, 2.4f);
 
-                // The neighbours themselves: a wall and a roof, close enough to clear our fence.
-                House(pieces, new Vector2(side * (lawnEdge + 11f), 2f), 7.5f, 9f, 6.5f);
-                House(pieces, new Vector2(side * (arenaEdge + 11f), 32f), 6.5f, 8f, 7.5f);
+                // Then the neighbours' fence, parallel to ours and a garden's width away. This is the
+                // piece that does the most work: two fence lines with a gap between them is what makes
+                // the yard read as one of several, rather than as the only place there is.
+                Fence(pieces, side);
             }
 
-            // The far end of the street, over the boss arena's back wall.
-            House(pieces, new Vector2(-6f, l.ArenaEndZ + 16f), 9f, 11f, 7f);
-            House(pieces, new Vector2(8f, l.ArenaEndZ + 19f), 8f, 9f, 6f);
-            Hedge(pieces, 0f, l.ArenaEndZ + 6f, l.ArenaEndZ + 6.6f, 2.2f, alongX: true, length: 44f);
+            // The neighbours themselves: a wall and a roof each, close enough to clear our fence, and
+            // spread round the ring so no two rooflines line up.
+            House(pieces, sides[0], along: 0.25f, width: 7.5f, depth: 9f, height: 6.5f);
+            House(pieces, sides[0], along: 0.75f, width: 6.5f, depth: 8f, height: 7.5f);
+            House(pieces, sides[1], along: 0.30f, width: 7f, depth: 9f, height: 7f);
+            House(pieces, sides[1], along: 0.80f, width: 8f, depth: 8f, height: 6f);
+            House(pieces, sides[2], along: 0.5f, width: 9f, depth: 8f, height: 6f);
+            House(pieces, sides[3], along: 0.35f, width: 9f, depth: 11f, height: 7f);
+            House(pieces, sides[3], along: 0.7f, width: 8f, depth: 9f, height: 6f);
 
             // Trees, thrown around the ring so the rooflines aren't a wall of boxes. They sit in the
-            // haze, so nobody counts them — five is a neighbourhood, twenty is a forest and a frame
-            // budget.
-            Tree(pieces, new Vector2(-(lawnEdge + 6f), -2f), 7.5f, PropCatalog.TreeDefault);
-            Tree(pieces, new Vector2(lawnEdge + 7f, 9f), 8.5f, PropCatalog.TreeOak);
-            Tree(pieces, new Vector2(-(arenaEdge + 6.5f), 27f), 9f, PropCatalog.TreeDefault);
-            Tree(pieces, new Vector2(arenaEdge + 6f, 39f), 7f, PropCatalog.TreeThin);
-            Tree(pieces, new Vector2(-13f, l.ArenaEndZ + 9f), 8f, PropCatalog.TreeOak);
-            Tree(pieces, new Vector2(15f, l.ArenaEndZ + 8f), 7.5f, PropCatalog.TreeDefault);
+            // haze, so nobody counts them — a handful is a neighbourhood, twenty is a forest and a
+            // frame budget.
+            Tree(pieces, sides[0], along: 0.15f, height: 7.5f, key: PropCatalog.TreeDefault);
+            Tree(pieces, sides[0], along: 0.55f, height: 9f, key: PropCatalog.TreeOak);
+            Tree(pieces, sides[1], along: 0.2f, height: 8.5f, key: PropCatalog.TreeOak);
+            Tree(pieces, sides[1], along: 0.6f, height: 7f, key: PropCatalog.TreeThin);
+            Tree(pieces, sides[2], along: 0.25f, height: 8f, key: PropCatalog.TreeDefault);
+            Tree(pieces, sides[3], along: 0.15f, height: 8f, key: PropCatalog.TreeOak);
+            Tree(pieces, sides[3], along: 0.85f, height: 7.5f, key: PropCatalog.TreeDefault);
 
             return pieces;
         }
 
-        private static void Fence(List<BackdropPiece> pieces, float x, float zFrom, float zTo)
+        /// <summary>One edge of the map's bounding rectangle, and which way is out of the yard from
+        /// it. Every backdrop piece is placed in these terms — how far along the edge, how far beyond
+        /// it — so a piece's clearance from the arena is a property of where it is asked to go, not
+        /// something a coordinate has to be checked for afterwards.</summary>
+        private readonly struct Side
         {
-            float length = zTo - zFrom;
-            if (length <= 0f) return;
+            public readonly bool AlongX;    // the edge runs along X (it is the near or far end)
+            public readonly float At;       // its coordinate on the other axis
+            public readonly float Outward;  // ±1: which way is away from the yard
+            public readonly float From;
+            public readonly float To;
+
+            public Side(bool alongX, float at, float outward, float from, float to)
+            {
+                AlongX = alongX; At = at; Outward = outward; From = from; To = to;
+            }
+
+            public float Length => To - From;
+
+            /// <summary>A point <paramref name="along"/> the edge (0..1) and <paramref name="beyond"/>
+            /// metres past it, measured from the arena's own wall.</summary>
+            public Vector2 Point(float along, float beyond)
+            {
+                float slide = From + Length * along;
+                float off = At + Outward * (Standoff + beyond);
+                return AlongX ? new Vector2(slide, off) : new Vector2(off, slide);
+            }
+        }
+
+        /// <summary>Places a piece by its inner face: <paramref name="clear"/> is the gap between the
+        /// arena's standoff and the nearest bit of it, whatever size it turns out to be.</summary>
+        private static Vector2 Beyond(in Side side, float along, float clear, float size) =>
+            side.Point(along, clear + size * 0.5f);
+
+        private static void Fence(List<BackdropPiece> pieces, in Side side)
+        {
+            const float Thickness = 0.22f;
+            const float Clear = 5f;         // out past the hedge
+
+            // Long enough to close the corners — a fence line that stops at the bounds leaves a gap
+            // you can see the void through from a camera that is looking slightly sideways.
+            float length = side.Length + 12f;
+            Vector2 at = Beyond(side, 0.5f, Clear, Thickness);
 
             pieces.Add(new BackdropPiece(
-                new Vector3(x, 0f, (zFrom + zTo) * 0.5f),
-                new Vector3(0.22f, 2.6f, length),
+                new Vector3(at.x, 0f, at.y),
+                side.AlongX ? new Vector3(length, 2.6f, Thickness) : new Vector3(Thickness, 2.6f, length),
                 Surface.HouseWall));
         }
 
@@ -177,28 +243,25 @@ namespace MaxWorlds.Arena
         /// edge. So the neighbours' hedges are the same kit shrubs the yard's own hedge is made of,
         /// grown big and set in a line, and they cost the same as the box did once they batch.
         /// </summary>
-        private static void Hedge(List<BackdropPiece> pieces, float at, float from, float to,
-                                  float height, bool alongX = false, float length = 0f)
+        private static void Hedge(List<BackdropPiece> pieces, in Side side, float height)
         {
-            float run = alongX ? length : to - from;
-            if (run <= 0f) return;
+            const float Clear = 1f;
 
+            float run = side.Length + 8f;
             int n = Mathf.Max(2, Mathf.RoundToInt(run / 2.4f));
             float step = run / n;
-            float middle = alongX ? (from + to) * 0.5f : from + (to - from) * 0.5f;
+            float size = step * 1.5f;
 
             for (int i = 0; i < n; i++)
             {
-                float along = -run * 0.5f + step * (i + 0.5f);
+                float along = (step * (i + 0.5f) - 4f) / side.Length;
                 float h = height * (1f + (i % 3 - 1) * 0.12f);   // deterministic, and never a straight top
 
-                Vector3 center = alongX
-                    ? new Vector3(at + along, 0f, middle)
-                    : new Vector3(at, 0f, middle + along);
+                Vector2 at = Beyond(side, along, Clear, size);
 
                 pieces.Add(new BackdropPiece(
-                    center,
-                    new Vector3(step * 1.5f, h, step * 1.5f),
+                    new Vector3(at.x, 0f, at.y),
+                    new Vector3(size, h, size),
                     Surface.Foliage,
                     yaw: i * 47f,                                 // no two shrubs the same way round
                     model: Bushes[i % Bushes.Length]));
@@ -210,34 +273,52 @@ namespace MaxWorlds.Arena
             PropCatalog.BushDetailed, PropCatalog.Bush, PropCatalog.BushLarge,
         };
 
-        /// <summary>A house: one wall block and a pitched roof. It is seen from one side, at
-        /// distance, through haze, over a 3.5 m fence — a box and a wedge is the whole of it, and
-        /// anything more is polygons nobody will ever resolve.</summary>
-        private static void House(List<BackdropPiece> pieces, Vector2 at, float width, float depth,
-                                  float height)
+        /// <summary>A house: one wall block and a pitched roof, stood beside one edge of the yard with
+        /// its front to us. It is seen from one side, at distance, through haze, over a 3.5 m fence —
+        /// a box and a wedge is the whole of it, and anything more is polygons nobody will ever
+        /// resolve.</summary>
+        private static void House(List<BackdropPiece> pieces, in Side side, float along,
+                                  float width, float depth, float height)
         {
-            pieces.Add(new BackdropPiece(new Vector3(at.x, 0f, at.y),
-                                         new Vector3(width, height, depth), Surface.HouseWall));
+            const float Clear = 3f;
+            const float Pitch = 30f;
 
-            const float pitch = 30f;
+            // The roof overhangs the walls, so the roof is what the standoff is measured from.
+            float across = depth + 0.9f;
+            float yaw = side.AlongX ? 0f : 90f;      // face the yard, whichever edge we're on
+            Vector2 at = Beyond(side, along, Clear, across);
+
+            pieces.Add(new BackdropPiece(new Vector3(at.x, 0f, at.y),
+                                         new Vector3(width, height, depth), Surface.HouseWall, yaw));
+
             float slope = width * 0.66f;
-            float rise = slope * 0.5f * Mathf.Sin(pitch * Mathf.Deg2Rad);
+            float rise = slope * 0.5f * Mathf.Sin(Pitch * Mathf.Deg2Rad);
+            Vector2 street = side.AlongX ? Vector2.right : Vector2.up;   // along the row of houses
 
             // Two tipped slabs meeting over the ridge. Positioned by their centres — see Tipped.
             foreach (float s in new[] { -1f, 1f })
             {
+                Vector2 ridge = at + street * (s * width * 0.25f);
+
                 pieces.Add(new BackdropPiece(
-                    new Vector3(at.x + s * width * 0.25f, height + rise, at.y),
-                    new Vector3(slope, 0.32f, depth + 0.9f),
+                    new Vector3(ridge.x, height + rise, ridge.y),
+                    new Vector3(slope, 0.32f, across),
                     Surface.Roof,
-                    roll: s * pitch));
+                    yaw,
+                    roll: s * Pitch));
             }
         }
 
-        private static void Tree(List<BackdropPiece> pieces, Vector2 at, float height, string key)
+        private static void Tree(List<BackdropPiece> pieces, in Side side, float along, float height,
+                                 string key)
         {
+            const float Clear = 1.5f;
+
+            float spread = height * 0.55f;
+            Vector2 at = Beyond(side, along, Clear, spread);
+
             pieces.Add(new BackdropPiece(new Vector3(at.x, 0f, at.y),
-                                         new Vector3(height * 0.55f, height, height * 0.55f),
+                                         new Vector3(spread, height, spread),
                                          Surface.Foliage, model: key));
         }
 
@@ -246,10 +327,9 @@ namespace MaxWorlds.Arena
         /// <summary>True when every piece of the backdrop is genuinely OUTSIDE the arena, by a
         /// margin. Scenery that reaches into the yard is not scenery — it's an obstacle the player
         /// can't shoot, and the one thing worse than a bare yard is one full of things that lie.</summary>
-        public static bool Validate(in BackyardPathLayout l, IReadOnlyList<BackdropPiece> pieces,
-                                    out string reason)
+        public static bool Validate(MapData map, IReadOnlyList<BackdropPiece> pieces, out string reason)
         {
-            Rect[] rooms = Rooms(l);
+            Rect[] rooms = Rooms(map);
 
             foreach (BackdropPiece p in pieces)
             {
@@ -270,26 +350,29 @@ namespace MaxWorlds.Arena
         /// <summary>
         /// The arena, room by room, each grown by its own wall and the clearance nothing may cross.
         ///
-        /// Room by room, and not one rectangle around the lot: the boss arena is 6 m wider than the
-        /// lawn, and treating the whole yard as if it were arena-width would push the neighbours'
-        /// hedge three metres further from the lawn fence than it needs to be — which, at a camera
-        /// that can only see a few metres past the fence, is the difference between a neighbour and
-        /// nothing at all.
+        /// Room by room, and not one rectangle around the lot: the boss arena is wider than the lawn
+        /// and the shed hangs off its side, and treating the whole yard as if it were one block would
+        /// push the neighbours' hedge metres further from the fence than it needs to be — which, at a
+        /// camera that can only see a few metres past the fence, is the difference between a
+        /// neighbour and nothing at all.
         /// </summary>
-        public static Rect[] Rooms(in BackyardPathLayout l)
+        public static Rect[] Rooms(MapData map)
         {
-            float pad = l.WallThickness + MinClearance;
+            if (map?.zones == null) return new Rect[0];
 
-            return new[]
+            float pad = map.wallThickness + MinClearance;
+            var rooms = new List<Rect>(map.zones.Length);
+
+            foreach (MapZone zone in map.zones)
             {
-                Room(l.PatioHalfWidth + pad, l.StartZ - pad, l.LawnStartZ),
-                Room(l.LawnHalfWidth + pad, l.LawnStartZ, l.GateZ),
-                Room(l.ArenaHalfWidth + pad, l.GateZ, l.ArenaEndZ + pad),
-            };
-        }
+                if (zone == null) continue;
 
-        private static Rect Room(float halfWidth, float zMin, float zMax) =>
-            new Rect(-halfWidth, zMin, halfWidth * 2f, zMax - zMin);
+                Rect f = zone.Footprint;
+                rooms.Add(new Rect(f.xMin - pad, f.yMin - pad, f.width + pad * 2f, f.height + pad * 2f));
+            }
+
+            return rooms.ToArray();
+        }
 
         // --- building it -------------------------------------------------------------------------
 
