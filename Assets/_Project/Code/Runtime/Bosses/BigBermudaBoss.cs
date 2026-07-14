@@ -109,8 +109,14 @@ namespace MaxWorlds.Bosses
             SetTell(idleColor);
         }
 
-        private void OnEnable() => HudSignals.FactoryDestroyed += OnFactoryDestroyed;
-        private void OnDisable() => HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+        // It wakes when the SOURCES ARE ALL GONE, not when one of them is (YT-92). The slice had a
+        // single factory, so "a factory died" and "the yard is clear" were the same event and this
+        // could listen to the identity-less destruction signal. With two factories that signal fires
+        // on the first kill — and a boss that woke up then would come through the gate while the
+        // player still had a factory pumping robots at their back. FactoryCensus is the one thing that
+        // knows how many sources the run has; it says when the last of them falls.
+        private void OnEnable() => FactoryCensus.Cleared += OnFactoriesCleared;
+        private void OnDisable() => FactoryCensus.Cleared -= OnFactoriesCleared;
 
         private void Start()
         {
@@ -118,7 +124,7 @@ namespace MaxWorlds.Bosses
             HudSignals.EmitBossRegistered();
         }
 
-        private void OnFactoryDestroyed(Vector3 _)
+        private void OnFactoriesCleared()
         {
             if (_phase != Phase.Dormant) return;
             _phase = Phase.Intro;

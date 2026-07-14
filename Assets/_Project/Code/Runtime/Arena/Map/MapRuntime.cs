@@ -11,6 +11,9 @@ namespace MaxWorlds.Arena
     {
         public readonly List<CoverPiece> Cover = new List<CoverPiece>(8);
         public readonly Dictionary<string, GameObject> Actors = new Dictionary<string, GameObject>();
+
+        /// <summary>The factories this map built, in the order it authored them.</summary>
+        public readonly List<MowerHutch> Factories = new List<MowerHutch>(2);
     }
 
     /// <summary>
@@ -21,12 +24,20 @@ namespace MaxWorlds.Arena
     /// That second half is the point. The level's shape used to live in the scene YAML and the actors
     /// standing in it were placed separately by hand, so the two drifted apart and an editor scaffold
     /// existed for the sole purpose of shoving them back into agreement every time a number moved
-    /// (Stage68). Now the map is the only thing that says where the factory stands, where the gate is,
-    /// and which factory opens which gate — so there is nothing left to keep in sync.
+    /// (Stage68). Now the map is the only thing that says where the factories stand, where the gate is,
+    /// and which factories open it — so there is nothing left to keep in sync.
     ///
-    /// Actors are ADOPTED, not created: the scene owns one of each (a factory, a gate, a boss, Max),
-    /// and the map moves and wires them. It does not spawn a second factory from data — when a map
-    /// wants that, this is the method that grows, and nothing else has to.
+    /// Two kinds of actor, and the difference is exactly the one the level cares about:
+    ///
+    ///   * The ONE-OF actors — Max, the gate, the boss — are ADOPTED. The scene owns one of each and
+    ///     the map moves and wires it.
+    ///
+    ///   * FACTORIES ARE BUILT (YT-92). A level can have as many as it likes, so there is nothing for
+    ///     the scene to own one of, and the hand-placed hutch it used to own stands down. This is not
+    ///     just plumbing for a second factory: the scene's copy of the hutch had been quietly carrying
+    ///     a body colour from three tickets ago, overriding the code's, which is precisely the failure
+    ///     mode the code-driven-scenes rule exists to stop. Built factories cannot disagree with each
+    ///     other or with the code, because there is only one recipe.
     ///
     /// Only shapes are set here. The stylised look is applied automatically by the rendering layer
     /// (flat → ground, tall → wall, short → prop), so nothing here touches a material — and so nothing
@@ -41,6 +52,12 @@ namespace MaxWorlds.Arena
 
             RetireLegacyGround();
 
+            // Before anything registers: the scene's hand-placed hutch stands down, and the census
+            // forgets whatever it may already have counted (its Awake may or may not have run — the
+            // order of two Awakes in one scene load is nobody's to promise).
+            RetireSceneFactories();
+            FactoryCensus.Reset();
+
             var root = new GameObject($"Map: {map.name}").transform;
             root.SetParent(parent, false);
 
@@ -53,7 +70,7 @@ namespace MaxWorlds.Arena
                 Box(root, w.Name, w.Center, w.Size, blocksSight: true, isStatic: true);
 
             BuildProps(map, root, built);
-            PlaceActors(map, built);
+            PlaceActors(map, root, built);
             WireGates(map, built);
 
             return built;
@@ -115,9 +132,10 @@ namespace MaxWorlds.Arena
             return new CoverPiece(cover, body);
         }
 
-        /// <summary>Move the scene's actors to where the map says they stand. Their Y is left alone —
-        /// the map authors a floor plan, not heights.</summary>
-        private static void PlaceActors(MapData map, MapBuild built)
+        /// <summary>Put the actors where the map says they stand: adopt the one-of ones, build the
+        /// factories. An adopted actor's Y is left alone — the map authors a floor plan, not heights —
+        /// while a built one gets a Y from its own body, so it can never be authored half-buried.</summary>
+        private static void PlaceActors(MapData map, Transform root, MapBuild built)
         {
             foreach (MapEntity e in map.entities)
             {
@@ -130,7 +148,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Factory:
-                        Adopt(e, built, Find<MowerHutch>());
+                        built.Factories.Add(BuildFactory(e, root, built));
                         break;
 
                     case EntityKind.Gate:
@@ -146,6 +164,49 @@ namespace MaxWorlds.Arena
                         Adopt(e, built, Find<BigBermudaBoss>());
                         break;
                 }
+            }
+        }
+
+        /// <summary>
+        /// A Mower Hutch, from data (YT-92). Every factory in every map is this one recipe, so a
+        /// level's second factory cannot be a slightly different machine from its first.
+        ///
+        /// The body is built and SIZED first, and only then given its components, because
+        /// <see cref="MowerHutch"/> reads its own scale in Awake to size a health bar in metres
+        /// (YT-71) — and AddComponent runs that Awake there and then. Add the script to a
+        /// default-sized cube and you get a bar built for a 1 m machine on a 3 m one.
+        ///
+        /// Nothing here sets a material. The body is damageable, so the rendering layer skins it as a
+        /// Structure exactly as it skins the hutch the scene used to hold, and both directors leave a
+        /// damageable renderer alone — which is what keeps a code-built factory off the magenta path.
+        /// </summary>
+        private static MowerHutch BuildFactory(MapEntity e, Transform root, MapBuild built)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+
+            // RequireComponent brings the EnemySpawner with it — the factory's mouth is part of what a
+            // factory IS, not something a scene has to remember to bolt on.
+            var hutch = body.AddComponent<MowerHutch>();
+
+            built.Actors[e.id] = body;
+            return hutch;
+        }
+
+        /// <summary>
+        /// The hand-placed Mower Hutch the slice scene has carried since the first scaffold stands
+        /// down. The map owns the factories now, and a scene copy is not a spare — it is a second
+        /// factory standing in the wrong room with its own stale serialized numbers.
+        ///
+        /// Inactive rather than destroyed, and BEFORE anything else runs: deactivating an object whose
+        /// Awake has not fired yet means it never fires, so the retired hutch cannot register itself,
+        /// emit a signal, or spawn a single robot.
+        /// </summary>
+        private static void RetireSceneFactories()
+        {
+            foreach (var hutch in Object.FindObjectsByType<MowerHutch>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (hutch != null) hutch.gameObject.SetActive(false);
             }
         }
 
@@ -174,19 +235,29 @@ namespace MaxWorlds.Arena
             return actor;
         }
 
-        /// <summary>Hand every gate the factory that opens it. "Kill the source and the way opens" is
-        /// now a property of the level data (<c>opensOn</c>) rather than a slot a human dragged an
-        /// object into — a slot that silently comes undone the next time the object is rebuilt.</summary>
+        /// <summary>Hand every gate the factories that open it. "Kill the sources and the way opens" is
+        /// a property of the level data (<c>opensOn</c>) rather than a slot a human dragged an object
+        /// into — a slot that silently comes undone the next time the object is rebuilt.
+        ///
+        /// A gate may name more than one factory (YT-92), and it opens on the LAST of them. Each key
+        /// is announced to the gate as it is bound, so the gate knows how many it is waiting on before
+        /// the player has broken any of them.</summary>
         private static void WireGates(MapData map, MapBuild built)
         {
             foreach (MapEntity gate in MapValidation.Kind(map, EntityKind.Gate))
             {
                 if (!built.Actors.TryGetValue(gate.id, out GameObject gateGo) || gateGo == null) continue;
-                if (!built.Actors.TryGetValue(gate.opensOn, out GameObject factoryGo) || factoryGo == null) continue;
 
-                var hutch = factoryGo.GetComponent<MowerHutch>();
                 var door = gateGo.GetComponent<SubZoneGate>();
-                if (hutch != null && door != null) hutch.Bind(door);
+                if (door == null) continue;
+
+                foreach (string key in gate.Keys)
+                {
+                    if (!built.Actors.TryGetValue(key, out GameObject factoryGo) || factoryGo == null) continue;
+
+                    var hutch = factoryGo.GetComponent<MowerHutch>();
+                    if (hutch != null) hutch.Bind(door);   // Bind tells the gate it has another key
+                }
             }
         }
 

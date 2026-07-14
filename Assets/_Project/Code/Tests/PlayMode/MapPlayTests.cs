@@ -6,42 +6,42 @@ using UnityEngine.TestTools;
 using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The map engine against the real actors (YT-89). The EditMode tests prove the map's SHAPE is
-    /// right; these prove the map is what actually puts the level together.
+    /// The map engine against the real actors (YT-89, YT-92). The EditMode tests prove the map's SHAPE
+    /// is right; these prove the map is what actually puts the level together.
     ///
-    /// Every actor here starts parked at the origin — deliberately in the wrong place — and no gate is
-    /// ever dragged into the factory's slot. If they end up where the map says, and if destroying the
-    /// factory opens the gate anyway, then the level's positions and its mission wiring both came out
-    /// of the data. That is the whole ticket, asserted.
+    /// Every adopted actor here starts parked at the origin — deliberately in the wrong place — and no
+    /// gate is ever dragged into a factory's slot. The factories are not built by the fixture at all:
+    /// the map builds those, which is the half of the engine YT-92 added. If the actors end up where
+    /// the map says, and if the run's mission wiring works anyway, then the level's positions and its
+    /// objectives both came out of the data. That is the whole ticket, asserted.
     /// </summary>
     public sealed class MapPlayTests
     {
-        private GameObject _path, _player, _hutch, _gate, _boss;
+        private GameObject _path, _player, _gate, _boss, _strayHutch;
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            foreach (GameObject go in new[] { _path, _player, _hutch, _gate, _boss })
+            foreach (GameObject go in new[] { _path, _player, _gate, _boss, _strayHutch })
                 if (go != null) Object.Destroy(go);
+
             yield return null;
         }
 
-        /// <summary>Builds the scene's actors — all at the origin — then loads the map on top of them.</summary>
+        /// <summary>Builds the scene's one-of actors — all at the origin — then loads the map on top of
+        /// them. The factories arrive with the map.</summary>
         private IEnumerator BuildLevelFromTheMap()
         {
             _player = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             _player.name = "Max (Greybox)";
             _player.tag = "Player";
             _player.AddComponent<CharacterController>();
-
-            _hutch = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _hutch.name = "Mower Hutch";
-            _hutch.AddComponent<MowerHutch>();          // RequireComponent brings the EnemySpawner
 
             _gate = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _gate.name = "SubZone Gate";
@@ -60,18 +60,118 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
         }
 
+        private static MapData Shipped() => MapLibrary.Load(MapLibrary.BackyardSlice);
+
         [UnityTest]
         public IEnumerator TheMapPutsEveryActorWhereItSaysTheyStand()
         {
             yield return BuildLevelFromTheMap();
 
-            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+            MapData map = Shipped();
             Assert.IsNotNull(map);
 
             AssertStandsWhereTheMapSays(map, "max_start", _player);
-            AssertStandsWhereTheMapSays(map, "mower_hutch", _hutch);
             AssertStandsWhereTheMapSays(map, "boss_gate", _gate);
             AssertStandsWhereTheMapSays(map, "big_bermuda", _boss);
+        }
+
+        /// <summary>
+        /// The engine builds a factory for every factory the map authors (YT-92) — which is what a
+        /// second one needs, and it is the thing the old engine could not do at all: it adopted the one
+        /// hutch the scene owned, so a map with two factories got one hutch, teleported twice.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheMapBuildsAFactoryForEveryOneItAuthors()
+        {
+            yield return BuildLevelFromTheMap();
+
+            MapData map = Shipped();
+            var authored = MapValidation.Kind(map, EntityKind.Factory);
+
+            Assert.AreEqual(authored.Count, FactoryCensus.Total,
+                "the level does not have as many factories as the map authors");
+            Assert.GreaterOrEqual(FactoryCensus.Total, 2, "the run has fewer than two sources of pressure");
+
+            for (int i = 0; i < authored.Count; i++)
+            {
+                MowerHutch hutch = FactoryCensus.All[i];
+                Assert.IsNotNull(hutch, $"factory {i} was never built");
+
+                Assert.AreEqual(authored[i].x, hutch.transform.position.x, 0.01f,
+                    $"'{authored[i].id}' is at the wrong X");
+                Assert.AreEqual(authored[i].z, hutch.transform.position.z, 0.01f,
+                    $"'{authored[i].id}' is at the wrong Z");
+
+                // Each one is a whole factory, not a body: its own spawner, its own mouth, its own
+                // stream of robots. Two factories sharing a spawner would be one factory with two
+                // bodies.
+                Assert.IsNotNull(hutch.GetComponent<EnemySpawner>(),
+                    $"'{authored[i].id}' has no spawner — it is a box, not a source");
+                Assert.IsTrue(hutch.IsAlive, $"'{authored[i].id}' was born dead");
+            }
+        }
+
+        /// <summary>
+        /// Both factories are WORKING factories — each one is emitting its own stream of robots, out of
+        /// its own mouth, into its own room. That is the ticket's acceptance, and "it has a spawner
+        /// component" is not the same claim: a second factory that stands there looking like a factory
+        /// and never produces anything is exactly the failure this would ship.
+        ///
+        /// Robots are matched to the factory they came out of by proximity — the mouth puts them a few
+        /// metres from the body (YT-70) — so a stream that all came from one shed cannot pass.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BothFactoriesActuallyEmitRobots()
+        {
+            yield return BuildLevelFromTheMap();
+
+            // The cadence starts at 1.8 s and the fixture has already burned a few frames; give both
+            // sheds enough time to have put something on the field.
+            float t = 0f;
+            while (t < 5f) { t += Time.deltaTime; yield return null; }
+
+            foreach (MowerHutch hutch in FactoryCensus.All)
+            {
+                var spawner = hutch.GetComponent<EnemySpawner>();
+                Assert.Greater(spawner.LiveCount, 0,
+                    $"'{hutch.name}' has not emitted a single robot — it is scenery shaped like a factory");
+
+                // …and what it emitted is standing next to IT, not next to the other one.
+                foreach (RobotEnemy robot in hutch.GetComponentsInChildren<RobotEnemy>())
+                {
+                    if (!robot.gameObject.activeInHierarchy) continue;   // pooled, not yet alive
+
+                    float fromMine = Flat(robot.transform.position - hutch.transform.position);
+                    Assert.Less(fromMine, 12f,
+                        $"a robot from '{hutch.name}' is {fromMine:0} m from it — it did not come out of " +
+                        "this factory's mouth");
+                }
+            }
+        }
+
+        private static float Flat(Vector3 v) => new Vector2(v.x, v.z).magnitude;
+
+        /// <summary>
+        /// A hand-placed hutch stands down (YT-92). The scene carried one from the very first scaffold,
+        /// with its own serialized numbers quietly overriding the code's; the map owns the factories
+        /// now, and a leftover would be a third one standing in the wrong room, spawning robots.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AHandPlacedFactory_StandsDown_SoTheLevelHasOnlyTheOnesTheMapAuthors()
+        {
+            _strayHutch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _strayHutch.name = "Mower Hutch (hand-placed)";
+            _strayHutch.transform.position = new Vector3(0f, 1f, 0f);
+            _strayHutch.AddComponent<MowerHutch>();
+
+            yield return BuildLevelFromTheMap();
+
+            Assert.IsFalse(_strayHutch.activeInHierarchy,
+                "the scene's hand-placed factory is still standing — the level has a source the map " +
+                "never authored");
+
+            Assert.AreEqual(MapValidation.Kind(Shipped(), EntityKind.Factory).Count, FactoryCensus.Total,
+                "the census counted the retired hutch");
         }
 
         /// <summary>The gate is as wide as the doorway it fills — read off the link, not typed in — so
@@ -81,50 +181,84 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return BuildLevelFromTheMap();
 
-            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+            MapData map = Shipped();
             MapEntity gate = map.First(EntityKind.Gate);
 
             Assert.AreEqual(MapRuntime.SealWidth(map, gate), _gate.transform.localScale.x, 1e-3,
                 "the gate is not as wide as its doorway — there is a sliver to squeeze through");
         }
 
-        /// <summary>The mission, proved from data: nothing wires this factory to this gate except the
-        /// map's <c>opensOn</c>. The serialized slot the scene used to rely on is left empty on
-        /// purpose — if it were doing the work, this test could not tell the difference.</summary>
+        /// <summary>
+        /// The mission, proved from data: BOTH factories, then the gate. Nothing wires these factories
+        /// to this gate except the map's <c>opensOn</c>, and nothing tells the gate it takes two keys
+        /// except the fact that the map named two.
+        ///
+        /// The first kill NOT opening the gate is the assertion that matters. That is the difference
+        /// between a run with a build-up and the one the playtest found — where you were through the
+        /// gate and at the boss before the fight had started (YT-92).
+        /// </summary>
         [UnityTest]
-        public IEnumerator KillingTheFactoryOpensTheGate_WiredOnlyByTheMap()
+        public IEnumerator TheGateOpensOnTheLastFactory_NotTheFirst()
         {
             yield return BuildLevelFromTheMap();
 
-            var hutch = _hutch.GetComponent<MowerHutch>();
             var door = _gate.GetComponent<Collider>();
-
-            Assert.IsTrue(hutch.IsAlive, "the factory should start alive");
+            var gate = _gate.GetComponent<SubZoneGate>();
             Assert.IsTrue(door.enabled, "the boss gate should start closed");
+            Assert.AreEqual(2, gate.Keys, "the gate is not waiting on both factories");
 
+            yield return Destroy(FactoryCensus.All[0]);
+
+            Assert.IsTrue(door.enabled,
+                "the gate opened on the FIRST factory. The second one is still standing and still " +
+                "spawning, and the player can walk past it to the boss.");
+            Assert.AreEqual(1, gate.KeysRemaining, "the gate did not count the first kill");
+
+            yield return Destroy(FactoryCensus.All[1]);
+
+            Assert.IsFalse(door.enabled,
+                "the gate never opened — with every factory down, the run cannot be finished");
+        }
+
+        /// <summary>Big Bermuda sleeps through the first kill. A boss that woke on it would come
+        /// through the gate while a factory was still pumping robots at the player's back.</summary>
+        [UnityTest]
+        public IEnumerator TheBossSleepsUntilTheLastFactoryFalls()
+        {
+            yield return BuildLevelFromTheMap();
+
+            var boss = _boss.GetComponent<BigBermudaBoss>();
+            Assert.IsFalse(boss.Engaged, "the boss is awake before anything has been destroyed");
+
+            yield return Destroy(FactoryCensus.All[0]);
+            Assert.IsFalse(boss.Engaged, "the boss woke on the first factory, with the second still up");
+
+            yield return Destroy(FactoryCensus.All[1]);
+            Assert.IsTrue(boss.Engaged, "the yard is clear and the boss never woke up");
+        }
+
+        /// <summary>Guards the wiring tests' premise. If someone quietly re-wires a gate through the
+        /// serialized slot again, those tests would still pass while proving nothing — so assert a
+        /// freshly built factory really has an empty slot until the map fills it.</summary>
+        [UnityTest]
+        public IEnumerator TheFactorysGateSlot_IsFilledByTheMap_NotByHand()
+        {
+            _strayHutch = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _strayHutch.AddComponent<MowerHutch>();
+            yield return null;
+
+            FieldInfo slot = typeof(MowerHutch).GetField("gate", BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNull(slot.GetValue(_strayHutch.GetComponent<MowerHutch>()),
+                "a freshly built factory already has a gate — the wiring tests can no longer tell " +
+                "whether the map wired it");
+        }
+
+        private static IEnumerator Destroy(MowerHutch hutch)
+        {
             hutch.TakeDamage(new DamageInfo(100000f, hutch.transform.position, Vector3.forward, Team.Player));
             for (int i = 0; i < 3; i++) yield return null;
 
             Assert.IsFalse(hutch.IsAlive, "the factory survived a lethal hit");
-            Assert.IsFalse(door.enabled,
-                "the boss gate never opened — the map's opensOn did not reach the factory, so the run " +
-                "cannot be finished");
-        }
-
-        /// <summary>Guards the previous test's premise. If someone quietly re-wires the gate through
-        /// the scene slot again, the test above would still pass while proving nothing — so assert the
-        /// slot really is empty until the map fills it.</summary>
-        [UnityTest]
-        public IEnumerator TheFactorysGateSlot_IsFilledByTheMap_NotByHand()
-        {
-            _hutch = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _hutch.AddComponent<MowerHutch>();
-            yield return null;
-
-            FieldInfo slot = typeof(MowerHutch).GetField("gate", BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.IsNull(slot.GetValue(_hutch.GetComponent<MowerHutch>()),
-                "a freshly built factory already has a gate — this test can no longer tell whether the " +
-                "map wired it");
         }
 
         private static void AssertStandsWhereTheMapSays(MapData map, string id, GameObject actor)

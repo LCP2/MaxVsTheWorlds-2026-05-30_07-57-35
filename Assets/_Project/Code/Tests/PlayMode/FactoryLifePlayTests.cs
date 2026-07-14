@@ -3,8 +3,8 @@ using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using MaxWorlds.Core;
 using MaxWorlds.Factories;
-using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.PlayMode
@@ -19,6 +19,8 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _hutch;
         private GameObject _life;
+        private GameObject _hutch2;
+        private GameObject _life2;
 
         [SetUp]
         public void SetUp()
@@ -35,8 +37,8 @@ namespace MaxWorlds.Tests.PlayMode
         [TearDown]
         public void TearDown()
         {
-            if (_life != null) Object.Destroy(_life);
-            if (_hutch != null) Object.Destroy(_hutch);
+            foreach (GameObject go in new[] { _life, _hutch, _life2, _hutch2 })
+                if (go != null) Object.Destroy(go);
         }
 
         private IEnumerator InstallLife()
@@ -80,8 +82,13 @@ namespace MaxWorlds.Tests.PlayMode
             yield return InstallLife();
             var life = _life.GetComponent<FactoryLife>();
 
-            HudSignals.EmitFactoryDestroyed(_hutch.transform.position);
-            yield return null;
+            // Destroy the MACHINE, not "a machine". This used to fire the global FactoryDestroyed
+            // signal, which is a position with no identity attached — and once the yard had two
+            // factories (YT-92), listening to it meant the first kill stopped BOTH machines, leaving a
+            // live, spawning hutch standing there with a dead impeller.
+            _hutch.GetComponent<MowerHutch>().TakeDamage(
+                new DamageInfo(100000f, _hutch.transform.position, Vector3.forward, Team.Player));
+            for (int i = 0; i < 2; i++) yield return null;
 
             Assert.IsFalse(life.Running, "the factory is still running after being destroyed.");
 
@@ -95,6 +102,45 @@ namespace MaxWorlds.Tests.PlayMode
             var exhaust = _life.GetComponentInChildren<ParticleSystem>();
             Assert.IsFalse(exhaust.emission.enabled,
                 "it is still smoking. The source is gone; nothing is burning any more.");
+        }
+
+        /// <summary>
+        /// Two factories, two machines — and breaking one leaves the other running (YT-92).
+        ///
+        /// This is the bug a second factory would have shipped with: the art layer stopped itself on a
+        /// GLOBAL "a factory was destroyed" signal, which carries a position and no identity. The first
+        /// kill would have frozen the impeller, killed the vents and cut the exhaust on a factory that
+        /// was still very much alive and still pouring robots at the player — a machine that looks dead
+        /// and behaves alive, which is the single most misleading thing an objective can do.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator BreakingOneFactory_LeavesTheOtherRunning()
+        {
+            yield return InstallLife();
+            var first = _life.GetComponent<FactoryLife>();
+
+            _hutch2 = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _hutch2.name = "Greenhouse Hutch";
+            _hutch2.transform.position = new Vector3(20f, 1f, 15f);
+            _hutch2.transform.localScale = new Vector3(3f, 2f, 3f);
+            var hutch2 = _hutch2.AddComponent<MowerHutch>();
+
+            _life2 = new GameObject("FactoryLife (2)");
+            _life2.SetActive(false);                       // bound before Awake builds the machine
+            var second = _life2.AddComponent<FactoryLife>();
+            second.Bind(hutch2);
+            _life2.SetActive(true);
+            yield return null;
+
+            _hutch.GetComponent<MowerHutch>().TakeDamage(
+                new DamageInfo(100000f, _hutch.transform.position, Vector3.forward, Team.Player));
+            for (int i = 0; i < 2; i++) yield return null;
+
+            Assert.IsFalse(first.Running, "the factory that was destroyed is still running.");
+            Assert.IsTrue(second.Running,
+                "the OTHER factory stopped too. It is alive, it is spawning robots, and its machine " +
+                "has gone dead — the player has no way to tell it is still the thing hunting them.");
+            Assert.IsTrue(hutch2.IsAlive, "the second factory died with the first");
         }
 
         /// <summary>Ambience is never the point of the frame. The existing motes are held to the same

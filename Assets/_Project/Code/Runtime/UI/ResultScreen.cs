@@ -89,7 +89,7 @@ namespace MaxWorlds.UI
             float y = -210f;
             AddStatRow(panel.rectTransform, "TIME", RunStats.FormatTime(stats.Elapsed), ref y);
             AddStatRow(panel.rectTransform, "ROBOTS DESTROYED", stats.Kills.ToString(), ref y);
-            AddStatRow(panel.rectTransform, "FACTORY DESTROYED", stats.FactoryDestroyed ? "YES" : "NO", ref y);
+            AddStatRow(panel.rectTransform, "FACTORIES DESTROYED", stats.FactoriesDestroyed.ToString(), ref y);
             AddStatRow(panel.rectTransform, "DIFFICULTY", "NORMAL", ref y);
 
             // CTAs. Both sit on the same content column as the stat rows above (YT-81) — REPLAY used

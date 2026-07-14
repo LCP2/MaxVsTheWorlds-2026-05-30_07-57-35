@@ -138,16 +138,33 @@ namespace MaxWorlds.Tests.EditMode
             MapData map = Shipped();
             var cover = MapValidation.Kind(map, EntityKind.Cover);
 
-            // Enough to break the beeline, not so much it is a maze — and the fight room itself has
-            // to hold several of them, or the lawn is an empty box again.
             Assert.GreaterOrEqual(cover.Count, 3);
-            Assert.LessOrEqual(cover.Count, 10);
 
-            int inTheLawn = 0;
-            foreach (MapEntity c in cover)
-                if (map.ZoneAt(c.x, c.z)?.id == "lawn") inTheLawn++;
+            // "Not so much it is a maze" is a claim about DENSITY, not about a count. The arena
+            // doubled (YT-92); a flat cap of ten pieces would have said the bigger yard must be
+            // emptier than the small one, which is the opposite of what it needs. So: one piece per
+            // so many square metres of room, which is the thing that actually reads as cluttered.
+            float floor = 0f;
+            foreach (MapZone zone in map.zones) floor += zone.width * zone.depth;
 
-            Assert.GreaterOrEqual(inTheLawn, 2, "the lawn is the fight room and it has nothing to fight around");
+            float metresPerPiece = floor / cover.Count;
+            Assert.Greater(metresPerPiece, 150f, "the yard is a maze — there is cover everywhere you look");
+            Assert.Less(metresPerPiece, 600f, "the yard is an empty box — there is nothing to fight around");
+
+            // And every room the fight actually happens in has to hold some of it.
+            Assert.GreaterOrEqual(CoverIn(map, "lawn"), 2,
+                "the lawn is a fight room and it has nothing to fight around");
+            Assert.GreaterOrEqual(CoverIn(map, "orchard"), 2,
+                "the orchard is a fight room and it has nothing to fight around");
+        }
+
+        private static int CoverIn(MapData map, string zone)
+        {
+            int n = 0;
+            foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
+                if (map.ZoneAt(c.x, c.z)?.id == zone) n++;
+
+            return n;
         }
 
         [Test]
@@ -194,18 +211,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void Cover_StaysOffTheShedsSpawnRing()
+        public void Cover_StaysOffEverySpawnRing()
         {
-            // Robots appear on a ring around the factory. A prop in that ring spawns them inside it —
-            // and a robot has a body, so tangent isn't good enough. The factory is in the shed now, so
-            // the ring is where the shed is, not on the centre line.
+            // Robots appear on a ring around a factory. A prop in that ring spawns them inside it —
+            // and a robot has a body, so tangent isn't good enough. EVERY factory (YT-92): there is no
+            // such thing as being clear of one ring while standing in another's.
             MapData map = Shipped();
-            Vector2 ring = map.First(EntityKind.Factory).CenterXz;
 
+            foreach (MapEntity factory in MapValidation.Kind(map, EntityKind.Factory))
             foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
-                Assert.GreaterOrEqual(c.ToCover().DistanceTo(ring),
+                Assert.GreaterOrEqual(c.ToCover().DistanceTo(factory.CenterXz),
                     MapValidation.SpawnRadius + MapValidation.SpawnClearance,
-                    $"{c.id} crowds the spawn ring");
+                    $"{c.id} crowds {factory.id}'s spawn ring");
         }
 
         [Test]

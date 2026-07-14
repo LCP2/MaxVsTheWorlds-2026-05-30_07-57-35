@@ -154,7 +154,10 @@ namespace MaxWorlds.Arena
             SteppingStones(props, map, cover, rng);
             EdgePlanting(props, map, faces, keepout, rng);
             FlowerBeds(props, map, keepout);
-            ShedYard(props, Factory(map));
+
+            // A shed for every factory (YT-92). One machine standing in a plank shed and another
+            // standing bare in a room would read as two different things, and they are the same thing.
+            foreach (Vector2 factory in Factories(map)) ShedYard(props, factory);
 
             return props;
         }
@@ -717,9 +720,14 @@ namespace MaxWorlds.Arena
 
         private static Vector2 Midpoint(in WallFace face) => (face.A + face.B) * 0.5f;
 
-        /// <summary>Where the factory stands. The spawn ring is around THIS, not around x=0.</summary>
-        private static Vector2 Factory(MapData map) =>
-            map.First(EntityKind.Factory)?.CenterXz ?? Vector2.zero;
+        /// <summary>Where the factories stand. A spawn ring is around EACH of these, not around x=0 —
+        /// and every one of them is a place no shrub may grow, or a robot is born inside it.</summary>
+        private static List<Vector2> Factories(MapData map)
+        {
+            var at = new List<Vector2>(2);
+            foreach (MapEntity e in MapValidation.Kind(map, EntityKind.Factory)) at.Add(e.CenterXz);
+            return at;
+        }
 
         private static List<ArenaCover> CoverIn(MapData map)
         {
@@ -774,13 +782,13 @@ namespace MaxWorlds.Arena
             private readonly Rect[] _interiors;
             private readonly Rect[] _doorways;
             private readonly List<ArenaCover> _cover = new List<ArenaCover>();
-            private readonly Vector2 _ring;
+            private readonly List<Vector2> _rings;
 
             public Keepout(MapData map, IReadOnlyList<ArenaCover> cover)
             {
                 _interiors = Interiors(map);
                 _doorways = Doorways(map);
-                _ring = Factory(map);
+                _rings = Factories(map);
 
                 if (cover != null) _cover.AddRange(cover);
             }
@@ -790,7 +798,12 @@ namespace MaxWorlds.Arena
             {
                 if (prop.Zone == DressingZone.Factory)
                 {
-                    return prop.FarthestFrom(_ring) > MapValidation.SpawnRadius - SpawnClearance
+                    // A shed prop belongs to ONE shed — the one it was placed around — and has to stay
+                    // wholly inside THAT ring. Judging it against the nearest ring is what lets a
+                    // second shed exist without every prop in the first one being measured from a
+                    // factory forty metres away and failing.
+                    return Nearest(prop.CenterXz, out Vector2 ring) &&
+                           prop.FarthestFrom(ring) > MapValidation.SpawnRadius - SpawnClearance
                         ? $"{prop.Key} by the shed reaches the spawn ring — robots would be born inside it"
                         : null;
                 }
@@ -807,14 +820,35 @@ namespace MaxWorlds.Arena
                     if (door.Overlaps(footprint))
                         return $"{prop.Key} at {prop.CenterXz} stands in a doorway";
 
-                if (prop.DistanceTo(_ring) < MapValidation.SpawnRadius + SpawnClearance)
-                    return $"{prop.Key} at {prop.CenterXz} crowds the shed's spawn ring";
+                // Every ring: a yard prop is judged against all of them, because there is no such thing
+                // as being clear of one factory's spawn ring while standing in another's.
+                foreach (Vector2 ring in _rings)
+                    if (prop.DistanceTo(ring) < MapValidation.SpawnRadius + SpawnClearance)
+                        return $"{prop.Key} at {prop.CenterXz} crowds a shed's spawn ring";
 
                 foreach (ArenaCover c in _cover)
                     if (c.Footprint.Overlaps(footprint))
                         return $"{prop.Key} at {prop.CenterXz} grows through the {c.Name}";
 
                 return null;
+            }
+
+            /// <summary>The factory nearest an XZ point. False when the map has no factory at all, in
+            /// which case no shed prop can be judged — and none can have been placed either.</summary>
+            private bool Nearest(Vector2 to, out Vector2 ring)
+            {
+                ring = Vector2.zero;
+                float best = float.MaxValue;
+
+                foreach (Vector2 r in _rings)
+                {
+                    float d = (r - to).sqrMagnitude;
+                    if (d >= best) continue;
+                    best = d;
+                    ring = r;
+                }
+
+                return best < float.MaxValue;
             }
         }
 

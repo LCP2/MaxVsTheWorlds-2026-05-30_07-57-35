@@ -33,11 +33,17 @@ namespace MaxWorlds.UI
         private RectTransform _plan;      // the aspect-correct area the arena is drawn inside
         private float _markerScale = 1f;
 
-        private RectTransform _player, _factory, _gate, _boss;
-        private Image _factoryImg, _gateImg, _bossImg;
+        private RectTransform _player, _gate, _boss;
+        private Image _gateImg, _bossImg;
+
+        // One dot per factory (YT-92). A map that draws one dot in a two-factory level is a map that
+        // sends the player to the gate with a source still standing behind them — and "where is the
+        // thing I have to break" is the whole reason the map is on screen.
+        private readonly List<MowerHutch> _hutches = new List<MowerHutch>(2);
+        private readonly List<RectTransform> _factories = new List<RectTransform>(2);
+        private readonly List<Image> _factoryImgs = new List<Image>(2);
 
         private Transform _playerT;
-        private MowerHutch _hutch;
         private SubZoneGate _gateObj;
         private BigBermudaBoss _bossObj;
 
@@ -91,12 +97,35 @@ namespace MaxWorlds.UI
             foreach (MapRoom room in _rooms) BuildRoom(room, opacity);
 
             _gate = BuildMarker("Gate", GateShut, 0.055f, out _gateImg);
-            _factory = BuildMarker("Factory", FactoryDot, 0.075f, out _factoryImg);
             _boss = BuildMarker("Boss", BossDot, 0.09f, out _bossImg);
             _player = BuildMarker("Max", PlayerDot, 0.07f, out _);
 
             AcquireTargets();
             Refresh();
+        }
+
+        /// <summary>
+        /// A dot for every factory that hasn't got one.
+        ///
+        /// On demand rather than up front, because the HUD and the level are both built in Awake and
+        /// neither gets to say which goes first. The factories come out of the map (YT-92), so a panel
+        /// that counted them while it was building itself could count none — and silently draw a map
+        /// with no objective on it.
+        ///
+        /// Max and the boss are pushed back to the top of the pile afterwards. A factory dot drawn
+        /// over the player dot hides the one marker the player is actually looking for.
+        /// </summary>
+        private void EnsureFactoryMarkers()
+        {
+            while (_factories.Count < _hutches.Count)
+            {
+                _factories.Add(BuildMarker($"Factory {_factories.Count + 1}", FactoryDot, 0.075f,
+                                           out Image img));
+                _factoryImgs.Add(img);
+
+                if (_boss != null) _boss.SetAsLastSibling();
+                if (_player != null) _player.SetAsLastSibling();
+            }
         }
 
         private void BuildRoom(MapRoom room, float opacity)
@@ -143,18 +172,24 @@ namespace MaxWorlds.UI
         {
             var p = GameObject.FindGameObjectWithTag("Player");
             _playerT = p != null ? p.transform : null;
-            _hutch = FindFirstObjectByType<MowerHutch>();
+
+            // In the order the map placed them, so dot 1 is always the near factory — a map whose
+            // markers shuffle between loads is a map you cannot learn.
+            _hutches.Clear();
+            _hutches.AddRange(FactoryCensus.All);
+
             _gateObj = FindFirstObjectByType<SubZoneGate>();
             _bossObj = FindFirstObjectByType<BigBermudaBoss>();
         }
 
         private void LateUpdate() => Refresh();
 
-        /// <summary>Re-plot the live markers. Cheap — four transforms.</summary>
+        /// <summary>Re-plot the live markers. Cheap — a handful of transforms.</summary>
         public void Refresh()
         {
             if (_plan == null) return;
-            if (_playerT == null) AcquireTargets();
+            if (_playerT == null || _hutches.Count != FactoryCensus.All.Count) AcquireTargets();
+            EnsureFactoryMarkers();
 
             if (_playerT != null)
             {
@@ -167,23 +202,23 @@ namespace MaxWorlds.UI
                 Place(_player, PlayerNormalized);
             }
 
-            if (_hutch != null)
+            for (int i = 0; i < _factories.Count && i < _hutches.Count; i++)
             {
-                Place(_factory, ArenaMap.Normalize(Flatten(_hutch.transform.position), _bounds));
+                MowerHutch hutch = _hutches[i];
+                if (hutch == null) continue;
+
+                Place(_factories[i], ArenaMap.Normalize(Flatten(hutch.transform.position), _bounds));
                 // Greyed rather than removed: "the thing you came to kill, already dead" is exactly
-                // what the player wants the map to tell them.
-                if (_factoryImg != null) _factoryImg.color = _hutch.IsAlive ? FactoryDot : Dead;
+                // what the player wants the map to tell them — and with two of them it is also how
+                // they see, at a glance, which one is still up.
+                if (_factoryImgs[i] != null) _factoryImgs[i].color = hutch.IsAlive ? FactoryDot : Dead;
             }
 
             if (_gateObj != null)
             {
                 Place(_gate, ArenaMap.Normalize(Flatten(_gateObj.transform.position), _bounds));
                 if (_gateImg != null)
-                {
-                    var col = _gateObj.GetComponent<Collider>();
-                    bool open = col == null || !col.enabled;   // the gate opens by disabling itself
-                    _gateImg.color = open ? GateOpen : GateShut;
-                }
+                    _gateImg.color = _gateObj.Unlocked ? GateOpen : GateShut;
             }
 
             if (_bossObj != null && _boss != null)

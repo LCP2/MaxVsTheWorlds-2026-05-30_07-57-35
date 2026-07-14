@@ -46,7 +46,15 @@ namespace MaxWorlds.Arena
             // inherits the Backyard's tyre tracks through its origin.
             Clear();
 
-            var hutch = FindFirstObjectByType<MowerHutch>();
+            // The FIRST factory the map placed, not the first one Unity happens to hand back. With two
+            // of them (YT-92) FindFirstObjectByType picks whichever it likes, so the tyre tracks would
+            // land under a different shed depending on scene ordering. These are the tracks the mower
+            // wore into the lawn on its way out of the hutch nearest the house — one machine, one set
+            // of tracks, and the same set every time the level loads.
+            MowerHutch hutch = FactoryCensus.All.Count > 0
+                ? FactoryCensus.All[0]
+                : FindFirstObjectByType<MowerHutch>();
+
             if (hutch == null) return false;
 
             Vector3 p = hutch.transform.position;

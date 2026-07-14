@@ -32,14 +32,44 @@ namespace MaxWorlds.VFX
     [DisallowMultipleComponent]
     public sealed class FactoryLife : MonoBehaviour
     {
+        /// <summary>
+        /// One of these per factory (YT-92) — a level can have more than one, and a machine that is
+        /// still standing has to keep running while the one next door burns.
+        ///
+        /// The object is created INACTIVE and switched on after it is bound, because Awake runs the
+        /// moment the component is added to an active object and Awake is where the machine is built
+        /// around its hutch. Built first, told which factory it belongs to second, and it would build
+        /// itself around whichever one it happened to find.
+        ///
+        /// AfterSceneLoad is late enough: the map builds its factories inside BackyardPath.Awake, so
+        /// by the time this runs, every factory in the level exists.
+        /// </summary>
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (FindFirstObjectByType<FactoryLife>() != null) return;
-            if (FindFirstObjectByType<MowerHutch>() == null) return;   // no factory, nothing to run
+            foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
+            {
+                if (hutch == null || Runs(hutch)) continue;
 
-            new GameObject("FactoryLife").AddComponent<FactoryLife>();
+                var go = new GameObject($"FactoryLife ({hutch.name})");
+                go.SetActive(false);
+                go.AddComponent<FactoryLife>().Bind(hutch);
+                go.SetActive(true);
+            }
         }
+
+        /// <summary>True if some FactoryLife is already running this hutch.</summary>
+        private static bool Runs(MowerHutch hutch)
+        {
+            foreach (var life in FindObjectsByType<FactoryLife>(FindObjectsSortMode.None))
+                if (life._hutch == hutch) return true;
+
+            return false;
+        }
+
+        /// <summary>The factory this one runs. Must be called before the object is activated — Awake
+        /// builds the machine around it.</summary>
+        public void Bind(MowerHutch hutch) => _hutch = hutch;
 
         [Header("Impeller")]
         [Tooltip("Degrees per second at full health. It winds UP as the factory dies — a machine " +
@@ -77,12 +107,18 @@ namespace MaxWorlds.VFX
 
         public bool Running => _running;
 
-        private void OnEnable() => HudSignals.FactoryDestroyed += OnFactoryDestroyed;
-        private void OnDisable() => HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+        // No subscription to HudSignals.FactoryDestroyed, and its absence is the fix: that signal
+        // carries a position, not an identity, so with two factories the first death would have
+        // stopped BOTH machines — leaving a live, spawning hutch standing there with its impeller
+        // dead, looking exactly like the thing you had already killed. Update watches ITS OWN hutch's
+        // health, which is the only question this class ever needed answered.
 
         private void Awake()
         {
-            _hutch = FindFirstObjectByType<MowerHutch>();
+            // Bound by Install before it switched us on. A hand-placed FactoryLife (a test fixture)
+            // has no binding, so it takes the one factory it can find — which is what a fixture with
+            // exactly one factory in it means.
+            if (_hutch == null) _hutch = FindFirstObjectByType<MowerHutch>();
             if (_hutch == null) return;
 
             _spawner = _hutch.GetComponent<EnemySpawner>();
@@ -327,8 +363,6 @@ namespace MaxWorlds.VFX
             _flash = 1f;
             if (_exhaust != null) _exhaust.Emit(coughParticles);
         }
-
-        private void OnFactoryDestroyed(Vector3 _) => Stop();
 
         /// <summary>
         /// The source is gone. Everything stops, and everything goes.

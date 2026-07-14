@@ -56,14 +56,19 @@ namespace MaxWorlds.Factories
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
         public float Normalized => _health?.Normalized ?? 0f;
 
-        /// <summary>Wire the gate this factory's destruction opens. The map engine (YT-89) calls this
-        /// at load time from the map's <c>opensOn</c>, so "kill the source and the way opens" is a
-        /// property of the level data. The serialized slot below still works for the scene the slice
-        /// shipped with, but it is no longer how the link is made — a slot a human drags is a link
-        /// that silently comes undone the next time the object is rebuilt.
+        /// <summary>Wire the gate this factory's destruction helps open. The map engine (YT-89) calls
+        /// this at load time from the map's <c>opensOn</c>, so "kill the source and the way opens" is
+        /// a property of the level data rather than a slot a human drags — a slot that silently comes
+        /// undone the next time the object is rebuilt.
         ///
-        /// Safe to call at any point before the factory dies: <c>gate</c> is only read on death.</summary>
-        public void Bind(SubZoneGate door) => gate = door;
+        /// The factory does not know, and does not need to know, whether it is the only key: it says
+        /// "I am gone" and the gate counts (YT-92). Safe to call at any point before the factory
+        /// dies — <c>gate</c> is only read on death.</summary>
+        public void Bind(SubZoneGate door)
+        {
+            gate = door;
+            if (door != null) door.AddKey();
+        }
 
         private void Awake()
         {
@@ -71,6 +76,11 @@ namespace MaxWorlds.Factories
             _health.Destroyed += OnDestroyed;
             _spawner = GetComponent<EnemySpawner>();
             _camera = Camera.main;
+
+            // In Awake, not Start: the map builds its factories inside BackyardPath.Awake, so by the
+            // time anything's Start runs (the HUD's, the boss's) the census is complete and can be
+            // trusted to say how many sources this run has.
+            FactoryCensus.Register(this);
 
             // The hutch breaks sight-lines (YT-83), and it has to — the shed (YT-75) is 2.4 m of
             // plank wall built AROUND it as pure scenery with no collider of its own. It is the most
@@ -89,9 +99,16 @@ namespace MaxWorlds.Factories
         private void Start()
         {
             // Emit in Start so the HUD (subscribed in OnEnable) reliably catches it, switching
-            // its arena tracker off the kill stand-in and onto real factory-destruction signals.
+            // its arena tracker off the kill stand-in and onto real factory-destruction signals —
+            // and, since YT-92, counting how many factories the run actually has.
             HudSignals.EmitFactoryRegistered();
         }
+
+        /// <summary>The factory's OBJECT is going away — the scene is being torn down. Not the same
+        /// thing as the player breaking it (that keeps the GameObject alive so the robots it already
+        /// spawned can keep fighting), so this is the one place the census is told to forget rather
+        /// than to count a kill.</summary>
+        private void OnDestroy() => FactoryCensus.Forget(this);
 
         public void TakeDamage(in DamageInfo info)
         {
@@ -104,10 +121,11 @@ namespace MaxWorlds.Factories
         private void OnDestroyed()
         {
             if (_spawner != null) _spawner.enabled = false;       // spawns stop
-            if (gate != null) gate.Open();                        // path opens
+            if (gate != null) gate.Unlock();                      // one key turned; the gate counts
+            FactoryCensus.ReportDestroyed(this);                  // ...and the boss listens to that
             // The destruction VFX hangs off this signal (CombatVfx, YT-48).
             HudSignals.EmitFactoryDestroyed(transform.position);
-            HudSignals.EmitPickup(transform.position + Vector3.up * 2.4f, "GATE OPEN", barColor);
+            HudSignals.EmitPickup(transform.position + Vector3.up * 2.4f, Banner(), barColor);
 
             // The source is gone: hide the body, collider, and bar — but keep the GameObject
             // ALIVE, because the robots it already spawned are parented here and must keep
@@ -119,6 +137,16 @@ namespace MaxWorlds.Factories
             if (_barPivot != null) _barPivot.gameObject.SetActive(false);
             if (_core != null) _core.gameObject.SetActive(false);
         }
+
+        /// <summary>What the kill shouts. With one factory, breaking it opens the gate, and saying so
+        /// IS the teaching beat. With two, shouting "GATE OPEN" on the first kill would be a lie — the
+        /// way is still shut — and a lie at the exact moment the player is looking for confirmation is
+        /// worse than silence. So it reports the objective instead, and only the last one opens a gate.
+        /// Read after <see cref="SubZoneGate.Unlock"/>, so the count already includes this death.</summary>
+        private string Banner() =>
+            gate != null && gate.KeysRemaining > 0
+                ? $"{gate.Keys - gate.KeysRemaining} OF {gate.Keys} DOWN"
+                : "GATE OPEN";
 
         private void LateUpdate()
         {

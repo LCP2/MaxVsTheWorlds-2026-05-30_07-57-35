@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaxWorlds.Arena
@@ -81,10 +82,19 @@ namespace MaxWorlds.Arena
         public string shape = "box";      // box | cylinder
         public string dressing = "none";  // none | tree | hedge | planter  (art pass, YT-75)
 
-        /// <summary>Gate only — the unlock condition. The id of the factory whose destruction opens
-        /// this gate. Empty means the gate never opens, which validation rejects: a locked door with
-        /// no key is a bug every time.</summary>
+        /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
+        /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means
+        /// the gate never opens, which validation rejects: a locked door with no key is a bug every
+        /// time.
+        ///
+        /// A list rather than a per-gate flag because that is the sentence the level is trying to say
+        /// — "this way opens when the hutch AND the greenhouse are gone" — and because it degrades to
+        /// the single id the one-factory maps already carry.</summary>
         public string opensOn;
+
+        /// <summary>The factories named in <see cref="opensOn"/>. Empty for anything that is not a
+        /// keyed gate.</summary>
+        public string[] Keys => MapEnums.Ids(opensOn);
 
         public EntityKind Kind => MapEnums.Entity(kind);
         public CoverShape Shape => MapEnums.Shape(shape);
@@ -193,6 +203,23 @@ namespace MaxWorlds.Arena
 
         public static CoverDressing Dressing(string s) =>
             Parse(s, CoverDressing.None);
+
+        /// <summary>A comma-separated list of entity ids, as written by hand: <c>"a, b"</c> and
+        /// <c>"a,b"</c> and <c>"a"</c> all say what they look like they say. Ids themselves are taken
+        /// verbatim — they are names, not words, and nothing here may quietly rewrite one.</summary>
+        public static string[] Ids(string s)
+        {
+            if (string.IsNullOrWhiteSpace(s)) return Array.Empty<string>();
+
+            string[] parts = s.Split(',');
+            var ids = new List<string>(parts.Length);
+            foreach (string part in parts)
+            {
+                string id = part.Trim();
+                if (id.Length > 0) ids.Add(id);
+            }
+            return ids.ToArray();
+        }
 
         /// <summary>Case- and separator-insensitive: <c>playerSpawn</c>, <c>PlayerSpawn</c> and
         /// <c>player_spawn</c> all mean the same thing, because a map file is written by hand.</summary>

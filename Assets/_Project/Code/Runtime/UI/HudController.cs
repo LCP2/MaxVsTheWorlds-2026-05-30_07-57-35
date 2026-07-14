@@ -140,7 +140,7 @@ namespace MaxWorlds.UI
         private void OnBossHealth(float normalized) => _model.SetBossHealth(normalized);
         private void OnBossDefeated() => _model.DefeatBossExternal();
 
-        private void OnFactoryRegistered() => _model.UseExternalFactories();
+        private void OnFactoryRegistered() => _model.RegisterFactory();
 
         private void OnFactoryDestroyed(Vector3 pos)
         {
