@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.VFX
 {
@@ -81,6 +82,16 @@ namespace MaxWorlds.VFX
             if (_quadGo == null)
             {
                 _quadGo = new GameObject("AimReticle");
+
+                // Unparenting dodges CharacterSkinDirector (see the class remarks) — and walks
+                // straight into RuntimeSurfaceDirector, which sweeps every LOOSE renderer and paints
+                // it as scenery. It claimed the reticle and swapped this transparent material for the
+                // OPAQUE ground one, so the reach cone was drawn as a wedge of grass lying 6 mm above
+                // the grass: perfectly invisible, alpha meaningless, and no error anywhere. The whole
+                // feature shipped and never drew a pixel. This is the marker that says "the material
+                // is mine" — the same one the imported art uses.
+                _quadGo.AddComponent<KeepsOwnMaterial>();
+
                 _quadGo.AddComponent<MeshFilter>();
                 _renderer = _quadGo.AddComponent<MeshRenderer>();
                 _renderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
