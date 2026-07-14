@@ -20,12 +20,14 @@ namespace MaxWorlds.Enemies
         private static MapData _map;
         private static bool _looked;
 
-        /// <summary>Forget the level. The map is cached because finding it means a scene search, and a
-        /// robot asks the way several times a second; a new level has to be able to say so.</summary>
+        /// <summary>Forget the level — the map, and the routes solved through it. Both are cached
+        /// because finding the map means a scene search and solving the routes means sixty-four
+        /// searches, and a robot asks the way every frame; a new level has to be able to say so.</summary>
         public static void Reset()
         {
             _map = null;
             _looked = false;
+            MapRoutes.Forget();
         }
 
         /// <summary>The map the robots are navigating, or null if there is no level in the scene.</summary>

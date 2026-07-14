@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.TestTools.Constraints;   // Is.Not.AllocatingGCMemory()
 using MaxWorlds.Arena;
 
 
@@ -228,6 +229,30 @@ namespace MaxWorlds.Tests.EditMode
 
             // Out past the fence, where no room is. Nothing to route through; head for him anyway.
             Assert.AreEqual(goal, MapRoutes.Waypoint(map, new Vector2(500f, 500f), goal));
+        }
+
+        /// <summary>
+        /// Asking the way costs nothing.
+        ///
+        /// Sixteen robots ask this sixty times a second. The first version searched the room graph on
+        /// every one of those calls — a fresh dictionary and a fresh queue, a thousand times a second,
+        /// to answer a question whose answer is a property of the level and never changes. That is
+        /// garbage, and garbage on a phone is a dropped frame; 60 fps is an acceptance criterion, not
+        /// an aspiration. The routes are solved once, and this is what stops them being un-solved.
+        /// </summary>
+        [Test]
+        public void AskingTheWay_AllocatesNothing()
+        {
+            MapData map = Shipped();
+            Vector2 from = map.Zone("greenhouse").CenterXz;
+            Vector2 goal = map.First(EntityKind.PlayerSpawn).CenterXz;
+
+            MapRoutes.Waypoint(map, from, goal);   // the level is solved on the first question asked
+
+            Assert.That(() =>
+            {
+                for (int i = 0; i < 64; i++) MapRoutes.Waypoint(map, from, goal);
+            }, NUnit.Framework.Is.Not.AllocatingGCMemory());
         }
 
         [Test]

@@ -83,6 +83,12 @@ namespace MaxWorlds.Arena
         /// Falls back to the goal whenever it cannot do better — no map, no rooms, no way through, or
         /// either end standing outside every room. A robot that can't be routed still chases, exactly
         /// as it did before; it does not stop dead because the level could not answer a question.
+        ///
+        /// Every robot asks this every frame, so it does no work: which room leads to which is a
+        /// property of the LEVEL, not of the asking, and it is solved once (<see cref="Hops"/>) and
+        /// then looked up. A search per robot per frame would have been a fresh dictionary and a fresh
+        /// queue sixteen times a frame — garbage, at 60 fps, on a phone, to answer a question whose
+        /// answer never changes.
         /// </summary>
         public static Vector2 Waypoint(MapData map, Vector2 from, Vector2 goal)
         {
@@ -93,11 +99,63 @@ namespace MaxWorlds.Arena
 
             if (here == null || there == null || here.id == there.id) return goal;
 
-            List<MapZone> route = Rooms(map, here, there);
-            if (route.Count < 2) return goal;
+            Solve(map);
 
-            return Mouth(map, route[0], route[1], goal);
+            return _hops.TryGetValue(HopKey(_index[here.id], _index[there.id]), out Vector2 hop)
+                ? hop
+                : goal;
         }
+
+        /// <summary>
+        /// The way out of every room toward every other, solved once for a level: room A → room B gives
+        /// the doorway you leave A by. Eight rooms is sixty-four answers, and they do not change while
+        /// the level stands.
+        ///
+        /// Rebuilt when it is handed a different map. It does NOT notice a map being edited underneath
+        /// it — the map editor mutates a MapData in place — which is fine because nothing navigates a
+        /// map mid-edit, and <see cref="Forget"/> exists for anything that ever needs to.
+        /// </summary>
+        private static void Solve(MapData map)
+        {
+            if (ReferenceEquals(_solvedFor, map) && _hops != null) return;
+
+            _solvedFor = map;
+            _hops = new Dictionary<int, Vector2>(64);
+            _index = new Dictionary<string, int>(16);
+
+            if (map.zones == null) return;
+
+            for (int i = 0; i < map.zones.Length; i++)
+                if (map.zones[i] != null) _index[map.zones[i].id] = i;
+
+            for (int a = 0; a < map.zones.Length; a++)
+            for (int b = 0; b < map.zones.Length; b++)
+            {
+                MapZone from = map.zones[a], to = map.zones[b];
+                if (from == null || to == null || a == b) continue;
+
+                List<MapZone> route = Rooms(map, from, to);
+                if (route.Count < 2) continue;   // no way through: the caller falls back to the goal
+
+                _hops[HopKey(a, b)] = Mouth(map, route[0], route[1], to.CenterXz);
+            }
+        }
+
+        /// <summary>Drop the solved routes. A level that is rebuilt in place has to be re-solved.</summary>
+        public static void Forget()
+        {
+            _solvedFor = null;
+            _hops = null;
+            _index = null;
+        }
+
+        private static MapData _solvedFor;
+        private static Dictionary<int, Vector2> _hops;
+        private static Dictionary<string, int> _index;
+
+        /// <summary>Two room indices in one int. No string built, nothing boxed — this is looked up
+        /// sixteen times a frame and it has to cost nothing.</summary>
+        private static int HopKey(int from, int to) => (from << 8) | to;
 
         /// <summary>The point to aim at to leave <paramref name="here"/> for <paramref name="next"/>:
         /// the middle of the doorway they share, pushed through the wall line into the room beyond.
