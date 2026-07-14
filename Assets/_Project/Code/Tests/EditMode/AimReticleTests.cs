@@ -111,13 +111,38 @@ namespace MaxWorlds.Tests.EditMode
                 {
                     float r = verts[i].magnitude;
                     if (Mathf.Abs(r - 6f) < 0.05f) edgeAlpha = Mathf.Max(edgeAlpha, cols[i].a);
-                    if (Mathf.Abs(r - 6f * 0.82f) < 0.05f) midAlpha = Mathf.Max(midAlpha, cols[i].a);
+                    // Read the ring the mesh actually uses. Spelling 0.82 out here meant that the day
+                    // the ramp moved, this test quietly found no vertex, compared against zero, and
+                    // passed while asserting nothing.
+                    if (Mathf.Abs(r - 6f * AimReticleMesh.FillRing) < 0.05f)
+                        midAlpha = Mathf.Max(midAlpha, cols[i].a);
                 }
 
                 Assert.Greater(edgeAlpha, midAlpha * 2f, "the range boundary doesn't stand out");
                 Assert.Greater(edgeAlpha, centreAlpha, "the reticle is brightest under Max's own feet");
             }
             finally { Free(m); }
+        }
+
+        /// <summary>Lee's call on the live build (YT-84): the mechanism is right, the outline is a
+        /// touch strong. It stays the loudest thing in the wedge — that is the information — but it is
+        /// no longer a hard opaque rope laid across the lawn.</summary>
+        [Test]
+        public void TheOutlineIsTheLoudestPart_ButNotAHardOpaqueLine()
+        {
+            Assert.Less(AimReticleMesh.EdgeAlpha, 1f,
+                "a fully opaque boundary draws a hard rope across the grass it sits on");
+            Assert.Greater(AimReticleMesh.EdgeAlpha, 0.6f,
+                "soften the boundary much further and the one fact the reticle exists to tell you " +
+                "stops being legible");
+
+            // The bright band is the ramp from the fill ring out to the range. Keeping the fill ring
+            // late makes that band narrow, which is what "thinner edge" means in a mesh whose alpha
+            // lives in its vertices.
+            Assert.Greater(AimReticleMesh.FillRing, 0.85f,
+                "the alpha ramp starts so far in that the outline reads as a thick glowing band");
+            Assert.Less(AimReticleMesh.FillRing, 0.95f,
+                "the ramp is so tight the edge has nothing to feather from and will alias");
         }
 
         [Test]

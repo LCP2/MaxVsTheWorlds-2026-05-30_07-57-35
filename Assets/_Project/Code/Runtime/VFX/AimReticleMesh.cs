@@ -19,8 +19,19 @@ namespace MaxWorlds.VFX
     /// </summary>
     public static class AimReticleMesh
     {
-        /// <summary>Where the fill sits, as a fraction of range: most of the wedge is a faint wash.</summary>
-        private const float FillRing = 0.82f;
+        /// <summary>Where the fill sits, as a fraction of range: most of the wedge is a faint wash.
+        ///
+        /// It is also what sets how THICK the outline reads. The alpha ramps from the fill's value up
+        /// to the boundary's across this gap, so the closer the fill ring sits to the range, the
+        /// narrower the bright band and the finer the outline (YT-84: Lee asked for a thinner edge).
+        /// Public because a test should read the number the mesh actually uses, not restate it.</summary>
+        public const float FillRing = 0.88f;
+
+        /// <summary>Alpha of the range boundary — the outline. Not fully opaque: at 1.0 the edge was a
+        /// hard bright rope laid across the lawn, and the Craft Bible's rule is that juice serves
+        /// readability rather than competing with it. Still comfortably the loudest part of the wedge,
+        /// because where your reach ENDS is the one fact the reticle exists to tell you.</summary>
+        public const float EdgeAlpha = 0.75f;
 
         /// <summary>How far past the edge the fade runs. Without it the outer boundary is a hard
         /// bright line, and a hard bright line at this camera aliases into a dashed one.</summary>
@@ -48,11 +59,12 @@ namespace MaxWorlds.VFX
             // a whisper while idle and still legible mid-fight without swapping anything.
             //
             // The outer boundary is the loudest part on purpose: the fill is nice, but the ONE fact
-            // the player needs is where their reach ends.
+            // the player needs is where their reach ends. Loudest, though — not loud. It sits over the
+            // lawn permanently, so it whispers the boundary rather than drawing a rope around it.
             (float radius, float alpha)[] rings =
             {
                 (FillRing * range, 0.30f),   // faint wash across the body of the wedge
-                (range,            1.00f),   // the boundary — this is the information
+                (range,            EdgeAlpha),  // the boundary — this is the information
                 (FadeRing * range, 0f),      // feather it out, or the edge aliases into a dashed line
             };
 
