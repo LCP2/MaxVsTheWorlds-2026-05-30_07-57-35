@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools.Constraints;   // Is.Not.AllocatingGCMemory()
+
 using MaxWorlds.Arena;
 
 
@@ -232,16 +232,21 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>
-        /// Asking the way costs nothing.
+        /// Asking the way costs nothing: the yard is solved ONCE, not once per robot per frame.
         ///
         /// Sixteen robots ask this sixty times a second. The first version searched the room graph on
         /// every one of those calls — a fresh dictionary and a fresh queue, a thousand times a second,
-        /// to answer a question whose answer is a property of the level and never changes. That is
-        /// garbage, and garbage on a phone is a dropped frame; 60 fps is an acceptance criterion, not
-        /// an aspiration. The routes are solved once, and this is what stops them being un-solved.
+        /// to answer a question whose answer is a property of the level and never changes. Garbage at
+        /// 60 fps on a phone is a dropped frame, and 60 fps is an acceptance criterion.
+        ///
+        /// Counted rather than weighed. The obvious way to write this is "assert it allocates no GC
+        /// memory", and I did, and it passed here and failed on CI — because a GC probe measures the
+        /// runtime it happens to be standing on (JIT, the closure, the collector) as much as it
+        /// measures the code. Counting the searches asks the question directly, and it gets the same
+        /// answer on every machine.
         /// </summary>
         [Test]
-        public void AskingTheWay_AllocatesNothing()
+        public void AskingTheWay_SolvesTheYardOnce_NotOncePerQuestion()
         {
             MapData map = Shipped();
             Vector2 from = map.Zone("greenhouse").CenterXz;
@@ -249,10 +254,13 @@ namespace MaxWorlds.Tests.EditMode
 
             MapRoutes.Waypoint(map, from, goal);   // the level is solved on the first question asked
 
-            Assert.That(() =>
-            {
-                for (int i = 0; i < 64; i++) MapRoutes.Waypoint(map, from, goal);
-            }, NUnit.Framework.Is.Not.AllocatingGCMemory());
+            int searchesAfterSolving = MapRoutes.Searches;
+
+            for (int i = 0; i < 64; i++) MapRoutes.Waypoint(map, from, goal);
+
+            Assert.AreEqual(searchesAfterSolving, MapRoutes.Searches,
+                "the room graph is being searched again on every question — that is a fresh dictionary " +
+                "and a fresh queue, sixteen times a frame, to answer something the level already knows");
         }
 
         [Test]
