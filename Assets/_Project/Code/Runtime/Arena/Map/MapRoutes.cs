@@ -36,12 +36,22 @@ namespace MaxWorlds.Arena
         public const float ThroughDoorway = 1.5f;
 
         /// <summary>
+        /// How many times the room graph has actually been searched. The whole performance claim of
+        /// this class is that the answer is "once per level, not once per robot per frame", and this is
+        /// how a test says so — by counting the searches rather than by weighing the garbage, which is
+        /// a proxy for the same thing that measures differently on every machine it runs on.
+        /// </summary>
+        public static int Searches { get; private set; }
+
+        /// <summary>
         /// The chain of rooms from one to another, inclusive of both — the fewest doorways between
         /// them. Empty if there is no way through at all, which validation has already refused, so a
         /// caller getting one back is looking at a map that never built.
         /// </summary>
         public static List<MapZone> Rooms(MapData map, MapZone from, MapZone to)
         {
+            Searches++;
+
             var path = new List<MapZone>();
             if (map == null || from == null || to == null) return path;
 
