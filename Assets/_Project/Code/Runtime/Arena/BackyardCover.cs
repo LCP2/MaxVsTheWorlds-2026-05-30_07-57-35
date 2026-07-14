@@ -76,15 +76,25 @@ namespace MaxWorlds.Arena
         /// spawns robots halfway inside it.</summary>
         public const float SpawnClearance = 0.8f;
 
-        /// <summary>Three props, staggered left/right/left so kiting up the lawn is a slalom rather
-        /// than a straight run: a low planter on the right, a tall tree on the left, and a hedge
-        /// covering the right-hand approach to the shed.</summary>
-        public static ArenaCover[] Default => new[]
+        /// <summary>The Backyard's cover, read from the map (YT-89). It used to be written out here as
+        /// three literals, but the map is where cover is authored now — and a second copy of the set
+        /// living in code would be a copy nobody edits and everybody trusts. Restating it here would
+        /// be exactly the trap this stopped being: a definition that looks authoritative and changes
+        /// nothing.</summary>
+        public static ArenaCover[] Default => _default ??= FromTheMap();
+
+        private static ArenaCover[] _default;
+
+        private static ArenaCover[] FromTheMap()
         {
-            new ArenaCover("Cover Planter", new Vector2(7f, 2f),     new Vector3(3.5f, 1.6f, 3.5f), CoverShape.Box,      CoverDressing.Planter),
-            new ArenaCover("Cover Tree",    new Vector2(-6.5f, 8f),  new Vector3(2.4f, 4.4f, 2.4f), CoverShape.Cylinder, CoverDressing.Tree),
-            new ArenaCover("Cover Hedge",   new Vector2(6.5f, 11f),  new Vector3(6f, 1.8f, 1.2f),   CoverShape.Box,      CoverDressing.Hedge),
-        };
+            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+            if (map == null) return new ArenaCover[0];
+
+            List<MapEntity> cover = MapValidation.Kind(map, EntityKind.Cover);
+            var set = new ArenaCover[cover.Count];
+            for (int i = 0; i < cover.Count; i++) set[i] = cover[i].ToCover();
+            return set;
+        }
 
         /// <summary>Widest continuous gap a player can run through at depth <paramref name="z"/>,
         /// across the lawn. Guards against a prop set that walls the room off.</summary>
