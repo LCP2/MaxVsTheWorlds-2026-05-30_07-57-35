@@ -19,34 +19,15 @@ namespace MaxWorlds.Bosses
     {
         private enum Phase { Dormant, Intro, Fight, Dead }
 
-        [Header("Identity")]
-        [SerializeField] private string bossName = "BIG BERMUDA";
-        // ~45–75 s slice duel (YT-65), not a 2-3 min slog. Renamed from maxHealth so the new
-        // value takes effect on the existing scene instance. Tunable feel knob.
-        [Tooltip("Boss HP — tuned for a ~45–75s slice fight (YT-65). Feel knob.")]
-        [SerializeField] private float bossHealth = 1200f;
+        // Every number this fight is made of lives in BossTuning (YT-94), NOT in a [SerializeField].
+        //
+        // It used to live in both, and the scene won: Backyard_Slice.unity carries a serialized copy of
+        // each one, so the boss the code described was not the boss anyone fought. The last person to
+        // change its HP had to RENAME the field to make the value take effect. A const cannot be
+        // shadowed, and "the tuning values are easy to adjust" is an acceptance criterion, not a nicety.
+        private const string BossName = "BIG BERMUDA";
+        private const float Gravity = 20f;
 
-        [Header("Movement")]
-        [SerializeField] private float moveSpeed = 3.6f;
-        [SerializeField] private float desiredRange = 6f;   // keeps this distance while repositioning
-        [SerializeField] private float chargeSpeed = 16f;
-        [SerializeField] private float enrageMoveScale = 1.4f;
-        [SerializeField] private float gravity = 20f;
-
-        [Header("Charge attack")]
-        [SerializeField] private float chargeContactDamage = 18f;
-        [SerializeField] private float chargeContactRadius = 2.4f;
-        [SerializeField] private float grassInterval = 0.15f;
-        [SerializeField] private float grassRadius = 1.7f;
-        [SerializeField] private float grassDamage = 6f;
-        [SerializeField] private float grassLife = 1.8f;
-
-        [Header("Enrage: blade rain")]
-        [SerializeField] private float bladeInterval = 1.4f;
-        [SerializeField] private int bladeCount = 3;
-        [SerializeField] private float bladeRadius = 1.5f;
-        [SerializeField] private float bladeDamage = 12f;
-        [SerializeField] private float bladeSpread = 5f;
 
         [Header("Intro")]
         [SerializeField] private float introTime = 1.6f;
@@ -102,7 +83,7 @@ namespace MaxWorlds.Bosses
             _cc = GetComponent<CharacterController>();
             _renderer = GetComponent<Renderer>();
             _mpb = new MaterialPropertyBlock();
-            _health = new DestructibleHealth(bossHealth);
+            _health = new DestructibleHealth(BossTuning.Health);
             _health.Destroyed += OnDeath;
             _brain = new BigBermudaBrain();
             AcquireTarget();
@@ -129,7 +110,7 @@ namespace MaxWorlds.Bosses
             if (_phase != Phase.Dormant) return;
             _phase = Phase.Intro;
             _introTimer = introTime;
-            HudSignals.EmitBossEngaged(bossName, 2); // 2 phases -> HUD bar shows the 50% segment
+            HudSignals.EmitBossEngaged(BossName, 2); // 2 phases -> HUD bar shows the 50% segment
             HudSignals.EmitBossHealth(1f);
         }
 
@@ -157,7 +138,7 @@ namespace MaxWorlds.Bosses
             _brain.Tick(dt, _health.Normalized);
             if (_brain.JustEntered) OnEnterPhase(_brain.Current);
 
-            float speedScale = _brain.Enraged ? enrageMoveScale : 1f;
+            float speedScale = _brain.Enraged ? BossTuning.EnrageMoveScale : 1f;
             switch (_brain.Current)
             {
                 case BossAction.Reposition: Reposition(dt, speedScale); FaceTarget(); break;
@@ -170,7 +151,7 @@ namespace MaxWorlds.Bosses
             if (_brain.Enraged)
             {
                 _bladeTimer -= dt;
-                if (_bladeTimer <= 0f) { _bladeTimer = bladeInterval; RainBlades(); }
+                if (_bladeTimer <= 0f) { _bladeTimer = BossTuning.BladeInterval; RainBlades(); }
             }
         }
 
@@ -201,26 +182,27 @@ namespace MaxWorlds.Bosses
             if (dist < 0.1f) return;
             Vector3 dir = to.normalized;
             // Approach until at desiredRange, then hold — keeps the boss circling, not hugging.
-            if (dist > desiredRange + 0.5f) _cc.Move(dir * moveSpeed * speedScale * dt);
-            else if (dist < desiredRange - 0.5f) _cc.Move(-dir * moveSpeed * speedScale * dt);
+            if (dist > BossTuning.DesiredRange + 0.5f) _cc.Move(dir * BossTuning.MoveSpeed * speedScale * dt);
+            else if (dist < BossTuning.DesiredRange - 0.5f) _cc.Move(-dir * BossTuning.MoveSpeed * speedScale * dt);
         }
 
         private void DoCharge(float dt, float speedScale)
         {
-            _cc.Move(_chargeDir * chargeSpeed * speedScale * dt);
+            _cc.Move(_chargeDir * BossTuning.ChargeSpeed * speedScale * dt);
 
             _grassTimer -= dt;
             if (_grassTimer <= 0f)
             {
-                _grassTimer = grassInterval;
-                DamageZone.Spawn(transform.position, grassRadius, grassDamage, grassLife, 0.2f, grassColor);
+                _grassTimer = BossTuning.GrassInterval;
+                DamageZone.Spawn(transform.position, BossTuning.GrassRadius, BossTuning.GrassDamage, BossTuning.GrassLife,
+                                 BossTuning.GrassArm, grassColor);
             }
 
-            if (!_contactThisCharge && PlanarToTarget().magnitude <= chargeContactRadius
+            if (!_contactThisCharge && PlanarToTarget().magnitude <= BossTuning.ChargeContactRadius
                 && _target.TryGetComponent<IDamageable>(out var d) && d.IsAlive)
             {
                 _contactThisCharge = true;
-                d.TakeDamage(new DamageInfo(chargeContactDamage, transform.position, _chargeDir, Team.Enemy));
+                d.TakeDamage(new DamageInfo(BossTuning.ChargeContactDamage, transform.position, _chargeDir, Team.Enemy));
             }
         }
 
@@ -228,11 +210,16 @@ namespace MaxWorlds.Bosses
         {
             if (_target == null) return;
             Vector3 c = _target.position;
-            for (int i = 0; i < bladeCount; i++)
+            for (int i = 0; i < BossTuning.BladeCount; i++)
             {
-                Vector2 off = Random.insideUnitCircle * bladeSpread;
+                Vector2 off = Random.insideUnitCircle * BossTuning.BladeSpread;
                 Vector3 pos = new Vector3(c.x + off.x, 1f, c.z + off.y);
-                DamageZone.Spawn(pos, bladeRadius, bladeDamage, 1.2f, 0.55f, bladeColor);
+
+                // The arm delay is the tell. It was 0.55 s on a zone that then bit three times over
+                // 1.2 s of life — 36 damage from one blade, three of them every 1.4 s, on top of the
+                // charges. Now it warns for the best part of a second and bites twice at most (YT-94).
+                DamageZone.Spawn(pos, BossTuning.BladeRadius, BossTuning.BladeDamage, BossTuning.BladeLife,
+                                 BossTuning.BladeArm, bladeColor);
             }
         }
 
@@ -282,7 +269,7 @@ namespace MaxWorlds.Bosses
         {
             if (_cc == null || !_cc.enabled) return;
             if (_cc.isGrounded && _verticalVel < 0f) _verticalVel = -2f;
-            _verticalVel -= gravity * dt;
+            _verticalVel -= Gravity * dt;
             _cc.Move(Vector3.up * _verticalVel * dt);
         }
 
