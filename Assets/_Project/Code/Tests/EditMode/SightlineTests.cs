@@ -104,21 +104,28 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(new Vector3(7f, 0f, 2f), p.Destination(new Vector3(7f, 0f, 2f)));
         }
 
+        /// <summary>
+        /// Losing sight is a clock, not a verdict.
+        ///
+        /// Perception used to decide when the robot gave up — <c>HasLostHim(2.5s)</c> — and that
+        /// decision is gone (YT-93): "I have not seen him for 2.5 s" is true of every robot 2.5 s into
+        /// the walk out of the shed it was born in, so they all stopped in the shed. What Perception
+        /// owns is the FACT: how long since the sight-line last held. What to do about it belongs to
+        /// the thing doing the walking.
+        /// </summary>
         [Test]
-        public void ItGivesUpOnlyAfterSearching_NotTheInstantItLosesSight()
+        public void LosingSightStartsAClock_AndKeepsCounting()
         {
-            // Both edges. Give up instantly and hiding is a free reset — step behind the tree, step
-            // straight back out, forgotten. Never give up and cover does nothing. The delay IS the
-            // price of hiding, so it has to actually elapse.
             var p = new Perception();
             p.Spawn(Vector3.zero);
             p.Tick(canSee: true, targetNow: Vector3.zero, dt: 0.1f);
+            Assert.AreEqual(0f, p.TimeSinceSeen, 1e-4, "it can see him — nothing has been lost yet");
 
             p.Tick(canSee: false, targetNow: Vector3.zero, dt: 1.0f);
-            Assert.IsFalse(p.HasLostHim(2.5f), "it gave up after one second of losing sight");
+            Assert.AreEqual(1.0f, p.TimeSinceSeen, 1e-4);
 
             p.Tick(canSee: false, targetNow: Vector3.zero, dt: 2.0f);
-            Assert.IsTrue(p.HasLostHim(2.5f), "it will hunt a stale spot forever — contact never breaks");
+            Assert.AreEqual(3.0f, p.TimeSinceSeen, 1e-4);
         }
 
         [Test]
@@ -127,12 +134,14 @@ namespace MaxWorlds.Tests.EditMode
             var p = new Perception();
             p.Spawn(Vector3.zero);
             p.Tick(canSee: false, targetNow: Vector3.zero, dt: 10f);
-            Assert.IsTrue(p.HasLostHim(2.5f), "precondition: it has lost him");
+            Assert.AreEqual(10f, p.TimeSinceSeen, 1e-4, "precondition: it has not seen him in a while");
 
             p.Tick(canSee: true, targetNow: new Vector3(1f, 0f, 1f), dt: 0.1f);
 
-            Assert.IsFalse(p.HasLostHim(2.5f), "he walked back into the open and it didn't notice");
+            Assert.AreEqual(0f, p.TimeSinceSeen, 1e-4,
+                "he walked back into the open and it didn't notice");
             Assert.IsTrue(p.HasSight);
+            Assert.AreEqual(new Vector3(1f, 0f, 1f), p.LastKnown, "the trail did not refresh on sight");
         }
 
         [Test]

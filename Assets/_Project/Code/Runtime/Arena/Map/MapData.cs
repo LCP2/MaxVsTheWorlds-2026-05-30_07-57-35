@@ -38,6 +38,11 @@ namespace MaxWorlds.Arena
         public float ZMax => z + depth * 0.5f;
 
         public Vector3 Center => new Vector3(x, 0f, z);
+
+        /// <summary>The room's middle on the floor plan. Same convention as everything else on the XZ
+        /// plane: <c>x</c> is world X, <c>y</c> is world Z.</summary>
+        public Vector2 CenterXz => new Vector2(x, z);
+
         public Rect Footprint => new Rect(XMin, ZMin, width, depth);
 
         public bool Contains(float px, float pz) =>
