@@ -1,0 +1,88 @@
+# YT-99 — sign the GameCI-produced Xcode project and ship it to TestFlight.
+# Match-free: every credential comes from a GitHub Actions secret (see
+# APPLE_SIGNING_SETUP.md), decoded to files by the workflow. No git cert repo,
+# nothing committed. Auth uses an App Store Connect API key (no Apple ID / 2FA).
+
+default_platform(:ios)
+
+# GameCI writes the Xcode project to build/iOS/iOS/Unity-iPhone.xcodeproj; the
+# workflow sets IOS_BUILD_PATH to <workspace>/build/iOS. Scheme + target are both
+# "Unity-iPhone".
+XCODEPROJ = "#{ENV['IOS_BUILD_PATH']}/iOS/Unity-iPhone.xcodeproj"
+CERT_PATH = "#{ENV['RUNNER_TEMP']}/dist.p12"
+PROFILE_PATH = "#{ENV['RUNNER_TEMP']}/profile.mobileprovision"
+
+platform :ios do
+  desc "Sign the Unity Xcode project and upload it to TestFlight"
+  lane :beta do
+    # 1. App Store Connect API key — used both for the upload and for the build's
+    #    -allowProvisioningUpdates. The .p8 is stored base64-encoded in the secret.
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("APP_STORE_CONNECT_KEY_ID"),
+      issuer_id: ENV.fetch("APP_STORE_CONNECT_ISSUER_ID"),
+      key_content: ENV.fetch("APP_STORE_CONNECT_P8_BASE64"),
+      is_key_content_base64: true,
+      in_house: false
+    )
+
+    # 2. Ephemeral CI keychain (creates + unlocks 'fastlane_tmp_keychain').
+    setup_ci
+
+    # 3. Import the Apple Distribution certificate (.p12) into that keychain.
+    import_certificate(
+      certificate_path: CERT_PATH,
+      certificate_password: ENV.fetch("IOS_DIST_CERT_PASSWORD"),
+      keychain_name: "fastlane_tmp_keychain",
+      keychain_password: ""
+    )
+
+    # 4. Install the App Store provisioning profile and wire it into the project.
+    update_project_provisioning(
+      xcodeproj: XCODEPROJ,
+      profile: PROFILE_PATH,
+      target_filter: "Unity-iPhone",
+      build_configuration: "Release",
+      code_signing_identity: "Apple Distribution"
+    )
+
+    # 5. Force manual signing on the target.
+    update_code_signing_settings(
+      use_automatic_signing: false,
+      path: XCODEPROJ,
+      targets: "Unity-iPhone",
+      team_id: ENV.fetch("APPLE_TEAM_ID"),
+      code_sign_identity: "Apple Distribution",
+      profile_name: ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
+    )
+
+    # 6. Encryption-compliance flag so TestFlight processing isn't held for review.
+    update_info_plist(
+      xcodeproj: XCODEPROJ,
+      plist_path: "Info.plist",
+      block: proc { |plist| plist["ITSAppUsesNonExemptEncryption"] = false }
+    )
+
+    # 7. Archive + export a signed, App-Store-method .ipa.
+    build_app(
+      project: XCODEPROJ,
+      scheme: "Unity-iPhone",
+      configuration: "Release",
+      export_method: "app-store",
+      xcargs: "-allowProvisioningUpdates",
+      export_options: {
+        method: "app-store",
+        signingStyle: "manual",
+        teamID: ENV.fetch("APPLE_TEAM_ID"),
+        provisioningProfiles: {
+          ENV.fetch("IOS_BUNDLE_ID") => ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
+        }
+      }
+    )
+
+    # 8. Ship to TestFlight. skip_waiting keeps CI from idling on Apple processing.
+    upload_to_testflight(
+      api_key: api_key,
+      skip_waiting_for_build_processing: true
+    )
+  end
+end

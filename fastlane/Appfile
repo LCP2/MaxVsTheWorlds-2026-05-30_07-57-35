@@ -1,0 +1,3 @@
+# Bundle id comes from the IOS_BUNDLE_ID secret so nothing app-specific is committed
+# (it should match ProjectSettings → iPhone bundle id, e.g. com.codynamics.maxvstheworlds).
+app_identifier(ENV["IOS_BUNDLE_ID"])
