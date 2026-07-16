@@ -125,7 +125,11 @@ namespace MaxWorlds.Arena
         public const float SpawnClearance = 0.5f;
 
         private const float PanelWidth = 3f;      // nominal world width of one fence panel
-        private const float PanelDepth = 0.28f;
+        // Slimmer than it was (0.28) — a lighter paling that frames the yard without reading as a
+        // bunker wall (YT-88). The height came down with it, via the map's lowered wallHeight.
+        private const float PanelDepth = 0.16f;
+        // A slim post where two runs meet, so the corners read as one continuous fence (YT-88).
+        private const float PostWidth = 0.20f;
         private const float ShedWallHeight = 2.4f;
 
         /// <summary>A wall face shorter than this is a corner, a doorway shoulder or a stub. Planting
@@ -177,6 +181,64 @@ namespace MaxWorlds.Arena
                 if (!faces[i].FacesRoom) continue;
                 FenceRun(into, map, faces[i], gateAtCentre: i == gate);
             }
+
+            CornerPosts(into, map, faces);
+        }
+
+        /// <summary>A post where two fenced walls meet at an angle, tying the runs together so the
+        /// boundary reads as one continuous fence instead of two panels stopping short of the corner
+        /// (YT-88). A doorway shoulder — where the wall carries straight on across a gap — is NOT a
+        /// corner and gets none; the gate frames those.</summary>
+        private static void CornerPosts(List<DressingProp> into, MapData map, List<WallFace> faces)
+        {
+            // The direction of every fenced run that ends at each point on a quarter-metre grid, so
+            // the two faces that meet at a shared corner land in the same bucket despite float drift.
+            var ends = new Dictionary<Vector2Int, List<Vector2>>();
+            void Note(Vector2 at, Vector2 dir)
+            {
+                var cell = new Vector2Int(Mathf.RoundToInt(at.x * 4f), Mathf.RoundToInt(at.y * 4f));
+                if (!ends.TryGetValue(cell, out var dirs)) { dirs = new List<Vector2>(2); ends[cell] = dirs; }
+                dirs.Add(dir);
+            }
+
+            foreach (WallFace face in faces)
+            {
+                if (!face.FacesRoom) continue;
+                Note(face.A, face.Direction);
+                Note(face.B, face.Direction);
+            }
+
+            Vector3 kit = PropCatalog.Size(PropCatalog.FencePanel);
+            var scale = new Vector3(PostWidth / kit.x, map.wallHeight / kit.y, PostWidth / kit.z);
+
+            // Placed in face order (deterministic), one per corner — a corner shared by two runs is
+            // reached twice, so the first placement claims it and the second is skipped.
+            var placed = new HashSet<Vector2Int>();
+            foreach (WallFace face in faces)
+            {
+                if (!face.FacesRoom) continue;
+                TryPost(face.A);
+                TryPost(face.B);
+            }
+
+            void TryPost(Vector2 at)
+            {
+                var cell = new Vector2Int(Mathf.RoundToInt(at.x * 4f), Mathf.RoundToInt(at.y * 4f));
+                if (!placed.Add(cell)) return;
+                if (!ends.TryGetValue(cell, out var dirs) || !TurnsHere(dirs)) return;
+                into.Add(new DressingProp(PropCatalog.FencePanel, at, scale, 0f));
+            }
+        }
+
+        /// <summary>Two of the runs meeting here head off in different directions — a real corner —
+        /// rather than carrying straight on across a doorway.</summary>
+        private static bool TurnsHere(List<Vector2> dirs)
+        {
+            for (int i = 0; i < dirs.Count; i++)
+                for (int j = i + 1; j < dirs.Count; j++)
+                    if (Mathf.Abs(Vector2.Dot(dirs[i].normalized, dirs[j].normalized)) < 0.7f)
+                        return true;
+            return false;
         }
 
         /// <summary>The face the garden gate goes in: the inner face of the wall the player has his
