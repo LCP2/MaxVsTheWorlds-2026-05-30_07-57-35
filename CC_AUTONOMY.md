@@ -20,7 +20,9 @@ It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship 
 
 ## Claim
 
-On every start, query Jira:
+**On every start, run the git-merge hygiene step first:** `sh scripts/setup-git-merge.sh`. It's idempotent and keeps Unity YAML (`.unity`/`.prefab`/`.asset`) merging **headless** — git's 3-way text merge writes conflict markers instead of the Smart-Merge GUI that once blocked an autonomous merge (YT-103; see `docs/GIT_MERGE_SETUP.md`). The art-stream contract must carry the same step.
+
+Then query Jira:
 
 ```
 project = YT AND labels = needs-cc AND statusCategory != Done ORDER BY priority DESC, key ASC
