@@ -1,5 +1,8 @@
 using UnityEngine;
 using UnityEngine.UI;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem.OnScreen;
+using UnityEngine.InputSystem.UI;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
 
@@ -41,6 +44,7 @@ namespace MaxWorlds.UI
         private Camera _worldCamera;
 
         private Canvas _canvas;
+        private RectTransform _safeRoot;
         private FloatingTextLayer _floating;
 
         // Status strip
@@ -70,6 +74,9 @@ namespace MaxWorlds.UI
         private RectTransform _moveKnob, _moveArrowRect;
         private Image _aimRings, _aimCross;
         private RectTransform _aimKnob;
+
+        // Touch controls (YT-98): the joystick/dash roots the on-screen sticks + button attach to.
+        private RectTransform _moveJoystickRoot, _aimJoystickRoot, _dashSlotRoot;
 
         // Arena indicator
         private Text _arenaLabel;
@@ -105,6 +112,7 @@ namespace MaxWorlds.UI
             BuildWarning();
             BuildFloatingLayer();
             BuildMap();
+            BuildTouchControls();
 
             _model.Boss.ActiveChanged += OnBossActiveChanged;
         }
@@ -382,13 +390,26 @@ namespace MaxWorlds.UI
             scaler.referenceResolution = new Vector2(RefW, RefH);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
+
+            // Safe-area root (YT-98): everything that anchors to a screen edge/corner is parented
+            // here so the notch / Dynamic Island / home indicator never covers it. On desktop and
+            // in CI the safe area is the full screen, so this rect fills the canvas and layout is
+            // identical to before; the inset only appears on hardware that reports a notch.
+            _safeRoot = NewRect("Safe Area", (RectTransform)_canvas.transform);
+            Stretch(_safeRoot);
+            _safeRoot.gameObject.AddComponent<SafeArea>();
         }
 
-        private RectTransform Root => (RectTransform)_canvas.transform;
+        /// <summary>Edge-anchored controls parent here — inset to the device safe area.</summary>
+        private RectTransform Root => _safeRoot;
+
+        /// <summary>Full-screen overlays (biome tint, floating text, big map) parent here — they
+        /// intentionally cover the whole display, notch included.</summary>
+        private RectTransform FullRoot => (RectTransform)_canvas.transform;
 
         private void BuildBiomeTint()
         {
-            var img = AddImage(Root, HudTextures.Solid(), BiomeTint, "Biome Tint");
+            var img = AddImage(FullRoot, HudTextures.Solid(), BiomeTint, "Biome Tint");
             Stretch(img.rectTransform);
             img.raycastTarget = false;
         }
@@ -483,6 +504,7 @@ namespace MaxWorlds.UI
                 slot.rectTransform.sizeDelta = new Vector2(72f, 72f);
                 slot.rectTransform.anchoredPosition = new Vector2(0f, -i * 80f);
                 slot.type = Image.Type.Sliced;
+                if (i == 0) _dashSlotRoot = slot.rectTransform; // Dash — the touch button attaches here.
 
                 // Ready glow (behind everything else in the slot).
                 var glow = AddImage(slot.rectTransform, HudTextures.RoundedBox(80, 0.24f), Color.clear, "Glow");
@@ -512,6 +534,7 @@ namespace MaxWorlds.UI
         {
             // Bottom-left: movement.
             var moveRoot = NewRect("Move Joystick", Root);
+            _moveJoystickRoot = moveRoot;
             Anchor(moveRoot, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
             moveRoot.anchoredPosition = new Vector2(150f, 150f);
             moveRoot.sizeDelta = new Vector2(200f, 200f);
@@ -527,6 +550,7 @@ namespace MaxWorlds.UI
 
             // Bottom-right: aim.
             var aimRoot = NewRect("Aim Joystick", Root);
+            _aimJoystickRoot = aimRoot;
             Anchor(aimRoot, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
             aimRoot.anchoredPosition = new Vector2(-150f, 150f);
             aimRoot.sizeDelta = new Vector2(200f, 200f);
@@ -536,6 +560,69 @@ namespace MaxWorlds.UI
             Center(_aimKnob, 64f);
             _aimCross = AddImage(aimRoot, HudTextures.Crosshair(96), TechRingColor, "Crosshair");
             Center(_aimCross.rectTransform, 72f);
+        }
+
+        /// <summary>
+        /// Touch controls for the iOS/mobile input path (YT-98). The visible joysticks above are
+        /// only visualisers; here we lay a transparent <see cref="OnScreenStick"/> pad over each and
+        /// an <see cref="OnScreenButton"/> over the Dash slot, all driving the SAME synthetic-gamepad
+        /// controls <see cref="PlayerController"/> already binds (<c>&lt;Gamepad&gt;/leftStick</c>,
+        /// <c>/rightStick</c>, <c>/buttonSouth</c>). So a finger feeds the exact input path a real
+        /// controller would, with zero change to gameplay code, and — because each stick captures its
+        /// own pointer — move and aim work as simultaneous multi-touch. On-device feel (drag range,
+        /// tap vs drag) is tuned in Lee's device pass.
+        /// </summary>
+        private void BuildTouchControls()
+        {
+            EnsureEventSystem();
+
+            if (_moveJoystickRoot != null)
+                AddOnScreenStick(_moveJoystickRoot, "<Gamepad>/leftStick", "Move Touch");
+            if (_aimJoystickRoot != null)
+                AddOnScreenStick(_aimJoystickRoot, "<Gamepad>/rightStick", "Aim Touch");
+            if (_dashSlotRoot != null)
+                AddOnScreenButton(_dashSlotRoot, "<Gamepad>/buttonSouth", "Dash Touch");
+        }
+
+        private static void AddOnScreenStick(RectTransform joystickRoot, string controlPath, string name)
+        {
+            // Transparent, raycastable pad over the joystick (plus margin for fat fingers). The pad
+            // is what the finger grabs; the rings/knob stay the visible stick, driven by MoveInput.
+            var pad = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(OnScreenStick));
+            var rect = (RectTransform)pad.transform;
+            rect.SetParent(joystickRoot, false);
+            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
+            rect.offsetMin = new Vector2(-30f, -30f); rect.offsetMax = new Vector2(30f, 30f);
+
+            var img = pad.GetComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0f); // invisible touch surface
+            img.raycastTarget = true;
+
+            var stick = pad.GetComponent<OnScreenStick>();
+            stick.controlPath = controlPath;
+            stick.movementRange = 90f; // px drag for full deflection; tuned on device
+        }
+
+        private static void AddOnScreenButton(RectTransform slotRoot, string controlPath, string name)
+        {
+            var pad = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(OnScreenButton));
+            var rect = (RectTransform)pad.transform;
+            rect.SetParent(slotRoot, false);
+            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
+            rect.offsetMin = new Vector2(-8f, -8f); rect.offsetMax = new Vector2(8f, 8f);
+
+            var img = pad.GetComponent<Image>();
+            img.color = new Color(0f, 0f, 0f, 0f);
+            img.raycastTarget = true;
+
+            pad.GetComponent<OnScreenButton>().controlPath = controlPath;
+        }
+
+        private static void EnsureEventSystem()
+        {
+            if (FindFirstObjectByType<EventSystem>() != null) return;
+            var es = new GameObject("EventSystem", typeof(EventSystem));
+            es.AddComponent<InputSystemUIInputModule>();
         }
 
         private void BuildArenaIndicator()
@@ -573,9 +660,9 @@ namespace MaxWorlds.UI
         private void BuildMap()
         {
             var go = new GameObject("Map Screen");
-            go.transform.SetParent(Root, false);
+            go.transform.SetParent(FullRoot, false);
             Map = go.AddComponent<MapScreen>();
-            Map.Build(Root, RefW, RefH);
+            Map.Build(FullRoot, RefW, RefH);
 
             // Below the utility icon column (P / ? / S), which owns the top-left down to y = -208.
             var mini = new GameObject("Minimap", typeof(RectTransform));
@@ -648,7 +735,7 @@ namespace MaxWorlds.UI
         {
             var go = new GameObject("Floating Text", typeof(RectTransform));
             var rect = (RectTransform)go.transform;
-            rect.SetParent(Root, false);
+            rect.SetParent(FullRoot, false);
             Stretch(rect);
             _floating = go.AddComponent<FloatingTextLayer>();
             _floating.Init(rect, _canvas, _worldCamera);
