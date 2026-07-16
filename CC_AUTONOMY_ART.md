@@ -13,6 +13,9 @@ It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship 
 Follow ALL of `CC_AUTONOMY.md` for conventions: auto-merge on green (squash-merge your own verified branch to `main`, don't wait for Lee), run `cc-verify` before merge, the code-driven scene/prefab convention (`docs/CODE_DRIVEN_SCENES.md`), the boot-scene rule, commit/Jira etiquette, and "run the verify command — never infer success."
 
 ## This stream's queue (DIFFERENT from the gameplay one)
+
+**On every start, first run the git-merge hygiene step:** `sh scripts/setup-git-merge.sh` (idempotent). It keeps Unity YAML (`.unity`/`.prefab`/`.asset`) merging **headless** — git's 3-way text merge writes conflict markers instead of the Smart-Merge GUI that once blocked an autonomous merge (YT-103; see `docs/GIT_MERGE_SETUP.md`).
+
 On every start, query Jira:
 
 ```
