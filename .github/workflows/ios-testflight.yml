@@ -113,6 +113,14 @@ jobs:
           name: build-iOS
           path: build/iOS
 
+      # upload-artifact/download-artifact round-trips through a zip, which does not
+      # preserve the executable bit. Unity's generated build-phase scripts
+      # (process_symbols.sh, MapFileParser.sh) therefore arrive non-executable and
+      # the archive dies with "process_symbols.sh: Permission denied".
+      - name: Restore executable bit on Unity's build scripts
+        shell: bash
+        run: find build/iOS -name '*.sh' -exec chmod +x {} +
+
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
         with:
