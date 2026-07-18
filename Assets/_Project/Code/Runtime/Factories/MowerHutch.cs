@@ -120,7 +120,10 @@ namespace MaxWorlds.Factories
 
         private void OnDestroyed()
         {
-            if (_spawner != null) _spawner.enabled = false;       // spawns stop
+            // Stop(), not enabled = false: dev mode re-asserts `enabled` on every spawner every
+            // frame, so switching the component off stopped this factory for exactly one frame and
+            // it produced robots for the rest of the run (YT-100).
+            if (_spawner != null) _spawner.Stop();                // spawns stop, and stay stopped
             if (gate != null) gate.Unlock();                      // one key turned; the gate counts
             FactoryCensus.ReportDestroyed(this);                  // ...and the boss listens to that
             // The destruction VFX hangs off this signal (CombatVfx, YT-48).

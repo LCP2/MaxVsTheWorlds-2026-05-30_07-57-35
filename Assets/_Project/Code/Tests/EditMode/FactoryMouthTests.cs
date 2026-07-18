@@ -80,6 +80,100 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- the door: where a robot APPEARS, before it walks out (YT-100) --------------------
+
+        /// <summary>The Mower Hutch body, as the map builds it: a cube scaled (3, 2, 3).</summary>
+        private static readonly Vector3 Body = new Vector3(3f, 2f, 3f);
+        private const float Radius = 0.4f;    // a robot's collider radius
+
+        [Test]
+        public void TheDoorIsAgainstTheFactoryWall_NotOutOnTheLawn()
+        {
+            // The whole of YT-100: a robot must be born at the building, and walk out. Appearing at
+            // the exit point — a clear 3.5 m out, past the shed, on open grass — is what read as
+            // popping into existence beside the factory rather than coming out of it.
+            var factory = new Vector3(0f, 1f, 15f);
+            for (int i = 0; i < 50; i++)
+            {
+                Vector3 dir = FactoryMouth.ExitDirection(TowardMax, MouthFacing, i, HalfAngle);
+                Vector3 door = FactoryMouth.DoorPoint(factory, dir, Body, Radius, 3.5f, 1f);
+                Vector3 exit = FactoryMouth.ExitPoint(factory, dir, 3.5f, 1f);
+
+                float toDoor = Flat(door, factory);
+                Assert.Less(toDoor, Flat(exit, factory),
+                    $"robot {i} appears no closer to the factory than the spot it walks out to — " +
+                    "there is no emergence left to see");
+
+                // Against the wall, but not embedded in it. The body's half-depth is 1.5 m, so the
+                // near face is 1.5 m out along an axis and further across a corner.
+                Assert.Greater(toDoor, 1.5f, $"robot {i} is born inside the factory's 3 m body");
+                Assert.Less(toDoor, 1.5f + Radius + 1.2f,
+                    $"robot {i} is born {toDoor:0.0} m out — that is not a doorway");
+            }
+        }
+
+        [Test]
+        public void TheRobotClearsTheWallItIsBornAgainst()
+        {
+            // Its own body must not overlap the factory's collider: an interpenetrating
+            // CharacterController is ejected on its first move, which would fire the robot out of
+            // the shed instead of walking it out.
+            for (int i = 0; i < 50; i++)
+            {
+                Vector3 dir = FactoryMouth.ExitDirection(TowardMax, MouthFacing, i, HalfAngle);
+                Vector3 door = FactoryMouth.DoorPoint(Vector3.zero, dir, Body, Radius, 3.5f, 0f);
+
+                // Distance from the box surface, measured on the axis the robot left by.
+                float outside = Mathf.Max(Mathf.Abs(door.x) - 1.5f, Mathf.Abs(door.z) - 1.5f);
+                Assert.Greater(outside, 0f, $"robot {i} overlaps the factory body");
+            }
+        }
+
+        [Test]
+        public void TheDoorIsOnTheLineTheRobotWalksOut_SoItLeavesInAStraightLine()
+        {
+            // Door and exit share a bearing from the factory: the emergence is a walk straight out
+            // of the mouth, not a sidestep.
+            for (int i = 0; i < 20; i++)
+            {
+                Vector3 dir = FactoryMouth.ExitDirection(TowardMax, MouthFacing, i, HalfAngle);
+                Vector3 door = FactoryMouth.DoorPoint(Vector3.zero, dir, Body, Radius, 3.5f, 0f);
+                Vector3 exit = FactoryMouth.ExitPoint(Vector3.zero, dir, 3.5f, 0f);
+
+                Vector3 outward = exit - door; outward.y = 0f;
+                Assert.Greater(Vector3.Dot(outward.normalized, dir), 0.999f,
+                    $"robot {i} does not walk straight out of the door it appeared in");
+            }
+        }
+
+        [Test]
+        public void ADoorBeyondTheExitPointIsClampedBack_SoNothingEmergesBackwards()
+        {
+            // A big enough robot (or a small enough spawn radius) would otherwise put the door
+            // further out than the place it is walking to, and the emergence would run inwards.
+            Vector3 dir = Vector3.back;
+            Vector3 door = FactoryMouth.DoorPoint(Vector3.zero, dir, Body, Radius, maxRadius: 1.0f, y: 0f);
+            Assert.AreEqual(1.0f, Flat(door, Vector3.zero), 1e-3,
+                "the door should be clamped to the exit point, never past it");
+        }
+
+        [Test]
+        public void TheDoorMovesToWhicheverFaceTheRobotLeavesBy()
+        {
+            // There is no authored door on the greybox body, and that is the feature: the mouth is
+            // wherever the stream is pointing, so it swings round the building as Max moves.
+            Vector3 north = FactoryMouth.DoorPoint(Vector3.zero, Vector3.forward, Body, Radius, 3.5f, 0f);
+            Vector3 east = FactoryMouth.DoorPoint(Vector3.zero, Vector3.right, Body, Radius, 3.5f, 0f);
+
+            Assert.Greater(north.z, 1.5f, "leaving north should put the door on the north face");
+            Assert.AreEqual(0f, north.x, 1e-3);
+            Assert.Greater(east.x, 1.5f, "leaving east should put the door on the east face");
+            Assert.AreEqual(0f, east.z, 1e-3);
+        }
+
+        private static float Flat(Vector3 a, Vector3 b) =>
+            Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
+
         [Test]
         public void TheMouthTracksMax_SoTheStreamAlwaysFlowsAtHim()
         {

@@ -26,7 +26,9 @@ namespace MaxWorlds.Enemies
     [RequireComponent(typeof(CharacterController))]
     public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable
     {
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search }
+        // Emerging is appended, not inserted: these are serialized as ints, and renumbering the
+        // existing members would silently re-label every one of them.
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -131,6 +133,19 @@ namespace MaxWorlds.Enemies
         private Vector3 _wallNormal;
         private float _wallTimer;
 
+        [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100).")]
+        [SerializeField] private float emergeSpeedScale = 0.8f;
+
+        /// <summary>How close to the spot outside the door counts as "out". Loose — the point is to
+        /// be clear of the building, not to hit a coordinate.</summary>
+        private const float EmergeArriveRadius = 0.35f;
+
+        /// <summary>Longest a robot may spend getting out of the door before it gives up and fights
+        /// anyway. The walk is well under a second; this only ever catches a blocked doorway.</summary>
+        private const float EmergeTimeout = 1.5f;
+
+        private Vector3 _emergeTarget;
+
         /// <summary>The closest it has got to the spot it is hunting, and how long since it last got
         /// closer. This is what "it has lost him" means now (YT-93) — not "it hasn't seen him lately",
         /// which is true of every robot the moment it is born.</summary>
@@ -196,6 +211,7 @@ namespace MaxWorlds.Enemies
 
             switch (Current)
             {
+                case State.Emerging: TickEmerge(dt);   break;
                 case State.Chase:    TickChase(dt);    break;
                 case State.Search:   TickSearch(dt);   break;
                 case State.Telegraph: TickTelegraph(dt); break;
@@ -220,6 +236,45 @@ namespace MaxWorlds.Enemies
             if (_knockback.sqrMagnitude < 0.0004f) { _knockback = Vector3.zero; return; }
             _cc.Move(_knockback * dt);
             _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, knockbackDecay * dt);
+        }
+
+        /// <summary>
+        /// Walk out of the factory door before doing anything else (YT-100). The spawner puts the
+        /// robot in the doorway and hands it the spot just outside; this is the walk between them.
+        ///
+        /// It is a state rather than a flag on Chase because chasing is exactly what it must not do
+        /// yet: Chase steers at Max, and from inside a doorway that means turning immediately and
+        /// scraping along the shed wall. The robot has one job for half a second — get clear of the
+        /// building it came out of — and having it hold that beat is what makes the factory read as
+        /// producing robots rather than as a place they appear.
+        /// </summary>
+        public void BeginEmergence(Vector3 exitPoint)
+        {
+            if (Current == State.Dead) return;
+            _emergeTarget = exitPoint;
+            Current = State.Emerging;
+            _stateTimer = 0f;
+            SetTell(idleTell);
+        }
+
+        private void TickEmerge(float dt)
+        {
+            Vector3 to = _emergeTarget - transform.position;
+            to.y = 0f;
+
+            // Out of the doorway, or it has taken long enough that something is in the way — a piece
+            // of cover, another robot, a corner of the shed. Either way it stops pushing and gets on
+            // with the fight, because a robot stuck emerging is a robot that never attacks.
+            if (to.sqrMagnitude <= EmergeArriveRadius * EmergeArriveRadius || _stateTimer >= EmergeTimeout)
+            {
+                Current = State.Chase;
+                _stateTimer = 0f;
+                return;
+            }
+
+            // Deliberately slower than a chase. It is heaving itself out of a shed, not sprinting;
+            // the step up to full speed as it clears the door is what sells the hand-off.
+            FaceAndMove(to.normalized, moveSpeed * emergeSpeedScale, dt);
         }
 
         private void TickChase(float dt)
