@@ -135,3 +135,20 @@ jobs:
       - name: Fastlane — sign & upload to TestFlight
         working-directory: ${{ github.workspace }}
         run: bundle exec fastlane ios beta
+
+      # xcbeautify swallows the stderr of failing run-script phases, so an archive
+      # failure otherwise shows only "PhaseScriptExecution ... failed" with no
+      # reason. Surface the raw gym log and the generated script on failure.
+      - name: Diagnose archive failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "::group::gym log (last 200 lines)"
+          tail -n 200 ~/Library/Logs/gym/*.log 2>/dev/null || echo "no gym log"
+          echo "::endgroup::"
+          echo "::group::failing run-script phases"
+          find ~/Library/Developer/Xcode/DerivedData -name 'Script-*.sh' 2>/dev/null | while read -r f; do
+            echo "--- $f"
+            cat "$f"
+          done || true
+          echo "::endgroup::"
