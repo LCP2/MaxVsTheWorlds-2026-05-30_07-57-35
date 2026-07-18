@@ -65,6 +65,34 @@ namespace MaxWorlds.Enemies
 
         public int LiveCount => _live.Count;
 
+        /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
+        /// test can prove a dead factory emitted NOTHING — which <see cref="LiveCount"/> can't, since
+        /// it also falls as robots die.</summary>
+        public int Emitted => _emitted;
+
+        /// <summary>Whether this source is still producing. Goes false exactly once, at
+        /// <see cref="Stop"/>, and never comes back.</summary>
+        public bool IsRunning => _running;
+
+        private bool _running = true;
+
+        /// <summary>
+        /// This source is gone — stop producing, permanently (YT-100).
+        ///
+        /// This is sticky ON PURPOSE, and it does not use <c>enabled</c>. The factory used to stop its
+        /// spawns by switching this component off, which looks right and isn't: <c>enabled</c> is a
+        /// shared channel with another writer. <see cref="MaxWorlds.Dev.DevModeController"/> re-asserts
+        /// <c>spawner.enabled = !IsSpawnPaused</c> over EVERY spawner EVERY frame, so a destroyed
+        /// factory switched itself off and dev mode switched it back on one frame later — and kept
+        /// producing robots for the rest of the run. Only reproducible with <c>?dev=1</c>, which is
+        /// how the game is play-tested.
+        ///
+        /// So death is recorded as state this object owns outright, and the spawn path asks that
+        /// rather than asking whether someone left the component enabled. Whoever else writes
+        /// <c>enabled</c> is now free to keep doing so; it cannot resurrect a dead source.
+        /// </summary>
+        public void Stop() => _running = false;
+
         /// <summary>Live count of one kind — lets a test prove the mix actually reaches the field.</summary>
         public int LiveCountOf(EnemyKind kind)
         {
@@ -79,6 +107,7 @@ namespace MaxWorlds.Enemies
 
         private void Update()
         {
+            if (!_running) return;
             float dt = Time.deltaTime;
             _elapsed += dt;
             _timer += dt;
@@ -89,6 +118,10 @@ namespace MaxWorlds.Enemies
 
         private void SpawnOne()
         {
+            // Guarded here too, not just in Update: SpawnOne is also called from outside (the press-kit
+            // director reflects it to populate a shot). A dead factory must not emit down ANY path.
+            if (!_running) return;
+
             EnemyKind kind = EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt);
             EnemyArchetype archetype = EnemyArchetype.Of(kind);
             RobotEnemy e = Take(kind, archetype);
@@ -97,10 +130,26 @@ namespace MaxWorlds.Enemies
             Vector3 dir = FactoryMouth.ExitDirection(
                 ToTarget(), -transform.forward, _emitted++, mouthHalfAngle);
 
-            e.transform.position = FactoryMouth.ExitPoint(
+            // It APPEARS at the door and WALKS OUT to the exit point (YT-100). It used to appear at
+            // the exit point already — a full body-length clear of the shed, out on the open lawn,
+            // fully formed. Nothing was between it and the player at any instant, so there was no
+            // frame in which it read as having come from the building; it read as switched on next
+            // to it. Born in the doorway with the hutch still between it and the camera, walking
+            // itself out, is the whole difference between a source and a spawn point.
+            Vector3 exit = FactoryMouth.ExitPoint(
                 transform.position, dir, spawnRadius, archetype.SpawnHeight);
+            Vector3 door = FactoryMouth.DoorPoint(
+                transform.position, dir, transform.lossyScale, archetype.ColliderRadius,
+                spawnRadius, archetype.SpawnHeight);
+
+            e.transform.position = door;
             e.transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
             e.gameObject.SetActive(true);
+
+            // AFTER SetActive: OnEnable runs ResetState, which puts a pooled robot back into Chase.
+            // Told to emerge first, it would be told to chase a frame later and step out of the door
+            // by beelining at Max instead.
+            e.BeginEmergence(exit);
 
             // Re-applied on every spawn, not just on creation: Unity drops an ignored collider pair
             // when the collider is disabled, and pooling disables it on every death (YT-74).
