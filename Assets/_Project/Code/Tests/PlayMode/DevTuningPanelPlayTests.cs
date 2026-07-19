@@ -5,6 +5,7 @@ using UnityEngine.TestTools;
 using UnityEngine.UI;
 using MaxWorlds.Core;
 using MaxWorlds.Dev;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -34,6 +35,10 @@ namespace MaxWorlds.Tests.PlayMode
         {
             if (_host != null) Object.Destroy(_host);
             DevMode.Reset();
+            // Static seams: clear here rather than at the end of the test that sets them, so a
+            // failing assert can't leak a simulated notch into every test that follows.
+            SafeArea.SimulatedSafeArea = null;
+            SafeArea.SimulatedScreenSize = null;
             yield return null;
         }
 
@@ -129,6 +134,85 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>
+        /// Everything the panel draws has to actually be ON the display.
+        ///
+        /// This exists because the first cut passed every other test in this file and was still
+        /// broken: the panel rect was anchored to screen centre with a top-left pivot, so it hung
+        /// down and right of centre and its footer — including the "Copy current values" button that
+        /// is the ticket's deliverable — fell off the bottom of the screen. Asserting the panel's
+        /// SIZE fits, which is what the readability test does, cannot catch that. Only its rendered
+        /// corners can.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator EverythingItDrawsIsOnScreen()
+        {
+            DevMode.Enabled = true;
+            yield return null;
+            yield return null;
+
+            var canvas = FindPanelCanvas();
+            Assert.That(canvas, Is.Not.Null);
+
+            // Open it: the footer only exists to be pressed, so it has to be reachable.
+            var gear = canvas.GetComponentInChildren<Button>(true);
+            gear.onClick.Invoke();
+            yield return null;
+
+            var screen = new Rect(0f, 0f, Screen.width, Screen.height);
+            var corners = new Vector3[4];
+
+            foreach (var rt in canvas.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rt.name != "Panel" && rt.name != "Gear" &&
+                    rt.name != "Copy current values" && rt.name != "Reset to defaults") continue;
+
+                // Overlay canvas -> world corners ARE screen pixels.
+                rt.GetWorldCorners(corners);
+                foreach (var c in corners)
+                {
+                    Assert.That(screen.Contains(new Vector2(c.x, c.y)), Is.True,
+                        $"'{rt.name}' has a corner at ({c.x:0}, {c.y:0}), outside the " +
+                        $"{Screen.width}x{Screen.height} screen — it is drawn off the display.");
+                }
+            }
+        }
+
+        /// <summary>
+        /// The gear is edge-anchored, and on a landscape iPhone the notch inset is about 44pt.
+        /// Without a safe-area parent it sits ~9pt in from the edge and lands underneath it — on
+        /// precisely the device this ticket exists to serve.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator WithANotch_TheGearStaysOutOfIt()
+        {
+            float inset = Screen.width * 0.08f;
+            SafeArea.SimulatedScreenSize = new Vector2(Screen.width, Screen.height);
+            SafeArea.SimulatedSafeArea =
+                new Rect(inset, 0f, Screen.width - inset * 2f, Screen.height);
+
+            DevMode.Enabled = true;
+            yield return null;
+            yield return null;
+            yield return null;   // SafeArea re-anchors on its own Update
+
+            var canvas = FindPanelCanvas();
+            Assert.That(canvas, Is.Not.Null);
+
+            var gear = canvas.transform.Find("Safe Area/Gear") as RectTransform;
+            Assert.That(gear, Is.Not.Null,
+                "The gear must hang off a safe-area root, not straight off the canvas.");
+
+            var corners = new Vector3[4];
+            gear.GetWorldCorners(corners);
+            foreach (var c in corners)
+            {
+                Assert.That(c.x, Is.GreaterThanOrEqualTo(inset - 0.5f),
+                    $"The gear reaches x={c.x:0}, inside the {inset:0}px notch inset — it would be " +
+                    "under the notch on a landscape iPhone.");
+            }
+        }
+
+        /// <summary>
         /// The Craft Bible's phone rule wants a measurement, not an assurance. The panel is laid out
         /// in 1920x1080 reference units; on an iPhone Plus in landscape (932x430pt) the
         /// ScaleWithScreenSize / match-0.5 factor is sqrt(932/1920)*sqrt(430/1080) = 0.44. So these
@@ -155,7 +239,7 @@ namespace MaxWorlds.Tests.PlayMode
                 "stops being readable at arm's length.");
 
             // Every slider must be a real finger target and must sit inside the screen.
-            var panel = canvas.transform.Find("Panel") as RectTransform;
+            var panel = canvas.transform.Find("Safe Area/Panel") as RectTransform;
             Assert.That(panel, Is.Not.Null);
             Assert.That(panel.sizeDelta.x * scale, Is.LessThanOrEqualTo(932f),
                 "The panel is wider than a landscape phone screen.");

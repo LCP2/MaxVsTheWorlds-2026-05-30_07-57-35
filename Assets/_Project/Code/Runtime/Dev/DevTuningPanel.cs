@@ -82,6 +82,7 @@ namespace MaxWorlds.Dev
         private static readonly Color TextColor = Color.white;
 
         private Canvas _canvas;
+        private RectTransform _safeRoot;
         private GameObject _panelRoot;
         private Text _dumpText;
         private bool _open;
@@ -151,6 +152,14 @@ namespace MaxWorlds.Dev
             scaler.referenceResolution = new Vector2(RefW, RefH);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
+
+            // Everything hangs off a safe-area root. The gear is edge-anchored, and on a landscape
+            // iPhone the notch inset is ~44pt — comfortably more than the 20 reference units (~9pt)
+            // it sits in from the edge, so without this it lands under the notch on the exact device
+            // the ticket is about.
+            _safeRoot = NewRect("Safe Area", _canvas.transform, Vector2.zero, Vector2.one);
+            Stretch(_safeRoot);
+            _safeRoot.gameObject.AddComponent<SafeArea>();
 
             BuildKnobs();
             BuildGearButton();
@@ -253,7 +262,7 @@ namespace MaxWorlds.Dev
             // Left edge, vertically centred: the one region nothing else claims. Top-left is the FPS
             // readout and the utility icons, top-right is the dev-mode box and the ability slots,
             // and both bottom corners are the joystick pads.
-            var rt = NewRect("Gear", _canvas.transform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            var rt = NewRect("Gear", _safeRoot, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(GearSize, GearSize);
             rt.anchoredPosition = new Vector2(Pad + GearSize * 0.5f, 0f);
@@ -275,9 +284,13 @@ namespace MaxWorlds.Dev
 
         private void BuildPanel()
         {
-            var rt = NewRect("Panel", _canvas.transform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            var rt = NewRect("Panel", _safeRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             rt.sizeDelta = new Vector2(PanelW, PanelH);
-            rt.anchoredPosition = Vector2.zero;
+            // The pivot stays top-left, because every child below is placed by Place() in top-left
+            // space. So centring is done by offsetting half the panel up and left rather than by
+            // moving the pivot — with a zero offset the panel hangs down-right of screen centre and
+            // its footer buttons fall off the bottom of the display.
+            rt.anchoredPosition = new Vector2(-PanelW * 0.5f, PanelH * 0.5f);
             _panelRoot = rt.gameObject;
 
             var bg = rt.gameObject.AddComponent<Image>();
