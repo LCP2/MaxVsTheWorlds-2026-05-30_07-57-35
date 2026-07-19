@@ -221,6 +221,10 @@ namespace MaxWorlds.VFX
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
             _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame(); _dash.EndFrame();
+            // _levelUp was missing here, which silently killed the boost VFX from level 3 on: its
+            // per-frame budget is 2 and nothing ever refilled it, so the counter reached the cap on
+            // the second level-up and every one after that was dropped. Found while adding YT-101.
+            _levelUp.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)
