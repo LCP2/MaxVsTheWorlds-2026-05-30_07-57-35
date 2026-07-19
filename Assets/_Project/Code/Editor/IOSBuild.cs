@@ -47,28 +47,52 @@ namespace MaxWorlds.Editor
         }
 
         /// <summary>
-        /// Fills every iOS application-icon slot with a generated greybox mark (dark block on warm
-        /// Backyard orange). Guarded: with no iOS module the slot list is empty and this is a no-op.
+        /// Fills every iOS icon slot of every supported kind with a generated greybox mark (dark
+        /// block on warm Backyard orange). Guarded: with no iOS module there are no kinds and this
+        /// is a no-op.
+        ///
+        /// YT-104: this used to fill only <c>IconKind.Application</c>, which leaves the 1024×1024
+        /// App Store slot empty. The archive then signs and exports fine, and Apple rejects it at
+        /// upload with "Missing app icon … 1024 by 1024 pixel PNG" (409 STATE_ERROR.VALIDATION_ERROR)
+        /// — a failure that only ever shows up in a real TestFlight upload. Enumerating the kinds
+        /// rather than naming them keeps that from re-breaking when Unity adds or renames a slot.
         /// </summary>
         private static void AssignPlaceholderIcon()
         {
             try
             {
-                int[] sizes = PlayerSettings.GetIconSizes(NamedBuildTarget.iOS, IconKind.Application);
-                if (sizes == null || sizes.Length == 0)
+                PlatformIconKind[] kinds = PlayerSettings.GetSupportedIconKinds(NamedBuildTarget.iOS);
+                if (kinds == null || kinds.Length == 0)
                 {
                     Debug.Log("[IOSBuild] No iOS icon slots on this editor (module not installed) — " +
-                              "skipping placeholder icon; the macOS CI runner will generate it.");
+                              "skipping placeholder icon; the CI runner will generate it.");
                     return;
                 }
 
-                var icons = new Texture2D[sizes.Length];
-                for (int i = 0; i < sizes.Length; i++)
+                int filled = 0;
+                foreach (PlatformIconKind kind in kinds)
                 {
-                    icons[i] = MakePlaceholderIcon(Mathf.Max(1, sizes[i]));
+                    PlatformIcon[] icons = PlayerSettings.GetPlatformIcons(NamedBuildTarget.iOS, kind);
+                    if (icons == null || icons.Length == 0) continue;
+
+                    foreach (PlatformIcon icon in icons)
+                    {
+                        // A slot's layers are its light/dark/tinted variants; every one Unity asks
+                        // for has to be non-empty or the slot still exports blank.
+                        int layers = Mathf.Max(1, icon.maxLayerCount);
+                        Texture2D tex = MakePlaceholderIcon(Mathf.Max(1, icon.width));
+                        for (int layer = 0; layer < layers; layer++)
+                        {
+                            icon.SetTexture(tex, layer);
+                        }
+                        filled++;
+                    }
+
+                    PlayerSettings.SetPlatformIcons(NamedBuildTarget.iOS, kind, icons);
                 }
-                PlayerSettings.SetIcons(NamedBuildTarget.iOS, icons, IconKind.Application);
-                Debug.Log($"[IOSBuild] Placeholder app icon assigned to {sizes.Length} iOS slot(s).");
+
+                Debug.Log($"[IOSBuild] Placeholder app icon assigned to {filled} iOS slot(s) across " +
+                          $"{kinds.Length} kind(s).");
             }
             catch (Exception e)
             {
@@ -77,9 +101,13 @@ namespace MaxWorlds.Editor
             }
         }
 
-        private static Texture2D MakePlaceholderIcon(int size)
+        /// <summary>
+        /// Square greybox icon at the requested size. RGB24, not RGBA32: Apple rejects an App Store
+        /// icon that carries an alpha channel, so the placeholder must not have one to give away.
+        /// </summary>
+        public static Texture2D MakePlaceholderIcon(int size)
         {
-            var tex = new Texture2D(size, size, TextureFormat.RGBA32, false);
+            var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
             var bg = new Color(0.96f, 0.62f, 0.20f, 1f); // warm Backyard orange
             var fg = new Color(0.10f, 0.11f, 0.14f, 1f); // dark centred block
             var px = new Color[size * size];
