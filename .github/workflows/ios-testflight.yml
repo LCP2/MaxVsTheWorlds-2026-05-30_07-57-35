@@ -49,10 +49,18 @@ jobs:
         with:
           unityVersion: auto # reads ProjectSettings/ProjectVersion.txt
           targetPlatform: iOS
+      # Tar the project before uploading. actions/upload-artifact does NOT preserve
+      # the executable bit, and Unity's generated project ships tools that must stay
+      # executable (process_symbols.sh, usymtoolarm64, MapFileParser.sh, ...) or the
+      # macOS archive fails with "Permission denied" in a build-phase script. A tar
+      # round-trip keeps the modes, which fixes the whole class rather than chmod'ing
+      # each file we happen to trip over.
+      - name: Package the Xcode project (tar preserves file modes)
+        run: tar -cf ios-build.tar -C build/iOS .
       - uses: actions/upload-artifact@v4
         with:
           name: build-iOS
-          path: build/iOS
+          path: ios-build.tar
           retention-days: 3
 
   # ---------------------------------------------------------------------------
@@ -111,15 +119,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: build-iOS
-          path: build/iOS
+          path: ${{ runner.temp }}/ios-artifact
 
-      # upload-artifact/download-artifact round-trips through a zip, which does not
-      # preserve the executable bit. Unity's generated build-phase scripts
-      # (process_symbols.sh, MapFileParser.sh) therefore arrive non-executable and
-      # the archive dies with "process_symbols.sh: Permission denied".
-      - name: Restore executable bit on Unity's build scripts
+      - name: Unpack the Xcode project
         shell: bash
-        run: find build/iOS -name '*.sh' -exec chmod +x {} +
+        run: |
+          mkdir -p build/iOS
+          tar -xf "$RUNNER_TEMP/ios-artifact/ios-build.tar" -C build/iOS
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
