@@ -39,7 +39,9 @@ namespace MaxWorlds.Core
         public static bool IsAutoFiring => Enabled && AutoFire;
         public static bool IsSpawnPaused => Enabled && PauseSpawns;
 
-        /// <summary>Back to a clean, shippable state.</summary>
+        /// <summary>Back to a clean, shippable state. Also drops any tuning-panel overrides (YT-105)
+        /// — leaving them set behind a switched-off dev mode would be a trap, since they'd silently
+        /// come back the next time dev mode was turned on.</summary>
         public static void Reset()
         {
             Enabled = false;
@@ -47,6 +49,7 @@ namespace MaxWorlds.Core
             InfiniteEnergy = true;
             AutoFire = false;
             PauseSpawns = false;
+            DevTuning.Reset();
         }
     }
 }

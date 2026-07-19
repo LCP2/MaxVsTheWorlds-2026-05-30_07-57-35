@@ -181,9 +181,12 @@ namespace MaxWorlds.Bosses
             float dist = to.magnitude;
             if (dist < 0.1f) return;
             Vector3 dir = to.normalized;
+            // Reposition speed only — the charge stays on the authored number, because the charge is
+            // a telegraphed attack whose dodge window is timed against it (YT-105).
+            float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
             // Approach until at desiredRange, then hold — keeps the boss circling, not hugging.
-            if (dist > BossTuning.DesiredRange + 0.5f) _cc.Move(dir * BossTuning.MoveSpeed * speedScale * dt);
-            else if (dist < BossTuning.DesiredRange - 0.5f) _cc.Move(-dir * BossTuning.MoveSpeed * speedScale * dt);
+            if (dist > BossTuning.DesiredRange + 0.5f) _cc.Move(dir * move * speedScale * dt);
+            else if (dist < BossTuning.DesiredRange - 0.5f) _cc.Move(-dir * move * speedScale * dt);
         }
 
         private void DoCharge(float dt, float speedScale)

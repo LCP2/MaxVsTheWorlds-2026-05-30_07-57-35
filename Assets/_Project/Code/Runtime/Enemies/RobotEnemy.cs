@@ -39,6 +39,13 @@ namespace MaxWorlds.Enemies
         // tune it. Kept in step with Rusher (60% of Max's 6 m/s) so a robot built without an
         // archetype isn't a different animal (YT-80).
         [SerializeField] private float moveSpeed = 3.6f;
+
+        /// <summary>
+        /// Chase speed after any dev override (YT-105). Read at the point of movement rather than
+        /// stamped in <see cref="Apply"/>, so dragging the slider retimes the robots already on the
+        /// field — the ones you're watching — instead of only the next wave.
+        /// </summary>
+        private float EffectiveMoveSpeed => DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed);
         [SerializeField] private float gravity = 20f;
 
         [Header("Lunge")]
@@ -274,7 +281,7 @@ namespace MaxWorlds.Enemies
 
             // Deliberately slower than a chase. It is heaving itself out of a shed, not sprinting;
             // the step up to full speed as it clears the door is what sells the hand-off.
-            FaceAndMove(to.normalized, moveSpeed * emergeSpeedScale, dt);
+            FaceAndMove(to.normalized, EffectiveMoveSpeed * emergeSpeedScale, dt);
         }
 
         private void TickChase(float dt)
@@ -313,7 +320,8 @@ namespace MaxWorlds.Enemies
             }
 
             bool hunting = !_sight.HasSight;
-            FaceAndMove(dir, hunting ? moveSpeed * searchSpeedScale : moveSpeed, dt);
+            float speed = EffectiveMoveSpeed;
+            FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
 
             // Is it getting anywhere? Seeing Max is a new spot to walk to, so the clock starts again.
             if (_sight.HasSight) { _closest = float.MaxValue; _stallTimer = 0f; }

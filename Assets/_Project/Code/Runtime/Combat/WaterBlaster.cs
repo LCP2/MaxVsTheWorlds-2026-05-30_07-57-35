@@ -115,6 +115,23 @@ namespace MaxWorlds.Combat
             energyPerTick = _baseEnergyPerSecond * fireInterval;
         }
 
+        /// <summary>
+        /// Re-read the drain/refill numbers through <see cref="DevTuning"/> (YT-105). Called by the
+        /// tuning panel after a slider move.
+        ///
+        /// Drain is re-derived against the CURRENT <see cref="fireInterval"/>, not the authored one,
+        /// so tuning the tank mid-run doesn't quietly undo the power ramp that's already applied.
+        /// </summary>
+        public void RefreshDevTuning()
+        {
+            _baseEnergyPerSecond = DevTuning.Or(DevTuning.BlasterDrainPerSecond, BlasterTuning.EnergyPerSecond);
+            energyPerTick = _baseEnergyPerSecond * fireInterval;
+            if (Energy != null)
+            {
+                Energy.RegenPerSec = DevTuning.Or(DevTuning.BlasterRegenPerSecond, BlasterTuning.RegenPerSec);
+            }
+        }
+
         private float _tickTimer;
         private bool _depleted;
         private bool _lastEmitting;

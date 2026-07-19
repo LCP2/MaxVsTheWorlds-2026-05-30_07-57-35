@@ -12,7 +12,19 @@ namespace MaxWorlds.Core
     {
         public float Max { get; }
         public float Current { get; private set; }
-        private readonly float _regenPerSec;
+
+        /// <summary>
+        /// Refill rate per second. Settable so the dev tuning panel can retune a live tank without
+        /// rebuilding it (YT-105) — rebuilding would reset <see cref="Current"/> mid-fight and lose
+        /// the HUD's <see cref="Changed"/> subscription.
+        /// </summary>
+        public float RegenPerSec
+        {
+            get => _regenPerSec;
+            set => _regenPerSec = Mathf.Max(0f, value);
+        }
+
+        private float _regenPerSec;
         private readonly float _regenDelay;
         private float _timeSinceDrain;
 
