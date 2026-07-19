@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Player
 {
@@ -16,6 +17,10 @@ namespace MaxWorlds.Player
     {
         [Header("Move")]
         [SerializeField] private float moveSpeed = 6f;
+
+        /// <summary>The authored walk speed, ignoring any dev override. The tuning panel shows the
+        /// live value as a percentage of this (YT-105).</summary>
+        public float AuthoredMoveSpeed => moveSpeed;
         [SerializeField] private float rotationSpeed = 720f; // deg/s
         [SerializeField] private float gravity = 20f;
 
@@ -150,7 +155,11 @@ namespace MaxWorlds.Player
                 _cooldownTimer = dashCooldown + dashDuration;
             }
 
-            Vector3 planarVel = _dashTimer > 0f ? _dashDir * dashSpeed : moveDir * moveSpeed;
+            // Dev tuning panel may be overriding the walk speed this session (YT-105); off by
+            // default and in release. The dash is left alone deliberately — it's an i-frame window
+            // whose distance is balanced against the lunge, not a feel knob.
+            float walkSpeed = DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed);
+            Vector3 planarVel = _dashTimer > 0f ? _dashDir * dashSpeed : moveDir * walkSpeed;
 
             // Keep grounded on the flat arena.
             if (_cc.isGrounded && _verticalVel < 0f)

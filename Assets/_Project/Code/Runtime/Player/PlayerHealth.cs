@@ -31,9 +31,29 @@ namespace MaxWorlds.Player
 
         public bool IsAlive => _health > 0f;
         public Team Team => Team.Player;
-        public float Max => maxHealth;
+
+        /// <summary>Effective max HP — the dev tuning panel may be overriding it this session
+        /// (YT-105). Everything downstream (regen ceiling, the HUD bar) reads through here, so a
+        /// slider move is felt everywhere at once.</summary>
+        public float Max => DevTuning.Or(DevTuning.PlayerMaxHealth, maxHealth);
+
+        /// <summary>The authored max, ignoring any dev override — the panel's 100% reference.</summary>
+        public float AuthoredMax => maxHealth;
+
         public float Current => _health;
-        public float Normalized => maxHealth > 0f ? _health / maxHealth : 0f;
+        public float Normalized => Max > 0f ? _health / Max : 0f;
+
+        /// <summary>
+        /// Re-settle current HP against a max that just changed underneath it (YT-105). Raising the
+        /// ceiling leaves Max where he stood — you get headroom, not a free heal — while lowering it
+        /// has to clamp or the bar would read over 100%. Either way the HUD is told, because it
+        /// binds <see cref="Changed"/> and would otherwise keep drawing the old fraction.
+        /// </summary>
+        public void RefreshMax()
+        {
+            _health = Mathf.Min(_health, Max);
+            Changed?.Invoke(_health);
+        }
 
         /// <summary>Fired when HP changes (HUD subscribes). Arg = current HP.</summary>
         public event Action<float> Changed;
@@ -41,7 +61,7 @@ namespace MaxWorlds.Player
         private void Awake()
         {
             _controller = GetComponent<PlayerController>();
-            _health = maxHealth;
+            _health = Max;
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -79,7 +99,7 @@ namespace MaxWorlds.Player
             _timeSinceDamage += dt;
 
             float before = _health;
-            _health = Regenerate(_health, maxHealth, _timeSinceDamage,
+            _health = Regenerate(_health, Max, _timeSinceDamage,
                                  PlayerTuning.RegenDelay, PlayerTuning.RegenPerSec, dt);
             if (!Mathf.Approximately(before, _health)) Changed?.Invoke(_health);
         }

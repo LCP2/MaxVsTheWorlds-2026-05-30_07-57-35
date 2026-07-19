@@ -44,9 +44,16 @@ namespace MaxWorlds.CameraRig
         /// for the art pipeline, so the one thing this knob must not be able to do is tilt the
         /// camera.
         /// </summary>
-        public void Nudge(float delta)
+        public void Nudge(float delta) => SetDistance(cameraDistance + delta);
+
+        /// <summary>
+        /// Set the pull-back directly, clamped (YT-105's tuning panel slider). Same contract as
+        /// <see cref="Nudge"/> — it cannot touch the pitch — so the two ways of dialling the framing
+        /// share one clamp and one apply, and the slider and the bracket keys agree.
+        /// </summary>
+        public void SetDistance(float metres)
         {
-            cameraDistance = Mathf.Clamp(cameraDistance + delta, MinDistance, MaxDistance);
+            cameraDistance = Mathf.Clamp(metres, MinDistance, MaxDistance);
             Apply();
         }
 
