@@ -61,7 +61,10 @@ namespace MaxWorlds.Dev
         private const float Scale6Inch = 0.44f;   // documented above; used by the layout test
 
         private const float PanelW = 980f;
-        private const float PanelH = 770f;
+        // Tall enough for the eight-line value dump. At 770 the dump spilled off the bottom of the
+        // panel background and sat on top of the game, because eight lines at DumpFont need ~230
+        // units and it had been given 110.
+        private const float PanelH = 900f;
         private const float Pad = 20f;
         private const float ColGap = 20f;
         private const float RowH = 112f;
@@ -69,7 +72,7 @@ namespace MaxWorlds.Dev
         private const float HandleW = 64f;
         private const float HeaderH = 56f;
         private const float ButtonH = 84f;
-        private const float DumpH = 110f;
+        private const float DumpH = 240f;   // 8 lines (header + 7 knobs) at DumpFont
         private const float GearSize = 96f;
 
         private const int LabelFont = 30;
@@ -331,6 +334,10 @@ namespace MaxWorlds.Dev
 
             _dumpText = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
             Place(_dumpText.rectTransform, Pad, footerY - ButtonH - 8f, PanelW - Pad * 2f, DumpH);
+            // Clip rather than spill. The panel is sized to fit the dump, but truncating means that
+            // if the value list ever grows the overflow is a cut-off line inside the panel instead
+            // of text printed over the game.
+            _dumpText.verticalOverflow = VerticalWrapMode.Truncate;
         }
 
         private void BuildKnobRow(Knob k, RectTransform parent, float x, float y, float w)

@@ -178,6 +178,55 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>
+        /// The value dump has to stay inside the panel background.
+        ///
+        /// It didn't: the dump rect was given 110 units for eight lines that need ~230, and with
+        /// overflow allowed the tail printed over the game instead of on the panel. Sizing fixed it;
+        /// this pins the relationship so a future extra knob can't quietly reopen it.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheCopiedValueDumpStaysInsideThePanel()
+        {
+            DevMode.Enabled = true;
+            yield return null;
+            yield return null;
+
+            var canvas = FindPanelCanvas();
+            var panel = canvas.transform.Find("Safe Area/Panel") as RectTransform;
+            Assert.That(panel, Is.Not.Null);
+
+            // Press Copy so the dump actually has its full content in it.
+            foreach (var b in canvas.GetComponentsInChildren<Button>(true))
+            {
+                if (b.name == "Copy current values") b.onClick.Invoke();
+            }
+            yield return null;
+
+            Text dump = null;
+            foreach (var t in panel.GetComponentsInChildren<Text>(true))
+            {
+                if (t.text.StartsWith("# MAX tuning")) dump = t;
+            }
+            Assert.That(dump, Is.Not.Null, "Copy should have filled the on-screen dump.");
+
+            var panelCorners = new Vector3[4];
+            var dumpCorners = new Vector3[4];
+            panel.GetWorldCorners(panelCorners);
+            dump.rectTransform.GetWorldCorners(dumpCorners);
+
+            float need = dump.preferredHeight;
+            Assert.That(dump.rectTransform.rect.height, Is.GreaterThanOrEqualTo(need),
+                $"The dump needs {need:0} units for its lines but was given " +
+                $"{dump.rectTransform.rect.height:0} — the tail would render outside the panel.");
+
+            foreach (var c in dumpCorners)
+            {
+                Assert.That(c.y, Is.GreaterThanOrEqualTo(panelCorners[0].y - 0.5f),
+                    "The dump text extends below the bottom of the panel background.");
+            }
+        }
+
+        /// <summary>
         /// The gear is edge-anchored, and on a landscape iPhone the notch inset is about 44pt.
         /// Without a safe-area parent it sits ~9pt in from the edge and lands underneath it — on
         /// precisely the device this ticket exists to serve.
