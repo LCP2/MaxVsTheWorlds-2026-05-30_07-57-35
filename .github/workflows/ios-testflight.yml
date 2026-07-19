@@ -49,10 +49,18 @@ jobs:
         with:
           unityVersion: auto # reads ProjectSettings/ProjectVersion.txt
           targetPlatform: iOS
+      # Tar the project before uploading. actions/upload-artifact does NOT preserve
+      # the executable bit, and Unity's generated project ships tools that must stay
+      # executable (process_symbols.sh, usymtoolarm64, MapFileParser.sh, ...) or the
+      # macOS archive fails with "Permission denied" in a build-phase script. A tar
+      # round-trip keeps the modes, which fixes the whole class rather than chmod'ing
+      # each file we happen to trip over.
+      - name: Package the Xcode project (tar preserves file modes)
+        run: tar -cf ios-build.tar -C build/iOS .
       - uses: actions/upload-artifact@v4
         with:
           name: build-iOS
-          path: build/iOS
+          path: ios-build.tar
           retention-days: 3
 
   # ---------------------------------------------------------------------------
@@ -111,7 +119,13 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: build-iOS
-          path: build/iOS
+          path: ${{ runner.temp }}/ios-artifact
+
+      - name: Unpack the Xcode project
+        shell: bash
+        run: |
+          mkdir -p build/iOS
+          tar -xf "$RUNNER_TEMP/ios-artifact/ios-build.tar" -C build/iOS
 
       - name: Select Xcode
         uses: maxim-lobanov/setup-xcode@v1
@@ -135,3 +149,20 @@ jobs:
       - name: Fastlane — sign & upload to TestFlight
         working-directory: ${{ github.workspace }}
         run: bundle exec fastlane ios beta
+
+      # xcbeautify swallows the stderr of failing run-script phases, so an archive
+      # failure otherwise shows only "PhaseScriptExecution ... failed" with no
+      # reason. Surface the raw gym log and the generated script on failure.
+      - name: Diagnose archive failure
+        if: failure()
+        shell: bash
+        run: |
+          echo "::group::gym log (last 200 lines)"
+          tail -n 200 ~/Library/Logs/gym/*.log 2>/dev/null || echo "no gym log"
+          echo "::endgroup::"
+          echo "::group::failing run-script phases"
+          find ~/Library/Developer/Xcode/DerivedData -name 'Script-*.sh' 2>/dev/null | while read -r f; do
+            echo "--- $f"
+            cat "$f"
+          done || true
+          echo "::endgroup::"

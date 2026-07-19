@@ -3,6 +3,8 @@
 # APPLE_SIGNING_SETUP.md), decoded to files by the workflow. No git cert repo,
 # nothing committed. Auth uses an App Store Connect API key (no Apple ID / 2FA).
 
+require 'fileutils'
+
 default_platform(:ios)
 
 # GameCI writes the Xcode project to build/iOS/iOS/Unity-iPhone.xcodeproj; the
@@ -36,7 +38,47 @@ platform :ios do
       keychain_password: ""
     )
 
-    # 4. Install the App Store provisioning profile and wire it into the project.
+    # 4. Install the App Store provisioning profile where xcodebuild looks for it.
+    #    YT-104: update_project_provisioning only PARSES the profile and edits the
+    #    pbxproj — it never installs it. The archive therefore carried a
+    #    PROVISIONING_PROFILE_SPECIFIER naming a profile Xcode had never seen, and
+    #    failed with "No profile for team '...' matching '...' found".
+    profile = FastlaneCore::ProvisioningProfile.parse(PROFILE_PATH)
+    profile_name = profile["Name"]
+    profile_uuid = profile["UUID"]
+
+    # Everything below uses the name read out of the profile, not the secret. A
+    # stale IOS_PROVISIONING_PROFILE_NAME was the other candidate cause of the same
+    # opaque Xcode error; deriving from the file makes it can't-happen. Warn rather
+    # than fail — the build is correct either way, but the secret wants tidying.
+    expected_name = ENV.fetch("IOS_PROVISIONING_PROFILE_NAME").strip
+    if profile_name != expected_name
+      UI.important("IOS_PROVISIONING_PROFILE_NAME is #{expected_name.inspect} but the profile " \
+                   "is actually named #{profile_name.inspect}. Using the profile's real name; " \
+                   "update the secret to match.")
+    end
+
+    # Same check for the team, which is the other half of the failing lookup.
+    profile_team = Array(profile["TeamIdentifier"]).first
+    expected_team = ENV.fetch("APPLE_TEAM_ID").strip
+    if profile_team != expected_team
+      UI.user_error!("Profile #{profile_name.inspect} belongs to team #{profile_team.inspect}, " \
+                     "but APPLE_TEAM_ID is #{expected_team.inspect}.")
+    end
+
+    # Xcode <16 reads ~/Library/MobileDevice/Provisioning Profiles; Xcode 16+ reads
+    # ~/Library/Developer/Xcode/UserData/Provisioning Profiles. The runner tracks
+    # latest-stable, so install to both and don't depend on which one it is today.
+    UI.message("Installing provisioning profile #{profile_name.inspect} (#{profile_uuid})")
+    [
+      File.expand_path("~/Library/MobileDevice/Provisioning Profiles"),
+      File.expand_path("~/Library/Developer/Xcode/UserData/Provisioning Profiles")
+    ].each do |dir|
+      FileUtils.mkdir_p(dir)
+      FileUtils.cp(PROFILE_PATH, File.join(dir, "#{profile_uuid}.mobileprovision"))
+    end
+
+    # 5. Wire the profile into the project.
     update_project_provisioning(
       xcodeproj: XCODEPROJ,
       profile: PROFILE_PATH,
@@ -45,24 +87,26 @@ platform :ios do
       code_signing_identity: "Apple Distribution"
     )
 
-    # 5. Force manual signing on the target.
+    # 6. Force manual signing on the target.
     update_code_signing_settings(
       use_automatic_signing: false,
       path: XCODEPROJ,
       targets: "Unity-iPhone",
-      team_id: ENV.fetch("APPLE_TEAM_ID"),
+      team_id: expected_team,
       code_sign_identity: "Apple Distribution",
-      profile_name: ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
+      profile_name: profile_name,
+      profile_uuid: profile_uuid,
+      bundle_identifier: ENV.fetch("IOS_BUNDLE_ID")
     )
 
-    # 6. Encryption-compliance flag so TestFlight processing isn't held for review.
+    # 7. Encryption-compliance flag so TestFlight processing isn't held for review.
     update_info_plist(
       xcodeproj: XCODEPROJ,
       plist_path: "Info.plist",
       block: proc { |plist| plist["ITSAppUsesNonExemptEncryption"] = false }
     )
 
-    # 7. Archive + export a signed, App-Store-method .ipa.
+    # 8. Archive + export a signed, App-Store-method .ipa.
     build_app(
       project: XCODEPROJ,
       scheme: "Unity-iPhone",
@@ -72,14 +116,14 @@ platform :ios do
       export_options: {
         method: "app-store",
         signingStyle: "manual",
-        teamID: ENV.fetch("APPLE_TEAM_ID"),
+        teamID: expected_team,
         provisioningProfiles: {
-          ENV.fetch("IOS_BUNDLE_ID") => ENV.fetch("IOS_PROVISIONING_PROFILE_NAME")
+          ENV.fetch("IOS_BUNDLE_ID") => profile_name
         }
       }
     )
 
-    # 8. Ship to TestFlight. skip_waiting keeps CI from idling on Apple processing.
+    # 9. Ship to TestFlight. skip_waiting keeps CI from idling on Apple processing.
     upload_to_testflight(
       api_key: api_key,
       skip_waiting_for_build_processing: true
