@@ -130,36 +130,36 @@ namespace MaxWorlds.Editor
             var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
             if (existing != null) return existing;
 
-            Debug.LogWarning($"[IOSBuild] {IconAssetPath} is missing — regenerating the placeholder.");
-            Directory.CreateDirectory(Path.GetDirectoryName(IconAssetPath));
-            File.WriteAllBytes(IconAssetPath, MakePlaceholderIcon(MarketingIconSize).EncodeToPNG());
-            AssetDatabase.ImportAsset(IconAssetPath, ImportAssetOptions.ForceSynchronousImport);
+            Debug.LogWarning($"[IOSBuild] {IconAssetPath} is missing — regenerating it from code.");
+            WriteIconAsset();
             return AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
         }
 
         /// <summary>
-        /// Square greybox icon at the requested size. RGB24, not RGBA32: Apple rejects an App Store
-        /// icon that carries an alpha channel, so the placeholder must not have one to give away.
+        /// The app icon at the requested size (YT-115). Delegates to <see cref="AppIconArt"/>, which
+        /// is the single source of truth for what the icon looks like.
+        ///
+        /// That indirection is the point. Before this, the committed PNG and the code that
+        /// regenerates it were two independent drawings of the same icon, and nothing compared them:
+        /// a fresh clone whose LFS pull had not run would silently regenerate the OLD greybox and
+        /// ship it, with every test still green. Now there is one drawing, and
+        /// <c>IOSIconTests.CommittedIcon_MatchesWhatTheCodeDraws</c> holds the PNG to it.
         /// </summary>
-        public static Texture2D MakePlaceholderIcon(int size)
+        public static Texture2D MakeAppIcon(int size) => AppIconArt.Build(size);
+
+        /// <summary>
+        /// Redraw the committed icon asset from <see cref="AppIconArt"/>. Run this after changing the
+        /// artwork — the PNG is what actually ships (PlayerSettings references it by GUID), so a
+        /// change to the drawing code that is not followed by this is a change that never reaches a
+        /// phone.
+        /// </summary>
+        [MenuItem("MaxWorlds/iOS/Regenerate App Icon")]
+        public static void WriteIconAsset()
         {
-            var tex = new Texture2D(size, size, TextureFormat.RGB24, false);
-            var bg = new Color(0.96f, 0.62f, 0.20f, 1f); // warm Backyard orange
-            var fg = new Color(0.10f, 0.11f, 0.14f, 1f); // dark centred block
-            var px = new Color[size * size];
-            int inset = Mathf.RoundToInt(size * 0.28f);
-            for (int y = 0; y < size; y++)
-            {
-                bool yIn = y >= inset && y < size - inset;
-                for (int x = 0; x < size; x++)
-                {
-                    bool xIn = x >= inset && x < size - inset;
-                    px[y * size + x] = (xIn && yIn) ? fg : bg;
-                }
-            }
-            tex.SetPixels(px);
-            tex.Apply();
-            return tex;
+            Directory.CreateDirectory(Path.GetDirectoryName(IconAssetPath));
+            File.WriteAllBytes(IconAssetPath, MakeAppIcon(MarketingIconSize).EncodeToPNG());
+            AssetDatabase.ImportAsset(IconAssetPath, ImportAssetOptions.ForceSynchronousImport);
+            Debug.Log($"[IOSBuild] Wrote {MarketingIconSize}x{MarketingIconSize} app icon to {IconAssetPath}");
         }
     }
 }
