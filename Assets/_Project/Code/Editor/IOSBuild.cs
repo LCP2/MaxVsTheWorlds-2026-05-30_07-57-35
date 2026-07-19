@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEditor.Build;
 using UnityEngine;
@@ -22,6 +23,17 @@ namespace MaxWorlds.Editor
     {
         private const string BundleId = "com.codynamics.maxvstheworlds";
         private const string MinIosVersion = "15.0"; // iPhone 6s and up — covers every phone we target.
+
+        /// <summary>
+        /// The placeholder icon, as a committed project asset. It has to be an asset, not a texture
+        /// built in memory: PlayerSettings stores icons as asset GUID references, so assigning a
+        /// `new Texture2D(...)` logs success and serialises nothing — which is exactly how the
+        /// generated Xcode project ended up carrying Unity's default logo (YT-104).
+        /// </summary>
+        public const string IconAssetPath = "Assets/_Project/Art/Icons/AppIcon.png";
+
+        /// <summary>Size Apple requires for the App Store icon, and what the asset is authored at.</summary>
+        public const int MarketingIconSize = 1024;
 
         [MenuItem("MaxWorlds/iOS/Apply Player Settings")]
         public static void ConfigureIOSPlayerSettings()
@@ -69,6 +81,13 @@ namespace MaxWorlds.Editor
                     return;
                 }
 
+                Texture2D source = LoadOrCreateIconAsset();
+                if (source == null)
+                {
+                    Debug.LogWarning("[IOSBuild] Placeholder icon asset unavailable — skipping.");
+                    return;
+                }
+
                 int filled = 0;
                 foreach (PlatformIconKind kind in kinds)
                 {
@@ -77,13 +96,13 @@ namespace MaxWorlds.Editor
 
                     foreach (PlatformIcon icon in icons)
                     {
-                        // A slot's layers are its light/dark/tinted variants; every one Unity asks
-                        // for has to be non-empty or the slot still exports blank.
+                        // One 1024 source for every slot — Unity downscales per slot on export. A
+                        // slot's layers are its light/dark/tinted variants; every one Unity asks for
+                        // has to be non-empty or the slot still exports blank.
                         int layers = Mathf.Max(1, icon.maxLayerCount);
-                        Texture2D tex = MakePlaceholderIcon(Mathf.Max(1, icon.width));
                         for (int layer = 0; layer < layers; layer++)
                         {
-                            icon.SetTexture(tex, layer);
+                            icon.SetTexture(source, layer);
                         }
                         filled++;
                     }
@@ -99,6 +118,23 @@ namespace MaxWorlds.Editor
                 // Never let a placeholder-icon hiccup fail the build; it is cosmetic and needs-lee.
                 Debug.LogWarning($"[IOSBuild] Placeholder icon step skipped: {e.Message}");
             }
+        }
+
+        /// <summary>
+        /// The committed placeholder icon, regenerated from code if it has gone missing so a fresh
+        /// clone (or a deleted asset) still produces a valid build rather than a 15-minute archive
+        /// that Apple rejects at the very end.
+        /// </summary>
+        private static Texture2D LoadOrCreateIconAsset()
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
+            if (existing != null) return existing;
+
+            Debug.LogWarning($"[IOSBuild] {IconAssetPath} is missing — regenerating the placeholder.");
+            Directory.CreateDirectory(Path.GetDirectoryName(IconAssetPath));
+            File.WriteAllBytes(IconAssetPath, MakePlaceholderIcon(MarketingIconSize).EncodeToPNG());
+            AssetDatabase.ImportAsset(IconAssetPath, ImportAssetOptions.ForceSynchronousImport);
+            return AssetDatabase.LoadAssetAtPath<Texture2D>(IconAssetPath);
         }
 
         /// <summary>
