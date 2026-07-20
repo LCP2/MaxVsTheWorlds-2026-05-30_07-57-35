@@ -1,3 +1,4 @@
+using System;
 using NUnit.Framework;
 using MaxWorlds.Editor;
 
@@ -42,6 +43,48 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual("0.1.0", BuildStamp.ComposeIosVersion("60c7413-0512"));
             Assert.AreEqual("0.1.0", BuildStamp.ComposeIosVersion(null));
             Assert.AreEqual("0.1.0", BuildStamp.ComposeIosVersion(""));
+        }
+
+        // ---------------------------------------------------------------------
+        // YT-117 — CFBundleVersion. Apple rejects a build whose number does not
+        // strictly increase within a marketing-version train, and silently drops
+        // a duplicate during async processing. These pin the three properties
+        // that keep uploads acceptable.
+        // ---------------------------------------------------------------------
+
+        /// <summary>The build number already live in App Store Connect. Anything we generate from
+        /// here on must exceed it, or Apple rejects the upload as non-increasing.</summary>
+        private const long AlreadyUploaded = 2607191034L;
+
+        [Test]
+        public void ComposeIosBuildNumber_IncreasesWithTime()
+        {
+            string earlier = BuildStamp.ComposeIosBuildNumber(new DateTime(2026, 7, 19, 10, 34, 0, DateTimeKind.Utc));
+            string later = BuildStamp.ComposeIosBuildNumber(new DateTime(2026, 7, 19, 10, 35, 0, DateTimeKind.Utc));
+
+            Assert.Less(long.Parse(earlier), long.Parse(later));
+        }
+
+        [Test]
+        public void ComposeIosBuildNumber_ExceedsTheBuildAlreadyInAppStoreConnect()
+        {
+            // A run number (11, 12, ...) would fail this — which is exactly why YT-117's proposed
+            // GITHUB_RUN_NUMBER fix would have broken uploads instead of fixing them.
+            string now = BuildStamp.ComposeIosBuildNumber(new DateTime(2026, 7, 20, 0, 0, 0, DateTimeKind.Utc));
+
+            Assert.Greater(long.Parse(now), AlreadyUploaded);
+        }
+
+        [Test]
+        public void ComposeIosBuildNumber_StaysWithinApplesNumericLimits()
+        {
+            // Must be all digits, <= 18 chars, and below 2^32 (App Store Connect rejects larger).
+            // A seconds-resolution stamp (yyMMddHHmmss) would blow the 2^32 ceiling.
+            string latest = BuildStamp.ComposeIosBuildNumber(new DateTime(2041, 12, 31, 23, 59, 0, DateTimeKind.Utc));
+
+            Assert.That(latest, Does.Match(@"^\d+$"));
+            Assert.LessOrEqual(latest.Length, 18);
+            Assert.Less(long.Parse(latest), 4294967296L);
         }
     }
 }

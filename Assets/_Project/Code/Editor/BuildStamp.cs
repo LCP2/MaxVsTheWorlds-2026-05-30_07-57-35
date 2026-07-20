@@ -46,6 +46,26 @@ namespace MaxWorlds.Editor
         public static string ComposeIosVersion(string gameCiVersion) =>
             IsValidIosVersion(gameCiVersion) ? gameCiVersion : "0.1.0";
 
+        /// <summary>
+        /// The iOS CFBundleVersion: a UTC <c>yyMMddHHmm</c> stamp.
+        ///
+        /// YT-117 proposed sourcing this from GITHUB_RUN_NUMBER instead. Don't — two reasons, both
+        /// load-bearing:
+        ///
+        /// 1. GameCI runs Unity inside a Docker container and does NOT forward GITHUB_RUN_NUMBER
+        ///    into it. The env-var branch that used to be here never once executed in CI; every
+        ///    build has come from the timestamp fallback. Silent dead code that looked like the
+        ///    primary path is what made this bug hard to read.
+        /// 2. Apple requires CFBundleVersion to strictly increase within a marketing-version train.
+        ///    Build 2607191034 is already uploaded, so a run number (11, 12, ...) is *lower* and
+        ///    Apple would reject it. The timestamp is already past that value and only grows.
+        ///
+        /// The format is also bounded on purpose: it must stay numeric, under 18 characters, and
+        /// below 2^32 (App Store Connect rejects larger integers). yyMMddHHmm satisfies all three
+        /// until the year 2042; a seconds-resolution stamp would overflow 2^32 and be rejected.
+        /// </summary>
+        public static string ComposeIosBuildNumber(DateTime utcNow) => utcNow.ToString("yyMMddHHmm");
+
         /// <summary>True if <paramref name="v"/> is a legal iOS CFBundleShortVersionString.</summary>
         public static bool IsValidIosVersion(string v)
         {
@@ -72,8 +92,7 @@ namespace MaxWorlds.Editor
                 // Numeric marketing version (SHA stamp is illegal on iOS — see ComposeIosVersion),
                 // plus a unique build number so each TestFlight upload is distinct.
                 string version = ComposeIosVersion(Environment.GetEnvironmentVariable("VERSION"));
-                string run = Environment.GetEnvironmentVariable("GITHUB_RUN_NUMBER");
-                string build = string.IsNullOrEmpty(run) ? DateTime.UtcNow.ToString("yyMMddHHmm") : run;
+                string build = ComposeIosBuildNumber(DateTime.UtcNow);
                 PlayerSettings.bundleVersion = version;
                 PlayerSettings.iOS.buildNumber = build;
                 Debug.Log($"[BuildStamp] iOS version {version} build {build} (commit {Compose()})");
