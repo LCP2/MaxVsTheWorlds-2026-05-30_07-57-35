@@ -67,9 +67,9 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return null;
 
-            // Everything that lives in the left column. The map button and minimap were laid over
-            // the icons; that is the bug.
-            var names = new[] { "Utility Icons", "Map Button", "Minimap" };
+            // Everything that lives in the left column. The minimap was laid over the icons; that
+            // was the bug. (The MAP button is gone since YT-123 — the minimap is the control now.)
+            var names = new[] { "Utility Icons", "Minimap" };
             var rects = new List<(string name, Rect rect)>();
 
             foreach (var n in names)
@@ -106,14 +106,17 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheMapButtonIsReachableAndClearOfTheStatusStrip()
+        public IEnumerator ThereIsNoDedicatedMapButton_TheMinimapIsTheControl()
         {
             yield return null;
 
-            Rect button = ScreenRect(Find("Map Button"));
-            Assert.Greater(button.width, 0f, "the map button has no footprint at all");
-            Assert.IsFalse(button.Overlaps(ScreenRect(Find("Status Strip"))),
-                "the map button is sitting on the HP/XP/Energy strip");
+            // YT-123: the MAP button is gone; tapping the minimap opens the full map.
+            Assert.That(Find("Map Button"), Is.Null, "the dedicated MAP button should be removed");
+
+            var mini = Find("Minimap");
+            Assert.IsNotNull(mini, "the minimap must still be present — it is the control now");
+            var button = mini.GetComponent<UnityEngine.UI.Button>();
+            Assert.IsNotNull(button, "the minimap is not tappable — it can no longer open the map");
         }
     }
 }
