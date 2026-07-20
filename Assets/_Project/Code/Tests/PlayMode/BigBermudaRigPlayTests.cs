@@ -12,11 +12,13 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// Big Bermuda is a machine now, and the machine says what the fight is doing (YT-90).
+    /// The Backyard boss is a possessed BOILER-MACHINE now (YT-114), and the machine says what the
+    /// fight is doing.
     ///
-    /// PlayMode, because every claim here is about time: the reel spins up over a wind-up, the eyes
-    /// change colour on a phase, the thing dies over half a second. None of that is a property you can
-    /// read off a struct.
+    /// PlayMode, because every claim here is about time: the boiler builds pressure over a wind-up, the
+    /// ports change colour on a phase, the thing dies over half a second. None of that is a property you
+    /// can read off a struct — which is the whole reason the wind-up tell could be dead for the life of
+    /// the fight and no EditMode test noticed.
     /// </summary>
     public sealed class BigBermudaRigPlayTests
     {
@@ -32,15 +34,15 @@ namespace MaxWorlds.Tests.PlayMode
         public void SetUp()
         {
             // The boss exactly as Stage27BossScaffold bakes it into Backyard_Slice: a cube on a
-            // CharacterController, scaled 3.5 x 3 x 3.5.
+            // CharacterController, scaled 3.5 x 3 x 3.5. The rig replaces the cube's VISUAL only.
             _boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
             _boss.name = "Big Bermuda";
             _boss.transform.position = new Vector3(0f, 2f, 33f);
             _boss.transform.localScale = new Vector3(3.5f, 3f, 3.5f);
             _boss.AddComponent<BigBermudaBoss>();
 
-            // The boss's brain does not tick without something to chase — TickFight returns early on a
-            // null target — so the fight never leaves Reposition and no tell would ever fire.
+            // The brain does not tick without something to chase — TickFight returns early on a null
+            // target — so the fight never leaves Reposition and no tell would ever fire.
             _player = new GameObject("Max") { tag = "Player" };
             _player.transform.position = new Vector3(0f, 0f, 20f);
         }
@@ -62,12 +64,8 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>
-        /// Kill the yard's factories. That is what wakes the boss — the LAST of them, since YT-92, so
-        /// this can no longer be faked with a bare "a factory died" signal: it needs a factory, and it
-        /// needs that factory to be the only one standing.
-        ///
-        /// The census is wiped first because it is static and a test run is one process: whatever the
-        /// previous fixture built, this yard has exactly one factory in it.
+        /// Kill the yard's factories — the LAST of them, since YT-92, is what wakes the boss. The census
+        /// is wiped first because it is static and a test run is one process.
         /// </summary>
         private IEnumerator Wake()
         {
@@ -91,12 +89,8 @@ namespace MaxWorlds.Tests.PlayMode
 
         /// <summary>
         /// Run until the fight enters <paramref name="action"/>, hold there, and report the colour the
-        /// eyes had SETTLED on.
-        ///
-        /// Settled, and not the brightest frame seen: the eyes ease into a phase's colour, so the first
-        /// frames of a wind-up are still mostly the green it was idling in — and that green is BRIGHTER
-        /// than the orange it is heading for (luma 0.74 vs 0.52). Sampling the brightest frame of a
-        /// wind-up would faithfully report the previous phase.
+        /// ports had SETTLED on — not the brightest frame seen, because the ports ease into a phase and
+        /// the green they idle in is brighter than the orange they head for (luma 0.74 vs 0.52).
         /// </summary>
         private IEnumerator SampleDuring(BossAction action, System.Action<Color> report, float timeout = 8f)
         {
@@ -106,8 +100,6 @@ namespace MaxWorlds.Tests.PlayMode
             while (boss.Action != action && t < timeout) { t += Time.deltaTime; yield return null; }
             Assert.Less(t, timeout, $"the fight never reached {action} — the tell could not be sampled.");
 
-            // 0.5 s at an eye response of 9/s converges to within 1%, and every phase in the cycle —
-            // even a wind-up, even enraged — lasts longer than that.
             Color settled = Rig.EyeColor;
             float held = 0f;
             while (boss.Action == action && held < 0.5f)
@@ -122,45 +114,69 @@ namespace MaxWorlds.Tests.PlayMode
 
         private static float Luma(Color c) => c.r * 0.3f + c.g * 0.59f + c.b * 0.11f;
 
-        // ------------------------------------------------------------------ it is not a cube
+        private bool Has(string partName) =>
+            _rigHost.GetComponentsInChildren<Transform>().Any(t => t.name == partName);
+
+        // ------------------------------------------------------------------ it is a boiler, not a cube
 
         /// <summary>
-        /// The whole ticket, in one assertion: the boss is a MACHINE, and the machine has the parts a
-        /// mower has. It had been a tinted cube since YT-27 — the end-cap of the Backyard and the story
-        /// beat of the run, and the thing it most resembled was a crate.
+        /// The whole ticket, in one assertion: the boss is a possessed BOILER-MACHINE, and it has the
+        /// parts a boiler has. It was a mower before (YT-90) and a tinted cube before that (YT-27); Lee's
+        /// Level-1 direction re-pitches the silhouette off the boiler-locomotive concept.
         /// </summary>
         [UnityTest]
-        public IEnumerator TheBossIsAPossessedMower_NotACube()
+        public IEnumerator TheBossIsAPossessedBoiler_NotACube()
         {
             yield return InstallRig();
 
             var parts = _rigHost.GetComponentsInChildren<MeshRenderer>();
-            Assert.Greater(parts.Length, 10,
-                "Big Bermuda has almost no parts. A boss is the biggest, meanest silhouette on the " +
-                "field; a handful of boxes is still a crate.");
+            Assert.Greater(parts.Length, 20,
+                "the boiler has almost no parts. A boss is the biggest, meanest silhouette on the field; " +
+                "a handful of boxes is still a crate.");
 
-            foreach (var required in new[] { "Deck", "Hood", "Hopper", "Grip", "Cowl", "Reel", "EyeL", "EyeR" })
+            // Belly + waist + drum + shoulder + cap read as a tall round boiler; the ports are the face;
+            // the stack and governor are what make it a possessed BOILER and not a water tank.
+            foreach (var required in new[]
+                     { "Belly", "Waist", "Drum", "Shoulder", "Cap", "Stack", "Governor", "EyeBig", "EyeL", "EyeR" })
             {
-                Assert.IsTrue(_rigHost.GetComponentsInChildren<Transform>().Any(t => t.name == required),
-                    $"the mower has no '{required}'. The deck, the hopper and the HANDLE are what make " +
-                    "this a lawnmower rather than a bulldozer; the eyes are what make it a character.");
+                Assert.IsTrue(Has(required),
+                    $"the boiler has no '{required}'. The drum and dome are what make it a boiler, the " +
+                    "stack and governor make it a machine, and the ports make it a character.");
             }
 
-            Assert.AreEqual(4, _rigHost.GetComponentsInChildren<Transform>().Count(t => t.name.StartsWith("Wheel")),
-                "a mower with the wrong number of wheels.");
+            yield return null;
+        }
 
-            // The greybox is gone — but its COLLIDERS are not. Gameplay still points at that object.
-            Assert.IsFalse(_boss.GetComponent<MeshRenderer>().enabled,
-                "the placeholder cube is still being drawn, inside the machine that replaced it.");
-            Assert.IsNotNull(_boss.GetComponent<CharacterController>(),
-                "the boss lost the controller it is hit and collided through.");
+        /// <summary>
+        /// The "not on rails" decision, made testable: it stands and walks on FOUR legs. The concept is a
+        /// rail locomotive; Lee's one change is that this one is free-roaming, and legs — not bogies — are
+        /// how a player reads "it moves where it likes".
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ItStandsOnLegs_NotRailWheels()
+        {
+            yield return InstallRig();
+
+            Assert.AreEqual(4, _rigHost.GetComponentsInChildren<Transform>().Count(t => t.name.StartsWith("Leg")),
+                "a walker needs its legs. Wheels or bogies would put it back on the rails the direction " +
+                "explicitly took it off.");
+            Assert.AreEqual(4, _rigHost.GetComponentsInChildren<Transform>().Count(t => t.name == "Foot"),
+                "the legs have no feet to plant.");
+
+            // And it is TALL — the boss read is a tall round thing among low angular robots. Measured off
+            // the actual renderers, not asserted from the constants.
+            var bounds = new Bounds(_rigHost.transform.position, Vector3.zero);
+            foreach (var r in _rigHost.GetComponentsInChildren<Renderer>()) bounds.Encapsulate(r.bounds);
+            Assert.Greater(bounds.size.y, 4.5f,
+                "the boiler is not tall enough to dwarf the robots. Height is most of what makes it read " +
+                "as the boss from thirty metres up.");
         }
 
         /// <summary>
         /// A primitive from CreatePrimitive carries Unity's BUILT-IN default material, which has no URP
-        /// subshader and draws MAGENTA in a player build while looking perfectly correct in the editor.
-        /// It is how the boss's damage zones shipped (YT-61) and how the factory's core shipped (YT-38),
-        /// and this machine is twenty-two primitives.
+        /// subshader and draws MAGENTA in a build while looking perfectly correct in the editor. It is
+        /// how the factory's core shipped (YT-38) and the boss's zones shipped (YT-61), and this machine
+        /// is thirty-odd primitives.
         /// </summary>
         [UnityTest]
         public IEnumerator NoPartOfTheMachineShipsMagenta()
@@ -180,11 +196,9 @@ namespace MaxWorlds.Tests.PlayMode
             }
         }
 
-        /// <summary>
-        /// Nothing on the machine may be shot or walked into. The boss's own controller and box are the
-        /// hitbox; a collider on the handle would silently eat water aimed at the boss, and Max would
-        /// bump into a grass catcher gameplay does not believe is there.
-        /// </summary>
+        /// <summary>Nothing on the machine may be shot or walked into. The boss's own controller and box
+        /// are the hitbox; a collider on a leg would silently eat water aimed at the boss, and Max would
+        /// bump into a boiler gameplay does not believe is there.</summary>
         [UnityTest]
         public IEnumerator NoPartOfTheMachineCanBeShot()
         {
@@ -192,23 +206,20 @@ namespace MaxWorlds.Tests.PlayMode
 
             var colliders = _rigHost.GetComponentsInChildren<Collider>(includeInactive: true);
             Assert.IsEmpty(colliders,
-                $"the machine is carrying {colliders.Length} collider(s). Every one of them is a shot " +
-                "that never reaches the boss.");
+                $"the machine is carrying {colliders.Length} collider(s). Every one is a shot that never " +
+                "reaches the boss.");
         }
 
         /// <summary>
-        /// The machine belongs to this rig and to nothing else.
-        ///
-        /// This is the bug the ticket is really about. Two scene-wide sweeps re-material anything they
-        /// recognise — CharacterSkinDirector claims every renderer under an IDamageable, and
-        /// RuntimeSurfaceDirector repaints everything else BY SHAPE. If either one gets hold of a part
-        /// of this machine, that part gets a SECOND writer on its property block, and script order picks
-        /// which of the two the player sees. That is precisely how the boss's wind-up tell died.
+        /// The machine belongs to this rig and nothing else. This is the bug the fight was really about:
+        /// two scene-wide sweeps re-material anything they recognise — CharacterSkinDirector claims every
+        /// renderer under an IDamageable, RuntimeSurfaceDirector repaints everything else BY SHAPE. Either
+        /// one getting hold of a part gives it a SECOND writer on its property block, and script order
+        /// picks what the player sees. That is precisely how the wind-up tell died.
         /// </summary>
         [UnityTest]
         public IEnumerator NoSceneDirectorClaimsTheMachine()
         {
-            // Both directors, running, exactly as they do in the game.
             var skins = new GameObject("CharacterSkins").AddComponent<CharacterSkinDirector>();
             var surfaces = new GameObject("RuntimeSurfaces").AddComponent<RuntimeSurfaceDirector>();
 
@@ -221,13 +232,13 @@ namespace MaxWorlds.Tests.PlayMode
                 foreach (var r in _rigHost.GetComponentsInChildren<MeshRenderer>())
                 {
                     Assert.IsNull(r.GetComponent<CharacterSkin>(),
-                        $"CharacterSkinDirector claimed '{r.name}'. It will now rewrite that part's " +
-                        "colour every LateUpdate, and the wind-up tell this rig writes in LateUpdate " +
-                        "will be a coin toss on script order — which is how the tell died in the first place.");
+                        $"CharacterSkinDirector claimed '{r.name}'. It will rewrite that part's colour " +
+                        "every LateUpdate, and the wind-up tell this rig writes in LateUpdate becomes a " +
+                        "coin toss on script order — which is how the tell died in the first place.");
 
                     Assert.IsNull(r.GetComponent<SurfaceSkinned>(),
-                        $"RuntimeSurfaceDirector repainted '{r.name}'. It classifies by SHAPE: the deck " +
-                        "is a flat slab, so the boss is now made of paving stones.");
+                        $"RuntimeSurfaceDirector repainted '{r.name}'. It classifies by SHAPE: the drum " +
+                        "is a cylinder, so the boss is now made of drainpipes.");
                 }
             }
             finally
@@ -239,8 +250,8 @@ namespace MaxWorlds.Tests.PlayMode
 
         // ------------------------------------------------------------------ reading the fight off it
 
-        /// <summary>It stands beyond the gate from the first frame of the run. It should look dead, not
-        /// switched off — and the moment the factory dies, it should open its eyes.</summary>
+        /// <summary>It stands beyond the gate from the first frame. It should look dead, not switched
+        /// off — and the moment the last factory dies, it opens its ports.</summary>
         [UnityTest]
         public IEnumerator TheMachineSleeps_UntilTheFactoryDies()
         {
@@ -248,27 +259,23 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             Assert.Less(Luma(Rig.EyeColor), 0.02f,
-                "its eyes are already lit and the factory is still standing. The wake-up is the beat " +
+                "its ports are already lit and the factory is still standing. The wake-up is the beat " +
                 "that makes the boss an event.");
             Assert.IsFalse(Rig.Running, "it is running before anything has woken it.");
 
             yield return Wake();
 
             Assert.IsTrue(Rig.Running, "the factory is dead and the boss has not woken up.");
-            Assert.Greater(Luma(Rig.EyeColor), 0.15f, "it woke up with its eyes still out.");
+            Assert.Greater(Luma(Rig.EyeColor), 0.15f, "it woke up with its ports still out.");
         }
 
         /// <summary>
-        /// THE REGRESSION. The charge wind-up has to reach the screen.
+        /// THE REGRESSION GUARD. The charge wind-up has to reach the screen.
         ///
-        /// BigBermudaBoss.SetTell has been writing an orange wind-up colour into the boss's property
-        /// block on every phase change since YT-27 — and CharacterSkin.LateUpdate has been overwriting
-        /// that same block, every frame, with the flat near-black body colour. Update writes; LateUpdate
-        /// overwrites. The single most important read in the fight — "it is about to charge, MOVE" — has
-        /// never once rendered a pixel.
-        ///
-        /// Warm, and clearly not the green it idles in. That is the same orange every telegraph in the
-        /// game already uses, so the player has been taught this word by every robot in the yard.
+        /// The boss wrote an orange warn colour into its property block on every phase change since
+        /// YT-27, and CharacterSkin overwrote that same block every frame with the flat body colour. The
+        /// single most important read in the fight — "it is about to charge, MOVE" — never rendered a
+        /// pixel until YT-90. This proves it survives the boiler re-theme.
         /// </summary>
         [UnityTest]
         public IEnumerator TheChargeWindUp_ActuallyReachesTheScreen()
@@ -284,22 +291,20 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.Greater(windup.r, windup.g + 0.25f,
                 "the wind-up is not warm. It is the one telegraph in the fight that costs you health to " +
-                "miss, and it has never rendered a pixel — CharacterSkin overwrote it every frame.");
+                "miss, and it has to be the orange every robot already taught the player.");
             Assert.Greater(windup.r, windup.b + 0.4f, "the wind-up is not warm.");
 
             Assert.Greater(windup.r - idle.r, 0.3f,
-                "the machine looks the same winding up as it does idling. A telegraph you cannot tell " +
-                "apart from doing nothing is not a telegraph.");
+                "the machine looks the same winding up as idling. A telegraph you cannot tell apart from " +
+                "doing nothing is not a telegraph.");
 
-            Assert.Greater(Rig.ReelSpin, 400f,
-                "the cutting reel is barely turning as it commits to a charge. The spin-up IS the " +
-                "threat: a blade at speed is the one part of this machine you must not be in front of.");
+            Assert.Greater(Rig.Pressure, 0.5f,
+                "the boiler is barely building pressure as it commits to a charge. The pressure IS the " +
+                "threat — the governor screaming and the boiler glowing is a boiler about to blow.");
         }
 
-        /// <summary>
-        /// Phase 2 has to be legible BETWEEN attacks, not only in the half-second it is committing to
-        /// one. The player needs to know the fight got worse while they are deciding what to do about it.
-        /// </summary>
+        /// <summary>Phase 2 has to be legible BETWEEN attacks, not only in the half-second it is
+        /// committing to one. The player needs to know the fight got worse while deciding what to do.</summary>
         [UnityTest]
         public IEnumerator PhaseTwo_IsLegibleEvenWhenItIsNotAttacking()
         {
@@ -308,33 +313,28 @@ namespace MaxWorlds.Tests.PlayMode
 
             Color idle = Color.black;
             yield return SampleDuring(BossAction.Reposition, c => idle = c);
-            Assert.Greater(idle.g, idle.r, "it is not idling in its own colour.");
+            Assert.Greater(idle.g, idle.r, "it is not idling in its own green.");
 
-            // Past the enrage threshold — asked of the tuning rather than typed in, because the fight's
-            // health is a knob now (YT-94) and a hardcoded 700 stopped enraging the day it moved.
+            // Past the enrage threshold — asked of the tuning, because the fight's health is a knob now
+            // (YT-94) and a hardcoded number stops enraging the day it moves.
             Hit(Boss, BossTuning.Health * (BossTuning.EnrageThreshold + 0.1f));
 
-            // A frame, because Enraged is recomputed by the brain's Tick and the brain ticks in Update.
-            // Asserting on it in the same frame as the hit asks the fight a question it has not been
-            // given a chance to answer.
-            yield return null;
-            Assert.IsTrue(Boss.Enraged, "the boss did not enrage on a hit that took it past half health.");
+            yield return null;   // Enraged is recomputed in the brain's Tick, which runs in Update
+            Assert.IsTrue(Boss.Enraged, "the boss did not enrage on a hit that took it past the threshold.");
 
             Color enragedIdle = Color.black;
             yield return SampleDuring(BossAction.Reposition, c => enragedIdle = c);
 
             Assert.Greater(enragedIdle.r, enragedIdle.g + 0.3f,
-                "it idles the same colour in phase 2 as it did in phase 1. 'It got worse' is something " +
-                "the player has to be able to see while they are still deciding what to do about it.");
+                "it idles the same colour in phase 2 as phase 1. 'It got worse' has to be visible while " +
+                "the player is still deciding what to do about it.");
         }
 
         /// <summary>
-        /// It has to actually die on screen.
-        ///
-        /// The boss deactivates its own GameObject on the frame it dies, and the result screen freezes
-        /// the game (timeScale = 0) on that same frame. This machine is not parented to the boss, so it
-        /// outlives it by half a second and comes apart — on UNSCALED time, or it would be frozen solid
-        /// before it moved, which is why YT-55's defeat sequence runs unscaled too.
+        /// It has to actually die on screen. The boss deactivates its own GameObject on the frame it
+        /// dies, and the result screen freezes the game (timeScale = 0) that same frame. This machine is
+        /// not parented to the boss, so it outlives it and topples — on UNSCALED time, or it would be
+        /// frozen solid before it moved.
         /// </summary>
         [UnityTest]
         public IEnumerator TheMachineComesApart_WhenTheBossDies()
@@ -345,8 +345,6 @@ namespace MaxWorlds.Tests.PlayMode
             HudSignals.EmitBossDefeated();
             Assert.IsFalse(Rig.Running, "the boss is dead and the machine is still running.");
 
-            // The game is frozen from the frame the boss dies. If the death throe were on scaled time,
-            // this loop would spin forever and the machine would hang in the air over its own wreckage.
             float scale = Time.timeScale;
             Time.timeScale = 0f;
             try
@@ -355,8 +353,8 @@ namespace MaxWorlds.Tests.PlayMode
                 while (_rigHost.activeSelf && t < 1.5f) { t += Time.unscaledDeltaTime; yield return null; }
 
                 Assert.IsFalse(_rigHost.activeSelf,
-                    "the machine is still standing there half a second after it died — and the game is " +
-                    "paused, so it never will not be. The death throe is on scaled time.");
+                    "the machine is still standing half a second after it died — and the game is paused, " +
+                    "so it never will not be. The death throe is on scaled time.");
             }
             finally
             {
