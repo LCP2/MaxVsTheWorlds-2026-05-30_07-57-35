@@ -17,8 +17,36 @@ namespace MaxWorlds.Core
     /// </summary>
     public static class DevMode
     {
-        /// <summary>Master switch. Everything else is gated behind this.</summary>
+        /// <summary>Master switch for the CHEATS. Everything below is gated behind this.</summary>
         public static bool Enabled { get; set; }
+
+        /// <summary>
+        /// True in a build compiled with dev tools in (YT-118). Set by the scripting define
+        /// <c>MAXWORLDS_DEV_TOOLS</c>, which the iOS→TestFlight workflow injects and which the
+        /// committed project settings deliberately do NOT carry — so the default, and anything
+        /// built for the App Store, ships without it.
+        /// </summary>
+        public const bool DevToolsBuild =
+#if MAXWORLDS_DEV_TOOLS
+            true;
+#else
+            false;
+#endif
+
+        /// <summary>
+        /// May the dev TOOLS be on screen — the tuning panel and its knobs (YT-118)?
+        ///
+        /// Deliberately a different question from <see cref="Enabled"/>, and that separation is the
+        /// point. On a phone there is no <c>?dev=1</c> URL and no Ctrl+Shift+D, so the only way to
+        /// reach the panel from a TestFlight build was to turn dev mode on at boot — which would
+        /// also have handed Lee invincibility and an infinite tank. He would then have been tuning
+        /// "life" and "water rates" in a build where neither could run out: the sliders would move
+        /// and nothing he was trying to feel would change.
+        ///
+        /// So a beta build gets the tools and plays honestly. The cheats stay behind
+        /// <see cref="Enabled"/> and stay off.
+        /// </summary>
+        public static bool ToolsAvailable => Enabled || DevToolsBuild;
 
         /// <summary>Max takes no damage. Lets a run last long enough to watch anything.</summary>
         public static bool Invincible { get; set; } = true;
