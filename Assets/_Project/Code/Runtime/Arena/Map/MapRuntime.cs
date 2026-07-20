@@ -158,7 +158,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Gate:
-                        GameObject gate = Adopt(e, built, Find<SubZoneGate>());
+                        GameObject gate = MarkDiscoverable(Adopt(e, built, Find<SubZoneGate>()));
                         // A gate is exactly as wide as the doorway it fills, plus the wall it seals
                         // against each side. Its width is NOT authored — it is read off the link, so a
                         // widened doorway can never leave a gap beside its gate.
@@ -167,10 +167,25 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Boss:
-                        Adopt(e, built, Find<BigBermudaBoss>());
+                        MarkDiscoverable(Adopt(e, built, Find<BigBermudaBoss>()));
                         break;
                 }
             }
+        }
+
+        /// <summary>
+        /// Say that this landmark has to be found before the map will admit it exists (YT-107).
+        ///
+        /// Here rather than in each landmark's own Awake because THIS is the code that knows what
+        /// kind of thing it is placing — the boss and the gate are adopted from the scene, and asking
+        /// them to mark themselves would mean a scene-authored gate quietly behaves differently from
+        /// a map-authored one.
+        /// </summary>
+        private static GameObject MarkDiscoverable(GameObject landmark)
+        {
+            if (landmark != null && landmark.GetComponent<Discoverable>() == null)
+                landmark.AddComponent<Discoverable>();
+            return landmark;
         }
 
         /// <summary>
@@ -189,6 +204,12 @@ namespace MaxWorlds.Arena
         private static MowerHutch BuildFactory(MapEntity e, Transform root, MapBuild built)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+
+            // Before the hutch, not after: MowerHutch.Awake runs inside the AddComponent below and
+            // asks whether it has been found yet, so that the name badge and the glowing core are
+            // never built visible and hidden a frame later. A one-frame flash of "MOWER HUTCH" on
+            // the horizon is exactly the telegraph this ticket exists to remove.
+            MarkDiscoverable(body);
 
             // RequireComponent brings the EnemySpawner with it — the factory's mouth is part of what a
             // factory IS, not something a scene has to remember to bolt on.
