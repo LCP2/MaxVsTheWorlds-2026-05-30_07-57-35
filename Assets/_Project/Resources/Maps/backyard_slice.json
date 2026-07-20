@@ -1,7 +1,7 @@
 {
     "name": "Backyard Slice",
     "wallHeight": 2.25,
-    "wallThickness": 1.0,
+    "wallThickness": 0.6,
     "zones": [
         {
             "id": "patio",
