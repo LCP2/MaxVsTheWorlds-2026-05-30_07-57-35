@@ -11,59 +11,51 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Bosses;
 using MaxWorlds.Player;
-using MaxWorlds.UI;
 
-namespace MaxWorlds.Dev
+namespace MaxWorlds.UI
 {
     /// <summary>
-    /// Dev-only on-device tuning panel for the combat-feel numbers (YT-105).
+    /// The in-game Settings panel (YT-120) — a gear button that opens a panel of live tuning sliders.
     ///
-    /// The problem it solves: every one of these values is a feel call, and a feel call costs a
-    /// guess → build → deploy → play round trip to evaluate. On a phone that round trip is minutes,
-    /// so the numbers get set by arithmetic rather than by playing, which is exactly how the yard
-    /// ended up framed as a corridor (YT-82) and the blaster ended up running dry (YT-80). This puts
-    /// the sliders in the build so a value can be found by sweeping past it and coming back — the
-    /// same reasoning as the [ / ] zoom keys, generalised to the other six knobs.
+    /// It began as a dev-only overlay (YT-105) gated behind a build-time scripting define. That
+    /// define was injected by editing ProjectSettings.asset mid-CI, which dirtied the git tree and
+    /// tripped the version guard, so the iOS build failed the moment the panel was turned on
+    /// (YT-119). The fix Lee asked for is the honest one: make it a real Settings panel that is
+    /// ALWAYS compiled into every build. No <c>#if</c>, no define, no build-time file edits — the
+    /// gear is simply always there, and a slider a player moves takes effect live through
+    /// <see cref="DevTuning"/>.
     ///
-    /// Built in uGUI, NOT IMGUI, even though every other dev overlay here is IMGUI. The existing
-    /// ones only ever draw — this one has to be touched, and the project runs Active Input Handling
-    /// = "Input System (New)" only, where IMGUI receiving touch on device is not something to bet an
-    /// acceptance criterion on. uGUI rides the EventSystem + InputSystemUIInputModule path that the
-    /// on-screen sticks already prove works on iOS and WebGL (YT-98).
+    /// The sliders are still the combat-feel numbers: every one is a feel call, and a feel call
+    /// costs a guess → build → deploy → play round trip to evaluate. On a phone that round trip is
+    /// minutes, so this lets a value be found by sweeping past it and coming back.
     ///
-    /// It sits on its own canvas at sorting order 200, above the HUD's 100, so its raycasts beat the
-    /// invisible OnScreenStick pads rather than being swallowed by them.
-    ///
-    /// Nothing is built unless <see cref="DevMode.ToolsAvailable"/> is true, so in a release session
-    /// this is one bool test per frame and no canvas, no widgets, nothing on screen.
+    /// Built in uGUI, NOT IMGUI: the project runs Active Input Handling = "Input System (New)" only,
+    /// where IMGUI receiving touch on device is not something to bet an acceptance criterion on.
+    /// uGUI rides the EventSystem + InputSystemUIInputModule path the on-screen sticks already prove
+    /// works on iOS and WebGL (YT-98). Its canvas sits at sorting order 200, above the HUD's 100, so
+    /// its raycasts beat the invisible OnScreenStick pads rather than being swallowed by them.
     /// </summary>
     [DisallowMultipleComponent]
-    public sealed class DevTuningPanel : MonoBehaviour
+    public sealed class SettingsPanel : MonoBehaviour
     {
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (FindFirstObjectByType<DevTuningPanel>() != null) return;
-            new GameObject("DevTuningPanel").AddComponent<DevTuningPanel>();
+            if (FindFirstObjectByType<SettingsPanel>() != null) return;
+            new GameObject("SettingsPanel").AddComponent<SettingsPanel>();
         }
 
         // --- layout, in canvas reference units (1920x1080, match 0.5) ---
         //
-        // These are sized against the phone, not the monitor, because the Craft Bible's
-        // non-negotiable is a 6-inch screen. On an iPhone Plus in landscape (932x430pt) the scale
-        // factor is sqrt(932/1920)*sqrt(430/1080) = 0.44, so one reference unit is 0.44pt. That
-        // makes the numbers below: panel 431x339pt on a 932x430pt screen, label text 13.2pt
-        // (iOS caption is 11-13pt), the gear button 42pt, and each slider a 202x32pt drag target —
-        // Unity's Slider takes a drag anywhere in its rect, not just on the handle, so the whole
-        // 202pt width is the target and the 28pt handle is only where it rests.
+        // Sized against the phone, not the monitor: the Craft Bible's non-negotiable is a 6-inch
+        // screen. On an iPhone Plus in landscape (932x430pt) the scale factor is
+        // sqrt(932/1920)*sqrt(430/1080) = 0.44, so one reference unit is 0.44pt. That makes the
+        // smallest font below ~10.5pt (iOS caption is 11-13pt) and the gear a 42pt target.
         private const float RefW = 1920f;
         private const float RefH = 1080f;
-        private const float Scale6Inch = 0.44f;   // documented above; used by the layout test
+        private const float Scale6Inch = 0.44f;   // used by the layout test
 
         private const float PanelW = 980f;
-        // Tall enough for the eight-line value dump. At 770 the dump spilled off the bottom of the
-        // panel background and sat on top of the game, because eight lines at DumpFont need ~230
-        // units and it had been given 110.
         private const float PanelH = 900f;
         private const float Pad = 20f;
         private const float ColGap = 20f;
@@ -72,35 +64,34 @@ namespace MaxWorlds.Dev
         private const float HandleW = 64f;
         private const float HeaderH = 56f;
         private const float ButtonH = 84f;
-        private const float DumpH = 240f;   // 8 lines (header + 7 knobs) at DumpFont
+        private const float DumpH = 240f;
         private const float GearSize = 96f;
 
         private const int LabelFont = 30;
-        private const int HeaderFont = 34;
+        private const int HeaderFont = 40;
         private const int DumpFont = 24;
 
-        private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.09f, 0.93f);
-        private static readonly Color Accent = new Color(1f, 0.9f, 0.3f);
-        private static readonly Color TrackColor = new Color(1f, 1f, 1f, 0.18f);
+        // Basement-biome dark panel + bright green accent, from mockups/13-settings.html.
+        private static readonly Color PanelColor = new Color(0.055f, 0.075f, 0.062f, 0.96f);
+        private static readonly Color Accent = new Color(0.298f, 0.851f, 0.392f);      // #4CD964
+        private static readonly Color AccentDeep = new Color(0.165f, 0.616f, 0.204f);  // #2A9D34
+        private static readonly Color TrackColor = new Color(1f, 1f, 1f, 0.14f);
         private static readonly Color TextColor = Color.white;
+        private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.55f);
 
         private Canvas _canvas;
         private RectTransform _safeRoot;
         private GameObject _panelRoot;
+        private GameObject _scrim;
         private Text _dumpText;
         private bool _open;
 
         private readonly List<Knob> _knobs = new List<Knob>();
 
-        /// <summary>
-        /// One tunable value: where its number comes from, where it goes, and what 100% means.
-        ///
-        /// <see cref="Apply"/> is the "push it at whatever is already alive" step. Most knobs don't
-        /// need one, because gameplay reads through <see cref="DevTuning"/> at the point of use and
-        /// so picks the new number up on the next frame by itself; only the ones cached into an
-        /// object at construction time (the camera offset, the energy pool, the health ceiling) have
-        /// to be told.
-        /// </summary>
+        /// <summary>One tunable value: where its number comes from, where it goes, and what 100%
+        /// means. <see cref="Apply"/> aside — most knobs read through <see cref="DevTuning"/> at the
+        /// point of use and pick a new number up next frame; only the ones cached into an object at
+        /// construction (camera offset, energy pool, health ceiling) have to be pushed.</summary>
         private sealed class Knob
         {
             public string Name;
@@ -114,39 +105,23 @@ namespace MaxWorlds.Dev
             public Text Value;
         }
 
-        private void Update()
-        {
-            // ToolsAvailable, not Enabled: on a phone there is no ?dev=1 and no key chord, so a
-            // TestFlight build reaches the panel through the compile-time dev-tools flag while the
-            // cheats stay off and the game still plays honestly (YT-118).
-            if (!DevMode.ToolsAvailable)
-            {
-                if (_canvas != null) Teardown();
-                return;
-            }
+        // Built once, a frame after the scene loads (the objects it reads defaults from wake in their
+        // own Awake first). Always — there is no gate any more.
+        private void Start() => Build();
 
-            if (_canvas == null) Build();
-        }
-
-        private void OnDestroy() => Teardown();
-
-        private void Teardown()
+        private void OnDestroy()
         {
             if (_canvas != null) Destroy(_canvas.gameObject);
-            _canvas = null;
-            _panelRoot = null;
-            _dumpText = null;
-            _knobs.Clear();
-            _open = false;
         }
 
         // ------------------------------------------------------------------ build
 
         private void Build()
         {
+            if (_canvas != null) return;
             EnsureEventSystem();
 
-            var go = new GameObject("DevTuning Canvas", typeof(Canvas), typeof(CanvasScaler),
+            var go = new GameObject("Settings Canvas", typeof(Canvas), typeof(CanvasScaler),
                                     typeof(GraphicRaycaster));
             go.transform.SetParent(transform, false);
             _canvas = go.GetComponent<Canvas>();
@@ -159,22 +134,21 @@ namespace MaxWorlds.Dev
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 0.5f;
 
-            // Everything hangs off a safe-area root. The gear is edge-anchored, and on a landscape
-            // iPhone the notch inset is ~44pt — comfortably more than the 20 reference units (~9pt)
-            // it sits in from the edge, so without this it lands under the notch on the exact device
+            // Everything hangs off a safe-area root so the gear clears the notch on the exact device
             // the ticket is about.
             _safeRoot = NewRect("Safe Area", _canvas.transform, Vector2.zero, Vector2.one);
             Stretch(_safeRoot);
             _safeRoot.gameObject.AddComponent<SafeArea>();
 
             BuildKnobs();
+            BuildScrim();
             BuildGearButton();
             BuildPanel();
             SetOpen(false);
         }
 
-        /// <summary>The HUD builds one too, but the panel must work in a scene that has no HUD
-        /// (a test fixture, a stripped scene) or nothing would be clickable.</summary>
+        /// <summary>The HUD builds one too, but the panel must work in a scene with no HUD (a test
+        /// fixture, a stripped scene) or nothing would be clickable.</summary>
         private static void EnsureEventSystem()
         {
             if (FindFirstObjectByType<EventSystem>() != null) return;
@@ -184,11 +158,9 @@ namespace MaxWorlds.Dev
 
         /// <summary>
         /// Declare the seven knobs, capturing the authored value of each as its 100% reference.
-        ///
-        /// The defaults are read from the live objects where they're serialized (camera, player) and
-        /// from the tuning classes where they're consts (robot, boss, blaster). If an object isn't
-        /// in this scene the knob still works — the override lives in <see cref="DevTuning"/>, which
-        /// is global — it just falls back to the authored constant for its 100% mark.
+        /// Defaults come from live objects where serialized (camera, player) and from tuning classes
+        /// where const (robot, boss, blaster). If an object isn't in this scene the knob still works —
+        /// the override lives in global <see cref="DevTuning"/> — it just falls back to the constant.
         /// </summary>
         private void BuildKnobs()
         {
@@ -263,11 +235,28 @@ namespace MaxWorlds.Dev
 
         // ------------------------------------------------------------------ widgets
 
+        /// <summary>A full-screen dark scrim behind the panel: it dims the game so a small settings
+        /// panel reads as a modal, and it swallows every tap outside the panel so tuning can never
+        /// drive Max around underneath. Only present while the panel is open.</summary>
+        private void BuildScrim()
+        {
+            var rt = NewRect("Scrim", _safeRoot, Vector2.zero, Vector2.one);
+            Stretch(rt);
+            var img = rt.gameObject.AddComponent<Image>();
+            img.sprite = HudTextures.Solid();
+            img.color = Scrim;
+            img.raycastTarget = true;
+            // Tap outside the panel to dismiss — the phone-native gesture.
+            var btn = rt.gameObject.AddComponent<Button>();
+            btn.transition = Selectable.Transition.None;
+            btn.onClick.AddListener(() => SetOpen(false));
+            _scrim = rt.gameObject;
+        }
+
         private void BuildGearButton()
         {
             // Left edge, vertically centred: the one region nothing else claims. Top-left is the FPS
-            // readout and the utility icons, top-right is the dev-mode box and the ability slots,
-            // and both bottom corners are the joystick pads.
+            // readout and utility icons, top-right the ability slots, both bottom corners the sticks.
             var rt = NewRect("Gear", _safeRoot, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(GearSize, GearSize);
@@ -275,27 +264,28 @@ namespace MaxWorlds.Dev
 
             var img = rt.gameObject.AddComponent<Image>();
             img.sprite = HudTextures.Disc();
-            img.color = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.85f);
+            img.color = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.78f);
             img.raycastTarget = true;
 
             var btn = rt.gameObject.AddComponent<Button>();
             btn.targetGraphic = img;
             btn.onClick.AddListener(() => SetOpen(!_open));
 
-            // Labelled "TUNE" rather than a ⚙ glyph: the HUD renders in LegacyRuntime.ttf, and a
-            // glyph the built-in font doesn't carry would leave an unlabelled disc on device.
-            var label = AddText(rt, "TUNE", DumpFont, Accent, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform);
+            // A concentric-ring dial for the icon rather than a ⚙ glyph: the HUD renders in
+            // LegacyRuntime.ttf, which doesn't carry the gear codepoint, so a glyph would leave an
+            // empty box on device. TechRings is the same icon language the joysticks use, and reads
+            // clearly as an adjustable control.
+            var icon = AddImage(rt, HudTextures.TechRings(96, 3), Accent, "Icon");
+            Stretch(icon.rectTransform);
+            icon.raycastTarget = false;
         }
 
         private void BuildPanel()
         {
             var rt = NewRect("Panel", _safeRoot, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             rt.sizeDelta = new Vector2(PanelW, PanelH);
-            // The pivot stays top-left, because every child below is placed by Place() in top-left
-            // space. So centring is done by offsetting half the panel up and left rather than by
-            // moving the pivot — with a zero offset the panel hangs down-right of screen centre and
-            // its footer buttons fall off the bottom of the display.
+            // The pivot stays top-left because every child is placed by Place() in top-left space, so
+            // centring is done by offsetting half the panel up and left rather than moving the pivot.
             rt.anchoredPosition = new Vector2(-PanelW * 0.5f, PanelH * 0.5f);
             _panelRoot = rt.gameObject;
 
@@ -303,17 +293,16 @@ namespace MaxWorlds.Dev
             bg.sprite = HudTextures.RoundedBox();
             bg.type = Image.Type.Sliced;
             bg.color = PanelColor;
-            bg.raycastTarget = true;   // swallow taps so tuning never drives Max around underneath
+            bg.raycastTarget = true;
 
             float y = -Pad;
 
-            var header = AddText(rt, "DEV TUNING — live, session only", HeaderFont, Accent,
-                                 TextAnchor.MiddleLeft);
+            var header = AddText(rt, "SETTINGS", HeaderFont, Accent, TextAnchor.MiddleLeft);
             Place(header.rectTransform, Pad, y, PanelW - Pad * 2f, HeaderH);
-            y -= HeaderH;
+            y -= HeaderH + 8f;
 
-            // Two columns: seven rows in one column would need ~1010 reference units of height,
-            // which is over the safe-area budget on a notched phone in landscape.
+            // Two columns: seven rows in one column would overrun the safe-area height on a notched
+            // phone in landscape.
             float colW = (PanelW - Pad * 2f - ColGap) * 0.5f;
             for (int i = 0; i < _knobs.Count; i++)
             {
@@ -326,7 +315,7 @@ namespace MaxWorlds.Dev
             float gridH = RowH * 4f;
             float footerY = y - gridH - 12f;
 
-            var copy = BuildButton(rt, "Copy current values", Pad, footerY, 380f, ButtonH);
+            var copy = BuildButton(rt, "Copy current values", Pad, footerY, 380f, ButtonH, primary: true);
             copy.onClick.AddListener(CopyValues);
 
             var reset = BuildButton(rt, "Reset to defaults", Pad + 380f + 16f, footerY, 300f, ButtonH);
@@ -337,9 +326,6 @@ namespace MaxWorlds.Dev
 
             _dumpText = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
             Place(_dumpText.rectTransform, Pad, footerY - ButtonH - 8f, PanelW - Pad * 2f, DumpH);
-            // Clip rather than spill. The panel is sized to fit the dump, but truncating means that
-            // if the value list ever grows the overflow is a cut-off line inside the panel instead
-            // of text printed over the game.
             _dumpText.verticalOverflow = VerticalWrapMode.Truncate;
         }
 
@@ -349,10 +335,10 @@ namespace MaxWorlds.Dev
             Place(row, x, y, w, RowH);
 
             var name = AddText(row, k.Name, LabelFont, TextColor, TextAnchor.MiddleLeft);
-            Place(name.rectTransform, 0f, 0f, w * 0.55f, 34f);
+            Place(name.rectTransform, 0f, 0f, w * 0.5f, 34f);
 
             k.Value = AddText(row, "", LabelFont, Accent, TextAnchor.MiddleRight);
-            Place(k.Value.rectTransform, w * 0.55f, 0f, w * 0.45f, 34f);
+            Place(k.Value.rectTransform, w * 0.5f, 0f, w * 0.5f, 34f);
 
             k.Slider = BuildSlider(row, 0f, -40f, w, SliderH, k);
             UpdateValueText(k);
@@ -368,7 +354,8 @@ namespace MaxWorlds.Dev
             track.sizeDelta = new Vector2(0f, 14f);
             track.anchoredPosition = Vector2.zero;
             var trackImg = track.gameObject.AddComponent<Image>();
-            trackImg.sprite = HudTextures.Solid();
+            trackImg.sprite = HudTextures.RoundedBox(24, 0.5f);
+            trackImg.type = Image.Type.Sliced;
             trackImg.color = TrackColor;
 
             var fillArea = NewRect("Fill Area", rt, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f));
@@ -377,7 +364,8 @@ namespace MaxWorlds.Dev
             var fill = NewRect("Fill", fillArea, new Vector2(0f, 0f), new Vector2(0f, 1f));
             fill.sizeDelta = new Vector2(HandleW, 0f);
             var fillImg = fill.gameObject.AddComponent<Image>();
-            fillImg.sprite = HudTextures.Solid();
+            fillImg.sprite = HudTextures.RoundedBox(24, 0.5f);
+            fillImg.type = Image.Type.Sliced;
             fillImg.color = Accent;
 
             var handleArea = NewRect("Handle Slide Area", rt, new Vector2(0f, 0f), new Vector2(1f, 1f));
@@ -387,7 +375,7 @@ namespace MaxWorlds.Dev
             handle.sizeDelta = new Vector2(HandleW, 0f);
             var handleImg = handle.gameObject.AddComponent<Image>();
             handleImg.sprite = HudTextures.Disc();
-            handleImg.color = Accent;
+            handleImg.color = Color.white;
 
             slider.fillRect = fill;
             slider.handleRect = handle;
@@ -403,14 +391,14 @@ namespace MaxWorlds.Dev
         }
 
         private Button BuildButton(RectTransform parent, string label, float x, float y,
-                                   float w, float h)
+                                   float w, float h, bool primary = false)
         {
             var rt = NewRect(label, parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             Place(rt, x, y, w, h);
             var img = rt.gameObject.AddComponent<Image>();
             img.sprite = HudTextures.RoundedBox();
             img.type = Image.Type.Sliced;
-            img.color = new Color(1f, 1f, 1f, 0.14f);
+            img.color = primary ? AccentDeep : new Color(1f, 1f, 1f, 0.14f);
             var btn = rt.gameObject.AddComponent<Button>();
             btn.targetGraphic = img;
             var text = AddText(rt, label, LabelFont, TextColor, TextAnchor.MiddleCenter);
@@ -424,22 +412,23 @@ namespace MaxWorlds.Dev
         {
             _open = open;
             if (_panelRoot != null) _panelRoot.SetActive(open);
+            if (_scrim != null) _scrim.SetActive(open);
         }
 
         private void UpdateValueText(Knob k)
         {
             if (k.Value == null) return;
             float v = k.Get();
-            // Raw number AND percent of the authored default — the percent is what makes a value
-            // portable ("40% faster"), the raw number is what gets pasted back into the source.
+            // Raw number AND percent of the authored default — the percent makes a value portable
+            // ("40% faster"), the raw number is what gets pasted back into the source.
             float pct = k.Default > 0f ? v / k.Default * 100f : 0f;
             k.Value.text = $"{v:0.##} {k.Unit}  ({pct:0}%)";
         }
 
         /// <summary>
         /// Dump every value as <c>name: value</c> text. Goes three places on purpose: the clipboard
-        /// (the convenient one, but <c>systemCopyBuffer</c> is not dependable under a WebGL security
-        /// prompt), the panel itself (always works — Lee can read or screenshot it), and the log.
+        /// (convenient, but <c>systemCopyBuffer</c> isn't dependable under a WebGL security prompt),
+        /// the panel itself (always works — Lee can read or screenshot it), and the log.
         /// </summary>
         private void CopyValues()
         {
@@ -455,15 +444,14 @@ namespace MaxWorlds.Dev
             string dump = sb.ToString();
             GUIUtility.systemCopyBuffer = dump;
             if (_dumpText != null) _dumpText.text = dump;
-            Debug.Log("[DevTuning]\n" + dump);
+            Debug.Log("[Settings]\n" + dump);
         }
 
         private void ResetValues()
         {
             // Push the authored value back through each knob's own setter first, so whatever cached
-            // it (the camera offset, the energy pool) is re-seeded by exactly the same path a slider
-            // move uses and the reset can't drift from it. Only then drop the overrides — after
-            // which Or() returns the authored constant and the two agree.
+            // it (camera offset, energy pool) is re-seeded by the same path a slider move uses. Only
+            // then drop the overrides — after which Or() returns the authored constant and they agree.
             foreach (var k in _knobs) k.Set(k.Default);
             DevTuning.Reset();
 
@@ -476,9 +464,6 @@ namespace MaxWorlds.Dev
         }
 
         // ------------------------------------------------------------------ uGUI helpers
-        //
-        // Deliberately local rather than shared with HudController: those are private there, and
-        // widening a gameplay HUD's surface for a dev tool is the wrong trade.
 
         private static RectTransform NewRect(string name, Transform parent, Vector2 anchorMin,
                                              Vector2 anchorMax)
@@ -511,6 +496,16 @@ namespace MaxWorlds.Dev
             rt.offsetMax = Vector2.zero;
         }
 
+        private static Image AddImage(Transform parent, Sprite sprite, Color color, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(Image));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<Image>();
+            img.sprite = sprite;
+            img.color = color;
+            return img;
+        }
+
         private static Text AddText(Transform parent, string content, int size, Color color,
                                     TextAnchor anchor)
         {
@@ -528,8 +523,7 @@ namespace MaxWorlds.Dev
             return text;
         }
 
-        /// <summary>Reference-unit → point scale on the 6-inch target, for the layout test to assert
-        /// against rather than re-deriving the arithmetic in the comment above.</summary>
+        /// <summary>Reference-unit → point scale on the 6-inch target, for the layout test.</summary>
         public static float PhoneScale => Scale6Inch;
 
         /// <summary>Smallest font in the panel, in reference units. The test converts it.</summary>

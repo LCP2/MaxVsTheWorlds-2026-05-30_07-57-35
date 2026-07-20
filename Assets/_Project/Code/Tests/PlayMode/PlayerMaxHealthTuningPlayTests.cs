@@ -8,8 +8,9 @@ using MaxWorlds.Player;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// Max's health ceiling became tunable at runtime (YT-105). Moving a ceiling under a value that
-    /// is already sitting on it is the fiddly part, so it gets its own tests.
+    /// Max's health ceiling is tunable at runtime through the Settings panel (YT-105, YT-120). Moving
+    /// a ceiling under a value that is already sitting on it is the fiddly part, so it gets its own
+    /// tests. Since YT-120 the override applies with no dev flag — the panel is a real feature now.
     /// </summary>
     public sealed class PlayerMaxHealthTuningPlayTests
     {
@@ -20,6 +21,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator SetUp()
         {
             DevMode.Reset();
+            DevTuning.Reset();   // overrides are no longer wiped by DevMode.Reset — clear explicitly
             _go = new GameObject("Max", typeof(CharacterController), typeof(PlayerController),
                                  typeof(PlayerHealth));
             _health = _go.GetComponent<PlayerHealth>();
@@ -31,6 +33,7 @@ namespace MaxWorlds.Tests.PlayMode
         {
             if (_go != null) Object.Destroy(_go);
             DevMode.Reset();
+            DevTuning.Reset();   // don't leak an override into the next fixture
             yield return null;
         }
 
@@ -45,7 +48,6 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator RaisingTheCeiling_GivesHeadroomNotAFreeHeal()
         {
-            DevMode.Enabled = true;
             float before = _health.Current;
 
             DevTuning.PlayerMaxHealth = _health.AuthoredMax * 2f;
@@ -61,8 +63,6 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator LoweringTheCeilingBelowCurrentHp_ClampsAndNotifies()
         {
-            DevMode.Enabled = true;
-
             float notified = -1f;
             _health.Changed += hp => notified = hp;
 
@@ -77,14 +77,18 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator WithDevModeOff_TheOverrideIsIgnored()
+        public IEnumerator TheOverrideAppliesWithNoDevMode()
         {
-            DevTuning.PlayerMaxHealth = 999f;
-            DevMode.Enabled = false;
+            // The inverse of what this used to assert. The Settings panel is a real, always-present
+            // feature now (YT-120), so a ceiling the player dialled in has to take effect with dev
+            // mode off — that is the whole point of shipping the sliders.
+            Assert.That(DevMode.Enabled, Is.False, "precondition: not in dev mode");
+            DevTuning.PlayerMaxHealth = 250f;
+            _health.RefreshMax();
             yield return null;
 
-            Assert.That(_health.Max, Is.EqualTo(_health.AuthoredMax).Within(0.001f),
-                "A tuning override must never reach a player's session.");
+            Assert.That(_health.Max, Is.EqualTo(250f).Within(0.001f),
+                "a moved slider must change Max's ceiling in a normal session");
         }
     }
 }

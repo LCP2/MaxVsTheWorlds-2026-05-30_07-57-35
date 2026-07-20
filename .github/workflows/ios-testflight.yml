@@ -9,12 +9,7 @@ name: iOS → TestFlight
 # All Apple credentials come from GitHub Actions secrets — see APPLE_SIGNING_SETUP.md.
 
 on:
-  workflow_dispatch:
-    inputs:
-      dev_tools:
-        description: 'Include the dev tuning panel (YT-118). Leave ON for TestFlight; turn OFF for an App Store submission build.'
-        type: boolean
-        default: true
+  workflow_dispatch: {}
   push:
     tags: ['v*']
 
@@ -45,20 +40,11 @@ jobs:
           restore-keys: |
             Library-iOS-
             Library-
-      # YT-118. Everything this workflow produces goes to TestFlight, which is a BETA
-      # channel, so the tuning panel is in by default and Lee can dial the combat-feel
-      # numbers on the device he actually plays on. Turn the dev_tools input off for an
-      # App Store submission build and the define is simply never added — the committed
-      # settings carry no define, so shipping without the panel is what happens by
-      # default rather than something anyone has to remember.
-      #
-      # Note this only lets the PANEL in. The cheats (invincible, infinite energy) stay
-      # behind DevMode.Enabled, which no iOS build can turn on — otherwise Lee would be
-      # tuning "life" and "water rates" in a build where neither could run out.
-      - name: Compile the dev tuning panel in (beta builds only)
-        if: github.event_name != 'workflow_dispatch' || inputs.dev_tools
-        run: python3 scripts/enable-dev-tools-define.py
-
+      # No dev-tools define step any more (YT-120). The tuning sliders are a real, always-
+      # compiled in-game Settings panel now, so there is nothing to inject — which is the
+      # whole point: the old step edited ProjectSettings.asset mid-build, dirtied the git
+      # tree, and tripped the semantic-version guard ("Branch is dirty", YT-119). A clean
+      # checkout builds a build that already has the sliders.
       - name: Build iOS target (GameCI)
         uses: game-ci/unity-builder@v4
         env:
