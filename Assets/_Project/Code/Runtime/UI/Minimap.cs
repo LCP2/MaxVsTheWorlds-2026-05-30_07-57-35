@@ -11,12 +11,13 @@ namespace MaxWorlds.UI
     /// two scales"). So the two can never disagree with each other, or with the level: all of it
     /// comes from BackyardPathLayout.
     ///
-    /// Top-left, under the MAP button. The bottom corners are the twin sticks and the top-right is
-    /// the ability column, so this is the only quiet corner — and it's the far side of the screen
-    /// from where the fight usually is, since Max advances up-field.
+    /// Top-left. The bottom corners are the twin sticks and the top-right is the ability column, so
+    /// this is the only quiet corner — and it's the far side of the screen from where the fight
+    /// usually is, since Max advances up-field.
     ///
-    /// Tapping it opens the full map, because a player who is looking at the minimap is already
-    /// asking the question the full map answers.
+    /// Tapping it opens the full map (YT-123): a player looking at the minimap is already asking the
+    /// question the full map answers, so the minimap IS the control — there is no separate MAP
+    /// button any more. The full map's own overlay closes on a tap, so tapping again dismisses it.
     /// </summary>
     public sealed class Minimap : MonoBehaviour
     {

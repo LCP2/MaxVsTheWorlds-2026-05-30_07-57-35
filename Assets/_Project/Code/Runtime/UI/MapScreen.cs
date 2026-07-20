@@ -7,8 +7,13 @@ using UnityEngine.UI;
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// The in-run map (YT-72): a HUD button that opens the whole arena at a glance, with Max, the
-    /// factory, the gate and the boss plotted live — then closes on a tap.
+    /// The in-run map (YT-72): the whole arena at a glance, with Max, the factory, the gate and the
+    /// boss plotted live — then closes on a tap.
+    ///
+    /// There is no dedicated Map button any more (YT-123): tapping the always-on minimap opens this,
+    /// which is where a player looking at the minimap was already headed. The overlay closes on a tap
+    /// anywhere, so "tap again to dismiss" needs nothing extra. The 'M' key stays as a desktop
+    /// convenience, but it is not a HUD control.
     ///
     /// It PAUSES while open (Pillar 1: you can check the map at the bus stop without dying). That's
     /// safe alongside the hit-stop, which refuses to start while the game is already frozen and only
@@ -21,7 +26,6 @@ namespace MaxWorlds.UI
         private static readonly Color Dim = new Color(0.03f, 0.05f, 0.04f, 0.82f);
         private static readonly Color Panel = new Color(0.06f, 0.08f, 0.07f, 0.95f);
         private static readonly Color Ink = new Color(0.96f, 0.94f, 0.86f);
-        private static readonly Color ButtonFace = new Color(0.10f, 0.13f, 0.12f, 0.85f);
 
         private RectTransform _overlay;
         private MapPanel _map;
@@ -36,10 +40,9 @@ namespace MaxWorlds.UI
         public void Build(RectTransform root, float refW, float refH)
         {
             EnsureEventSystem();
-            BuildButton(root);
             BuildOverlay(root, refW, refH);
 
-            // Desktop convenience; the button is the real control on a phone.
+            // Desktop convenience; tapping the minimap is the real control on a phone (YT-123).
             _toggle = new InputAction("ToggleMap", InputActionType.Button, "<Keyboard>/m");
             _toggle.performed += _ => Toggle();
             _toggle.Enable();
@@ -49,35 +52,6 @@ namespace MaxWorlds.UI
         {
             _toggle?.Disable();
             _toggle?.Dispose();
-        }
-
-        /// <summary>
-        /// Top-left, but to the RIGHT of the utility icon column (P / ? / S), which already owns
-        /// x 24–80 down to y −208. The bottom corners belong to the twin sticks and the top-right to
-        /// the ability slots, so this strip is the only free ground — and it's the one a thumb can
-        /// reach without letting go of the fight.
-        /// </summary>
-        private void BuildButton(RectTransform root)
-        {
-            var go = new GameObject("Map Button", typeof(RectTransform), typeof(Image), typeof(Button));
-            var rt = (RectTransform)go.transform;
-            rt.SetParent(root, false);
-            rt.anchorMin = rt.anchorMax = rt.pivot = new Vector2(0f, 1f);
-            rt.anchoredPosition = new Vector2(96f, -24f);   // clear of the utility icons
-            rt.sizeDelta = new Vector2(88f, 64f);
-
-            var img = go.GetComponent<Image>();
-            img.sprite = HudTextures.RoundedBox(24, 0.3f);
-            img.type = Image.Type.Sliced;
-            img.color = ButtonFace;
-
-            var label = NewText(rt, "MAP", 24, Ink);
-            label.rectTransform.anchorMin = Vector2.zero;
-            label.rectTransform.anchorMax = Vector2.one;
-            label.rectTransform.offsetMin = label.rectTransform.offsetMax = Vector2.zero;
-            label.fontStyle = FontStyle.Bold;
-
-            go.GetComponent<Button>().onClick.AddListener(Toggle);
         }
 
         private void BuildOverlay(RectTransform root, float refW, float refH)
