@@ -123,10 +123,17 @@ platform :ios do
       }
     )
 
-    # 9. Ship to TestFlight. skip_waiting keeps CI from idling on Apple processing.
+    # 9. Ship to TestFlight, and WAIT for Apple to finish processing.
+    #
+    # YT-117: this used to pass skip_waiting_for_build_processing: true, which returns as soon as
+    # the bytes are transferred. Apple validates asynchronously *after* that — a duplicate build
+    # number, a bad entitlement or a missing-compliance hold is only reported during processing.
+    # So the run went green ("Successfully uploaded the new binary") while Apple could still be
+    # discarding the binary, and nobody could tell the difference from the log. Waiting costs ~7
+    # minutes of macOS time and buys the difference between "uploaded" and "actually a build".
     upload_to_testflight(
       api_key: api_key,
-      skip_waiting_for_build_processing: true
+      skip_waiting_for_build_processing: false
     )
   end
 end
