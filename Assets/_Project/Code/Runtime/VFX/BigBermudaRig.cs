@@ -8,69 +8,67 @@ using MaxWorlds.UI;
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Big Bermuda — the possessed industrial mower (YT-90).
+    /// The Backyard boss — a possessed BOILER-MACHINE (YT-114).
     ///
-    /// The fight has been running since YT-27 and the boss has been a 3.5 m CUBE the whole time. Not a
-    /// greybox stand-in for a boss: a cube, tinted olive, charging at you. The end-cap of the Backyard,
-    /// the story beat of the run, and the thing it most resembled was a crate.
+    /// It was a possessed mower before this (YT-90), which was itself a rescue of the tinted 3.5 m CUBE
+    /// the fight ran on from YT-27. Lee's Level-1 direction (2026-07-21) re-pitches the silhouette off
+    /// the boiler-locomotive concept: a squat green/red possessed boiler with glowing eye-ports and a
+    /// coughing smokestack. The one change from the concept art is the load-bearing one — it is NOT on
+    /// rails. The rail bogies are gone; it stands and WALKS on four heavy piston legs, because "a
+    /// free-roaming arena boss that moves around on its own" is a thing you read from the legs first.
     ///
-    /// So it is a machine now — a mower, and one built to be read from thirty metres up at 72°, which
-    /// is the only angle anybody will ever see it from:
+    /// Built to be read from thirty metres up at 72°, the only angle this game has. From there a boss is
+    /// a silhouette and a colour, and this one is:
     ///
-    ///   * A CUTTING REEL across the front, blades out, spinning. This is the boss's whole threat and
-    ///     it points at Max. Its outer edge sits at 2.35 m, which is where <c>chargeContactRadius</c>
-    ///     (2.4 m) actually is — so the blades reach exactly as far as the damage does, and the hitbox
-    ///     is something you can SEE rather than something you learn by dying to it.
-    ///   * MISMATCHED EYES, welded on: two salvaged lamps at different sizes, at different heights, on
-    ///     crooked brackets. They are the face, they are what makes it a character rather than a
-    ///     vehicle, and they are where you read the fight from (below).
-    ///   * A mower's HANDLE, arcing up and back over the grass catcher. Nothing else in the silhouette
-    ///     says "lawnmower" as fast: a deck on wheels is a go-kart until the handle is on it.
+    ///   * A TALL DOMED BODY — a green boiler drum on a red belly, split by a brass waist ring, capped
+    ///     by a little purple turret and a lightning spire. Nothing else on the field is tall or round;
+    ///     the robots are low and angular and the mower was low and wide. Height and a dome are the
+    ///     whole "that is the boss" read.
+    ///   * GLOWING EYE-PORTS — one big brass-rimmed port on the front (where it charges) and two smaller
+    ///     mismatched ones on the drum, welded on crooked. They are the face, they are what makes it a
+    ///     character and not a water heater, and they are where the fight is read from (below).
+    ///   * A SMOKESTACK that coughs, and a steam GOVERNOR that spins up as it builds pressure. A boiler
+    ///     winding up to blow is the most on-concept telegraph this fight could possibly have.
+    ///   * FOUR LEGS, splayed out under the belly and planted on the lawn. They pump when it walks and
+    ///     lean into a charge. This is the "not on rails" decision made visible.
     ///
     /// ---------------------------------------------------------------------------------------------
-    /// THE TELL THE FIGHT NEVER HAD
+    /// THE TELL, AND WHY IT IS ONE WRITER
     ///
-    /// <see cref="BigBermudaBoss.SetTell"/> has been writing an orange wind-up colour into the boss's
-    /// MaterialPropertyBlock on every phase change since YT-27, and NONE of it has ever reached the
-    /// screen. <see cref="CharacterSkin"/> claims the boss (it is a MeshRenderer under an IDamageable)
-    /// and rewrites that same block every LateUpdate with the flat near-black body colour. Update
-    /// writes; LateUpdate overwrites; the player sees nothing. The single most important read in the
-    /// fight — "it is about to charge, MOVE" — has been dead code the entire time.
-    ///
-    /// That is the same bug that ate the Mower Hutch's vulnerable core (YT-38): two writers on one
-    /// property block, and script order picks the winner. The fix is the same one — ONE writer. This
-    /// rig owns every renderer on the machine, and no director can reach them:
+    /// The wind-up tell died for the whole life of this fight (YT-90 diagnosed it): the boss wrote an
+    /// orange warn colour into its MaterialPropertyBlock, and <see cref="CharacterSkin"/> overwrote that
+    /// same block every LateUpdate with the flat body colour — two writers on one block, script order
+    /// picks the winner, the player sees nothing. The fix is ONE writer. This rig owns every renderer on
+    /// the machine and no director can reach them:
     ///
     ///   * <see cref="RuntimeSurfaceDirector"/> skips anything under a <see cref="KeepsOwnMaterial"/>,
     ///     which this object carries.
     ///   * <see cref="CharacterSkinDirector"/> only claims renderers under an <see cref="IDamageable"/>,
     ///     and the machine is NOT parented to the boss (see <see cref="Follow"/>), so it claims none.
     ///
-    /// Which means nothing else hands these renderers a material, and a primitive's default material is
-    /// not in the build's shader set — it ships MAGENTA. Every part built here is given a real material
-    /// explicitly. That is not belt-and-braces; it is the exact failure the Hutch's core shipped with.
+    /// And because nothing else hands these renderers a material, every part is given a real one here: a
+    /// primitive's default material has no URP subshader and ships MAGENTA (YT-58/YT-38).
     ///
     /// ---------------------------------------------------------------------------------------------
     /// READING THE FIGHT OFF THE MACHINE
     ///
-    /// Three states, three colours, and the language is one the player has already been taught:
+    /// Three states, three colours, in the language the player has already been taught:
     ///
-    ///   ASLEEP      eyes dark. It is standing beyond the gate from the first frame of the run, and a
-    ///               dead machine that opens its eyes when the factory dies is worth more than one that
-    ///               fades in.
-    ///   AWAKE       acid GREEN — the grass that possesses it, and the colour of its own clipping AoEs.
-    ///               Deliberately not the warn colour: if the boss glowed orange while idling, orange
-    ///               would stop meaning "incoming" within ten seconds.
-    ///   WINDING UP  hot ORANGE, and the whole chassis heats with it. This is <see cref="WarnColor"/> —
-    ///               the same orange every telegraph in the game already uses. The reel screams up to
-    ///               speed and the stack coughs. You get 0.75 s, which is what the fight always gave
-    ///               you and never showed you.
-    ///   ENRAGED     RED, and it stays red between attacks, so phase 2 is legible at a glance and not
-    ///               only in the half-second it is committing to something.
+    ///   ASLEEP      ports dark. It stands beyond the gate from the first frame; a dead machine that
+    ///               opens its eyes when the last factory falls is worth more than one that fades in.
+    ///   AWAKE       acid GREEN — the grass that possesses it, and the colour of the clipping AoEs it
+    ///               still throws (BigBermudaBoss.grassColor). NOT the concept's amber: an amber idle
+    ///               sits too close to the warn orange and would blunt the telegraph. Readability beats
+    ///               fidelity (Craft Bible tie-break); the amber is a note for Lee, not a regression.
+    ///   WINDING UP  hot ORANGE, the whole boiler glows, the governor screams up and the stack coughs —
+    ///               a boiler over-pressuring. This is <see cref="WarnColor"/>, the same orange every
+    ///               telegraph in the game uses. You get the wind-up window the fight always gave you
+    ///               and, until YT-90, never showed you.
+    ///   ENRAGED     RED, and it holds red between attacks, so phase 2 is legible at a glance.
     ///
     /// Reads the fight, writes nothing to it: <see cref="BigBermudaBoss.Action"/>,
     /// <see cref="BigBermudaBoss.Enraged"/> and <see cref="BigBermudaBoss.Engaged"/> are getters, and
-    /// the intro/defeat beats come off the same <see cref="HudSignals"/> that YT-55's spectacle uses.
+    /// the intro/defeat beats come off the same <see cref="HudSignals"/> YT-55's spectacle uses.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BigBermudaRig : MonoBehaviour
@@ -85,25 +83,26 @@ namespace MaxWorlds.VFX
         }
 
         // ---------------------------------------------------------------- the palette
+        //
+        // Straight off the concept: green boiler, red belly, brass trim, a purple cap. This is a DEPARTURE
+        // from the mower's near-black body — the boiler wants its own colours, not a rim-lit silhouette —
+        // so the figure-ground work is done by the red/brass/purple against a desaturated lawn and by the
+        // boss simply being three times Max's height, rather than by a black body under a rim light.
 
-        /// <summary>The machine's paint. Straight from <see cref="CharacterSkin"/> — the boss's body
-        /// colour is decided in ONE place (YT-86 put it there) and a second near-black living here
-        /// would drift away from it the first time anyone tuned either.</summary>
-        private static Color BodyColor => CharacterSkin.BaseColorFor(CharacterRole.Boss);
+        private static readonly Color BoilerGreen = new Color(0.16f, 0.52f, 0.40f);  // jade drum, distinct from the muted lawn
+        private static readonly Color BoilerRed = new Color(0.60f, 0.15f, 0.17f);    // crimson belly + legs
+        private static readonly Color Brass = new Color(0.72f, 0.54f, 0.22f);        // waist ring, port rims, spouts
+        private static readonly Color CapPurple = new Color(0.30f, 0.26f, 0.46f);    // the turret cap
+        private static readonly Color Steel = new Color(0.24f, 0.25f, 0.30f);        // the stack, the governor
 
-        /// <summary>The reel. Cold, pale steel: the blades are the one part of this machine that is
-        /// supposed to catch the light, because they are the part that kills you.</summary>
-        private static readonly Color BladeColor = new Color(0.58f, 0.64f, 0.72f);
-
-        /// <summary>Awake and idle: acid green. Bermuda grass, and the colour of the clippings it
-        /// throws (BigBermudaBoss.grassColor). It is possessed BY the lawn.</summary>
+        /// <summary>Awake and idle: acid green. Possessed by the lawn, and the colour of the clippings
+        /// it throws. Distinct from the warn orange on purpose.</summary>
         private static readonly Color EyeIdle = new Color(0.42f, 1f, 0.22f);
 
-        /// <summary>Winding up. The same orange as every other telegraph in the game — the player has
-        /// been taught this word by every robot in the yard, and the boss should not invent a new one.</summary>
+        /// <summary>Winding up. The same orange as every other telegraph in the game.</summary>
         private static readonly Color EyeWarn = new Color(1f, 0.35f, 0.12f);
 
-        /// <summary>Phase 2. It stays red BETWEEN attacks, so "it got worse" is readable at a glance.</summary>
+        /// <summary>Phase 2. Held between attacks, so "it got worse" reads at a glance.</summary>
         private static readonly Color EyeRage = new Color(1f, 0.12f, 0.06f);
 
         /// <summary>Committed to a charge, enraged. Past red — there is nowhere hotter to go.</summary>
@@ -114,66 +113,82 @@ namespace MaxWorlds.VFX
 
         // ---------------------------------------------------------------- tuning
 
-        [Header("The reel")]
-        [Tooltip("Degrees/sec the cutting reel turns while it is just idling around. Slow — a mower " +
-                 "ticking over. The spin-up to the charge is what carries the threat.")]
-        [SerializeField] private float reelIdleSpin = 90f;
+        [Header("Pressure (the governor + the glow)")]
+        [Tooltip("How fast boiler pressure builds when it commits to a charge, and bleeds off after. " +
+                 "Up fast, down slow — a pressure vessel has lag, and the slow bleed is what makes the " +
+                 "recover read as 'it is spent' rather than 'it switched off'.")]
+        [SerializeField] private float pressureRise = 5.5f;
+        [SerializeField] private float pressureFall = 1.6f;
 
-        [Tooltip("Degrees/sec at full commit. Fast enough to blur into a disc, which is what a blade " +
-                 "at speed does and what makes it read as something you do not want to be in front of.")]
-        [SerializeField] private float reelChargeSpin = 1500f;
-
-        [Tooltip("How fast the reel reaches its target speed. It SCREAMS up during the wind-up and " +
-                 "spins down slowly afterwards — a flywheel has mass.")]
-        [SerializeField] private float reelSpinUp = 6f;
+        [Tooltip("Governor revolutions/sec at full pressure. Fast enough to blur — a governor at speed " +
+                 "is the mechanical readout of 'about to blow'.")]
+        [SerializeField] private float governorMaxSpin = 900f;
 
         [Header("The eyes")]
-        [Tooltip("How fast the eyes reach the colour the current phase calls for. Fast: a telegraph " +
-                 "that eases in is a telegraph that arrives after the charge does.")]
+        [Tooltip("How fast the ports reach the colour the phase calls for. Fast: a telegraph that eases " +
+                 "in is a telegraph that arrives after the charge does.")]
         [SerializeField] private float eyeResponse = 9f;
 
-        [Tooltip("How much of the eye colour bleeds into the chassis as it heats. Low on purpose — the " +
-                 "body must not stop being near-black, because the near-black is what the rim lights.")]
+        [Tooltip("How much of the tell colour bleeds into the boiler as it heats. Kept modest so the " +
+                 "green stays green until it actually commits.")]
         [Range(0f, 1f)]
-        [SerializeField] private float chassisHeat = 0.55f;
+        [SerializeField] private float chassisHeat = 0.5f;
+
+        [Header("Gait")]
+        [Tooltip("How far the legs swing, in metres, per metre the boss travels. The walk is driven by " +
+                 "distance moved, not a clock, so it never has to know the boss's speed or be re-tuned.")]
+        [SerializeField] private float strideScale = 0.9f;
+
+        [Tooltip("How deep it crouches as it winds up — the coil before the charge. Metres.")]
+        [SerializeField] private float crouchDepth = 0.35f;
 
         [Header("Exhaust")]
-        [SerializeField] private float exhaustIdleRate = 4f;
-        [SerializeField] private float exhaustChargeRate = 40f;
-        [SerializeField] private Color exhaustColor = new Color(0.30f, 0.30f, 0.29f, 0.5f);
+        [SerializeField] private float exhaustIdleRate = 5f;
+        [SerializeField] private float exhaustChargeRate = 46f;
+        [SerializeField] private Color exhaustColor = new Color(0.32f, 0.32f, 0.31f, 0.5f);
 
         // ---------------------------------------------------------------- state
 
         private BigBermudaBoss _boss;
-        private Transform _reel;
+        private Transform _chassis;      // everything above the legs — bobs and crouches as one
+        private Transform _governor;     // the spinner on the cap
         private ParticleSystem _exhaust;
-        private Material _bodyMat;
-        private Material _bladeMat;
 
-        private readonly MeshRenderer[] _eyes = new MeshRenderer[2];
-        private readonly Transform[] _wheels = new Transform[4];
-        private readonly float[] _wheelRadius = new float[4];
+        private Material _greenMat;
+        private Material _redMat;
+        private Material _brassMat;
+        private Material _capMat;
+        private Material _steelMat;
+
+        private readonly MeshRenderer[] _eyes = new MeshRenderer[3];   // big front + two mismatched
         private MaterialPropertyBlock _eyeMpb;
 
-        private Color _eyeColor = Color.black;   // starts DARK: it is asleep beyond the gate
-        private float _reelSpin;
+        private const int LegCount = 4;
+        private readonly Transform[] _legLift = new Transform[LegCount];   // the thing that swings per leg
+        private readonly float[] _legPhase = new float[LegCount];
+
+        private Color _eyeColor = Color.black;   // starts DARK: asleep beyond the gate
+        private float _pressure;                 // 0..1, boiler pressure — spikes on commit
+        private float _governorSpin;
         private float _flash;                    // 1 the frame it takes a hit, decays
         private float _lastHealth = 1f;
-        private float _wakeTimer;                // >0 while the eyes are stuttering on
+        private float _wakeTimer;                // >0 while the ports stutter on
+        private float _gaitPhase;                // advanced by distance travelled
+        private float _crouch;                   // current crouch offset, eased
         private Vector3 _lastPos;
         private bool _awake;
         private bool _dying;
         private float _dieTimer;
 
-        /// <summary>Awake and running. False while it is dormant, and false forever once it is dead.</summary>
+        /// <summary>Awake and running. False while dormant, and false forever once it is dead.</summary>
         public bool Running => _awake && !_dying;
 
-        /// <summary>The colour the eyes are currently burning. The tell, in one value — this is what a
-        /// test can look at to prove the wind-up actually reaches the screen.</summary>
+        /// <summary>The colour the ports are burning — the tell in one value, for a test to read.</summary>
         public Color EyeColor => _eyeColor;
 
-        /// <summary>Degrees/sec the cutting reel is turning. Spins up on the wind-up.</summary>
-        public float ReelSpin => _reelSpin;
+        /// <summary>Boiler pressure, 0 idle … 1 about to blow. Spikes through a wind-up and charge; this
+        /// is the boiler's version of the mower's reel-spin — the numeric a test can watch commit.</summary>
+        public float Pressure => _pressure;
 
         // ---------------------------------------------------------------- build
 
@@ -197,25 +212,22 @@ namespace MaxWorlds.VFX
             if (_boss == null) return;
 
             // Both scene-sweeping directors honour this, and it covers everything parented below us.
-            // Without it, RuntimeSurfaceDirector classifies the machine BY SHAPE and repaints the deck
-            // as a paving stone — exactly what it did to the factory's impeller (YT-78).
             gameObject.AddComponent<KeepsOwnMaterial>();
 
             _eyeMpb = new MaterialPropertyBlock();
             BuildMaterials();
 
-            // The greybox goes. Its COLLIDERS stay — the CharacterController and the box are what the
-            // Water Blaster has to hit, and what Max walks into. Only the visual changes, which is the
-            // whole reason this is an art-stream ticket (docs/CODE_DRIVEN_SCENES.md, ModelSwap).
+            // The greybox cube goes. Its COLLIDERS stay — the CharacterController and box are what the
+            // Water Blaster hits and what Max walks into. Only the visual changes (ModelSwap,
+            // docs/CODE_DRIVEN_SCENES.md), which is the whole reason this is an art-stream ticket.
             var placeholder = _boss.GetComponent<MeshRenderer>();
             if (placeholder != null) placeholder.enabled = false;
 
             Build();
 
-            // Stand it on the boss BEFORE the first frame. Otherwise the machine spends frame one at the
-            // world origin and frame two thirty metres away, and the wheels — which read their speed off
-            // how far it actually moved — spin up as though it had crossed the yard in a sixtieth of a
-            // second.
+            // Stand it on the boss BEFORE the first frame, or the machine spends frame one at the world
+            // origin and frame two thirty metres away — and the gait, which reads its speed off distance
+            // travelled, spins up as though it crossed the yard in a sixtieth of a second.
             Follow();
             _lastPos = transform.position;
 
@@ -223,208 +235,254 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Two materials, both OURS.
+        /// Five materials, all OURS and all instances.
         ///
-        /// Instances, not the shared <see cref="MaterialLibrary.Character()"/> — that one material is
-        /// worn by Max and every robot in the yard, and tinting it to heat the boss up would set the
-        /// entire cast on fire. Owning an instance is also what lets the chassis heat with a single
-        /// property write instead of a MaterialPropertyBlock on each of fifteen renderers (a block is
-        /// what breaks SRP batching; a shared material instance is what keeps it).
+        /// Instances rather than the shared <see cref="MaterialLibrary.Character()"/>, because that one
+        /// material is worn by Max and every robot in the yard: heating the boiler by tinting it would
+        /// set the whole cast on fire. Owning instances is also what lets the boiler glow with one
+        /// property write per material instead of a MaterialPropertyBlock on thirty renderers — a block
+        /// breaks SRP batching; a shared instance keeps it.
         /// </summary>
         private void BuildMaterials()
         {
             var character = MaterialLibrary.Character();
-
-            _bodyMat = NewCharacterMaterial(character, "BigBermuda_Body", BodyColor);
-            _bladeMat = NewCharacterMaterial(character, "BigBermuda_Blades", BladeColor);
+            _greenMat = NewCharacterMaterial(character, "Boiler_Green", BoilerGreen);
+            _redMat = NewCharacterMaterial(character, "Boiler_Red", BoilerRed);
+            _brassMat = NewCharacterMaterial(character, "Boiler_Brass", Brass);
+            _capMat = NewCharacterMaterial(character, "Boiler_Cap", CapPurple);
+            _steelMat = NewCharacterMaterial(character, "Boiler_Steel", Steel);
         }
 
         private static Material NewCharacterMaterial(Material template, string name, Color color)
         {
             // No character shader in this build is a look regression, never a magenta one (YT-58): a
             // plain lit material still draws a correctly coloured machine, just without the outline.
-            var m = template != null
-                ? new Material(template)
-                : new Material(MaterialLibrary.SurfaceShader);
+            var m = template != null ? new Material(template) : new Material(MaterialLibrary.SurfaceShader);
 
             m.name = name;
             m.hideFlags = HideFlags.HideAndDontSave;
             if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
-            if (m.HasProperty(EmissionId)) m.SetColor(EmissionId, Color.black);
+            if (m.HasProperty(EmissionId))
+            {
+                // Turn emission ON so the boiler-heat write in TickTells actually lights: a cloned
+                // material that had the keyword off would take the colour and render nothing.
+                m.SetColor(EmissionId, Color.black);
+                m.EnableKeyword("_EMISSION");
+                m.globalIlluminationFlags = MaterialGlobalIlluminationFlags.EmissiveIsBlack;
+            }
             return m;
         }
 
         /// <summary>
-        /// The machine, in metres, with the ground at y = 0 and +Z pointing at whatever it is about to
-        /// run over. Nothing here is parented to the boss, and that is deliberate twice over: the boss
-        /// transform is SCALED (3.5, 3, 3.5), so a 20 cm bolt hung off it would render as a 70 cm one
-        /// (the bug that made the factory's health bar metres wide, YT-71) — and being outside the boss
-        /// is what keeps CharacterSkinDirector's hands off these renderers.
+        /// The machine, in metres, ground at y = 0, +Z pointing at whatever it is about to run over.
+        /// Nothing is parented to the boss: the boss transform is SCALED (3.5, 3, 3.5), so a 20 cm bolt
+        /// hung off it would render as a 70 cm one (the bug that made the factory bar metres wide, YT-71)
+        /// — and being outside the boss is what keeps CharacterSkinDirector off these renderers.
+        ///
+        /// A "chassis" child holds everything above the legs, so the whole body can crouch and bob as one
+        /// while the legs stay planted on the lawn.
         /// </summary>
         private void Build()
         {
-            // -- the deck. Low, wide, heavy: a machine that is mostly a blade housing on wheels.
-            Part("Deck", PrimitiveType.Cube, new Vector3(0f, 0.62f, 0.05f), new Vector3(3.05f, 0.5f, 3.3f));
-            Part("Skirt", PrimitiveType.Cube, new Vector3(0f, 0.3f, 0.05f), new Vector3(3.25f, 0.3f, 3.1f));
+            var chassisGo = new GameObject("Chassis");
+            chassisGo.transform.SetParent(transform, worldPositionStays: false);
+            _chassis = chassisGo.transform;
 
-            // -- the engine it is possessed through.
-            Part("Hood", PrimitiveType.Cube, new Vector3(0f, 1.32f, -0.55f), new Vector3(2f, 0.95f, 1.9f));
+            BuildLegs();     // parented to the ROOT — they stand on the ground, the chassis rides them
+            BuildBoiler();   // parented to the chassis
+            BuildFace();
+            BuildStack();
+            BuildSpouts();
 
-            // Bolted on crooked, on ONE side only. A silhouette with a mistake in it reads as a thing
-            // that was built by something that does not care what it looks like.
-            Part("Intake", PrimitiveType.Cube, new Vector3(-1.14f, 1.5f, -0.2f), new Vector3(0.5f, 0.5f, 0.85f),
-                 Quaternion.Euler(0f, 0f, 9f));
+            _exhaust = BuildExhaust(new Vector3(StackX, StackTopY + 0.1f, StackZ));
+        }
 
-            Part("Stack", PrimitiveType.Cylinder, new Vector3(0.78f, 1.95f, -0.72f), new Vector3(0.15f, 0.3f, 0.15f));
+        // ---- dimensions, so the stack of parts lines up and the tests can reason about it ----
+        private const float BellyY = 1.5f, BellyH = 1.4f, BellyR = 1.35f;
+        private const float DrumY = 3.0f, DrumH = 1.5f, DrumR = 1.2f;
+        private const float WaistY = 2.28f;
+        private const float CapY = 4.35f;
+        private const float StackX = 0.95f, StackZ = -0.72f, StackBaseY = 2.3f, StackTopY = 4.15f;
+        private const float LegSpreadX = 1.5f, LegSpreadZ = 1.35f, HipY = 1.35f;
 
-            // -- the grass catcher. Pulled IN, to z = -1.97 at its back face: Max is stopped by the
-            //    boss's collider about 2.15 m from its centre, so anything inside that can never be
-            //    walked into, and a hopper he could stand inside would be a hole in the machine.
-            Part("Hopper", PrimitiveType.Cube, new Vector3(0f, 1.15f, -1.55f), new Vector3(2.3f, 1f, 0.85f),
-                 Quaternion.Euler(-14f, 0f, 0f));
+        /// <summary>The boiler body: a red belly, a brass waist, a green drum with a domed shoulder, and
+        /// a purple turret cap with a lightning spire. Round and tall — the two things nothing else on
+        /// the field is.</summary>
+        private void BuildBoiler()
+        {
+            // The red belly — a wide low drum, the heaviest part of the silhouette.
+            Part("Belly", PrimitiveType.Cylinder, new Vector3(0f, BellyY, 0f),
+                 new Vector3(BellyR * 2f, BellyH * 0.5f, BellyR * 2f), null, _redMat);
 
-            // -- THE HANDLE. This is the single most load-bearing shape on the machine.
-            //
-            // Seen from 72° almost overhead, a mower is a wide deck with two rails and a crossbar
-            // sticking out of the back of it. That plan-view "T" is the icon — without it a deck on
-            // wheels is a go-kart, and the first render of this boss proved it: a dark rounded lump that
-            // could have been anything.
-            //
-            // It is allowed to overhang the collider where the hopper is not: it is a thin bar 2.8 m up,
-            // and Max walks underneath it rather than into it.
-            var gripAt = new Vector3(0f, 2.75f, -3.3f);
+            // The brass waist ring — proud of both drums, the trim line that splits red from green.
+            Part("Waist", PrimitiveType.Cylinder, new Vector3(0f, WaistY, 0f),
+                 new Vector3((BellyR + 0.08f) * 2f, 0.16f, (BellyR + 0.08f) * 2f), null, _brassMat);
+
+            // The green drum, and a domed shoulder that rounds it off into the classic boiler bell.
+            Part("Drum", PrimitiveType.Cylinder, new Vector3(0f, DrumY, 0f),
+                 new Vector3(DrumR * 2f, DrumH * 0.5f, DrumR * 2f), null, _greenMat);
+            Part("Shoulder", PrimitiveType.Sphere, new Vector3(0f, DrumY + DrumH * 0.5f, 0f),
+                 new Vector3(DrumR * 2f, DrumR * 1.5f, DrumR * 2f), null, _greenMat);
+
+            // The turret cap and its spire — a lightning rod on a possessed thing is never just a rod.
+            Part("Cap", PrimitiveType.Cylinder, new Vector3(0f, CapY, 0f),
+                 new Vector3(0.95f, 0.28f, 0.95f), null, _capMat);
+            Part("Dome", PrimitiveType.Sphere, new Vector3(0f, CapY + 0.28f, 0f),
+                 new Vector3(0.85f, 0.7f, 0.85f), null, _capMat);
+            Part("Spire", PrimitiveType.Cylinder, new Vector3(0.02f, CapY + 1.25f, -0.02f),
+                 new Vector3(0.06f, 0.55f, 0.06f), null, _steelMat);
+
+            // The governor: a steel hub with two out-flung balls on arms, spinning on the cap. A steam
+            // governor flies OUT as it speeds up — a mechanical readout of pressure you can see from
+            // across the yard. Built on its own pivot so it can spin without the rest of the cap.
+            var govGo = new GameObject("Governor");
+            govGo.transform.SetParent(_chassis, worldPositionStays: false);
+            govGo.transform.localPosition = new Vector3(0f, CapY + 0.5f, 0f);
+            _governor = govGo.transform;
+
+            var hub = Part("GovHub", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.12f, 0.18f, 0.12f),
+                           null, _steelMat);
+            hub.SetParent(_governor, worldPositionStays: false);
             for (int i = 0; i < 2; i++)
             {
-                float x = i == 0 ? -1.15f : 1.15f;
-                var anchor = new Vector3(x, 1.5f, -1.55f);         // out of the top of the hopper
-                var top = new Vector3(x, gripAt.y, gripAt.z);      // up to the grip
-
-                // Aimed by construction rather than by a Euler angle whose sign I would be guessing at.
-                Vector3 along = top - anchor;
-                Part($"Handle{i}", PrimitiveType.Cube, (anchor + top) * 0.5f,
-                     new Vector3(0.13f, along.magnitude, 0.13f),
-                     Quaternion.FromToRotation(Vector3.up, along.normalized));
-            }
-            Part("Grip", PrimitiveType.Cube, gripAt, new Vector3(2.5f, 0.15f, 0.15f));
-
-            // -- wheels. Big at the back, small at the front, because that is a mower and because a
-            //    machine whose wheels do not match is a machine that was assembled out of other machines.
-            Wheel(0, new Vector3(-1.62f, 0.52f, -1.45f), 0.52f);
-            Wheel(1, new Vector3(1.62f, 0.52f, -1.45f), 0.52f);
-            Wheel(2, new Vector3(-1.5f, 0.34f, 1.05f), 0.34f);
-            Wheel(3, new Vector3(1.5f, 0.34f, 1.05f), 0.34f);
-
-            // -- the business end. A cowl, and under it the reel.
-            Part("Cowl", PrimitiveType.Cube, new Vector3(0f, 1.05f, 1.3f), new Vector3(3f, 0.6f, 0.7f),
-                 Quaternion.Euler(18f, 0f, 0f));
-            BuildReel();
-
-            BuildEyes();
-            _exhaust = BuildExhaust(new Vector3(0.78f, 2.3f, -0.72f));
-        }
-
-        /// <summary>
-        /// The cutting reel: five blades on an axle that runs side to side across the front, so they
-        /// come over the top and down towards you. A mower's blade spins FLAT, under the deck, where a
-        /// camera thirty metres up at 72° would never see a frame of it — and the one thing this
-        /// machine's threat cannot be is invisible. So it is a flail reel, which is a real thing on a
-        /// real industrial mower, and it is pointed at Max.
-        /// </summary>
-        private void BuildReel()
-        {
-            // The axle sits low and forward: low enough that the blades sweep down to y = 0 and vanish
-            // into the lawn at the bottom of the arc — which is where a mower's blade goes and is the
-            // cheapest possible way to say "this thing cuts."
-            var hub = new GameObject("Reel");
-            hub.transform.SetParent(transform, worldPositionStays: false);
-            hub.transform.localPosition = new Vector3(0f, ReelHeight, ReelForward);
-            _reel = hub.transform;
-
-            const int blades = 5;
-            for (int i = 0; i < blades; i++)
-            {
-                // Around the X axis: the axle lies across the machine, so the blades come up over the
-                // front and down at you. Rotated Y is the radial direction, so the blade is LONG across
-                // the machine (x), reaches outward (y), and is thin in the sweep (z).
-                var rot = Quaternion.Euler(i * (360f / blades), 0f, 0f);
-                var blade = Part($"Blade{i}", PrimitiveType.Cube,
-                                 hub.transform.localPosition + rot * new Vector3(0f, BladeReach * 0.5f, 0f),
-                                 new Vector3(2.85f, BladeReach, 0.08f),
-                                 rot, _bladeMat);
-                blade.SetParent(_reel, worldPositionStays: true);
+                float s = i == 0 ? -1f : 1f;
+                var arm = Part($"GovArm{i}", PrimitiveType.Cube, new Vector3(s * 0.22f, 0.05f, 0f),
+                               new Vector3(0.42f, 0.05f, 0.05f), Quaternion.Euler(0f, 0f, s * 18f), _steelMat);
+                arm.SetParent(_governor, worldPositionStays: false);
+                var ball = Part($"GovBall{i}", PrimitiveType.Sphere, new Vector3(s * 0.42f, 0.0f, 0f),
+                                new Vector3(0.16f, 0.16f, 0.16f), null, _brassMat);
+                ball.SetParent(_governor, worldPositionStays: false);
             }
         }
 
-        /// <summary>How far a blade reaches from the axle. With the axle at <see cref="ReelForward"/>,
-        /// this puts the blade tip at 2.35 m from the boss's centre — and its charge hurts you at 2.4 m
-        /// (BigBermudaBoss.chargeContactRadius). The reach you can SEE is the reach that kills you.</summary>
-        private const float BladeReach = 0.72f;
-
-        private const float ReelForward = 1.63f;
-
-        /// <summary>Axle height = blade reach, so the bottom of the arc lands exactly on the lawn.</summary>
-        private const float ReelHeight = 0.72f;
-
         /// <summary>
-        /// The face. Two lamps welded on by something that has never seen one: different sizes,
-        /// different heights, sitting on crooked brackets, and one is noticeably bigger than the other.
-        /// Mounted proud of the hood and tilted up, because a face on the FRONT of a machine is a face
-        /// nobody at this camera angle will ever see.
+        /// The face. One big brass-rimmed port on the front where it charges, and two smaller ones
+        /// welded on crooked at mismatched heights — salvaged, not designed. The ports are additive
+        /// lights, not painted balls; they carry the tell.
         /// </summary>
-        private void BuildEyes()
+        private void BuildFace()
         {
-            // BIG. The first cut of these was 44 cm and it was measured, not guessed, to be wrong: at the
-            // camera the game is actually played at, the whole boss is about sixty pixels across, so a
-            // 44 cm lamp is EIGHT — a dark speck on a dark machine. These are 60 and 82 cm, which is
-            // eleven and fifteen pixels: two glowing dots you can see from across the yard, and two you
-            // can tell apart.
-            //
-            // Mounted on the hood's top-front lip (its face is at z = 0.45, its roof at y = 1.80) and
-            // standing proud of it, because a face on the FRONT of a machine is a face nobody at 72°
-            // will ever see. The small one is high and the big one is low: it has no idea what a face is.
-            _eyes[0] = Eye("EyeL", new Vector3(-0.58f, 1.78f, 0.42f), 0.6f, -14f);
-            _eyes[1] = Eye("EyeR", new Vector3(0.62f, 1.5f, 0.52f), 0.82f, 11f);
+            // Big front port — the eye you meet head-on as it comes at you. Brass ring + a glowing lens.
+            PortRing("EyeBigRim", new Vector3(0f, 2.55f, DrumR + 0.02f), 0.95f);
+            _eyes[0] = Port("EyeBig", new Vector3(0f, 2.55f, DrumR + 0.16f), 0.62f);
+
+            // Two smaller ports on the drum, mismatched — the small one high, the big-ish one low, on the
+            // opposite side. It has no idea what a face is.
+            PortRing("EyeLRim", new Vector3(-0.72f, 3.35f, DrumR - 0.35f), 0.5f);
+            _eyes[1] = Port("EyeL", new Vector3(-0.72f, 3.35f, DrumR - 0.22f), 0.34f);
+
+            PortRing("EyeRRim", new Vector3(0.8f, 2.95f, DrumR - 0.3f), 0.62f);
+            _eyes[2] = Port("EyeR", new Vector3(0.8f, 2.95f, DrumR - 0.17f), 0.42f);
         }
 
-        private MeshRenderer Eye(string name, Vector3 at, float size, float bracketTilt)
+        /// <summary>A brass porthole rim — a short fat cylinder lying face-out, so the lens sits in a
+        /// ring rather than floating on the hull.</summary>
+        private void PortRing(string name, Vector3 at, float size)
         {
-            // The weld. Near-black, part of the machine — it runs from inside the hood out to the lamp,
-            // and without it the eyes read as painted on rather than bolted on by something in a hurry.
-            var bracket = new Vector3(at.x * 0.92f, at.y - size * 0.12f, 0.12f);
-            Part($"{name}Weld", PrimitiveType.Cube, bracket, new Vector3(size * 0.5f, size * 0.45f, 0.75f),
-                 Quaternion.Euler(0f, 0f, bracketTilt));
+            Part(name, PrimitiveType.Cylinder, at, new Vector3(size, 0.08f, size),
+                 Quaternion.Euler(90f, 0f, 0f), _brassMat);
+        }
 
+        private MeshRenderer Port(string name, Vector3 at, float size)
+        {
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             go.name = name;
             Strip(go);
-            go.transform.SetParent(transform, worldPositionStays: false);
+            go.transform.SetParent(_chassis, worldPositionStays: false);
             go.transform.localPosition = at;
-            go.transform.localScale = Vector3.one * size;
+            go.transform.localScale = new Vector3(size, size, size * 0.55f);   // a lens, flattened into the ring
 
             var r = go.GetComponent<MeshRenderer>();
-
-            // Additive and unlit: an eye is a LIGHT, not a painted ball. It has to stay bright when the
-            // machine is in its own shadow, which — being near-black and lit by one warm key — it
-            // mostly is. Shared VFX material + a property block per eye, so the two can burn different
-            // colours without minting a material each (the Hutch's vents, YT-78, do exactly this).
+            // Additive + unlit: a port is a LIGHT. Shared VFX material + a property block per port, so
+            // the three can burn different colours without minting a material each (the Hutch's vents,
+            // YT-78, do exactly this).
             r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
             r.shadowCastingMode = ShadowCastingMode.Off;
             r.receiveShadows = false;
             return r;
         }
 
-        private void Wheel(int index, Vector3 at, float radius)
+        /// <summary>The smokestack — a steel pipe with a brass band and a lip, off the back shoulder.
+        /// A chimney on a machine says "boiler" faster than any amount of paint.</summary>
+        private void BuildStack()
         {
-            var t = Part($"Wheel{index}", PrimitiveType.Cylinder, at,
-                         new Vector3(radius * 2f, 0.16f, radius * 2f),
-                         Quaternion.Euler(0f, 0f, 90f));   // axle across the machine
-            _wheels[index] = t;
-            _wheelRadius[index] = radius;
+            float midY = (StackBaseY + StackTopY) * 0.5f;
+            Part("Stack", PrimitiveType.Cylinder, new Vector3(StackX, midY, StackZ),
+                 new Vector3(0.4f, (StackTopY - StackBaseY) * 0.5f, 0.4f), null, _steelMat);
+            Part("StackBand", PrimitiveType.Cylinder, new Vector3(StackX, midY + 0.2f, StackZ),
+                 new Vector3(0.46f, 0.08f, 0.46f), null, _brassMat);
+            Part("StackLip", PrimitiveType.Cylinder, new Vector3(StackX, StackTopY, StackZ),
+                 new Vector3(0.5f, 0.1f, 0.5f), null, _capMat);
         }
 
-        /// <summary>One part of the machine. Given a real material, always — nothing built here may
-        /// keep a primitive's default material, which has no URP subshader and ships MAGENTA (YT-38).</summary>
+        /// <summary>Two cannon spouts off the sides — stubby barrels, one bigger, both bolted on crooked.
+        /// The concept's maroon barrels: pure menace in the silhouette, and asymmetry that reads as
+        /// "possessed junk" rather than "designed weapon".</summary>
+        private void BuildSpouts()
+        {
+            Spout("SpoutL", new Vector3(-BellyR - 0.1f, 1.75f, 0.35f), 0.62f, Quaternion.Euler(78f, -18f, 0f));
+            Spout("SpoutR", new Vector3(BellyR + 0.05f, 1.55f, 0.2f), 0.5f, Quaternion.Euler(82f, 20f, 0f));
+        }
+
+        private void Spout(string name, Vector3 at, float length, Quaternion rot)
+        {
+            Part($"{name}Barrel", PrimitiveType.Cylinder, at, new Vector3(0.3f, length * 0.5f, 0.3f), rot, _redMat);
+            // A brass muzzle on the end, pushed out along the barrel's own axis.
+            Vector3 muzzle = at + (rot * Vector3.up) * length * 0.5f;
+            Part($"{name}Muzzle", PrimitiveType.Cylinder, muzzle, new Vector3(0.34f, 0.1f, 0.34f), rot, _brassMat);
+        }
+
+        /// <summary>
+        /// Four legs, splayed out under the belly and planted on the lawn. THIS is the "not on rails"
+        /// decision: a thing with legs walks where it likes; a thing on bogies is on a track. Each leg is
+        /// a thigh angled out to a knee and a shin angled in to a foot — a squat, heavy, insectoid stance
+        /// that reads as a walker from directly above, where you can see the feet around the hull.
+        ///
+        /// A "lift" pivot per leg carries the thigh+shin+foot, so the gait can swing the whole leg from
+        /// the hip with one rotation rather than posing three parts.
+        /// </summary>
+        private void BuildLegs()
+        {
+            for (int i = 0; i < LegCount; i++)
+            {
+                float sx = (i == 0 || i == 3) ? -1f : 1f;
+                float sz = (i < 2) ? 1f : -1f;
+                var hip = new Vector3(sx * 0.9f, HipY, sz * 0.9f);
+                var foot = new Vector3(sx * LegSpreadX, 0f, sz * LegSpreadZ);
+
+                var liftGo = new GameObject($"Leg{i}");
+                liftGo.transform.SetParent(transform, worldPositionStays: false);
+                liftGo.transform.localPosition = hip;
+                _legLift[i] = liftGo.transform;
+                // Diagonal legs step together, opposite diagonals alternate — a stable four-beat walk.
+                _legPhase[i] = (i == 0 || i == 2) ? 0f : Mathf.PI;
+
+                // Thigh: hip out and down toward the knee.
+                Vector3 knee = Vector3.Lerp(Vector3.zero, foot - hip, 0.5f) + Vector3.up * 0.15f;
+                LegBone("Thigh", Vector3.zero, knee, 0.22f, _legLift[i]);
+                // Shin: knee down to the foot.
+                LegBone("Shin", knee, foot - hip, 0.18f, _legLift[i]);
+                // Foot: a planted pad.
+                var footPart = Part($"Foot", PrimitiveType.Cube, foot - hip + Vector3.up * 0.1f,
+                                    new Vector3(0.5f, 0.2f, 0.7f), null, _redMat);
+                footPart.SetParent(_legLift[i], worldPositionStays: false);
+            }
+        }
+
+        /// <summary>One leg bone from <paramref name="a"/> to <paramref name="b"/> in the lift's space,
+        /// aimed by construction rather than by a Euler angle I would be guessing the sign of.</summary>
+        private void LegBone(string name, Vector3 a, Vector3 b, float thick, Transform parent)
+        {
+            Vector3 along = b - a;
+            var bone = Part(name, PrimitiveType.Cylinder, (a + b) * 0.5f,
+                            new Vector3(thick, along.magnitude * 0.5f, thick),
+                            Quaternion.FromToRotation(Vector3.up, along.normalized), _redMat);
+            bone.SetParent(parent, worldPositionStays: false);
+        }
+
+        /// <summary>One part of the machine, given a real material always — nothing here may keep a
+        /// primitive's default material, which has no URP subshader and ships MAGENTA.</summary>
         private Transform Part(string name, PrimitiveType shape, Vector3 at, Vector3 scale,
                                Quaternion? rot = null, Material mat = null)
         {
@@ -432,22 +490,18 @@ namespace MaxWorlds.VFX
             go.name = name;
             Strip(go);
 
-            go.transform.SetParent(transform, worldPositionStays: false);
+            go.transform.SetParent(_chassis != null ? _chassis : transform, worldPositionStays: false);
             go.transform.localPosition = at;
             go.transform.localRotation = rot ?? Quaternion.identity;
             go.transform.localScale = scale;
 
-            go.GetComponent<MeshRenderer>().sharedMaterial = mat ?? _bodyMat;
+            go.GetComponent<MeshRenderer>().sharedMaterial = mat ?? _greenMat;
             return go.transform;
         }
 
-        /// <summary>
-        /// Nothing on this machine can be shot or walked into.
-        ///
-        /// The boss's own CharacterController and box are the hitbox. An extra collider on the handle
-        /// would silently eat water that was aimed at the boss, and Max would bump into a grass catcher
-        /// that gameplay does not believe is there.
-        /// </summary>
+        /// <summary>Nothing on this machine can be shot or walked into. The boss's own CharacterController
+        /// and box are the hitbox; an extra collider here would silently eat water aimed at the boss, and
+        /// Max would bump into a leg gameplay does not believe is there.</summary>
         private static void Strip(GameObject go)
         {
             var col = go.GetComponent<Collider>();
@@ -457,7 +511,7 @@ namespace MaxWorlds.VFX
         private ParticleSystem BuildExhaust(Vector3 at)
         {
             var go = new GameObject("Exhaust");
-            go.transform.SetParent(transform, worldPositionStays: false);
+            go.transform.SetParent(_chassis, worldPositionStays: false);
             go.transform.localPosition = at;
 
             var ps = go.AddComponent<ParticleSystem>();
@@ -465,11 +519,11 @@ namespace MaxWorlds.VFX
             var main = ps.main;
             main.playOnAwake = false;
             main.simulationSpace = ParticleSystemSimulationSpace.World;   // smoke is left BEHIND a charge
-            main.startLifetime = new ParticleSystem.MinMaxCurve(0.8f, 1.7f);
-            main.startSpeed = new ParticleSystem.MinMaxCurve(0.5f, 1.4f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.3f, 0.7f);
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.9f, 1.9f);
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.5f, 1.5f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.35f, 0.8f);
             main.startColor = exhaustColor;
-            main.gravityModifier = -0.04f;
+            main.gravityModifier = -0.05f;
             main.maxParticles = 90;   // ambience budget: AmbiencePlayTests holds effects under 200
 
             var emission = ps.emission;
@@ -478,12 +532,12 @@ namespace MaxWorlds.VFX
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
             shape.angle = 12f;
-            shape.radius = 0.05f;
+            shape.radius = 0.06f;
             shape.rotation = new Vector3(-90f, 0f, 0f);   // straight up out of the pipe
 
             var size = ps.sizeOverLifetime;
             size.enabled = true;
-            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 1.8f));
+            size.size = new ParticleSystem.MinMaxCurve(1f, AnimationCurve.Linear(0f, 0.6f, 1f, 1.9f));
 
             var col = ps.colorOverLifetime;
             col.enabled = true;
@@ -500,7 +554,7 @@ namespace MaxWorlds.VFX
 
             var noise = ps.noise;
             noise.enabled = true;
-            noise.strength = 0.22f;
+            noise.strength = 0.25f;
             noise.frequency = 0.45f;
 
             var r = ps.GetComponent<ParticleSystemRenderer>();
@@ -518,8 +572,8 @@ namespace MaxWorlds.VFX
 
         /// <summary>
         /// LateUpdate, not Update: the boss moves its CharacterController in Update, and a machine that
-        /// followed it in Update would sit one frame behind its own hitbox — at a 16 m/s charge that is
-        /// a quarter of a metre of daylight between the blades and the damage.
+        /// followed it in Update would sit one frame behind its own hitbox — at a 12 m/s charge that is a
+        /// fifth of a metre of daylight between the boiler and the damage.
         /// </summary>
         private void LateUpdate()
         {
@@ -534,75 +588,79 @@ namespace MaxWorlds.VFX
             _flash = Mathf.Max(0f, _flash - dt * 7f);
             if (_wakeTimer > 0f) _wakeTimer = Mathf.Max(0f, _wakeTimer - dt);
 
+            TickPressure(dt);
             TickTells(dt);
-            SpinReel(dt);
+            TickGait(dt);
         }
 
         /// <summary>
         /// The machine sits on the LAWN, under the boss, facing where the boss faces.
         ///
         /// Its own y is thrown away and the ground is used instead, exactly as the shockwave does
-        /// (BossSpectacle.Shockwave). The boss is a 3 m cube balanced on a capsule whose height is a
-        /// scaled-up 1 — wherever gravity settles that, it is not where a mower's wheels go, and a boss
-        /// hovering a metre over its own shadow is worse than a boss that is a cube.
+        /// (BossSpectacle.Shockwave). The boss is a scaled cube balanced on a capsule; wherever gravity
+        /// settles that, it is not where a walker's feet go, and a boss hovering over its own shadow is
+        /// worse than a boss that is a cube.
         /// </summary>
         private void Follow()
         {
             Vector3 p = _boss.transform.position;
             var at = new Vector3(p.x, 0f, p.z);
-
             // Yaw only. The boss only ever turns on the spot; taking its full rotation would let any
             // pitch the controller picks up tip the machine into the ground.
             var facing = Quaternion.Euler(0f, _boss.transform.eulerAngles.y, 0f);
             transform.SetPositionAndRotation(at, facing);
         }
 
+        /// <summary>Winding up or charging: the two states where being near the front of this machine is
+        /// fatal, and the two it has to shout about.</summary>
+        private bool Committed =>
+            _awake && (_boss.Action == BossAction.ChargeWindup || _boss.Action == BossAction.Charge);
+
+        /// <summary>Pressure builds toward 1 while committed and bleeds off after — up fast, down slow.
+        /// It drives the governor, the boiler glow and the crouch, so all three move as one system.</summary>
+        private void TickPressure(float dt)
+        {
+            float target = Committed ? 1f : 0f;
+            float rate = target > _pressure ? pressureRise : pressureFall;
+            _pressure = Mathf.Lerp(_pressure, target, 1f - Mathf.Exp(-rate * dt));
+
+            // The governor flies with pressure — spins up as it commits, coasts down after.
+            _governorSpin = _pressure * governorMaxSpin;
+            if (_governor != null) _governor.Rotate(Vector3.up, _governorSpin * dt, Space.Self);
+        }
+
         private void TickTells(float dt)
         {
             Color target = TargetEyeColor();
 
-            // A hit whites the lamps out for a moment. Same word the robots use (CharacterSkin.Flash) —
-            // and on a boss with 1200 HP, "did that land?" is a question the player asks a lot.
+            // A hit whites the ports out for a moment — same word the robots use (CharacterSkin.Flash);
+            // on a boss with thousands of HP, "did that land?" is asked a lot.
             if (_flash > 0f) target = Color.Lerp(target, Color.white, _flash * 0.7f);
 
             _eyeColor = Color.Lerp(_eyeColor, target, 1f - Mathf.Exp(-eyeResponse * dt));
             ApplyEyes(_eyeColor);
 
-            // The chassis heats WITH the eyes, but only a little: the body has to stay near-black or the
-            // rim light — which is most of what separates this thing from the lawn — has nothing to
-            // frame (MaterialLibrary.RimPower, YT-86).
-            if (_bodyMat != null && _bodyMat.HasProperty(EmissionId))
-            {
-                float heat = Committed ? 1f : 0f;
-                heat = Mathf.Max(heat, _flash);
-                _bodyMat.SetColor(EmissionId, _eyeColor * (heat * chassisHeat));
-            }
-
-            if (_bladeMat != null && _bladeMat.HasProperty(EmissionId))
-            {
-                // The blades take the heat harder than the body does. They are the thing to be afraid of.
-                _bladeMat.SetColor(EmissionId, _eyeColor * (Committed ? 0.7f : 0.08f));
-            }
+            // The boiler glows with the tell as pressure builds — the green/red take the heat as emission,
+            // so the body reads as heating without losing its own colour until it actually commits.
+            float heat = Mathf.Max(_pressure, _flash) * chassisHeat;
+            Color glow = _eyeColor * heat;
+            if (_greenMat != null && _greenMat.HasProperty(EmissionId)) _greenMat.SetColor(EmissionId, glow);
+            if (_redMat != null && _redMat.HasProperty(EmissionId)) _redMat.SetColor(EmissionId, glow);
 
             if (_exhaust != null)
             {
                 var emission = _exhaust.emission;
-                emission.rateOverTime = !_awake ? 0f : (Committed ? exhaustChargeRate : exhaustIdleRate);
+                emission.rateOverTime = !_awake ? 0f
+                    : Mathf.Lerp(exhaustIdleRate, exhaustChargeRate, _pressure);
             }
         }
-
-        /// <summary>Winding up or charging: the two states where being anywhere near the front of this
-        /// machine is fatal, and the two it has to shout about.</summary>
-        private bool Committed =>
-            _awake && (_boss.Action == BossAction.ChargeWindup || _boss.Action == BossAction.Charge);
 
         private Color TargetEyeColor()
         {
             if (!_awake) return Color.black;
 
-            // Waking. The lamps stutter — a machine that has been dead in a garden for a long time does
-            // not come on cleanly. Cheap, and it lands right on top of the dust and the shockwave YT-55
-            // throws at the same moment.
+            // Waking. The ports stutter — a machine dead in a garden a long time does not come on
+            // cleanly. Lands on top of YT-55's dust and shockwave at the same moment.
             if (_wakeTimer > 0f)
             {
                 float flicker = Mathf.PerlinNoise(Time.time * 34f, 0f);
@@ -614,8 +672,8 @@ namespace MaxWorlds.VFX
             return rage ? EyeRage : EyeIdle;
         }
 
-        /// <summary>The two lamps never quite agree. One is dimmer and a touch cooler than the other —
-        /// they were salvaged from different machines, and a matched pair would read as a design.</summary>
+        /// <summary>The three ports never quite agree — salvaged from different machines. The big front
+        /// one burns full, the small ones dimmer and a touch cooler.</summary>
         private void ApplyEyes(Color c)
         {
             for (int i = 0; i < _eyes.Length; i++)
@@ -623,7 +681,7 @@ namespace MaxWorlds.VFX
                 var r = _eyes[i];
                 if (r == null) continue;
 
-                Color eye = i == 0 ? c * 0.78f : c;
+                Color eye = i == 0 ? c : c * 0.8f;
                 eye.a = 1f;
 
                 r.GetPropertyBlock(_eyeMpb);
@@ -633,42 +691,48 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// The reel screams up through the wind-up and coasts back down after — a flywheel with mass,
-        /// not a switch. The spin-up IS the telegraph: you hear a mower before you see it, and this is
-        /// the closest a silent build gets to that.
+        /// The walk, and the coil before a charge.
+        ///
+        /// The gait is driven by DISTANCE the boss actually moved, not a clock — so the legs swing in
+        /// step with real motion and nothing here has to know its speed or be re-tuned when gameplay
+        /// changes it. Legs on opposite diagonals alternate, a stable four-beat walk. When it is standing
+        /// still the legs settle; when it winds up the whole chassis crouches over planted feet — the
+        /// coil that says a charge is coming, on top of the eye-heat and the governor.
         /// </summary>
-        private void SpinReel(float dt)
+        private void TickGait(float dt)
         {
-            float target = !_awake ? 0f : (Committed ? reelChargeSpin : reelIdleSpin);
-
-            // Up fast, down slow. A blade that spins down as sharply as it spins up feels like a fan;
-            // one that keeps turning after the charge feels like it has weight.
-            float rate = target > _reelSpin ? reelSpinUp : reelSpinUp * 0.35f;
-            _reelSpin = Mathf.Lerp(_reelSpin, target, 1f - Mathf.Exp(-rate * dt));
-
-            if (_reel != null) _reel.Rotate(Vector3.right, _reelSpin * dt, Space.Self);
-
-            // The wheels turn because it is DRIVING at you, not sliding. Speed comes from how far the
-            // boss actually moved, so nothing here has to know its charge speed or be re-tuned when
-            // gameplay changes it.
             Vector3 pos = transform.position;
             float travelled = Vector3.Distance(pos, _lastPos);
             _lastPos = pos;
 
-            if (dt > 0f)
+            _gaitPhase += travelled * strideScale * 6f;
+
+            for (int i = 0; i < LegCount; i++)
             {
-                for (int i = 0; i < _wheels.Length; i++)
-                {
-                    if (_wheels[i] == null) continue;
-                    float degrees = travelled / (2f * Mathf.PI * _wheelRadius[i]) * 360f;
-                    _wheels[i].Rotate(Vector3.up, degrees, Space.Self);   // its local up IS the axle
-                }
+                if (_legLift[i] == null) continue;
+                // Swing the leg from the hip: forward on the lift, a little up as it passes. Amplitude
+                // eases toward zero as it stops moving, so a standing boss is not marching on the spot.
+                float swing = Mathf.Sin(_gaitPhase + _legPhase[i]);
+                float moving = Mathf.Clamp01(travelled / (0.02f + Time.deltaTime * 3f));
+                float pitch = swing * 16f * moving;
+                _legLift[i].localRotation = Quaternion.Euler(pitch, 0f, 0f);
+            }
+
+            // Crouch on wind-up: ease the chassis down over the feet, and lean into the charge.
+            float wantCrouch = _boss.Action == BossAction.ChargeWindup ? crouchDepth : 0f;
+            _crouch = Mathf.Lerp(_crouch, wantCrouch, 1f - Mathf.Exp(-8f * dt));
+            if (_chassis != null)
+            {
+                _chassis.localPosition = new Vector3(0f, -_crouch, 0f);
+                float lean = _boss.Action == BossAction.Charge ? 6f : 0f;
+                _chassis.localRotation = Quaternion.Lerp(
+                    _chassis.localRotation, Quaternion.Euler(lean, 0f, 0f), 1f - Mathf.Exp(-6f * dt));
             }
         }
 
         // ---------------------------------------------------------------- the fight's beats
 
-        /// <summary>The factory is dead and it has woken up. YT-55 throws dust and a shockwave on this
+        /// <summary>The last factory is dead and it has woken. YT-55 throws dust and a shockwave on this
         /// same signal; this is the machine underneath it coming on.</summary>
         private void OnEngaged(string name, int phases)
         {
@@ -676,11 +740,11 @@ namespace MaxWorlds.VFX
             _wakeTimer = 0.9f;   // inside the boss's own 1.6 s intro — lit and running before it moves
             _lastHealth = 1f;
 
-            if (_exhaust != null) _exhaust.Emit(22);   // it catches, hard
+            if (_exhaust != null) _exhaust.Emit(26);   // it catches, hard
         }
 
-        /// <summary>Health only ever falls, so a fall is a hit. The damage signal carries a position
-        /// rather than a victim, so this is a cleaner read than guessing from proximity.</summary>
+        /// <summary>Health only ever falls, so a fall is a hit. The signal carries a position, not a
+        /// victim, so this is cleaner than guessing from proximity.</summary>
         private void OnHealth(float normalized)
         {
             if (normalized < _lastHealth) _flash = 1f;
@@ -704,14 +768,13 @@ namespace MaxWorlds.VFX
         /// It comes apart, and it takes its time about it.
         ///
         /// UNSCALED, because the run ends on the frame the boss dies: RunTracker hears BossDefeated and
-        /// ResultScreen sets timeScale = 0 in the same frame, so anything on scaled time is frozen solid
-        /// before it moves. YT-55's defeat sequence runs unscaled for exactly this reason and this has
-        /// to run alongside it.
+        /// ResultScreen sets timeScale = 0 the same frame, so anything on scaled time is frozen before it
+        /// moves. YT-55's defeat sequence runs unscaled for exactly this reason and this runs alongside it.
         ///
-        /// The boss deactivates its own GameObject the instant it dies — but this machine is not
-        /// parented to it, so it can outlive it by half a second and actually DIE on screen: the lamps
-        /// go out, the reel seizes, and the whole thing sags into the lawn while YT-55's three flashes
-        /// and its big one go off on top of it. Then it is gone, before the result card settles.
+        /// The boss deactivates its own GameObject the instant it dies — but this machine is not parented
+        /// to it, so it outlives it by half a second and actually DIES on screen: the ports go out, the
+        /// governor seizes, and the whole boiler sags into the lawn while YT-55's flashes go off on top.
+        /// Then it is gone, before the result card settles.
         /// </summary>
         private void TickDeath()
         {
@@ -720,25 +783,23 @@ namespace MaxWorlds.VFX
             _dieTimer += Time.unscaledDeltaTime;
             float t = Mathf.Clamp01(_dieTimer / duration);
 
-            // The lamps die first, and they die fast. Whatever was in there has left.
+            // The ports die first, and fast. Whatever was in there has left.
             _eyeColor = Color.Lerp(_eyeColor, Color.black, 1f - Mathf.Exp(-14f * Time.unscaledDeltaTime));
             ApplyEyes(_eyeColor);
 
-            // The reel seizes rather than coasting: something in it has caught.
-            _reelSpin = Mathf.Lerp(_reelSpin, 0f, 1f - Mathf.Exp(-9f * Time.unscaledDeltaTime));
-            if (_reel != null) _reel.Rotate(Vector3.right, _reelSpin * Time.unscaledDeltaTime, Space.Self);
+            // The governor seizes rather than coasting: something in it has caught.
+            _governorSpin = Mathf.Lerp(_governorSpin, 0f, 1f - Mathf.Exp(-9f * Time.unscaledDeltaTime));
+            if (_governor != null) _governor.Rotate(Vector3.up, _governorSpin * Time.unscaledDeltaTime, Space.Self);
 
-            // And it sags — nose down into the grass it spent the whole fight cutting.
-            //
-            // These are ABSOLUTE offsets, not accumulating ones, and that is deliberate: Follow() has
-            // already re-anchored the machine on the boss this frame, so each of these is applied to a
-            // clean pose and driven entirely by t. Accumulate them instead and the sag would depend on
-            // the frame rate — half a second of it at 30 fps would be half the tilt it is at 60.
-            transform.rotation *= Quaternion.Euler(t * 9f, 0f, t * 4f);
-            transform.position += Vector3.down * (t * t * 0.9f);
+            // And it topples — over into the grass it spent the whole fight cutting. ABSOLUTE offsets,
+            // not accumulating ones: Follow() has already re-anchored the machine on the boss this frame,
+            // so each is applied to a clean pose and driven entirely by t. Accumulate them instead and
+            // the fall would depend on the frame rate.
+            transform.rotation *= Quaternion.Euler(t * 11f, 0f, t * 7f);
+            transform.position += Vector3.down * (t * t * 0.8f);
 
-            if (_bodyMat != null && _bodyMat.HasProperty(EmissionId))
-                _bodyMat.SetColor(EmissionId, Color.black);
+            if (_greenMat != null && _greenMat.HasProperty(EmissionId)) _greenMat.SetColor(EmissionId, Color.black);
+            if (_redMat != null && _redMat.HasProperty(EmissionId)) _redMat.SetColor(EmissionId, Color.black);
 
             if (t >= 1f) gameObject.SetActive(false);
         }
@@ -746,8 +807,8 @@ namespace MaxWorlds.VFX
         private void OnDestroy()
         {
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
-            if (_bodyMat != null) Destroy(_bodyMat);
-            if (_bladeMat != null) Destroy(_bladeMat);
+            foreach (var m in new[] { _greenMat, _redMat, _brassMat, _capMat, _steelMat })
+                if (m != null) Destroy(m);
         }
     }
 }
