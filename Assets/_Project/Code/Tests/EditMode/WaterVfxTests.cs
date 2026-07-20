@@ -111,7 +111,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var vfx = go.AddComponent<WaterVfx>();
-                vfx.Init(range: 6f, radius: 0.6f);
+                vfx.Init(range: 6f, radius: 0.6f, coneHalfAngle: 35f);
 
                 var systems = go.GetComponentsInChildren<ParticleSystem>(includeInactive: true);
                 Assert.That(systems.Length, Is.GreaterThanOrEqualTo(3),
@@ -139,7 +139,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var vfx = go.AddComponent<WaterVfx>();
-                vfx.Init(range: 6f, radius: 0.6f);
+                vfx.Init(range: 6f, radius: 0.6f, coneHalfAngle: 35f);
 
                 // Far more impacts in one frame than the budget — a stream raking a crowd of
                 // 20–30 enemies does exactly this, and uncapped it would spike the particle count.

@@ -37,8 +37,30 @@ namespace MaxWorlds.VFX
                  "on screen for travelTime, so the live particle count is roughly rate x travelTime. " +
                  "Too low and it reads as a scatter of dots instead of a jet.")]
         [SerializeField] private float streamRate = 320f;
-        [Tooltip("Cone half-angle of the stream, degrees. Small = a jet, large = a spray.")]
-        [SerializeField] private float streamAngle = 6f;
+        // The stream's spread is NOT authored here any more (YT-110). It is derived from the
+        // blaster's own cone in Init, so the water you can see and the arc the reticle draws cannot
+        // drift apart the way they had: this was a 6 degree jet drawn under a 35 degree indicator,
+        // and the reticle got the blame for being "far wider than the spray" when it was the one
+        // telling the truth about the weapon.
+        private float streamAngle = SprayHalfAngleFor(35f);
+
+        /// <summary>
+        /// How much of the blaster's cone the visible water fills.
+        ///
+        /// A half, so the indicator ends up drawing twice the width of the spray — which is what
+        /// YT-110 asked for, and it is the right shape for the job: the water reads as a definite
+        /// jet with a softer envelope of reach around it, rather than a wall of particles that
+        /// hides the robots you are aiming at (Craft Bible: juice must never obscure readability).
+        /// </summary>
+        public const float SprayFillsFractionOfCone = 0.5f;
+
+        /// <summary>The visible stream's cone half-angle for a weapon with this spread.</summary>
+        public static float SprayHalfAngleFor(float coneHalfAngle) =>
+            Mathf.Max(1f, coneHalfAngle * SprayFillsFractionOfCone);
+
+        /// <summary>The stream's actual cone half-angle, in degrees. Exposed so a test can hold it
+        /// against the reticle's without reading particles off the screen.</summary>
+        public float StreamHalfAngle => streamAngle;
         [Tooltip("How far in front of the blaster's origin the water leaves the nozzle, in " +
                  "multiples of the stream radius. Stretched particles trail a tail behind " +
                  "themselves, so emitting at the origin makes the jet appear to pass through " +
@@ -64,10 +86,18 @@ namespace MaxWorlds.VFX
         private int _splashesThisFrame;
 
         /// <summary>Build the systems to match the blaster's actual reach. Safe to call twice.</summary>
-        public void Init(float range, float radius)
+        /// <summary>
+        /// Build the water for a weapon of this reach and spread.
+        ///
+        /// <paramref name="coneHalfAngle"/> is the blaster's REAL cone — the same number the hit
+        /// test and the aim reticle use — so the stream is sized from the weapon rather than
+        /// authored next to it and left to rot (YT-110).
+        /// </summary>
+        public void Init(float range, float radius, float coneHalfAngle)
         {
             _range = Mathf.Max(0.1f, range);
             _radius = Mathf.Max(0.05f, radius);
+            streamAngle = SprayHalfAngleFor(coneHalfAngle);
             if (_built) return;
             _built = true;
 
