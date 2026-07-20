@@ -125,11 +125,14 @@ namespace MaxWorlds.Arena
         public const float SpawnClearance = 0.5f;
 
         private const float PanelWidth = 3f;      // nominal world width of one fence panel
-        // Slimmer than it was (0.28) — a lighter paling that frames the yard without reading as a
-        // bunker wall (YT-88). The height came down with it, via the map's lowered wallHeight.
-        private const float PanelDepth = 0.16f;
-        // A slim post where two runs meet, so the corners read as one continuous fence (YT-88).
-        private const float PostWidth = 0.20f;
+        // Slimmer again (0.28 → 0.16 → 0.10): a lighter paling that frames the yard without reading
+        // as a bunker wall (YT-88, YT-112). Public so a test can prove it still fits the wall it
+        // dresses — a panel deeper than the slab behind it pokes out the far side, which reads as a
+        // fence built through the fence.
+        public const float PanelDepth = 0.10f;
+        // A slim post where two runs meet, so the corners read as one continuous fence (YT-88),
+        // narrowed with the panels (YT-112) so the corners don't become the chunkiest thing left.
+        public const float PostWidth = 0.12f;
         private const float ShedWallHeight = 2.4f;
 
         /// <summary>A wall face shorter than this is a corner, a doorway shoulder or a stub. Planting

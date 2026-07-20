@@ -251,8 +251,15 @@ namespace MaxWorlds.Tests.EditMode
             MapData map = Shipped();
             MapEntity gate = map.First(EntityKind.Gate);
 
-            // 9 m doorway + 1 m wall on each side = 11 m of gate. No sliver to squeeze through.
-            Assert.AreEqual(11f, MapRuntime.SealWidth(map, gate), 1e-3);
+            // The doorway, plus a wall's thickness on each side. No sliver to squeeze through.
+            // Derived rather than hard-coded: the wall's thickness is level data and gets tuned
+            // (YT-112 took it from 1 m to 0.6 m), and a literal here fails that as if it were a bug.
+            float doorway = 0f;
+            foreach (MapLink link in map.links)
+                if (link.gate == gate.id) doorway = link.doorway;
+
+            Assert.Greater(doorway, 0f, "the shipped gate fills no doorway");
+            Assert.AreEqual(doorway + map.wallThickness * 2f, MapRuntime.SealWidth(map, gate), 1e-3);
         }
 
         [Test]
@@ -264,7 +271,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (MapLink link in map.links)
                 if (link.gate == gate.id) link.doorway = 11f;
 
-            Assert.AreEqual(13f, MapRuntime.SealWidth(map, gate), 1e-3,
+            Assert.AreEqual(11f + map.wallThickness * 2f, MapRuntime.SealWidth(map, gate), 1e-3,
                 "the gate did not follow its doorway — it would leave a gap beside itself");
         }
 
