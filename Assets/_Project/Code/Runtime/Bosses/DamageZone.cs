@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Bosses
 {
@@ -20,6 +21,7 @@ namespace MaxWorlds.Bosses
         private float _life;
         private float _age;
         private float _sinceTick;
+        private GroundRing _ring;
 
         private static readonly Collider[] s_hits = new Collider[16];
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
@@ -46,23 +48,45 @@ namespace MaxWorlds.Bosses
             return zone;
         }
 
+        /// <summary>
+        /// How high the puddle draws. Below the arming telegraph (0.03) so the mark the player has
+        /// to react to always wins, above the always-on ground anchors (0.02) so a boss attack is
+        /// never hidden under a footprint ring.
+        /// </summary>
+        public const float ZoneLift = 0.026f;
+
+        /// <summary>
+        /// The mark on the lawn (YT-113).
+        ///
+        /// This was a CYLINDER parented at the zone's own position, and both halves of that were
+        /// wrong. The zone is a damage SPHERE whose centre sits at chest height — blade-rain spawns
+        /// at y=1, grass at the boss's mid-body — so a visual drawn at the zone's origin floated a
+        /// metre above the grass instead of lying on it. That is the "white circles around the
+        /// player" and the "green circles around the boss": they were never on the ground.
+        ///
+        /// It also assigned no material, relying on the surface director to hand it one a frame
+        /// later. Grass puddles spawn every 0.18s for the length of a charge, so there was always
+        /// one wearing Unity's default material — untextured and untinted, which is white in the
+        /// editor and worse in a build. An untinted disc IS the white circle.
+        ///
+        /// <see cref="GroundRing"/> already solves every part of this: a flat quad, a real
+        /// alpha-blended material at creation, tint through a property block, and an explicit place
+        /// in the lift order. It is also skipped by the surface sweep, so nothing can repaint it.
+        /// </summary>
         private void BuildVisual(Color color)
         {
-            var disc = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            disc.name = "Visual";
-            var col = disc.GetComponent<Collider>();
-            if (col != null) Destroy(col); // visual only — damage is by overlap query
-            disc.transform.SetParent(transform, false);
-            disc.transform.localScale = new Vector3(_radius * 2f, 0.05f, _radius * 2f);
-            var rend = disc.GetComponent<Renderer>();
-            if (rend != null)
-            {
-                var mpb = new MaterialPropertyBlock();
-                rend.GetPropertyBlock(mpb);
-                mpb.SetColor("_BaseColor", color);
-                rend.SetPropertyBlock(mpb);
-            }
+            // Splat, not a hard disc: this is a puddle of clippings and a scatter of blades, and a
+            // geometric circle is what made them read as "random discs" rather than as something
+            // the boss did.
+            _ring = GroundRing.Create("Visual", VfxMaterials.Splat());
+            _ring.Lift = ZoneLift;
+            _ring.transform.SetParent(transform, false);
+            _ring.Show(Grounded(transform.position), _radius, color);
         }
+
+        /// <summary>The lawn directly under a point. The zone's own Y is the centre of its damage
+        /// sphere, which is nowhere near the ground it should be drawing on.</summary>
+        private static Vector3 Grounded(Vector3 p) => new Vector3(p.x, 0f, p.z);
 
         private void Update()
         {

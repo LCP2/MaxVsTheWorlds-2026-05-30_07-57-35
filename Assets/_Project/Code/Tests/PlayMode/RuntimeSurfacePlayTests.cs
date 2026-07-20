@@ -32,15 +32,15 @@ namespace MaxWorlds.Tests.PlayMode
                 new Vector3(3f, 0f, 3f), radius: 2f, damage: 5f, life: 5f,
                 armDelay: 0.3f, color: new Color(0.45f, 0.7f, 0.25f, 0.7f));
 
-            // Give the sweep a frame — the same frame budget a real zone gets.
-            yield return null;
-            yield return null;
-
+            // NO frames yielded, deliberately (YT-113). This used to wait two, because the zone was
+            // built from a bare primitive and depended on the surface director sweeping it a frame
+            // later. That frame was real: grass puddles spawn every 0.18s for the length of a
+            // charge, so on any given frame one of them was still wearing Unity's default material.
+            // The zone now takes a proper material at construction, so the guarantee is no longer
+            // "claimed in time" but "never wrong at all" — which is what this test should have been
+            // asking for, and it can only be asked before the sweep has had a chance to run.
             var renderer = zone.GetComponentInChildren<MeshRenderer>();
             Assert.IsNotNull(renderer, "the zone should have a visual");
-
-            Assert.IsNotNull(renderer.GetComponent<SurfaceSkinned>(),
-                "the zone's visual must be claimed by the surface director within a frame of spawning");
 
             var shader = renderer.sharedMaterial != null ? renderer.sharedMaterial.shader : null;
             Assert.IsNotNull(shader, "no material at all would draw nothing");
