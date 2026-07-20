@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Player
 {
@@ -17,7 +18,7 @@ namespace MaxWorlds.Player
     /// earn by disengaging — and it is far too slow to stand in a pack and out-heal it.
     /// </summary>
     [RequireComponent(typeof(PlayerController))]
-    public sealed class PlayerHealth : MonoBehaviour, IDamageable
+    public sealed class PlayerHealth : MonoBehaviour, IDamageable, IHealthReadout
     {
         [SerializeField] private float maxHealth = 100f;
 
@@ -58,10 +59,24 @@ namespace MaxWorlds.Player
         /// <summary>Fired when HP changes (HUD subscribes). Arg = current HP.</summary>
         public event Action<float> Changed;
 
+        // --- IHealthReadout (YT-111): what the floating bar over Max reads. ---
+        public float HealthNormalized => Normalized;
+        public float HealthCurrent => _health;
+        public string ReadoutName => "MAX";
+
+        /// <summary>Metres above Max's origin his bar floats. His capsule is 2 m tall with its
+        /// origin at the centre, so his head is at +1.0 and this clears it.</summary>
+        private const float BarHeight = 1.55f;
+        private const float BarWidth = 1.5f;
+
         private void Awake()
         {
             _controller = GetComponent<PlayerController>();
             _health = Max;
+
+            // Always shown, unlike a robot's: you should be able to find your own health without
+            // having to be hit first (YT-111).
+            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true);
         }
 
         public void TakeDamage(in DamageInfo info)

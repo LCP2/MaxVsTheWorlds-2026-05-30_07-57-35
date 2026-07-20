@@ -24,7 +24,7 @@ namespace MaxWorlds.Enemies
     /// mesh would be a second, drifting copy of an answer we author.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable
+    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHealthReadout
     {
         // Emerging is appended, not inserted: these are serialized as ints, and renumbering the
         // existing members would silently re-label every one of them.
@@ -165,13 +165,28 @@ namespace MaxWorlds.Enemies
         private readonly Perception _sight = new Perception();
         private float _preferSign = 1f;
 
+        // --- IHealthReadout (YT-111): what the floating bar over this robot reads. ---
+        public float HealthNormalized => maxHealth > 0f ? Mathf.Clamp01(_health / maxHealth) : 0f;
+        public float HealthCurrent => _health;
+        public string ReadoutName => Kind == EnemyKind.Bruiser ? "BRUISER" : "RUSHER";
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
             _mpb = new MaterialPropertyBlock();
             _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
             ResetState();
+
+            // A child of the body, so it deactivates and comes back with a POOLED robot instead of
+            // needing to be reattached on reuse. The bar re-derives its own metre space every frame,
+            // so it does not care that Apply() stamps this body's scale on after Awake has run.
+            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth);
         }
+
+        /// <summary>Metres above a robot's origin its bar floats. The origin is the body's centre
+        /// and the tallest archetype is 1.4 m, so this clears every head with room to spare.</summary>
+        private const float BarHeight = 1.15f;
+        private const float BarWidth = 1.1f;
 
         private void OnEnable() => ResetState(); // reset for pooling reuse
 
