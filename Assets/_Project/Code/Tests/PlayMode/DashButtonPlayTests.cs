@@ -52,6 +52,27 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator TheDashButtonSpeaksTheJoystickRingLanguage()
+        {
+            // YT-124: match the see-through transparency of the move/aim controls and thin the
+            // outer outline. It does that by dropping the solid disc face for the same thin TechRings
+            // outline the joysticks use — so the tell is: no opaque "Face", and a "Ring" that shares
+            // the joysticks' exact ring sprite.
+            Assert.That(Find("Face"), Is.Null,
+                "the dash button still has a solid opaque face — it reads heavier than the sticks");
+
+            var ring = Find("Ring");
+            Assert.IsNotNull(ring, "the dash button has no thin ring outline");
+
+            var ringImg = ring.GetComponent<UnityEngine.UI.Image>();
+            var stickRings = Find("Rings");   // a joystick's ring image
+            Assert.IsNotNull(stickRings, "the joysticks' ring image is gone — fixture wrong");
+            Assert.That(ringImg.sprite, Is.SameAs(stickRings.GetComponent<UnityEngine.UI.Image>().sprite),
+                "the dash outline must use the same thin-ring sprite as the move/aim controls");
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator TheDashButtonExistsDownWhereTheThumbIs()
         {
             RectTransform dash = Find("Dash Button");

@@ -531,22 +531,28 @@ namespace MaxWorlds.UI
             root.sizeDelta = new Vector2(DashButtonSize, DashButtonSize);
             _dashButtonRoot = root;
 
-            // Ready glow first, so it sits behind the face — same z-order as the ability slots.
+            // Ready glow first, behind everything. Thinner than it was (YT-124): a +4 halo, not a
+            // +10 slab, so it reads as a rim-light on the ring rather than a second fat ring.
             var glow = AddImage(root, HudTextures.Disc(160), Color.clear, "Glow");
-            Stretch(glow.rectTransform, 10f);
+            Stretch(glow.rectTransform, 4f);
             glow.raycastTarget = false;
             _slotGlow[0] = glow;
 
-            var face = AddImage(root, HudTextures.Disc(160), PanelColor, "Face");
-            Stretch(face.rectTransform);
-            face.raycastTarget = false;
+            // The button now speaks the joysticks' language (YT-124): a thin TechRings outline with a
+            // see-through interior, instead of a solid disc. That drops the opacity to match the
+            // move/aim controls and thins the outer outline in one move — the colour (dash gold) and
+            // position are unchanged, which is what Lee wanted kept. No solid face any more; the
+            // cooldown radial darkens the interior while charging and clears to transparent when ready.
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), DashColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = false;
 
-            var label = AddText(root, 26f, BoneWhite, TextAnchor.MiddleCenter);
+            var label = AddText(root, 26f, DashColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = "DASH";
 
             // Cooldown wipe, identical treatment to the slots so the two read as one language.
-            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.62f), "Radial");
+            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
             radial.type = Image.Type.Filled;
             radial.fillMethod = Image.FillMethod.Radial360;
@@ -562,6 +568,10 @@ namespace MaxWorlds.UI
         private const float DashButtonSize = 140f;
         private const float DashButtonInset = 400f;
         private const float DashButtonRise = 330f;
+
+        // The dash gold — the colour Lee likes and asked to keep (YT-124). Same value the ready glow
+        // pulses in, so the ring and its pulse are one hue.
+        private static readonly Color DashColor = ReadyGlow;
 
         private void BuildJoysticks()
         {
