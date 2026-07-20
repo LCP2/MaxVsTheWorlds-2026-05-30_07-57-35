@@ -52,7 +52,62 @@ namespace MaxWorlds.Tests.PlayMode
         private WorldHealthBar Bar => _go.GetComponent<WorldHealthBar>();
         private RectTransform Canvas => (RectTransform)_go.GetComponentInChildren<Canvas>(true).transform;
 
+        /// <summary>A Max-like unit: a life bar with a water gauge stacked above (YT-121).</summary>
+        private FakeUnit NewUnitWithWater(System.Func<float> water)
+        {
+            _go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            var unit = _go.AddComponent<FakeUnit>();
+            WorldHealthBar.Attach(_go, unit, heightAboveCentre: 1.55f, worldWidth: 1.5f,
+                                  alwaysShow: true, secondary: water,
+                                  secondaryColor: new Color(0.2f, 0.62f, 0.92f));
+            return unit;
+        }
+
         private static float WorldWidth(RectTransform rt) => rt.sizeDelta.x * rt.lossyScale.x;
+
+        // ---------------------------------------------------------------- Max's water stack (YT-121)
+
+        [UnityTest]
+        public IEnumerator MaxsBarCarriesAWaterGaugeStackedAboveItsLifeBar()
+        {
+            float water = 0.5f;
+            NewUnitWithWater(() => water);
+            yield return null;
+
+            Assert.That(Bar.HasSecondary, Is.True, "Max's stack has no water gauge above the life bar");
+
+            var waterFill = FindImage("Water Fill");
+            var lifeFill = FindImage("Fill");
+            Assert.That(waterFill.fillAmount, Is.EqualTo(0.5f).Within(0.02f), "the gauge did not read the tank");
+
+            // Stacked ABOVE: the water gauge sits higher on screen than the life bar.
+            var wc = new Vector3[4]; var lc = new Vector3[4];
+            waterFill.rectTransform.GetWorldCorners(wc);
+            lifeFill.rectTransform.GetWorldCorners(lc);
+            Assert.That(wc[1].y, Is.GreaterThan(lc[1].y),
+                "the water gauge must sit above the life bar, not below or on it");
+        }
+
+        [UnityTest]
+        public IEnumerator TheWaterGaugeTracksTheTankLive()
+        {
+            float water = 1f;
+            NewUnitWithWater(() => water);
+            yield return null;
+
+            water = 0.2f;
+            yield return null;
+            Assert.That(FindImage("Water Fill").fillAmount, Is.EqualTo(0.2f).Within(0.02f),
+                "draining the tank must drain the gauge without a rebuild");
+        }
+
+        [UnityTest]
+        public IEnumerator ARobotHasNoWaterGauge()
+        {
+            NewUnit(Vector3.one).Hp = 50f;
+            yield return null;
+            Assert.That(Bar.HasSecondary, Is.False, "only Max carries a water gauge; robots must not");
+        }
 
         // ---------------------------------------------------------------- size and place
 

@@ -52,6 +52,17 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator ThereIsNoTopOfScreenLifeOrWaterBarForMax()
+        {
+            // YT-121: Max's life and water moved to a floating stack over his head, so the top HP
+            // and Energy bars are gone. The level pip stays.
+            Assert.That(Find("HP Bar"), Is.Null, "the redundant top-of-screen HP bar is still here");
+            Assert.That(Find("Energy Bar"), Is.Null, "the redundant top-of-screen water/energy bar is still here");
+            Assert.That(Find("XP Bar"), Is.Not.Null, "the level pip should remain");
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator TheTopLeftWidgetsDoNotSitOnTopOfEachOther()
         {
             yield return null;
