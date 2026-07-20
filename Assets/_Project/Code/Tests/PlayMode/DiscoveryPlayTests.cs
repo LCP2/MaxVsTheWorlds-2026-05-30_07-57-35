@@ -90,6 +90,46 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsNotNull(_gate.GetComponent<Discoverable>(), "the boss gate is not discoverable");
         }
 
+        // ---------------------------------------------------------------- a shut door is a shut door
+
+        /// <summary>
+        /// The boss sits in a sealed room behind a gate that has never been opened, so "has the
+        /// player seen it" must answer NO — and it did not, because the arena walls block sight but
+        /// the gate filling the doorway did not. On the deployed build, with the camera pulled wide,
+        /// the boss was discovered straight through a shut door. Camera zoom is a tunable knob
+        /// (YT-82), so this was one tuning change away from being visible in normal play.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AShutGateBlocksTheSightLineToTheBoss()
+        {
+            if (!CoverLayer.Exists) Assert.Ignore("no Cover layer in this project");
+
+            yield return BuildLevelFromTheMap();
+
+            var gate = _gate.GetComponent<SubZoneGate>();
+            Assert.That(_gate.layer, Is.EqualTo(CoverLayer.Index),
+                        "the gate is not on the cover layer — sight passes straight through it");
+
+            // Stand Max just short of the gate, looking up the level at the boss beyond it.
+            Vector3 bossAt = _boss.transform.position;
+            _player.transform.position = new Vector3(bossAt.x, 1f, _gate.transform.position.z - 4f);
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(LineOfSight.Clear(_player.transform.position, bossAt, _boss.transform),
+                        Is.False, "Max can see the boss through a gate that has never been opened");
+
+            // ...and the moment the way is open, so is the sight-line. No extra state to maintain:
+            // Open() disables the gate's collider as it starts to sink.
+            gate.Open();
+            yield return null;
+            Physics.SyncTransforms();
+            yield return null;
+
+            Assert.That(LineOfSight.Clear(_player.transform.position, bossAt, _boss.transform),
+                        Is.True, "the gate opened and the boss is still hidden from sight");
+        }
+
         // ---------------------------------------------------------------- the map draws nothing yet
 
         [UnityTest]

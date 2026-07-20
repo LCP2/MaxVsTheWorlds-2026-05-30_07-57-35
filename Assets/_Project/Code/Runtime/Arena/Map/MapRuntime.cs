@@ -163,7 +163,17 @@ namespace MaxWorlds.Arena
                         // against each side. Its width is NOT authored — it is read off the link, so a
                         // widened doorway can never leave a gap beside its gate.
                         if (gate != null)
+                        {
                             gate.transform.localScale = new Vector3(SealWidth(map, e), e.height, e.depth);
+
+                            // A shut gate stops sight, not just footsteps (YT-107). The walls around
+                            // it already block (Box(blocksSight: true)), but the gate filling the
+                            // doorway did not — so the boss could be discovered straight through a
+                            // door that has never been opened, and a robot could watch Max through it.
+                            // Nothing has to close this again: SubZoneGate.Open disables its collider
+                            // the instant it starts sinking, so the sight-line opens with the gate.
+                            CoverLayer.Assign(gate);
+                        }
                         break;
 
                     case EntityKind.Boss:
