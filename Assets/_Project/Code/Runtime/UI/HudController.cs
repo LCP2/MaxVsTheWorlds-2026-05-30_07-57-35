@@ -24,7 +24,6 @@ namespace MaxWorlds.UI
         // Backyard palette (Art Direction §Colour identity + HUD spec).
         private static readonly Color HpColor = new Color(0.90f, 0.22f, 0.20f);
         private static readonly Color XpColor = new Color(0.957f, 0.788f, 0.365f); // #F4C95D golden
-        private static readonly Color EnergyColor = new Color(0.118f, 0.533f, 0.898f); // #1E88E5 blue
         private static readonly Color TechRingColor = new Color(0.31f, 0.76f, 0.97f);
         private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.09f, 0.55f);
         private static readonly Color ReadyGlow = new Color(1f, 0.85f, 0.35f);
@@ -47,15 +46,11 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private FloatingTextLayer _floating;
 
-        // Status strip
-        private Image _hpFill, _xpFill, _energyFill;
-        private Image _hpGhost;
+        // Status strip — just the level pip since YT-121 (life + water float over Max).
+        private Image _xpFill;
 
         // YT-54 presentation state. None of this feeds the model — it only animates what the model
         // already says.
-        private static readonly Color HpGhostColor = new Color(1f, 0.72f, 0.62f, 0.55f);
-        private readonly BarState _hpBar = new BarState();
-        private readonly BarState _energyBar = new BarState();
         private readonly BarState _xpBar = new BarState();
         private readonly DamageNumberAggregator _damageNumbers = new DamageNumberAggregator();
         private readonly System.Collections.Generic.List<DamageNumberAggregator.Entry> _damageBuffer =
@@ -63,7 +58,7 @@ namespace MaxWorlds.UI
         private readonly float[] _slotReadyFlash = new float[3];
         private readonly bool[] _slotWasReady = new bool[3];
         private int _lastLevel = 1;
-        private Text _hpLabel, _xpLabel, _energyLabel;
+        private Text _xpLabel;
 
         // Ability slots (0 Dash, 1 Bomb, 2 Ultimate)
         private readonly Image[] _slotRadial = new Image[3];
@@ -226,29 +221,8 @@ namespace MaxWorlds.UI
 
         private void UpdateStatusStrip(float dt)
         {
-            if (_health != null)
-            {
-                _hpBar.Update(_health.Normalized, dt);
-                _hpFill.fillAmount = _hpBar.Fill;
-                if (_hpGhost != null)
-                {
-                    // The chip bar: holds where the health WAS, then drains. It shows you how much
-                    // you just lost, which a bar that snaps to its new value never tells you.
-                    _hpGhost.fillAmount = _hpBar.Ghost;
-                    var gc = HpGhostColor; gc.a *= Mathf.Clamp01(_hpBar.Ghost - _hpBar.Fill) > 0.001f ? 1f : 0f;
-                    _hpGhost.color = gc;
-                }
-                _hpFill.color = Color.Lerp(HpColor, Color.white, _hpBar.Flash);
-                _hpLabel.text = Mathf.CeilToInt(_health.Current).ToString();
-            }
-            if (_blaster != null && _blaster.Energy != null)
-            {
-                // Energy drains and refills constantly while firing, so it gets smoothing but no
-                // ghost — a chip bar on a bar that's always moving would just be noise.
-                _energyBar.Update(_blaster.Energy.Normalized, dt, fillSpeed: 6f, hold: 0f);
-                _energyFill.fillAmount = _energyBar.Fill;
-                _energyLabel.text = Mathf.CeilToInt(_blaster.Energy.Current).ToString();
-            }
+            // Life and water are drawn over Max's head now (YT-121, WorldHealthBar). All that lives
+            // up here is the level pip.
             _xpBar.Update(_model.Xp.Normalized, dt, fillSpeed: 2.2f, hold: 0f);
             _xpFill.fillAmount = _xpBar.Fill;
             _xpLabel.text = $"Lv {_model.Xp.Level}";
@@ -417,17 +391,15 @@ namespace MaxWorlds.UI
 
         private void BuildStatusStrip()
         {
-            // Container ~40% width, top-centre.
+            // Just the level pip now (YT-121). Max's life and water moved to a floating stack over
+            // his head, so the top-of-screen HP and Energy bars that used to flank this are gone —
+            // they were a redundant second copy of what now sits above Max. XP is neither life nor
+            // water, so it stays, centred where it always was.
             var strip = NewRect("Status Strip", Root);
             Anchor(strip, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             strip.sizeDelta = new Vector2(RefW * 0.40f, 90f);
             strip.anchoredPosition = new Vector2(0f, -28f);
 
-            // HP (left, wide) | XP (centre, thin) | Energy (right, wide)
-            _hpFill = BuildBar(strip, "HP", HpColor, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f),
-                new Vector2(0f, 0f), new Vector2(RefW * 0.15f, 26f), out _hpLabel);
-            _energyFill = BuildBar(strip, "Energy", EnergyColor, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f),
-                new Vector2(0f, 0f), new Vector2(RefW * 0.15f, 26f), out _energyLabel);
             _xpFill = BuildBar(strip, "XP", XpColor, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
                 new Vector2(0f, -2f), new Vector2(RefW * 0.06f, 14f), out _xpLabel);
         }
@@ -443,19 +415,6 @@ namespace MaxWorlds.UI
             var bg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform);
             bg.type = Image.Type.Sliced;
-
-            // The chip/ghost bar sits BETWEEN the background and the fill, so the fill draws over
-            // it and only the difference between them is visible — that difference is the damage
-            // you just took. (YT-54; only the HP bar uses it.)
-            var ghostImg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), HpGhostColor, "Ghost");
-            Stretch(ghostImg.rectTransform, -3f);
-            ghostImg.type = Image.Type.Filled;
-            ghostImg.fillMethod = Image.FillMethod.Horizontal;
-            ghostImg.fillOrigin = (int)Image.OriginHorizontal.Left;
-            ghostImg.fillAmount = 1f;
-            ghostImg.raycastTarget = false;
-            if (name == "HP") _hpGhost = ghostImg;
-            else ghostImg.gameObject.SetActive(false);
 
             var fillImg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), fill, "Fill");
             Stretch(fillImg.rectTransform, -3f); // inset inside the bg for a bordered look

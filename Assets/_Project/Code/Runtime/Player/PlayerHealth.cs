@@ -64,19 +64,32 @@ namespace MaxWorlds.Player
         public float HealthCurrent => _health;
         public string ReadoutName => "MAX";
 
-        /// <summary>Metres above Max's origin his bar floats. His capsule is 2 m tall with its
+        /// <summary>Metres above Max's origin his stack floats. His capsule is 2 m tall with its
         /// origin at the centre, so his head is at +1.0 and this clears it.</summary>
         private const float BarHeight = 1.55f;
         private const float BarWidth = 1.5f;
+        private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f); // #33A0EB
+
+        private MaxWorlds.Combat.WaterBlaster _blaster;
 
         private void Awake()
         {
             _controller = GetComponent<PlayerController>();
             _health = Max;
 
-            // Always shown, unlike a robot's: you should be able to find your own health without
-            // having to be hit first (YT-111).
-            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true);
+            // Max's whole status now lives over his head (YT-121): the water gauge stacked directly
+            // above his life bar, and no top-of-screen HUD. Always shown, unlike a robot's — you
+            // should be able to find your own health without waiting to be hit.
+            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
+                                  secondary: WaterNormalized, secondaryColor: WaterColor);
+        }
+
+        /// <summary>Max's blaster tank, 0..1, for the floating water gauge. Resolved lazily and
+        /// cached — the blaster attaches itself to Max and may not exist on the frame this runs.</summary>
+        private float WaterNormalized()
+        {
+            if (_blaster == null) _blaster = GetComponent<MaxWorlds.Combat.WaterBlaster>();
+            return _blaster != null && _blaster.Energy != null ? _blaster.Energy.Normalized : 1f;
         }
 
         public void TakeDamage(in DamageInfo info)

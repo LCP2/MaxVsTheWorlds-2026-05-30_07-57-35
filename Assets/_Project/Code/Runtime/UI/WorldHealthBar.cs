@@ -39,10 +39,10 @@ namespace MaxWorlds.UI
         private const float FullEnough = 0.999f;
 
         private static readonly Color BackColor = new Color(0f, 0f, 0f, 0.6f);
-        private static readonly Color HealthyColor = new Color(0.36f, 0.85f, 0.32f);
-        private static readonly Color HurtColor = new Color(0.95f, 0.72f, 0.16f);
-        private static readonly Color CriticalColor = new Color(0.92f, 0.24f, 0.20f);
         private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.85f);
+
+        // Height of the optional secondary gauge (Max's water), as a fraction of the health bar's.
+        private const float SecondaryHeightFraction = 0.6f;
 
         private IHealthReadout _source;
         private Transform _pivot;
@@ -51,6 +51,12 @@ namespace MaxWorlds.UI
         private Text _nameText;
         private Text _numberText;
         private Camera _camera;
+
+        // Optional secondary gauge stacked ABOVE the life bar (YT-121 — Max's water level). Null for
+        // robots, who carry only a life bar.
+        private System.Func<float> _secondary;
+        private Color _secondaryColor;
+        private Image _secondaryFill;
 
         private float _worldWidth;
         private float _heightAboveCentre;
@@ -72,7 +78,9 @@ namespace MaxWorlds.UI
         /// </summary>
         public static WorldHealthBar Attach(GameObject owner, IHealthReadout source,
                                             float heightAboveCentre, float worldWidth,
-                                            bool alwaysShow = false)
+                                            bool alwaysShow = false,
+                                            System.Func<float> secondary = null,
+                                            Color secondaryColor = default)
         {
             if (owner == null || source == null) return null;
 
@@ -83,9 +91,14 @@ namespace MaxWorlds.UI
             bar._heightAboveCentre = heightAboveCentre;
             bar._worldWidth = worldWidth;
             bar._alwaysShow = alwaysShow;
+            bar._secondary = secondary;
+            bar._secondaryColor = secondaryColor;
             bar.Build();
             return bar;
         }
+
+        /// <summary>Is the secondary (water) gauge present? Exposed for the tests.</summary>
+        public bool HasSecondary => _secondaryFill != null;
 
         private void Build()
         {
@@ -107,19 +120,45 @@ namespace MaxWorlds.UI
             var bg = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), BackColor, "Back");
             Stretch(bg.rectTransform, 0f);
 
-            _fill = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), HealthyColor, "Fill");
+            _fill = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), HealthBarColor.Ramp(1f), "Fill");
             _fill.type = Image.Type.Filled;
             _fill.fillMethod = Image.FillMethod.Horizontal;
             _fill.fillOrigin = (int)Image.OriginHorizontal.Left;
             _fill.fillAmount = 1f;
             Stretch(_fill.rectTransform, -3f);
 
+            // The water gauge (YT-121) stacks directly ABOVE the life bar. Thinner, so the stack
+            // reads as "gauge on top, health below" at a glance and the life bar stays the dominant
+            // one. Built only for Max — robots pass no secondary.
+            float nameLift = 3f;
+            if (_secondary != null)
+            {
+                float h = BarPixelHeight * SecondaryHeightFraction;
+                var back = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), BackColor, "Water Back");
+                var br = back.rectTransform;
+                br.anchorMin = new Vector2(0f, 1f); br.anchorMax = new Vector2(1f, 1f);
+                br.pivot = new Vector2(0.5f, 0f);
+                br.offsetMin = new Vector2(0f, 0f); br.offsetMax = new Vector2(0f, 0f);
+                br.sizeDelta = new Vector2(0f, h);
+                br.anchoredPosition = new Vector2(0f, 2f);   // a hair above the life bar
+
+                _secondaryFill = NewImage(back.rectTransform, HudTextures.RoundedBox(24, 0.5f),
+                                          _secondaryColor, "Water Fill");
+                _secondaryFill.type = Image.Type.Filled;
+                _secondaryFill.fillMethod = Image.FillMethod.Horizontal;
+                _secondaryFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+                _secondaryFill.fillAmount = 1f;
+                Stretch(_secondaryFill.rectTransform, -2f);
+
+                nameLift = h + 6f;   // push the name clear of the water gauge
+            }
+
             _nameText = NewText(_canvas, LabelFontSize, NameColor, TextAnchor.LowerCenter);
             var nr = _nameText.rectTransform;
             nr.anchorMin = nr.anchorMax = new Vector2(0.5f, 1f);
             nr.pivot = new Vector2(0.5f, 0f);
             nr.sizeDelta = new Vector2(LabelPixelWidth, LabelPixelHeight);
-            nr.anchoredPosition = new Vector2(0f, 3f);
+            nr.anchoredPosition = new Vector2(0f, nameLift);
             _nameText.text = _source.ReadoutName;
 
             // The number sits ON the bar, Brawl-Stars style, so the figure and the length it
@@ -163,7 +202,12 @@ namespace MaxWorlds.UI
             if (!show) return;
 
             _fill.fillAmount = n;
-            _fill.color = n > 0.6f ? HealthyColor : n > 0.3f ? HurtColor : CriticalColor;
+            // Shared ramp: green → yellow → orange → red, flashing when critical (YT-121). unscaled
+            // time so it keeps pulsing even if the game is paused on a low-health beat.
+            _fill.color = HealthBarColor.At(n, Time.unscaledTime);
+
+            if (_secondaryFill != null && _secondary != null)
+                _secondaryFill.fillAmount = Mathf.Clamp01(_secondary());
 
             // Only rebuild the string when the printed number actually changes. At ~25 robots a
             // per-frame ToString is 1500 allocations a second for text nobody can read changing.
