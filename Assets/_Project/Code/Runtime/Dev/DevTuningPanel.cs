@@ -34,8 +34,8 @@ namespace MaxWorlds.Dev
     /// It sits on its own canvas at sorting order 200, above the HUD's 100, so its raycasts beat the
     /// invisible OnScreenStick pads rather than being swallowed by them.
     ///
-    /// Nothing is built unless <see cref="DevMode.Enabled"/> is true, so in a release session this
-    /// is one bool test per frame and no canvas, no widgets, nothing on screen.
+    /// Nothing is built unless <see cref="DevMode.ToolsAvailable"/> is true, so in a release session
+    /// this is one bool test per frame and no canvas, no widgets, nothing on screen.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DevTuningPanel : MonoBehaviour
@@ -116,7 +116,10 @@ namespace MaxWorlds.Dev
 
         private void Update()
         {
-            if (!DevMode.Enabled)
+            // ToolsAvailable, not Enabled: on a phone there is no ?dev=1 and no key chord, so a
+            // TestFlight build reaches the panel through the compile-time dev-tools flag while the
+            // cheats stay off and the game still plays honestly (YT-118).
+            if (!DevMode.ToolsAvailable)
             {
                 if (_canvas != null) Teardown();
                 return;

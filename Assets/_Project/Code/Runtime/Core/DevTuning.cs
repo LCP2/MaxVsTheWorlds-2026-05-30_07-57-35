@@ -45,12 +45,18 @@ namespace MaxWorlds.Core
         public static float? BlasterRegenPerSecond { get; set; }
 
         /// <summary>
-        /// The number gameplay should actually use: the dev override if one is set AND dev mode is
-        /// on, otherwise the authored value. The <see cref="DevMode.Enabled"/> check comes first so
-        /// a release session costs one bool read.
+        /// The number gameplay should actually use: the dev override if one is set AND the tuning
+        /// tools are available, otherwise the authored value. The <see cref="DevMode.ToolsAvailable"/>
+        /// check comes first so a release session costs one bool read.
+        ///
+        /// Gated on ToolsAvailable rather than <see cref="DevMode.Enabled"/> since YT-118: a beta
+        /// build has the panel but not the cheats, and a slider that moves without changing the game
+        /// would be worse than no slider at all. In a release build the define is absent and
+        /// ToolsAvailable collapses to Enabled, which is false — so this is unchanged where it
+        /// matters.
         /// </summary>
         public static float Or(float? over, float authored) =>
-            DevMode.Enabled && over.HasValue ? over.Value : authored;
+            DevMode.ToolsAvailable && over.HasValue ? over.Value : authored;
 
         /// <summary>True if any knob has been moved this session. Used by the panel's readout.</summary>
         public static bool AnyOverride =>
