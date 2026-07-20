@@ -65,6 +65,19 @@ namespace MaxWorlds.Enemies
 
         public int LiveCount => _live.Count;
 
+        // --- The door (YT-108). Optional: with none set this spawner behaves exactly as it did. ---
+        private IFactoryDoor _door;
+
+        /// <summary>Route this factory's robots through a real door. Called by the art layer, which
+        /// owns the door; gameplay never constructs one.</summary>
+        public void UseDoor(IFactoryDoor door) => _door = door;
+
+        /// <summary>A robot is due — the cadence has come round and there is room on the field. The
+        /// door watches this to know when to start hauling itself up, so that it is open by the time
+        /// the robot is ready rather than the robot waiting on a door that had no reason to move.</summary>
+        public bool WantsToEmit =>
+            _running && _timer >= CurrentInterval && _live.Count < maxLiveEnemies;
+
         /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
         /// test can prove a dead factory emitted NOTHING — which <see cref="LiveCount"/> can't, since
         /// it also falls as robots die.</summary>
@@ -112,6 +125,13 @@ namespace MaxWorlds.Enemies
             _elapsed += dt;
             _timer += dt;
             if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies) return;
+
+            // Wait for the door, WITHOUT resetting the timer (YT-108) — so the robot comes out on the
+            // frame the door finishes opening, not a full interval after it. Holding the timer is
+            // what makes the door read as the thing releasing them rather than a shutter that
+            // happens to be up.
+            if (_door != null && !_door.CanEmit) return;
+
             _timer = 0f;
             SpawnOne();
         }
@@ -126,9 +146,13 @@ namespace MaxWorlds.Enemies
             EnemyArchetype archetype = EnemyArchetype.Of(kind);
             RobotEnemy e = Take(kind, archetype);
 
-            // Out of the mouth, fanned, facing the way it's about to run.
+            // Out of the mouth, fanned, facing the way it's about to run. With a real door (YT-108)
+            // the door decides which way that is — a robot leaving by a doorway on the west wall
+            // cannot also be leaving toward a player standing east of it.
+            Vector3 mouth = _door != null ? _door.OutwardDirection : ToTarget();
+            float halfAngle = _door != null ? _door.FanHalfAngleDeg : mouthHalfAngle;
             Vector3 dir = FactoryMouth.ExitDirection(
-                ToTarget(), -transform.forward, _emitted++, mouthHalfAngle);
+                mouth, -transform.forward, _emitted++, halfAngle);
 
             // It APPEARS at the door and WALKS OUT to the exit point (YT-100). It used to appear at
             // the exit point already — a full body-length clear of the shed, out on the open lawn,

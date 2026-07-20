@@ -397,6 +397,8 @@ namespace MaxWorlds.VFX
         {
             if (!_built || _enemy == null) return;
 
+            RideTheRamp();
+
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
 
@@ -412,6 +414,39 @@ namespace MaxWorlds.VFX
             Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f);
             if (_bodyMat != null && _bodyMat.HasProperty(EmissionId)) _bodyMat.SetColor(EmissionId, heat);
             if (_accentMat != null && _accentMat.HasProperty(EmissionId)) _accentMat.SetColor(EmissionId, heat);
+        }
+
+        /// <summary>
+        /// Stand the visible body on the factory ramp while it is walking down it (YT-108).
+        ///
+        /// The robot's CharacterController stays on the flat plane the whole level navigates on. Every
+        /// chase, cover and pathing rule in the game assumes that plane, and teaching all of them about
+        /// slopes to serve one 45 cm wedge outside a shed would be a large change with a large blast
+        /// radius. So the MODEL rides the ramp and the collider does not — a discrepancy that is at
+        /// most 45 cm, lasts about a second, and happens under a doorway the robot is half-occluded by.
+        ///
+        /// Only while emerging: a robot that has finished walking out is on the lawn like everything
+        /// else, and one that later fights its way back across the ramp should not bob.
+        /// </summary>
+        private void RideTheRamp()
+        {
+            if (_model == null) return;
+
+            float lift = _enemy.Current == RobotEnemy.State.Emerging
+                ? FactoryDoorway.RampLiftAt(transform.position)
+                : 0f;
+
+            // localPosition is measured in the ROBOT's local units, and the robot root carries its
+            // archetype's body scale — so a metre of ramp is not a unit of localPosition. Divide it
+            // out, or a bruiser rides higher than a rusher on the same slope.
+            float scaleY = Mathf.Abs(transform.lossyScale.y);
+            float local = lift / Mathf.Max(scaleY, 1e-4f);
+
+            Vector3 p = _model.localPosition;
+            // Toward the target rather than snapping, so stepping off the bottom of the ramp settles
+            // instead of dropping a frame's worth of height in one go.
+            p.y = Mathf.MoveTowards(p.y, local, 3.5f * Mathf.Max(Time.deltaTime, 1e-4f));
+            _model.localPosition = p;
         }
 
         /// <summary>
