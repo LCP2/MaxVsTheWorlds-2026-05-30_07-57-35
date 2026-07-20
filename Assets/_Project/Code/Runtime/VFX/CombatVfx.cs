@@ -1,3 +1,4 @@
+using System.Collections;
 using UnityEngine;
 using MaxWorlds.UI;
 using MaxWorlds.Player;
@@ -153,32 +154,77 @@ namespace MaxWorlds.VFX
                 colorA: Debris, colorB: SparkGold);
         }
 
-        /// <summary>The factory going down — the biggest moment in the slice, so it gets the
-        /// full three-part treatment: fire, chunks, and smoke that hangs after the bang.</summary>
-        private void OnFactoryDestroyed(Vector3 pos)
+        /// <summary>
+        /// The factory going down — the biggest moment in the slice, so it is a SEQUENCE rather than
+        /// a bang (YT-109).
+        ///
+        /// All three bursts used to go off on the same frame. Fire, chunks and smoke arriving together
+        /// is one event however much of it there is: it was over in about a second, and the thing the
+        /// whole slice teaches you to do resolved faster than killing an ordinary robot. Staggering it
+        /// costs nothing and buys the beat — the machine fails, THEN it lets go, THEN it burns.
+        /// </summary>
+        private void OnFactoryDestroyed(Vector3 pos) => StartCoroutine(FactoryDeath(pos));
+
+        /// <summary>Timings live in <see cref="FactoryDeathTiming"/>, so the shape of the beat can be
+        /// read (and tested) without stepping through a coroutine.</summary>
+        private IEnumerator FactoryDeath(Vector3 pos)
         {
             Vector3 at = pos + Vector3.up * 1.2f;
 
-            _boom.Emit(at, 40,
-                axis: Vector3.up, spreadDegrees: 100f,
-                speedMin: 3f, speedMax: 11f,
-                sizeMin: 0.5f, sizeMax: 1.5f,
-                lifeMin: 0.3f, lifeMax: 0.7f,
+            // 1. It fails. A short, contained jet out of the core — something inside has let go, but
+            //    the building is still standing. This is the "uh oh" frame.
+            _boom.Emit(at, 14,
+                axis: Vector3.up, spreadDegrees: 45f,
+                speedMin: 2.5f, speedMax: 6f,
+                sizeMin: 0.3f, sizeMax: 0.8f,
+                lifeMin: 0.25f, lifeMax: 0.5f,
                 colorA: FireHot, colorB: FireDeep);
 
-            _boomDebris.Emit(at, 26,
-                axis: Vector3.up, spreadDegrees: 85f,
-                speedMin: 4f, speedMax: 12f,
-                sizeMin: 0.18f, sizeMax: 0.45f,
-                lifeMin: 0.7f, lifeMax: 1.3f,
+            _boomDebris.Emit(at, 8,
+                axis: Vector3.up, spreadDegrees: 40f,
+                speedMin: 3f, speedMax: 7f,
+                sizeMin: 0.12f, sizeMax: 0.28f,
+                lifeMin: 0.5f, lifeMax: 0.9f,
                 colorA: Debris, colorB: FireDeep);
 
-            _boomSmoke.Emit(at, 22,
+            yield return new WaitForSeconds(FactoryDeathTiming.FailToBlast);
+
+            // 2. It lets go. The big one — everything the single-frame version used to be, and then
+            //    some, now landing on a building the player has already watched start to fail.
+            _boom.Emit(at, 44,
+                axis: Vector3.up, spreadDegrees: 110f,
+                speedMin: 3f, speedMax: 12f,
+                sizeMin: 0.55f, sizeMax: 1.6f,
+                lifeMin: 0.35f, lifeMax: 0.8f,
+                colorA: FireHot, colorB: FireDeep);
+
+            _boomDebris.Emit(at, 30,
+                axis: Vector3.up, spreadDegrees: 85f,
+                speedMin: 4f, speedMax: 13f,
+                sizeMin: 0.18f, sizeMax: 0.48f,
+                lifeMin: 0.9f, lifeMax: 1.6f,
+                colorA: Debris, colorB: FireDeep);
+
+            yield return new WaitForSeconds(FactoryDeathTiming.BlastToSmoke);
+
+            // 3. It burns. Smoke arriving AFTER the fire is what makes it read as aftermath; arriving
+            //    with it, it was just more stuff in the same puff.
+            _boomSmoke.Emit(at, 26,
                 axis: Vector3.up, spreadDegrees: 120f,
-                speedMin: 0.6f, speedMax: 2.6f,
-                sizeMin: 1.1f, sizeMax: 2.4f,
-                lifeMin: 0.9f, lifeMax: 1.7f,
+                speedMin: 0.5f, speedMax: 2.4f,
+                sizeMin: 1.2f, sizeMax: 2.6f,
+                lifeMin: 1.6f, lifeMax: 2.6f,
                 colorA: Smoke, colorB: FireDeep);
+
+            yield return new WaitForSeconds(FactoryDeathTiming.SmokeToEmbers);
+
+            // 4. Last embers off the wreck, small and slow. The tail of the beat, not a fourth bang.
+            _boom.Emit(at - Vector3.up * 0.6f, 10,
+                axis: Vector3.up, spreadDegrees: 70f,
+                speedMin: 0.8f, speedMax: 2.6f,
+                sizeMin: 0.18f, sizeMax: 0.42f,
+                lifeMin: 0.6f, lifeMax: 1.2f,
+                colorA: FireDeep, colorB: Smoke);
         }
 
         // --- dash trail ---
