@@ -76,7 +76,7 @@ namespace MaxWorlds.UI
         private RectTransform _aimKnob;
 
         // Touch controls (YT-98): the joystick/dash roots the on-screen sticks + button attach to.
-        private RectTransform _moveJoystickRoot, _aimJoystickRoot, _dashSlotRoot;
+        private RectTransform _moveJoystickRoot, _aimJoystickRoot, _dashButtonRoot;
 
         // Arena indicator
         private Text _arenaLabel;
@@ -106,6 +106,7 @@ namespace MaxWorlds.UI
             BuildStatusStrip();
             BuildUtilityIcons();
             BuildAbilitySlots();
+            BuildDashButton();
             BuildJoysticks();
             BuildArenaIndicator();
             BuildBossBar();
@@ -490,21 +491,31 @@ namespace MaxWorlds.UI
             }
         }
 
+        /// <summary>
+        /// The top-right slots. Dash used to be the first of these (YT-116) — it now has its own
+        /// button down by the thumb, because top-right is the one corner a thumb holding a phone
+        /// cannot reach, and dash is the only one of the three that does anything.
+        ///
+        /// Bomb and Ultimate stay here, and stay honest: neither is implemented, so both are drawn
+        /// dimmed with a LOCKED caption rather than glowing as though they were a button you were
+        /// failing to find. Slot indices are unchanged (0 dash, 1 bomb, 2 ultimate) so the cooldown
+        /// driver does not have to care where a slot is drawn.
+        /// </summary>
         private void BuildAbilitySlots()
         {
-            string[] glyphs = { "D", "B", "U" }; // Dash, Bomb, Ultimate
+            string[] glyphs = { "B", "U" };      // Bomb, Ultimate — index 1 and 2
             var col = NewRect("Ability Slots", Root);
             Anchor(col, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             col.anchoredPosition = new Vector2(-24f, -24f);
-            col.sizeDelta = new Vector2(72f, 240f);
-            for (int i = 0; i < 3; i++)
+            col.sizeDelta = new Vector2(72f, 160f);
+            for (int g = 0; g < glyphs.Length; g++)
             {
-                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[i]}");
+                int i = g + 1;                   // slot 0 is the dash button, built separately
+                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[g]}");
                 Anchor(slot.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
                 slot.rectTransform.sizeDelta = new Vector2(72f, 72f);
-                slot.rectTransform.anchoredPosition = new Vector2(0f, -i * 80f);
+                slot.rectTransform.anchoredPosition = new Vector2(0f, -g * 80f);
                 slot.type = Image.Type.Sliced;
-                if (i == 0) _dashSlotRoot = slot.rectTransform; // Dash — the touch button attaches here.
 
                 // Ready glow (behind everything else in the slot).
                 var glow = AddImage(slot.rectTransform, HudTextures.RoundedBox(80, 0.24f), Color.clear, "Glow");
@@ -513,9 +524,20 @@ namespace MaxWorlds.UI
                 glow.raycastTarget = false;
                 _slotGlow[i] = glow;
 
-                var letter = AddText(slot.rectTransform, 30f, BoneWhite, TextAnchor.MiddleCenter);
+                // Dimmed, and captioned. These were reported as buttons of unknown purpose (YT-116);
+                // the truth is they are placeholders for abilities nobody has built, and a slot that
+                // looks live is the thing that made them worth asking about.
+                var letter = AddText(slot.rectTransform, 30f,
+                                     new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.45f),
+                                     TextAnchor.MiddleCenter);
                 Stretch(letter.rectTransform);
-                letter.text = glyphs[i];
+                letter.text = glyphs[g];
+
+                var locked = AddText(slot.rectTransform, 15f,
+                                     new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f),
+                                     TextAnchor.LowerCenter);
+                Stretch(locked.rectTransform);
+                locked.text = "LOCKED";
 
                 // Cooldown radial wipe overlay (darkens the covered fraction).
                 var radial = AddImage(slot.rectTransform, HudTextures.Disc(96), new Color(0f, 0f, 0f, 0.62f), "Radial");
@@ -529,6 +551,58 @@ namespace MaxWorlds.UI
                 _slotRadial[i] = radial;
             }
         }
+
+        /// <summary>
+        /// The dash button (YT-116) — a round action button up and to the left of the aim stick,
+        /// where the right thumb already is.
+        ///
+        /// It was in the top-right slot column, which is the far corner of a phone held in two
+        /// hands: reaching it means letting go of aim. This is the Brawl-Stars placement — the
+        /// action button sits inside the arc the aiming thumb already sweeps.
+        ///
+        /// The position is picked to clear the aim stick's TOUCH pad, not just its rings. That pad
+        /// is 30 px larger than the visible stick on every side (see AddOnScreenStick), so a button
+        /// tucked against the artwork would have stolen drags meant for aiming.
+        /// </summary>
+        private void BuildDashButton()
+        {
+            var root = NewRect("Dash Button", Root);
+            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(-DashButtonInset, DashButtonRise);
+            root.sizeDelta = new Vector2(DashButtonSize, DashButtonSize);
+            _dashButtonRoot = root;
+
+            // Ready glow first, so it sits behind the face — same z-order as the ability slots.
+            var glow = AddImage(root, HudTextures.Disc(160), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 10f);
+            glow.raycastTarget = false;
+            _slotGlow[0] = glow;
+
+            var face = AddImage(root, HudTextures.Disc(160), PanelColor, "Face");
+            Stretch(face.rectTransform);
+            face.raycastTarget = false;
+
+            var label = AddText(root, 26f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform);
+            label.text = "DASH";
+
+            // Cooldown wipe, identical treatment to the slots so the two read as one language.
+            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.62f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _slotRadial[0] = radial;
+        }
+
+        // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
+        // (-150, 150) and its pad adds 30 on each side, so it owns out to x = -310).
+        private const float DashButtonSize = 140f;
+        private const float DashButtonInset = 400f;
+        private const float DashButtonRise = 330f;
 
         private void BuildJoysticks()
         {
@@ -580,8 +654,8 @@ namespace MaxWorlds.UI
                 AddOnScreenStick(_moveJoystickRoot, "<Gamepad>/leftStick", "Move Touch");
             if (_aimJoystickRoot != null)
                 AddOnScreenStick(_aimJoystickRoot, "<Gamepad>/rightStick", "Aim Touch");
-            if (_dashSlotRoot != null)
-                AddOnScreenButton(_dashSlotRoot, "<Gamepad>/buttonSouth", "Dash Touch");
+            if (_dashButtonRoot != null)
+                AddOnScreenButton(_dashButtonRoot, "<Gamepad>/buttonSouth", "Dash Touch");
         }
 
         private static void AddOnScreenStick(RectTransform joystickRoot, string controlPath, string name)
