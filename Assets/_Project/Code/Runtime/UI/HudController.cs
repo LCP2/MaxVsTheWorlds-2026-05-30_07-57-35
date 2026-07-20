@@ -531,9 +531,10 @@ namespace MaxWorlds.UI
             root.sizeDelta = new Vector2(DashButtonSize, DashButtonSize);
             _dashButtonRoot = root;
 
-            // Ready glow first, behind everything. Thinner than it was (YT-124): a +4 halo, not a
-            // +10 slab, so it reads as a rim-light on the ring rather than a second fat ring.
-            var glow = AddImage(root, HudTextures.Disc(160), Color.clear, "Glow");
+            // Ready glow first, behind everything. A RING, not a filled disc (YT-124): when dash is
+            // ready the pulse rides the outline as a gold rim, leaving the interior see-through like
+            // the joysticks — a filled glow was tinting the whole button gold and reading as solid.
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
             Stretch(glow.rectTransform, 4f);
             glow.raycastTarget = false;
             _slotGlow[0] = glow;
