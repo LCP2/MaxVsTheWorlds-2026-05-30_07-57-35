@@ -264,6 +264,28 @@ namespace MaxWorlds.Tests.PlayMode
                              "the bar's canvas did not come back with the recycled body");
         }
 
+        /// <summary>
+        /// YT-122: a robot shows its bar from the moment it spawns, at full health — not only once
+        /// it has been hit. That "hidden until hit" default (YT-111) is what read on device as the
+        /// robots having no life bars at all.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator AFullHealthRobotAlreadyShowsItsColourCodedBar()
+        {
+            _go = new GameObject("Robot", typeof(CharacterController));
+            _go.AddComponent<RobotEnemy>();
+            yield return null;
+
+            var bar = _go.GetComponent<WorldHealthBar>();
+            Assert.That(bar.Showing, Is.True,
+                "a full-health robot must already show its bar — that is the whole ticket");
+
+            // Full health reads green (the calm end of the shared ramp), so a wall of them stays quiet.
+            Color full = FindImage("Fill").color;
+            Assert.That(full.g, Is.GreaterThan(full.r).And.GreaterThan(full.b),
+                "a healthy robot's bar should be green, not already alarming");
+        }
+
         private UnityEngine.UI.Image FindImage(string name)
         {
             foreach (UnityEngine.UI.Image i in _go.GetComponentsInChildren<UnityEngine.UI.Image>(true))

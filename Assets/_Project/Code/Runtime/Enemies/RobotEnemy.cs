@@ -180,7 +180,13 @@ namespace MaxWorlds.Enemies
             // A child of the body, so it deactivates and comes back with a POOLED robot instead of
             // needing to be reattached on reuse. The bar re-derives its own metre space every frame,
             // so it does not care that Apply() stamps this body's scale on after Awake has run.
-            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth);
+            //
+            // alwaysShow (YT-122): every robot carries its bar from the moment it spawns, not only
+            // once it has been hit. YT-111 hid a full-health robot's bar to cut clutter, but the
+            // result on device read as "the robots have no life bars" — and a green bar you can see
+            // approaching is exactly the read the ticket wants. The shared ramp keeps a healthy
+            // robot's bar green and quiet, so a wall of full robots stays calm rather than loud.
+            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true);
         }
 
         /// <summary>Metres above a robot's origin its bar floats. The origin is the body's centre
