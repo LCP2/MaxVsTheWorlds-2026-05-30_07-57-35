@@ -94,6 +94,33 @@ namespace MaxWorlds.Factories
             BuildHealthBar();
             BuildCore();
             BuildLabel();
+
+            // Straight away, so the badge and the core are never drawn for even one frame on a
+            // factory the player hasn't found yet (YT-107).
+            ApplyDiscovery();
+        }
+
+        /// <summary>
+        /// Show the tells only once this factory has been found (YT-107).
+        ///
+        /// The BODY is not hidden — it is a three-metre orange building, and a building that pops
+        /// into existence when you cross a line is worse than one you simply hadn't looked at yet.
+        /// What gets hidden is everything that reads THROUGH the level: the name badge and health bar
+        /// float 2.7 m up, clear of the 2.4 m shed walls, and the core's pulsing cyan is designed to
+        /// pull the eye from across the yard. Those are what told you where the objective was before
+        /// you had been anywhere.
+        ///
+        /// One expression rather than a flag flipped in two places, and it folds in the destroyed
+        /// case: a dead factory has no tells either.
+        /// </summary>
+        private void ApplyDiscovery()
+        {
+            bool show = Discoverable.FoundOn(this) && IsAlive;
+
+            if (_barPivot != null && _barPivot.gameObject.activeSelf != show)
+                _barPivot.gameObject.SetActive(show);
+            if (_core != null && _core.gameObject.activeSelf != show)
+                _core.gameObject.SetActive(show);
         }
 
         private void Start()
@@ -153,6 +180,8 @@ namespace MaxWorlds.Factories
 
         private void LateUpdate()
         {
+            ApplyDiscovery();
+
             if (_barFill != null) _barFill.fillAmount = Normalized;
             if (_barPivot != null && _camera != null)
             {

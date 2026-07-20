@@ -207,6 +207,11 @@ namespace MaxWorlds.UI
                 MowerHutch hutch = _hutches[i];
                 if (hutch == null) continue;
 
+                // Undiscovered sources are not on the map at all (YT-107). Drawing them from the
+                // first frame told the player where every objective was before they had walked
+                // anywhere, which is the exploration this level was supposed to be made of.
+                if (!Show(_factories[i], Discoverable.FoundOn(hutch))) continue;
+
                 Place(_factories[i], ArenaMap.Normalize(Flatten(hutch.transform.position), _bounds));
                 // Greyed rather than removed: "the thing you came to kill, already dead" is exactly
                 // what the player wants the map to tell them — and with two of them it is also how
@@ -214,22 +219,28 @@ namespace MaxWorlds.UI
                 if (_factoryImgs[i] != null) _factoryImgs[i].color = hutch.IsAlive ? FactoryDot : Dead;
             }
 
-            if (_gateObj != null)
+            // The gate is held to the same rule as the things it stands between. A marker saying
+            // "the way through is HERE" is a marker saying where the boss arena is, so revealing it
+            // up front would hand back most of what hiding the boss just bought.
+            if (_gateObj != null && Show(_gate, Discoverable.FoundOn(_gateObj)))
             {
                 Place(_gate, ArenaMap.Normalize(Flatten(_gateObj.transform.position), _bounds));
                 if (_gateImg != null)
                     _gateImg.color = _gateObj.Unlocked ? GateOpen : GateShut;
             }
 
-            if (_bossObj != null && _boss != null)
-            {
-                _boss.gameObject.SetActive(true);
+            if (_bossObj != null && Show(_boss, Discoverable.FoundOn(_bossObj)))
                 Place(_boss, ArenaMap.Normalize(Flatten(_bossObj.transform.position), _bounds));
-            }
-            else if (_boss != null)
-            {
-                _boss.gameObject.SetActive(false);
-            }
+            else if (_bossObj == null)
+                Show(_boss, false);
+        }
+
+        /// <summary>Show or hide a marker, and report whether it is worth plotting.</summary>
+        private static bool Show(RectTransform marker, bool visible)
+        {
+            if (marker == null) return false;
+            if (marker.gameObject.activeSelf != visible) marker.gameObject.SetActive(visible);
+            return visible;
         }
 
         private void Place(RectTransform marker, Vector2 normalized)
