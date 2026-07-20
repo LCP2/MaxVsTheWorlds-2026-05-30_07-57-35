@@ -14,39 +14,18 @@ namespace MaxWorlds.Core
     ///
     /// It lives in Core (not the art assemblies) purely because the gameplay code that has to
     /// consult it — PlayerHealth, WaterBlaster — can only reference Core.
+    ///
+    /// Note the scope here: only the CHEATS (invincible, infinite energy) live behind this. The
+    /// combat-feel tuning that used to hide behind a <c>MAXWORLDS_DEV_TOOLS</c> build define is now a
+    /// real, always-present Settings panel (YT-120) — see <see cref="DevTuning"/> and SettingsPanel —
+    /// so nothing here gates it any more. Bundling the two was the mistake that broke the iOS build:
+    /// the define was injected by editing ProjectSettings.asset mid-CI, which dirtied the tree and
+    /// tripped the version guard (YT-119).
     /// </summary>
     public static class DevMode
     {
         /// <summary>Master switch for the CHEATS. Everything below is gated behind this.</summary>
         public static bool Enabled { get; set; }
-
-        /// <summary>
-        /// True in a build compiled with dev tools in (YT-118). Set by the scripting define
-        /// <c>MAXWORLDS_DEV_TOOLS</c>, which the iOS→TestFlight workflow injects and which the
-        /// committed project settings deliberately do NOT carry — so the default, and anything
-        /// built for the App Store, ships without it.
-        /// </summary>
-        public const bool DevToolsBuild =
-#if MAXWORLDS_DEV_TOOLS
-            true;
-#else
-            false;
-#endif
-
-        /// <summary>
-        /// May the dev TOOLS be on screen — the tuning panel and its knobs (YT-118)?
-        ///
-        /// Deliberately a different question from <see cref="Enabled"/>, and that separation is the
-        /// point. On a phone there is no <c>?dev=1</c> URL and no Ctrl+Shift+D, so the only way to
-        /// reach the panel from a TestFlight build was to turn dev mode on at boot — which would
-        /// also have handed Lee invincibility and an infinite tank. He would then have been tuning
-        /// "life" and "water rates" in a build where neither could run out: the sliders would move
-        /// and nothing he was trying to feel would change.
-        ///
-        /// So a beta build gets the tools and plays honestly. The cheats stay behind
-        /// <see cref="Enabled"/> and stay off.
-        /// </summary>
-        public static bool ToolsAvailable => Enabled || DevToolsBuild;
 
         /// <summary>Max takes no damage. Lets a run last long enough to watch anything.</summary>
         public static bool Invincible { get; set; } = true;
@@ -67,9 +46,13 @@ namespace MaxWorlds.Core
         public static bool IsAutoFiring => Enabled && AutoFire;
         public static bool IsSpawnPaused => Enabled && PauseSpawns;
 
-        /// <summary>Back to a clean, shippable state. Also drops any tuning-panel overrides (YT-105)
-        /// — leaving them set behind a switched-off dev mode would be a trap, since they'd silently
-        /// come back the next time dev mode was turned on.</summary>
+        /// <summary>Back to a clean, shippable CHEAT state.
+        ///
+        /// It no longer touches <see cref="DevTuning"/> (YT-120). The tuning overrides used to be
+        /// wiped here because they hid behind dev mode and a stale one was a trap. Now they belong to
+        /// the always-present Settings panel and are their own feature — a player who moved a slider
+        /// should not have it silently reset because dev mode happened to toggle. The panel's own
+        /// "Reset to defaults" button is the one thing that clears them.</summary>
         public static void Reset()
         {
             Enabled = false;
@@ -77,7 +60,6 @@ namespace MaxWorlds.Core
             InfiniteEnergy = true;
             AutoFire = false;
             PauseSpawns = false;
-            DevTuning.Reset();
         }
     }
 }

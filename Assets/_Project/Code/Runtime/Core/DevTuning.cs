@@ -1,21 +1,20 @@
 namespace MaxWorlds.Core
 {
     /// <summary>
-    /// Session-only overrides for the combat-feel numbers, driven by the dev tuning panel (YT-105).
+    /// Session overrides for the combat-feel numbers, driven by the in-game Settings panel (YT-120,
+    /// originally YT-105).
     ///
     /// Why this layer exists at all: the authored numbers live in <c>const</c> classes on purpose
     /// (see <see cref="MaxWorlds.Combat.BlasterTuning"/> — serialized fields got baked into
     /// Backyard_Slice.unity and silently outranked the code). Consts can't be written at runtime,
     /// and promoting them to mutable statics would throw away exactly the property that made them
     /// trustworthy. So the authored value stays a const and this sits in front of it: gameplay asks
-    /// <see cref="Or"/> for the number, and gets the authored one unless a dev has dialled an
-    /// override this session.
+    /// <see cref="Or"/> for the number, and gets the authored one unless the Settings panel has
+    /// dialled an override.
     ///
-    /// Every override is gated behind <see cref="DevMode.Enabled"/>, so in a release session
-    /// <see cref="Or"/> returns the authored value on the first comparison and nothing here can
-    /// change how the game plays. That gate is the whole "not present in release" story — there is
-    /// no scripting define to hide behind, because the project ships with none and the CI WebGL
-    /// build is a non-development build.
+    /// A fresh session starts with every override null, so <see cref="Or"/> returns the authored
+    /// value until a slider is actually moved. No dev flag gates this any more (YT-120): the panel
+    /// is always compiled in, so a moved slider always takes effect. That is the point of it.
     ///
     /// Deliberately NOT persisted to disk. These are throwaway numbers you sweep past to find the
     /// one you want; the panel's "Copy current values" button is the intended way for a good set to
@@ -45,18 +44,17 @@ namespace MaxWorlds.Core
         public static float? BlasterRegenPerSecond { get; set; }
 
         /// <summary>
-        /// The number gameplay should actually use: the dev override if one is set AND the tuning
-        /// tools are available, otherwise the authored value. The <see cref="DevMode.ToolsAvailable"/>
-        /// check comes first so a release session costs one bool read.
+        /// The number gameplay should actually use: the override if the Settings panel has set one,
+        /// otherwise the authored value.
         ///
-        /// Gated on ToolsAvailable rather than <see cref="DevMode.Enabled"/> since YT-118: a beta
-        /// build has the panel but not the cheats, and a slider that moves without changing the game
-        /// would be worse than no slider at all. In a release build the define is absent and
-        /// ToolsAvailable collapses to Enabled, which is false — so this is unchanged where it
-        /// matters.
+        /// No longer gated on any dev flag (YT-120). The Settings panel is now a real, always-present
+        /// feature compiled into every build, so a slider the player moved must take effect — the
+        /// whole point of it is to change the game live. Until a slider is touched the override is
+        /// null and this returns the authored constant on the first comparison, so a fresh session
+        /// still plays exactly as authored and the cost is one HasValue read.
         /// </summary>
         public static float Or(float? over, float authored) =>
-            DevMode.ToolsAvailable && over.HasValue ? over.Value : authored;
+            over.HasValue ? over.Value : authored;
 
         /// <summary>True if any knob has been moved this session. Used by the panel's readout.</summary>
         public static bool AnyOverride =>
