@@ -102,13 +102,15 @@ namespace MaxWorlds.UI
             ApplyAnim(0f);
         }
 
-        /// <summary>Finish the upgrade: bank the install (spend the pending part), resume, hide.</summary>
+        /// <summary>Finish the upgrade: apply the part's effect (YT-133 — the weapon/player re-fit off
+        /// <see cref="UpgradeState"/>), take it off the pending queue, resume, hide.</summary>
         public void Continue()
         {
             if (!_open) return;
             _open = false;
             Time.timeScale = _prevTimeScale;
-            PickupWallet.SpendPart();   // this part is now installed
+            UpgradeState.Install(_part.Kind);   // the install — effects stack and are read live
+            PickupWallet.SpendPart();
             _root.SetActive(false);
         }
 

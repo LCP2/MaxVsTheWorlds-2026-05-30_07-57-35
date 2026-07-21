@@ -1,5 +1,6 @@
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Hose
@@ -76,7 +77,17 @@ namespace MaxWorlds.Hose
 
         private void LateUpdate()
         {
+            // Hydro device installed (YT-133): the hose is off the tap. Max self-supplies and roams
+            // free — no leash, no tap connection, and the tap-fed hose line comes down.
+            if (UpgradeState.Untethered)
+            {
+                if (_tap != null) { _tap.SetConnected(false); _tap = null; }
+                if (_hose != null && _hose.enabled) _hose.enabled = false;
+                return;
+            }
+
             if (_tap == null) return;
+            if (_hose != null && !_hose.enabled) _hose.enabled = true;
 
             TryReplug();   // walk up to a different tap and the hose swaps to it (YT-130)
 

@@ -22,6 +22,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator SetUp()
         {
             PickupWallet.Reset();
+            UpgradeState.Reset();   // Continue installs a part now (YT-133) — don't leak it into other tests
             Time.timeScale = 1f;
             // Both the screen and the HUD self-install and persist across the run; clear them so each
             // test owns exactly one of each and FindFirstObjectByType can't return a stray.
@@ -39,6 +40,7 @@ namespace MaxWorlds.Tests.PlayMode
             if (_screenGo != null) Object.Destroy(_screenGo);
             if (_hudGo != null) Object.Destroy(_hudGo);
             PickupWallet.Reset();
+            UpgradeState.Reset();
             yield return null;
         }
 
@@ -55,7 +57,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OpeningPausesTheGameAndShowsThePart()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
 
             Screen.Open(UpgradePart.Generic);
             yield return null;
@@ -69,7 +71,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator ContinueInstallsThePartAndResumes()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
             Assert.That(PickupWallet.PartsPending, Is.EqualTo(1));
 
             Screen.Open(UpgradePart.Generic);
@@ -86,7 +88,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator ItRestoresWhateverTimescaleItPausedFrom()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
 
             Time.timeScale = 0.5f;   // e.g. a slow-mo beat
             Screen.Open(UpgradePart.Generic);
@@ -123,7 +125,7 @@ namespace MaxWorlds.Tests.PlayMode
             _hudGo.AddComponent<HudController>();
             yield return null;
 
-            PickupWallet.AddPart();   // raises the chip
+            PickupWallet.AddPart(PartKind.BeamNozzle);   // raises the chip
             yield return null;
 
             // Find the chip's button and tap it, the way a finger would.

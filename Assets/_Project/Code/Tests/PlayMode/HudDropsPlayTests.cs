@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.TestTools;
 using MaxWorlds.UI;
 using MaxWorlds.Pickups;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -78,7 +79,7 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var alert = FindRect("Part Alert");
 
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
             yield return null;
             Assert.That(alert.gameObject.activeSelf, Is.True, "a collected part must raise the edge chip");
 

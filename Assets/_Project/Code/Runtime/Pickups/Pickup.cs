@@ -1,6 +1,7 @@
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Pickups
 {
@@ -20,6 +21,10 @@ namespace MaxWorlds.Pickups
         private const float FloatHeight = 0.6f;
 
         public PickupKind Kind { get; private set; }
+
+        /// <summary>For a part pickup (YT-133), which of the five it is — set by the director from the
+        /// unique drop table when it's placed. Meaningless for a power cell.</summary>
+        public PartKind Part { get; set; }
 
         private Transform _spin;
         private float _baseY = FloatHeight;
