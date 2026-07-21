@@ -66,8 +66,8 @@ namespace MaxWorlds.Player
 
         /// <summary>Metres above Max's origin his stack floats. His capsule is 2 m tall with its
         /// origin at the centre, so his head is at +1.0 and this clears it.</summary>
-        private const float BarHeight = 1.55f;
-        private const float BarWidth = 1.5f;
+        private const float BarHeight = 1.6f;
+        private const float BarWidth = 1.7f;   // a touch larger than a robot's (YT-125) — it's you
         private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f); // #33A0EB
 
         private MaxWorlds.Combat.WaterBlaster _blaster;

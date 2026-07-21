@@ -109,6 +109,54 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(Bar.HasSecondary, Is.False, "only Max carries a water gauge; robots must not");
         }
 
+        // ---------------------------------------------------------------- prominence (YT-125)
+
+        [UnityTest]
+        public IEnumerator TheBarHasASolidDarkOutlineThatPops()
+        {
+            NewUnit(Vector3.one).Hp = 50f;
+            yield return null;
+
+            var outline = FindImage("Outline");
+            Assert.That(outline, Is.Not.Null, "the beefed bar has no dark outline capsule");
+            Assert.That(outline.color.a, Is.GreaterThan(0.8f), "the outline is too faint to read as a border");
+            // Dark: the outline should be near-black, not another bright element.
+            Assert.That(outline.color.r + outline.color.g + outline.color.b, Is.LessThan(0.3f),
+                        "the outline is not dark enough to separate the bar from the grass");
+
+            // Behind the fill, so the fill draws over it and only the border shows.
+            Assert.That(outline.rectTransform.GetSiblingIndex(),
+                        Is.LessThan(FindImage("Fill").rectTransform.GetSiblingIndex()),
+                        "the outline must sit behind the fill");
+        }
+
+        [UnityTest]
+        public IEnumerator TheBarIsChunkierThanAHairline()
+        {
+            NewUnit(Vector3.one).Hp = 50f;
+            yield return null;
+
+            // World height of the drawn bar, in metres, from its rendered corners (sizeDelta is
+            // meaningless on a stretched rect). The old bar was ~0.12 m; the beefed one is roughly
+            // double, which is what "reads at 23 m zoom" needs.
+            var c = new Vector3[4];
+            FindImage("Outline").rectTransform.GetWorldCorners(c);
+            float worldHeight = Mathf.Abs(c[1].y - c[0].y);
+            Assert.That(worldHeight, Is.GreaterThan(0.18f),
+                        $"the bar is only {worldHeight:0.00} m tall — too thin to read at play zoom");
+        }
+
+        [UnityTest]
+        public IEnumerator TheWaterGaugeGetsTheSameOutlineTreatment()
+        {
+            NewUnitWithWater(() => 0.5f);
+            yield return null;
+
+            Assert.That(FindImage("Water Outline"), Is.Not.Null,
+                        "the water gauge must be beefed up like the life bar, not left a hairline");
+            yield return null;
+        }
+
         // ---------------------------------------------------------------- size and place
 
         [UnityTest]

@@ -25,24 +25,32 @@ namespace MaxWorlds.UI
     public sealed class WorldHealthBar : MonoBehaviour
     {
         // Sizes in metres, so the bar reads as a label on the unit rather than a banner over the
-        // arena. Deliberately narrower than a body: it is a readout, not architecture.
+        // arena. Beefed up for YT-125 (Brawl Stars idiom): much taller than the old 20, with a solid
+        // dark outline and capsule ends so it pops against the busy backyard at the 23 m phone zoom.
         private const float BarPixelWidth = 180f;
-        private const float BarPixelHeight = 20f;
+        private const float BarPixelHeight = 40f;      // was 20 — chunky, unmistakable
         private const float LabelPixelWidth = 260f;
-        private const float LabelPixelHeight = 26f;
-        private const int LabelFontSize = 20;
-        private const int NumberFontSize = 22;
+        private const float LabelPixelHeight = 30f;
+        private const int LabelFontSize = 22;
+        private const int NumberFontSize = 28;
+
+        // The solid dark border, in canvas pixels. Thick enough to read as a deliberate outline that
+        // separates the bar from the grass, not a hairline.
+        private const float OutlinePx = 6f;
 
         /// <summary>Hide the bar once a unit is this close to full. A field of untouched robots each
         /// carrying a full green bar is the clutter the ticket warned about; a bar that appears when
         /// something has been hit is information.</summary>
         private const float FullEnough = 0.999f;
 
-        private static readonly Color BackColor = new Color(0f, 0f, 0f, 0.6f);
-        private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.85f);
+        // Near-black, mostly opaque: the outline that makes the capsule pop. The track (unfilled
+        // part) is a translucent dark, so a drained bar reads as an empty capsule, not a black slab.
+        private static readonly Color OutlineColor = new Color(0.02f, 0.03f, 0.02f, 0.92f);
+        private static readonly Color BackColor = new Color(0f, 0f, 0f, 0.55f);
+        private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.9f);
 
         // Height of the optional secondary gauge (Max's water), as a fraction of the health bar's.
-        private const float SecondaryHeightFraction = 0.6f;
+        private const float SecondaryHeightFraction = 0.62f;
 
         private IHealthReadout _source;
         private Transform _pivot;
@@ -117,40 +125,27 @@ namespace MaxWorlds.UI
             _canvas.SetParent(_pivot, false);
             _canvas.sizeDelta = new Vector2(BarPixelWidth, BarPixelHeight);
 
-            var bg = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), BackColor, "Back");
-            Stretch(bg.rectTransform, 0f);
+            // The life bar: a bold outlined capsule filling the whole canvas.
+            _fill = BuildCapsule(_canvas, HealthBarColor.Ramp(1f), "");
 
-            _fill = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), HealthBarColor.Ramp(1f), "Fill");
-            _fill.type = Image.Type.Filled;
-            _fill.fillMethod = Image.FillMethod.Horizontal;
-            _fill.fillOrigin = (int)Image.OriginHorizontal.Left;
-            _fill.fillAmount = 1f;
-            Stretch(_fill.rectTransform, -3f);
-
-            // The water gauge (YT-121) stacks directly ABOVE the life bar. Thinner, so the stack
-            // reads as "gauge on top, health below" at a glance and the life bar stays the dominant
-            // one. Built only for Max — robots pass no secondary.
-            float nameLift = 3f;
+            // The water gauge (YT-121) stacks directly ABOVE the life bar, and gets the same beefed
+            // treatment (YT-125). Slightly shorter so the stack reads as "gauge on top, health below"
+            // and the life bar stays the dominant one. Built only for Max — robots pass no secondary.
+            float nameLift = 4f;
             if (_secondary != null)
             {
                 float h = BarPixelHeight * SecondaryHeightFraction;
-                var back = NewImage(_canvas, HudTextures.RoundedBox(24, 0.5f), BackColor, "Water Back");
-                var br = back.rectTransform;
-                br.anchorMin = new Vector2(0f, 1f); br.anchorMax = new Vector2(1f, 1f);
-                br.pivot = new Vector2(0.5f, 0f);
-                br.offsetMin = new Vector2(0f, 0f); br.offsetMax = new Vector2(0f, 0f);
-                br.sizeDelta = new Vector2(0f, h);
-                br.anchoredPosition = new Vector2(0f, 2f);   // a hair above the life bar
+                var host = new GameObject("Water", typeof(RectTransform)).GetComponent<RectTransform>();
+                host.SetParent(_canvas, false);
+                host.anchorMin = new Vector2(0f, 1f); host.anchorMax = new Vector2(1f, 1f);
+                host.pivot = new Vector2(0.5f, 0f);
+                host.offsetMin = Vector2.zero; host.offsetMax = Vector2.zero;
+                host.sizeDelta = new Vector2(0f, h);
+                host.anchoredPosition = new Vector2(0f, 3f);   // a hair above the life bar
 
-                _secondaryFill = NewImage(back.rectTransform, HudTextures.RoundedBox(24, 0.5f),
-                                          _secondaryColor, "Water Fill");
-                _secondaryFill.type = Image.Type.Filled;
-                _secondaryFill.fillMethod = Image.FillMethod.Horizontal;
-                _secondaryFill.fillOrigin = (int)Image.OriginHorizontal.Left;
-                _secondaryFill.fillAmount = 1f;
-                Stretch(_secondaryFill.rectTransform, -2f);
+                _secondaryFill = BuildCapsule(host, _secondaryColor, "Water ");
 
-                nameLift = h + 6f;   // push the name clear of the water gauge
+                nameLift = h + 8f;   // push the name clear of the water gauge
             }
 
             _nameText = NewText(_canvas, LabelFontSize, NameColor, TextAnchor.LowerCenter);
@@ -224,6 +219,33 @@ namespace MaxWorlds.UI
                 _pivot.rotation = Quaternion.LookRotation(
                     _pivot.position - _camera.transform.position, Vector3.up);
             }
+        }
+
+        /// <summary>
+        /// A Brawl-Stars-style capsule bar filling <paramref name="host"/> (YT-125): a solid dark
+        /// outline capsule, a translucent dark track inside it, and a coloured fill inset by the
+        /// outline width so the dark border shows all the way round. Returns the fill Image, whose
+        /// <c>fillAmount</c> is what tracks the value. Used for both the life bar and the water gauge
+        /// so they cannot drift apart in style.
+        /// </summary>
+        private Image BuildCapsule(RectTransform host, Color fillColor, string prefix)
+        {
+            // Higher-res rounded sprite so the capsule ends stay crisp at the bigger size.
+            Sprite capsule = HudTextures.RoundedBox(48, 0.5f);
+
+            var outline = NewImage(host, capsule, OutlineColor, prefix + "Outline");
+            Stretch(outline.rectTransform, 0f);
+
+            var track = NewImage(host, capsule, BackColor, prefix + "Back");
+            Stretch(track.rectTransform, -OutlinePx);
+
+            var fill = NewImage(host, capsule, fillColor, prefix + "Fill");
+            fill.type = Image.Type.Filled;
+            fill.fillMethod = Image.FillMethod.Horizontal;
+            fill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            fill.fillAmount = 1f;
+            Stretch(fill.rectTransform, -OutlinePx);
+            return fill;
         }
 
         // ------------------------------------------------------------------ small builders
