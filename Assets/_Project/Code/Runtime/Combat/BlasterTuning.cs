@@ -23,8 +23,9 @@ namespace MaxWorlds.Combat
         public const float MaxEnergy = 140f;
 
         /// <summary>What holding the trigger costs per second. The ramp keeps this constant, so this
-        /// single number sets sustained-fire length: <see cref="SustainedFireSeconds"/>.</summary>
-        public const float EnergyPerSecond = 10f;
+        /// single number sets sustained-fire length: <see cref="SustainedFireSeconds"/>.
+        /// Raised to Lee's on-device number (YT-106, was 10): the tank runs out sooner.</summary>
+        public const float EnergyPerSecond = 19.94f;
 
         /// <summary>Refill rate once the delay has passed. Comfortably faster than the drain, so any
         /// natural pause in a fight — repositioning, a dash, picking the next target — puts real

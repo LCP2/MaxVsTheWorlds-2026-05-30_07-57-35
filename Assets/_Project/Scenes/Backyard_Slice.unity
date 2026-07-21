@@ -732,7 +732,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0584fcc500d009b49860ee866a0ea654, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Player.PlayerController
-  moveSpeed: 6
+  moveSpeed: 3.01
   rotationSpeed: 720
   gravity: 20
   aimActivateThreshold: 0.5
@@ -801,7 +801,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70347c6004f2b744a9d37cf91fcd58b8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Player.PlayerHealth
-  maxHealth: 100
+  maxHealth: 69.82
 --- !u!1 &500010018
 GameObject:
   m_ObjectHideFlags: 0

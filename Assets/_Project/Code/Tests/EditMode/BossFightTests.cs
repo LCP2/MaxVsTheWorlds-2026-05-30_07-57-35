@@ -97,7 +97,12 @@ namespace MaxWorlds.Tests.EditMode
                     $"a level-{level} player firing {engagement:P0} of the time melts the boss in " +
                     $"{seconds:0}s");
 
-                Assert.Less(seconds, 220f,
+                // Ceiling nudged 220 → 240 for YT-106: Lee's faster water drain cuts effective gun
+                // uptime, so the WEAKEST turnout (level 6, timid 30% engagement) now takes ~237s
+                // instead of ~215. FLAG: that is right at the edge of "a slog" for an underlevelled
+                // player. Boss HP becomes a live Settings slider in YT-126 (default unchanged), so
+                // Lee can pull the fight length back on-device if this reads too long.
+                Assert.Less(seconds, 240f,
                     $"a level-{level} player firing {engagement:P0} of the time is still hosing the " +
                     $"boss {seconds:0}s later — that is a health bar, not a fight");
             }
