@@ -49,6 +49,9 @@ namespace MaxWorlds.Core
         /// <summary>Big Bermuda's max HP (YT-126).</summary>
         public static float? BossHealth { get; set; }
 
+        /// <summary>Hard max length of the hose leash, metres — how far Max can range from his tap (YT-129).</summary>
+        public static float? HoseTetherLength { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -67,7 +70,7 @@ namespace MaxWorlds.Core
             CameraDistance.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
-            FactoryHealth.HasValue || BossHealth.HasValue;
+            FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -81,6 +84,7 @@ namespace MaxWorlds.Core
             BlasterRegenPerSecond = null;
             FactoryHealth = null;
             BossHealth = null;
+            HoseTetherLength = null;
         }
     }
 }

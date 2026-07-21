@@ -777,14 +777,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a5b7957ca077d7e40b16f369c6143c73, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Combat.WaterBlaster
-  range: 6
+  range: 4.5
   radius: 0.6
   damagePerTick: 4
   fireInterval: 0.1
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  coneHalfAngle: 35
+  coneHalfAngle: 48
   knockbackForce: 5
   streamVisualRadius: 1.1
   debugOverlay: 1

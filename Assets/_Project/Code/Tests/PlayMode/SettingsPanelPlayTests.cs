@@ -80,9 +80,10 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(9),
-                "Nine values: camera zoom, Max speed, robot speed, boss speed, Max max-life, water " +
-                "deplete, water replenish, plus factory health and boss health (YT-126).");
+            Assert.That(sliders.Length, Is.EqualTo(10),
+                "Ten values: camera zoom, Max speed, robot speed, boss speed, Max max-life, water " +
+                "deplete, water replenish, factory health and boss health (YT-126), plus hose " +
+                "tether length (YT-129).");
             yield return null;
         }
 
