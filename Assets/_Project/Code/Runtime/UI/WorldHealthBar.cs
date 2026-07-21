@@ -28,7 +28,9 @@ namespace MaxWorlds.UI
         // arena. Beefed up for YT-125 (Brawl Stars idiom): much taller than the old 20, with a solid
         // dark outline and capsule ends so it pops against the busy backyard at the 23 m phone zoom.
         private const float BarPixelWidth = 180f;
-        private const float BarPixelHeight = 40f;      // was 20 — chunky, unmistakable
+        // Genuinely chunky (YT-128): 64 vs the old 20, so even foreshortened by the ~72° camera the
+        // capsule reads comfortably at the 23 m phone zoom rather than as a hairline over a threshold.
+        private const float BarPixelHeight = 64f;
         private const float LabelPixelWidth = 260f;
         private const float LabelPixelHeight = 30f;
         private const int LabelFontSize = 22;
