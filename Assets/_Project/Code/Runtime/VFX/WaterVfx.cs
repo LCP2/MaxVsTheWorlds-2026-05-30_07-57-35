@@ -61,6 +61,16 @@ namespace MaxWorlds.VFX
         /// <summary>The stream's actual cone half-angle, in degrees. Exposed so a test can hold it
         /// against the reticle's without reading particles off the screen.</summary>
         public float StreamHalfAngle => streamAngle;
+
+        /// <summary>The cone half-angle the LIVE stream EMITTER is shaped to, read off the particle
+        /// system itself (not a cached field). A nozzle upgrade must move THIS, not just the reticle —
+        /// the emitter reading a stale value is the YT-141 bug. 0 before the stream is built.</summary>
+        public float EmitterHalfAngle => _stream != null ? _stream.shape.angle : 0f;
+
+        /// <summary>The stream emitter's current top launch speed. It scales with reach (the droplet
+        /// lifetime is fixed), so a longer beam is a faster jet — this is how a test proves the
+        /// emitter's REACH grew, not only the aim outline's. 0 before the stream is built.</summary>
+        public float EmitterSpeed => _stream != null ? _stream.main.startSpeed.constantMax : 0f;
         [Tooltip("How far in front of the blaster's origin the water leaves the nozzle, in " +
                  "multiples of the stream radius. Stretched particles trail a tail behind " +
                  "themselves, so emitting at the origin makes the jet appear to pass through " +
@@ -98,7 +108,7 @@ namespace MaxWorlds.VFX
             _range = Mathf.Max(0.1f, range);
             _radius = Mathf.Max(0.05f, radius);
             streamAngle = SprayHalfAngleFor(coneHalfAngle);
-            if (_built) return;
+            if (_built) { Refit(); return; }   // a nozzle upgrade re-shapes the live stream (YT-141)
             _built = true;
 
             _stream = BuildStream();
@@ -108,6 +118,32 @@ namespace MaxWorlds.VFX
             _flash = BuildFlash();
 
             SetStreaming(false, force: true);
+        }
+
+        /// <summary>
+        /// Re-apply reach and spread to the already-built stream (YT-141), so a nozzle upgrade
+        /// re-shapes the visible water to match the reticle and the hit test — the three must agree
+        /// (YT-110). Cheaper than rebuilding the particle systems: the shape angle and the droplet
+        /// lifetime (which is what makes the water die at the weapon's real reach) are just re-set.
+        /// </summary>
+        private void Refit()
+        {
+            if (_stream != null)
+            {
+                float speed = Reach / Mathf.Max(0.05f, travelTime);   // mirrors BuildStream
+                var m = _stream.main;
+                m.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.82f, speed * 1.15f);
+                m.startLifetime = Reach / speed;
+                var s = _stream.shape; s.angle = streamAngle;
+            }
+            if (_core != null)
+            {
+                float speed = Reach / Mathf.Max(0.05f, travelTime * 0.9f);   // mirrors BuildCore
+                var m = _core.main;
+                m.startSpeed = speed;
+                m.startLifetime = (Reach * 0.8f) / speed;
+                var s = _core.shape; s.angle = streamAngle * 0.4f;
+            }
         }
 
         /// <summary>Start/stop the jet. Only acts on change, so it is free to call every frame.</summary>
