@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 
@@ -57,7 +58,67 @@ namespace MaxWorlds.VFX
                 Part(root, $"Spoke{i}", PrimitiveType.Cube, new Vector3(0f, 0.98f, 0f),
                      new Vector3(i == 0 ? 0.22f : 0.05f, 0.03f, i == 0 ? 0.05f : 0.22f), null, brass);
             }
+
+            BuildDrip(root);
             return root;
+        }
+
+        /// <summary>The dripping-tap beacon (YT-142): a continuous water drip off the spout and a wet
+        /// patch pooling at the base, so a tap reads at a glance as a water source to plug into — the
+        /// "here I am" locator Lee asked for, the way a pickup shimmers.</summary>
+        private static void BuildDrip(GameObject root)
+        {
+            // The drip — droplets falling from the spout mouth. World space so they fall straight down
+            // and pool no matter how the tap is turned.
+            var dripGo = new GameObject("Drip");
+            dripGo.transform.SetParent(root.transform, worldPositionStays: false);
+            dripGo.transform.localPosition = new Vector3(0f, SpoutHeight - 0.05f, 0.26f);   // the spout mouth
+            var ps = dripGo.AddComponent<ParticleSystem>();
+
+            var main = ps.main;
+            main.playOnAwake = true;
+            main.loop = true;
+            main.simulationSpace = ParticleSystemSimulationSpace.World;
+            main.startLifetime = new ParticleSystem.MinMaxCurve(0.55f, 0.75f);   // ~time to fall to the lawn
+            main.startSpeed = new ParticleSystem.MinMaxCurve(0.08f, 0.3f);
+            main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.14f);       // fat enough to read as beads at zoom
+            main.gravityModifier = 1.7f;                                          // it FALLS — that is the read
+            main.startColor = new Color(0.62f, 0.86f, 1f, 0.95f);
+            main.maxParticles = 40;                                               // ambience budget (< 200)
+
+            var emission = ps.emission;
+            emission.rateOverTime = 7f;   // a steady, catch-the-eye drip, still not a stream
+
+            var shape = ps.shape;
+            shape.shapeType = ParticleSystemShapeType.Sphere;
+            shape.radius = 0.02f;
+
+            // Stretched along fall velocity so each drop reads as a bead of water, not a dot.
+            var r = ps.GetComponent<ParticleSystemRenderer>();
+            r.renderMode = ParticleSystemRenderMode.Stretch;
+            r.velocityScale = 0.09f;
+            r.lengthScale = 2.4f;
+            r.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Droplet());
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
+
+            // The wet patch — a soft translucent disc darkening the lawn under the spout.
+            var patch = GameObject.CreatePrimitive(PrimitiveType.Quad);
+            patch.name = "WetPatch";
+            var col = patch.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col);
+            patch.transform.SetParent(root.transform, worldPositionStays: false);
+            patch.transform.localPosition = new Vector3(0f, 0.02f, 0.18f);
+            patch.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);        // lie flat on the lawn
+            patch.transform.localScale = new Vector3(0.72f, 0.72f, 1f);
+            var pr = patch.GetComponent<MeshRenderer>();
+            pr.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Droplet());
+            pr.shadowCastingMode = ShadowCastingMode.Off;
+            pr.receiveShadows = false;
+            var mpb = new MaterialPropertyBlock();
+            pr.GetPropertyBlock(mpb);
+            mpb.SetColor("_BaseColor", new Color(0.16f, 0.30f, 0.38f, 0.5f));     // wet, darkened lawn
+            pr.SetPropertyBlock(mpb);
         }
 
         private static void Part(GameObject root, string name, PrimitiveType shape, Vector3 pos,

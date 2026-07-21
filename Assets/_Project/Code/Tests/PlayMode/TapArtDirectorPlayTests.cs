@@ -66,6 +66,23 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator TheTapDrips_WithAWetPatchAtItsBase()
+        {
+            // YT-142 — the drip is the "here I am" beacon so players can find the taps.
+            var tap = MakeTap();
+            yield return InstallDirector();
+
+            var art = tap.transform.Find("TapArt");
+            Assert.IsNotNull(art, "the tap was not dressed.");
+            Assert.IsNotNull(art.GetComponentInChildren<ParticleSystem>(),
+                "the tap has no drip — nothing marks it as a water source at a glance.");
+            Assert.IsNotNull(art.Find("WetPatch"), "the tap has no wet patch pooling at its base.");
+            // Still scenery — the drip and patch must not have brought a collider back.
+            Assert.IsEmpty(tap.transform.Find("TapArt").GetComponentsInChildren<Collider>(),
+                "the drip dressing added a collider.");
+        }
+
+        [UnityTest]
         public IEnumerator DressesEachTapOnce_NoDuplicates()
         {
             var tap = MakeTap();
