@@ -36,27 +36,36 @@ namespace MaxWorlds.VFX
             Material pipe = MaterialLibrary.Tinted(SurfaceKind.Metal, Pipe);
             Material brass = MaterialLibrary.Tinted(SurfaceKind.Metal, BrassTone);
 
+            // A chunk bigger than the first cut (YT-144), so it's easy to spot as a water source from
+            // across the yard at the ~72 deg camera. The mass and girth grow ~1.5x; the vertical layout
+            // is deliberately NOT scaled with it — the SPOUT has to stay at the hose-coupling height
+            // (SpoutHeight / Tap.NozzleHeight, 0.9 m) or the hose line meets it in mid-air and the
+            // retained cyan connection bulb (Tap's, at 1.02 m) floats off the valve. So it grows fat and
+            // a touch taller, not uniformly scaled: a beefier standpipe, same plug-in point.
+
             // A flange where it comes out of the ground, and the riser pipe up to the valve body.
-            Part(root, "Flange", PrimitiveType.Cylinder, new Vector3(0f, 0.03f, 0f),
-                 new Vector3(0.2f, 0.03f, 0.2f), null, pipe);
-            Part(root, "Riser", PrimitiveType.Cylinder, new Vector3(0f, 0.4f, 0f),
-                 new Vector3(0.11f, 0.4f, 0.11f), null, pipe);
+            Part(root, "Flange", PrimitiveType.Cylinder, new Vector3(0f, 0.05f, 0f),
+                 new Vector3(0.30f, 0.05f, 0.30f), null, pipe);
+            Part(root, "Riser", PrimitiveType.Cylinder, new Vector3(0f, 0.46f, 0f),
+                 new Vector3(0.17f, 0.46f, 0.17f), null, pipe);
 
             // The brass valve body.
-            Part(root, "Body", PrimitiveType.Cylinder, new Vector3(0f, 0.82f, 0f),
-                 new Vector3(0.17f, 0.1f, 0.17f), null, brass);
+            Part(root, "Body", PrimitiveType.Cylinder, new Vector3(0f, 0.95f, 0f),
+                 new Vector3(0.25f, 0.12f, 0.25f), null, brass);
 
-            // The spout — angled forward and down, ending at the coupling height so the hose meets it.
-            Part(root, "Spout", PrimitiveType.Cylinder, new Vector3(0f, SpoutHeight - 0.02f, 0.16f),
-                 new Vector3(0.08f, 0.13f, 0.08f), Quaternion.Euler(62f, 0f, 0f), brass);
+            // The spout — angled forward and down, its mouth kept at the coupling height so the hose
+            // meets it. Branches off the riser BELOW the raised valve, so the tap can grow taller
+            // without the water source leaving the 0.9 m line.
+            Part(root, "Spout", PrimitiveType.Cylinder, new Vector3(0f, SpoutHeight - 0.04f, 0.24f),
+                 new Vector3(0.11f, 0.18f, 0.11f), Quaternion.Euler(62f, 0f, 0f), brass);
 
             // The valve wheel on top — a rim plus a cross handle, the clearest "turn me on" read.
-            Part(root, "Wheel", PrimitiveType.Cylinder, new Vector3(0f, 0.98f, 0f),
-                 new Vector3(0.22f, 0.03f, 0.22f), null, brass);
+            Part(root, "Wheel", PrimitiveType.Cylinder, new Vector3(0f, 1.08f, 0f),
+                 new Vector3(0.32f, 0.04f, 0.32f), null, brass);
             for (int i = 0; i < 2; i++)
             {
-                Part(root, $"Spoke{i}", PrimitiveType.Cube, new Vector3(0f, 0.98f, 0f),
-                     new Vector3(i == 0 ? 0.22f : 0.05f, 0.03f, i == 0 ? 0.05f : 0.22f), null, brass);
+                Part(root, $"Spoke{i}", PrimitiveType.Cube, new Vector3(0f, 1.08f, 0f),
+                     new Vector3(i == 0 ? 0.32f : 0.07f, 0.04f, i == 0 ? 0.07f : 0.32f), null, brass);
             }
 
             BuildDrip(root);
@@ -72,7 +81,7 @@ namespace MaxWorlds.VFX
             // and pool no matter how the tap is turned.
             var dripGo = new GameObject("Drip");
             dripGo.transform.SetParent(root.transform, worldPositionStays: false);
-            dripGo.transform.localPosition = new Vector3(0f, SpoutHeight - 0.05f, 0.26f);   // the spout mouth
+            dripGo.transform.localPosition = new Vector3(0f, SpoutHeight - 0.06f, 0.36f);   // the bigger spout's mouth
             var ps = dripGo.AddComponent<ParticleSystem>();
 
             var main = ps.main;
@@ -81,17 +90,17 @@ namespace MaxWorlds.VFX
             main.simulationSpace = ParticleSystemSimulationSpace.World;
             main.startLifetime = new ParticleSystem.MinMaxCurve(0.55f, 0.75f);   // ~time to fall to the lawn
             main.startSpeed = new ParticleSystem.MinMaxCurve(0.08f, 0.3f);
-            main.startSize = new ParticleSystem.MinMaxCurve(0.08f, 0.14f);       // fat enough to read as beads at zoom
+            main.startSize = new ParticleSystem.MinMaxCurve(0.13f, 0.21f);       // grown with the tap — fat beads that read at zoom
             main.gravityModifier = 1.7f;                                          // it FALLS — that is the read
             main.startColor = new Color(0.62f, 0.86f, 1f, 0.95f);
-            main.maxParticles = 40;                                               // ambience budget (< 200)
+            main.maxParticles = 60;                                               // ambience budget (< 200)
 
             var emission = ps.emission;
-            emission.rateOverTime = 7f;   // a steady, catch-the-eye drip, still not a stream
+            emission.rateOverTime = 11f;   // a steady, catch-the-eye drip, still not a stream
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Sphere;
-            shape.radius = 0.02f;
+            shape.radius = 0.035f;
 
             // Stretched along fall velocity so each drop reads as a bead of water, not a dot.
             var r = ps.GetComponent<ParticleSystemRenderer>();
@@ -108,9 +117,9 @@ namespace MaxWorlds.VFX
             var col = patch.GetComponent<Collider>();
             if (col != null) Object.Destroy(col);
             patch.transform.SetParent(root.transform, worldPositionStays: false);
-            patch.transform.localPosition = new Vector3(0f, 0.02f, 0.18f);
+            patch.transform.localPosition = new Vector3(0f, 0.02f, 0.24f);
             patch.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);        // lie flat on the lawn
-            patch.transform.localScale = new Vector3(0.72f, 0.72f, 1f);
+            patch.transform.localScale = new Vector3(1.15f, 1.15f, 1f);           // grown with the tap
             var pr = patch.GetComponent<MeshRenderer>();
             pr.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Droplet());
             pr.shadowCastingMode = ShadowCastingMode.Off;
