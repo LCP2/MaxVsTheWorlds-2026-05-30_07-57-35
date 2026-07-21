@@ -4,6 +4,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Combat;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Hose;
 using MaxWorlds.Pickups;
@@ -42,6 +43,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             UpgradeState.Reset();   // critical: don't leak installs into other test classes
             PickupWallet.Reset();
+            DevTuning.Reset();
             Time.timeScale = 1f;
             yield return null;
         }
@@ -136,6 +138,7 @@ namespace MaxWorlds.Tests.PlayMode
             dir.AddComponent<PickupDirector>();
             yield return null;
 
+            DevTuning.PartDropInterval = 1f;   // one part per kill, so 6 kills exercises the whole table
             for (int i = 0; i < 6; i++)   // six tough kills; only five parts exist
                 DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
             yield return null;
