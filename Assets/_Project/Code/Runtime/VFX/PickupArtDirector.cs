@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
 
@@ -23,6 +24,20 @@ namespace MaxWorlds.VFX
     {
         private const string ArtPrefix = "PartArt:";   // child name carries the key it was built for
         private const float SpinDegreesPerSecond = 90f;
+
+        // The collectible glow (YT-145): a soft additive bloom aura on every dropped pickup + power cell,
+        // with a subtle pulse, so they read as "grab me" from across the yard. One shared colour for the
+        // whole pickup language — the HUD part-ready icon (YT-147) is told to match it.
+        //
+        // ORANGE, not green: the lawn is green (BiomePalette turf/grass), so a green glow on it has almost
+        // no hue contrast — and readability is the craft bible's first tie-breaker. Orange is the
+        // complement of the grass, so it pops hardest; the pulse keeps it distinct from the game's STATIC
+        // hazard-orange (factory/telegraph), and it stays clear of the forbidden yellow/brown. The aura
+        // rides the floating pickup (it is NOT a ground ring) so it never reads as a danger telegraph.
+        private const string GlowName = "CollectibleGlow";
+        private static readonly Color GlowColor = new Color(1f, 0.52f, 0.12f);
+        private const float GlowBaseScale = 0.72f;
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -57,6 +72,50 @@ namespace MaxWorlds.VFX
                 // child, which we hid, so the art needs its own turn. Unscaled so it keeps turning while
                 // the upgrade screen has the game paused with a part still on the ground.
                 if (art != null) art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+
+                PulseGlow(EnsureGlow(pickup.transform));
+            }
+        }
+
+        /// <summary>The pickup's collectible aura, built once and reused. A sibling of the art (not a
+        /// PartArt: child), so a pooled pickup swapping parts keeps its glow instead of rebuilding it,
+        /// and <see cref="ClearWrongArt"/> never touches it.</summary>
+        private static Transform EnsureGlow(Transform pickup)
+        {
+            var existing = pickup.Find(GlowName);
+            if (existing != null) return existing;
+
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = GlowName;
+            var col = go.GetComponent<Collider>();
+            if (col != null) Destroy(col);                 // the Pickup's own trigger owns walk-over
+            go.transform.SetParent(pickup, worldPositionStays: false);
+            go.transform.localPosition = Vector3.zero;     // centred on the prop mass; rides the float/bob
+            go.transform.localScale = Vector3.one * GlowBaseScale;
+
+            var r = go.GetComponent<MeshRenderer>();
+            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
+            return go.transform;
+        }
+
+        /// <summary>Breathe the aura — a gentle scale + brightness pulse so it reads as an active beacon,
+        /// not a painted-on disc. Unscaled time so it keeps pulsing while a part sits on the ground under
+        /// the paused upgrade screen, matching the art's spin.</summary>
+        private static void PulseGlow(Transform glow)
+        {
+            if (glow == null) return;
+
+            float t = Mathf.Sin(Time.unscaledTime * 3.4f) * 0.5f + 0.5f;   // 0..1
+            glow.localScale = Vector3.one * (GlowBaseScale * (0.9f + 0.16f * t));
+
+            if (glow.TryGetComponent<MeshRenderer>(out var r))
+            {
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                mpb.SetColor(BaseColorId, GlowColor * (0.6f + 0.4f * t));   // additive: dimmer..full
+                r.SetPropertyBlock(mpb);
             }
         }
 
