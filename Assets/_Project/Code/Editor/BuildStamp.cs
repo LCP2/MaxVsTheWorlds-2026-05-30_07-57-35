@@ -37,14 +37,25 @@ namespace MaxWorlds.Editor
         }
 
         /// <summary>
+        /// The marketing version (CFBundleShortVersionString) — tracks the release milestone, bumped
+        /// by hand as the game hits each one (YT-135: 0.1.0 → 0.2.0, the weapon epic). The build
+        /// NUMBER auto-increments separately (see <see cref="ComposeIosBuildNumber"/>); this string is
+        /// the deliberate human decision about which milestone the build represents. It's a compiled
+        /// constant, NOT a build-time edit of a tracked file — the thing that dirtied the tree and
+        /// broke the iOS build in YT-117/YT-119.
+        /// </summary>
+        public const string MilestoneVersion = "0.2.0";
+
+        /// <summary>
         /// iOS rejects a bundle version that isn't purely digits-and-dots (CFBundleShortVersionString:
         /// "must consist only of '.'s and numbers, begin and end with a number, ≤18 chars"), so the
         /// SHA/timestamp stamp <see cref="Compose"/> makes is illegal there. Use the numeric version
-        /// GameCI already computes (the <c>VERSION</c> env, e.g. "0.0.110") when it's valid; otherwise
-        /// fall back to a stable marketing version for a hand-made iOS build.
+        /// GameCI already computes (the <c>VERSION</c> env, e.g. "0.0.110") when it's valid — e.g. a
+        /// pushed <c>vX.Y.Z</c> tag — otherwise fall back to the <see cref="MilestoneVersion"/> so a
+        /// dispatch/hand-made iOS build still reads the current milestone.
         /// </summary>
         public static string ComposeIosVersion(string gameCiVersion) =>
-            IsValidIosVersion(gameCiVersion) ? gameCiVersion : "0.1.0";
+            IsValidIosVersion(gameCiVersion) ? gameCiVersion : MilestoneVersion;
 
         /// <summary>
         /// The iOS CFBundleVersion: a UTC <c>yyMMddHHmm</c> stamp.
