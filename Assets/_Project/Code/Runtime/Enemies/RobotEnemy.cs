@@ -192,7 +192,7 @@ namespace MaxWorlds.Enemies
         /// <summary>Metres above a robot's origin its bar floats. The origin is the body's centre
         /// and the tallest archetype is 1.4 m, so this clears every head with room to spare.</summary>
         private const float BarHeight = 1.15f;
-        private const float BarWidth = 1.3f;   // YT-128: bigger overall so it's readable at 23 m zoom
+        private const float BarWidth = 1.5f;   // YT-136: wider so a flat, short bar still reads at 23 m zoom
 
         private void OnEnable() => ResetState(); // reset for pooling reuse
 
