@@ -59,6 +59,22 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator TheCounterWearsTheBatteryIcon_NotAGenericDisc()
+        {
+            // YT-134 — the counter must show the purpose-built power-cell sprite so it reads as a
+            // battery, not "a cyan dot". WeaponHudIcons.PowerCell names its sprite "powercell".
+            Image icon = null;
+            foreach (var img in _hudGo.GetComponentsInChildren<Image>(true))
+                if (img.name == "Cell Icon") icon = img;
+
+            Assert.That(icon, Is.Not.Null, "the power-cell counter has no icon");
+            Assert.That(icon.sprite, Is.Not.Null, "the counter icon draws no sprite");
+            Assert.That(icon.sprite.name, Is.EqualTo("powercell"),
+                "the counter must wear the battery icon, not a generic disc");
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator BankingACellBumpsTheCounter()
         {
             PickupWallet.AddPowerCell();
