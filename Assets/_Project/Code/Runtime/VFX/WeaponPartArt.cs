@@ -34,7 +34,13 @@ namespace MaxWorlds.VFX
         private static readonly Color HydroGlow = new Color(0.45f, 0.9f, 1f);
         private static readonly Color Steel = new Color(0.55f, 0.58f, 0.63f);
         private static readonly Color DarkSteel = new Color(0.24f, 0.26f, 0.30f);
-        private static readonly Color Brass = new Color(0.72f, 0.55f, 0.22f);
+        // Bright cool chrome — the accent/trim on the parts and the power-cell caps. Replaces the old
+        // brass (0.72,0.55,0.22): brass is a warm mid-value that the 0.6 sunlit-albedo ceiling
+        // (SunlitAlbedo.Clamp, under the yard's 1.8x key) scaled down into a muddy BROWN, so the caps,
+        // the power-nozzle ring and the harness clip all read dull/dirty (YT-146). A near-neutral
+        // chrome stays a bright metal at any value — it can't go brown — so the pickups read as clean
+        // collectibles, not rust.
+        private static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
         private static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -98,7 +104,7 @@ namespace MaxWorlds.VFX
         {
             var root = Root("PowerNozzle", parent);
             Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
-            Material ring = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
+            Material ring = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
             Part(root, "Collar", PrimitiveType.Cylinder, new Vector3(0f, 0.11f, 0f),
                  new Vector3(0.26f, 0.11f, 0.26f), null, body);
@@ -120,7 +126,7 @@ namespace MaxWorlds.VFX
             var root = Root("AugmentationHarness", parent);
             Material tank = MaterialLibrary.Tinted(SurfaceKind.Metal, HarnessGreen);
             Material strap = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            Material clip = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
+            Material clip = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
             // The tank — a rounded box, the biggest single mass of the five so it reads as "the backpack".
             Part(root, "Tank", PrimitiveType.Capsule, new Vector3(0f, 0.3f, 0f),
@@ -204,8 +210,12 @@ namespace MaxWorlds.VFX
         public static GameObject BuildPowerCell(Transform parent = null)
         {
             var root = Root("PowerCell", parent);
-            Material casing = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
+            // A bright cool casing, not the old near-black DarkSteel: a dark shell + brown brass caps
+            // is exactly what made the cell read as a dull brown lump on the lawn (YT-146). A mid steel
+            // body with chrome caps lets the cyan charge core do the talking, so the cell reads as a
+            // bright, lit collectible.
+            Material casing = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
             Part(root, "Casing", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f),
                  new Vector3(0.2f, 0.18f, 0.2f), null, casing);
