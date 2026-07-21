@@ -43,6 +43,12 @@ namespace MaxWorlds.Core
         /// <summary>Tank refill rate per second, once the regen delay has passed.</summary>
         public static float? BlasterRegenPerSecond { get; set; }
 
+        /// <summary>Each Mower Hutch's max HP — how much spray it takes to destroy (YT-126).</summary>
+        public static float? FactoryHealth { get; set; }
+
+        /// <summary>Big Bermuda's max HP (YT-126).</summary>
+        public static float? BossHealth { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -60,7 +66,8 @@ namespace MaxWorlds.Core
         public static bool AnyOverride =>
             CameraDistance.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
-            BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue;
+            BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
+            FactoryHealth.HasValue || BossHealth.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -72,6 +79,8 @@ namespace MaxWorlds.Core
             PlayerMaxHealth = null;
             BlasterDrainPerSecond = null;
             BlasterRegenPerSecond = null;
+            FactoryHealth = null;
+            BossHealth = null;
         }
     }
 }

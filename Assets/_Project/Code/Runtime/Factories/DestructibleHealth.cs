@@ -11,7 +11,7 @@ namespace MaxWorlds.Factories
     /// </summary>
     public sealed class DestructibleHealth
     {
-        public float Max { get; }
+        public float Max { get; private set; }
         public float Current { get; private set; }
         public bool IsAlive => Current > 0f;
         public float Normalized => Max > 0f ? Current / Max : 0f;
@@ -26,6 +26,21 @@ namespace MaxWorlds.Factories
         {
             Max = Mathf.Max(1f, max);
             Current = Max;
+        }
+
+        /// <summary>
+        /// Change the ceiling live (YT-126, the Settings-panel durability sliders). Raising it gives
+        /// headroom rather than a heal — Current is left where it was, so a factory the player has
+        /// already dented stays dented but now needs more to finish. Lowering it clamps Current down
+        /// so the bar can never read past full. Same semantics as PlayerHealth.RefreshMax.
+        /// </summary>
+        public void Retune(float newMax)
+        {
+            newMax = Mathf.Max(1f, newMax);
+            if (Mathf.Approximately(newMax, Max)) return;
+            Max = newMax;
+            if (Current > Max) Current = Max;
+            Changed?.Invoke(Current);
         }
 
         /// <summary>Apply damage. Returns true only on the hit that destroys it.</summary>

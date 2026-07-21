@@ -22,7 +22,10 @@ namespace MaxWorlds.Factories
     {
         // ~4 s of focused fire to kill, so destroying it lands as a decisive beat (YT-65). Tunable.
         // Renamed from maxHealth so the lower value takes effect on the existing scene instance.
-        [SerializeField] private float factoryHealth = 140f;
+        // YT-126: ~2.5x the old 140 — factories were dying almost instantly, which removed the
+        // tension of clearing them. This is the first-pass default; Lee dials the final on-device via
+        // the Settings panel's Factory-health slider.
+        [SerializeField] private float factoryHealth = 350f;
         [Tooltip("Gate opened when the factory dies. Optional — the path/gate is placed by YT-38.")]
         [SerializeField] private SubZoneGate gate;
         // Industrial hazard-orange so the factory reads as the objective, not another grey fence
@@ -70,9 +73,21 @@ namespace MaxWorlds.Factories
             if (door != null) door.AddKey();
         }
 
+        /// <summary>The authored factory HP, for the Settings panel's 100% reference (YT-126).</summary>
+        public float AuthoredMax => factoryHealth;
+
+        /// <summary>Re-read the Factory-health slider and retune this hutch live (YT-126). Raising it
+        /// gives headroom, not a heal; lowering clamps. Same contract as PlayerHealth.RefreshMax.</summary>
+        public void RefreshMax()
+        {
+            if (_health == null) return;
+            _health.Retune(DevTuning.Or(DevTuning.FactoryHealth, factoryHealth));
+            if (_barFill != null) _barFill.fillAmount = Normalized;
+        }
+
         private void Awake()
         {
-            _health = new DestructibleHealth(factoryHealth);
+            _health = new DestructibleHealth(DevTuning.Or(DevTuning.FactoryHealth, factoryHealth));
             _health.Destroyed += OnDestroyed;
             _spawner = GetComponent<EnemySpawner>();
             _camera = Camera.main;

@@ -80,9 +80,9 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(7),
-                "Seven values: camera zoom, Max speed, robot speed, boss speed, Max max-life, water " +
-                "deplete, water replenish.");
+            Assert.That(sliders.Length, Is.EqualTo(9),
+                "Nine values: camera zoom, Max speed, robot speed, boss speed, Max max-life, water " +
+                "deplete, water replenish, plus factory health and boss health (YT-126).");
             yield return null;
         }
 
@@ -114,6 +114,27 @@ namespace MaxWorlds.Tests.PlayMode
                 "below that order would have its drags swallowed.");
             Assert.That(canvas.GetComponent<GraphicRaycaster>(), Is.Not.Null);
             yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TheDurabilitySlidersAppearAndAreWired()
+        {
+            var canvas = PanelCanvas();
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+
+            var factory = System.Array.Find(sliders, s => s.transform.parent.name == "Factory health");
+            var boss = System.Array.Find(sliders, s => s.transform.parent.name == "Boss health");
+            Assert.That(factory, Is.Not.Null, "no Factory health slider (YT-126)");
+            Assert.That(boss, Is.Not.Null, "no Boss health slider (YT-126)");
+
+            factory.value = 500f;
+            boss.value = 3000f;
+            yield return null;
+
+            Assert.That(DevTuning.FactoryHealth, Is.EqualTo(500f).Within(0.001f),
+                "the Factory health slider must drive DevTuning.FactoryHealth");
+            Assert.That(DevTuning.BossHealth, Is.EqualTo(3000f).Within(0.001f),
+                "the Boss health slider must drive DevTuning.BossHealth");
         }
 
         // ---------------------------------------------------------------- it does something

@@ -56,6 +56,15 @@ namespace MaxWorlds.Bosses
         public bool IsAlive => _phase == Phase.Fight && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
 
+        /// <summary>Re-read the Boss-health slider and retune live (YT-126). Raising it gives
+        /// headroom, not a heal; lowering clamps. Pushes the new fraction to the HUD boss bar.</summary>
+        public void RefreshMax()
+        {
+            if (_health == null) return;
+            _health.Retune(DevTuning.Or(DevTuning.BossHealth, BossTuning.Health));
+            HudSignals.EmitBossHealth(_health.Normalized);
+        }
+
         // --- read-only fight state, for the art layer (YT-90) ---
         //
         // Big Bermuda is a MACHINE with moving parts, and what those parts are doing has to agree with
@@ -83,7 +92,7 @@ namespace MaxWorlds.Bosses
             _cc = GetComponent<CharacterController>();
             _renderer = GetComponent<Renderer>();
             _mpb = new MaterialPropertyBlock();
-            _health = new DestructibleHealth(BossTuning.Health);
+            _health = new DestructibleHealth(DevTuning.Or(DevTuning.BossHealth, BossTuning.Health));
             _health.Destroyed += OnDeath;
             _brain = new BigBermudaBrain();
             AcquireTarget();
