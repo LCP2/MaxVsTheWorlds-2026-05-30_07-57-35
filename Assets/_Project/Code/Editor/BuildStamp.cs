@@ -47,15 +47,20 @@ namespace MaxWorlds.Editor
         public const string MilestoneVersion = "0.2.0";
 
         /// <summary>
-        /// iOS rejects a bundle version that isn't purely digits-and-dots (CFBundleShortVersionString:
-        /// "must consist only of '.'s and numbers, begin and end with a number, ≤18 chars"), so the
-        /// SHA/timestamp stamp <see cref="Compose"/> makes is illegal there. Use the numeric version
-        /// GameCI already computes (the <c>VERSION</c> env, e.g. "0.0.110") when it's valid — e.g. a
-        /// pushed <c>vX.Y.Z</c> tag — otherwise fall back to the <see cref="MilestoneVersion"/> so a
-        /// dispatch/hand-made iOS build still reads the current milestone.
+        /// The iOS marketing version (CFBundleShortVersionString) — always the hand-set
+        /// <see cref="MilestoneVersion"/> (YT-139).
+        ///
+        /// It IGNORES GameCI's computed <paramref name="gameCiVersion"/> on purpose. That was the bug
+        /// in YT-135: GameCI's default Semantic versioning auto-bumps a version like "0.0.152" from the
+        /// commit count, and "0.0.152" is a perfectly legal iOS version string — so the old
+        /// "use GameCI's if it's valid, else the milestone" rule ALWAYS took GameCI's auto-bump and the
+        /// milestone pin never once applied. The version is supposed to track the milestone we choose,
+        /// not the commit count, so the constant wins outright. The build NUMBER
+        /// (<see cref="ComposeIosBuildNumber"/>) still auto-increments — that's the per-upload counter.
+        ///
+        /// Still a compiled constant, so nothing edits a tracked file at build time (YT-117).
         /// </summary>
-        public static string ComposeIosVersion(string gameCiVersion) =>
-            IsValidIosVersion(gameCiVersion) ? gameCiVersion : MilestoneVersion;
+        public static string ComposeIosVersion(string gameCiVersion) => MilestoneVersion;
 
         /// <summary>
         /// The iOS CFBundleVersion: a UTC <c>yyMMddHHmm</c> stamp.
