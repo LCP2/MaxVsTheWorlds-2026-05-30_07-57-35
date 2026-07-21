@@ -5,6 +5,7 @@ using UnityEngine.InputSystem.OnScreen;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
 {
@@ -854,9 +855,11 @@ namespace MaxWorlds.UI
             var bg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = false;
 
-            _cellIcon = AddImage(root, HudTextures.Disc(48), CellColor, "Cell Icon");
+            // A purpose-built battery cell (YT-134) — a disc read as "a thing", not "a power cell".
+            // The sprite bakes its own cyan/dark, so tint white to render it as authored.
+            _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Cell Icon");
             Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            _cellIcon.rectTransform.sizeDelta = new Vector2(26f, 26f);
+            _cellIcon.rectTransform.sizeDelta = new Vector2(30f, 30f);
             _cellIcon.rectTransform.anchoredPosition = new Vector2(16f, 0f);
             _cellIcon.raycastTarget = false;
 
