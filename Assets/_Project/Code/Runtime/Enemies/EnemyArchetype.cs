@@ -74,7 +74,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 3.6f, maxHealth: 24f,
+            moveSpeed: 2.18f, maxHealth: 24f,   // YT-106: Lee's on-device robot speed (was 3.6)
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -101,7 +101,11 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Bruiser => new EnemyArchetype(
             EnemyKind.Bruiser, EnemyShape.Box, new Vector3(1.15f, 1.15f, 1.15f),
             colliderHeight: 1.15f, colliderRadius: 0.55f,
-            moveSpeed: 1.8f, maxHealth: 100f,
+            // Half the rusher's speed, preserved (YT-66's "fridge on legs"): Lee's 2.18 robot
+            // number is the rusher/panel default; the bruiser scales with it to stay the slow tank
+            // (was 1.8 = half of 3.6, now 1.09 = half of 2.18). Flag: if Lee wants ALL robots flat
+            // at 2.18, this is the one line to change.
+            moveSpeed: 1.09f, maxHealth: 100f,
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,

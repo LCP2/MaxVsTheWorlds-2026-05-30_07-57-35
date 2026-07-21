@@ -23,6 +23,18 @@ namespace MaxWorlds.CameraRig
         public const float MinDistance = 12f;
         public const float MaxDistance = 45f;
 
+        /// <summary>Phone-class default (YT-106): the tighter framing Lee dialed in on-device. Only
+        /// phones use it — desktop keeps the serialized wide value, because on a monitor the wider
+        /// shot read fine (if anything a touch zoomed-in). The panel reads whichever default this
+        /// device ends up with, so "Reset to defaults" returns to the right one per device.</summary>
+        public const float PhoneDistance = 23f;
+
+        /// <summary>Test seam: force the device class. Null = ask the platform.</summary>
+        public static bool? SimulatePhoneClass;
+
+        /// <summary>True on a handheld build (iOS/Android/TestFlight, and a mobile WebGL browser).</summary>
+        public static bool IsPhoneClass => SimulatePhoneClass ?? Application.isMobilePlatform;
+
         [Tooltip("Fixed top-down pitch. Load-bearing for the AI-art pipeline — do NOT change (YT-33).")]
         [SerializeField] private float pitchDegrees = 72f;
 
@@ -57,7 +69,14 @@ namespace MaxWorlds.CameraRig
             Apply();
         }
 
-        private void Awake() => Apply();
+        private void Awake()
+        {
+            // Per-device-class default (YT-106): a phone sits closer than the desktop framing this
+            // field was authored for. Done here, before the first Apply, so the value the tuning
+            // panel captures as its 100% reference is already the per-device one.
+            if (IsPhoneClass) cameraDistance = PhoneDistance;
+            Apply();
+        }
 
         /// <summary>Push the current distance/pitch to the Cinemachine follow offset + vcam pitch.</summary>
         public void Apply()

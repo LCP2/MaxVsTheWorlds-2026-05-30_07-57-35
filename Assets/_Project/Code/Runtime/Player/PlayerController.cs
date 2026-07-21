@@ -16,7 +16,7 @@ namespace MaxWorlds.Player
     public sealed class PlayerController : MonoBehaviour
     {
         [Header("Move")]
-        [SerializeField] private float moveSpeed = 6f;
+        [SerializeField] private float moveSpeed = 3.01f;   // YT-106: Lee's on-device number (was 6)
 
         /// <summary>The authored walk speed, ignoring any dev override. The tuning panel shows the
         /// live value as a percentage of this (YT-105).</summary>

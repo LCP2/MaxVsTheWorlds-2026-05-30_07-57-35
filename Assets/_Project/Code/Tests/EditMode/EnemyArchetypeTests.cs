@@ -29,19 +29,23 @@ namespace MaxWorlds.Tests.EditMode
 
         // --- Kiteability (YT-80) --------------------------------------------------------------
 
-        /// <summary>PlayerController.moveSpeed.</summary>
-        private const float MaxSpeed = 6f;
+        /// <summary>PlayerController.moveSpeed (YT-106: Lee's on-device number, was 6).</summary>
+        private const float MaxSpeed = 3.01f;
 
         [Test]
         public void MovingAwayFromTheSwarmActuallyOpensAGap()
         {
-            // Not just "slower than Max" — slower by enough that retreating BUYS something. The
-            // rusher used to run at 4.2 against Max's 6, and a 1.8 m/s edge means crossing the arena
-            // to shake one off; it read as being chased rather than as out-manoeuvring anything.
-            // Every robot must now cede at least a third of Max's speed.
+            // Not just "slower than Max" — slower by enough that retreating BUYS something. Lee
+            // tightened this on-device (YT-106): the rusher now runs at 2.18 against Max's 3.01, so
+            // Max still gains ~0.8 m/s, but the margin is narrower than the old 0.65-of-Max target.
+            // FLAG for the Craft Bible's kiteability pillar: the swarm is a touch harder to out-run
+            // now (rusher ≈ 72% of Max, was 60%). It is still kiteable — Max is strictly faster —
+            // which is the invariant this pins.
             foreach (var a in new[] { Rusher, Bruiser })
-                Assert.LessOrEqual(a.MoveSpeed, MaxSpeed * 0.65f,
-                    $"the {a.Kind} is too fast to out-position — kiting it isn't a real option");
+                Assert.Less(a.MoveSpeed, MaxSpeed,
+                    $"the {a.Kind} can outrun Max — kiting stops being possible at all");
+            Assert.LessOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.8f,
+                "the rusher has crept too close to Max's speed to out-position with any comfort");
         }
 
         [Test]

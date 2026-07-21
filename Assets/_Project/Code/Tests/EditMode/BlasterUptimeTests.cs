@@ -15,10 +15,11 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FullTank_HoldsAnEntireEngagement()
         {
-            // A fight with a factory's wave is on the order of ten seconds of held trigger. The old
-            // gun managed 4.0s, so you ran dry in the middle of every single one.
-            Assert.GreaterOrEqual(BlasterTuning.SustainedFireSeconds, 10f,
-                "a full tank must cover a normal engagement without tapping out");
+            // Lee raised the drain on-device (YT-106): the tank now lasts ~7s, deliberately shorter
+            // than the old 14s so running dry is a real pressure, not a formality. Still a proper
+            // burst though — a full tank has to cover most of an engagement, not a squirt.
+            Assert.GreaterOrEqual(BlasterTuning.SustainedFireSeconds, 6f,
+                "a full tank must still fire long enough to feel like a weapon, not a water pistol");
         }
 
         [Test]
@@ -34,7 +35,7 @@ namespace MaxWorlds.Tests.EditMode
             // This is the one that actually caused the complaint. The old hysteresis handed back 35%
             // of a small tank — 1.4s of water — so after the first magazine the gun was in a
             // permanent squirt/wait cycle. The recharged burst has to be a burst.
-            Assert.GreaterOrEqual(BlasterTuning.RechargedFireSeconds, 5f,
+            Assert.GreaterOrEqual(BlasterTuning.RechargedFireSeconds, 3.5f,
                 "a recharged tank must fire for long enough to feel like firing");
         }
 
@@ -42,14 +43,19 @@ namespace MaxWorlds.Tests.EditMode
         public void EvenNeverLettingGo_TheGunIsMostlyFiring()
         {
             // Worst case: the player holds the trigger forever and never earns a natural pause.
-            Assert.Greater(BlasterTuning.WorstCaseUptime, 0.75f,
-                "downtime must be the exception even for a player who never releases the trigger");
+            // With Lee's faster drain (YT-106) this sits near 0.69 — more downtime pressure by
+            // design — but firing must still be the majority state, not a stutter.
+            Assert.Greater(BlasterTuning.WorstCaseUptime, 0.6f,
+                "downtime must stay the exception even for a player who never releases the trigger");
         }
 
         [Test]
         public void RefillOutrunsTheDrain_SoAnyPauseInTheFightPaysYouBack()
         {
-            Assert.Greater(BlasterTuning.RegenPerSec, BlasterTuning.EnergyPerSecond * 3f,
+            // Lee raised the drain but left regen at 55 (YT-106), so refill now outruns drain by
+            // ~2.8x rather than the old 5.5x. Still comfortably ahead — a pause pays you back — just
+            // less lopsided, which is the point of making the tank matter.
+            Assert.Greater(BlasterTuning.RegenPerSec, BlasterTuning.EnergyPerSecond * 2f,
                 "a pause has to put real ammo back, or letting go is never worth it");
         }
 
