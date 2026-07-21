@@ -244,6 +244,13 @@ namespace MaxWorlds.UI
                     var b = FindFirstObjectByType<BigBermudaBoss>();
                     if (b != null) b.RefreshMax();
                 });
+
+            // Hose leash length (YT-129). The tether reads this through DevTuning every frame, so the
+            // slider needs no push — moving it re-leashes Max on the next LateUpdate.
+            float tetherDefault = MaxWorlds.Hose.HoseTether.AuthoredLength;
+            Add("Hose tether", "m", 6f, 40f, tetherDefault,
+                () => DevTuning.Or(DevTuning.HoseTetherLength, tetherDefault),
+                v => DevTuning.HoseTetherLength = v);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has

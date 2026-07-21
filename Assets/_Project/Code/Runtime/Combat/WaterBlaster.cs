@@ -14,6 +14,13 @@ namespace MaxWorlds.Combat
     /// (+soak tag) to every <see cref="IDamageable"/> in the stream. Energy binds
     /// to the HUD (YT-30) via <see cref="Energy"/>.
     ///
+    /// Since the weapon epic (YT-127/YT-129) this is Max's <b>garden hose</b>: the water
+    /// short-circuits the robots (the existing damage, re-themed — a spray shorts them out).
+    /// Its OPENING spray is deliberately short and wide — weak but forgiving — the base state
+    /// before any nozzle upgrade (YT-133) narrows or lengthens it. The hose is tethered to a
+    /// tap by <see cref="MaxWorlds.Hose.HoseTether"/>, which leashes how far Max can range; the
+    /// spray reach here is a separate, much shorter number.
+    ///
     /// All firing visuals live in <see cref="WaterVfx"/> (YT-47), which this attaches
     /// to itself at Awake and drives with cosmetic-only calls. The VFX never feeds back
     /// into fire gating, energy, or damage.
@@ -21,7 +28,9 @@ namespace MaxWorlds.Combat
     public sealed class WaterBlaster : MonoBehaviour
     {
         [Header("Stream")]
-        [SerializeField] private float range = 6f;
+        // Opening hose spray (YT-129): SHORT reach, WIDE arc — weak but forgiving. Nozzle
+        // upgrades (YT-133) narrow/lengthen it from this base. Also baked in Backyard_Slice.unity.
+        [SerializeField] private float range = 4.5f;
         [SerializeField] private float radius = 0.6f;
         [SerializeField] private float damagePerTick = 4f;
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
@@ -29,7 +38,7 @@ namespace MaxWorlds.Combat
 
         [Header("Spray archetype (YT-64) — a threatening arc, not a thin dribble")]
         [Tooltip("Half-angle of the spray cone, degrees. Everything in this arc within range is hit.")]
-        [SerializeField] private float coneHalfAngle = 35f;
+        [SerializeField] private float coneHalfAngle = 48f;
         [Tooltip("Velocity (m/s) each hit shoves an enemy back — sells 'pushing the swarm back'.")]
         [SerializeField] private float knockbackForce = 5f;
         [Tooltip("Visual width of the stream, so it reads as a spray fan (cosmetic only).")]
