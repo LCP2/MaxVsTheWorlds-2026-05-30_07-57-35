@@ -162,14 +162,29 @@ namespace MaxWorlds.Tests.PlayMode
                 "explicitly took it off.");
             Assert.AreEqual(4, _rigHost.GetComponentsInChildren<Transform>().Count(t => t.name == "Foot"),
                 "the legs have no feet to plant.");
+        }
 
-            // And it is TALL — the boss read is a tall round thing among low angular robots. Measured off
-            // the actual renderers, not asserted from the constants.
+        /// <summary>
+        /// SQUAT AND WIDE, from Lee's on-camera review. The first cut was tall and read small — on a 72°
+        /// camera height foreshortens, so the mass has to be in the WIDTH. This pins the proportion so a
+        /// future tweak cannot quietly stretch it tall again: it must dwarf the ~1–2 m robots by footprint
+        /// and be wider than it is tall. Measured off the real renderers, not the constants.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ItReadsSquatAndWide_NotTall()
+        {
+            yield return InstallRig();
+
             var bounds = new Bounds(_rigHost.transform.position, Vector3.zero);
             foreach (var r in _rigHost.GetComponentsInChildren<Renderer>()) bounds.Encapsulate(r.bounds);
-            Assert.Greater(bounds.size.y, 4.5f,
-                "the boiler is not tall enough to dwarf the robots. Height is most of what makes it read " +
-                "as the boss from thirty metres up.");
+
+            float footprint = Mathf.Max(bounds.size.x, bounds.size.z);
+            Assert.Greater(footprint, 3.2f,
+                "the boiler's footprint is too small to dwarf the robots. Width is what fills screen at " +
+                "the 72° angle — a big footprint is the 'that is the boss' read, not height.");
+            Assert.Greater(footprint, bounds.size.y,
+                "it is taller than it is wide. A tall silhouette foreshortens away on the angled camera " +
+                "and reads small; Lee's review cut it down to a squat, heavy, wider-than-tall mass.");
         }
 
         /// <summary>
@@ -294,9 +309,11 @@ namespace MaxWorlds.Tests.PlayMode
                 "miss, and it has to be the orange every robot already taught the player.");
             Assert.Greater(windup.r, windup.b + 0.4f, "the wind-up is not warm.");
 
-            Assert.Greater(windup.r - idle.r, 0.3f,
-                "the machine looks the same winding up as idling. A telegraph you cannot tell apart from " +
-                "doing nothing is not a telegraph.");
+            // Idle is AMBER now, not green, so the wind-up cannot be told apart by 'r rose'. The tell is
+            // the gold COOLING toward orange — the green channel drops out.
+            Assert.Greater(idle.g - windup.g, 0.2f,
+                "the machine looks the same winding up as idling. The amber idle has to cool to a hotter " +
+                "orange on the wind-up — a telegraph you cannot tell apart from doing nothing is none.");
 
             Assert.Greater(Rig.Pressure, 0.5f,
                 "the boiler is barely building pressure as it commits to a charge. The pressure IS the " +
@@ -313,7 +330,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             Color idle = Color.black;
             yield return SampleDuring(BossAction.Reposition, c => idle = c);
-            Assert.Greater(idle.g, idle.r, "it is not idling in its own green.");
+            Assert.Greater(idle.g, 0.4f, "it is not idling in its own amber — the furnace glow is gone.");
 
             // Past the enrage threshold — asked of the tuning, because the fight's health is a knob now
             // (YT-94) and a hardcoded number stops enraging the day it moves.
@@ -325,9 +342,12 @@ namespace MaxWorlds.Tests.PlayMode
             Color enragedIdle = Color.black;
             yield return SampleDuring(BossAction.Reposition, c => enragedIdle = c);
 
-            Assert.Greater(enragedIdle.r, enragedIdle.g + 0.3f,
-                "it idles the same colour in phase 2 as phase 1. 'It got worse' has to be visible while " +
-                "the player is still deciding what to do about it.");
+            // Phase 1 idles amber (high g); phase 2 idles RED (low g). Discriminate on the green channel
+            // dropping out — that is what "it got worse" looks like at a glance.
+            Assert.Less(enragedIdle.g, 0.35f,
+                "it idles the same amber in phase 2 as phase 1. 'It got worse' has to be visible while " +
+                "the player is still deciding what to do about it — the gold has to go red.");
+            Assert.Greater(enragedIdle.r, enragedIdle.g + 0.3f, "phase-2 idle is not the hot red it should be.");
         }
 
         /// <summary>
