@@ -35,7 +35,11 @@ namespace MaxWorlds.VFX
         // hazard-orange (factory/telegraph), and it stays clear of the forbidden yellow/brown. The aura
         // rides the floating pickup (it is NOT a ground ring) so it never reads as a danger telegraph.
         private const string GlowName = "CollectibleGlow";
-        private static readonly Color GlowColor = new Color(1f, 0.52f, 0.12f);
+        /// <summary>The collectible language colour: the on-ground pickup aura, and the shared source
+        /// the HUD part-ready chip reads so the tell matches the pickup it points at (YT-147). Retune
+        /// this one value and both the ground glow and the HUD chip move together — they can't drift.</summary>
+        public static readonly Color CollectibleGlow = new Color(1f, 0.52f, 0.12f);
+        private static readonly Color GlowColor = CollectibleGlow;
         private const float GlowBaseScale = 0.72f;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 

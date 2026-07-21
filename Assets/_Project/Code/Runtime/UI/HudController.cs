@@ -31,9 +31,13 @@ namespace MaxWorlds.UI
         private static readonly Color BiomeTint = new Color(0.96f, 0.62f, 0.20f, 0.06f); // warm orange overlay
         private static readonly Color BossColor = new Color(0.85f, 0.12f, 0.12f);
         private static readonly Color BoneWhite = new Color(0.96f, 0.94f, 0.86f);
-        // Robot-drop colours (YT-131): cyan power cell, gold part — matched to the world pickups.
+        // Robot-drop colours (YT-131): cyan power cell — matched to the world pickup's cyan core.
         private static readonly Color CellColor = new Color(0.31f, 0.86f, 0.98f);
-        private static readonly Color PartColor = new Color(0.98f, 0.72f, 0.22f);
+        // The part-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell and
+        // the pickup it points at read as ONE language. Sourced from the constant the aura uses, not a
+        // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
+        // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
+        private static readonly Color PartColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
         /// <summary>The power-up shout (YT-67). Hot cyan-white: it has to out-shout the golden
         /// SPARKS numbers flying around it, or the one moment that matters gets lost in them.</summary>
         private static readonly Color BoostColor = new Color(0.45f, 0.95f, 1f);
@@ -270,20 +274,46 @@ namespace MaxWorlds.UI
                 _cellIcon.rectTransform.localScale = new Vector3(s, s, 1f);
             }
 
-            // The part chip flashes while it's shown — it's the "you have an upgrade waiting" tell
-            // that YT-132 turns into the upgrade screen.
+            // The part chip FLASHES while it's shown — the "you have an upgrade waiting" tell that YT-132
+            // turns into the upgrade screen. It now beats in the shared collectible orange (YT-147): a
+            // real dim->bright + scale pulse that reads as a beacon, not the old barely-there alpha fade
+            // on a gold badge that read as static and yellow.
             if (_partAlertRoot != null && _partAlertRoot.gameObject.activeSelf)
             {
-                float pulse = 0.45f + 0.55f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 5f));
-                if (_partAlertBg != null)
-                {
-                    var c = PartColor; c.a = pulse; _partAlertBg.color = c;
-                }
+                float t = PartAlertFlash(Time.unscaledTime);
+                if (_partAlertBg != null) _partAlertBg.color = PartAlertColor(t);
+
+                // A scale pop on the beat, so the flash reads even in a busy corner of the screen.
+                float s = 1f + 0.11f * t;
+                _partAlertRoot.localScale = new Vector3(s, s, 1f);
+
                 if (_partAlertLabel != null)
                 {
-                    var lc = BoneWhite; lc.a = 0.6f + 0.4f * pulse; _partAlertLabel.color = lc;
+                    var lc = BoneWhite; lc.a = 0.65f + 0.35f * t; _partAlertLabel.color = lc;
                 }
             }
+        }
+
+        /// <summary>
+        /// The part-ready chip's flash, 0..1. Pure and driven by unscaled time so it keeps flashing
+        /// while the upgrade screen has the game paused with the part still waiting (YT-147). ~1 Hz —
+        /// a touch quicker than the on-ground aura's ambient breath, because this is an alert.
+        /// </summary>
+        public static float PartAlertFlash(float unscaledTime)
+            => 0.5f + 0.5f * Mathf.Sin(unscaledTime * 6f);
+
+        /// <summary>
+        /// The chip's colour at flash amount <paramref name="t"/>: the shared collectible orange swung
+        /// dim->full so it reads as an active beacon, not a static badge (YT-147). The hue is
+        /// <see cref="PartColor"/> — the same orange the on-ground pickup glows — so the two never drift
+        /// and neither is the forbidden yellow.
+        /// </summary>
+        public static Color PartAlertColor(float t)
+        {
+            t = Mathf.Clamp01(t);
+            Color c = PartColor * (0.5f + 0.5f * t);   // dim -> full orange
+            c.a = 0.72f + 0.28f * t;
+            return c;
         }
 
         private void UpdateStatusStrip(float dt)
