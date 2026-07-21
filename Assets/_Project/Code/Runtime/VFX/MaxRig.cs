@@ -295,6 +295,7 @@ namespace MaxWorlds.VFX
         private Transform _hairPivot;
         private Transform _charmPivot;
         private Transform _gun;
+        private Transform _nozzle;                 // the hose sprayer's tip — where the water leaves (YT-134)
         private Transform _armL, _armR;
         private Transform _handL, _handR;
         private readonly Transform[] _hips = new Transform[2];
@@ -306,7 +307,7 @@ namespace MaxWorlds.VFX
 
         // Not outlined — the detail that a five-pixel line would eat. See CharacterMaterial.
         private Material _hoodieDeepMat, _hoodieTrimMat, _skinTrimMat, _hairTrimMat, _canvasTrimMat,
-                         _rubberTrimMat, _steelTrimMat, _boneMat, _tapeMat;
+                         _rubberTrimMat, _steelTrimMat, _boneMat, _tapeMat, _hoseMat;
         private Material[] _charmMats;
         private MaterialPropertyBlock _lensMpb;
 
@@ -319,6 +320,13 @@ namespace MaxWorlds.VFX
         /// <summary>How far the gadget is presented: 0 at the hip, 1 up and aiming. What a test looks
         /// at to prove the weapon actually comes up when the aim stick does.</summary>
         public float AimPose => _aim;
+
+        /// <summary>World position of the hose sprayer's tip — where the water leaves and where the
+        /// visible tether should meet his hands (YT-134). The hose tether draws from a point off Max's
+        /// capsule today; this lets it re-anchor to the real nozzle. Falls back to a metre up if the
+        /// gadget has not built yet, so a caller never reads the world origin.</summary>
+        public Vector3 MuzzleWorldPosition =>
+            _nozzle != null ? _nozzle.position : transform.position + Vector3.up;
 
         /// <summary>Stride phase, in radians. Advances only while he is moving.</summary>
         public float Stride => _stride;
@@ -393,6 +401,9 @@ namespace MaxWorlds.VFX
             _steelTrimMat = DetailMaterial("Max_SteelTrim", Steel);
             _boneMat = DetailMaterial("Max_Bone", Bone);
             _tapeMat = DetailMaterial("Max_Tape", Tape);
+            // Garden-hose green — the same green the tether line is drawn in (HoseTether.HoseGreen), so
+            // the coil on his hip and the line running to the tap read as one continuous hose (YT-134).
+            _hoseMat = DetailMaterial("Max_Hose", new Color(0.24f, 0.55f, 0.30f));
 
             _charmMats = new Material[Charms.Length];
             for (int i = 0; i < Charms.Length; i++)
@@ -469,6 +480,7 @@ namespace MaxWorlds.VFX
             BuildPack();
             BuildHead();
             BuildGadget();
+            BuildHoseCoil();
             BuildArms();
         }
 
@@ -708,7 +720,7 @@ namespace MaxWorlds.VFX
                  new Vector3(0f, 0.01f, 0.31f), new Vector3(0.08f, 0.16f, 0.08f), _steelMat,
                  Quaternion.Euler(90f, 0f, 0f));
 
-            Part("Nozzle", _gun, PrimitiveType.Cylinder,
+            _nozzle = Part("Nozzle", _gun, PrimitiveType.Cylinder,
                  new Vector3(0f, 0.01f, 0.485f), new Vector3(0.105f, 0.02f, 0.105f), _rubberTrimMat,
                  Quaternion.Euler(90f, 0f, 0f));
 
@@ -735,6 +747,31 @@ namespace MaxWorlds.VFX
             _handL = Part("HandL", _gun, PrimitiveType.Cube,
                           new Vector3(0f, -0.02f, 0.15f), new Vector3(0.115f, 0.115f, 0.14f),
                           _rubberTrimMat);
+
+            // YT-134 — read it as a HOSE, not a self-contained bottle-gun. A green rubber hose feeds
+            // into the BACK of the sprayer and drops away toward the hip coil (built on the body), so
+            // the eye follows nozzle -> hose -> coil -> the tether line -> the tap. Two stub segments,
+            // angled, so it curves rather than sticking straight out.
+            Part("HoseInlet", _gun, PrimitiveType.Cylinder,
+                 new Vector3(0f, -0.05f, -0.14f), new Vector3(0.06f, 0.12f, 0.06f), _hoseMat,
+                 Quaternion.Euler(52f, 0f, 0f));
+            Part("HoseDrop", _gun, PrimitiveType.Cylinder,
+                 new Vector3(0f, -0.16f, -0.22f), new Vector3(0.06f, 0.12f, 0.06f), _hoseMat,
+                 Quaternion.Euler(78f, 0f, 0f));
+        }
+
+        /// <summary>A coil of spare hose slung at Max's hip — where the tether line emanates, so the
+        /// hose reads as carried ON him rather than sprouting from his belly (YT-134). Flattened rings
+        /// stacked into a loop; parented to the torso so it bobs with him.</summary>
+        private void BuildHoseCoil()
+        {
+            var coil = Pivot("HoseCoil", _torso, new Vector3(-0.24f, -0.02f, -0.12f));
+            coil.localRotation = Quaternion.Euler(18f, 0f, 74f);   // hangs on his hip, slightly turned
+            for (int i = 0; i < 3; i++)
+            {
+                Part($"Coil{i}", coil, PrimitiveType.Cylinder,
+                     new Vector3(0f, 0.02f * (i - 1), 0f), new Vector3(0.2f, 0.03f, 0.2f), _hoseMat);
+            }
         }
 
         /// <summary>Two sleeves. They have no pose of their own — they are stretched between the
@@ -1004,7 +1041,7 @@ namespace MaxWorlds.VFX
 
             Kill(_hoodieDeepMat); Kill(_hoodieTrimMat); Kill(_skinTrimMat); Kill(_hairTrimMat);
             Kill(_canvasTrimMat); Kill(_rubberTrimMat); Kill(_steelTrimMat); Kill(_boneMat);
-            Kill(_tapeMat);
+            Kill(_tapeMat); Kill(_hoseMat);
 
             if (_charmMats == null) return;
             for (int i = 0; i < _charmMats.Length; i++) Kill(_charmMats[i]);
