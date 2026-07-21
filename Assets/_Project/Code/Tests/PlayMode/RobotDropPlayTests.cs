@@ -2,6 +2,7 @@ using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
 
@@ -20,6 +21,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TearDown()
         {
             PickupWallet.Reset();
+            DevTuning.Reset();
             if (_max != null) Object.Destroy(_max);
             if (_director != null) Object.Destroy(_director);
             yield return null;
@@ -33,6 +35,7 @@ namespace MaxWorlds.Tests.PlayMode
         private IEnumerator NewDirector()
         {
             PickupWallet.Reset();
+            DevTuning.PartDropInterval = 1f;   // these tests exercise the drop itself: one part per kill
             // A PickupDirector self-installs at PlayMode bootstrap and persists across the run, so it
             // would receive the same DropSignals as our test's director and double every drop. Clear
             // any existing one first so this test owns exactly one director.
@@ -125,6 +128,27 @@ namespace MaxWorlds.Tests.PlayMode
                 "the second drop must reuse pooled pickups, not leak a fresh set each time");
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupDirector.CellsPerDrop * 2),
                 "both waves of cells banked");
+        }
+
+        [UnityTest]
+        public IEnumerator PartsDropOnlyEveryNthToughKill_CellsEveryKill()
+        {
+            yield return NewDirector();
+            DevTuning.PartDropInterval = 3f;   // a part every 3rd bruiser (YT-143 pacing)
+
+            // First two kills: cells, but no part yet.
+            DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
+            DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
+            yield return null;
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
+                "a part shouldn't drop before the pacing interval");
+            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(PickupDirector.CellsPerDrop * 2),
+                "power cells keep dropping every kill regardless of the part pacing");
+
+            // Third kill hits the interval — the first part drops.
+            DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
+            yield return null;
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1), "the first part should drop on the 3rd kill");
         }
     }
 }

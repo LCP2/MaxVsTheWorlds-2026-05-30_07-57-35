@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.UI;
 
@@ -29,6 +30,11 @@ namespace MaxWorlds.Pickups
         /// <summary>Power cells per bruiser drop. The part is always exactly one.</summary>
         public const int CellsPerDrop = 3;
 
+        /// <summary>Default tough-robot kills between part drops (YT-143). A part every 3rd bruiser
+        /// spreads the five across a level instead of handing them over in the first five kills; power
+        /// cells keep dropping every kill. Tunable via <see cref="DevTuning.PartDropInterval"/>.</summary>
+        public const float DefaultPartInterval = 3f;
+
         private const float ScatterRadius = 0.9f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -44,6 +50,7 @@ namespace MaxWorlds.Pickups
         // The unique drop table (YT-133): the five parts, each dispensed exactly once across the level.
         private readonly MaxWorlds.Upgrades.PartDropTable _table = new MaxWorlds.Upgrades.PartDropTable();
         private Transform _max;
+        private int _bruiserKills;
 
         private void OnEnable() => DropSignals.RobotDied += OnRobotDied;
         private void OnDisable() => DropSignals.RobotDied -= OnRobotDied;
@@ -52,9 +59,15 @@ namespace MaxWorlds.Pickups
         {
             if (kind != EnemyKind.Bruiser) return;   // only the medium/tough tier drops loot
 
-            // Drop the next unique part, if the set isn't exhausted (YT-133). Once all five are out,
-            // the tough robots keep giving cells but no more parts.
-            if (_table.TryNext(out MaxWorlds.Upgrades.PartKind part))
+            _bruiserKills++;
+
+            // Pace the parts (YT-143): one every Nth tough kill, so the five spread across the level
+            // instead of arriving in the first five kills. Cells (below) still drop every kill. Once
+            // all five parts are out, only cells drop.
+            int interval = Mathf.Max(1, Mathf.RoundToInt(
+                DevTuning.Or(DevTuning.PartDropInterval, DefaultPartInterval)));
+            if (_bruiserKills % interval == 0
+                && _table.TryNext(out MaxWorlds.Upgrades.PartKind part))
                 SpawnDrop(PickupKind.Part, pos, part);
 
             for (int i = 0; i < CellsPerDrop; i++)

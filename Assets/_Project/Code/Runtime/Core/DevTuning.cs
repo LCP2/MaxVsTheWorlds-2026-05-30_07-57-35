@@ -52,6 +52,10 @@ namespace MaxWorlds.Core
         /// <summary>Hard max length of the hose leash, metres — how far Max can range from his tap (YT-129).</summary>
         public static float? HoseTetherLength { get; set; }
 
+        /// <summary>Tough-robot kills between upgrade-part drops (YT-143) — bigger spreads the five parts
+        /// further across a level. Power cells drop on their own faster rate regardless.</summary>
+        public static float? PartDropInterval { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -70,7 +74,8 @@ namespace MaxWorlds.Core
             CameraDistance.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
-            FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue;
+            FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
+            PartDropInterval.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -85,6 +90,7 @@ namespace MaxWorlds.Core
             FactoryHealth = null;
             BossHealth = null;
             HoseTetherLength = null;
+            PartDropInterval = null;
         }
     }
 }
