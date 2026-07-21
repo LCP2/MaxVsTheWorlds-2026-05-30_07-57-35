@@ -30,6 +30,9 @@ namespace MaxWorlds.UI
         private static readonly Color BiomeTint = new Color(0.96f, 0.62f, 0.20f, 0.06f); // warm orange overlay
         private static readonly Color BossColor = new Color(0.85f, 0.12f, 0.12f);
         private static readonly Color BoneWhite = new Color(0.96f, 0.94f, 0.86f);
+        // Robot-drop colours (YT-131): cyan power cell, gold part — matched to the world pickups.
+        private static readonly Color CellColor = new Color(0.31f, 0.86f, 0.98f);
+        private static readonly Color PartColor = new Color(0.98f, 0.72f, 0.22f);
         /// <summary>The power-up shout (YT-67). Hot cyan-white: it has to out-shout the golden
         /// SPARKS numbers flying around it, or the one moment that matters gets lost in them.</summary>
         private static readonly Color BoostColor = new Color(0.45f, 0.95f, 1f);
@@ -88,6 +91,14 @@ namespace MaxWorlds.UI
         private float _warningTimer;
         private float _bossIncomingTimer;
 
+        // Robot drops (YT-131): banked power-cell counter + the flashing "install available" chip.
+        private Text _cellCount;
+        private Image _cellIcon;
+        private float _cellPop;              // one-shot scale pop when a cell is banked
+        private RectTransform _partAlertRoot;
+        private Image _partAlertBg;
+        private Text _partAlertLabel;
+
         private void Awake()
         {
             _health = FindFirstObjectByType<PlayerHealth>();
@@ -106,6 +117,8 @@ namespace MaxWorlds.UI
             BuildArenaIndicator();
             BuildBossBar();
             BuildWarning();
+            BuildPowerCellCounter();
+            BuildPartAlert();
             BuildFloatingLayer();
             BuildMap();
             BuildTouchControls();
@@ -124,6 +137,8 @@ namespace MaxWorlds.UI
             HudSignals.BossEngaged += OnBossEngaged;
             HudSignals.BossHealthChanged += OnBossHealth;
             HudSignals.BossDefeated += OnBossDefeated;
+            MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
+            MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
         }
 
         private void OnDisable()
@@ -137,6 +152,21 @@ namespace MaxWorlds.UI
             HudSignals.BossEngaged -= OnBossEngaged;
             HudSignals.BossHealthChanged -= OnBossHealth;
             HudSignals.BossDefeated -= OnBossDefeated;
+            MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
+            MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
+        }
+
+        private void OnPowerCells(int total)
+        {
+            if (_cellCount != null) _cellCount.text = total.ToString();
+            _cellPop = 1f;   // a brief scale pop so a banked cell registers
+        }
+
+        private void OnParts(int pending)
+        {
+            // The chip is shown while any part is waiting to be installed (YT-131). It flashes in
+            // Update; here we just toggle its presence. YT-132's upgrade screen spends the part.
+            if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(pending > 0);
         }
 
         private void OnBossRegistered() => _model.UseExternalBoss();
@@ -215,8 +245,35 @@ namespace MaxWorlds.UI
             UpdateArena(dt);
             UpdateBoss();
             UpdateWarnings(dt);
+            UpdateDrops(dt);
             FlushDamageNumbers();
             CheckLevelUp();
+        }
+
+        private void UpdateDrops(float dt)
+        {
+            // Cell icon pops on a bank and settles back.
+            _cellPop = Mathf.Max(0f, _cellPop - dt * 3f);
+            if (_cellIcon != null)
+            {
+                float s = 1f + 0.35f * _cellPop;
+                _cellIcon.rectTransform.localScale = new Vector3(s, s, 1f);
+            }
+
+            // The part chip flashes while it's shown — it's the "you have an upgrade waiting" tell
+            // that YT-132 turns into the upgrade screen.
+            if (_partAlertRoot != null && _partAlertRoot.gameObject.activeSelf)
+            {
+                float pulse = 0.45f + 0.55f * Mathf.Abs(Mathf.Sin(Time.unscaledTime * 5f));
+                if (_partAlertBg != null)
+                {
+                    var c = PartColor; c.a = pulse; _partAlertBg.color = c;
+                }
+                if (_partAlertLabel != null)
+                {
+                    var lc = BoneWhite; lc.a = 0.6f + 0.4f * pulse; _partAlertLabel.color = lc;
+                }
+            }
         }
 
         private void UpdateStatusStrip(float dt)
@@ -773,6 +830,55 @@ namespace MaxWorlds.UI
             _warning.rectTransform.anchoredPosition = new Vector2(0f, 160f);
             _warning.fontStyle = FontStyle.Bold;
             _warning.gameObject.SetActive(false);
+        }
+
+        /// <summary>The banked power-cell counter (YT-131): a small pill under the level pip with a
+        /// cyan cell icon and a running total. Display-only currency for now — it just has to be
+        /// visibly accumulating as you clear the tough robots.</summary>
+        private void BuildPowerCellCounter()
+        {
+            var root = NewRect("Power Cells", Root);
+            Anchor(root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            root.sizeDelta = new Vector2(150f, 44f);
+            root.anchoredPosition = new Vector2(0f, -104f); // just below the centred level pip
+
+            var bg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = false;
+
+            _cellIcon = AddImage(root, HudTextures.Disc(48), CellColor, "Cell Icon");
+            Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            _cellIcon.rectTransform.sizeDelta = new Vector2(26f, 26f);
+            _cellIcon.rectTransform.anchoredPosition = new Vector2(16f, 0f);
+            _cellIcon.raycastTarget = false;
+
+            _cellCount = AddText(root, 24f, BoneWhite, TextAnchor.MiddleLeft);
+            Anchor(_cellCount.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
+            _cellCount.rectTransform.offsetMin = new Vector2(42f, 0f);
+            _cellCount.rectTransform.offsetMax = new Vector2(-10f, 0f);
+            _cellCount.fontStyle = FontStyle.Bold;
+            _cellCount.text = MaxWorlds.Pickups.PickupWallet.PowerCells.ToString();
+        }
+
+        /// <summary>The flashing "install available" chip (YT-131): a gold part badge pinned to the
+        /// right edge that appears and pulses the moment a part is picked up. It is the tell that
+        /// drives YT-132's upgrade flow (tap it → pause → fit the part); here it just flashes.</summary>
+        private void BuildPartAlert()
+        {
+            _partAlertRoot = NewRect("Part Alert", Root);
+            Anchor(_partAlertRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            _partAlertRoot.sizeDelta = new Vector2(96f, 96f);
+            _partAlertRoot.anchoredPosition = new Vector2(-28f, 120f); // right edge, above the aim stick
+
+            _partAlertBg = AddImage(_partAlertRoot, HudTextures.RoundedBox(72, 0.3f), PartColor, "Chip");
+            Stretch(_partAlertBg.rectTransform); _partAlertBg.type = Image.Type.Sliced;
+            _partAlertBg.raycastTarget = false;
+
+            _partAlertLabel = AddText(_partAlertRoot, 24f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(_partAlertLabel.rectTransform);
+            _partAlertLabel.fontStyle = FontStyle.Bold;
+            _partAlertLabel.text = "PART";
+
+            _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsPending > 0);
         }
 
         private void BuildFloatingLayer()
