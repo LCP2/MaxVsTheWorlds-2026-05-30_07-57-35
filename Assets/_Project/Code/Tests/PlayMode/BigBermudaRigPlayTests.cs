@@ -12,13 +12,13 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The Backyard boss is a possessed BOILER-MACHINE now (YT-114), and the machine says what the
-    /// fight is doing.
+    /// The Backyard boss is the otherworldly BROOD-HULK now (YT-150) — an alien chitin carrier — and the
+    /// body says what the fight is doing.
     ///
-    /// PlayMode, because every claim here is about time: the boiler builds pressure over a wind-up, the
-    /// ports change colour on a phase, the thing dies over half a second. None of that is a property you
-    /// can read off a struct — which is the whole reason the wind-up tell could be dead for the life of
-    /// the fight and no EditMode test noticed.
+    /// PlayMode, because every claim here is about time: it builds the coil over a wind-up, the core
+    /// changes colour on a phase, the side hatches vent on a cadence, the thing dies over half a second.
+    /// None of that is a property you can read off a struct — which is the whole reason the wind-up tell
+    /// could be dead for the life of the fight and no EditMode test noticed.
     /// </summary>
     public sealed class BigBermudaRigPlayTests
     {
@@ -117,40 +117,65 @@ namespace MaxWorlds.Tests.PlayMode
         private bool Has(string partName) =>
             _rigHost.GetComponentsInChildren<Transform>().Any(t => t.name == partName);
 
-        // ------------------------------------------------------------------ it is a boiler, not a cube
+        // ------------------------------------------------------------------ it is the Brood-Hulk, not a cube
 
         /// <summary>
-        /// The whole ticket, in one assertion: the boss is a possessed BOILER-MACHINE, and it has the
-        /// parts a boiler has. It was a mower before (YT-90) and a tinted cube before that (YT-27); Lee's
-        /// Level-1 direction re-pitches the silhouette off the boiler-locomotive concept.
+        /// The whole ticket, in one assertion: the boss is the otherworldly BROOD-HULK, and it has the
+        /// parts a chitin carrier has. It was a possessed boiler before (YT-114), a mower before that
+        /// (YT-90) and a tinted cube before that (YT-27); Lee's round-2 pick (YT-150) re-skins the
+        /// silhouette off the alien carrier concept.
         /// </summary>
         [UnityTest]
-        public IEnumerator TheBossIsAPossessedBoiler_NotACube()
+        public IEnumerator TheBossIsTheBroodHulk_NotACube()
         {
             yield return InstallRig();
 
             var parts = _rigHost.GetComponentsInChildren<MeshRenderer>();
             Assert.Greater(parts.Length, 20,
-                "the boiler has almost no parts. A boss is the biggest, meanest silhouette on the field; " +
-                "a handful of boxes is still a crate.");
+                "the Brood-Hulk has almost no parts. A boss is the biggest, meanest silhouette on the " +
+                "field; a handful of boxes is still a crate.");
 
-            // Belly + waist + drum + shoulder + cap read as a tall round boiler; the ports are the face;
-            // the stack and governor are what make it a possessed BOILER and not a water tank.
+            // Thorax + head read as the alien body; the ocular core, glands and spine-seam are the face
+            // and the tell; the two hatches + brood cavity are the carrier's signature — the swarm doors.
             foreach (var required in new[]
-                     { "Belly", "Waist", "Drum", "Shoulder", "Cap", "Stack", "Governor", "EyeBig", "EyeL", "EyeR" })
+                     { "Thorax", "Head", "OcularCore", "GlandL", "GlandR", "SpineSeam",
+                       "HatchL", "HatchR", "BroodCore" })
             {
                 Assert.IsTrue(Has(required),
-                    $"the boiler has no '{required}'. The drum and dome are what make it a boiler, the " +
-                    "stack and governor make it a machine, and the ports make it a character.");
+                    $"the Brood-Hulk has no '{required}'. The thorax and shell make it a carrier, the " +
+                    "hatches make it disgorge, and the core makes it a character.");
             }
 
             yield return null;
         }
 
         /// <summary>
-        /// The "not on rails" decision, made testable: it stands and walks on FOUR legs. The concept is a
-        /// rail locomotive; Lee's one change is that this one is free-roaming, and legs — not bogies — are
-        /// how a player reads "it moves where it likes".
+        /// The signature of the pick (YT-150): functional LEFT and RIGHT side hatches. This asserts they
+        /// are real, hinged, MIRRORED parts — not one door, not painted seams — because YT-157 flings the
+        /// swarm out of BOTH sides and the open shell is the spawn telegraph.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator ItHasTwoMirroredSideHatches()
+        {
+            yield return InstallRig();
+
+            Assert.IsTrue(Has("HatchL") && Has("HatchR"),
+                "a carrier with one door disgorges to one side. The spawn attack (YT-157) uses both flanks.");
+
+            // The hatch pivots sit on the spine (x ≈ 0) so the shells hinge open OUT to the sides. Their
+            // shells are offset to opposite flanks — that mirror is what reads as 'it split down the back'.
+            var shellL = _rigHost.GetComponentsInChildren<Transform>().First(t => t.name == "HatchLShell");
+            var shellR = _rigHost.GetComponentsInChildren<Transform>().First(t => t.name == "HatchRShell");
+            Assert.Less(shellL.position.x, _rigHost.transform.position.x,
+                "the left shell is not on the left.");
+            Assert.Greater(shellR.position.x, _rigHost.transform.position.x,
+                "the right shell is not on the right.");
+        }
+
+        /// <summary>
+        /// A walker, not a floater: it stands and walks on FOUR chitin legs. An alien invader could have
+        /// hovered in on an anti-grav field; the pick keeps it grounded, and legs — not a hover — are how a
+        /// player reads "it moves around the arena on its own".
         /// </summary>
         [UnityTest]
         public IEnumerator ItStandsOnLegs_NotRailWheels()
@@ -348,6 +373,38 @@ namespace MaxWorlds.Tests.PlayMode
                 "it idles the same amber in phase 2 as phase 1. 'It got worse' has to be visible while " +
                 "the player is still deciding what to do about it — the gold has to go red.");
             Assert.Greater(enragedIdle.r, enragedIdle.g + 0.3f, "phase-2 idle is not the hot red it should be.");
+        }
+
+        /// <summary>
+        /// The SPAWN TELL (YT-150 + YT-157). The two side hatches open on the brood cadence — the shell
+        /// splits, the cavity floods, the swarm spills from the flanks — and the OPEN shell is the spawn
+        /// telegraph. Shut before it wakes; opening during the fight. (YT-157's real spawn drives them for
+        /// real later; today the art-side cadence is what makes the mechanic visible for Lee's eye.)
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheSideHatches_VentAsTheSpawnTell()
+        {
+            yield return InstallRig();
+            yield return null;
+
+            Assert.Less(Rig.HatchOpen, 0.05f, "the hatches are open before it has even woken.");
+
+            yield return Wake();
+
+            // The brood cadence opens the shells to disgorge. Give it a couple of cycles of real fight time
+            // — the vent waits out any charge it is committing to, so this is deliberately generous.
+            float peak = 0f, t = 0f;
+            while (t < 14f)
+            {
+                peak = Mathf.Max(peak, Rig.HatchOpen);
+                if (peak > 0.6f) break;
+                t += Time.deltaTime;
+                yield return null;
+            }
+
+            Assert.Greater(peak, 0.6f,
+                "the side hatches never opened. The open shell is the spawn telegraph (YT-157) — if it " +
+                "never vents, the player never sees the swarm coming.");
         }
 
         /// <summary>
