@@ -96,6 +96,9 @@ namespace MaxWorlds.Tests.PlayMode
             _max = new GameObject("Max");
             _max.tag = "Player";
             _max.AddComponent<CharacterController>();
+            // The director only wires the ARMED player (the one with a WaterBlaster) — a bare capsule
+            // is a test greybox, not Max. Give this one a blaster so it qualifies.
+            _max.AddComponent<MaxWorlds.Combat.WaterBlaster>();
             _max.transform.position = HoseDirector.StartTapPosition + new Vector3(0f, 1f, 1f);
 
             _director = new GameObject("HoseDirector");

@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Combat;
 
 namespace MaxWorlds.Hose
 {
@@ -36,6 +37,13 @@ namespace MaxWorlds.Hose
 
             var maxGo = GameObject.FindGameObjectWithTag("Player");
             if (maxGo == null) return; // Max not placed yet — try again next frame
+
+            // The hose is Max's weapon re-themed, so it only belongs to the ARMED player — the one
+            // carrying a WaterBlaster. This gate keeps the tether and its per-frame hose renderer out
+            // of the enemy-navigation / factory / boss PlayMode tests, whose Max is a bare greybox
+            // capsule with no weapon: attaching a leash and drawing a hose in those scenes was pure
+            // overhead that tipped a frame-pacing-sensitive nav test over its stall threshold.
+            if (maxGo.GetComponent<WaterBlaster>() == null) return;
 
             EnsureStartTap();
             Tap tap = Nearest(maxGo.transform.position);

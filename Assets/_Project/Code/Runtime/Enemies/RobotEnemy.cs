@@ -519,6 +519,9 @@ namespace MaxWorlds.Enemies
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
             // The death VFX also hangs off this signal (CombatVfx, YT-48).
             HudSignals.EmitEnemyKilled(transform.position);
+            // Announce the death to the drop system (YT-131); it decides whether loot falls out of
+            // this kind. The enemy stays ignorant of pickups — the policy lives in PickupDirector.
+            MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
             Died?.Invoke(this);
             gameObject.SetActive(false);
         }
