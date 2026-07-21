@@ -10,6 +10,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Bosses;
+using MaxWorlds.Factories;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.UI
@@ -56,7 +57,9 @@ namespace MaxWorlds.UI
         private const float Scale6Inch = 0.44f;   // used by the layout test
 
         private const float PanelW = 980f;
-        private const float PanelH = 900f;
+        // Grew for the two durability sliders (YT-126): 9 knobs need 5 rows a column, not 4. Still
+        // inside the landscape-phone height (930 * 0.44 ≈ 409pt < 430), which the layout test guards.
+        private const float PanelH = 930f;
         private const float Pad = 20f;
         private const float ColGap = 20f;
         private const float RowH = 112f;
@@ -64,7 +67,9 @@ namespace MaxWorlds.UI
         private const float HandleW = 64f;
         private const float HeaderH = 56f;
         private const float ButtonH = 84f;
-        private const float DumpH = 240f;
+        // The copied-values dump is laid out in TWO columns (YT-126), so it stays full-content but
+        // only ~5 lines tall — a single 10-line column would push the panel off a phone.
+        private const float DumpH = 170f;
         private const float GearSize = 96f;
 
         private const int LabelFont = 30;
@@ -83,7 +88,7 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private GameObject _panelRoot;
         private GameObject _scrim;
-        private Text _dumpText;
+        private Text _dumpTextL, _dumpTextR;   // two-column value dump (YT-126)
         private bool _open;
 
         private readonly List<Knob> _knobs = new List<Knob>();
@@ -216,6 +221,37 @@ namespace MaxWorlds.UI
             Add("Water replenish rate", "/s", 0f, 200f, regenDefault,
                 () => DevTuning.Or(DevTuning.BlasterRegenPerSecond, regenDefault),
                 v => { DevTuning.BlasterRegenPerSecond = v; RefreshBlaster(); });
+
+            // Durability sliders (YT-126). Factory default is read off a live hutch so it tracks the
+            // baked value; the boss default is its authored max. Both retune the live objects on the
+            // frame the slider moves, exactly like the speed/life/water knobs.
+            float factoryHpDefault = FactoryDefault();
+            float bossHpDefault = BossTuning.Health;
+
+            Add("Factory health", "hp", 50f, 1500f, factoryHpDefault,
+                () => DevTuning.Or(DevTuning.FactoryHealth, factoryHpDefault),
+                v =>
+                {
+                    DevTuning.FactoryHealth = v;
+                    foreach (MowerHutch h in FactoryCensus.All) if (h != null) h.RefreshMax();
+                });
+
+            Add("Boss health", "hp", 500f, 8000f, bossHpDefault,
+                () => DevTuning.Or(DevTuning.BossHealth, bossHpDefault),
+                v =>
+                {
+                    DevTuning.BossHealth = v;
+                    var b = FindFirstObjectByType<BigBermudaBoss>();
+                    if (b != null) b.RefreshMax();
+                });
+        }
+
+        /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
+        /// one, else the shipped default so the panel still works in a bare test scene.</summary>
+        private static float FactoryDefault()
+        {
+            foreach (MowerHutch h in FactoryCensus.All) if (h != null) return h.AuthoredMax;
+            return 350f;
         }
 
         private void Add(string name, string unit, float min, float max, float def,
@@ -301,18 +337,19 @@ namespace MaxWorlds.UI
             Place(header.rectTransform, Pad, y, PanelW - Pad * 2f, HeaderH);
             y -= HeaderH + 8f;
 
-            // Two columns: seven rows in one column would overrun the safe-area height on a notched
-            // phone in landscape.
+            // Two columns, split by knob count: one long column would overrun the safe-area height
+            // on a notched phone in landscape. Nine knobs (YT-126) => five rows a column.
+            int rowsPerCol = Mathf.CeilToInt(_knobs.Count / 2f);
             float colW = (PanelW - Pad * 2f - ColGap) * 0.5f;
             for (int i = 0; i < _knobs.Count; i++)
             {
-                int col = i / 4;
-                int row = i % 4;
+                int col = i / rowsPerCol;
+                int row = i % rowsPerCol;
                 float x = Pad + col * (colW + ColGap);
                 BuildKnobRow(_knobs[i], rt, x, y - row * RowH, colW);
             }
 
-            float gridH = RowH * 4f;
+            float gridH = RowH * rowsPerCol;
             float footerY = y - gridH - 12f;
 
             var copy = BuildButton(rt, "Copy current values", Pad, footerY, 380f, ButtonH, primary: true);
@@ -324,9 +361,16 @@ namespace MaxWorlds.UI
             var close = BuildButton(rt, "Close", Pad + 380f + 16f + 300f + 16f, footerY, 200f, ButtonH);
             close.onClick.AddListener(() => SetOpen(false));
 
-            _dumpText = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
-            Place(_dumpText.rectTransform, Pad, footerY - ButtonH - 8f, PanelW - Pad * 2f, DumpH);
-            _dumpText.verticalOverflow = VerticalWrapMode.Truncate;
+            // Two-column dump (YT-126): keeps all ten lines on the panel without pushing it off a
+            // phone. Left half + right half of the value list, side by side.
+            float dumpY = footerY - ButtonH - 8f;
+            _dumpTextL = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
+            Place(_dumpTextL.rectTransform, Pad, dumpY, colW, DumpH);
+            _dumpTextL.verticalOverflow = VerticalWrapMode.Truncate;
+
+            _dumpTextR = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
+            Place(_dumpTextR.rectTransform, Pad + colW + ColGap, dumpY, colW, DumpH);
+            _dumpTextR.verticalOverflow = VerticalWrapMode.Truncate;
         }
 
         private void BuildKnobRow(Knob k, RectTransform parent, float x, float y, float w)
@@ -432,19 +476,24 @@ namespace MaxWorlds.UI
         /// </summary>
         private void CopyValues()
         {
-            var sb = new StringBuilder();
-            sb.AppendLine("# MAX tuning — " + Application.version);
+            // The full block for the clipboard and the log — one line per knob, header first.
+            var lines = new List<string> { "# MAX tuning — " + Application.version };
             foreach (var k in _knobs)
             {
                 float v = k.Get();
                 float pct = k.Default > 0f ? v / k.Default * 100f : 0f;
-                sb.AppendLine($"{k.Name}: {v:0.##} {k.Unit}  (default {k.Default:0.##}, {pct:0}%)");
+                lines.Add($"{k.Name}: {v:0.##} {k.Unit}  (default {k.Default:0.##}, {pct:0}%)");
             }
 
-            string dump = sb.ToString();
+            string dump = string.Join("\n", lines);
             GUIUtility.systemCopyBuffer = dump;
-            if (_dumpText != null) _dumpText.text = dump;
             Debug.Log("[Settings]\n" + dump);
+
+            // Split across the two on-panel columns so all of it stays inside the panel on a phone.
+            int half = Mathf.CeilToInt(lines.Count / 2f);
+            if (_dumpTextL != null) _dumpTextL.text = string.Join("\n", lines.GetRange(0, half));
+            if (_dumpTextR != null)
+                _dumpTextR.text = string.Join("\n", lines.GetRange(half, lines.Count - half));
         }
 
         private void ResetValues()
@@ -460,7 +509,8 @@ namespace MaxWorlds.UI
                 if (k.Slider != null) k.Slider.SetValueWithoutNotify(Mathf.Clamp(k.Default, k.Min, k.Max));
                 UpdateValueText(k);
             }
-            if (_dumpText != null) _dumpText.text = "";
+            if (_dumpTextL != null) _dumpTextL.text = "";
+            if (_dumpTextR != null) _dumpTextR.text = "";
         }
 
         // ------------------------------------------------------------------ uGUI helpers

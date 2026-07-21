@@ -136,12 +136,12 @@ namespace MaxWorlds.Tests.PlayMode
             NewUnit(Vector3.one).Hp = 50f;
             yield return null;
 
-            // World height of the drawn bar, in metres, from its rendered corners (sizeDelta is
-            // meaningless on a stretched rect). The old bar was ~0.12 m; the beefed one is roughly
-            // double, which is what "reads at 23 m zoom" needs.
-            var c = new Vector3[4];
-            FindImage("Outline").rectTransform.GetWorldCorners(c);
-            float worldHeight = Mathf.Abs(c[1].y - c[0].y);
+            // World height of the drawn bar, in metres. Use rect.height x world scale rather than
+            // GetWorldCorners: the bar billboards toward the camera, and a tilted bar's world-Y
+            // corner extent is foreshortened — its actual size is the rect times the lossy scale,
+            // which rotation leaves alone. The old bar was ~0.12 m; the beefed one is ~double.
+            var rt = FindImage("Outline").rectTransform;
+            float worldHeight = rt.rect.height * rt.lossyScale.y;
             Assert.That(worldHeight, Is.GreaterThan(0.18f),
                         $"the bar is only {worldHeight:0.00} m tall — too thin to read at play zoom");
         }
