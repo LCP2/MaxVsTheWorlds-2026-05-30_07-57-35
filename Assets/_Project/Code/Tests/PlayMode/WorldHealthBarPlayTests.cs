@@ -136,14 +136,18 @@ namespace MaxWorlds.Tests.PlayMode
             NewUnit(Vector3.one).Hp = 50f;
             yield return null;
 
-            // World height of the drawn bar, in metres. Use rect.height x world scale rather than
-            // GetWorldCorners: the bar billboards toward the camera, and a tilted bar's world-Y
-            // corner extent is foreshortened — its actual size is the rect times the lossy scale,
-            // which rotation leaves alone. The old bar was ~0.12 m; the beefed one is ~double.
+            // True world height of the bar, in metres = rect height x world scale. (Not
+            // GetWorldCorners' world-Y extent: that foreshortens when the bar billboards toward the
+            // camera, which is a property of the viewing angle, not the bar — and a stray MainCamera
+            // in the suite made it flaky. rect x scale is what the bar actually measures.)
+            //
+            // YT-128: the threshold is a genuinely-chunky 0.30 m, not the old 0.18 the bar squeaked
+            // over. This test unit is 1.1 m wide; the robots that ship are 1.3 and Max 1.9, so the
+            // real bars are bigger still. The old bar was ~0.12 m.
             var rt = FindImage("Outline").rectTransform;
             float worldHeight = rt.rect.height * rt.lossyScale.y;
-            Assert.That(worldHeight, Is.GreaterThan(0.18f),
-                        $"the bar is only {worldHeight:0.00} m tall — too thin to read at play zoom");
+            Assert.That(worldHeight, Is.GreaterThan(0.30f),
+                        $"the bar is only {worldHeight:0.00} m tall — too thin to read at 23 m zoom");
         }
 
         [UnityTest]
