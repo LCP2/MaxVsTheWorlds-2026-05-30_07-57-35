@@ -56,6 +56,25 @@ namespace MaxWorlds.UI
         // Height of the optional secondary gauge (Max's water), as a fraction of the health bar's.
         private const float SecondaryHeightFraction = 0.62f;
 
+        /// <summary>
+        /// Extra clearance the bar is pushed UP THE SCREEN, in metres, on top of its world-up anchor
+        /// (YT-149).
+        ///
+        /// The world-up anchor (<see cref="_heightAboveCentre"/>) leaves ~0.8 m of real space over
+        /// Max's head — but at the fixed ~72° camera a world-up offset barely separates ON SCREEN: it
+        /// projects at cos(pitch) ≈ 0.31, so that 0.8 m collapsed to a sliver above his hair. The 3 m
+        /// camera look-ahead (CameraTargetRig) then closed even that sliver the moment he ran up-screen
+        /// — it re-aims the camera to a steeper ~79° over the top of him, lifting his silhouette into
+        /// the bar. That is the whole bug: his head slid under the bar when he ran away from camera.
+        ///
+        /// The camera's up axis is (almost) screen-up, so the same metres buy ~3× the on-screen
+        /// clearance AND the lift is measured from the camera, not the world — it holds at every
+        /// movement angle and rides the look-ahead automatically, instead of being a bigger world
+        /// number that would just reappear as the bug at the next steeper frame. Picked to clear his
+        /// hair-tips (1.83 m) with visible daylight at the phone zoom without floating the bar off him.
+        /// </summary>
+        private const float ScreenClearance = 0.45f;
+
         private IHealthReadout _source;
         private Transform _pivot;
         private RectTransform _canvas;
@@ -220,6 +239,11 @@ namespace MaxWorlds.UI
             if (_camera == null) _camera = Camera.main;
             if (_camera != null)
             {
+                // Lift the bar up the SCREEN, not just up the world (YT-149). SyncToBody has already
+                // re-set the pivot to its world-up anchor this frame, so this rides on top of it and
+                // cannot accumulate. See ScreenClearance for why the camera's up axis rather than
+                // world up — it is what keeps his head out from under the bar when he runs up-screen.
+                _pivot.position += _camera.transform.up * ScreenClearance;
                 _pivot.rotation = Quaternion.LookRotation(
                     _pivot.position - _camera.transform.position, Vector3.up);
             }
