@@ -104,5 +104,44 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             Assert.That(alert.gameObject.activeSelf, Is.False, "spending the part must clear the chip");
         }
+
+        /// <summary>
+        /// YT-147: the raised chip the player actually sees must be the shared collectible orange and it
+        /// must FLASH — not the old static gold. Drives the REAL widget (not just the pure pulse
+        /// function), so a correct function left un-wired to the chip would fail here.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheRaisedChipIsTheCollectibleOrange_AndFlashes()
+        {
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            yield return null;
+
+            Image chip = null;
+            foreach (var img in _hudGo.GetComponentsInChildren<Image>(true))
+                if (img.name == "Chip") chip = img;
+            Assert.That(chip, Is.Not.Null, "the raised chip has no 'Chip' background image");
+
+            // Hue matches the on-ground pickup glow — a relationship, invariant under the flash
+            // brightness, so it survives an art retune of the collectible orange.
+            var glow = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
+            Color c = chip.color;
+            Assert.That(c.g / c.r, Is.EqualTo(glow.g / glow.r).Within(0.05f),
+                "the chip's hue drifted from the on-ground pickup glow");
+            Assert.That(c.g, Is.LessThan(c.r * 0.65f), $"the chip reads yellow (g/r={c.g / c.r:0.00}), not orange");
+            Assert.That(c.b, Is.LessThan(0.35f), "too blue to be the warm collectible orange");
+
+            // It FLASHES: the real widget's brightness swings over time — not a static badge.
+            float min = float.MaxValue, max = float.MinValue;
+            float end = Time.realtimeSinceStartup + 0.5f;
+            while (Time.realtimeSinceStartup < end)
+            {
+                Color cc = chip.color;
+                float b = (cc.r + cc.g + cc.b) * cc.a;
+                min = Mathf.Min(min, b); max = Mathf.Max(max, b);
+                yield return null;
+            }
+            Assert.That(max - min, Is.GreaterThan(0.3f),
+                "the raised chip barely changes brightness over half a second — it is not flashing");
+        }
     }
 }
