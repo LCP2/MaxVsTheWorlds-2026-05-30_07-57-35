@@ -31,9 +31,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ComposeIosVersion_UsesGameCiVersionWhenValid()
+        public void ComposeIosVersion_IgnoresGameCisAutoBump_TheMilestoneWins()
         {
-            Assert.AreEqual("0.0.110", BuildStamp.ComposeIosVersion("0.0.110"));
+            // The YT-139 bug: GameCI's Semantic versioning auto-bumps a legal iOS version like
+            // "0.0.152" from the commit count, and the old rule took it over the milestone pin. The
+            // marketing version tracks the milestone we choose, not the commit count — the constant wins.
+            Assert.AreEqual(BuildStamp.MilestoneVersion, BuildStamp.ComposeIosVersion("0.0.152"));
+            Assert.AreEqual(BuildStamp.MilestoneVersion, BuildStamp.ComposeIosVersion("0.0.110"));
+            Assert.AreEqual(BuildStamp.MilestoneVersion, BuildStamp.ComposeIosVersion("9.9.9"));
         }
 
         [Test]
