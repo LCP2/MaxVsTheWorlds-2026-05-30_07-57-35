@@ -20,11 +20,13 @@ namespace MaxWorlds.Tests.PlayMode
     public sealed class WorldHealthBarPlayTests
     {
         private GameObject _go;
+        private GameObject _cam;
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
             if (_go != null) Object.Destroy(_go);
+            if (_cam != null) Object.Destroy(_cam);
             yield return null;
         }
 
@@ -64,6 +66,90 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         private static float WorldWidth(RectTransform rt) => rt.sizeDelta.x * rt.lossyScale.x;
+
+        // ---------------------------------------------------------------- never covers Max (YT-149)
+
+        /// <summary>
+        /// The bug this pins: at the fixed ~72° camera, Max's head slid UNDER his own floating bar
+        /// whenever he ran up-screen (away from camera). It is a projection trap, so a declared-size
+        /// check can't see it — it only shows up once you put the real camera at the real angle and
+        /// ask where the bar and his head land ON SCREEN.
+        ///
+        /// Two things conspire: a world-up bar offset projects at only cos(72°) ≈ 0.31 of screen-up,
+        /// so the ~0.8 m of real headroom is a sliver on screen; and the 3 m camera look-ahead
+        /// (CameraTargetRig) re-aims the camera to a steeper ~79° over the top of him the instant he
+        /// runs up-screen, lifting his silhouette into that sliver. The test recreates both — a camera
+        /// dead-on him, and a camera led 3 m past him — and asserts his hair-tips never rise into the
+        /// bar in either.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheBarNeverCoversMaxsHeadEvenWhenHeRunsUpScreen()
+        {
+            Camera cam = SetupMainCamera();
+
+            _go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            _go.transform.position = new Vector3(0f, 1.0f, 0f);   // capsule centre 1 m up, like Max
+            var unit = _go.AddComponent<FakeUnit>();
+            // Max's real bar: the water gauge stacked above the life bar, at his authored height/width.
+            WorldHealthBar.Attach(_go, unit, heightAboveCentre: 1.65f, worldWidth: 2.1f,
+                                  alwaysShow: true, secondary: () => 1f,
+                                  secondaryColor: new Color(0.2f, 0.62f, 0.92f));
+
+            Vector3 ground = Vector3.zero;
+            Vector3 hairTip = new Vector3(0f, 1.83f, 0f);   // "stands 1.83 m to the tips of his hair" (MaxRig)
+
+            // Standing still: the camera sits dead on him at the fixed 72°.
+            AimFollowCamera(cam, ground, leadNorth: 0f);
+            yield return null;
+            yield return null;
+            AssertBarClearsHead(cam, hairTip, "standing still");
+
+            // Running up-screen: the look-ahead leads the camera 3 m past him, steepening the view over
+            // the top of his head — the frame the bug actually happened in.
+            AimFollowCamera(cam, ground, leadNorth: 3f);
+            yield return null;
+            yield return null;
+            AssertBarClearsHead(cam, hairTip, "running up-screen (away from camera)");
+        }
+
+        /// <summary>A MainCamera so <see cref="Camera.main"/> resolves inside the bar.</summary>
+        private Camera SetupMainCamera()
+        {
+            _cam = new GameObject("MainCamera", typeof(Camera));
+            _cam.tag = "MainCamera";
+            return _cam.GetComponent<Camera>();
+        }
+
+        /// <summary>Place the camera exactly as FixedAngleCameraRig + CameraTargetRig would: the fixed
+        /// 72° pitch, the phone pull-back, and a look-ahead <paramref name="leadNorth"/> metres past
+        /// the subject toward where he is running.</summary>
+        private static void AimFollowCamera(Camera cam, Vector3 ground, float leadNorth)
+        {
+            const float pitch = 72f, distance = 23f;
+            float rad = pitch * Mathf.Deg2Rad;
+            Vector3 offset = new Vector3(0f, distance * Mathf.Sin(rad), -distance * Mathf.Cos(rad));
+            Vector3 target = ground + new Vector3(0f, 0f, leadNorth);
+            cam.transform.position = target + offset;
+            cam.transform.rotation = Quaternion.Euler(pitch, 0f, 0f);
+        }
+
+        /// <summary>Project the bar's lowest corner and Max's hair-tip to the screen and fail if the bar
+        /// reaches down over his head. Screen Y grows upward, so "clear" means the bar's bottom is
+        /// strictly higher on screen than the top of him.</summary>
+        private void AssertBarClearsHead(Camera cam, Vector3 hairTipWorld, string when)
+        {
+            var corners = new Vector3[4];
+            FindImage("Outline").rectTransform.GetWorldCorners(corners);
+
+            float barBottomY = float.MaxValue;
+            foreach (Vector3 c in corners)
+                barBottomY = Mathf.Min(barBottomY, cam.WorldToScreenPoint(c).y);
+
+            float headTopY = cam.WorldToScreenPoint(hairTipWorld).y;
+            Assert.That(barBottomY, Is.GreaterThan(headTopY),
+                $"{when}: the bar's bottom edge sits at {barBottomY:0} px, at/under the top of Max's " +
+                $"head at {headTopY:0} px — the bar is covering him (YT-149)");
+        }
 
         // ---------------------------------------------------------------- Max's water stack (YT-121)
 
