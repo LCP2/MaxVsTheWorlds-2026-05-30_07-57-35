@@ -44,6 +44,12 @@ namespace MaxWorlds.UI
         /// <summary>The boss was defeated — hide the bar.</summary>
         public static event Action BossDefeated;
 
+        /// <summary>The boss-death payoff has run its course (YT-152) — Max walked out through the exit
+        /// gate, or the sequence timed out. This is the cue to finally show the results card, decoupled
+        /// from <see cref="BossDefeated"/> so the blow-up, the flung parts and the walk-out can play
+        /// first instead of the run cutting straight to results.</summary>
+        public static event Action BossPayoffFinished;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -73,5 +79,8 @@ namespace MaxWorlds.UI
 
         public static void EmitBossDefeated()
             => BossDefeated?.Invoke();
+
+        public static void EmitBossPayoffFinished()
+            => BossPayoffFinished?.Invoke();
     }
 }

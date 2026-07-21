@@ -34,7 +34,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator BossDefeated_ShowsVictoryScreenAndPauses()
+        public IEnumerator BossDefeated_HoldsTheCardForThePayoff_ThenShowsVictoryAndPauses()
         {
             _tracker = new GameObject("RunTracker Test");
             _tracker.AddComponent<RunTracker>();
@@ -42,12 +42,25 @@ namespace MaxWorlds.Tests.PlayMode
 
             HudSignals.EmitEnemyKilled(Vector3.zero);
             HudSignals.EmitFactoryDestroyed(Vector3.zero);
-            HudSignals.EmitBossDefeated(); // Victory
-            yield return null; // let End() build the screen
+            HudSignals.EmitBossDefeated(); // Victory sealed — but the card is held for the payoff (YT-152)
+            yield return null;
+
+            bool CardIsUp() => Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None)
+                .Any(c => c.name == "Result Canvas");
+
+            // The win no longer cuts straight to results: the blow-up + flung parts + walk-out play first.
+            Assert.IsFalse(CardIsUp(), "Results must be held back until the boss-death payoff finishes.");
+            // The world is still live (a brief death hit-stop may dip timeScale, but the results freeze —
+            // timeScale 0 — must NOT have landed yet).
+            Assert.Greater(Time.timeScale, 0f, "The results freeze must not land until the payoff finishes.");
+
+            // The payoff completes (Max walked through the exit gate, or it timed out) — now the card lands.
+            HudSignals.EmitBossPayoffFinished();
+            yield return null;
 
             var canvas = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None)
                 .FirstOrDefault(c => c.name == "Result Canvas");
-            Assert.IsNotNull(canvas, "Result canvas should be built when the run ends.");
+            Assert.IsNotNull(canvas, "Result canvas should build once the payoff finishes.");
             Assert.AreEqual(0f, Time.timeScale, "Result screen should pause the game.");
             Assert.IsNotNull(Object.FindFirstObjectByType<EventSystem>(),
                 "An EventSystem should exist so the Result buttons are clickable.");
