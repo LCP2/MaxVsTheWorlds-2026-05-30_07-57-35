@@ -14,6 +14,8 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.UI;
 using MaxWorlds.Bosses;
+using MaxWorlds.VFX;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Dev
 {
@@ -152,7 +154,45 @@ namespace MaxWorlds.Dev
                 PlaceOrbit(cam, bp, 60f, 0f, 16f);
             }, cam, "05_big_bermuda");
 
+            // 6 — the upgrade-screen weapon render (YT-140), captured straight off its own stage camera.
+            yield return CaptureUpgradeWeapon();
+
             Finish();
+        }
+
+        /// <summary>Render the upgrade-screen hero weapon (YT-140) — the base sprayer with a couple of
+        /// parts already installed and a new one seated on — straight from <see cref="UpgradeWeaponStage"/>'s
+        /// own RenderTexture, so the 3D piece can be eyeballed without compositing the overlay canvas.</summary>
+        private IEnumerator CaptureUpgradeWeapon()
+        {
+            UpgradeState.Reset();
+            UpgradeState.Install(PartKind.AugmentationHarness);
+            UpgradeState.Install(PartKind.AccelerationEngine);
+
+            var stage = UpgradeWeaponStage.Create(null);
+            stage.Show(PartKind.PowerNozzle);
+            for (int i = 0; i < 10; i++) { stage.Tick(1.3f, 0.45f, 0.45f); yield return null; }   // seat the new part
+
+            WriteRenderTexture(stage.Texture, "06_upgrade_weapon");
+            Destroy(stage.gameObject);
+            UpgradeState.Reset();
+        }
+
+        private void WriteRenderTexture(RenderTexture rt, string name)
+        {
+            if (rt == null) return;
+            var tex = new Texture2D(rt.width, rt.height, TextureFormat.ARGB32, false);
+            var prev = RenderTexture.active;
+            try
+            {
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, rt.width, rt.height), 0, 0);
+                tex.Apply();
+                File.WriteAllBytes(Path.Combine(_outDir, name + ".png"), tex.EncodeToPNG());
+                _manifest.AppendLine(name + ".png");
+                Log($"wrote {name}.png");
+            }
+            finally { RenderTexture.active = prev; Destroy(tex); }
         }
 
         // --- staging helpers ------------------------------------------------------------------

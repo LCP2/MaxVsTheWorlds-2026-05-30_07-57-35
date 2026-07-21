@@ -4,6 +4,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
 {
@@ -36,8 +37,6 @@ namespace MaxWorlds.UI
         private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.72f);
         private static readonly Color PanelColor = new Color(0.06f, 0.08f, 0.10f, 0.98f);
         private static readonly Color CardColor = new Color(0.12f, 0.14f, 0.17f, 1f);
-        private static readonly Color BodyColor = new Color(0.90f, 0.45f, 0.16f);   // Max's orange greybox
-        private static readonly Color HoseColor = new Color(0.24f, 0.55f, 0.30f);   // the hose
         private static readonly Color TextColor = Color.white;
         private static readonly Color Dim = new Color(1f, 1f, 1f, 0.6f);
 
@@ -50,18 +49,17 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private GameObject _root;
 
-        private RectTransform _partIcon;      // the part that reveals and flies onto the weapon
         private Text _partLabel;
-        private RectTransform _mount;         // where the part fits on the weapon
-        private Image _weaponGlow;            // flashes when the part settles
         private Text _title;
         private Text _continueHint;
+        private UpgradeWeaponStage _stage;    // the live 3D weapon render (YT-140)
+        private Image _weaponGlow;            // rim flash behind the weapon as the new part seats
+        private Sprite _maxSprite;            // the art-bible portrait, on the left
 
         private bool _open;
         private float _prevTimeScale = 1f;
         private float _t;                     // unscaled time since Open
         private UpgradePart _part;
-        private Vector2 _partStart, _partEnd;
 
         /// <summary>Is the upgrade screen currently up (and the game paused)?</summary>
         public bool IsOpen => _open;
@@ -93,12 +91,11 @@ namespace MaxWorlds.UI
 
             _title.text = "UPGRADE";
             _partLabel.text = _part.Name;
-            _partIcon.GetComponent<Image>().color = _part.Accent;
             _partLabel.color = _part.Accent;
             _continueHint.text = "TAP TO CONTINUE";
 
             _root.SetActive(true);
-            LayoutAnimTargets();
+            if (_stage != null) _stage.Show(_part.Kind);   // assemble the weapon + stage the new part
             ApplyAnim(0f);
         }
 
@@ -109,6 +106,7 @@ namespace MaxWorlds.UI
             if (!_open) return;
             _open = false;
             Time.timeScale = _prevTimeScale;
+            if (_stage != null) _stage.Hide();  // stop the live weapon render (YT-140)
             UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
             CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
             PickupWallet.SpendPart();
@@ -139,30 +137,19 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ animation
 
-        private void LayoutAnimTargets()
-        {
-            // The part reveals up and to the right of the weapon, then flies to the mount point on it.
-            _partEnd = _mount.anchoredPosition;
-            _partStart = _partEnd + new Vector2(210f, 190f);
-        }
-
         private void ApplyAnim(float t)
         {
-            // Phase 1 — reveal: part scales up from nothing at its start spot.
-            float reveal = Mathf.Clamp01(t / RevealTime);
-            float scale = EaseOutBack(reveal);
+            // The 3D weapon stage glides the new part onto its mount over the fit window (YT-140).
+            if (_stage != null) _stage.Tick(t, RevealTime, FitTime);
 
-            // Phase 2 — fit: part slides from start to the mount.
-            float fit = Mathf.Clamp01((t - RevealTime) / FitTime);
-            float glide = EaseInOut(fit);
-            _partIcon.anchoredPosition = Vector2.Lerp(_partStart, _partEnd, glide);
-            _partIcon.localScale = Vector3.one * Mathf.Lerp(1f, 0.72f, glide) * scale;
-
-            // Phase 3 — settle: the weapon flashes as the part locks on, then eases off.
+            // The rim behind the weapon flashes in the part's accent as it locks on, then eases off.
             float settle = Mathf.Clamp01((t - RevealTime - FitTime) / SettleTime);
             float flash = Mathf.Sin(settle * Mathf.PI);                 // 0 → 1 → 0
-            var g = _part.Accent; g.a = 0.85f * flash;
-            _weaponGlow.color = g;
+            if (_weaponGlow != null)
+            {
+                var g = _part.Accent; g.a = 0.55f * flash;
+                _weaponGlow.color = g;
+            }
 
             // The continue hint pulses once the part is on.
             bool done = t >= RevealTime + FitTime;
@@ -173,15 +160,6 @@ namespace MaxWorlds.UI
                 _continueHint.color = c;
             }
         }
-
-        private static float EaseOutBack(float x)
-        {
-            const float c1 = 1.70158f, c3 = c1 + 1f;
-            float p = x - 1f;
-            return 1f + c3 * p * p * p + c1 * p * p;
-        }
-
-        private static float EaseInOut(float x) => x * x * (3f - 2f * x);
 
         // ------------------------------------------------------------------ build
 
@@ -221,6 +199,9 @@ namespace MaxWorlds.UI
             scrimBtn.transition = Selectable.Transition.None;
             scrimBtn.onClick.AddListener(Continue);
 
+            _maxSprite = LoadPortrait();
+            _stage = UpgradeWeaponStage.Create(transform);
+
             BuildPanel(rootRt);
 
             // Input layer (YT-141): a transparent full-screen button ON TOP of everything, so a tap
@@ -238,6 +219,15 @@ namespace MaxWorlds.UI
             _root.SetActive(false);
         }
 
+        /// <summary>The art-bible Max portrait (right half of the reference sheet), from Resources.
+        /// Falls back to null — the card just shows empty — rather than throwing if the art is missing.</summary>
+        private static Sprite LoadPortrait()
+        {
+            var tex = Resources.Load<Texture2D>("Art/max_portrait");
+            return tex == null ? null
+                : Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
         private void BuildPanel(RectTransform parent)
         {
             var panel = NewRect("Panel", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
@@ -252,56 +242,49 @@ namespace MaxWorlds.UI
             _title.rectTransform.anchoredPosition = new Vector2(0f, -34f);
             _title.fontStyle = FontStyle.Bold;
 
-            // Max + his hose — a greybox figure with a nozzle out front where the part mounts.
+            // A two-column stage: the real Max on the left, his weapon in all its glory on the right.
             var stage = NewRect("Stage", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            stage.sizeDelta = new Vector2(1000f, 420f);
+            stage.sizeDelta = new Vector2(1080f, 460f);
             stage.anchoredPosition = new Vector2(0f, -6f);
 
-            // Body (capsule) + head.
-            var body = AddImage(stage, HudTextures.RoundedBox(64, 0.5f), BodyColor, "Max Body");
-            Anchor(body.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            body.rectTransform.sizeDelta = new Vector2(150f, 250f);
-            body.rectTransform.anchoredPosition = new Vector2(-210f, -10f);
-            var head = AddImage(stage, HudTextures.Disc(96), BodyColor, "Max Head");
-            Anchor(head.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            head.rectTransform.sizeDelta = new Vector2(120f, 120f);
-            head.rectTransform.anchoredPosition = new Vector2(-210f, 150f);
-            var mlabel = AddText(stage, 26, Color.white, TextAnchor.MiddleCenter);
+            // LEFT — the art-bible portrait, in a rounded card with a hairline frame so it reads as a
+            // hero shot rather than a pasted cut-out. Replaces the two orange blobs (YT-140).
+            var portraitCard = AddImage(stage, HudTextures.RoundedBox(40, 0.5f), CardColor, "Portrait Card");
+            Anchor(portraitCard.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            portraitCard.rectTransform.sizeDelta = new Vector2(360f, 420f);
+            portraitCard.rectTransform.anchoredPosition = new Vector2(-300f, 0f);
+            portraitCard.type = Image.Type.Sliced;
+
+            var portrait = AddImage(portraitCard.rectTransform, _maxSprite, Color.white, "Max Portrait");
+            Stretch(portrait.rectTransform, -12f);   // inset inside the card frame
+            portrait.preserveAspect = true;
+
+            var mlabel = AddText(stage, 30, TextColor, TextAnchor.MiddleCenter);
             Anchor(mlabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            mlabel.rectTransform.sizeDelta = new Vector2(200f, 40f);
-            mlabel.rectTransform.anchoredPosition = new Vector2(-210f, -150f);
+            mlabel.rectTransform.sizeDelta = new Vector2(360f, 44f);
+            mlabel.rectTransform.anchoredPosition = new Vector2(-300f, -240f);
             mlabel.text = "MAX";
+            mlabel.fontStyle = FontStyle.Bold;
 
-            // The hose + nozzle (the weapon), reaching right from Max toward the mount.
-            var hose = AddImage(stage, HudTextures.RoundedBox(24, 0.5f), HoseColor, "Hose");
-            Anchor(hose.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            hose.rectTransform.sizeDelta = new Vector2(260f, 34f);
-            hose.rectTransform.anchoredPosition = new Vector2(-20f, 20f);
-
-            // The mount slot — where the part locks on — with a glow that flashes on settle.
-            var slot = AddImage(stage, HudTextures.RoundedBox(32, 0.45f), CardColor, "Mount");
-            Anchor(slot.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            slot.rectTransform.sizeDelta = new Vector2(150f, 150f);
-            slot.rectTransform.anchoredPosition = new Vector2(170f, 20f);
-            _mount = slot.rectTransform;
-
-            _weaponGlow = AddImage(stage, HudTextures.RoundedBox(40, 0.45f), new Color(0, 0, 0, 0), "Weapon Glow");
-            Stretch(_weaponGlow.rectTransform, 14f);   // sits just outside the mount as a rim
-            _weaponGlow.rectTransform.SetParent(slot.rectTransform, false);
+            // RIGHT — the weapon, rendered live in 3D (the base sprayer + every installed part), with the
+            // new one flying on. A rim behind it flashes the part's accent when it seats. Replaces the
+            // blue-square part + green-ellipse connector (YT-140).
+            _weaponGlow = AddImage(stage, HudTextures.Disc(256), new Color(0, 0, 0, 0), "Weapon Glow");
+            Anchor(_weaponGlow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _weaponGlow.rectTransform.sizeDelta = new Vector2(460f, 460f);
+            _weaponGlow.rectTransform.anchoredPosition = new Vector2(250f, 30f);
             _weaponGlow.raycastTarget = false;
 
-            // The part icon that reveals + flies onto the mount. Parented to the stage so its
-            // anchoredPosition shares the mount's frame.
-            var part = AddImage(stage, HudTextures.RoundedBox(32, 0.4f), BodyColor, "Part");
-            Anchor(part.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            part.rectTransform.sizeDelta = new Vector2(130f, 130f);
-            part.raycastTarget = false;
-            _partIcon = part.rectTransform;
+            var weapon = AddRawImage(stage, _stage != null ? _stage.Texture : null, "Weapon Render");
+            Anchor(weapon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            weapon.rectTransform.sizeDelta = new Vector2(440f, 440f);
+            weapon.rectTransform.anchoredPosition = new Vector2(250f, 30f);
+            weapon.raycastTarget = false;
 
-            _partLabel = AddText(stage, 30, TextColor, TextAnchor.MiddleCenter);
+            _partLabel = AddText(stage, 34, TextColor, TextAnchor.MiddleCenter);
             Anchor(_partLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            _partLabel.rectTransform.sizeDelta = new Vector2(520f, 48f);
-            _partLabel.rectTransform.anchoredPosition = new Vector2(170f, -140f);
+            _partLabel.rectTransform.sizeDelta = new Vector2(560f, 48f);
+            _partLabel.rectTransform.anchoredPosition = new Vector2(250f, -240f);
             _partLabel.fontStyle = FontStyle.Bold;
 
             _continueHint = AddText(panel, 30, Dim, TextAnchor.LowerCenter);
@@ -335,6 +318,15 @@ namespace MaxWorlds.UI
             var img = go.GetComponent<Image>();
             img.sprite = sprite;
             img.color = color;
+            return img;
+        }
+
+        private static RawImage AddRawImage(Transform parent, Texture tex, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<RawImage>();
+            img.texture = tex;
             return img;
         }
 
