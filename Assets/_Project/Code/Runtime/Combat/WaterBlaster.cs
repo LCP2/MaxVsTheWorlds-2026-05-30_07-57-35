@@ -217,7 +217,7 @@ namespace MaxWorlds.Combat
         private HoseTether _tether;
         private float _hydroDrainAccum;
         /// <summary>Power cells the Hydro condenser burns per second of spray, before any dev override.</summary>
-        private const float DefaultHydroDrainRate = 0.5f;
+        public const float DefaultHydroDrainRate = 0.5f;
 
         /// <summary>True when the water is coming from the Hydro condenser (Hydro installed and Max is
         /// off a tap), not a tap (YT-137). Then power cells fuel it instead of the YT-106 economy.</summary>

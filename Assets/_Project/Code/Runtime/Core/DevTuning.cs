@@ -62,6 +62,20 @@ namespace MaxWorlds.Core
         /// <summary>Max power cells the reserve holds — the meter's full mark (YT-137).</summary>
         public static float? PowerCellCapacity { get; set; }
 
+        // --- upgrade-part effect magnitudes (YT-138 Weapons tab) ---
+
+        /// <summary>Each nozzle's cone multiplier — smaller narrows the beam more.</summary>
+        public static float? NozzleConeMultiplier { get; set; }
+
+        /// <summary>Extra reach in metres the Power nozzle adds.</summary>
+        public static float? PowerNozzleRange { get; set; }
+
+        /// <summary>Water-capacity bonus the Augmentation harness adds.</summary>
+        public static float? HarnessCapacity { get; set; }
+
+        /// <summary>Move-speed multiplier the Acceleration engine gives.</summary>
+        public static float? AccelSpeed { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -81,7 +95,9 @@ namespace MaxWorlds.Core
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
             FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
-            PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue;
+            PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue ||
+            NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || HarnessCapacity.HasValue ||
+            AccelSpeed.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -99,6 +115,10 @@ namespace MaxWorlds.Core
             PartDropInterval = null;
             HydroDrainRate = null;
             PowerCellCapacity = null;
+            NozzleConeMultiplier = null;
+            PowerNozzleRange = null;
+            HarnessCapacity = null;
+            AccelSpeed = null;
         }
     }
 }

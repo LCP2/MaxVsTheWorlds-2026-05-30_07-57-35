@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Upgrades
 {
@@ -37,29 +38,33 @@ namespace MaxWorlds.Upgrades
 
         // --- derived modifiers the systems read ---
 
+        // The effect magnitudes read through DevTuning (YT-138 Weapons tab) so Lee can dial them live,
+        // falling back to the authored UpgradeCatalog consts.
+        private static float NozzleCone => DevTuning.Or(DevTuning.NozzleConeMultiplier, UpgradeCatalog.NozzleConeMultiplier);
+
         /// <summary>Spray cone multiplier: each installed nozzle narrows it, and they compound.</summary>
         public static float ConeMultiplier
         {
             get
             {
                 float m = 1f;
-                if (IsInstalled(PartKind.BeamNozzle)) m *= UpgradeCatalog.NozzleConeMultiplier;
-                if (IsInstalled(PartKind.PowerNozzle)) m *= UpgradeCatalog.NozzleConeMultiplier;
+                if (IsInstalled(PartKind.BeamNozzle)) m *= NozzleCone;
+                if (IsInstalled(PartKind.PowerNozzle)) m *= NozzleCone;
                 return m;
             }
         }
 
         /// <summary>Extra spray reach in metres — the Power nozzle lengthens the beam.</summary>
         public static float RangeBonus =>
-            IsInstalled(PartKind.PowerNozzle) ? UpgradeCatalog.PowerRangeBonus : 0f;
+            IsInstalled(PartKind.PowerNozzle) ? DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus) : 0f;
 
         /// <summary>Extra water-tank capacity — the Augmentation harness.</summary>
         public static float CapacityBonus =>
-            IsInstalled(PartKind.AugmentationHarness) ? UpgradeCatalog.HarnessCapacityBonus : 0f;
+            IsInstalled(PartKind.AugmentationHarness) ? DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus) : 0f;
 
         /// <summary>Move-speed multiplier — the Acceleration engine.</summary>
         public static float MoveSpeedMultiplier =>
-            IsInstalled(PartKind.AccelerationEngine) ? UpgradeCatalog.AccelSpeedMultiplier : 1f;
+            IsInstalled(PartKind.AccelerationEngine) ? DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier) : 1f;
 
         /// <summary>Once the Hydro device is installed the hose detaches and Max is untethered from
         /// the taps — he self-supplies water and roams free.</summary>

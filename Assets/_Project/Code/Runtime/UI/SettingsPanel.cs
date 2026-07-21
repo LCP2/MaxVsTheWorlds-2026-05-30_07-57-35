@@ -11,7 +11,9 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Bosses;
 using MaxWorlds.Factories;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.UI
 {
@@ -108,7 +110,15 @@ namespace MaxWorlds.UI
             public Action<float> Set;
             public Slider Slider;
             public Text Value;
+            public int Tab;   // 0 = Gameplay, 1 = Weapons (YT-138)
         }
+
+        // Tabs (YT-138): the panel is full at 10 gameplay knobs, so the upgrade tuning lives on a
+        // second page. One container per tab; only the active one is shown.
+        private static readonly string[] TabNames = { "GAMEPLAY", "WEAPONS" };
+        private GameObject[] _pages;
+        private Button[] _tabButtons;
+        private int _tab;
 
         // Built once, a frame after the scene loads (the objects it reads defaults from wake in their
         // own Awake first). Always — there is no gate any more.
@@ -245,6 +255,36 @@ namespace MaxWorlds.UI
                     if (b != null) b.RefreshMax();
                 });
 
+            // ---- Weapons tab (YT-138): the upgrade-part magnitudes + the pacing/Hydro tunables. ----
+            // Nozzle/range/harness re-fit the live weapon (RefreshUpgrades); the rest read live.
+            Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,
+                () => DevTuning.Or(DevTuning.NozzleConeMultiplier, UpgradeCatalog.NozzleConeMultiplier),
+                v => { DevTuning.NozzleConeMultiplier = v; RefreshUpgrades(); }, tab: 1);
+
+            Add("Power reach", "m", 0f, 8f, UpgradeCatalog.PowerRangeBonus,
+                () => DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus),
+                v => { DevTuning.PowerNozzleRange = v; RefreshUpgrades(); }, tab: 1);
+
+            Add("Harness capacity", "wtr", 0f, 150f, UpgradeCatalog.HarnessCapacityBonus,
+                () => DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus),
+                v => { DevTuning.HarnessCapacity = v; RefreshUpgrades(); }, tab: 1);
+
+            Add("Engine boost", "x", 1f, 2.5f, UpgradeCatalog.AccelSpeedMultiplier,
+                () => DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier),
+                v => DevTuning.AccelSpeed = v, tab: 1);
+
+            Add("Hydro drain", "/s", 0f, 3f, WaterBlaster.DefaultHydroDrainRate,
+                () => DevTuning.Or(DevTuning.HydroDrainRate, WaterBlaster.DefaultHydroDrainRate),
+                v => DevTuning.HydroDrainRate = v, tab: 1);
+
+            Add("Cell capacity", "cells", 5f, 60f, PickupWallet.DefaultCapacity,
+                () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.DefaultCapacity),
+                v => DevTuning.PowerCellCapacity = v, tab: 1);
+
+            Add("Part pacing", "kills", 1f, 8f, PickupDirector.DefaultPartInterval,
+                () => DevTuning.Or(DevTuning.PartDropInterval, PickupDirector.DefaultPartInterval),
+                v => DevTuning.PartDropInterval = v, tab: 1);
+
             // Hose leash length (YT-129). The tether reads this through DevTuning every frame, so the
             // slider needs no push — moving it re-leashes Max on the next LateUpdate.
             float tetherDefault = MaxWorlds.Hose.HoseTether.AuthoredLength;
@@ -262,11 +302,11 @@ namespace MaxWorlds.UI
         }
 
         private void Add(string name, string unit, float min, float max, float def,
-                         Func<float> get, Action<float> set)
+                         Func<float> get, Action<float> set, int tab = 0)
         {
             _knobs.Add(new Knob
             {
-                Name = name, Unit = unit, Min = min, Max = max, Default = def, Get = get, Set = set,
+                Name = name, Unit = unit, Min = min, Max = max, Default = def, Get = get, Set = set, Tab = tab,
             });
         }
 
@@ -274,6 +314,14 @@ namespace MaxWorlds.UI
         {
             var b = FindFirstObjectByType<WaterBlaster>();
             if (b != null) b.RefreshDevTuning();
+        }
+
+        /// <summary>Re-fit the live weapon to a changed upgrade magnitude (YT-138) — so sliding the
+        /// nozzle/reach/capacity re-shapes an already-installed part on the frame you move it.</summary>
+        private static void RefreshUpgrades()
+        {
+            var b = FindFirstObjectByType<WaterBlaster>();
+            if (b != null) b.RefreshUpgrades();
         }
 
         // ------------------------------------------------------------------ widgets
@@ -340,23 +388,46 @@ namespace MaxWorlds.UI
 
             float y = -Pad;
 
+            // Header: title on the left, the Gameplay/Weapons tabs on the right of the same row so the
+            // paging costs no vertical space on a phone (YT-138).
             var header = AddText(rt, "SETTINGS", HeaderFont, Accent, TextAnchor.MiddleLeft);
-            Place(header.rectTransform, Pad, y, PanelW - Pad * 2f, HeaderH);
+            Place(header.rectTransform, Pad, y, PanelW * 0.34f, HeaderH);
+
+            const float TabW = 168f, TabGap = 8f;
+            _pages = new GameObject[TabNames.Length];
+            _tabButtons = new Button[TabNames.Length];
+            for (int t = 0; t < TabNames.Length; t++)
+            {
+                float tx = PanelW - Pad - (TabNames.Length - t) * (TabW + TabGap) + TabGap;
+                int captured = t;
+                _tabButtons[t] = BuildButton(rt, TabNames[t], tx, y, TabW, HeaderH);
+                _tabButtons[t].onClick.AddListener(() => ShowTab(captured));
+            }
             y -= HeaderH + 8f;
 
-            // Two columns, split by knob count: one long column would overrun the safe-area height
-            // on a notched phone in landscape. Nine knobs (YT-126) => five rows a column.
-            int rowsPerCol = Mathf.CeilToInt(_knobs.Count / 2f);
+            // One container per tab; each holds its own two-column grid. The Gameplay tab has the most
+            // knobs (10 => five rows), so the footer sits below that height for both.
             float colW = (PanelW - Pad * 2f - ColGap) * 0.5f;
-            for (int i = 0; i < _knobs.Count; i++)
+            int maxRows = 0;
+            for (int t = 0; t < TabNames.Length; t++)
             {
-                int col = i / rowsPerCol;
-                int row = i % rowsPerCol;
-                float x = Pad + col * (colW + ColGap);
-                BuildKnobRow(_knobs[i], rt, x, y - row * RowH, colW);
+                var page = NewRect($"Page {TabNames[t]}", rt, new Vector2(0f, 1f), new Vector2(0f, 1f));
+                Place(page, 0f, y, PanelW, RowH * 5f);
+                _pages[t] = page.gameObject;
+
+                var rows = _knobs.FindAll(k => k.Tab == t);
+                int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(rows.Count / 2f));
+                maxRows = Mathf.Max(maxRows, rowsPerCol);
+                for (int i = 0; i < rows.Count; i++)
+                {
+                    int col = i / rowsPerCol;
+                    int row = i % rowsPerCol;
+                    float x = Pad + col * (colW + ColGap);
+                    BuildKnobRow(rows[i], page, x, -row * RowH, colW);
+                }
             }
 
-            float gridH = RowH * rowsPerCol;
+            float gridH = RowH * maxRows;
             float footerY = y - gridH - 12f;
 
             var copy = BuildButton(rt, "Copy current values", Pad, footerY, 380f, ButtonH, primary: true);
@@ -378,6 +449,8 @@ namespace MaxWorlds.UI
             _dumpTextR = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
             Place(_dumpTextR.rectTransform, Pad + colW + ColGap, dumpY, colW, DumpH);
             _dumpTextR.verticalOverflow = VerticalWrapMode.Truncate;
+
+            ShowTab(0);   // start on the Gameplay tab
         }
 
         private void BuildKnobRow(Knob k, RectTransform parent, float x, float y, float w)
@@ -466,6 +539,18 @@ namespace MaxWorlds.UI
             if (_scrim != null) _scrim.SetActive(open);
         }
 
+        /// <summary>Show one tab's page and light its button (YT-138).</summary>
+        private void ShowTab(int tab)
+        {
+            _tab = tab;
+            for (int t = 0; t < _pages.Length; t++)
+            {
+                if (_pages[t] != null) _pages[t].SetActive(t == tab);
+                if (_tabButtons[t] != null && _tabButtons[t].targetGraphic is Image img)
+                    img.color = t == tab ? AccentDeep : new Color(1f, 1f, 1f, 0.10f);
+            }
+        }
+
         private void UpdateValueText(Knob k)
         {
             if (k.Value == null) return;
@@ -483,10 +568,13 @@ namespace MaxWorlds.UI
         /// </summary>
         private void CopyValues()
         {
-            // The full block for the clipboard and the log — one line per knob, header first.
-            var lines = new List<string> { "# MAX tuning — " + Application.version };
+            // The block for the clipboard and the log — one line per knob on the CURRENT tab, header
+            // first. Per-tab (YT-138) so seventeen knobs across two tabs never overrun the on-panel
+            // dump: you copy the page you're tuning.
+            var lines = new List<string> { $"# MAX tuning ({TabNames[_tab]}) — " + Application.version };
             foreach (var k in _knobs)
             {
+                if (k.Tab != _tab) continue;
                 float v = k.Get();
                 float pct = k.Default > 0f ? v / k.Default * 100f : 0f;
                 lines.Add($"{k.Name}: {v:0.##} {k.Unit}  (default {k.Default:0.##}, {pct:0}%)");

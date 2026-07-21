@@ -80,10 +80,31 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(10),
-                "Ten values: camera zoom, Max speed, robot speed, boss speed, Max max-life, water " +
-                "deplete, water replenish, factory health and boss health (YT-126), plus hose " +
-                "tether length (YT-129).");
+            Assert.That(sliders.Length, Is.EqualTo(17),
+                "Ten Gameplay knobs plus the seven Weapons-tab knobs (YT-138): nozzle narrowing, power " +
+                "reach, harness capacity, engine boost, Hydro drain, cell capacity, part pacing.");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator ItHasAWeaponsTabWithItsOwnSliders()
+        {
+            var canvas = PanelCanvas();
+
+            // Two page containers, one per tab (YT-138).
+            RectTransform gameplay = null, weapons = null;
+            foreach (var rt in canvas.GetComponentsInChildren<RectTransform>(true))
+            {
+                if (rt.name == "Page GAMEPLAY") gameplay = rt;
+                if (rt.name == "Page WEAPONS") weapons = rt;
+            }
+            Assert.That(gameplay, Is.Not.Null, "no Gameplay page");
+            Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
+
+            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
+                "the Gameplay tab keeps its ten knobs");
+            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(7),
+                "the Weapons tab carries the seven upgrade/pacing/Hydro knobs");
             yield return null;
         }
 
