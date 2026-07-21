@@ -18,12 +18,13 @@ namespace MaxWorlds.VFX
     /// free-roaming arena boss that moves around on its own" is a thing you read from the legs first.
     ///
     /// Built to be read from thirty metres up at 72°, the only angle this game has. From there a boss is
-    /// a silhouette and a colour, and this one is:
+    /// a silhouette and a colour — and, crucially, HEIGHT FORESHORTENS: a tall figure shows you its top
+    /// and hides its mass, so it reads small. Lee's on-camera review (2026-07-21) cut the first, tall cut
+    /// down by ~35% into a SQUAT, WIDE siege-engine. From above this one is:
     ///
-    ///   * A TALL DOMED BODY — a green boiler drum on a red belly, split by a brass waist ring, capped
-    ///     by a little purple turret and a lightning spire. Nothing else on the field is tall or round;
-    ///     the robots are low and angular and the mower was low and wide. Height and a dome are the
-    ///     whole "that is the boss" read.
+    ///   * A WIDE, LOW BODY — a squat green boiler drum on a broad red belly, split by a brass waist
+    ///     ring, on legs planted wide. It is wider than it is tall on purpose: a big FOOTPRINT is what
+    ///     fills screen at this angle, where height would just collapse into the top of the frame.
     ///   * GLOWING EYE-PORTS — one big brass-rimmed port on the front (where it charges) and two smaller
     ///     mismatched ones on the drum, welded on crooked. They are the face, they are what makes it a
     ///     character and not a water heater, and they are where the fight is read from (below).
@@ -56,10 +57,10 @@ namespace MaxWorlds.VFX
     ///
     ///   ASLEEP      ports dark. It stands beyond the gate from the first frame; a dead machine that
     ///               opens its eyes when the last factory falls is worth more than one that fades in.
-    ///   AWAKE       acid GREEN — the grass that possesses it, and the colour of the clipping AoEs it
-    ///               still throws (BigBermudaBoss.grassColor). NOT the concept's amber: an amber idle
-    ///               sits too close to the warn orange and would blunt the telegraph. Readability beats
-    ///               fidelity (Craft Bible tie-break); the amber is a note for Lee, not a regression.
+    ///   AWAKE       AMBER — the furnace glow, off the concept's eye-ports. It pops on the green body
+    ///               where a green eye vanished, and the telegraph survives because the warn cools the
+    ///               gold OUT toward red (a green→orange idle-to-warn shift was never the point; a
+    ///               gold→orange one reads just as clearly and looks like a furnace being stoked).
     ///   WINDING UP  hot ORANGE, the whole boiler glows, the governor screams up and the stack coughs —
     ///               a boiler over-pressuring. This is <see cref="WarnColor"/>, the same orange every
     ///               telegraph in the game uses. You get the wind-up window the fight always gave you
@@ -89,24 +90,28 @@ namespace MaxWorlds.VFX
         // so the figure-ground work is done by the red/brass/purple against a desaturated lawn and by the
         // boss simply being three times Max's height, rather than by a black body under a rim light.
 
-        private static readonly Color BoilerGreen = new Color(0.16f, 0.52f, 0.40f);  // jade drum, distinct from the muted lawn
+        private static readonly Color BoilerGreen = new Color(0.11f, 0.40f, 0.33f);  // deep teal drum — metal, not candy, and off the yellow-green lawn
         private static readonly Color BoilerRed = new Color(0.60f, 0.15f, 0.17f);    // crimson belly + legs
         private static readonly Color Brass = new Color(0.72f, 0.54f, 0.22f);        // waist ring, port rims, spouts
         private static readonly Color CapPurple = new Color(0.30f, 0.26f, 0.46f);    // the turret cap
         private static readonly Color Steel = new Color(0.24f, 0.25f, 0.30f);        // the stack, the governor
 
-        /// <summary>Awake and idle: acid green. Possessed by the lawn, and the colour of the clippings
-        /// it throws. Distinct from the warn orange on purpose.</summary>
-        private static readonly Color EyeIdle = new Color(0.42f, 1f, 0.22f);
+        /// <summary>Awake and idle: AMBER — the furnace glow, straight off the concept's eye-ports. The
+        /// mower idled green because its body was near-black and green popped on it; this body is GREEN,
+        /// so a green eye is green-on-green and vanishes (the first squat render proved it). Amber pops
+        /// hard on the teal drum, it is the boiler's own fire, and the telegraph still reads because the
+        /// warn/rage cool the gold OUT toward red.</summary>
+        private static readonly Color EyeIdle = new Color(1f, 0.66f, 0.12f);
 
-        /// <summary>Winding up. The same orange as every other telegraph in the game.</summary>
-        private static readonly Color EyeWarn = new Color(1f, 0.35f, 0.12f);
+        /// <summary>Winding up. The gold cools to a hot orange — the green channel drops out, a clear
+        /// shift from the idle even though both are warm.</summary>
+        private static readonly Color EyeWarn = new Color(1f, 0.30f, 0.04f);
 
-        /// <summary>Phase 2. Held between attacks, so "it got worse" reads at a glance.</summary>
-        private static readonly Color EyeRage = new Color(1f, 0.12f, 0.06f);
+        /// <summary>Phase 2. Full red, held between attacks, so "it got worse" reads at a glance.</summary>
+        private static readonly Color EyeRage = new Color(0.95f, 0.10f, 0.05f);
 
-        /// <summary>Committed to a charge, enraged. Past red — there is nowhere hotter to go.</summary>
-        private static readonly Color EyeRageWarn = new Color(1f, 0.72f, 0.45f);
+        /// <summary>Committed to a charge, enraged. A white-hot flare — nowhere hotter to go.</summary>
+        private static readonly Color EyeRageWarn = new Color(1f, 0.55f, 0.30f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
@@ -299,16 +304,23 @@ namespace MaxWorlds.VFX
         }
 
         // ---- dimensions, so the stack of parts lines up and the tests can reason about it ----
-        private const float BellyY = 1.5f, BellyH = 1.4f, BellyR = 1.35f;
-        private const float DrumY = 3.0f, DrumH = 1.5f, DrumR = 1.2f;
-        private const float WaistY = 2.28f;
-        private const float CapY = 4.35f;
-        private const float StackX = 0.95f, StackZ = -0.72f, StackBaseY = 2.3f, StackTopY = 4.15f;
-        private const float LegSpreadX = 1.5f, LegSpreadZ = 1.35f, HipY = 1.35f;
+        //
+        // SQUAT AND WIDE, from Lee's on-camera review (2026-07-21). The first cut was ~5.4 m tall and
+        // read SMALL: on a 72° camera a tall figure foreshortens — you see the top but not the mass. So
+        // the whole machine is ~35% shorter (≈3.5 m) and much wider, a siege-engine / sumo squat with a
+        // low centre of gravity and a broad planted footprint. Width is what reads as big at this angle;
+        // the boiler mass now sits in the readable MIDDLE band of the screen, out of the foreshortened
+        // top. Everything is measured off the actual game angle, not a straight-on hero render.
+        private const float BellyY = 1.0f, BellyH = 1.3f, BellyR = 1.75f;   // wide, low, heavy chassis
+        private const float DrumY = 2.15f, DrumH = 1.1f, DrumR = 1.55f;     // boiler mass, dropped to mid-band
+        private const float WaistY = 1.62f;
+        private const float CapY = 2.95f;
+        private const float StackX = 0.42f, StackZ = -0.9f, StackBaseY = 2.5f, StackTopY = 3.5f;  // short + fat
+        private const float LegSpreadX = 2.05f, LegSpreadZ = 1.75f, HipY = 1.0f;   // planted wide
 
-        /// <summary>The boiler body: a red belly, a brass waist, a green drum with a domed shoulder, and
-        /// a purple turret cap with a lightning spire. Round and tall — the two things nothing else on
-        /// the field is.</summary>
+        /// <summary>The boiler body: a wide red belly, a brass waist, a squat green drum with a shallow
+        /// lid, a small steel pressure-cap and a stout funnel. Broad and heavy — a wide low mass reads as
+        /// big at the 72° angle where a tall one just foreshortens away.</summary>
         private void BuildBoiler()
         {
             // The red belly — a wide low drum, the heaviest part of the silhouette.
@@ -319,26 +331,35 @@ namespace MaxWorlds.VFX
             Part("Waist", PrimitiveType.Cylinder, new Vector3(0f, WaistY, 0f),
                  new Vector3((BellyR + 0.08f) * 2f, 0.16f, (BellyR + 0.08f) * 2f), null, _brassMat);
 
-            // The green drum, and a domed shoulder that rounds it off into the classic boiler bell.
+            // The green drum, and a SHALLOW domed lid — flattened on purpose. A tall round shoulder
+            // reads as a head and a head reads as cute; a shallow lid reads as the top of a tank.
             Part("Drum", PrimitiveType.Cylinder, new Vector3(0f, DrumY, 0f),
                  new Vector3(DrumR * 2f, DrumH * 0.5f, DrumR * 2f), null, _greenMat);
+            // A shallow lid — flattened hard now that the machine is squat, so it does not add height.
             Part("Shoulder", PrimitiveType.Sphere, new Vector3(0f, DrumY + DrumH * 0.5f, 0f),
-                 new Vector3(DrumR * 2f, DrumR * 1.5f, DrumR * 2f), null, _greenMat);
+                 new Vector3(DrumR * 2f, DrumR * 0.62f, DrumR * 2f), null, _greenMat);
 
-            // The turret cap and its spire — a lightning rod on a possessed thing is never just a rod.
-            Part("Cap", PrimitiveType.Cylinder, new Vector3(0f, CapY, 0f),
-                 new Vector3(0.95f, 0.28f, 0.95f), null, _capMat);
-            Part("Dome", PrimitiveType.Sphere, new Vector3(0f, CapY + 0.28f, 0f),
-                 new Vector3(0.85f, 0.7f, 0.85f), null, _capMat);
-            Part("Spire", PrimitiveType.Cylinder, new Vector3(0.02f, CapY + 1.25f, -0.02f),
-                 new Vector3(0.06f, 0.55f, 0.06f), null, _steelMat);
+            // A heavy brass collar caps the drum — the trim line at the top, matching the waist, so the
+            // top reads as the lid of a pressure vessel rather than the crown of a head.
+            Part("Collar", PrimitiveType.Cylinder, new Vector3(0f, DrumY + DrumH * 0.5f + 0.05f, 0f),
+                 new Vector3((DrumR + 0.06f) * 2f, 0.14f, (DrumR + 0.06f) * 2f), null, _brassMat);
+
+            // A modest steel pressure-cap, set back off-centre — small and industrial, NOT a head, so
+            // the top does not read as a face looking up. The TALL element on top is the stack now.
+            Part("Cap", PrimitiveType.Cylinder, new Vector3(0f, CapY, -0.2f),
+                 new Vector3(0.72f, 0.2f, 0.72f), null, _steelMat);
+            Part("CapDome", PrimitiveType.Sphere, new Vector3(0f, CapY + 0.16f, -0.2f),
+                 new Vector3(0.6f, 0.4f, 0.6f), null, _steelMat);
+            // A short brass whistle-valve, not a tall antenna.
+            Part("Whistle", PrimitiveType.Cylinder, new Vector3(-0.3f, CapY + 0.12f, 0.12f),
+                 new Vector3(0.1f, 0.18f, 0.1f), null, _brassMat);
 
             // The governor: a steel hub with two out-flung balls on arms, spinning on the cap. A steam
             // governor flies OUT as it speeds up — a mechanical readout of pressure you can see from
             // across the yard. Built on its own pivot so it can spin without the rest of the cap.
             var govGo = new GameObject("Governor");
             govGo.transform.SetParent(_chassis, worldPositionStays: false);
-            govGo.transform.localPosition = new Vector3(0f, CapY + 0.5f, 0f);
+            govGo.transform.localPosition = new Vector3(0f, CapY + 0.42f, -0.2f);
             _governor = govGo.transform;
 
             var hub = Part("GovHub", PrimitiveType.Cylinder, Vector3.zero, new Vector3(0.12f, 0.18f, 0.12f),
@@ -363,17 +384,27 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void BuildFace()
         {
-            // Big front port — the eye you meet head-on as it comes at you. Brass ring + a glowing lens.
-            PortRing("EyeBigRim", new Vector3(0f, 2.55f, DrumR + 0.02f), 0.95f);
-            _eyes[0] = Port("EyeBig", new Vector3(0f, 2.55f, DrumR + 0.16f), 0.62f);
+            // ONE big glaring eye, high on the front face where the game camera can actually see it (a
+            // 72° top-down look foreshortens the lower body away). A cyclops reads as a threat; two
+            // matched eyes read as a face, and a face reads as cute. A menacing brow/scowl is a great
+            // art-polish lever, but at greybox a chunky brass box in front of the eye reads as a mail
+            // slot — so the glare is left as a note for Lee, and the eye carries the front on its own.
+            // The eye has to be visible from the 72° camera, which looks down at the TOP: a lens on the
+            // vertical front face is seen edge-on and vanishes (the first squat cut proved it — the flat
+            // green lid dominated and the face was gone). So the cyclops is a glowing DOME that bulges
+            // up-and-forward off the front rim of the lid, where the top-down camera reads it as the one
+            // bright focal point on the machine — a full sphere (flatten 1) so it reads from any angle.
+            _eyes[0] = Port("EyeBig", new Vector3(0f, 2.66f, 1.12f), 1.05f, flatten: 1f);
 
-            // Two smaller ports on the drum, mismatched — the small one high, the big-ish one low, on the
-            // opposite side. It has no idea what a face is.
-            PortRing("EyeLRim", new Vector3(-0.72f, 3.35f, DrumR - 0.35f), 0.5f);
-            _eyes[1] = Port("EyeL", new Vector3(-0.72f, 3.35f, DrumR - 0.22f), 0.34f);
+            // Two smaller ports LOW on the wide red belly, off to the sides — furnace-lights, not eyes.
+            // They still carry the tell (they pulse with the phase) but they sit where they cannot pair
+            // up into a face. Placed on the belly's curved front, so z follows the radius.
+            float bellyFrontZ = Mathf.Sqrt(Mathf.Max(0.01f, BellyR * BellyR - 1.0f * 1.0f));
+            PortRing("EyeLRim", new Vector3(-1.0f, 1.02f, bellyFrontZ - 0.04f), 0.46f);
+            _eyes[1] = Port("EyeL", new Vector3(-1.0f, 1.02f, bellyFrontZ + 0.06f), 0.3f);
 
-            PortRing("EyeRRim", new Vector3(0.8f, 2.95f, DrumR - 0.3f), 0.62f);
-            _eyes[2] = Port("EyeR", new Vector3(0.8f, 2.95f, DrumR - 0.17f), 0.42f);
+            PortRing("EyeRRim", new Vector3(1.0f, 0.94f, bellyFrontZ - 0.04f), 0.46f);
+            _eyes[2] = Port("EyeR", new Vector3(1.0f, 0.94f, bellyFrontZ + 0.06f), 0.3f);
         }
 
         /// <summary>A brass porthole rim — a short fat cylinder lying face-out, so the lens sits in a
@@ -384,14 +415,15 @@ namespace MaxWorlds.VFX
                  Quaternion.Euler(90f, 0f, 0f), _brassMat);
         }
 
-        private MeshRenderer Port(string name, Vector3 at, float size)
+        private MeshRenderer Port(string name, Vector3 at, float size, float flatten = 0.55f)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             go.name = name;
             Strip(go);
             go.transform.SetParent(_chassis, worldPositionStays: false);
             go.transform.localPosition = at;
-            go.transform.localScale = new Vector3(size, size, size * 0.55f);   // a lens, flattened into the ring
+            // flatten < 1 = a lens sunk into a ring; flatten 1 = a full dome that reads from above too.
+            go.transform.localScale = new Vector3(size, size, size * flatten);
 
             var r = go.GetComponent<MeshRenderer>();
             // Additive + unlit: a port is a LIGHT. Shared VFX material + a property block per port, so
@@ -407,13 +439,16 @@ namespace MaxWorlds.VFX
         /// A chimney on a machine says "boiler" faster than any amount of paint.</summary>
         private void BuildStack()
         {
+            // Short and FAT now — a stout funnel, not a chimney on end. It reads as a boiler from the
+            // side without adding the height the squat rework just cut.
             float midY = (StackBaseY + StackTopY) * 0.5f;
             Part("Stack", PrimitiveType.Cylinder, new Vector3(StackX, midY, StackZ),
-                 new Vector3(0.4f, (StackTopY - StackBaseY) * 0.5f, 0.4f), null, _steelMat);
-            Part("StackBand", PrimitiveType.Cylinder, new Vector3(StackX, midY + 0.2f, StackZ),
-                 new Vector3(0.46f, 0.08f, 0.46f), null, _brassMat);
+                 new Vector3(0.62f, (StackTopY - StackBaseY) * 0.5f, 0.62f), null, _steelMat);
+            Part("StackBand", PrimitiveType.Cylinder, new Vector3(StackX, StackBaseY + 0.35f, StackZ),
+                 new Vector3(0.7f, 0.1f, 0.7f), null, _brassMat);
+            // A flared lip in the purple cap-colour — the one splash of purple, at the top of the funnel.
             Part("StackLip", PrimitiveType.Cylinder, new Vector3(StackX, StackTopY, StackZ),
-                 new Vector3(0.5f, 0.1f, 0.5f), null, _capMat);
+                 new Vector3(0.76f, 0.12f, 0.76f), null, _capMat);
         }
 
         /// <summary>Two cannon spouts off the sides — stubby barrels, one bigger, both bolted on crooked.
@@ -421,16 +456,22 @@ namespace MaxWorlds.VFX
         /// "possessed junk" rather than "designed weapon".</summary>
         private void BuildSpouts()
         {
-            Spout("SpoutL", new Vector3(-BellyR - 0.1f, 1.75f, 0.35f), 0.62f, Quaternion.Euler(78f, -18f, 0f));
-            Spout("SpoutR", new Vector3(BellyR + 0.05f, 1.55f, 0.2f), 0.5f, Quaternion.Euler(82f, 20f, 0f));
+            // Jutting OUT to the sides, roughly level — from the 72° camera they read as two gun-arms
+            // extending the silhouette wide and mean, which is exactly the width the squat rework wants.
+            // Mounted on the drum's flank at mid-band height so they sit in the readable middle.
+            Spout("SpoutL", new Vector3(-DrumR + 0.1f, 2.05f, 0.4f), new Vector3(-1f, -0.1f, 0.7f), 1.2f, 0.17f);
+            Spout("SpoutR", new Vector3(DrumR - 0.05f, 1.85f, 0.35f), new Vector3(1f, -0.14f, 0.62f), 0.95f, 0.15f);
         }
 
-        private void Spout(string name, Vector3 at, float length, Quaternion rot)
+        private void Spout(string name, Vector3 at, Vector3 dir, float length, float radius)
         {
-            Part($"{name}Barrel", PrimitiveType.Cylinder, at, new Vector3(0.3f, length * 0.5f, 0.3f), rot, _redMat);
-            // A brass muzzle on the end, pushed out along the barrel's own axis.
-            Vector3 muzzle = at + (rot * Vector3.up) * length * 0.5f;
-            Part($"{name}Muzzle", PrimitiveType.Cylinder, muzzle, new Vector3(0.34f, 0.1f, 0.34f), rot, _brassMat);
+            dir = dir.normalized;
+            Quaternion rot = Quaternion.FromToRotation(Vector3.up, dir);   // a cylinder's long axis is Y
+            Part($"{name}Barrel", PrimitiveType.Cylinder, at + dir * length * 0.5f,
+                 new Vector3(radius * 2f, length * 0.5f, radius * 2f), rot, _redMat);
+            // A brass muzzle on the end.
+            Part($"{name}Muzzle", PrimitiveType.Cylinder, at + dir * length,
+                 new Vector3(radius * 2.4f, 0.1f, radius * 2.4f), rot, _brassMat);
         }
 
         /// <summary>
@@ -458,14 +499,16 @@ namespace MaxWorlds.VFX
                 // Diagonal legs step together, opposite diagonals alternate — a stable four-beat walk.
                 _legPhase[i] = (i == 0 || i == 2) ? 0f : Mathf.PI;
 
-                // Thigh: hip out and down toward the knee.
-                Vector3 knee = Vector3.Lerp(Vector3.zero, foot - hip, 0.5f) + Vector3.up * 0.15f;
-                LegBone("Thigh", Vector3.zero, knee, 0.22f, _legLift[i]);
+                // Thigh: hip out and down toward the knee, which flares OUT past the foot — a bent,
+                // braced knee reads as heavy and planted, a sumo stance rather than stilts.
+                Vector3 knee = Vector3.Lerp(Vector3.zero, foot - hip, 0.55f)
+                               + new Vector3(sx * 0.35f, 0.25f, 0f);
+                LegBone("Thigh", Vector3.zero, knee, 0.28f, _legLift[i]);
                 // Shin: knee down to the foot.
-                LegBone("Shin", knee, foot - hip, 0.18f, _legLift[i]);
-                // Foot: a planted pad.
-                var footPart = Part($"Foot", PrimitiveType.Cube, foot - hip + Vector3.up * 0.1f,
-                                    new Vector3(0.5f, 0.2f, 0.7f), null, _redMat);
+                LegBone("Shin", knee, foot - hip, 0.24f, _legLift[i]);
+                // Foot: a big planted pad.
+                var footPart = Part($"Foot", PrimitiveType.Cube, foot - hip + Vector3.up * 0.12f,
+                                    new Vector3(0.7f, 0.24f, 0.9f), null, _redMat);
                 footPart.SetParent(_legLift[i], worldPositionStays: false);
             }
         }
