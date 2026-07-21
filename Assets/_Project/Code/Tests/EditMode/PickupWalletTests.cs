@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using MaxWorlds.Pickups;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -40,8 +41,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void PartsAccumulateAsPending()
         {
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart(PartKind.BeamNozzle);
             Assert.That(PickupWallet.PartsPending, Is.EqualTo(2),
                 "each collected part is a pending upgrade until the upgrade screen (YT-132) spends it");
         }
@@ -54,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.PartsChanged += Handler;
             try
             {
-                PickupWallet.AddPart();
+                PickupWallet.AddPart(PartKind.BeamNozzle);
                 Assert.That(seen, Is.EqualTo(1), "the flashing edge icon is raised off this event");
             }
             finally { PickupWallet.PartsChanged -= Handler; }
@@ -64,7 +65,7 @@ namespace MaxWorlds.Tests.EditMode
         public void SpendingAPartDecrementsPending_AndIsANoOpWhenEmpty()
         {
             Assert.That(PickupWallet.SpendPart(), Is.False, "there's nothing to spend yet");
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
             Assert.That(PickupWallet.SpendPart(), Is.True);
             Assert.That(PickupWallet.PartsPending, Is.EqualTo(0), "spending the only pending part clears it");
             Assert.That(PickupWallet.SpendPart(), Is.False, "and can't be spent below zero");
@@ -74,7 +75,7 @@ namespace MaxWorlds.Tests.EditMode
         public void ResetClearsBothTallies()
         {
             PickupWallet.AddPowerCell();
-            PickupWallet.AddPart();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
             PickupWallet.Reset();
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
             Assert.That(PickupWallet.PartsPending, Is.EqualTo(0));

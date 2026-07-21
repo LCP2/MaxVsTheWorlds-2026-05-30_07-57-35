@@ -169,13 +169,13 @@ namespace MaxWorlds.UI
             if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(pending > 0);
         }
 
-        /// <summary>Tapping the flashing chip opens the paused upgrade screen for the collected part
-        /// (YT-132). The specific part is a generic placeholder until YT-133 defines the five.</summary>
+        /// <summary>Tapping the flashing chip opens the paused upgrade screen for the part at the front
+        /// of the pending queue (YT-132/133) — the specific one Max picked up.</summary>
         private void OpenUpgrade()
         {
-            if (MaxWorlds.Pickups.PickupWallet.PartsPending <= 0) return;
+            if (!MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var kind)) return;
             var screen = FindFirstObjectByType<UpgradeScreen>();
-            if (screen != null) screen.Open(MaxWorlds.Upgrades.UpgradePart.Generic);
+            if (screen != null) screen.Open(MaxWorlds.Upgrades.UpgradeCatalog.For(kind));
         }
 
         private void OnBossRegistered() => _model.UseExternalBoss();

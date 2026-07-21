@@ -10,8 +10,22 @@ namespace MaxWorlds.Core
     /// </summary>
     public sealed class EnergyPool
     {
-        public float Max { get; }
+        public float Max { get; private set; }
         public float Current { get; private set; }
+
+        /// <summary>Resize the tank to a new capacity (YT-133: the Augmentation harness enlarges it).
+        /// Raising it hands the extra straight to Current — a bigger tank you have to earn back is a
+        /// worse upgrade than one that just tops you up — while lowering it clamps. Rebuilding the pool
+        /// instead would drop the HUD's <see cref="Changed"/> subscription, so we mutate in place.</summary>
+        public void Retune(float newMax)
+        {
+            newMax = Mathf.Max(0f, newMax);
+            if (Mathf.Approximately(newMax, Max)) return;
+            float headroom = newMax - Max;
+            Max = newMax;
+            Current = Mathf.Clamp(Current + Mathf.Max(0f, headroom), 0f, Max);
+            Changed?.Invoke(Current);
+        }
 
         /// <summary>
         /// Refill rate per second. Settable so the dev tuning panel can retune a live tank without

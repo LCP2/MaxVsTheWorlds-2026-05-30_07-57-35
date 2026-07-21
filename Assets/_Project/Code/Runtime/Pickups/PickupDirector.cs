@@ -41,6 +41,8 @@ namespace MaxWorlds.Pickups
         private readonly List<Pickup> _live = new List<Pickup>(32);
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
+        // The unique drop table (YT-133): the five parts, each dispensed exactly once across the level.
+        private readonly MaxWorlds.Upgrades.PartDropTable _table = new MaxWorlds.Upgrades.PartDropTable();
         private Transform _max;
 
         private void OnEnable() => DropSignals.RobotDied += OnRobotDied;
@@ -50,7 +52,11 @@ namespace MaxWorlds.Pickups
         {
             if (kind != EnemyKind.Bruiser) return;   // only the medium/tough tier drops loot
 
-            SpawnDrop(PickupKind.Part, pos);
+            // Drop the next unique part, if the set isn't exhausted (YT-133). Once all five are out,
+            // the tough robots keep giving cells but no more parts.
+            if (_table.TryNext(out MaxWorlds.Upgrades.PartKind part))
+                SpawnDrop(PickupKind.Part, pos, part);
+
             for (int i = 0; i < CellsPerDrop; i++)
             {
                 float ang = i * (Mathf.PI * 2f / CellsPerDrop);
@@ -59,10 +65,11 @@ namespace MaxWorlds.Pickups
             }
         }
 
-        private void SpawnDrop(PickupKind kind, Vector3 pos)
+        private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default)
         {
             Stack<Pickup> pool = kind == PickupKind.Part ? _partPool : _cellPool;
             Pickup p = pool.Count > 0 ? pool.Pop() : Pickup.Create(kind);
+            p.Part = part;
             p.transform.SetParent(transform, worldPositionStays: false);
             p.Place(pos);
             _live.Add(p);
@@ -97,8 +104,9 @@ namespace MaxWorlds.Pickups
             }
             else
             {
-                PickupWallet.AddPart();
-                HudSignals.EmitPickup(p.transform.position, "PART!", new Color(0.98f, 0.72f, 0.22f));
+                PickupWallet.AddPart(p.Part);   // banked with which of the five it is (YT-133)
+                var part = MaxWorlds.Upgrades.UpgradeCatalog.For(p.Part);
+                HudSignals.EmitPickup(p.transform.position, part.Name, part.Accent);
             }
 
             p.gameObject.SetActive(false);

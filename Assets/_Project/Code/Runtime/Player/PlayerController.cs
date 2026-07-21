@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using MaxWorlds.Core;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Player
 {
@@ -156,9 +157,11 @@ namespace MaxWorlds.Player
             }
 
             // Dev tuning panel may be overriding the walk speed this session (YT-105); off by
-            // default and in release. The dash is left alone deliberately — it's an i-frame window
-            // whose distance is balanced against the lunge, not a feel knob.
-            float walkSpeed = DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed);
+            // default and in release. Then the Acceleration engine (YT-133) scales it — read at the
+            // point of use so installing the part speeds up the Max you're already controlling, not
+            // just the next one. The dash is left alone deliberately — it's an i-frame window whose
+            // distance is balanced against the lunge, not a feel knob.
+            float walkSpeed = DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed) * UpgradeState.MoveSpeedMultiplier;
             Vector3 planarVel = _dashTimer > 0f ? _dashDir * dashSpeed : moveDir * walkSpeed;
 
             // Keep grounded on the flat arena.

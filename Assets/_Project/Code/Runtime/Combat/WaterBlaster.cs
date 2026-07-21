@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
+using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Combat
@@ -87,14 +88,16 @@ namespace MaxWorlds.Combat
         private float _baseInterval;
         private float _baseEnergyPerSecond;
 
-        /// <summary>How far the stream actually reaches, in metres. Public so the aim reticle (YT-84)
-        /// is drawn from the number the hit test uses, rather than from a shape someone drew — the
-        /// moment those two disagree, the reticle is a lie the player has been taught to trust.</summary>
-        public float Range => range;
+        /// <summary>How far the stream actually reaches, in metres — the authored reach plus any reach
+        /// the Power nozzle adds (YT-133). Public so the aim reticle (YT-84) is drawn from the number
+        /// the hit test uses, rather than from a shape someone drew — the moment those two disagree,
+        /// the reticle is a lie the player has been taught to trust. The serialized <c>range</c> stays
+        /// the authored base; upgrades are layered on here.</summary>
+        public float Range => range + UpgradeState.RangeBonus;
 
         /// <summary>HALF the spray's total spread, in degrees — the same convention
-        /// <see cref="SprayHit.InCone"/> uses.</summary>
-        public float ConeHalfAngle => coneHalfAngle;
+        /// <see cref="SprayHit.InCone"/> uses. Narrowed by any nozzle Max has fitted (YT-133).</summary>
+        public float ConeHalfAngle => coneHalfAngle * UpgradeState.ConeMultiplier;
 
         /// <summary>Damage one tick of the stream deals, after the power ramp.</summary>
         public float DamagePerTick => damagePerTick;
@@ -139,6 +142,26 @@ namespace MaxWorlds.Combat
             {
                 Energy.RegenPerSec = DevTuning.Or(DevTuning.BlasterRegenPerSecond, BlasterTuning.RegenPerSec);
             }
+        }
+
+        private void OnEnable()
+        {
+            UpgradeState.Changed += RefreshUpgrades;
+            RefreshUpgrades();   // fit to whatever's already installed (e.g. Max spawned into a run in progress)
+        }
+
+        private void OnDisable() => UpgradeState.Changed -= RefreshUpgrades;
+
+        /// <summary>
+        /// Re-fit the weapon to Max's installed parts (YT-133): rebuild the reticle and stream at the
+        /// new reach/spread the nozzles give, and resize the tank to its upgraded capacity. Fires on
+        /// every install. No-ops safely before <see cref="Awake"/> has built the sub-objects.
+        /// </summary>
+        public void RefreshUpgrades()
+        {
+            if (_reticle != null) _reticle.Init(transform, Range, ConeHalfAngle);
+            if (_vfx != null) _vfx.Init(Range, Mathf.Max(radius, streamVisualRadius), ConeHalfAngle);
+            if (Energy != null) Energy.Retune(BlasterTuning.MaxEnergy + UpgradeState.CapacityBonus);
         }
 
         private float _tickTimer;
@@ -240,10 +263,14 @@ namespace MaxWorlds.Combat
         {
             Vector3 origin = transform.position;
             Vector3 dir = transform.forward;
+            // Effective reach/spread after any nozzle upgrades (YT-133) — the hit test, the reticle
+            // and the VFX all read these same numbers, so the beam you see is the beam that hits.
+            float reach = Range;
+            float cone = ConeHalfAngle;
             // Spray: gather everything within range, then keep only what's inside the cone arc —
             // so one tick can wash a whole knot of robots, not a single-file tube (YT-64).
             int count = Physics.OverlapSphereNonAlloc(
-                origin, range, _hits, hitMask, QueryTriggerInteraction.Ignore);
+                origin, reach, _hits, hitMask, QueryTriggerInteraction.Ignore);
 
             s_buffer.Clear();
             s_contacts.Clear();
@@ -252,7 +279,7 @@ namespace MaxWorlds.Combat
                 if (_hits[i] == null) continue;
                 if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && d.Team != Team.Player
                     && !s_buffer.Contains(d)
-                    && SprayHit.InCone(origin, dir, _hits[i].transform.position, range, coneHalfAngle)
+                    && SprayHit.InCone(origin, dir, _hits[i].transform.position, reach, cone)
                     // Water does not go through the shed (YT-83). This is not decoration — it is what
                     // keeps cover a DECISION instead of an exploit. If the tree broke the robots'
                     // sight of Max but not Max's spray of them, hiding would be strictly dominant:
@@ -294,7 +321,7 @@ namespace MaxWorlds.Combat
             // the ground so it's always obvious where the shot actually went.
             if (!hitSomething && _vfx != null)
             {
-                Vector3 end = origin + dir * range;
+                Vector3 end = origin + dir * reach;
                 _vfx.Splash(new Vector3(end.x, 0f, end.z), dir, damagePerTick * 0.5f);
             }
         }

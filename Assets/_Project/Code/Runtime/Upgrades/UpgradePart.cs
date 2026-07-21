@@ -21,11 +21,16 @@ namespace MaxWorlds.Upgrades
         /// <summary>Accent colour for the part's icon and reveal glow.</summary>
         public readonly Color Accent;
 
-        public UpgradePart(string name, string code, Color accent)
+        /// <summary>Which of the five this part is (YT-133) — decides the effect installed on dismiss.
+        /// The generic placeholder uses <see cref="PartKind.BeamNozzle"/> as a harmless default.</summary>
+        public readonly PartKind Kind;
+
+        public UpgradePart(string name, string code, Color accent, PartKind kind = PartKind.BeamNozzle)
         {
             Name = name;
             Code = code;
             Accent = accent;
+            Kind = kind;
         }
 
         /// <summary>Whether this is a real part (has a name). A default(UpgradePart) is "none".</summary>
