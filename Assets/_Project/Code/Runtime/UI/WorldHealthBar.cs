@@ -25,20 +25,22 @@ namespace MaxWorlds.UI
     public sealed class WorldHealthBar : MonoBehaviour
     {
         // Sizes in metres, so the bar reads as a label on the unit rather than a banner over the
-        // arena. Beefed up for YT-125 (Brawl Stars idiom): much taller than the old 20, with a solid
-        // dark outline and capsule ends so it pops against the busy backyard at the 23 m phone zoom.
+        // arena. Prominence comes from WIDTH, not height (YT-136): a flat, wide Brawl-Stars strip.
         private const float BarPixelWidth = 180f;
-        // Genuinely chunky (YT-128): 64 vs the old 20, so even foreshortened by the ~72° camera the
-        // capsule reads comfortably at the 23 m phone zoom rather than as a hairline over a threshold.
-        private const float BarPixelHeight = 64f;
+        // Flattened for YT-136: 34, down from YT-128's 64. The tall bar (plus the water gauge and name
+        // stacked over it) reared up over Max and buried the character it floats above. A flat wide
+        // strip reads just as clearly at the 23 m phone zoom and leaves all of Max visible. The
+        // width:height ratio here (~5.3:1) is what makes it a bar rather than a block.
+        private const float BarPixelHeight = 34f;
         private const float LabelPixelWidth = 260f;
         private const float LabelPixelHeight = 30f;
         private const int LabelFontSize = 22;
-        private const int NumberFontSize = 28;
+        private const int NumberFontSize = 26;
 
         // The solid dark border, in canvas pixels. Thick enough to read as a deliberate outline that
-        // separates the bar from the grass, not a hairline.
-        private const float OutlinePx = 6f;
+        // separates the bar from the grass, not a hairline; trimmed to 5 with the flatter bar (YT-136)
+        // so the coloured fill inside the thinner strip still reads.
+        private const float OutlinePx = 5f;
 
         /// <summary>Hide the bar once a unit is this close to full. A field of untouched robots each
         /// carrying a full green bar is the clutter the ticket warned about; a bar that appears when

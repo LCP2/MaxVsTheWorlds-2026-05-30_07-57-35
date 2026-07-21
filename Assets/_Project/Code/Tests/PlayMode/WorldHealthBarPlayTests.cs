@@ -131,23 +131,28 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheBarIsChunkierThanAHairline()
+        public IEnumerator TheBarIsProminentlyWideAndFlat()
         {
             NewUnit(Vector3.one).Hp = 50f;
             yield return null;
 
-            // True world height of the bar, in metres = rect height x world scale. (Not
-            // GetWorldCorners' world-Y extent: that foreshortens when the bar billboards toward the
-            // camera, which is a property of the viewing angle, not the bar — and a stray MainCamera
-            // in the suite made it flaky. rect x scale is what the bar actually measures.)
-            //
-            // YT-128: the threshold is a genuinely-chunky 0.30 m, not the old 0.18 the bar squeaked
-            // over. This test unit is 1.1 m wide; the robots that ship are 1.3 and Max 1.9, so the
-            // real bars are bigger still. The old bar was ~0.12 m.
+            // Prominence comes from WIDTH now (YT-136), not height. YT-128 chased chunkiness through
+            // height (a > 0.30 m threshold); that reared a tall bar up over Max and buried him. This
+            // re-points at the two properties that actually matter: the bar is wide enough to read at
+            // the 23 m phone zoom, and it is FLAT — much wider than tall — so all of Max stays visible
+            // above and below it. Measured as rect x world-scale (not GetWorldCorners, which
+            // foreshortens under the billboard and made the old check camera-dependent).
             var rt = FindImage("Outline").rectTransform;
+            float worldWidth = rt.rect.width * rt.lossyScale.x;
             float worldHeight = rt.rect.height * rt.lossyScale.y;
-            Assert.That(worldHeight, Is.GreaterThan(0.30f),
-                        $"the bar is only {worldHeight:0.00} m tall — too thin to read at 23 m zoom");
+
+            // This test unit is 1.1 m wide; the robots that ship are 1.5 and Max 2.1, so real bars are
+            // wider still.
+            Assert.That(worldWidth, Is.GreaterThan(0.9f),
+                        $"the bar is only {worldWidth:0.00} m wide — too narrow to read at 23 m zoom");
+            Assert.That(worldWidth / worldHeight, Is.GreaterThan(3f),
+                        $"the bar is {worldWidth / worldHeight:0.0}:1 — not flat enough; a tall bar " +
+                        "buries the character it floats over (YT-136)");
         }
 
         [UnityTest]
