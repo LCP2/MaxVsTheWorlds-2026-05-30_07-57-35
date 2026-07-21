@@ -98,7 +98,7 @@ namespace MaxWorlds.VFX
             _range = Mathf.Max(0.1f, range);
             _radius = Mathf.Max(0.05f, radius);
             streamAngle = SprayHalfAngleFor(coneHalfAngle);
-            if (_built) return;
+            if (_built) { Refit(); return; }   // a nozzle upgrade re-shapes the live stream (YT-141)
             _built = true;
 
             _stream = BuildStream();
@@ -108,6 +108,32 @@ namespace MaxWorlds.VFX
             _flash = BuildFlash();
 
             SetStreaming(false, force: true);
+        }
+
+        /// <summary>
+        /// Re-apply reach and spread to the already-built stream (YT-141), so a nozzle upgrade
+        /// re-shapes the visible water to match the reticle and the hit test — the three must agree
+        /// (YT-110). Cheaper than rebuilding the particle systems: the shape angle and the droplet
+        /// lifetime (which is what makes the water die at the weapon's real reach) are just re-set.
+        /// </summary>
+        private void Refit()
+        {
+            if (_stream != null)
+            {
+                float speed = Reach / Mathf.Max(0.05f, travelTime);   // mirrors BuildStream
+                var m = _stream.main;
+                m.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.82f, speed * 1.15f);
+                m.startLifetime = Reach / speed;
+                var s = _stream.shape; s.angle = streamAngle;
+            }
+            if (_core != null)
+            {
+                float speed = Reach / Mathf.Max(0.05f, travelTime * 0.9f);   // mirrors BuildCore
+                var m = _core.main;
+                m.startSpeed = speed;
+                m.startLifetime = (Reach * 0.8f) / speed;
+                var s = _core.shape; s.angle = streamAngle * 0.4f;
+            }
         }
 
         /// <summary>Start/stop the jet. Only acts on change, so it is free to call every frame.</summary>

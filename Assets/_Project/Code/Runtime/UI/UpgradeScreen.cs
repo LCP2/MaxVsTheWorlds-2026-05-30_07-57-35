@@ -109,9 +109,25 @@ namespace MaxWorlds.UI
             if (!_open) return;
             _open = false;
             Time.timeScale = _prevTimeScale;
-            UpgradeState.Install(_part.Kind);   // the install — effects stack and are read live
+            UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
+            CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
             PickupWallet.SpendPart();
             _root.SetActive(false);
+        }
+
+        /// <summary>
+        /// Push the new loadout onto the live weapon the instant a part is confirmed (YT-141), the way
+        /// the Hydro tether already pulls its state every frame — so a confirmed part measurably changes
+        /// the weapon NOW, not only if a change-event happened to be wired to the right instance.
+        ///
+        /// Cone, reach and move speed are read at their point of use, so they are already live; this
+        /// re-fits the things that are BUILT once and would otherwise keep their old shape: the aim
+        /// reticle, the stream, and the tank capacity. Belt-and-suspenders with the event subscription.
+        /// </summary>
+        private static void CommitToLiveWeapon()
+        {
+            var blaster = FindFirstObjectByType<MaxWorlds.Combat.WaterBlaster>();
+            if (blaster != null) blaster.RefreshUpgrades();
         }
 
         private void Update()
@@ -206,6 +222,19 @@ namespace MaxWorlds.UI
             scrimBtn.onClick.AddListener(Continue);
 
             BuildPanel(rootRt);
+
+            // Input layer (YT-141): a transparent full-screen button ON TOP of everything, so a tap
+            // ANYWHERE — including on the panel, where "TAP TO CONTINUE" sits — dismisses and installs.
+            // The panel's own graphics were raycast targets stacked above the scrim, so they ate every
+            // tap on the panel and only the bare margin outside it registered. This is the input layer,
+            // kept separate from the panel's visual composition (the art rebuild, YT-140, owns that).
+            var catcher = AddImage(rootRt, HudTextures.Solid(), new Color(0f, 0f, 0f, 0f), "Tap Catcher");
+            Stretch(catcher.rectTransform);
+            catcher.raycastTarget = true;
+            var catchBtn = catcher.gameObject.AddComponent<Button>();
+            catchBtn.transition = Selectable.Transition.None;
+            catchBtn.onClick.AddListener(Continue);
+
             _root.SetActive(false);
         }
 

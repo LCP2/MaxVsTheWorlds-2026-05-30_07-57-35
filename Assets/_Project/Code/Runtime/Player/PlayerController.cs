@@ -22,6 +22,11 @@ namespace MaxWorlds.Player
         /// <summary>The authored walk speed, ignoring any dev override. The tuning panel shows the
         /// live value as a percentage of this (YT-105).</summary>
         public float AuthoredMoveSpeed => moveSpeed;
+
+        /// <summary>Max's effective walk speed right now — the authored/dev-tuned base scaled by the
+        /// Acceleration engine if it's installed (YT-133/141). The single number <see cref="Update"/>
+        /// moves him at; exposed so the effect can be measured without driving input.</summary>
+        public float WalkSpeed => DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed) * UpgradeState.MoveSpeedMultiplier;
         [SerializeField] private float rotationSpeed = 720f; // deg/s
         [SerializeField] private float gravity = 20f;
 
@@ -161,8 +166,7 @@ namespace MaxWorlds.Player
             // point of use so installing the part speeds up the Max you're already controlling, not
             // just the next one. The dash is left alone deliberately — it's an i-frame window whose
             // distance is balanced against the lunge, not a feel knob.
-            float walkSpeed = DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed) * UpgradeState.MoveSpeedMultiplier;
-            Vector3 planarVel = _dashTimer > 0f ? _dashDir * dashSpeed : moveDir * walkSpeed;
+            Vector3 planarVel = _dashTimer > 0f ? _dashDir * dashSpeed : moveDir * WalkSpeed;
 
             // Keep grounded on the flat arena.
             if (_cc.isGrounded && _verticalVel < 0f)
