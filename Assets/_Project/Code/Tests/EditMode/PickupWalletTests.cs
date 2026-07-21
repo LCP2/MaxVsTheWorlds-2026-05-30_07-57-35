@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
 
@@ -13,7 +14,7 @@ namespace MaxWorlds.Tests.EditMode
     {
         [SetUp]
         [TearDown]
-        public void Clear() => PickupWallet.Reset();
+        public void Clear() { PickupWallet.Reset(); DevTuning.Reset(); }
 
         [Test]
         public void PowerCellsAccumulate()
@@ -69,6 +70,26 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PickupWallet.SpendPart(), Is.True);
             Assert.That(PickupWallet.PartsPending, Is.EqualTo(0), "spending the only pending part clears it");
             Assert.That(PickupWallet.SpendPart(), Is.False, "and can't be spent below zero");
+        }
+
+        [Test]
+        public void PowerCellsCanBeSpent_AndStopAtEmpty()
+        {
+            PickupWallet.AddPowerCell();
+            PickupWallet.AddPowerCell();
+            Assert.That(PickupWallet.TrySpendPowerCell(), Is.True);
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(1), "spending a cell decrements the reserve (YT-137)");
+            Assert.That(PickupWallet.TrySpendPowerCell(), Is.True);
+            Assert.That(PickupWallet.TrySpendPowerCell(), Is.False, "can't spend below zero — Hydro stalls here");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void TheReserveIsCappedAtCapacity()
+        {
+            for (int i = 0; i < PickupWallet.Capacity + 10; i++) PickupWallet.AddPowerCell();
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity),
+                "collecting past the cap is wasted — the meter has a full mark (YT-137)");
         }
 
         [Test]

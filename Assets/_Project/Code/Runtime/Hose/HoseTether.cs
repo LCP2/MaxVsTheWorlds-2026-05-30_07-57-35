@@ -40,8 +40,14 @@ namespace MaxWorlds.Hose
         /// Small — you "walk up to" a tap. Well under the gap between taps so only one is ever in range.</summary>
         public const float PlugRange = 2.5f;
 
-        /// <summary>The tap Max is currently plugged into (null until the director wires it).</summary>
+        /// <summary>The tap Max is currently plugged into (null until the director wires it, or when
+        /// he's roaming free on the Hydro device — YT-137).</summary>
         public Tap Tap => _tap;
+
+        /// <summary>Is Max drawing water from a tap right now? True when plugged in. False when he's
+        /// off on the Hydro condenser (untethered, away from any tap) — which is when it burns power
+        /// cells (YT-137). Without Hydro he is always on a tap.</summary>
+        public bool OnTap => _tap != null;
 
         /// <summary>Plug the hose into a tap and re-anchor the leash to it (YT-129/130). Lights the new
         /// tap and dims the old, so exactly one glows. No-op if it's already the current tap.</summary>
@@ -77,12 +83,15 @@ namespace MaxWorlds.Hose
 
         private void LateUpdate()
         {
-            // Hydro device installed (YT-133): the hose is off the tap. Max self-supplies and roams
-            // free — no leash, no tap connection, and the tap-fed hose line comes down.
+            // Hydro device installed (YT-133/137): no leash — Max roams free. But the tap is now
+            // OPTIONAL, not gone: stand on one and he plugs in for unlimited tap water; walk away and
+            // he runs off the condenser (which burns power cells, handled by the WaterBlaster). So the
+            // hose plugs/unplugs purely by proximity, and there is no clamp.
             if (UpgradeState.Untethered)
             {
-                if (_tap != null) { _tap.SetConnected(false); _tap = null; }
-                if (_hose != null && _hose.enabled) _hose.enabled = false;
+                SetTap(NearestTapInRange());   // may be null when he's out roaming
+                if (_hose != null) _hose.enabled = _tap != null;
+                if (_tap != null) DrawHose();
                 return;
             }
 
@@ -105,9 +114,15 @@ namespace MaxWorlds.Hose
         /// </summary>
         private void TryReplug()
         {
-            var taps = Tap.All;
-            if (taps.Count <= 1) return;
+            Tap near = NearestTapInRange();
+            if (near != null && near != _tap) SetTap(near);   // keep the current tap when between taps
+        }
 
+        /// <summary>The nearest tap within <see cref="PlugRange"/> of Max (planar), or null if none is
+        /// close enough. Shared by the leash's tap-hop (YT-130) and Hydro's proximity plug (YT-137).</summary>
+        private Tap NearestTapInRange()
+        {
+            var taps = Tap.All;
             Tap near = null;
             float nearSq = PlugRange * PlugRange;
             Vector3 p = transform.position;
@@ -120,8 +135,7 @@ namespace MaxWorlds.Hose
                 float sq = dx * dx + dz * dz;
                 if (sq <= nearSq) { nearSq = sq; near = t; }
             }
-
-            if (near != null && near != _tap) SetTap(near);
+            return near;
         }
 
         /// <summary>Reposition Max honouring the CharacterController, which caches its own position and

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Pickups
@@ -32,10 +33,29 @@ namespace MaxWorlds.Pickups
         /// flashing edge icon off this (YT-131); the upgrade screen consumes them (YT-132/133).</summary>
         public static event Action<int> PartsChanged;
 
+        /// <summary>Max power cells the reserve holds (YT-137) — the meter's full mark. Collecting past
+        /// it is wasted; the Hydro device drains against it. Tunable via <see cref="MaxWorlds.Core.DevTuning.PowerCellCapacity"/>.</summary>
+        public const int DefaultCapacity = 30;
+
+        public static int Capacity =>
+            Mathf.Max(1, Mathf.RoundToInt(MaxWorlds.Core.DevTuning.Or(
+                MaxWorlds.Core.DevTuning.PowerCellCapacity, DefaultCapacity)));
+
         public static void AddPowerCell()
         {
+            if (PowerCells >= Capacity) return;   // reserve is full (YT-137)
             PowerCells++;
             PowerCellsChanged?.Invoke(PowerCells);
+        }
+
+        /// <summary>Consume one power cell if any remain — the Hydro condenser burns these to self-supply
+        /// water while untethered (YT-137). Returns false at empty, which is what stalls Hydro.</summary>
+        public static bool TrySpendPowerCell()
+        {
+            if (PowerCells <= 0) return false;
+            PowerCells--;
+            PowerCellsChanged?.Invoke(PowerCells);
+            return true;
         }
 
         /// <summary>Bank a collected part of a specific kind (YT-133).</summary>

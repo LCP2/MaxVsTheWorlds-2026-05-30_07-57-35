@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Hose;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
@@ -80,6 +82,10 @@ namespace MaxWorlds.Combat
         /// (isolated testing / scripted fire). Ignored on frames where a bound aim source
         /// overrides it in Update.</summary>
         public void SetFiring(bool firing) => IsFiring = firing;
+
+        /// <summary>Is the stream actually coming out this frame? (Firing AND supplied.) Exposed so a
+        /// test can see the Hydro condenser stall the spray at zero power cells (YT-137).</summary>
+        public bool IsEmitting => _lastEmitting;
 
         // --- Power ramp (YT-67) ---------------------------------------------------------------
         // The authored numbers, captured before any level-up scales them. Multipliers are always
@@ -208,10 +214,38 @@ namespace MaxWorlds.Combat
             _reticle.Init(transform, range, coneHalfAngle);
         }
 
+        private HoseTether _tether;
+        private float _hydroDrainAccum;
+        /// <summary>Power cells the Hydro condenser burns per second of spray, before any dev override.</summary>
+        private const float DefaultHydroDrainRate = 0.5f;
+
+        /// <summary>True when the water is coming from the Hydro condenser (Hydro installed and Max is
+        /// off a tap), not a tap (YT-137). Then power cells fuel it instead of the YT-106 economy.</summary>
+        private bool HydroActive
+        {
+            get
+            {
+                if (!UpgradeState.Untethered) return false;
+                if (_tether == null) _tether = GetComponent<HoseTether>();
+                return _tether == null || !_tether.OnTap;
+            }
+        }
+
         private void Update()
         {
             float dt = Time.deltaTime;
-            Energy.Tick(dt);
+
+            // Water supply (YT-137). On a tap (or with no Hydro), the YT-106 economy: the tank regens.
+            // On the Hydro condenser, power cells top the tank while any remain; at empty it can't, so
+            // the tank drains as Max fires and the spray stalls until he collects cells or re-taps.
+            if (HydroActive)
+            {
+                if (PickupWallet.PowerCells > 0) Energy.Refill();
+            }
+            else
+            {
+                Energy.Tick(dt);
+            }
 
             // Trigger is held only while the player is actively aiming. When bound,
             // orient along their facing too. If unbound, IsFiring stays false (no
@@ -242,8 +276,23 @@ namespace MaxWorlds.Combat
             if (_depleted && Energy.Normalized >= rechargeFraction) _depleted = false;
             else if (!_depleted && !Energy.CanSpend(energyPerTick)) _depleted = true;
 
-            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick));
+            // On the Hydro condenser the water is made from power cells — no cells, no water, so the
+            // spray stalls until Max collects more or re-plugs a tap (YT-137). On a tap this is false
+            // and the normal YT-106 tank rules apply.
+            bool hydroStarved = HydroActive && PickupWallet.PowerCells <= 0;
+
+            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick) && !hydroStarved);
             _lastEmitting = emitting;
+
+            // While it IS spraying on the condenser, the water is paid for in power cells — burn them
+            // for the time it's actually spraying, so the meter ticks down as it's used.
+            if (HydroActive && emitting)
+            {
+                float rate = Mathf.Max(0f, DevTuning.Or(DevTuning.HydroDrainRate, DefaultHydroDrainRate));
+                _hydroDrainAccum += rate * dt;
+                while (_hydroDrainAccum >= 1f && PickupWallet.TrySpendPowerCell()) _hydroDrainAccum -= 1f;
+            }
+
             if (_vfx != null) _vfx.SetStreaming(emitting);
             if (!emitting)
             {
