@@ -35,11 +35,22 @@ namespace MaxWorlds.Hose
         private CharacterController _cc;
         private LineRenderer _hose;
 
+        /// <summary>How close Max must get to a different tap for the hose to re-plug to it (YT-130).
+        /// Small — you "walk up to" a tap. Well under the gap between taps so only one is ever in range.</summary>
+        public const float PlugRange = 2.5f;
+
         /// <summary>The tap Max is currently plugged into (null until the director wires it).</summary>
         public Tap Tap => _tap;
 
-        /// <summary>Plug the hose into a tap. YT-130's tap-switcher re-calls this to re-anchor the leash.</summary>
-        public void SetTap(Tap tap) => _tap = tap;
+        /// <summary>Plug the hose into a tap and re-anchor the leash to it (YT-129/130). Lights the new
+        /// tap and dims the old, so exactly one glows. No-op if it's already the current tap.</summary>
+        public void SetTap(Tap tap)
+        {
+            if (_tap == tap) return;
+            if (_tap != null) _tap.SetConnected(false);
+            _tap = tap;
+            if (_tap != null) _tap.SetConnected(true);
+        }
 
         /// <summary>
         /// Pure leash clamp: where Max is allowed to stand, given his position, the tap, and the max
@@ -67,10 +78,39 @@ namespace MaxWorlds.Hose
         {
             if (_tap == null) return;
 
+            TryReplug();   // walk up to a different tap and the hose swaps to it (YT-130)
+
             Vector3 clamped = Clamp(transform.position, _tap.transform.position, Length);
             if (clamped != transform.position) MoveTo(clamped);
 
             DrawHose();
+        }
+
+        /// <summary>
+        /// Instant tap-hopping (YT-130): if Max is standing on a DIFFERENT tap, re-plug the hose to it
+        /// with no pause and no button — the leash re-anchors on the next clamp. He can only reach the
+        /// next tap because it sits within the current tether, which is what makes tap-hopping the
+        /// early traversal: hop out to a tap, and from there the leash reaches the one after it.
+        /// </summary>
+        private void TryReplug()
+        {
+            var taps = Tap.All;
+            if (taps.Count <= 1) return;
+
+            Tap near = null;
+            float nearSq = PlugRange * PlugRange;
+            Vector3 p = transform.position;
+            for (int i = 0; i < taps.Count; i++)
+            {
+                Tap t = taps[i];
+                if (t == null) continue;
+                float dx = t.transform.position.x - p.x;
+                float dz = t.transform.position.z - p.z;
+                float sq = dx * dx + dz * dz;
+                if (sq <= nearSq) { nearSq = sq; near = t; }
+            }
+
+            if (near != null && near != _tap) SetTap(near);
         }
 
         /// <summary>Reposition Max honouring the CharacterController, which caches its own position and

@@ -4,23 +4,38 @@ using MaxWorlds.Combat;
 namespace MaxWorlds.Hose
 {
     /// <summary>
-    /// Wires the hose weapon into the level with no scene wiring (YT-129) — the self-installing
+    /// Wires the hose weapon into the level with no scene wiring (YT-129/130) — the self-installing
     /// director idiom used across this project (<c>GroundAnchorVfx</c>, <c>RuntimeSurfaceDirector</c>).
     ///
-    /// On the first frame Max exists it: places the starting <see cref="Tap"/> on the patio if the
-    /// level has none, then gives Max a <see cref="HoseTether"/> plugged into the nearest tap. It
+    /// On the first frame the armed Max exists it: places the whole tap NETWORK across the garden if
+    /// the level has none, then gives Max a <see cref="HoseTether"/> plugged into the nearest tap. It
     /// retries each frame until Max is found, because Max is teleported to his map spawn during scene
     /// build and may not be at his final position on frame zero. Once wired it stops doing work.
     ///
-    /// One tap for YT-129. YT-130 will add more taps and the instant-replug switcher; this director is
-    /// where that discovery/binding logic will grow.
+    /// The taps are spaced a bit under a tether-length apart along the path (YT-130), so from each one
+    /// Max can just reach the next — hopping tap to tap is the early-game traversal, until the Hydro
+    /// device (YT-133) cuts the hose entirely. The instant re-plug itself lives in
+    /// <see cref="HoseTether"/>; this only decides where the taps stand.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class HoseDirector : MonoBehaviour
     {
-        /// <summary>The starting tap: on the patio by the back door, a couple of metres off Max's
-        /// spawn at (0, -10). Close enough that the opening leash still reaches the lawn.</summary>
-        public static readonly Vector3 StartTapPosition = new Vector3(3.5f, 0f, -12f);
+        /// <summary>The tap network, roughly along the patio → lawn → orchard → boss path. Each is
+        /// under <see cref="HoseTether.AuthoredLength"/> from its neighbours so the leash reaches from
+        /// one to the next; small x-offsets keep them clear of centre-line cover and the boss gate.</summary>
+        public static readonly Vector3[] TapPositions =
+        {
+            new Vector3(3.5f, 0f, -12f),  // patio, by the back door (the start)
+            new Vector3(0f,   0f,   4f),  // the lawn
+            new Vector3(-2f,  0f,  20f),  // far lawn
+            new Vector3(2f,   0f,  36f),  // the orchard
+            new Vector3(4f,   0f,  52f),  // just past the boss gate
+            new Vector3(-4f,  0f,  62f),  // the boss clearing
+        };
+
+        /// <summary>The starting tap — the first of the network, on the patio. Kept as a named point
+        /// for tests and for where Max plugs in at spawn.</summary>
+        public static Vector3 StartTapPosition => TapPositions[0];
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -45,7 +60,7 @@ namespace MaxWorlds.Hose
             // overhead that tipped a frame-pacing-sensitive nav test over its stall threshold.
             if (maxGo.GetComponent<WaterBlaster>() == null) return;
 
-            EnsureStartTap();
+            EnsureTaps();
             Tap tap = Nearest(maxGo.transform.position);
             if (tap == null) return;
 
@@ -56,10 +71,14 @@ namespace MaxWorlds.Hose
             _wired = true;
         }
 
-        private static void EnsureStartTap()
+        private static void EnsureTaps()
         {
-            if (Tap.All.Count > 0) return;
-            Tap.Create("Garden Tap (Start)", StartTapPosition);
+            if (Tap.All.Count > 0) return;   // already placed (idempotent under the installer re-run)
+            for (int i = 0; i < TapPositions.Length; i++)
+            {
+                string name = i == 0 ? "Garden Tap (Start)" : $"Garden Tap {i}";
+                Tap.Create(name, TapPositions[i]);
+            }
         }
 
         private static Tap Nearest(Vector3 p)

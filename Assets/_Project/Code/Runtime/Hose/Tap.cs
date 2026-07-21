@@ -1,5 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Hose
 {
@@ -30,6 +32,17 @@ namespace MaxWorlds.Hose
         /// <summary>World point the hose visually connects to (top of the spout).</summary>
         public Vector3 NozzlePosition => transform.position + Vector3.up * NozzleHeight;
 
+        // Bright cyan when Max's hose is plugged in here, dim grey otherwise — so which tap he's on
+        // reads at a glance (YT-130), alongside the hose line that runs to it.
+        private static readonly Color ConnectedColor = new Color(0.31f, 0.86f, 0.98f);
+        private static readonly Color IdleColor = new Color(0.30f, 0.32f, 0.34f);
+
+        private Renderer _indicator;
+        private MaterialPropertyBlock _mpb;
+
+        /// <summary>Is Max's hose currently plugged into this tap? Driven by the tether (YT-130).</summary>
+        public bool IsConnected { get; private set; }
+
         private void OnEnable()
         {
             if (!s_all.Contains(this)) s_all.Add(this);
@@ -38,6 +51,39 @@ namespace MaxWorlds.Hose
         private void OnDisable()
         {
             s_all.Remove(this);
+        }
+
+        /// <summary>Light this tap up as the connected one (or dim it back). The tether calls this on
+        /// every re-plug so exactly one tap glows.</summary>
+        public void SetConnected(bool connected)
+        {
+            IsConnected = connected;
+            if (_indicator == null) return;
+            if (_mpb == null) _mpb = new MaterialPropertyBlock();
+            _indicator.GetPropertyBlock(_mpb);
+            Color c = connected ? ConnectedColor : IdleColor;
+            _mpb.SetColor("_BaseColor", c);
+            _mpb.SetColor("_EmissionColor", connected ? c : Color.black);
+            _indicator.SetPropertyBlock(_mpb);
+        }
+
+        /// <summary>
+        /// Nearest tap to <paramref name="pos"/> within <paramref name="range"/> metres (planar), by
+        /// index into <paramref name="taps"/>; -1 if none is in range. Pure, so the "walk up to a tap
+        /// and it swaps" rule (YT-130) can be tested without a scene.
+        /// </summary>
+        public static int NearestWithin(Vector3 pos, IReadOnlyList<Vector3> taps, float range)
+        {
+            int best = -1;
+            float bestSq = range * range;
+            for (int i = 0; i < taps.Count; i++)
+            {
+                float dx = taps[i].x - pos.x;
+                float dz = taps[i].z - pos.z;
+                float sq = dx * dx + dz * dz;
+                if (sq <= bestSq) { bestSq = sq; best = i; }
+            }
+            return best;
         }
 
         /// <summary>Build and place a greybox tap standing on the lawn at <paramref name="groundPosition"/>.</summary>
@@ -73,6 +119,23 @@ namespace MaxWorlds.Hose
             spout.transform.localScale = new Vector3(0.1f, 0.18f, 0.1f);
             spout.transform.localPosition = new Vector3(0f, NozzleHeight, 0.18f);
             spout.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+
+            // The connection indicator: a small bulb on top that glows cyan when Max is plugged in
+            // here (YT-130). Marked KeepsOwnMaterial + given a real URP material so the surface sweep
+            // leaves it alone and it's tinted per-state through a property block rather than repainted
+            // as scenery. Its collider is stripped like the rest of the tap.
+            var bulb = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            bulb.name = "TapIndicator";
+            Destroy(bulb.GetComponent<Collider>());
+            bulb.AddComponent<KeepsOwnMaterial>();
+            bulb.transform.SetParent(transform, worldPositionStays: false);
+            bulb.transform.localScale = Vector3.one * 0.16f;
+            bulb.transform.localPosition = new Vector3(0f, NozzleHeight + 0.12f, 0f);
+            _indicator = bulb.GetComponent<MeshRenderer>();
+            _indicator.sharedMaterial = MaterialLibrary.Surface(SurfaceKind.Metal);
+            _indicator.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+
+            SetConnected(IsConnected);   // paint the initial state (idle unless the tether plugged in first)
         }
     }
 }
