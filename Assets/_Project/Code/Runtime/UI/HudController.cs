@@ -169,6 +169,15 @@ namespace MaxWorlds.UI
             if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(pending > 0);
         }
 
+        /// <summary>Tapping the flashing chip opens the paused upgrade screen for the collected part
+        /// (YT-132). The specific part is a generic placeholder until YT-133 defines the five.</summary>
+        private void OpenUpgrade()
+        {
+            if (MaxWorlds.Pickups.PickupWallet.PartsPending <= 0) return;
+            var screen = FindFirstObjectByType<UpgradeScreen>();
+            if (screen != null) screen.Open(MaxWorlds.Upgrades.UpgradePart.Generic);
+        }
+
         private void OnBossRegistered() => _model.UseExternalBoss();
         private void OnBossEngaged(string name, int phases) => _model.EngageBossExternal(name, phases);
         private void OnBossHealth(float normalized) => _model.SetBossHealth(normalized);
@@ -871,7 +880,12 @@ namespace MaxWorlds.UI
 
             _partAlertBg = AddImage(_partAlertRoot, HudTextures.RoundedBox(72, 0.3f), PartColor, "Chip");
             Stretch(_partAlertBg.rectTransform); _partAlertBg.type = Image.Type.Sliced;
-            _partAlertBg.raycastTarget = false;
+            _partAlertBg.raycastTarget = true;   // it's a button now (YT-132): tap it to open the upgrade screen
+
+            // Tapping the chip opens the paused upgrade screen for the part you picked up (YT-132).
+            var chipButton = _partAlertBg.gameObject.AddComponent<Button>();
+            chipButton.transition = Selectable.Transition.None;   // the flash pulse drives its colour
+            chipButton.onClick.AddListener(OpenUpgrade);
 
             _partAlertLabel = AddText(_partAlertRoot, 24f, BoneWhite, TextAnchor.MiddleCenter);
             Stretch(_partAlertLabel.rectTransform);
