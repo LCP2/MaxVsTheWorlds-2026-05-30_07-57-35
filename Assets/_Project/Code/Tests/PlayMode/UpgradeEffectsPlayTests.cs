@@ -136,6 +136,26 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator TheWaterJetItselfReFits_NotJustTheOutline()
+        {
+            // Lee's report: the aim outline lengthened on the Power nozzle but the water jet stayed
+            // short — the emitter was reading a stale value. Assert the EMITTER's own reach + spread
+            // move, not just the reticle.
+            var vfx = _max.GetComponent<MaxWorlds.VFX.WaterVfx>();
+            Assert.That(vfx, Is.Not.Null, "the blaster should carry its water VFX");
+            float baseAngle = vfx.EmitterHalfAngle;
+            float baseSpeed = vfx.EmitterSpeed;
+            Assert.That(baseAngle, Is.GreaterThan(0f), "the stream emitter should be built");
+
+            yield return PickUpAndConfirm(PartKind.PowerNozzle);
+
+            Assert.That(vfx.EmitterHalfAngle, Is.LessThan(baseAngle - 0.5f),
+                "the water JET didn't narrow — the emitter is still reading the base cone");
+            Assert.That(vfx.EmitterSpeed, Is.GreaterThan(baseSpeed + 0.1f),
+                "the water JET didn't lengthen — the emitter is still reading the base reach (the YT-141 bug)");
+        }
+
+        [UnityTest]
         public IEnumerator TheReticleReFitsWhenTheBeamNarrows()
         {
             var reticle = _max.GetComponent<MaxWorlds.VFX.AimReticle>();

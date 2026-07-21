@@ -61,6 +61,16 @@ namespace MaxWorlds.VFX
         /// <summary>The stream's actual cone half-angle, in degrees. Exposed so a test can hold it
         /// against the reticle's without reading particles off the screen.</summary>
         public float StreamHalfAngle => streamAngle;
+
+        /// <summary>The cone half-angle the LIVE stream EMITTER is shaped to, read off the particle
+        /// system itself (not a cached field). A nozzle upgrade must move THIS, not just the reticle —
+        /// the emitter reading a stale value is the YT-141 bug. 0 before the stream is built.</summary>
+        public float EmitterHalfAngle => _stream != null ? _stream.shape.angle : 0f;
+
+        /// <summary>The stream emitter's current top launch speed. It scales with reach (the droplet
+        /// lifetime is fixed), so a longer beam is a faster jet — this is how a test proves the
+        /// emitter's REACH grew, not only the aim outline's. 0 before the stream is built.</summary>
+        public float EmitterSpeed => _stream != null ? _stream.main.startSpeed.constantMax : 0f;
         [Tooltip("How far in front of the blaster's origin the water leaves the nozzle, in " +
                  "multiples of the stream radius. Stretched particles trail a tail behind " +
                  "themselves, so emitting at the origin makes the jet appear to pass through " +
