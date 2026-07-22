@@ -73,13 +73,11 @@ namespace MaxWorlds.VFX
     /// swarm spills from the flanks. The open shell IS the spawn telegraph — a read distinct from the
     /// charge wind-up (which is the eye cooling + the coil), so the two never blur into one another.
     ///
-    /// YT-157 (the gameplay that actually spawns robots) is the OTHER stream's work and is not built yet —
-    /// <see cref="BossAction"/> has no Spawn state to read. So the hatches run here on an art-side brood
-    /// CADENCE: purely cosmetic (they open, the cavity floods, motes spill, they close — no robots, no
-    /// damage), so the mechanic is visible and readable at 72° for Lee's eye now. When YT-157 lands, point
-    /// <see cref="_venting"/> at the real spawn-windup signal — the ONE line marked in <see cref="TickHatches"/>
-    /// — and delete the cadence. This is the same read-gameplay-write-nothing seam the factory door uses
-    /// (<see cref="FactoryDoorway"/>).
+    /// YT-157 has landed: the gameplay boss now flings real robots on a brood volley, and the hatches open
+    /// on THAT — <see cref="BigBermudaBoss.SpawnWindup01"/> is 0 shut … 1 flung. The rig reads it and shows
+    /// it; it never writes back. The eased hinge, the brood-cavity flood and the mote burst are all still
+    /// owned here — the gameplay says only WHEN, the art says what it looks like. This is the same
+    /// read-gameplay-write-nothing seam the factory door uses (<see cref="FactoryDoorway"/>).
     ///
     /// Reads the fight, writes nothing to it: <see cref="BigBermudaBoss.Action"/>,
     /// <see cref="BigBermudaBoss.Enraged"/> and <see cref="BigBermudaBoss.Engaged"/> are getters, and the
@@ -159,11 +157,6 @@ namespace MaxWorlds.VFX
         [Tooltip("How fast the hatches hinge to the state the spawn tell calls for.")]
         [SerializeField] private float hatchResponse = 7f;
 
-        [Tooltip("Art-side brood cadence (stand-in for YT-157): seconds between vents, and how long the " +
-                 "hatches hold open each vent. Replace with the real spawn-windup signal when YT-157 lands.")]
-        [SerializeField] private float broodInterval = 5.5f;
-        [SerializeField] private float broodOpenHold = 1.5f;
-
         // ---------------------------------------------------------------- state
 
         private BigBermudaBoss _boss;
@@ -198,8 +191,7 @@ namespace MaxWorlds.VFX
         private float _dieTimer;
 
         private float _hatchOpen;                // 0 shut … 1 fully hinged, eased
-        private float _broodClock;               // drives the stand-in vent cadence
-        private bool _venting;                   // true while the hatches are meant to be open
+        private bool _venting;                   // true while the hatches are meant to be open (YT-157)
 
         /// <summary>Awake and running. False while dormant, and false forever once it is dead.</summary>
         public bool Running => _awake && !_dying;
@@ -718,31 +710,14 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void TickHatches(float dt)
         {
-            // >>> YT-157 SEAM: replace this cadence block with `_venting = _boss.SpawnWindup;` (or the
-            //     equivalent getter the gameplay stream adds) once the spawn attack exists. <<<
-            // The clock runs whenever it is awake, but a vent only OPENS when it is not committing to a
-            // charge — so the spawn tell and the charge tell never fire at once. A charge starting mid-vent
-            // snaps the shell shut; the clock, already past the interval, re-opens it the moment the charge
-            // is done.
-            if (_awake && !_dying)
-            {
-                _broodClock += dt;
-                if (_venting)
-                {
-                    if (Committed) _venting = false;   // a charge interrupts the vent — shut, keep reads distinct
-                    else if (_broodClock >= broodOpenHold) { _venting = false; _broodClock = 0f; }
-                }
-                else if (_broodClock >= broodInterval && !Committed)
-                {
-                    _venting = true;
-                    _broodClock = 0f;
-                    if (_motes != null) _motes.Emit(14);   // the swarm spills as the shell cracks
-                }
-            }
-            else
-            {
-                _venting = false;
-            }
+            // The hatches now open on the REAL spawn attack (YT-157 landed). BigBermudaBoss.SpawnWindup01
+            // is 0 shut … 1 flung: it ramps up as the volley telegraphs, holds while the swarm spills, and
+            // is already held shut while the boss commits to a charge — so the spawn read and the charge
+            // read never blur into one another, exactly the rule the stand-in cadence used to enforce here.
+            // The swarm spills as the shell first cracks, so the mote burst rides the rising edge.
+            bool vent = _awake && !_dying && _boss.SpawnWindup01 > 0f;
+            if (vent && !_venting && _motes != null) _motes.Emit(14);
+            _venting = vent;
 
             float want = (_venting && !_dying) ? 1f : 0f;
             _hatchOpen = Mathf.Lerp(_hatchOpen, want, 1f - Mathf.Exp(-hatchResponse * dt));
@@ -812,7 +787,6 @@ namespace MaxWorlds.VFX
             _awake = true;
             _wakeTimer = 0.9f;   // inside the boss's own 1.6 s intro — lit and running before it moves
             _lastHealth = 1f;
-            _broodClock = 0f;    // start the vent cadence fresh from the wake
         }
 
         /// <summary>Health only ever falls, so a fall is a hit. The signal carries a position, not a

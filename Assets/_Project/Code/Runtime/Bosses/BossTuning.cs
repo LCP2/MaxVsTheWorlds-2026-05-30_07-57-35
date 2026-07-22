@@ -84,6 +84,67 @@ namespace MaxWorlds.Bosses
         public const float BladeLife = 0.8f;            // was 1.2 — 36 damage a blade became 14
         public const float BladeArm = 0.85f;            // was 0.55 — long enough to walk out of
 
+        // ---------------------------------------------------------------- the brood volley (YT-157)
+        //
+        // Big Bermuda's SIGNATURE second attack: it opens the side hatches and flings a volley of robots
+        // out onto the lawn, so the fight becomes "the boss AND the swarm it keeps launching", not just
+        // dodge-the-charge. Ramming stays; this is additive. Every number here is a feel call and lives
+        // in one place, exposed on the Settings panel's BOSS tab (YT-138) so it can be swept live.
+
+        /// <summary>Seconds between volleys before it enrages. The breather between waves — long enough
+        /// that a volley is an event you brace for, not a constant drizzle.</summary>
+        public const float VolleyInterval = 7f;
+
+        /// <summary>Interval multiplier once enraged: the waves come ~40% faster as it reddens, so phase
+        /// two is the boss leaning on the swarm harder. Same &lt;1 "faster when angry" shape as
+        /// <see cref="EnrageTimeScale"/>.</summary>
+        public const float VolleyEnrageScale = 0.6f;
+
+        /// <summary>The spawn TELL: how long the hatches crack and the cavity floods BEFORE the robots
+        /// are flung. This is the read — the player's window to reposition — so it is deliberately close
+        /// to the charge wind-up (<see cref="ChargeWindup"/>), long enough to see and act on.</summary>
+        public const float VolleyWindup = 1.2f;
+
+        /// <summary>How long the hatches stay gaping after the fling, as the swarm spills — the "it is
+        /// emptying" beat before the shell closes.</summary>
+        public const float VolleyOpenHold = 0.7f;
+
+        /// <summary>Robots flung per volley before enrage.</summary>
+        public const int RobotsPerVolley = 2;
+
+        /// <summary>Robots flung per volley once enraged — a bigger wave on top of the faster cadence.</summary>
+        public const int RobotsPerVolleyEnraged = 3;
+
+        /// <summary>The ceiling on adds alive at once. The boss fight is the ONE time nothing else caps
+        /// the robot count (every factory is dead by now), so this is the whole "kiteable, not a wall of
+        /// bodies" guarantee (YT-63/74/80) — a volley that would breach it throws fewer, or none.</summary>
+        public const int MaxConcurrentAdds = 6;
+
+        /// <summary>Whether it flings adds in phase one, or only once enraged. True = a second threat
+        /// from the opening; false = the swarm is the phase-two escalation. Ships true so the signature
+        /// attack is taught early; flip for an enrage-only wave.</summary>
+        public const bool VolleyFiresBeforeEnrage = true;
+
+        // The throw itself — the arc a flung robot travels from a hatch to the lawn.
+
+        /// <summary>How high, in metres, an add arcs above the straight line to its landing spot — the
+        /// lift that reads as "thrown" at the 72° camera.</summary>
+        public const float VolleyArcApex = 4f;
+
+        /// <summary>Seconds an add spends in the air before it lands and turns into a normal robot.</summary>
+        public const float VolleyArcTime = 0.8f;
+
+        /// <summary>How far off the boss's flank a hatch mouth sits (metres) — where the throw starts.
+        /// Matches the rig's hatch height so the robot leaves from the open shell, not the floor.</summary>
+        public const float HatchMuzzleSide = 2.2f;
+        public const float HatchMuzzleHeight = 1.7f;
+
+        /// <summary>How far out to the flank an add lands, and how much further each successive robot of
+        /// the same volley is thrown, so a two-or-three wave fans out instead of stacking on one spot.</summary>
+        public const float VolleyLandingSide = 6f;
+        public const float VolleyLandingSpread = 2.2f;
+        public const float VolleyLandingForward = 1.5f;
+
         // ---------------------------------------------------------------- derived
 
         /// <summary>The tell before an ENRAGED charge — the number that made the fight unfair.</summary>

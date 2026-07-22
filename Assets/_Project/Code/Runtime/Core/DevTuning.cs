@@ -49,6 +49,21 @@ namespace MaxWorlds.Core
         /// <summary>Big Bermuda's max HP (YT-126).</summary>
         public static float? BossHealth { get; set; }
 
+        /// <summary>Seconds between the boss's brood volleys — its side-hatch add-spawner (YT-157). Read
+        /// live, so the Settings BOSS tab retimes the waves mid-fight.</summary>
+        public static float? BossVolleyInterval { get; set; }
+
+        /// <summary>Robots flung per brood volley (YT-157). Rounded to a whole robot at the point of use.</summary>
+        public static float? BossAddsPerVolley { get; set; }
+
+        /// <summary>The ceiling on brood adds alive at once (YT-157) — the kiteability knob for the boss
+        /// fight, where nothing else caps the robot count.</summary>
+        public static float? BossMaxAdds { get; set; }
+
+        /// <summary>The spawn telegraph length — how long the hatches gape before the fling (YT-157). The
+        /// player's window to read the volley and reposition.</summary>
+        public static float? BossVolleyWindup { get; set; }
+
         /// <summary>Hard max length of the hose leash, metres — how far Max can range from his tap (YT-129).</summary>
         public static float? HoseTetherLength { get; set; }
 
@@ -95,6 +110,8 @@ namespace MaxWorlds.Core
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
             FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
+            BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
+            BossVolleyWindup.HasValue ||
             PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || HarnessCapacity.HasValue ||
             AccelSpeed.HasValue;
@@ -111,6 +128,10 @@ namespace MaxWorlds.Core
             BlasterRegenPerSecond = null;
             FactoryHealth = null;
             BossHealth = null;
+            BossVolleyInterval = null;
+            BossAddsPerVolley = null;
+            BossMaxAdds = null;
+            BossVolleyWindup = null;
             HoseTetherLength = null;
             PartDropInterval = null;
             HydroDrainRate = null;
