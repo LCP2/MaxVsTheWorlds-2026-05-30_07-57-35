@@ -1,5 +1,7 @@
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
+using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
@@ -16,22 +18,29 @@ namespace MaxWorlds.Intro
     /// which is how an in-engine intro fakes an orbit-to-ground journey no single top-down set can hold.
     ///
     /// ---------------------------------------------------------------------------------------------
-    /// THE YT-155 SEAM — this drives its own camera and skip as a STAND-IN
+    /// YT-155 — the gameplay half OWNS the trigger, the skip, and the handoff.
     ///
-    /// The gameplay half (YT-155: Unity Timeline, camera moves, the New-Game trigger, skip, handoff) is
-    /// not built yet. So — exactly as the Brood-Hulk's spawn hatches run an art-side cadence until YT-157
-    /// lands (<see cref="MaxWorlds.VFX.BigBermudaRig"/>) — this plays itself on an internal clock, drives
-    /// its own camera, and hands off on its own, so the art is on Lee's WebGL link NOW. When YT-155 lands,
-    /// it OWNS the trigger/camera/skip/handoff: keep the act builders and their by-time scrub methods
-    /// (<see cref="IntroSpace.SetComet"/>, <see cref="IntroShed.SetPhase"/>, …) and drive them from the
-    /// Timeline; delete <see cref="Tick"/>'s camera + input block. The seam is marked below.
+    /// The five-beat sequence is a code-driven timeline: the beats scrub the art act-builders
+    /// (<see cref="IntroSpace.SetComet"/>, <see cref="IntroShed.SetPhase"/>, …) on an unscaled clock in
+    /// <see cref="Tick"/>. It is deliberately NOT a Unity <c>TimelineAsset</c>/<c>PlayableDirector</c>:
+    /// per <c>docs/CODE_DRIVEN_SCENES.md</c> a fresh clone must build and run headlessly with zero
+    /// inspector wiring, and a Timeline asset's track bindings are exactly that hand-wiring. So the
+    /// "Timeline" is a committed C# sequence — same shape as the boss abilities (YT-157).
+    ///
+    ///  * TRIGGER — <see cref="TryPlay"/> starts it once per process (the New Game). It fires
+    ///    automatically on first boot and is public so a future main menu (YT-151) can call it from its
+    ///    New Game button; it never fires on a Replay-triggered scene reload.
+    ///  * SKIP — a tap, click, or any key ends it immediately and drops straight into gameplay
+    ///    (<see cref="Skip"/>, driven from <see cref="LateUpdate"/>; a "Tap to skip" prompt shows while
+    ///    it runs).
+    ///  * HANDOFF — at the end (or on skip) the screen is given back exactly as it was borrowed and
+    ///    control returns to the player (<see cref="Restore"/>).
     ///
     /// It takes the screen over cleanly and puts it back: the intro camera draws OVER the gameplay one
     /// (higher depth + a solid clear), rather than disabling it — so <c>Camera.main</c> stays valid for
-    /// the many systems that cache it (the HUD, world health bars, the minimap). The HUD is hidden and
-    /// fog switched off for the ~21 s it runs, then both restored at handoff. It plays ONCE per process
-    /// (never on a Replay-triggered scene reload), and touches no gameplay logic. There is no skip — the
-    /// real tap-to-skip is YT-155's; the art stand-in simply plays through and hands off.
+    /// the many systems that cache it (the HUD, world health bars, the minimap). The HUD is hidden, fog
+    /// switched off, and the player's <see cref="PlayerController"/> suspended for the ~21 s it runs, so
+    /// blind input under the cinematic never moves Max; all three are restored at handoff.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class IntroCinematic : MonoBehaviour
@@ -39,13 +48,22 @@ namespace MaxWorlds.Intro
         private static bool s_consumed;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install()
+        private static void Install() => TryPlay();
+
+        /// <summary>
+        /// Start the opening cinematic — the New-Game trigger. Plays once per process (never on a
+        /// Replay-triggered scene reload) and only when there is a <c>Camera.main</c> to take over and
+        /// hand back to. Called automatically on first boot; public so a future main menu (YT-151) can
+        /// trigger it from its New Game button. Returns true if it started.
+        /// </summary>
+        public static bool TryPlay()
         {
-            if (s_consumed) return;                              // once per process — not on Replay
-            if (FindFirstObjectByType<IntroCinematic>() != null) return;
-            if (Camera.main == null) return;                    // nothing to take over / hand back to
+            if (s_consumed) return false;                        // once per process — not on Replay
+            if (FindFirstObjectByType<IntroCinematic>() != null) return false;
+            if (Camera.main == null) return false;              // nothing to take over / hand back to
             s_consumed = true;
             new GameObject("IntroCinematic").AddComponent<IntroCinematic>();
+            return true;
         }
 
         // The three acts live far apart in world space so nothing overlaps the yard (at the origin) or
@@ -64,6 +82,9 @@ namespace MaxWorlds.Intro
         // The screen the intro borrowed, to be handed back exactly as it was found.
         private GameObject _hud;
         private bool _fogWas;
+        private PlayerController _suspendedPlayer;   // control taken for the cinematic, returned at handoff
+        private bool _restored;                      // Restore() is idempotent — handoff, skip, or Destroy
+        private GUIStyle _skipStyle;
 
         // A full-screen fader for the opening fade-in, the cuts between acts, and the final fade-out.
         private Transform _fade;
@@ -89,6 +110,10 @@ namespace MaxWorlds.Intro
         public IntroDescent Descent => _descent;
         public IntroShed Shed => _shed;
         public Camera IntroCamera => _cam;
+
+        /// <summary>True while the intro is holding the player's control (disabled for the cinematic).
+        /// A test reads this to prove control is suspended during, and returned after, the sequence.</summary>
+        public bool PlayerControlSuspended => _suspendedPlayer != null && !_suspendedPlayer.enabled;
 
         private readonly struct Beat
         {
@@ -120,6 +145,13 @@ namespace MaxWorlds.Intro
             // shots) and bring it back at handoff.
             var hud = FindFirstObjectByType<HudController>();
             if (hud != null) { _hud = hud.gameObject; _hud.SetActive(false); }
+
+            // Suspend the player: the gameplay camera keeps ticking unseen beneath the cinematic, so
+            // without this a player mashing the stick during the intro would drive Max blind and hand off
+            // to a Max who has wandered off (or died). Disabling the controller stops Update AND releases
+            // its input actions; re-enabled at handoff, which is "control returns to the player".
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player != null) { _suspendedPlayer = player; player.enabled = false; }
 
             // Fog is global and tuned for the yard; at the intro's scale it would grey out space. Off for
             // the duration, restored at handoff.
@@ -254,13 +286,52 @@ namespace MaxWorlds.Intro
         private void LateUpdate()
         {
             if (_done) return;
+            if (SkipRequested()) { Skip(); return; }
             Tick(Time.unscaledDeltaTime);
         }
 
+        /// <summary>A tap, click, pen, or any key skips the intro. Polled on the New Input System so it
+        /// works with touch on device and mouse/keyboard in the editor and on WebGL.</summary>
+        private static bool SkipRequested()
+        {
+            var kb = Keyboard.current;
+            if (kb != null && kb.anyKey.wasPressedThisFrame) return true;
+            var ptr = Pointer.current;                 // mouse, pen, or the primary touch
+            if (ptr != null && ptr.press.wasPressedThisFrame) return true;
+            var ts = Touchscreen.current;
+            if (ts != null && ts.primaryTouch.press.wasPressedThisFrame) return true;
+            return false;
+        }
+
+        /// <summary>Tap-to-skip: end the cinematic now and drop straight into gameplay. Public so a test
+        /// can drive it without synthesising input.</summary>
+        public void Skip()
+        {
+            if (_done) return;
+            Handoff();
+        }
+
+        // The "Tap to skip" affordance. IMGUI (like the FPS readout) so it needs no font asset and is
+        // guaranteed to draw in the WebGL/headless build.
+        private void OnGUI()
+        {
+            if (_done) return;
+            _skipStyle ??= new GUIStyle(GUI.skin.label)
+            {
+                fontSize = Mathf.Max(16, Mathf.RoundToInt(Screen.height * 0.03f)),
+                alignment = TextAnchor.MiddleCenter,
+                fontStyle = FontStyle.Bold,
+                normal = { textColor = new Color(1f, 1f, 1f, 0.72f) }
+            };
+            float h = Screen.height * 0.06f;
+            GUI.Label(new Rect(0f, Screen.height - h * 1.6f, Screen.width, h), "TAP TO SKIP", _skipStyle);
+        }
+
         /// <summary>
-        /// Advance the cinematic. Public so a test can fast-forward it; in the game it is called from
-        /// LateUpdate on unscaled time. >>> YT-155 SEAM: the camera driving below, and the auto-handoff at
-        /// the end, are the stand-in the Timeline (and its tap-to-skip) replace. <<<
+        /// Advance the cinematic one step: pick the live beat, scrub it, and drive the intro camera. This
+        /// IS the code-driven timeline (YT-155) — the beats and their by-time scrubs of the art builders.
+        /// Public so a test can fast-forward the ~21 s sequence; in the game it runs from LateUpdate on
+        /// unscaled time, and hands off to gameplay when the clock passes the last beat.
         /// </summary>
         public void Tick(float dt)
         {
@@ -341,11 +412,25 @@ namespace MaxWorlds.Intro
         {
             if (_done) return;
             _done = true;
+            Restore();
+            Destroy(gameObject);
+        }
+
+        /// <summary>
+        /// Return everything the intro borrowed: show the HUD, restore fog, and hand control back to the
+        /// player. Idempotent and also called from <see cref="OnDestroy"/>, so a stray cinematic cleared
+        /// by a test (or any early teardown) never leaves the player disabled or the yard's fog off.
+        /// </summary>
+        private void Restore()
+        {
+            if (_restored) return;
+            _restored = true;
 
             if (_hud != null) _hud.SetActive(true);
             RenderSettings.fog = _fogWas;
-
-            Destroy(gameObject);
+            if (_suspendedPlayer != null) _suspendedPlayer.enabled = true;
         }
+
+        private void OnDestroy() => Restore();
     }
 }
