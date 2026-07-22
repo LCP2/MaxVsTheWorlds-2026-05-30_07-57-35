@@ -2,6 +2,18 @@
 
 > CC's kickoff prompt is *"Follow `CC_AUTONOMY.md`."* Everything below.
 
+## NEVER IDLE — the standing rule (read before anything else)
+
+The moment you finish a ticket (merged / handed off / proposal posted), **immediately pick the next actionable `needs-cc` ticket** (highest priority first, then key ascending) and keep going **without stopping**. Re-check the backlog after every completion.
+
+Only STOP and wait for Lee when one of these is true:
+
+- (a) there are genuinely **no** actionable `needs-cc` tickets left in the backlog,
+- (b) the only remaining items are `needs-lee` / explicitly blocked on a Lee decision, or
+- (c) you hit a blocker you cannot resolve yourself.
+
+When you post something for Lee to review (a concept sheet, a proposal, any `needs-lee` handoff), **do not stop** — move straight on to the next actionable ticket while you wait for his reply. The safety contract is unchanged: `cc-verify` green before merge, auto-merge on green, CI-on-`main` as the net, git/merge hygiene, drop `cc-active`. This rule removes only the "stop and idle between tickets" behaviour.
+
 
 ## Design standard — READ FIRST, applies to every ticket
 
