@@ -22,7 +22,18 @@ On every start, query Jira:
 project = YT AND labels = needs-cc-art AND statusCategory != Done ORDER BY priority DESC, key ASC
 ```
 
-Claim the top ticket (add label `cc-active`). If the `needs-cc-art` queue is empty, STOP and report — do NOT fall back to gameplay (`needs-cc`) tickets. Those belong to the other stream.
+Claim the top ticket (add label `cc-active`).
+
+### NEVER IDLE (YT-160)
+
+The moment you finish a ticket — merged, handed off, or a proposal/concept posted for Lee — **immediately re-run the queue query above, claim the next actionable `needs-cc-art` ticket (highest priority first), and keep going WITHOUT stopping.** Re-check the backlog after every completion. Posting something for Lee to review (a concept sheet, a proposal, any `needs-lee` handoff) is NOT a reason to stop — move straight on to the next actionable ticket while you wait for his reply.
+
+Only STOP and report to Lee when one of these is true:
+- (a) there are genuinely NO actionable `needs-cc-art` tickets left in the backlog;
+- (b) the only remaining `needs-cc-art` items are `needs-lee` / explicitly blocked on a Lee decision (`blocked-*`); or
+- (c) you hit a blocker you cannot resolve yourself.
+
+"Actionable" excludes tickets already waiting on Lee or blocked. When the queue is empty in that sense, STOP and report — do NOT fall back to gameplay (`needs-cc`) tickets. Those belong to the other stream. This rule ONLY removes the "stop and idle between tickets" behaviour; the safety contract below stays fully intact (`cc-verify` green before merge, auto-merge on green, CI-on-`main` as the net, git/merge hygiene, drop `cc-active`).
 
 ### Handing a ticket back — REMOVE `needs-cc-art`
 
