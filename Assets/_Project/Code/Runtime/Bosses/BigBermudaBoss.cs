@@ -1,5 +1,7 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.UI;
 
@@ -53,6 +55,24 @@ namespace MaxWorlds.Bosses
         private float _bladeTimer;
         private bool _contactThisCharge;
 
+        // --- the brood volley: the second attack (YT-157). Runs ALONGSIDE the charge cycle. ---
+        private BroodVolley _volley;
+        private Transform _addsRoot;                    // world-space, unit scale — NOT under the moving boss
+        private readonly List<AddInFlight> _inFlight = new List<AddInFlight>(8);
+        private readonly Stack<RobotEnemy> _addPool = new Stack<RobotEnemy>(8);
+        private int _liveAdds;                          // landed + chasing; capped by MaxConcurrentAdds
+        private Collider[] _playerColliders;
+
+        /// <summary>One robot mid-throw: it is visible but its own logic is switched off, so the boss
+        /// drives it along the parabola until it lands and becomes a normal robot.</summary>
+        private struct AddInFlight
+        {
+            public RobotEnemy Robot;
+            public Vector3 From;
+            public Vector3 To;
+            public float T;   // 0..1 along the arc
+        }
+
         public bool IsAlive => _phase == Phase.Fight && _health != null && _health.IsAlive;
         public Team Team => Team.Enemy;
 
@@ -87,6 +107,12 @@ namespace MaxWorlds.Bosses
         /// the machine is standing there the whole time, and it should look asleep, not switched off.</summary>
         public bool Engaged => _phase == Phase.Intro || _phase == Phase.Fight;
 
+        /// <summary>The brood-volley spawn telegraph, 0 shut … 1 flung (YT-157). This is the ONE getter
+        /// <see cref="MaxWorlds.VFX.BigBermudaRig"/> reads to open the side hatches — the gameplay says
+        /// when the swarm is coming, the rig shows it, and nothing writes back the other way. 0 whenever
+        /// the volley is dormant (asleep, intro, between waves, dead).</summary>
+        public float SpawnWindup01 => _volley != null ? _volley.SpawnWindup01 : 0f;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -95,6 +121,7 @@ namespace MaxWorlds.Bosses
             _health = new DestructibleHealth(DevTuning.Or(DevTuning.BossHealth, BossTuning.Health));
             _health.Destroyed += OnDeath;
             _brain = new BigBermudaBrain();
+            _volley = new BroodVolley();
             AcquireTarget();
             SetTell(idleColor);
         }
@@ -162,6 +189,170 @@ namespace MaxWorlds.Bosses
                 _bladeTimer -= dt;
                 if (_bladeTimer <= 0f) { _bladeTimer = BossTuning.BladeInterval; RainBlades(); }
             }
+
+            // The second attack (YT-157): the brood volley, on its own cadence beside the charge cycle.
+            TickVolley(dt);
+            AdvanceAdds(dt);
+        }
+
+        /// <summary>
+        /// The brood volley — the boss's signature side-hatch add-spawner (YT-157). The pure
+        /// <see cref="BroodVolley"/> owns the cadence and the telegraph; this executes the fling on its
+        /// <see cref="BroodVolley.JustFired"/> edge, the same shape as the blade rain above.
+        ///
+        /// The volley is vetoed (<c>canVent = false</c>) while it is committing to a charge — so the
+        /// spawn read and the charge read never overlap — and while the arena already holds its cap of
+        /// adds, which is the whole kiteability guarantee for a fight where no factory is left to bound
+        /// the robot count.
+        /// </summary>
+        private void TickVolley(float dt)
+        {
+            bool committing = _brain.Current == BossAction.ChargeWindup || _brain.Current == BossAction.Charge;
+            bool enraged = _brain.Enraged;
+            bool phaseAllows = enraged || BossTuning.VolleyFiresBeforeEnrage;
+
+            int maxAdds = Mathf.Max(0, Mathf.RoundToInt(DevTuning.Or(DevTuning.BossMaxAdds, BossTuning.MaxConcurrentAdds)));
+            int onField = _liveAdds + _inFlight.Count;
+
+            bool canVent = !committing && phaseAllows && onField < maxAdds;
+            _volley.Tick(dt, enraged, canVent);
+
+            if (_volley.JustFired)
+            {
+                int want = _volley.RobotsThisVolley(enraged);
+                LaunchVolley(Mathf.Min(want, Mathf.Max(0, maxAdds - onField)));
+            }
+        }
+
+        /// <summary>Throw <paramref name="count"/> robots out of the side hatches, alternating flanks so
+        /// both hatches disgorge and the wave fans out rather than stacking. Each starts at a hatch
+        /// mouth and begins its arc; it is not a live robot yet — see <see cref="AdvanceAdds"/>.</summary>
+        private void LaunchVolley(int count)
+        {
+            if (count <= 0) return;
+
+            Vector3 pos = transform.position;
+            Quaternion facing = transform.rotation;
+            EnemyArchetype archetype = EnemyArchetype.Rusher;   // "reuse the standard robot" (YT-157)
+
+            for (int i = 0; i < count; i++)
+            {
+                float side = (i % 2 == 0) ? -1f : 1f;   // L, R, L, R…
+                float spread = (i / 2) * BossTuning.VolleyLandingSpread;
+
+                Vector3 from = BroodArc.Muzzle(pos, facing, side,
+                    BossTuning.HatchMuzzleSide, BossTuning.HatchMuzzleHeight);
+                Vector3 to = BroodArc.Landing(pos, facing, side,
+                    BossTuning.VolleyLandingSide, BossTuning.VolleyLandingForward,
+                    archetype.SpawnHeight, spread);
+
+                RobotEnemy add = TakeAdd(archetype);
+                add.transform.position = from;
+                add.gameObject.SetActive(true);   // VISIBLE for the throw…
+                add.enabled = false;              // …but its own chase/gravity is off while the boss flies it
+                _inFlight.Add(new AddInFlight { Robot = add, From = from, To = to, T = 0f });
+            }
+        }
+
+        /// <summary>Fly every in-flight add one step along its parabola. On landing it re-enables the
+        /// robot — <see cref="RobotEnemy"/>'s OnEnable resets it into Chase and it self-acquires Max — and
+        /// lets the player walk through it, so from that instant it is an ordinary robot.</summary>
+        private void AdvanceAdds(float dt)
+        {
+            if (_inFlight.Count == 0) return;
+            float arcTime = Mathf.Max(0.05f, BossTuning.VolleyArcTime);
+
+            for (int i = _inFlight.Count - 1; i >= 0; i--)
+            {
+                AddInFlight a = _inFlight[i];
+                if (a.Robot == null) { _inFlight.RemoveAt(i); continue; }
+
+                a.T += dt / arcTime;
+                if (a.T >= 1f)
+                {
+                    a.Robot.transform.position = a.To;
+                    Vector3 outward = a.To - a.From; outward.y = 0f;
+                    if (outward.sqrMagnitude > 0.0001f)
+                        a.Robot.transform.rotation = Quaternion.LookRotation(outward.normalized, Vector3.up);
+
+                    a.Robot.enabled = true;   // OnEnable -> ResetState -> Chase, full health, acquires Max
+                    LetThePlayerThrough(a.Robot.gameObject);
+                    _liveAdds++;
+                    _inFlight.RemoveAt(i);
+                }
+                else
+                {
+                    a.Robot.transform.position = BroodArc.PointAt(a.From, a.To, BossTuning.VolleyArcApex, a.T);
+                    _inFlight[i] = a;   // struct — write the advanced T back
+                }
+            }
+        }
+
+        private RobotEnemy TakeAdd(in EnemyArchetype archetype)
+            => _addPool.Count > 0 ? _addPool.Pop() : CreateAdd(archetype);
+
+        /// <summary>Build one greybox add, sized exactly the way <see cref="EnemySpawner"/> builds a
+        /// factory robot (YT-74 metre-space collider un-scaling) but parented to the boss's own adds
+        /// root rather than a factory. Born inactive; a volley activates it on landing.</summary>
+        private RobotEnemy CreateAdd(in EnemyArchetype a)
+        {
+            var go = GameObject.CreatePrimitive(a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
+            go.name = $"Brood Add {a.Kind}";
+            go.transform.SetParent(AddsRoot(), false);
+            go.transform.localScale = a.BodyScale;
+
+            var cc = go.AddComponent<CharacterController>();
+            float lateral = Mathf.Max(a.BodyScale.x, a.BodyScale.z);
+            cc.height = a.ColliderHeight / Mathf.Max(a.BodyScale.y, 1e-4f);
+            cc.radius = a.ColliderRadius / Mathf.Max(lateral, 1e-4f);
+            cc.center = Vector3.zero;
+
+            var e = go.AddComponent<RobotEnemy>();
+            e.Apply(a);
+            e.Died += OnAddDied;
+            e.gameObject.SetActive(false);
+            return e;
+        }
+
+        private void OnAddDied(RobotEnemy e)
+        {
+            _liveAdds = Mathf.Max(0, _liveAdds - 1);
+            _addPool.Push(e);   // back to the pool, reused on the next volley — no GC churn
+        }
+
+        /// <summary>The container the adds live in. Top-level and unit-scaled ON PURPOSE: the boss MOVES,
+        /// and adds parented under it would be dragged across the arena as it charges. It also cancels
+        /// nothing (scale 1), so the robots are authored in metres, straight.</summary>
+        private Transform AddsRoot()
+        {
+            if (_addsRoot == null) _addsRoot = new GameObject("Brood Adds").transform;
+            return _addsRoot;
+        }
+
+        /// <summary>Adds must never body-block Max any more than factory robots do (YT-74). Re-applied on
+        /// every landing because Unity drops an ignored pair when the collider is toggled.</summary>
+        private void LetThePlayerThrough(GameObject enemy)
+        {
+            if (_playerColliders == null || _playerColliders.Length == 0)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return;
+                _playerColliders = p.GetComponents<Collider>();
+            }
+
+            foreach (var ec in enemy.GetComponents<Collider>())
+            {
+                if (ec == null) continue;
+                foreach (var pc in _playerColliders)
+                    if (pc != null) Physics.IgnoreCollision(ec, pc, true);
+            }
+        }
+
+        private void OnDestroy()
+        {
+            // The adds root is ours and outlives nothing — tear it (and every add under it) down with the
+            // boss so a torn-down fight leaves no robots pathing after a player who is gone.
+            if (_addsRoot != null) Destroy(_addsRoot.gameObject);
         }
 
         private void OnEnterPhase(BossAction action)

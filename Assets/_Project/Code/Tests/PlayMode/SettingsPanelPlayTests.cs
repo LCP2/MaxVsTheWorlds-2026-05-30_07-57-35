@@ -80,9 +80,9 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(17),
-                "Ten Gameplay knobs plus the seven Weapons-tab knobs (YT-138): nozzle narrowing, power " +
-                "reach, harness capacity, engine boost, Hydro drain, cell capacity, part pacing.");
+            Assert.That(sliders.Length, Is.EqualTo(21),
+                "Ten Gameplay knobs, the seven Weapons-tab knobs (YT-138), and the four Boss-tab brood-volley " +
+                "knobs (YT-157): volley interval, adds per volley, max adds alive, volley windup.");
             yield return null;
         }
 
@@ -91,20 +91,24 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
 
-            // Two page containers, one per tab (YT-138).
-            RectTransform gameplay = null, weapons = null;
+            // One page container per tab (YT-138 Gameplay/Weapons, YT-157 Boss).
+            RectTransform gameplay = null, weapons = null, boss = null;
             foreach (var rt in canvas.GetComponentsInChildren<RectTransform>(true))
             {
                 if (rt.name == "Page GAMEPLAY") gameplay = rt;
                 if (rt.name == "Page WEAPONS") weapons = rt;
+                if (rt.name == "Page BOSS") boss = rt;
             }
             Assert.That(gameplay, Is.Not.Null, "no Gameplay page");
             Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
+            Assert.That(boss, Is.Not.Null, "no Boss page — the brood-volley tuning has nowhere to live (YT-157)");
 
             Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
                 "the Gameplay tab keeps its ten knobs");
             Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(7),
                 "the Weapons tab carries the seven upgrade/pacing/Hydro knobs");
+            Assert.That(boss.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(4),
+                "the Boss tab carries the four brood-volley knobs (YT-157)");
             yield return null;
         }
 

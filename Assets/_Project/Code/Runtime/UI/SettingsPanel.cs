@@ -110,12 +110,13 @@ namespace MaxWorlds.UI
             public Action<float> Set;
             public Slider Slider;
             public Text Value;
-            public int Tab;   // 0 = Gameplay, 1 = Weapons (YT-138)
+            public int Tab;   // 0 = Gameplay, 1 = Weapons (YT-138), 2 = Boss (YT-157)
         }
 
         // Tabs (YT-138): the panel is full at 10 gameplay knobs, so the upgrade tuning lives on a
-        // second page. One container per tab; only the active one is shown.
-        private static readonly string[] TabNames = { "GAMEPLAY", "WEAPONS" };
+        // second page, and the boss's own attack tuning (YT-157) on a third. One container per tab;
+        // only the active one is shown.
+        private static readonly string[] TabNames = { "GAMEPLAY", "WEAPONS", "BOSS" };
         private GameObject[] _pages;
         private Button[] _tabButtons;
         private int _tab;
@@ -291,6 +292,25 @@ namespace MaxWorlds.UI
             Add("Hose tether", "m", 6f, 40f, tetherDefault,
                 () => DevTuning.Or(DevTuning.HoseTetherLength, tetherDefault),
                 v => DevTuning.HoseTetherLength = v);
+
+            // ---- Boss tab (YT-157): the brood volley — Big Bermuda's side-hatch add-spawner. ----
+            // All read live: the volley pulls each number through DevTuning the next time it fires, so a
+            // slider retimes or re-sizes the wave mid-fight with no push.
+            Add("Add volley interval", "s", 2f, 20f, BossTuning.VolleyInterval,
+                () => DevTuning.Or(DevTuning.BossVolleyInterval, BossTuning.VolleyInterval),
+                v => DevTuning.BossVolleyInterval = v, tab: 2);
+
+            Add("Adds per volley", "bots", 1f, 8f, BossTuning.RobotsPerVolley,
+                () => DevTuning.Or(DevTuning.BossAddsPerVolley, BossTuning.RobotsPerVolley),
+                v => DevTuning.BossAddsPerVolley = v, tab: 2);
+
+            Add("Max adds alive", "bots", 1f, 20f, BossTuning.MaxConcurrentAdds,
+                () => DevTuning.Or(DevTuning.BossMaxAdds, BossTuning.MaxConcurrentAdds),
+                v => DevTuning.BossMaxAdds = v, tab: 2);
+
+            Add("Volley windup", "s", 0.3f, 3f, BossTuning.VolleyWindup,
+                () => DevTuning.Or(DevTuning.BossVolleyWindup, BossTuning.VolleyWindup),
+                v => DevTuning.BossVolleyWindup = v, tab: 2);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
