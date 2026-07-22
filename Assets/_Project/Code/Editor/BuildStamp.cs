@@ -38,13 +38,20 @@ namespace MaxWorlds.Editor
 
         /// <summary>
         /// The marketing version (CFBundleShortVersionString) — tracks the release milestone, bumped
-        /// by hand as the game hits each one (YT-135: 0.1.0 → 0.2.0, the weapon epic). The build
-        /// NUMBER auto-increments separately (see <see cref="ComposeIosBuildNumber"/>); this string is
-        /// the deliberate human decision about which milestone the build represents. It's a compiled
-        /// constant, NOT a build-time edit of a tracked file — the thing that dirtied the tree and
-        /// broke the iOS build in YT-117/YT-119.
+        /// by hand as the game hits each one (YT-135: 0.1.0 → 0.2.0, the weapon epic; YT-158: 0.2.0 →
+        /// 0.3.0, the boss redesign + enemies + boss-death + home page/save + intro milestone). The
+        /// build NUMBER auto-increments separately (see <see cref="ComposeIosBuildNumber"/>); this
+        /// string is the deliberate human decision about which milestone the build represents. It's a
+        /// compiled constant, NOT a build-time edit of a tracked file — the thing that dirtied the tree
+        /// and broke the iOS build in YT-117/YT-119.
+        ///
+        /// This is the milestone FLOOR. On the iOS→TestFlight run the Fastlane step overrides
+        /// CFBundleShortVersionString to the per-build <c>0.&lt;milestone&gt;.&lt;run_number&gt;</c>
+        /// (YT-159), so each TestFlight build reads a distinct version on device; the run number is only
+        /// available on the macOS runner, never inside GameCI's Unity container. Keep the milestone minor
+        /// here in sync with <c>MILESTONE</c> in <c>fastlane/Fastfile</c>.
         /// </summary>
-        public const string MilestoneVersion = "0.2.0";
+        public const string MilestoneVersion = "0.3.0";
 
         /// <summary>
         /// The iOS marketing version (CFBundleShortVersionString) — always the hand-set

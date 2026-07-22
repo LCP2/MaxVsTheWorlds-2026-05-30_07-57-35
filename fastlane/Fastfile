@@ -99,11 +99,38 @@ platform :ios do
       bundle_identifier: ENV.fetch("IOS_BUNDLE_ID")
     )
 
-    # 7. Encryption-compliance flag so TestFlight processing isn't held for review.
+    # 7. Marketing version + encryption flag, written straight into the shipping Info.plist.
+    #
+    # YT-158/159 — the visible marketing version (CFBundleShortVersionString) is
+    # 0.<MILESTONE>.<BUILD>, so every TestFlight build reads a distinct, strictly-increasing
+    # version on device. It used to be a flat 0.2.0, so every update looked identical to the last
+    # and only the hidden CFBundleVersion timestamp changed.
+    #
+    #   * MILESTONE — the release-milestone minor, bumped by hand when a new milestone starts
+    #     (weapon era = 2; this boss/enemies/boss-death/home-page/intro era = 3). Keep it in sync
+    #     with BuildStamp.MilestoneVersion ("0.<MILESTONE>.0") in Assets/_Project/Code/Editor.
+    #   * BUILD — this workflow run's number. github.run_number of ios-testflight tracks the #N
+    #     shown in Actions exactly (run #24 == number 24), so run #25 → 0.3.25, then 0.3.26…
+    #
+    # This is stamped HERE, on the macOS runner, on purpose: the GameCI Unity build runs in a Linux
+    # container that never sees GITHUB_RUN_NUMBER (YT-117), so the run number can only be applied
+    # after Unity. Writing it last makes it the pin — it overrides whatever Unity baked, the same
+    # role YT-139's constant played for the flat 0.2.0. CFBundleVersion is left untouched: it stays
+    # the auto-incrementing yyMMddHHmm timestamp (BuildStamp.ComposeIosBuildNumber, YT-117) that
+    # keeps each upload unique.
+    milestone = 3
+    run_no = ENV["GITHUB_RUN_NUMBER"].to_s.strip
+    run_no = "0" if run_no.empty?   # a local `fastlane ios beta` with no run number → 0.3.0 floor
+    marketing_version = "0.#{milestone}.#{run_no}"
+    UI.message("Marketing version (CFBundleShortVersionString) → #{marketing_version}")
+
     update_info_plist(
       xcodeproj: XCODEPROJ,
       plist_path: "Info.plist",
-      block: proc { |plist| plist["ITSAppUsesNonExemptEncryption"] = false }
+      block: proc { |plist|
+        plist["ITSAppUsesNonExemptEncryption"] = false
+        plist["CFBundleShortVersionString"] = marketing_version
+      }
     )
 
     # 8. Archive + export a signed, App-Store-method .ipa.
