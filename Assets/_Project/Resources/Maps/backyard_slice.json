@@ -74,6 +74,15 @@
             "z": 66.0,
             "width": 34.0,
             "depth": 26.0
+        },
+        {
+            "id": "toolshed",
+            "name": "The Toolshed",
+            "type": "interior",
+            "x": 23.0,
+            "z": 34.0,
+            "width": 16.0,
+            "depth": 14.0
         }
     ],
     "links": [
@@ -104,6 +113,12 @@
         {
             "from": "orchard",
             "to": "greenhouse",
+            "doorway": 6.0,
+            "gate": ""
+        },
+        {
+            "from": "orchard",
+            "to": "toolshed",
             "doorway": 6.0,
             "gate": ""
         },
@@ -158,6 +173,18 @@
             "opensOn": ""
         },
         {
+            "id": "toolshed_hutch",
+            "kind": "factory",
+            "x": 23.0,
+            "z": 34.0,
+            "width": 3.0,
+            "height": 2.0,
+            "depth": 3.0,
+            "shape": "box",
+            "dressing": "none",
+            "opensOn": ""
+        },
+        {
             "id": "boss_gate",
             "kind": "gate",
             "x": 0.0,
@@ -167,7 +194,7 @@
             "depth": 0.6,
             "shape": "box",
             "dressing": "none",
-            "opensOn": "mower_hutch, greenhouse_hutch"
+            "opensOn": "mower_hutch, greenhouse_hutch, toolshed_hutch"
         },
         {
             "id": "big_bermuda",

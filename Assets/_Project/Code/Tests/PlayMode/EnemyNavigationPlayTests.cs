@@ -106,7 +106,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return BuildTheYard();
 
             MapData map = Shipped();
-            Assert.AreEqual(2, FactoryCensus.Total, "the yard has lost a factory");
+            Assert.AreEqual(3, FactoryCensus.Total, "the yard has lost a factory");
 
             yield return Fight(26f);
 
