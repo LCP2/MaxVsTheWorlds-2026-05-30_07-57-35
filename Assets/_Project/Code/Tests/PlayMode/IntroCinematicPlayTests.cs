@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Intro;
+using MaxWorlds.Player;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -107,6 +108,64 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.IsFalse(intro.IsPlaying, "still playing after being ticked past the end.");
             Assert.IsTrue(RenderSettings.fog, "fog was not restored to the yard at handoff.");
+        }
+
+        // ------------------------------------------------------------------ YT-155: skip + handoff
+
+        [UnityTest]
+        public IEnumerator TapToSkipEndsItImmediatelyAndGivesTheScreenBack()
+        {
+            var intro = Build();
+            yield return null;
+
+            intro.Tick(0.5f);   // a little way into the first beat
+            Assert.IsTrue(intro.IsPlaying, "the cinematic ended before it was skipped.");
+
+            intro.Skip();
+
+            Assert.IsFalse(intro.IsPlaying, "Skip did not end the cinematic.");
+            Assert.IsTrue(RenderSettings.fog, "Skip did not hand the yard's fog back.");
+        }
+
+        [UnityTest]
+        public IEnumerator ItSuspendsPlayerControlThenReturnsItAtHandoff()
+        {
+            // A real PlayerController for the intro to find and suspend. It builds all its input in code
+            // (no serialized refs), so it stands up cleanly in a test.
+            var playerGo = new GameObject("Player");
+            var player = playerGo.AddComponent<PlayerController>();
+            Assert.IsTrue(player.enabled, "sanity: the player starts in control.");
+
+            var intro = Build();   // Awake finds + suspends the player
+            yield return null;
+
+            Assert.IsFalse(player.enabled, "player control was not suspended for the cinematic.");
+            Assert.IsTrue(intro.PlayerControlSuspended, "the intro does not report holding control.");
+
+            // Play it through to the natural handoff.
+            while (intro.IsPlaying) intro.Tick(0.2f);
+
+            Assert.IsTrue(player.enabled, "control was not returned to the player at handoff.");
+            Assert.IsFalse(intro.PlayerControlSuspended, "the intro still reports holding control after handoff.");
+
+            Object.Destroy(playerGo);
+        }
+
+        [UnityTest]
+        public IEnumerator SkipReturnsControlToThePlayer()
+        {
+            var playerGo = new GameObject("Player");
+            var player = playerGo.AddComponent<PlayerController>();
+
+            var intro = Build();
+            yield return null;
+            Assert.IsFalse(player.enabled, "player control was not suspended for the cinematic.");
+
+            intro.Skip();
+
+            Assert.IsTrue(player.enabled, "skipping did not return control to the player.");
+
+            Object.Destroy(playerGo);
         }
 
         [UnityTest]
