@@ -13,6 +13,14 @@ namespace MaxWorlds.Tests.PlayMode
     /// </summary>
     public sealed class TelegraphVfxPlayTests
     {
+        // The zone's arm delay is driven by scaled game time (Time.deltaTime), so this test needs
+        // a running clock — and the ambient Time.timeScale can't be trusted at test start in this
+        // headless runner (see the other PlayMode fixtures that pin it in SetUp for the same
+        // reason). Root cause of YT-173: Time.timeScale sat at 0 for the whole run, so the zone
+        // never armed and the test raced a warning that would never come.
+        [SetUp] public void SetUp() => Time.timeScale = 1f;
+        [TearDown] public void TearDown() => Time.timeScale = 1f;
+
         [UnityTest]
         public IEnumerator ArmingZone_ShowsADangerRingThatMatchesItsRadius_ThenClearsIt()
         {
@@ -36,12 +44,23 @@ namespace MaxWorlds.Tests.PlayMode
                 "the wrong safe distance");
 
             // Once it arms, the warning has served its purpose and must get out of the way.
-            float deadline = Time.realtimeSinceStartup + 3f;
-            while (zone != null && zone.IsArming && Time.realtimeSinceStartup < deadline) yield return null;
-            yield return null;
-            yield return null;
+            float armDeadline = Time.realtimeSinceStartup + 3f;
+            while (zone != null && zone.IsArming && Time.realtimeSinceStartup < armDeadline) yield return null;
+            Assert.IsTrue(zone != null && !zone.IsArming,
+                "the zone never finished arming within the timeout — can't test the clear");
 
-            Assert.IsNull(FindVisibleRing(), "the danger ring must clear once the zone is live");
+            // Wait for the actual clear signal rather than assuming a fixed frame count is enough:
+            // TelegraphVfx only retires the ring on the LateUpdate pass after it notices the zone
+            // stopped arming, so poll for it instead of guessing exactly how many frames that takes.
+            GroundRing lingering = FindVisibleRing();
+            float clearDeadline = Time.realtimeSinceStartup + 3f;
+            while (lingering != null && Time.realtimeSinceStartup < clearDeadline)
+            {
+                yield return null;
+                lingering = FindVisibleRing();
+            }
+
+            Assert.IsNull(lingering, "the danger ring must clear once the zone is live");
 
             if (zone != null) Object.Destroy(zone.gameObject);
         }
