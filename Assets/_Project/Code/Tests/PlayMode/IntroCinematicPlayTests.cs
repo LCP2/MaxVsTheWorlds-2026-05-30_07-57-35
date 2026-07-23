@@ -194,6 +194,9 @@ namespace MaxWorlds.Tests.PlayMode
                 "fewer than 3 invaders have struck with time left in the beat — the impacts are still rushed.");
         }
 
+        // Mirrors the "descent" beat's Duration in BuildBeats (YT-175: lengthened from 4.8s).
+        private const float DescentBeatDuration = 6.2f;
+
         [UnityTest]
         public IEnumerator Descent_CameraSettlesOnTheRoofBeforeTheFlashCut()
         {
@@ -202,7 +205,6 @@ namespace MaxWorlds.Tests.PlayMode
             while (intro.IsPlaying && intro.BeatName != "descent") intro.Tick(0.05f);
             Assert.AreEqual("descent", intro.BeatName, "never reached the descent beat.");
 
-            const float descentDuration = 4.8f;   // mirrors the "descent" beat's Duration in BuildBeats
             float beatStart = intro.Elapsed;
             Vector3? pos90 = null, pos99 = null;
 
@@ -210,7 +212,7 @@ namespace MaxWorlds.Tests.PlayMode
             {
                 intro.Tick(0.02f);
                 if (intro.BeatName != "descent") break;   // the next beat's OnEnter can move the camera
-                float frac = (intro.Elapsed - beatStart) / descentDuration;
+                float frac = (intro.Elapsed - beatStart) / DescentBeatDuration;
                 if (pos90 == null && frac >= 0.9f) pos90 = intro.IntroCamera.transform.position;
                 if (pos99 == null && frac >= 0.99f) pos99 = intro.IntroCamera.transform.position;
             }
@@ -220,6 +222,35 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.Less(Vector3.Distance(pos90.Value, pos99.Value), 25f,
                 "the camera is still travelling fast in the last stretch of the dive — it arrives too " +
                 "late on the roof to read before the flash-cut.");
+        }
+
+        [UnityTest]
+        public IEnumerator Descent_HoldsHighBeforeFallingSoContinentAndTownRead()
+        {
+            // YT-175: Lee's playtest — even after YT-161's single ease, the dive still read as a blur.
+            // The camera must hold near-static at altitude long enough for the continent/town silhouette
+            // to actually register before anything starts falling.
+            var intro = Build();
+            yield return null;
+            while (intro.IsPlaying && intro.BeatName != "descent") intro.Tick(0.05f);
+            Assert.AreEqual("descent", intro.BeatName, "never reached the descent beat.");
+
+            float beatStart = intro.Elapsed;
+            Vector3? posEarly = null, posHoldEnd = null;
+
+            while (intro.IsPlaying && intro.BeatName == "descent")
+            {
+                intro.Tick(0.02f);
+                if (intro.BeatName != "descent") break;
+                float frac = (intro.Elapsed - beatStart) / DescentBeatDuration;
+                if (posEarly == null && frac >= 0.02f) posEarly = intro.IntroCamera.transform.position;
+                if (posHoldEnd == null && frac >= 0.16f) posHoldEnd = intro.IntroCamera.transform.position;
+            }
+
+            Assert.IsTrue(posEarly.HasValue && posHoldEnd.HasValue, "never sampled the hold window.");
+            Assert.Less(Vector3.Distance(posEarly.Value, posHoldEnd.Value), 5f,
+                "the camera is already falling before the hold ends — the continent/town silhouette " +
+                "never gets time to read.");
         }
 
         [UnityTest]

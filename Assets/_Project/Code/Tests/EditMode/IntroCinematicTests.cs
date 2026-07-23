@@ -156,6 +156,31 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void Shed_HoseIsPlumbedToAWallReelAndFollowsTheGrab()
+        {
+            // YT-175: Lee's playtest — the hose went nowhere, so the beat read as "picks up a gun", not
+            // "grabs his hosepipe". There must be a reel/tap fixture on the wall, and the trailing hose
+            // must actually move as Max grabs and turns, not stay frozen while the sprayer moves away.
+            var shed = new IntroShed(_root.transform, Vector3.zero);
+
+            Assert.IsTrue(Has(shed.Root, "HoseCoil"), "there is no hose reel on the shed wall.");
+            Assert.IsTrue(Has(shed.Root, "TapValve"), "there is no tap the hose is plumbed into.");
+
+            shed.SetPhase(0f);
+            Assert.Less(Vector3.Distance(shed.HoseLineStart, shed.HoseReelAnchor), 0.01f,
+                "the trailing hose's fixed end is not anchored at the wall reel.");
+            Vector3 restEnd = shed.HoseLineEnd;
+
+            shed.SetPhase(1f);
+            Vector3 heldEnd = shed.HoseLineEnd;
+            Assert.Greater(Vector3.Distance(restEnd, heldEnd), 0.1f,
+                "the trailing hose does not follow the sprayer as Max grabs and turns to the door.");
+
+            AssertNoColliders(shed.Root);
+            AssertNoMagenta(shed.Root);
+        }
+
+        [Test]
         public void Shed_DoorShutAndMaxAtBenchAtTheStart()
         {
             var shed = new IntroShed(_root.transform, Vector3.zero);

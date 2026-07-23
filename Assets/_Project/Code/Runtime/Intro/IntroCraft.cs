@@ -71,6 +71,9 @@ namespace MaxWorlds.Intro
         public static readonly Color Trousers = new Color(0.20f, 0.21f, 0.25f);
         public static readonly Color Steel = new Color(0.58f, 0.64f, 0.72f);
         public static readonly Color HoseGreen = new Color(0.24f, 0.55f, 0.30f);
+        /// <summary>The rim shading behind the wall-mounted hose coil (YT-175) — a darker green so the
+        /// reel reads as a wound-up coil, not a flat green disc.</summary>
+        public static readonly Color HoseGreenDark = new Color(0.15f, 0.38f, 0.20f);
         public static readonly Color TankWater = new Color(0.31f, 0.76f, 0.97f);
     }
 

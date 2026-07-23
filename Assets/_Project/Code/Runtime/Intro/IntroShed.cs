@@ -1,4 +1,5 @@
 using UnityEngine;
+using UnityEngine.Rendering;
 
 namespace MaxWorlds.Intro
 {
@@ -54,6 +55,21 @@ namespace MaxWorlds.Intro
         private Transform _gun;
         private MeshRenderer _daylight;
 
+        // ---- the hose reel + tap on the back wall, and the trailing hose that ties them together
+        // (YT-175 — Lee: the shed beat read as "picks up a gun", not "grabs his hosepipe" because the
+        // hose went nowhere; it needs to visibly run from the sprayer back to where it lives on the wall).
+        private LineRenderer _hoseLine;
+        private Vector3 _hoseReelExitLocal;   // Root-local: the fixed end, where the hose leaves the wall
+        private static readonly Vector3 GunHosePortLocal = new Vector3(0f, -0.05f, -0.32f);
+
+        /// <summary>Where the wall-mounted reel/tap lives, in world space — the fixed end of the trailing
+        /// hose. A test reads this to prove the hose is actually plumbed to the wall, not floating.</summary>
+        public Vector3 HoseReelAnchor => Root.TransformPoint(_hoseReelExitLocal);
+        /// <summary>The trailing hose's fixed (wall) end, world space.</summary>
+        public Vector3 HoseLineStart => Root.TransformPoint(_hoseLine.GetPosition(0));
+        /// <summary>The trailing hose's live end at the sprayer, world space — moves as Max grabs and turns.</summary>
+        public Vector3 HoseLineEnd => Root.TransformPoint(_hoseLine.GetPosition(_hoseLine.positionCount - 1));
+
         public IntroShed(Transform parent, Vector3 localOrigin)
         {
             Root = IntroBuild.Pivot(parent, "IntroShed", localOrigin);
@@ -61,6 +77,8 @@ namespace MaxWorlds.Intro
             BuildRoom();
             BuildBenchAndTools();
             BuildMax();
+            BuildHoseReelAndTap();
+            BuildHoseLine();
             BuildDoorAndDaylight();
 
             CameraAnchor = IntroBuild.Pivot(Root, "ShedCam", new Vector3(4.4f, 1.85f, 1.6f));
@@ -111,6 +129,28 @@ namespace MaxWorlds.Intro
             if (Door != null) Door.localRotation = Quaternion.Euler(0f, -104f * DoorOpen01, 0f);
             if (_daylight != null)
                 IntroBuild.SetGlow(_daylight, IntroPalette.Daylight * Mathf.Lerp(0.15f, 1.4f, DoorOpen01));
+
+            UpdateHoseLine();
+        }
+
+        /// <summary>Re-run the trailing hose from the wall reel to the sprayer every frame — its live end
+        /// rides the gun, so it visibly follows the pickup and the turn instead of standing frozen while
+        /// the hose it belongs to moves away from it (YT-175).</summary>
+        private void UpdateHoseLine()
+        {
+            if (_hoseLine == null || _gun == null) return;
+
+            Vector3 start = _hoseReelExitLocal;
+            Vector3 end = Root.InverseTransformPoint(_gun.TransformPoint(GunHosePortLocal));
+
+            // A couple of sagging midpoints so it reads as a slack hose, not a taut rigid rod.
+            Vector3 mid1 = Vector3.Lerp(start, end, 0.33f) + Vector3.down * 0.28f;
+            Vector3 mid2 = Vector3.Lerp(start, end, 0.66f) + Vector3.down * 0.16f;
+
+            _hoseLine.SetPosition(0, start);
+            _hoseLine.SetPosition(1, mid1);
+            _hoseLine.SetPosition(2, mid2);
+            _hoseLine.SetPosition(3, end);
         }
 
         // ------------------------------------------------------------------ build
@@ -254,6 +294,63 @@ namespace MaxWorlds.Intro
             IntroBuild.Part(_gun, "Hose", PrimitiveType.Cylinder, new Vector3(0f, -0.08f, -0.16f),
                             new Vector3(0.06f, 0.18f, 0.06f), hose, Quaternion.Euler(56f, 0f, 0f),
                             castShadows: false);
+        }
+
+        /// <summary>The wall-mounted hose reel and tap Max's hose is plumbed into (YT-175): a coiled disc
+        /// with a hub and crank so it reads as a REEL and not a wheel, and a spigot beneath it so the
+        /// whole fixture reads as "this hose lives here, fed from the shed's tap" rather than a loose
+        /// prop. <see cref="_hoseReelExitLocal"/> is where the trailing hose (<see cref="BuildHoseLine"/>)
+        /// actually leaves it.</summary>
+        private void BuildHoseReelAndTap()
+        {
+            var hose = IntroBuild.Lit("shed_hose_reel", IntroPalette.HoseGreen);
+            var hoseDark = IntroBuild.Lit("shed_hose_reel_dark", IntroPalette.HoseGreenDark);
+            var steel = IntroBuild.Lit("shed_steel", IntroPalette.Steel);
+
+            Vector3 reelPos = new Vector3(-3.5f, 1.85f, -4.32f);
+
+            IntroBuild.Part(Root, "HoseCoilRim", PrimitiveType.Cylinder, reelPos,
+                            new Vector3(0.66f, 0.05f, 0.66f), hoseDark, Quaternion.Euler(90f, 0f, 0f),
+                            castShadows: false);
+            IntroBuild.Part(Root, "HoseCoil", PrimitiveType.Cylinder, reelPos + new Vector3(0f, 0f, 0.02f),
+                            new Vector3(0.6f, 0.07f, 0.6f), hose, Quaternion.Euler(90f, 0f, 0f),
+                            castShadows: false);
+            IntroBuild.Part(Root, "HoseHub", PrimitiveType.Cylinder, reelPos + new Vector3(0f, 0f, 0.06f),
+                            new Vector3(0.14f, 0.09f, 0.14f), steel, Quaternion.Euler(90f, 0f, 0f),
+                            castShadows: false);
+            IntroBuild.Part(Root, "HoseCrank", PrimitiveType.Cube, reelPos + new Vector3(0.34f, 0f, 0.06f),
+                            new Vector3(0.34f, 0.05f, 0.05f), steel, castShadows: false);
+
+            // The tap/spigot beneath the reel — a pipe stub and a valve wheel on the wall.
+            Vector3 tapPos = reelPos + new Vector3(0f, -0.55f, 0f);
+            IntroBuild.Part(Root, "TapPipe", PrimitiveType.Cylinder, tapPos,
+                            new Vector3(0.05f, 0.12f, 0.05f), steel, Quaternion.Euler(90f, 0f, 0f),
+                            castShadows: false);
+            IntroBuild.Part(Root, "TapValve", PrimitiveType.Sphere, tapPos + new Vector3(0f, 0f, 0.14f),
+                            new Vector3(0.13f, 0.13f, 0.13f), steel, castShadows: false);
+
+            // Where the hose actually leaves the reel — the fixed end the trailing hose line runs from.
+            _hoseReelExitLocal = reelPos + new Vector3(0f, -0.12f, 0.2f);
+        }
+
+        /// <summary>The trailing hose itself: a soft-sagging line run from the wall reel
+        /// (<see cref="_hoseReelExitLocal"/>) to the sprayer in Max's hands, re-drawn every frame by
+        /// <see cref="UpdateHoseLine"/> so it visibly follows the grab and the turn (YT-175) instead of
+        /// the sprayer reading as a self-contained "gun" with nothing feeding it.</summary>
+        private void BuildHoseLine()
+        {
+            var go = new GameObject("HoseTrail");
+            go.transform.SetParent(Root, worldPositionStays: false);
+
+            _hoseLine = go.AddComponent<LineRenderer>();
+            _hoseLine.useWorldSpace = false;
+            _hoseLine.positionCount = 4;
+            _hoseLine.widthMultiplier = 0.07f;
+            _hoseLine.numCapVertices = 4;
+            _hoseLine.numCornerVertices = 2;
+            _hoseLine.shadowCastingMode = ShadowCastingMode.Off;
+            _hoseLine.receiveShadows = false;
+            _hoseLine.material = IntroBuild.Lit("shed_hose_reel", IntroPalette.HoseGreen);
         }
 
         private void BuildDoorAndDaylight()

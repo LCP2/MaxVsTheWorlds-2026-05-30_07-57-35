@@ -204,7 +204,9 @@ namespace MaxWorlds.Intro
                 new Beat("space-open", 3.2f, SpaceOpen, () => Show(_space.Root)),
                 new Beat("comet", 4.6f, Comet, null),
                 new Beat("split-land", 4.4f, SplitLand, null),
-                new Beat("descent", 4.8f, Dive, () => { Cut(); Show(_descent.Root); }),
+                // Lengthened from 4.8s (YT-175 — Lee: the fly-in still read as a blur): more real time to
+                // let continent -> town -> shed actually resolve instead of rushing the whole descent.
+                new Beat("descent", 6.2f, Dive, () => { Cut(); Show(_descent.Root); }),
                 // Lengthened from 5.4s (YT-162): the old duration didn't leave room to hold on Max, stage
                 // a real hose grab, THEN turn and open the door — see IntroShed.SetPhase's sub-beats.
                 new Beat("shed", 6.6f, ShedBeat, () => { Cut(); Show(_shed.Root); }),
@@ -260,22 +262,57 @@ namespace MaxWorlds.Intro
                     new Vector3(0f, 18f, -94f), new Vector3(0f, 9f, -38f), camT);
         }
 
+        // Three altitude bands instead of one long lerp (YT-175 — Lee: even the single-ease version
+        // (YT-161) still read as a blur). Held near-static at the top long enough to read as a continent,
+        // eased down through a town-scale midpoint so buildings visibly pass, then arrives on the roof
+        // with room to spare before the flash — see Dive below.
+        private const float DiveHoldEnd = 0.18f;    // held high: the continent/town silhouette registers
+        private const float DiveTownEnd = 0.55f;    // the fall through town scale — buildings visibly pass
+        private const float DiveFinalEnd = 0.80f;   // arrives on the roof well before the 0.85 flash starts
+
         // ---- beat 4: plunge — continent, town, the shed roof, and a readable arrival ----
         private void Dive(float t)
         {
             var apex = _descent.DiveTarget;
             Vector3 apexLocal = _descent.Root.InverseTransformPoint(apex.position);
-            // From high above, looking down and a little forward, down to just over the roof.
-            Vector3 from = apexLocal + new Vector3(0f, 640f, -260f);
-            Vector3 to = apexLocal + new Vector3(0f, 22f, -30f);
-            // AimCam already eases with SmoothStep; driving it with a SECOND, quadratic ease compounded
-            // into an extreme late-beat rush — over 90% of the whole descent used to land in the final
-            // ~20% of the beat, too fast to resolve continent -> town -> shed before the cut (YT-161).
-            // A single ease settles the camera on the roof well before the flash: the shed is on screen
-            // and legible, THEN the beat flashes to the cut — not a blur that happens to end on white.
-            AimCam(_descent.Root, from, apexLocal, to, apexLocal, t);
-            // The flash starts only once the camera has essentially arrived (see above), so it reads as
-            // a brief flash on an already-legible shot of the shed, not a hard slam mid-motion.
+            // From high above, looking down and a little forward; a town-scale midpoint; down to just
+            // over the roof.
+            Vector3 highLocal = apexLocal + new Vector3(0f, 640f, -260f);
+            Vector3 midLocal = apexLocal + new Vector3(0f, 150f, -95f);
+            Vector3 roofLocal = apexLocal + new Vector3(0f, 22f, -30f);
+
+            Vector3 posLocal;
+            if (t < DiveHoldEnd)
+            {
+                // Held near-static: the continent/town silhouette actually registers before anything
+                // starts falling, instead of the dive being under way from the beat's first frame.
+                posLocal = highLocal;
+            }
+            else if (t < DiveTownEnd)
+            {
+                float e = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(DiveHoldEnd, DiveTownEnd, t));
+                posLocal = Vector3.Lerp(highLocal, midLocal, e);
+            }
+            else if (t < DiveFinalEnd)
+            {
+                float e = Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(DiveTownEnd, DiveFinalEnd, t));
+                posLocal = Vector3.Lerp(midLocal, roofLocal, e);
+            }
+            else
+            {
+                // Settles here well before the flash: the shed is on screen and legible, THEN the beat
+                // flashes to the cut — not a blur that happens to end on white (YT-161, still true YT-175).
+                posLocal = roofLocal;
+            }
+
+            _cam.transform.position = _descent.Root.TransformPoint(posLocal);
+            Vector3 look = _descent.Root.TransformPoint(apexLocal);
+            Vector3 dir = look - _cam.transform.position;
+            if (dir.sqrMagnitude > 1e-5f)
+                _cam.transform.rotation = Quaternion.LookRotation(dir.normalized, Vector3.up);
+
+            // The flash starts only once the camera has long since arrived (see above), so it reads as a
+            // brief flash on an already-legible shot of the shed, not a hard slam mid-motion.
             if (t > 0.85f) _fadeColor = Color.white;
             _fadeAlpha = Mathf.Max(_fadeAlpha, IntroBuild.Ramp(0.85f, 1f, t));
         }
