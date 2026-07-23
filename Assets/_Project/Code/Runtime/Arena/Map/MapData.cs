@@ -85,7 +85,7 @@ namespace MaxWorlds.Arena
         public float depth = 1f;
 
         public string shape = "box";      // box | cylinder
-        public string dressing = "none";  // none | tree | hedge | planter  (art pass, YT-75)
+        public string dressing = "none";  // none | tree | hedge | planter | shed  (art pass, YT-75; shed added YT-172)
 
         /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
         /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means

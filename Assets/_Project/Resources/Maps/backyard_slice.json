@@ -269,6 +269,18 @@
             "opensOn": ""
         },
         {
+            "id": "Cover Central Shed",
+            "kind": "cover",
+            "x": 11.5,
+            "z": 9.0,
+            "width": 4.0,
+            "height": 2.4,
+            "depth": 3.6,
+            "shape": "box",
+            "dressing": "shed",
+            "opensOn": ""
+        },
+        {
             "id": "Cover Beds",
             "kind": "cover",
             "x": -25.0,
