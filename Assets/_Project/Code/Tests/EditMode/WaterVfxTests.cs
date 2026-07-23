@@ -60,6 +60,51 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsFalse(float.IsNaN(p.x) || float.IsNaN(p.y) || float.IsNaN(p.z));
         }
 
+        // --- YT-177: reach must not shrink as the cone widens ---
+
+        [Test]
+        public void ReachForCone_AtZeroAngle_MatchesTheOldStraightLineSubtraction()
+        {
+            float reach = WaterVfxTuning.ReachForCone(range: 4.5f, muzzleOffset: 2.09f, halfAngleDeg: 0f);
+            Assert.That(reach, Is.EqualTo(4.5f - 2.09f).Within(0.001f));
+        }
+
+        [Test]
+        public void ReachForCone_TheConeEdgeLandsExactlyOnTheOutline()
+        {
+            const float range = 4.5f, offset = 2.09f, angleDeg = 24f;   // the base/wide weapon's stream edge
+            float reach = WaterVfxTuning.ReachForCone(range, offset, angleDeg);
+
+            // Reconstruct the edge particle's landing point: it leaves the muzzle (offset along
+            // local Z from the weapon's origin) at angleDeg and travels `reach` in a straight line.
+            float rad = angleDeg * Mathf.Deg2Rad;
+            var muzzle = new Vector3(0f, 0f, offset);
+            var dir = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
+            var landing = muzzle + dir * reach;
+
+            Assert.That(landing.magnitude, Is.EqualTo(range).Within(0.01f),
+                "the widest visible particle must land exactly on the aim outline, not short of it (YT-177)");
+        }
+
+        [Test]
+        public void ReachForCone_GrowsAsTheConeWidens_ToCompensateForTheAngle()
+        {
+            const float range = 4.5f, offset = 2.09f;
+            float r0 = WaterVfxTuning.ReachForCone(range, offset, 0f);
+            float r24 = WaterVfxTuning.ReachForCone(range, offset, 24f);
+            float r45 = WaterVfxTuning.ReachForCone(range, offset, 45f);
+
+            Assert.That(r24, Is.GreaterThan(r0), "a wider cone must get more reach, not the same fixed amount");
+            Assert.That(r45, Is.GreaterThan(r24));
+        }
+
+        [Test]
+        public void ReachForCone_NeverGoesNegativeForAnExtremeAngle()
+        {
+            float reach = WaterVfxTuning.ReachForCone(range: 1f, muzzleOffset: 5f, halfAngleDeg: 89f);
+            Assert.That(reach, Is.GreaterThanOrEqualTo(0.1f));
+        }
+
         [Test]
         public void SplashAxis_SpraysBackTowardTheShooterAndUpward()
         {
@@ -129,6 +174,32 @@ namespace MaxWorlds.Tests.EditMode
             finally
             {
                 Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void WaterVfx_AWiderConeGetsMoreEmitterSpeed_AtTheSameRange()
+        {
+            // The base/wide weapon (YT-177): at the same range, a wider cone loses more reach to the
+            // muzzle-offset geometry, so its emitter must be given more speed to still land on the
+            // outline at its own (wider) edge angle.
+            var narrowGo = new GameObject("blaster-vfx-narrow");
+            var wideGo = new GameObject("blaster-vfx-wide");
+            try
+            {
+                var narrow = narrowGo.AddComponent<WaterVfx>();
+                narrow.Init(range: 4.5f, radius: 1.1f, coneHalfAngle: 6f);
+
+                var wide = wideGo.AddComponent<WaterVfx>();
+                wide.Init(range: 4.5f, radius: 1.1f, coneHalfAngle: 48f);
+
+                Assert.That(wide.EmitterSpeed, Is.GreaterThan(narrow.EmitterSpeed),
+                    "the wide weapon's stream must be sped up to cover the extra distance its angle costs it");
+            }
+            finally
+            {
+                Object.DestroyImmediate(narrowGo);
+                Object.DestroyImmediate(wideGo);
             }
         }
 
