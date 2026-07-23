@@ -179,6 +179,21 @@ namespace MaxWorlds.VFX
             _cam.enabled = true;
         }
 
+        /// <summary>Set the weapon up for a status view (YT-178): bolt on everything already installed,
+        /// with nothing flying in. Used when the WEAPONS button opens the weapons area on demand rather
+        /// than off a fresh pickup, so there is no new part to reveal.</summary>
+        public void ShowInstalled()
+        {
+            foreach (var go in _attached) if (go != null) Destroy(go);
+            _attached.Clear();
+            _newPart = null;
+
+            foreach (var kind in Mounts.Keys)
+                if (UpgradeState.IsInstalled(kind)) Attach(kind, Mounts[kind]);
+
+            _cam.enabled = true;
+        }
+
         /// <summary>Animate the reveal: the new part glides from its staged spot down onto its mount,
         /// and the whole weapon turns slowly so it reads as a hero object. Driven by the screen's clock.</summary>
         public void Tick(float unscaledT, float fitStart, float fitTime)

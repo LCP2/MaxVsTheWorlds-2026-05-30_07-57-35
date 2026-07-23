@@ -53,8 +53,22 @@ namespace MaxWorlds.Tests.PlayMode
         {
             Assert.That(FindRect("Power Cells"), Is.Not.Null, "the power-cell counter is missing from the HUD");
             var alert = FindRect("Part Alert");
-            Assert.That(alert, Is.Not.Null, "the part-alert chip is missing from the HUD");
-            Assert.That(alert.gameObject.activeSelf, Is.False, "with no part collected the chip must be hidden");
+            Assert.That(alert, Is.Not.Null, "the part-alert badge is missing from the HUD");
+            Assert.That(alert.gameObject.activeSelf, Is.False, "with no part collected the badge must be hidden");
+            yield return null;
+        }
+
+        /// <summary>
+        /// YT-178: the PART chip becomes a persistent WEAPONS button — it must be visible at ALL times,
+        /// not only while a part is waiting to be installed, so the weapons area is reachable on demand.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheWeaponsButtonIsAlwaysVisible()
+        {
+            var button = FindRect("Weapons Button");
+            Assert.That(button, Is.Not.Null, "the WEAPONS button is missing from the HUD");
+            Assert.That(button.gameObject.activeSelf, Is.True,
+                "the WEAPONS button must be visible at all times, not gated on a part being pending");
             yield return null;
         }
 

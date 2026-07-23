@@ -96,13 +96,18 @@ namespace MaxWorlds.UI
         private float _warningTimer;
         private float _bossIncomingTimer;
 
-        // Robot drops (YT-131): banked power-cell counter + the flashing "install available" chip.
+        // Robot drops (YT-131): banked power-cell counter + the flashing "install available" badge.
         private Text _cellCount;
         private Image _cellIcon;
         private float _cellPop;              // one-shot scale pop when a cell is banked
         private RectTransform _partAlertRoot;
         private Image _partAlertBg;
         private Image _partAlertIcon;
+
+        // The always-available WEAPONS access button (YT-178). The part-alert chip above used to BE
+        // this button, gated on a part being pending; now it's a small badge pinned to this button's
+        // corner, and the button itself is always up.
+        private RectTransform _weaponsButtonRoot;
 
         private void Awake()
         {
@@ -123,6 +128,7 @@ namespace MaxWorlds.UI
             BuildBossBar();
             BuildWarning();
             BuildPowerCellCounter();
+            BuildWeaponsButton();
             BuildPartAlert();
             BuildFloatingLayer();
             BuildMap();
@@ -174,13 +180,19 @@ namespace MaxWorlds.UI
             if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(pending > 0);
         }
 
-        /// <summary>Tapping the flashing chip opens the paused upgrade screen for the part at the front
-        /// of the pending queue (YT-132/133) — the specific one Max picked up.</summary>
-        private void OpenUpgrade()
+        /// <summary>Tapping the WEAPONS button (YT-178): opens the reveal flow for whatever part is
+        /// waiting at the front of the pending queue (YT-132/133) if one is, otherwise opens the weapons
+        /// area to show Max's current loadout on demand — the button is always-available access now,
+        /// not gated on a part being pending.</summary>
+        private void OnWeaponsButtonTapped()
         {
-            if (!MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var kind)) return;
             var screen = FindFirstObjectByType<UpgradeScreen>();
-            if (screen != null) screen.Open(MaxWorlds.Upgrades.UpgradeCatalog.For(kind));
+            if (screen == null) return;
+
+            if (MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var kind))
+                screen.Open(MaxWorlds.Upgrades.UpgradeCatalog.For(kind));
+            else
+                screen.OpenStatus();
         }
 
         private void OnBossRegistered() => _model.UseExternalBoss();
@@ -901,31 +913,56 @@ namespace MaxWorlds.UI
             _cellCount.text = MaxWorlds.Pickups.PickupWallet.PowerCells.ToString();
         }
 
-        /// <summary>The flashing "install available" chip (YT-131): a gold part badge pinned to the
-        /// right edge that appears and pulses the moment a part is picked up. It is the tell that
-        /// drives YT-132's upgrade flow (tap it → pause → fit the part); here it just flashes.</summary>
+        /// <summary>The always-available WEAPONS button (YT-178): a persistent chip pinned to the right
+        /// edge that opens the weapons area on demand — any time, not only when a part is waiting. Sits
+        /// where the old part-only chip lived; that chip is now the badge <see cref="BuildPartAlert"/>
+        /// pins to its corner.</summary>
+        private void BuildWeaponsButton()
+        {
+            _weaponsButtonRoot = NewRect("Weapons Button", Root);
+            Anchor(_weaponsButtonRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            _weaponsButtonRoot.sizeDelta = new Vector2(96f, 96f);
+            _weaponsButtonRoot.anchoredPosition = new Vector2(-28f, 120f); // right edge, above the aim stick
+
+            var bg = AddImage(_weaponsButtonRoot, HudTextures.RoundedBox(72, 0.3f), PanelColor, "Weapons BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnWeaponsButtonTapped);
+
+            var label = AddText(_weaponsButtonRoot, 18f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform, -8f);
+            label.text = "WEAPONS";
+            label.fontStyle = FontStyle.Bold;
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = 10;
+            label.resizeTextMaxSize = 20;
+            label.raycastTarget = false;
+        }
+
+        /// <summary>The flashing "install available" badge (YT-131, corner-pinned to the WEAPONS button
+        /// since YT-178): pulses the moment a part is picked up — the tell that drives YT-132's upgrade
+        /// flow. It no longer gates access to the weapons area (the button beneath it does that always);
+        /// it just signals that a part is waiting, so it stays purely visual and lets taps fall through.</summary>
         private void BuildPartAlert()
         {
-            _partAlertRoot = NewRect("Part Alert", Root);
-            Anchor(_partAlertRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            _partAlertRoot.sizeDelta = new Vector2(96f, 96f);
-            _partAlertRoot.anchoredPosition = new Vector2(-28f, 120f); // right edge, above the aim stick
+            _partAlertRoot = NewRect("Part Alert", _weaponsButtonRoot);
+            Anchor(_partAlertRoot, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            _partAlertRoot.sizeDelta = new Vector2(44f, 44f);
+            _partAlertRoot.anchoredPosition = new Vector2(10f, 10f); // pinned to the button's top-right corner
 
             _partAlertBg = AddImage(_partAlertRoot, HudTextures.RoundedBox(72, 0.3f), PartColor, "Chip");
             Stretch(_partAlertBg.rectTransform); _partAlertBg.type = Image.Type.Sliced;
-            _partAlertBg.raycastTarget = true;   // it's a button now (YT-132): tap it to open the upgrade screen
-
-            // Tapping the chip opens the paused upgrade screen for the part you picked up (YT-132).
-            var chipButton = _partAlertBg.gameObject.AddComponent<Button>();
-            chipButton.transition = Selectable.Transition.None;   // the flash pulse drives its colour
-            chipButton.onClick.AddListener(OpenUpgrade);
+            _partAlertBg.raycastTarget = false;  // the WEAPONS button underneath handles taps (YT-178)
 
             // The part icon (YT-168): a black salvage-nut silhouette, not the old "PART" text — a
             // shape reads faster than a word, and BLACK is the one tint that stays high-contrast
             // against the chip's warm orange. The sprite bakes its own black, so tint white to render
             // it as authored (the same trick the power-cell icon uses).
             _partAlertIcon = AddImage(_partAlertRoot, WeaponHudIcons.Part(64), Color.white, "Part Icon");
-            Stretch(_partAlertIcon.rectTransform, -18f);   // inset from the chip edge
+            Stretch(_partAlertIcon.rectTransform, -8f);   // inset from the badge edge
             _partAlertIcon.raycastTarget = false;
 
             _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsPending > 0);

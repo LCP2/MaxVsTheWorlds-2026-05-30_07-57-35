@@ -173,8 +173,15 @@ namespace MaxWorlds.Tests.PlayMode
                 "the part name must sit clear above 'tap to continue', not overlap it");
         }
 
+        private static Button FindWeaponsButton(GameObject hud)
+        {
+            foreach (var b in hud.GetComponentsInChildren<Button>(true))
+                if (b.transform.parent != null && b.transform.parent.name == "Weapons Button") return b;
+            return null;
+        }
+
         [UnityTest]
-        public IEnumerator TappingTheHudChipOpensTheScreen()
+        public IEnumerator TappingTheWeaponsButtonOpensTheScreen()
         {
             yield return NewScreen();
 
@@ -182,19 +189,18 @@ namespace MaxWorlds.Tests.PlayMode
             _hudGo.AddComponent<HudController>();
             yield return null;
 
-            PickupWallet.AddPart(PartKind.BeamNozzle);   // raises the chip
+            PickupWallet.AddPart(PartKind.BeamNozzle);   // raises the pending-part badge
             yield return null;
 
-            // Find the chip's button and tap it, the way a finger would.
-            Button chip = null;
-            foreach (var b in _hudGo.GetComponentsInChildren<Button>(true))
-                if (b.gameObject.name == "Chip") chip = b;
-            Assert.That(chip, Is.Not.Null, "the part chip isn't a button");
+            // Find the WEAPONS button (YT-178: it's always there now, not just the chip) and tap it,
+            // the way a finger would.
+            var weaponsButton = FindWeaponsButton(_hudGo);
+            Assert.That(weaponsButton, Is.Not.Null, "the WEAPONS button has no Button component");
 
-            chip.onClick.Invoke();
+            weaponsButton.onClick.Invoke();
             yield return null;
 
-            Assert.That(Screen.IsOpen, Is.True, "tapping the chip should open the upgrade screen");
+            Assert.That(Screen.IsOpen, Is.True, "tapping the WEAPONS button should open the upgrade screen");
             Assert.That(Time.timeScale, Is.EqualTo(0f), "and pause the game");
         }
 
@@ -273,6 +279,63 @@ namespace MaxWorlds.Tests.PlayMode
 
         private static Text FindTextInside(Image parent) =>
             parent == null ? null : parent.GetComponentInChildren<Text>(true);
+
+        /// <summary>
+        /// YT-178: with nothing pending, the WEAPONS button still opens the weapons area — it's an
+        /// always-available access point, not just a "part ready" alert.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TappingTheWeaponsButtonWithNothingPendingOpensTheStatusView()
+        {
+            yield return NewScreen();
+
+            _hudGo = new GameObject("HUD");
+            _hudGo.AddComponent<HudController>();
+            yield return null;
+
+            var weaponsButton = FindWeaponsButton(_hudGo);
+            Assert.That(weaponsButton, Is.Not.Null, "the WEAPONS button has no Button component");
+
+            weaponsButton.onClick.Invoke();
+            yield return null;
+
+            Assert.That(Screen.IsOpen, Is.True,
+                "the WEAPONS button must open the weapons area even with nothing pending");
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "and pause the game");
+            Assert.That(FindText(_screenGo, "GARDEN HOSE"), Is.Not.Null,
+                "with no upgrades installed the weapon must read GARDEN HOSE");
+        }
+
+        [UnityTest]
+        public IEnumerator OpenStatusShowsTheUpgradedNameOnceAPartIsInstalled()
+        {
+            yield return NewScreen();
+            UpgradeState.Install(PartKind.BeamNozzle);
+
+            Screen.OpenStatus();
+            yield return null;
+
+            Assert.That(FindText(_screenGo, "GARDEN HOSE"), Is.Null,
+                "once a part is installed the weapon should no longer read the bare base name");
+            Screen.Continue();
+        }
+
+        [UnityTest]
+        public IEnumerator OpenStatusDoesNotInstallOrSpendAnything()
+        {
+            yield return NewScreen();
+            PickupWallet.AddPart(PartKind.BeamNozzle);   // left pending on purpose
+
+            Screen.OpenStatus();
+            yield return null;
+            Screen.Continue();
+            yield return null;
+
+            Assert.That(PickupWallet.PartsPending, Is.EqualTo(1),
+                "opening the weapons area on demand must not spend a pending part");
+            Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False,
+                "opening the weapons area on demand must not install anything");
+        }
 
         private static Text FindText(GameObject root, string content)
         {

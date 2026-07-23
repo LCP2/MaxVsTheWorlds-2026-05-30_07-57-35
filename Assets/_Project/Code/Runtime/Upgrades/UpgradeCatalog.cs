@@ -114,5 +114,15 @@ namespace MaxWorlds.Upgrades
                 default: return "HOSE";
             }
         }
+
+        /// <summary>Max's base weapon (YT-178) — a garden hose, ties to the hosepipe identity
+        /// (YT-163/YT-175). What the WEAPONS screen reads with nothing installed yet.</summary>
+        public const string BaseWeaponName = "GARDEN HOSE";
+
+        /// <summary>The weapon's current display name for the WEAPONS screen: the bare base name until
+        /// any part is installed, then flagged as upgraded — the screen lists which parts alongside it,
+        /// so the name doesn't need to enumerate them itself.</summary>
+        public static string WeaponName(System.Collections.Generic.IReadOnlyCollection<PartKind> installed)
+            => installed == null || installed.Count == 0 ? BaseWeaponName : "UPGRADED " + BaseWeaponName;
     }
 }

@@ -69,6 +69,7 @@ namespace MaxWorlds.UI
         private readonly Text[] _familyPipLabel = new Text[MaxFamilySize];
 
         private bool _open;
+        private bool _statusOnly;             // opened via OpenStatus (YT-178) — no part to install on Continue
         private float _prevTimeScale = 1f;
         private float _t;                     // unscaled time since Open
         private UpgradePart _part;
@@ -96,6 +97,7 @@ namespace MaxWorlds.UI
             if (_canvas == null) Build();
 
             _part = part.IsValid ? part : UpgradePart.Generic;
+            _statusOnly = false;
             _open = true;
             _t = 0f;
             _prevTimeScale = Time.timeScale;
@@ -158,8 +160,46 @@ namespace MaxWorlds.UI
             }
         }
 
+        /// <summary>Hides the family-progression pips (YT-176) for a status-only open (YT-178) — they
+        /// show progress toward the family of a specific just-revealed part, which doesn't apply when
+        /// opening the weapons area on demand rather than off a fresh pickup.</summary>
+        private void HideFamilyRow()
+        {
+            for (int i = 0; i < MaxFamilySize; i++)
+                if (_familyPipBg[i] != null) _familyPipBg[i].gameObject.SetActive(false);
+        }
+
+        /// <summary>Open the weapons area on demand (YT-178) — the WEAPONS button's always-available
+        /// entry point when nothing is pending. Shows Max's current weapon name and whatever's already
+        /// installed, rather than the reveal-a-new-part flow <see cref="Open"/> drives; dismissing it
+        /// (tap anywhere) just closes back to play without installing or spending anything.</summary>
+        public void OpenStatus()
+        {
+            if (_open) return;
+            if (_canvas == null) Build();
+
+            _part = UpgradePart.Generic;   // unused for effect — Continue() skips Install/SpendPart below
+            _statusOnly = true;
+            _open = true;
+            _t = RevealTime + FitTime;     // nothing is flying in — skip straight to the settled state
+            _prevTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+
+            _title.text = "WEAPONS";
+            _partLabel.text = UpgradeCatalog.WeaponName(UpgradeState.Installed);
+            _partLabel.color = TextColor;
+            _continueHint.text = "TAP TO CLOSE";
+            HideFamilyRow();
+
+            _root.SetActive(true);
+            if (_stage != null) _stage.ShowInstalled();   // bolt on everything installed, nothing new
+            if (_maxStage != null) _maxStage.Show();       // start the live Max render (YT-176)
+            ApplyAnim(_t);
+        }
+
         /// <summary>Finish the upgrade: apply the part's effect (YT-133 — the weapon/player re-fit off
-        /// <see cref="UpgradeState"/>), take it off the pending queue, resume, hide.</summary>
+        /// <see cref="UpgradeState"/>), take it off the pending queue, resume, hide. A status-only open
+        /// (YT-178) has no part to install — it just closes.</summary>
         public void Continue()
         {
             if (!_open) return;
@@ -167,9 +207,12 @@ namespace MaxWorlds.UI
             Time.timeScale = _prevTimeScale;
             if (_stage != null) _stage.Hide();  // stop the live weapon render (YT-140)
             if (_maxStage != null) _maxStage.Hide();   // and the live Max render (YT-176)
-            UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
-            CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
-            PickupWallet.SpendPart();
+            if (!_statusOnly)
+            {
+                UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
+                CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
+                PickupWallet.SpendPart();
+            }
             _root.SetActive(false);
         }
 
@@ -204,12 +247,20 @@ namespace MaxWorlds.UI
             if (_maxStage != null) _maxStage.Tick(t);   // Max's slow idle turn (YT-176)
 
             // The rim behind the weapon flashes in the part's accent as it locks on, then eases off.
-            float settle = Mathf.Clamp01((t - RevealTime - FitTime) / SettleTime);
-            float flash = Mathf.Sin(settle * Mathf.PI);                 // 0 → 1 → 0
+            // A status-only open (YT-178) has no new part settling in, so there's nothing to flash.
             if (_weaponGlow != null)
             {
-                var g = _part.Accent; g.a = 0.55f * flash;
-                _weaponGlow.color = g;
+                if (_statusOnly)
+                {
+                    _weaponGlow.color = new Color(0f, 0f, 0f, 0f);
+                }
+                else
+                {
+                    float settle = Mathf.Clamp01((t - RevealTime - FitTime) / SettleTime);
+                    float flash = Mathf.Sin(settle * Mathf.PI);             // 0 → 1 → 0
+                    var g = _part.Accent; g.a = 0.55f * flash;
+                    _weaponGlow.color = g;
+                }
             }
 
             // The continue hint pulses once the part is on.
