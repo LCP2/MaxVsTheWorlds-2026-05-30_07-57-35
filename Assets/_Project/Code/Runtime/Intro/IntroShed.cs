@@ -26,10 +26,28 @@ namespace MaxWorlds.Intro
         public float DoorOpen01 { get; private set; }
         /// <summary>How far Max has turned from his bench toward the door, 0..1.</summary>
         public float Turn01 { get; private set; }
+        /// <summary>How far Max has reached down, gripped the hose resting on the bench, and lifted it,
+        /// 0..1 — the pickup beat (YT-162), independent of <see cref="Turn01"/> so a test (and the eye)
+        /// can tell the grab actually happens before he turns for the door.</summary>
+        public float Grab01 { get; private set; }
 
         private const float RoomW = 8f, RoomH = 3.6f, RoomD = 9f;
         private const float DoorW = 2.2f, DoorH = 3f;
         private const float BenchYaw = 200f;   // Max starts facing his bench (back-left), not the door
+
+        // The hose/sprayer's two resting states: laid on the bench, and gripped up in a carry. The beat
+        // lerps between them by Grab01, NOT by Turn01 — so the pickup reads as its own moment instead of
+        // the gun just floating up as a side effect of him turning (YT-162).
+        private static readonly Vector3 GunRestPos = new Vector3(0.55f, 0.12f, 0.68f);
+        private static readonly Quaternion GunRestRot = Quaternion.Euler(82f, 0f, 0f);
+        private static readonly Vector3 GunHeldPos = new Vector3(0.1f, 1.05f, 0.55f);
+        private static readonly Quaternion GunHeldRot = Quaternion.Euler(8f, 0f, 0f);
+
+        // Sub-beat timing, as a fraction of the whole shed beat (see SetPhase's summary below).
+        private const float NoticeStart = 0.16f, NoticeEnd = 0.30f;
+        private const float GrabStart = 0.30f, GrabEnd = 0.58f;
+        private const float TurnStart = 0.55f, TurnEnd = 0.85f;
+        private const float DoorStart = 0.72f, DoorEnd = 1f;
 
         private Transform _torso;
         private Transform _head;
@@ -56,35 +74,40 @@ namespace MaxWorlds.Intro
         // ------------------------------------------------------------------ the beat
 
         /// <summary>
-        /// Drive the whole shed beat, t in 0..1:
-        ///   • 0.00–0.45  Max works, oblivious — a gentle tinker at the bench.
-        ///   • 0.40–0.70  he straightens and turns to the door, and the gun comes up into his hands.
-        ///   • 0.55–1.00  the door swings wide and daylight floods in.
+        /// Drive the whole shed beat, t in 0..1. Staged as five distinct beats (YT-162 — Lee's playtest:
+        /// the old single ramp did everything at once, so you never actually saw Max or the pickup):
+        ///   • 0.00–0.18  held on Max, oblivious, tinkering — nothing else moves yet.
+        ///   • 0.16–0.30  he notices and stills.
+        ///   • 0.30–0.58  he reaches down, grips the hose resting on the bench, and lifts it — the grab.
+        ///   • 0.55–0.85  only once he has hold of it does he turn from the bench to the door.
+        ///   • 0.72–1.00  the door swings wide and daylight floods in.
         /// </summary>
         public void SetPhase(float t)
         {
             t = Mathf.Clamp01(t);
 
-            // The oblivious tinker: a small bob and a busy set of hands, fading out as he notices.
-            float working = 1f - IntroBuild.Ramp(0.35f, 0.5f, t);
+            // The oblivious tinker: a small bob and a busy set of hands, fading out as he notices — held
+            // long enough on its own that the player actually registers Max before anything else moves.
+            float working = 1f - IntroBuild.Ramp(NoticeStart, NoticeEnd, t);
             float tinker = Mathf.Sin(t * 46f) * 0.06f * working;
             if (_torso != null) _torso.localPosition = new Vector3(0f, 0.02f * working, tinker);
             if (_head != null) _head.localRotation = Quaternion.Euler(18f * working + tinker * 60f, 0f, 0f);
 
-            // He turns from the bench to the door.
-            Turn01 = IntroBuild.Ramp(0.40f, 0.70f, t);
-            if (Max != null) Max.localRotation = Quaternion.Euler(0f, Mathf.Lerp(BenchYaw, 360f, Turn01), 0f);
-
-            // The gun comes up out of the tinker and into a carry as he turns.
+            // He reaches down and grips the hose off the bench, and brings it up — a real pickup, staged
+            // on its own beat rather than riding along with the turn.
+            Grab01 = IntroBuild.Ramp(GrabStart, GrabEnd, t);
             if (_gun != null)
             {
-                _gun.localPosition = Vector3.Lerp(new Vector3(0.35f, 0.9f, 0.5f),
-                                                  new Vector3(0.1f, 1.05f, 0.55f), Turn01);
-                _gun.localRotation = Quaternion.Euler(Mathf.Lerp(70f, 8f, Turn01), 0f, 0f);
+                _gun.localPosition = Vector3.Lerp(GunRestPos, GunHeldPos, Grab01);
+                _gun.localRotation = Quaternion.Slerp(GunRestRot, GunHeldRot, Grab01);
             }
 
+            // Only once he has hold of the hose does he turn from the bench to the door.
+            Turn01 = IntroBuild.Ramp(TurnStart, TurnEnd, t);
+            if (Max != null) Max.localRotation = Quaternion.Euler(0f, Mathf.Lerp(BenchYaw, 360f, Turn01), 0f);
+
             // The door swings wide, and the daylight past it floods from a slit to the whole doorway.
-            DoorOpen01 = IntroBuild.Ramp(0.55f, 1f, t);
+            DoorOpen01 = IntroBuild.Ramp(DoorStart, DoorEnd, t);
             if (Door != null) Door.localRotation = Quaternion.Euler(0f, -104f * DoorOpen01, 0f);
             if (_daylight != null)
                 IntroBuild.SetGlow(_daylight, IntroPalette.Daylight * Mathf.Lerp(0.15f, 1.4f, DoorOpen01));
@@ -209,10 +232,11 @@ namespace MaxWorlds.Intro
         }
 
         /// <summary>The junk-built water gun: a steel receiver, the blue tank, the green hose. Parented to
-        /// a pivot the beat raises from the bench into his hands.</summary>
+        /// a pivot the beat lifts from resting on the bench (<see cref="GunRestPos"/>) into a carry
+        /// (<see cref="GunHeldPos"/>) as Max grips it (YT-162).</summary>
         private void BuildGun()
         {
-            _gun = IntroBuild.Pivot(_torso, "Gun", new Vector3(0.35f, 0.9f, 0.5f));
+            _gun = IntroBuild.Pivot(_torso, "Gun", GunRestPos);
 
             var steel = IntroBuild.Lit("max_steel", IntroPalette.Steel);
             var water = IntroBuild.Lit("max_water", IntroPalette.TankWater);

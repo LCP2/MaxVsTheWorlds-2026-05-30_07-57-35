@@ -40,7 +40,7 @@ namespace MaxWorlds.Intro
     /// It takes the screen over cleanly and puts it back: the intro camera draws OVER the gameplay one
     /// (higher depth + a solid clear), rather than disabling it — so <c>Camera.main</c> stays valid for
     /// the many systems that cache it (the HUD, world health bars, the minimap). The HUD is hidden, fog
-    /// switched off, and the player's <see cref="PlayerController"/> suspended for the ~21 s it runs, so
+    /// switched off, and the player's <see cref="PlayerController"/> suspended for the ~24 s it runs, so
     /// blind input under the cinematic never moves Max; all three are restored at handoff.
     /// </summary>
     [DisallowMultipleComponent]
@@ -205,7 +205,9 @@ namespace MaxWorlds.Intro
                 new Beat("comet", 4.6f, Comet, null),
                 new Beat("split-land", 4.4f, SplitLand, null),
                 new Beat("descent", 4.8f, Dive, () => { Cut(); Show(_descent.Root); }),
-                new Beat("shed", 5.4f, ShedBeat, () => { Cut(); Show(_shed.Root); }),
+                // Lengthened from 5.4s (YT-162): the old duration didn't leave room to hold on Max, stage
+                // a real hose grab, THEN turn and open the door — see IntroShed.SetPhase's sub-beats.
+                new Beat("shed", 6.6f, ShedBeat, () => { Cut(); Show(_shed.Root); }),
             };
 
             float total = 0f;
@@ -278,17 +280,24 @@ namespace MaxWorlds.Intro
             _fadeAlpha = Mathf.Max(_fadeAlpha, IntroBuild.Ramp(0.85f, 1f, t));
         }
 
-        // ---- beat 5: inside the shed — oblivious, then the hose, then the door ----
+        // The camera holds still on this fraction of the beat before it starts pushing in — long enough
+        // to actually read Max before anything moves (YT-162; matches IntroShed.NoticeStart).
+        private const float ShedCameraHoldEnd = 0.18f;
+
+        // ---- beat 5: hold on Max, then the grab, then he turns, then the door ----
         private void ShedBeat(float t)
         {
             _shed.SetPhase(t);
             Vector3 anchor = _shed.Root.InverseTransformPoint(_shed.CameraAnchor.position);
             Vector3 look = _shed.Root.InverseTransformPoint(_shed.Max.position) + Vector3.up * 1.1f;
-            // A slow push in on Max as he turns and the door opens.
+            // Hold on the opening frame, THEN a slow push in through the grab, the turn, and the door —
+            // not a push that's already under way the instant the beat starts (YT-162).
+            float camT = Mathf.Clamp01((t - ShedCameraHoldEnd) / (1f - ShedCameraHoldEnd));
             AimCam(_shed.Root, anchor + new Vector3(0.6f, 0.1f, -0.4f), look,
-                    anchor + new Vector3(-0.2f, 0f, 0.5f), look + Vector3.up * 0.1f, t);
-            // Fade to daylight-white as the door reaches wide, into the handoff.
-            if (t > 0.85f) { _fadeColor = Color.white; _fadeAlpha = IntroBuild.Ramp(0.85f, 1f, t); }
+                    anchor + new Vector3(-0.2f, 0f, 0.5f), look + Vector3.up * 0.1f, camT);
+            // Fade to daylight-white only once the door is nearly wide — after Max and the grab have
+            // clearly read, not stacked on top of them (YT-162).
+            if (t > 0.94f) { _fadeColor = Color.white; _fadeAlpha = IntroBuild.Ramp(0.94f, 1f, t); }
         }
 
         // ------------------------------------------------------------------ running it
@@ -340,7 +349,7 @@ namespace MaxWorlds.Intro
         /// <summary>
         /// Advance the cinematic one step: pick the live beat, scrub it, and drive the intro camera. This
         /// IS the code-driven timeline (YT-155) — the beats and their by-time scrubs of the art builders.
-        /// Public so a test can fast-forward the ~21 s sequence; in the game it runs from LateUpdate on
+        /// Public so a test can fast-forward the ~24 s sequence; in the game it runs from LateUpdate on
         /// unscaled time, and hands off to gameplay when the clock passes the last beat.
         /// </summary>
         public void Tick(float dt)

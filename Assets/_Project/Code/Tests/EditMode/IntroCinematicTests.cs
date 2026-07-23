@@ -180,5 +180,25 @@ namespace MaxWorlds.Tests.EditMode
             float shutYaw = Mathf.Abs(Mathf.DeltaAngle(0f, shed.Door.localEulerAngles.y));
             Assert.Greater(openYaw - shutYaw, 30f, "the door hinge does not actually swing between shut and open.");
         }
+
+        [Test]
+        public void Shed_GrabsTheHoseBeforeTurningOrOpeningTheDoor()
+        {
+            // YT-162: Lee's playtest never actually saw Max pick up his hose because the old beat tied
+            // the gun's rise to the same ramp as his turn. The grab must now read as its own moment,
+            // finished well before he turns for the door or the door itself starts moving.
+            var shed = new IntroShed(_root.transform, Vector3.zero);
+
+            shed.SetPhase(0f);
+            Assert.Less(shed.Grab01, 0.01f, "Max already has hold of the hose before the beat begins.");
+
+            shed.SetPhase(0.6f);
+            Assert.Greater(shed.Grab01, 0.9f, "the hose pickup never actually reads as a completed grab.");
+            Assert.Less(shed.Turn01, shed.Grab01, "Max turns toward the door before he has hold of the hose.");
+            Assert.Less(shed.DoorOpen01, 0.05f, "the door starts opening before Max has even grabbed the hose.");
+
+            shed.SetPhase(1f);
+            Assert.Greater(shed.Grab01, 0.9f, "Max never ends up holding the hose.");
+        }
     }
 }
