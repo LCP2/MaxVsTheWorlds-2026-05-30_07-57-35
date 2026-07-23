@@ -8,7 +8,7 @@ namespace MaxWorlds.Arena
     /// <summary>What a cover piece looks like once the art pass has been through (YT-75). The BOX is
     /// what the game reasons about — it is the collider, and none of these change it. This only says
     /// which kit models get built inside it.</summary>
-    public enum CoverDressing { None, Tree, Hedge, Planter }
+    public enum CoverDressing { None, Tree, Hedge, Planter, Shed }
 
     /// <summary>One free-standing cover prop in the lawn (YT-68). Sits on the floor by construction:
     /// only its XZ centre is authored, the height follows from the size, so a prop can never be

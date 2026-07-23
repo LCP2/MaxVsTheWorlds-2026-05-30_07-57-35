@@ -192,10 +192,102 @@ namespace MaxWorlds.Arena
                     Fill(PropCatalog.PotLarge, at + new Vector2(0f, -c.Size.z * 0.35f), 0.5f, 1.2f, 0f);
                     break;
                 }
+
+                case CoverDressing.Shed:
+                    // No kit model for this — the garden kit never shipped a shed — so it's built the
+                    // same primitive way as BackyardHomeShed's backdrop, just sized to fill THIS block
+                    // rather than a fixed backdrop footprint, so the plank walls and the collider that
+                    // stops the player always agree.
+                    BuildShedCover(c);
+                    break;
             }
 
             var renderer = piece.Body.GetComponent<Renderer>();
             if (renderer != null) renderer.enabled = false;
+        }
+
+        /// <summary>Plank walls, a door and a pitched roof filling a cover block's own footprint and
+        /// height (YT-172) — the block stays the collider, this only ever paints inside it, the same
+        /// contract every other case in <see cref="DressCover"/> keeps.</summary>
+        private void BuildShedCover(ArenaCover c)
+        {
+            Material plank = ShedMaterial("cover_shed_plank", ShedPlank);
+            Material plankDark = ShedMaterial("cover_shed_plank_dark", ShedPlankDark);
+            Material roof = ShedMaterial("cover_shed_roof", ShedRoof);
+
+            Vector2 at = c.CenterXz;
+            float wallHeight = c.Size.y * 0.75f;
+            float roofRise = c.Size.y - wallHeight;
+
+            Part("Walls", PrimitiveType.Cube,
+                new Vector3(at.x, wallHeight * 0.5f, at.y),
+                new Vector3(c.Size.x, wallHeight, c.Size.z), plank);
+
+            // The door faces south, back toward the patio — the direction Max approaches from.
+            float doorZ = at.y - c.Size.z * 0.5f - 0.05f;
+            Part("Door", PrimitiveType.Cube,
+                new Vector3(at.x, wallHeight * 0.42f, doorZ),
+                new Vector3(Mathf.Min(1.2f, c.Size.x * 0.4f), wallHeight * 0.84f, 0.12f), plankDark);
+
+            // Two tipped slabs meeting at a ridge, capped at the block's own height so the roofline
+            // never pokes out past the collider that actually stops the player.
+            float slope = c.Size.x * 0.62f;
+            const float Pitch = 32f;
+            foreach (float s in new[] { -1f, 1f })
+            {
+                Part("RoofSlab", PrimitiveType.Cube,
+                    new Vector3(at.x + s * c.Size.x * 0.25f, wallHeight + roofRise * 0.5f, at.y),
+                    new Vector3(slope, 0.2f, c.Size.z + 0.4f), roof,
+                    Quaternion.Euler(0f, 0f, s * Pitch));
+            }
+        }
+
+        private void Part(string name, PrimitiveType shape, Vector3 at, Vector3 scale, Material mat,
+                          Quaternion? rot = null)
+        {
+            GameObject go = GameObject.CreatePrimitive(shape);
+            go.name = name;
+            go.transform.SetParent(_props, false);
+            go.transform.localPosition = at;
+            go.transform.localRotation = rot ?? Quaternion.identity;
+            go.transform.localScale = scale;
+            go.isStatic = true;
+
+            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+
+            Strip(go);
+            PropCount++;
+        }
+
+        // The look — matched to BackyardHomeShed's plank/roof palette, duplicated locally so this
+        // dressing pass doesn't reach into that backdrop's namespace for a handful of colours.
+        private static readonly Color ShedPlank = new Color(0.40f, 0.30f, 0.20f);
+        private static readonly Color ShedPlankDark = new Color(0.28f, 0.21f, 0.14f);
+        private static readonly Color ShedRoof = new Color(0.42f, 0.24f, 0.19f);
+
+        private static readonly Dictionary<string, Material> ShedMaterials = new Dictionary<string, Material>();
+
+        private static Material ShedMaterial(string key, Color c)
+        {
+            if (ShedMaterials.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var shader = MaterialLibrary.SurfaceShader;
+            if (shader == null) return null;
+
+            var m = new Material(shader)
+            {
+                name = key,
+                hideFlags = HideFlags.HideAndDontSave,
+                enableInstancing = true,
+            };
+
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", c);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", c);
+            if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0.05f);
+            if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+
+            ShedMaterials[key] = m;
+            return m;
         }
 
         /// <summary>A kit model sized to fill a slot: as wide as <paramref name="width"/> allows, then
