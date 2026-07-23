@@ -264,11 +264,14 @@ namespace MaxWorlds.Tests.PlayMode
                 "a robot is chasing before it has left the building.");
 
             float born = Flat(robot.transform.position, _hutch.transform.position);
-            yield return Run(1.0f);
+            // 1.3s, not 1.0s: YT-169 slowed the emerge walk (emergeSpeedScale 0.8 -> 0.65, on top of
+            // the also-slowed chase speed) so the birth beat reads as a distinctly more deliberate
+            // step than the chase that follows — still safely inside the 1.5s EmergeTimeout fallback.
+            yield return Run(1.3f);
 
             float now = Flat(robot.transform.position, _hutch.transform.position);
             Assert.Greater(now, born + 0.5f,
-                $"the robot has moved {now - born:0.00} m from the factory in a second. It is not " +
+                $"the robot has moved {now - born:0.00} m from the factory in {1.3f:0.0}s. It is not " +
                 "emerging — it is standing in the doorway.");
             Assert.AreNotEqual(RobotEnemy.State.Emerging, robot.Current,
                 "the robot never finished emerging and so never joined the fight. Emergence is a " +

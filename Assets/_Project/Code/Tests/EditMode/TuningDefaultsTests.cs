@@ -13,6 +13,10 @@ namespace MaxWorlds.Tests.EditMode
     /// numbers — and, for the two that are serialized on the player, guard against the scene silently
     /// shadowing them back to the old values (the exact trap that bit BlasterTuning and moved it to
     /// a const in the first place).
+    ///
+    /// Robot speed was retuned again at YT-169: YT-106 paired the rusher's number with Max's own
+    /// on-device slowdown and quietly drifted the ratio to ~72% of Max; YT-169 pulls it back to ~60%
+    /// so the swarm reads as a walk, not a rush.
     /// </summary>
     public sealed class TuningDefaultsTests
     {
@@ -23,7 +27,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(19.94f).Within(0.001f), "water deplete");
             Assert.That(BlasterTuning.RegenPerSec, Is.EqualTo(55f).Within(0.001f), "water replenish — unchanged");
-            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(2.18f).Within(0.001f), "robot speed");
+            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(1.85f).Within(0.001f), "robot speed");
             Assert.That(BossTuning.MoveSpeed, Is.EqualTo(3.6f).Within(0.001f), "boss speed — unchanged");
         }
 

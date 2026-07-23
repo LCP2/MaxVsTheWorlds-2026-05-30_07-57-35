@@ -35,11 +35,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MovingAwayFromTheSwarmActuallyOpensAGap()
         {
-            // Not just "slower than Max" — slower by enough that retreating BUYS something. Lee
-            // tightened this on-device (YT-106): the rusher now runs at 2.18 against Max's 3.01, so
-            // Max still gains ~0.8 m/s, but the margin is narrower than the old 0.65-of-Max target.
-            // FLAG for the Craft Bible's kiteability pillar: the swarm is a touch harder to out-run
-            // now (rusher ≈ 72% of Max, was 60%). It is still kiteable — Max is strictly faster —
+            // Not just "slower than Max" — slower by enough that retreating BUYS something. YT-106's
+            // on-device pairing had quietly drifted the rusher to ~72% of Max's speed (flagged here at
+            // the time); YT-169 pulled it back to ~60% (1.85 against Max's 3.01), restoring the wider
+            // ~1.16 m/s gap a retreat actually opens. It is still kiteable — Max is strictly faster —
             // which is the invariant this pins.
             foreach (var a in new[] { Rusher, Bruiser })
                 Assert.Less(a.MoveSpeed, MaxSpeed,

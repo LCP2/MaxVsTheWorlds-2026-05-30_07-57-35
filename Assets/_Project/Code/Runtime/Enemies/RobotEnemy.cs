@@ -140,8 +140,10 @@ namespace MaxWorlds.Enemies
         private Vector3 _wallNormal;
         private float _wallTimer;
 
-        [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100).")]
-        [SerializeField] private float emergeSpeedScale = 0.8f;
+        [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100). " +
+                 "Dropped further at YT-169 so the birth beat reads as a distinctly slower, more " +
+                 "deliberate step than the chase that follows it, not almost the same pace.")]
+        [SerializeField] private float emergeSpeedScale = 0.65f;
 
         /// <summary>How close to the spot outside the door counts as "out". Loose — the point is to
         /// be clear of the building, not to hit a coordinate.</summary>
