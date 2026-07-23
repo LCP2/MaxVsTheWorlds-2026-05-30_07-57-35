@@ -15,7 +15,11 @@ namespace MaxWorlds.Pickups
     public sealed class Pickup : MonoBehaviour
     {
         private static readonly Color CellColor = new Color(0.31f, 0.86f, 0.98f); // cyan power cell
-        private static readonly Color PartColor = new Color(0.98f, 0.72f, 0.22f); // gold part
+
+        // One shared, non-brown colour for every part box (YT-180): the old gold (0.98, 0.72, 0.22) is
+        // exactly the warm mid-value WeaponPartArt's Chrome fix (YT-146) already found reads as a muddy
+        // brown once the sunlit-albedo ceiling scales it down in shade — a near-neutral chrome can't.
+        private static readonly Color PartColor = new Color(0.80f, 0.83f, 0.88f); // chrome part
 
         /// <summary>How high the collectible hovers over the ground.</summary>
         private const float FloatHeight = 0.6f;

@@ -10,13 +10,14 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The pickups wear their real art (YT-134). YT-131/133 drop all five parts as the SAME gold cube;
-    /// this director swaps in the distinct <see cref="WeaponPartArt"/> prop per <see cref="PartKind"/>.
+    /// The pickups wear their real art (YT-134/145), and YT-180 reversed the part-like-model direction
+    /// for the five parts: they stay their own greybox cube, just glowing and one consistent (non-brown)
+    /// colour, while the power cell still wears its swapped-in <see cref="WeaponPartArt"/> prop.
     ///
-    /// The one thing the five parts must never be is indistinguishable, so the load-bearing assertion is
-    /// that a beam nozzle and a Hydro device end up wearing different props — and that a POOLED pickup
-    /// rebuilds when it comes back as a different part rather than keeping its old body or stacking a
-    /// second one (deferred Destroy lingers a frame, which is the easy way to get duplicates).
+    /// The load-bearing assertions here are that a part pickup is NEVER given a PartArt: child (no
+    /// regression back to the reverted direction), that its own box stays visible and lit, that the cell
+    /// still gets its dedicated prop with the greybox hidden underneath, and that every pickup — box or
+    /// prop — carries the shared pulsing collectible glow.
     /// </summary>
     public sealed class PickupArtDirectorPlayTests
     {
@@ -57,7 +58,7 @@ namespace MaxWorlds.Tests.PlayMode
         {
             _director = new GameObject("PickupArt");
             _director.AddComponent<PickupArtDirector>();
-            yield return null;   // one Update swaps the art in
+            yield return null;   // one Update swaps the cell's art in
             yield return null;   // collider-strip Destroy lands
         }
 
@@ -68,56 +69,66 @@ namespace MaxWorlds.Tests.PlayMode
             return null;
         }
 
-        private void AssertWears(Pickup p, string key)
-        {
-            Transform art = ArtOf(p);
-            Assert.IsNotNull(art, $"{p.Kind}/{p.Part} got no art model.");
-            Assert.IsTrue(art.name.EndsWith(key), $"{p.Part} wears '{art.name}', expected key '{key}'.");
-            Assert.Greater(art.GetComponentsInChildren<MeshRenderer>().Length, 1, "the prop is empty.");
-
-            var visual = p.transform.Find("Visual");
-            Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
-                "the greybox stand-in is still drawn under the real prop — you'd see both.");
-        }
+        private static Transform GlowOf(Pickup p) => p.transform.Find("CollectibleGlow");
 
         [UnityTest]
-        public IEnumerator EachPart_WearsItsOwnDistinctProp()
+        public IEnumerator PartPickups_StayBoxes_WithNoPropSwap()
         {
             var beam = MakePart(PartKind.BeamNozzle);
             var harness = MakePart(PartKind.AugmentationHarness);
             var hydro = MakePart(PartKind.Hydro);
+
+            yield return InstallDirector();
+
+            foreach (var p in new[] { beam, harness, hydro })
+            {
+                Assert.IsNull(ArtOf(p), $"{p.Part} was given a PartArt: prop — YT-180 reverted parts to boxes.");
+
+                var visual = p.transform.Find("Visual");
+                Assert.IsNotNull(visual, $"{p.Part} lost its greybox box.");
+                Assert.IsTrue(visual.GetComponent<MeshRenderer>().enabled,
+                    $"{p.Part}'s box is hidden — it has to stay visible now that nothing replaces it.");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator EveryPickup_CarriesThePulsingCollectibleGlow()
+        {
+            var part = MakePart(PartKind.BeamNozzle);
             var cell = MakeCell();
 
             yield return InstallDirector();
 
-            AssertWears(beam, WeaponPartArt.Keys.BeamNozzle);
-            AssertWears(harness, WeaponPartArt.Keys.AugmentationHarness);
-            AssertWears(hydro, WeaponPartArt.Keys.HydroDevice);
-            AssertWears(cell, WeaponPartArt.Keys.PowerCell);
+            foreach (var p in new[] { part, cell })
+            {
+                Transform glow = GlowOf(p);
+                Assert.IsNotNull(glow, $"{p.Kind} got no collectible glow.");
+                float scaleAtT0 = glow.localScale.x;
 
-            Assert.AreNotEqual(ArtOf(beam).name, ArtOf(hydro).name,
-                "the beam nozzle and the Hydro device wear the same prop — the drops are indistinguishable.");
+                yield return null;
+                yield return null;
+
+                Assert.AreNotEqual(scaleAtT0, glow.localScale.x,
+                    $"{p.Kind}'s glow isn't pulsing — same scale two frames later.");
+            }
         }
 
         [UnityTest]
-        public IEnumerator APooledPickup_RebuildsWhenItComesBackAsADifferentPart()
+        public IEnumerator PowerCell_StillWearsItsSwappedProp_WithTheGreyboxHidden()
         {
-            var p = MakePart(PartKind.BeamNozzle);
+            var cell = MakeCell();
+
             yield return InstallDirector();
-            AssertWears(p, WeaponPartArt.Keys.BeamNozzle);
 
-            // Reuse it as a different part, exactly as the pool would.
-            p.Part = PartKind.AccelerationEngine;
-            yield return null;   // director notices the key changed, clears the old, builds the new
-            yield return null;   // the old one's deferred Destroy lands
-            yield return null;
+            Transform art = ArtOf(cell);
+            Assert.IsNotNull(art, "the power cell got no art model.");
+            Assert.IsTrue(art.name.EndsWith(WeaponPartArt.Keys.PowerCell),
+                $"the cell wears '{art.name}', expected the power-cell prop.");
+            Assert.Greater(art.GetComponentsInChildren<MeshRenderer>().Length, 1, "the prop is empty.");
 
-            AssertWears(p, WeaponPartArt.Keys.AccelerationEngine);
-
-            int artChildren = 0;
-            foreach (Transform c in p.transform) if (c.name.StartsWith("PartArt:")) artChildren++;
-            Assert.AreEqual(1, artChildren,
-                "a pooled pickup that changed part is wearing more than one prop — the old one wasn't cleared.");
+            var visual = cell.transform.Find("Visual");
+            Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
+                "the greybox stand-in is still drawn under the real cell prop — you'd see both.");
         }
     }
 }
