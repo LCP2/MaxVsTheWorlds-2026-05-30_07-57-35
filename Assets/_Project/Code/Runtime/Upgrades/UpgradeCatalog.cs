@@ -66,5 +66,29 @@ namespace MaxWorlds.Upgrades
                 default: return UpgradePart.Generic;
             }
         }
+
+        /// <summary>Which of the three families (YT-166) a part belongs to: HOSE for the nozzles and
+        /// the capacity harness, MOVEMENT for the Acceleration engine, DETACH for the Hydro kit — so
+        /// the upgrade screen can label a reveal at a glance.</summary>
+        public static PartFamily FamilyFor(PartKind kind)
+        {
+            switch (kind)
+            {
+                case PartKind.AccelerationEngine: return PartFamily.Movement;
+                case PartKind.Hydro: return PartFamily.Detach;
+                default: return PartFamily.Hose;   // BeamNozzle, PowerNozzle, AugmentationHarness
+            }
+        }
+
+        /// <summary>The all-caps label the upgrade screen stamps for a family.</summary>
+        public static string FamilyLabel(PartFamily family)
+        {
+            switch (family)
+            {
+                case PartFamily.Movement: return "MOVEMENT";
+                case PartFamily.Detach: return "DETACH";
+                default: return "HOSE";
+            }
+        }
     }
 }

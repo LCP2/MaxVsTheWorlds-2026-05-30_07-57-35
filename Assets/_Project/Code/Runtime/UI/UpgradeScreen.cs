@@ -89,7 +89,10 @@ namespace MaxWorlds.UI
             _prevTimeScale = Time.timeScale;
             Time.timeScale = 0f;   // freeze the fight; we animate on unscaled time
 
-            _title.text = "UPGRADE";
+            // "HOSE UPGRADE" / "MOVEMENT UPGRADE" / "DETACH UPGRADE" — labels which of the three
+            // families (YT-166) this reveal belongs to, so the system reads at a glance instead of
+            // every part looking like an undifferentiated drop.
+            _title.text = UpgradeCatalog.FamilyLabel(UpgradeCatalog.FamilyFor(_part.Kind)) + " UPGRADE";
             _partLabel.text = _part.Name;
             _partLabel.color = _part.Accent;
             _continueHint.text = "TAP TO CONTINUE";
@@ -231,7 +234,12 @@ namespace MaxWorlds.UI
         private void BuildPanel(RectTransform parent)
         {
             var panel = NewRect("Panel", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            panel.sizeDelta = new Vector2(1180f, 640f);
+            // Taller than the first cut (was 640) — the extra room is what fixes the "TAP TO CONTINUE"
+            // prompt sitting right on top of the part name (YT-166): both the title and the continue
+            // hint are anchored to the panel's top/bottom EDGES, so growing the panel around its fixed
+            // centre pushes them apart from the (unmoved) name in the middle without touching either
+            // one's own anchor math.
+            panel.sizeDelta = new Vector2(1180f, 740f);
             panel.anchoredPosition = Vector2.zero;
             var bg = AddImage(panel, HudTextures.RoundedBox(48, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = true;
@@ -246,6 +254,17 @@ namespace MaxWorlds.UI
             var stage = NewRect("Stage", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             stage.sizeDelta = new Vector2(1080f, 460f);
             stage.anchoredPosition = new Vector2(0f, -6f);
+
+            // A thin rim in Max's own hoodie colour, peeking out from behind the card — his hot-orange
+            // identity (MaxRig/CharacterSkin) framing the portrait before you even read the art, the
+            // same colour as his ground ring and damage numbers (YT-166).
+            var portraitGlow = AddImage(stage, HudTextures.RoundedBox(44, 0.5f),
+                                        CharacterSkin.BaseColorFor(CharacterRole.Player), "Portrait Glow");
+            Anchor(portraitGlow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            portraitGlow.rectTransform.sizeDelta = new Vector2(376f, 436f);
+            portraitGlow.rectTransform.anchoredPosition = new Vector2(-300f, 0f);
+            portraitGlow.type = Image.Type.Sliced;
+            portraitGlow.raycastTarget = false;
 
             // LEFT — the art-bible portrait, in a rounded card with a hairline frame so it reads as a
             // hero shot rather than a pasted cut-out. Replaces the two orange blobs (YT-140).
