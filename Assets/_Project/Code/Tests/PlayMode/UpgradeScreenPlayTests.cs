@@ -117,6 +117,63 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator TheTitleLabelsWhichFamilyThePartBelongsTo()
+        {
+            // YT-166: the screen should read "HOSE UPGRADE" / "MOVEMENT UPGRADE" / "DETACH UPGRADE" so
+            // which of the three families a reveal belongs to is obvious at a glance.
+            yield return NewScreen();
+
+            Screen.Open(UpgradeCatalog.AccelerationEngine);
+            yield return null;
+            var movementTitle = FindTextEndingWith(_screenGo, "UPGRADE");
+            Assert.That(movementTitle, Is.Not.Null, "no title text found");
+            Assert.That(movementTitle.text, Is.EqualTo("MOVEMENT UPGRADE"),
+                "the Acceleration engine is a MOVEMENT part");
+            Screen.Continue();
+            yield return null;
+
+            Screen.Open(UpgradeCatalog.Hydro);
+            yield return null;
+            Assert.That(FindTextEndingWith(_screenGo, "UPGRADE").text, Is.EqualTo("DETACH UPGRADE"),
+                "the Hydro kit is a DETACH part");
+            Screen.Continue();
+            yield return null;
+
+            Screen.Open(UpgradeCatalog.BeamNozzle);
+            yield return null;
+            Assert.That(FindTextEndingWith(_screenGo, "UPGRADE").text, Is.EqualTo("HOSE UPGRADE"),
+                "the Beam nozzle is a HOSE part");
+        }
+
+        [UnityTest]
+        public IEnumerator TheContinueHintDoesNotOverlapThePartName()
+        {
+            // YT-166: "TAP TO CONTINUE" used to sit close enough to the part/weapon name to overlap it
+            // (a ~20px overlap in their text boxes). Assert the fitted layout instead of trusting eyes.
+            yield return NewScreen();
+            Screen.Open(UpgradePart.Generic);
+
+            float waited = 0f;
+            while (waited < 1.2f) { waited += Time.unscaledDeltaTime; yield return null; }
+
+            var name = FindText(_screenGo, Screen.Part.Name);
+            var hint = FindText(_screenGo, "TAP TO CONTINUE");
+            Assert.That(name, Is.Not.Null, "the part name text wasn't found");
+            Assert.That(hint, Is.Not.Null, "the continue hint wasn't found");
+
+            var nameCorners = new Vector3[4];
+            var hintCorners = new Vector3[4];
+            name.rectTransform.GetWorldCorners(nameCorners);
+            hint.rectTransform.GetWorldCorners(hintCorners);
+
+            float nameBottom = nameCorners[0].y;
+            float hintTop = hintCorners[1].y;
+
+            Assert.That(nameBottom, Is.GreaterThan(hintTop),
+                "the part name must sit clear above 'tap to continue', not overlap it");
+        }
+
+        [UnityTest]
         public IEnumerator TappingTheHudChipOpensTheScreen()
         {
             yield return NewScreen();
@@ -145,6 +202,13 @@ namespace MaxWorlds.Tests.PlayMode
         {
             foreach (var t in root.GetComponentsInChildren<Text>(true))
                 if (t.text == content) return t;
+            return null;
+        }
+
+        private static Text FindTextEndingWith(GameObject root, string suffix)
+        {
+            foreach (var t in root.GetComponentsInChildren<Text>(true))
+                if (t.text != null && t.text.EndsWith(suffix)) return t;
             return null;
         }
     }
