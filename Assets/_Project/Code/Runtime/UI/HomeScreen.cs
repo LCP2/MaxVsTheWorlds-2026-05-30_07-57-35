@@ -7,6 +7,7 @@ using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
 using MaxWorlds.Save;
 using MaxWorlds.Upgrades;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
 {
@@ -39,14 +40,20 @@ namespace MaxWorlds.UI
         private const float RowHeight = 190f;
         private const float RowGap = 20f;
 
-        private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.82f);
+        // Near-opaque so this reads as its own dedicated screen, not a thin overlay on the live
+        // arena behind it (Lee's 0.3.26 feedback, YT-174).
+        private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
         private static readonly Color PanelColor = new Color(0.06f, 0.08f, 0.10f, 0.98f);
-        private static readonly Color SlotColor = new Color(0.12f, 0.14f, 0.17f, 1f);
-        private static readonly Color Gold = new Color(0.957f, 0.788f, 0.365f);
+        private static readonly Color CardColor = new Color(0.12f, 0.14f, 0.17f, 1f);
+        private static readonly Color CardRim = new Color(0.20f, 0.23f, 0.27f, 1f);
         private static readonly Color Bone = new Color(0.96f, 0.94f, 0.86f);
         private static readonly Color Dim = new Color(1f, 1f, 1f, 0.55f);
-        private static readonly Color Green = new Color(0.49f, 0.76f, 0.42f);
-        private static readonly Color Grey = new Color(0.3f, 0.34f, 0.4f);
+        private static readonly Color Muted = new Color(0.22f, 0.25f, 0.30f);
+
+        // Max's own hoodie colour (CharacterSkin/MaxRig) — the same hot-orange identity treatment
+        // as the Upgrade screen's portrait rim (YT-166), so this reads as unmistakably his menu
+        // instead of a generic save list (YT-174).
+        private static readonly Color MaxOrange = CharacterSkin.BaseColorFor(CharacterRole.Player);
 
         private GameObject _root;
         private float _prevTimeScale = 1f;
@@ -152,32 +159,64 @@ namespace MaxWorlds.UI
 
             var panel = AddImage(safeRoot, HudTextures.RoundedBox(48, 0.12f), PanelColor, "Panel");
             panel.type = Image.Type.Sliced;
-            Center(panel.rectTransform, 1200f, 900f);
+            Center(panel.rectTransform, 1200f, 990f);
 
-            var title = AddText(panel.rectTransform, 56f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
-            Top(title.rectTransform, 0f, -46f, 1000f, 70f);
+            // A crest of Max himself, rimmed in his own hot-orange, so the panel carries his
+            // identity from the first frame instead of opening on an anonymous menu (YT-174).
+            var badgeRim = AddImage(panel.rectTransform, HudTextures.RoundedBox(28, 0.4f), MaxOrange, "Badge Rim");
+            Top(badgeRim.rectTransform, 0f, -14f, 104f, 104f);
+            badgeRim.type = Image.Type.Sliced;
+
+            var badgeCard = AddImage(badgeRim.rectTransform, HudTextures.RoundedBox(24, 0.4f), CardColor, "Badge Card");
+            Stretch(badgeCard.rectTransform, -8f);
+            badgeCard.type = Image.Type.Sliced;
+
+            var badgePortrait = AddImage(badgeCard.rectTransform, LoadPortrait(), Color.white, "Badge Portrait");
+            Stretch(badgePortrait.rectTransform, -6f);
+            badgePortrait.preserveAspect = true;
+
+            var title = AddText(panel.rectTransform, 46f, MaxOrange, TextAnchor.MiddleCenter, FontStyle.Bold);
+            Top(title.rectTransform, 0f, -134f, 1000f, 64f);
             title.text = "MAX vs THE WORLDS";
 
             var sub = AddText(panel.rectTransform, 24f, Dim, TextAnchor.MiddleCenter, FontStyle.Normal);
-            Top(sub.rectTransform, 0f, -108f, 1000f, 36f);
+            Top(sub.rectTransform, 0f, -200f, 1000f, 36f);
             sub.text = "SELECT A SAVE";
 
-            const float top = -170f;
+            const float top = -258f;
             for (int i = 0; i < SaveSystem.SlotCount; i++)
             {
                 BuildSlotRow(panel.rectTransform, i, top - i * (RowHeight + RowGap));
             }
         }
 
+        /// <summary>The art-bible Max portrait, same asset/idiom as <see cref="UpgradeScreen"/>'s crest
+        /// (YT-166). Falls back to null — the badge card just shows empty — rather than throwing if the
+        /// art is missing.</summary>
+        private static Sprite LoadPortrait()
+        {
+            var tex = Resources.Load<Texture2D>("Art/max_portrait");
+            return tex == null ? null
+                : Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
+        }
+
         private void BuildSlotRow(RectTransform panel, int slot, float y)
         {
-            var row = AddImage(panel, HudTextures.RoundedBox(32, 0.3f), SlotColor, $"Slot {slot + 1}");
+            // A thin rim behind the card, same framing trick as the Upgrade screen's portrait rim
+            // (YT-166), so each slot reads as a designed card rather than a flat generic box.
+            var rim = AddImage(panel, HudTextures.RoundedBox(36, 0.32f), CardRim, $"Slot {slot + 1} Rim");
+            rim.type = Image.Type.Sliced;
+            Top(rim.rectTransform, 0f, y, 1080f, RowHeight);
+
+            var row = AddImage(rim.rectTransform, HudTextures.RoundedBox(32, 0.3f), CardColor, $"Slot {slot + 1}");
             row.type = Image.Type.Sliced;
-            Top(row.rectTransform, 0f, y, 1080f, RowHeight);
+            Stretch(row.rectTransform, -3f);
 
             SaveSlotData data = SaveSystem.Load(slot);
 
-            var label = AddText(row.rectTransform, 30f, Bone, TextAnchor.UpperLeft, FontStyle.Bold);
+            // Occupied slots pick up Max's hot-orange for the slot label — a live save reads as
+            // "his" progress at a glance, not just another empty box.
+            var label = AddText(row.rectTransform, 30f, data.HasData ? MaxOrange : Bone, TextAnchor.UpperLeft, FontStyle.Bold);
             Anchor(label.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             label.rectTransform.sizeDelta = new Vector2(400f, 40f);
             label.rectTransform.anchoredPosition = new Vector2(34f, -20f);
@@ -191,19 +230,19 @@ namespace MaxWorlds.UI
 
             if (data.HasData)
             {
-                var continueBtn = AddButton(row.rectTransform, "CONTINUE", Green, true, () => OnContinue(slot));
+                var continueBtn = AddButton(row.rectTransform, "CONTINUE", MaxOrange, true, () => OnContinue(slot));
                 Anchor(continueBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
                 continueBtn.sizeDelta = new Vector2(280f, 64f);
                 continueBtn.anchoredPosition = new Vector2(-190f, 18f);
 
-                var newGameBtn = AddButton(row.rectTransform, "NEW GAME", Grey, true, () => OnNewGame(slot));
+                var newGameBtn = AddButton(row.rectTransform, "NEW GAME", Muted, true, () => OnNewGame(slot));
                 Anchor(newGameBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
                 newGameBtn.sizeDelta = new Vector2(200f, 44f);
                 newGameBtn.anchoredPosition = new Vector2(-40f, -46f);
             }
             else
             {
-                var newGameBtn = AddButton(row.rectTransform, "NEW GAME", Green, true, () => OnNewGame(slot));
+                var newGameBtn = AddButton(row.rectTransform, "NEW GAME", MaxOrange, true, () => OnNewGame(slot));
                 Anchor(newGameBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
                 newGameBtn.sizeDelta = new Vector2(280f, 64f);
                 newGameBtn.anchoredPosition = new Vector2(-110f, 0f);
@@ -285,11 +324,12 @@ namespace MaxWorlds.UI
             r.anchorMin = min; r.anchorMax = max; r.pivot = pivot;
         }
 
-        private static void Stretch(RectTransform r)
+        private static void Stretch(RectTransform r, float padding = 0f)
         {
             r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one;
             r.pivot = new Vector2(0.5f, 0.5f);
-            r.offsetMin = Vector2.zero; r.offsetMax = Vector2.zero;
+            r.offsetMin = new Vector2(-padding, -padding);
+            r.offsetMax = new Vector2(padding, padding);
         }
 
         private static void Center(RectTransform r, float w, float h)
