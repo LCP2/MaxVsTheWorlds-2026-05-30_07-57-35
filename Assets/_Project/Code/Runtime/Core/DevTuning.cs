@@ -31,6 +31,11 @@ namespace MaxWorlds.Core
         /// <summary>Robot chase speed, m/s. Applies to live robots and to anything spawned after.</summary>
         public static float? RobotMoveSpeed { get; set; }
 
+        /// <summary>Seconds between robot spawns, overriding the whole start→min ramp with one flat
+        /// rate. Read live every frame by <see cref="MaxWorlds.Enemies.EnemySpawner.CurrentInterval"/>,
+        /// so moving the slider changes emergence cadence for every factory immediately (YT-170).</summary>
+        public static float? SpawnInterval { get; set; }
+
         /// <summary>Big Bermuda's reposition speed, m/s. Charge speed is left alone.</summary>
         public static float? BossMoveSpeed { get; set; }
 
@@ -113,6 +118,7 @@ namespace MaxWorlds.Core
         /// <summary>True if any knob has been moved this session. Used by the panel's readout.</summary>
         public static bool AnyOverride =>
             CameraDistance.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
+            SpawnInterval.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
             FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
@@ -128,6 +134,7 @@ namespace MaxWorlds.Core
             CameraDistance = null;
             PlayerMoveSpeed = null;
             RobotMoveSpeed = null;
+            SpawnInterval = null;
             BossMoveSpeed = null;
             PlayerMaxHealth = null;
             BlasterDrainPerSecond = null;
