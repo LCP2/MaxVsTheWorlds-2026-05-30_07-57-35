@@ -13,7 +13,7 @@ namespace MaxWorlds.Tests.PlayMode
     /// The opening cinematic's DIRECTOR (YT-156) — the timeline. PlayMode, because every claim here is
     /// about time: it walks its five beats in order, borrows the screen and gives it back, and hands off
     /// to gameplay when it is done. <see cref="IntroCinematic.Tick"/> is public precisely so a test can
-    /// fast-forward the 21-second sequence without waiting 21 real seconds.
+    /// fast-forward the ~24-second sequence without waiting that long in real time.
     /// </summary>
     public sealed class IntroCinematicPlayTests
     {
