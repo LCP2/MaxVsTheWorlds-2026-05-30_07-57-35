@@ -86,6 +86,7 @@ crashlytics-build.properties
 
 # TestRunner generated files
 InitTestScene*.unity*
+/[Aa]ssets/[Rr]esources/PerformanceTestRun*
 
 # Addressables default ignores, before user customizations
 /ServerData

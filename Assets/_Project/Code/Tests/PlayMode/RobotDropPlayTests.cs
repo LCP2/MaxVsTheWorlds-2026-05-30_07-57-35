@@ -9,8 +9,9 @@ using MaxWorlds.Pickups;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// Robot drops wired up for real (YT-131): the tough tier drops parts + power cells, the light
-    /// tier drops nothing, and Max collects by walking over them — all with no scene wiring.
+    /// Robot drops wired up for real (YT-131): the tough tier always drops a part + power cells, the
+    /// light tier drops no part but rolls a tunable chance at a single power cell (YT-171), and Max
+    /// collects by walking over them — all with no scene wiring.
     /// </summary>
     public sealed class RobotDropPlayTests
     {
@@ -70,15 +71,44 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ARusherDeathDropsNothing()
+        public IEnumerator ARusherDeathNeverDropsAPart()
         {
             yield return NewDirector();
+            DevTuning.PowerCellDropChance = 1f;   // even at a guaranteed cell roll...
+
+            DropSignals.EmitRobotDied(new Vector3(5f, 0f, 5f), EnemyKind.Rusher);
+            yield return null;
+
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
+                "the light rusher swarm must never drop the tough tier's upgrade part");
+        }
+
+        [UnityTest]
+        public IEnumerator ARusherDeathDropsNothingWhenTheCellChanceIsZero()
+        {
+            yield return NewDirector();
+            DevTuning.PowerCellDropChance = 0f;
 
             DropSignals.EmitRobotDied(new Vector3(5f, 0f, 5f), EnemyKind.Rusher);
             yield return null;
 
             Assert.That(LivePickups(PickupKind.Part) + LivePickups(PickupKind.PowerCell), Is.EqualTo(0),
-                "the light rusher swarm must not carpet the lawn in loot — only the tough tier drops");
+                "the light rusher swarm must not carpet the lawn in loot — a zero chance drops nothing");
+        }
+
+        [UnityTest]
+        public IEnumerator ARusherDeathCanDropASinglePowerCell()
+        {
+            // YT-171: once Hydro burns cells as fuel, a supply tied only to the rare bruiser starves
+            // Max for most of a fight — so the common kill also rolls a tunable chance at ONE cell.
+            yield return NewDirector();
+            DevTuning.PowerCellDropChance = 1f;   // deterministic: always drops
+
+            DropSignals.EmitRobotDied(new Vector3(5f, 0f, 5f), EnemyKind.Rusher);
+            yield return null;
+
+            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(1),
+                "a rusher kill must be able to produce a cell drop, one at a time — not the bruiser's full scatter");
         }
 
         [UnityTest]

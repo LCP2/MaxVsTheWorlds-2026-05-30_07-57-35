@@ -11,11 +11,16 @@ namespace MaxWorlds.Pickups
     /// project idiom (<c>GroundAnchorVfx</c>, <c>HoseDirector</c>), so it needs no scene wiring.
     ///
     /// It owns the drop policy: only the tough tier — the <see cref="EnemyKind.Bruiser"/>, the closest
-    /// thing the slice has to a "medium" robot — leaves loot, so drops are an occasional event rather
-    /// than a carpet under the rusher swarm. On a bruiser death it scatters one part and a few power
-    /// cells. Each frame it does the walk-over collection itself: one Max lookup, one pool, a planar
-    /// distance test per live pickup. Banking goes through <see cref="PickupWallet"/>; the HUD reacts
-    /// to that.
+    /// thing the slice has to a "medium" robot — leaves an upgrade part, so parts stay an occasional
+    /// event rather than a carpet under the rusher swarm. On a bruiser death it also scatters a few
+    /// power cells, guaranteed. Each frame it does the walk-over collection itself: one Max lookup, one
+    /// pool, a planar distance test per live pickup. Banking goes through <see cref="PickupWallet"/>;
+    /// the HUD reacts to that.
+    ///
+    /// Power cells alone also drop off the common rusher swarm (YT-171): once Hydro burns cells as
+    /// fuel (YT-137), a supply tied only to the rare bruiser leaves Max starved for most of a fight, so
+    /// every rusher death rolls a tunable chance for a single cell — "not every robot need drop one,"
+    /// per the ticket, hence a roll rather than a second guarantee.
     ///
     /// The specific part identities and the guaranteed-unique drop table are YT-133 — here a part is
     /// generic, and <see cref="OnRobotDied"/> is where that table will slot in.
@@ -34,6 +39,11 @@ namespace MaxWorlds.Pickups
         /// spreads the five across a level instead of handing them over in the first five kills; power
         /// cells keep dropping every kill. Tunable via <see cref="DevTuning.PartDropInterval"/>.</summary>
         public const float DefaultPartInterval = 3f;
+
+        /// <summary>Default chance [0,1] that a rusher's death drops a single power cell (YT-171) — a
+        /// trickle from the common kill so the Hydro reserve doesn't depend solely on the rare bruiser.
+        /// Tunable via <see cref="DevTuning.PowerCellDropChance"/>.</summary>
+        public const float DefaultCellDropChance = 0.3f;
 
         private const float ScatterRadius = 0.9f;
 
@@ -57,7 +67,14 @@ namespace MaxWorlds.Pickups
 
         private void OnRobotDied(Vector3 pos, EnemyKind kind)
         {
-            if (kind != EnemyKind.Bruiser) return;   // only the medium/tough tier drops loot
+            if (kind != EnemyKind.Bruiser)
+            {
+                // The common tier (YT-171): no part, but a rolled chance at a single power cell so the
+                // Hydro reserve has a trickle that doesn't wait on the rare bruiser.
+                float chance = Mathf.Clamp01(DevTuning.Or(DevTuning.PowerCellDropChance, DefaultCellDropChance));
+                if (Random.value < chance) SpawnDrop(PickupKind.PowerCell, pos);
+                return;
+            }
 
             _bruiserKills++;
 
