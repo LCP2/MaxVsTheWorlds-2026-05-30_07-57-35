@@ -45,8 +45,10 @@ namespace MaxWorlds.Upgrades
         // The effect magnitudes read through DevTuning (YT-138 Weapons tab) so Lee can dial them live,
         // falling back to the authored UpgradeCatalog consts.
         private static float NozzleCone => DevTuning.Or(DevTuning.NozzleConeMultiplier, UpgradeCatalog.NozzleConeMultiplier);
+        private static float WideBoreCone => DevTuning.Or(DevTuning.WideBoreConeMultiplier, UpgradeCatalog.WideBoreConeMultiplier);
 
-        /// <summary>Spray cone multiplier: each installed nozzle narrows it, and they compound.</summary>
+        /// <summary>Spray cone multiplier: each nozzle narrows it and they compound (YT-133); the
+        /// Wide-Bore (YT-164), top of the hose tree, widens it back out on top of whatever came before.</summary>
         public static float ConeMultiplier
         {
             get
@@ -54,13 +56,23 @@ namespace MaxWorlds.Upgrades
                 float m = 1f;
                 if (IsInstalled(PartKind.BeamNozzle)) m *= NozzleCone;
                 if (IsInstalled(PartKind.PowerNozzle)) m *= NozzleCone;
+                if (IsInstalled(PartKind.WideBore)) m *= WideBoreCone;
                 return m;
             }
         }
 
-        /// <summary>Extra spray reach in metres — the Power nozzle lengthens the beam.</summary>
-        public static float RangeBonus =>
-            IsInstalled(PartKind.PowerNozzle) ? DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus) : 0f;
+        /// <summary>Extra spray reach in metres — the Power nozzle lengthens the beam to 4 m, and the
+        /// Range Extender (YT-164) lengthens it further to 6 m; the two stack additively.</summary>
+        public static float RangeBonus
+        {
+            get
+            {
+                float r = 0f;
+                if (IsInstalled(PartKind.PowerNozzle)) r += DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus);
+                if (IsInstalled(PartKind.RangeExtender)) r += DevTuning.Or(DevTuning.RangeExtenderBonus, UpgradeCatalog.RangeExtenderBonus);
+                return r;
+            }
+        }
 
         /// <summary>Extra water-tank capacity — the Augmentation harness.</summary>
         public static float CapacityBonus =>

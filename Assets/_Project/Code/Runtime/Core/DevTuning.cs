@@ -85,6 +85,12 @@ namespace MaxWorlds.Core
         /// <summary>Extra reach in metres the Power nozzle adds.</summary>
         public static float? PowerNozzleRange { get; set; }
 
+        /// <summary>Extra reach in metres the Range Extender adds on top of the Power nozzle (YT-164).</summary>
+        public static float? RangeExtenderBonus { get; set; }
+
+        /// <summary>The Wide-Bore's own cone multiplier, stacked on top of the nozzles (YT-164).</summary>
+        public static float? WideBoreConeMultiplier { get; set; }
+
         /// <summary>Water-capacity bonus the Augmentation harness adds.</summary>
         public static float? HarnessCapacity { get; set; }
 
@@ -113,8 +119,8 @@ namespace MaxWorlds.Core
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
             PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue ||
-            NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || HarnessCapacity.HasValue ||
-            AccelSpeed.HasValue;
+            NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
+            WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -138,6 +144,8 @@ namespace MaxWorlds.Core
             PowerCellCapacity = null;
             NozzleConeMultiplier = null;
             PowerNozzleRange = null;
+            RangeExtenderBonus = null;
+            WideBoreConeMultiplier = null;
             HarnessCapacity = null;
             AccelSpeed = null;
         }

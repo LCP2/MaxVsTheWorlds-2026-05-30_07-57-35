@@ -124,14 +124,18 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>Which prop this pickup should wear. A power cell is a power cell; a part maps to one
-        /// of the five by its <see cref="PartKind"/>.</summary>
+        /// of the hose-upgrade props by its <see cref="PartKind"/>. Range Extender and Wide-Bore
+        /// (YT-164) don't have bespoke art yet, so they wear the Power nozzle's — still reads as a hose
+        /// nozzle, not a stray power cell.</summary>
         private static string KeyFor(Pickup pickup)
         {
             if (pickup.Kind == PickupKind.PowerCell) return WeaponPartArt.Keys.PowerCell;
             switch (pickup.Part)
             {
                 case PartKind.BeamNozzle: return WeaponPartArt.Keys.BeamNozzle;
-                case PartKind.PowerNozzle: return WeaponPartArt.Keys.PowerNozzle;
+                case PartKind.PowerNozzle:
+                case PartKind.RangeExtender:
+                case PartKind.WideBore: return WeaponPartArt.Keys.PowerNozzle;
                 case PartKind.AugmentationHarness: return WeaponPartArt.Keys.AugmentationHarness;
                 case PartKind.AccelerationEngine: return WeaponPartArt.Keys.AccelerationEngine;
                 case PartKind.Hydro: return WeaponPartArt.Keys.HydroDevice;

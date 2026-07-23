@@ -266,6 +266,14 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus),
                 v => { DevTuning.PowerNozzleRange = v; RefreshUpgrades(); }, tab: 1);
 
+            Add("Extender reach", "m", 0f, 8f, UpgradeCatalog.RangeExtenderBonus,
+                () => DevTuning.Or(DevTuning.RangeExtenderBonus, UpgradeCatalog.RangeExtenderBonus),
+                v => { DevTuning.RangeExtenderBonus = v; RefreshUpgrades(); }, tab: 1);
+
+            Add("Wide-bore widen", "x", 1f, 5f, UpgradeCatalog.WideBoreConeMultiplier,
+                () => DevTuning.Or(DevTuning.WideBoreConeMultiplier, UpgradeCatalog.WideBoreConeMultiplier),
+                v => { DevTuning.WideBoreConeMultiplier = v; RefreshUpgrades(); }, tab: 1);
+
             Add("Harness capacity", "wtr", 0f, 150f, UpgradeCatalog.HarnessCapacityBonus,
                 () => DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus),
                 v => { DevTuning.HarnessCapacity = v; RefreshUpgrades(); }, tab: 1);
