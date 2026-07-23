@@ -240,17 +240,25 @@ namespace MaxWorlds.Intro
                     new Vector3(4f, 12f, -150f), Vector3.zero, t);
         }
 
+        // The camera reaches its final framing here (as a fraction of the beat) and holds — the rest of
+        // the beat is hang time on the impacts, not more camera travel (YT-161).
+        private const float SplitLandCameraSettle = 0.7f;
+
         // ---- beat 3: it splits; the pods rain down and land ----
         private void SplitLand(float t)
         {
             _space.SetComet(1f);
             _space.SetSplit(t);
+            // Framed on the impact cluster on the near hemisphere, not the globe's centre — aiming at
+            // (0,-6,0) put the landings small and off toward the globe's edge (YT-161); this holds on
+            // where they actually strike, closer in, so several unmistakable landings read in-frame.
+            float camT = Mathf.Clamp01(t / SplitLandCameraSettle);
             AimCam(_space.Root,
                     new Vector3(4f, 12f, -150f), Vector3.zero,
-                    new Vector3(22f, 6f, -120f), new Vector3(0f, -6f, 0f), t);
+                    new Vector3(0f, 18f, -94f), new Vector3(0f, 9f, -38f), camT);
         }
 
-        // ---- beat 4: plunge — continent, town, the shed roof, and through it ----
+        // ---- beat 4: plunge — continent, town, the shed roof, and a readable arrival ----
         private void Dive(float t)
         {
             var apex = _descent.DiveTarget;
@@ -258,11 +266,16 @@ namespace MaxWorlds.Intro
             // From high above, looking down and a little forward, down to just over the roof.
             Vector3 from = apexLocal + new Vector3(0f, 640f, -260f);
             Vector3 to = apexLocal + new Vector3(0f, 22f, -30f);
-            float e = t * t;                                   // accelerate down — it is a plunge
-            AimCam(_descent.Root, from, apexLocal, to, apexLocal, e);
-            // The last instant drops through the roof: a hard white flash into the cut.
-            if (t > 0.9f) _fadeColor = Color.white;
-            _fadeAlpha = Mathf.Max(_fadeAlpha, IntroBuild.Ramp(0.9f, 1f, t));
+            // AimCam already eases with SmoothStep; driving it with a SECOND, quadratic ease compounded
+            // into an extreme late-beat rush — over 90% of the whole descent used to land in the final
+            // ~20% of the beat, too fast to resolve continent -> town -> shed before the cut (YT-161).
+            // A single ease settles the camera on the roof well before the flash: the shed is on screen
+            // and legible, THEN the beat flashes to the cut — not a blur that happens to end on white.
+            AimCam(_descent.Root, from, apexLocal, to, apexLocal, t);
+            // The flash starts only once the camera has essentially arrived (see above), so it reads as
+            // a brief flash on an already-legible shot of the shed, not a hard slam mid-motion.
+            if (t > 0.85f) _fadeColor = Color.white;
+            _fadeAlpha = Mathf.Max(_fadeAlpha, IntroBuild.Ramp(0.85f, 1f, t));
         }
 
         // ---- beat 5: inside the shed — oblivious, then the hose, then the door ----
