@@ -48,17 +48,27 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void TheShed_StandsFlushAgainstTheWall_NotMetresBehindIt()
+        {
+            // YT-179: the YT-163 backdrop placement (BackyardBackdrop.MinClearance beyond the wall)
+            // put the shed far enough back the fixed camera never saw it. It now stands just past the
+            // wall's own thickness — close enough to read as replacing that section of the boundary.
+            MapData map = Map;
+            Vector3 center = BackyardHomeShed.PlaceFor(map);
+
+            float frontZ = center.z + BackyardHomeShed.Depth * 0.5f;
+            float gap = map.Bounds().yMin - frontZ;
+            Assert.Less(gap, BackyardBackdrop.MinClearance,
+                "the shed is still held off the wall by the neighbourhood's whole clearance");
+        }
+
+        [Test]
         public void TheShed_ClearsEveryRoom_NotJustThePatio()
         {
             MapData map = Map;
             Vector3 center = BackyardHomeShed.PlaceFor(map);
-            var footprint = new Rect(center.x - BackyardHomeShed.Width * 0.5f,
-                                      center.z - BackyardHomeShed.Depth * 0.5f,
-                                      BackyardHomeShed.Width, BackyardHomeShed.Depth);
 
-            foreach (Rect room in BackyardBackdrop.Rooms(map))
-                Assert.IsFalse(room.Overlaps(footprint),
-                    $"the shed at {center} is standing inside the arena's clearance");
+            Assert.IsTrue(BackyardHomeShed.Validate(map, center, out string why), why);
         }
 
         [Test]

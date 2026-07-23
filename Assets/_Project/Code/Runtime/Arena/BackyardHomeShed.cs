@@ -7,16 +7,21 @@ using MaxWorlds.Rendering;
 namespace MaxWorlds.Arena
 {
     /// <summary>
-    /// Max's home shed (YT-163, relates to the intro cinematic epic YT-154): the backdrop landmark
-    /// that closes the loop between the opening — Max leaves his shed, hose in hand — and the start
-    /// of the playable Backyard.
+    /// Max's home shed (YT-163, relates to the intro cinematic epic YT-154): the landmark that closes
+    /// the loop between the opening — Max leaves his shed, hose in hand — and the start of the
+    /// playable Backyard.
     ///
-    /// Decided by Lee: this is a BACKDROP behind the arena, not a porch the player stands in. It
-    /// stands just past the patio's own back wall, matching the intro's exterior shed look (plank
-    /// walls, pitched roof, a door), centred on the starting tap so the first hose plainly reads as
-    /// running back to it. Built the same self-installing, code-only way as
-    /// <see cref="BackyardBackdrop"/> and <see cref="BackyardDressing"/> — no scene wiring, and it
-    /// re-installs itself on Replay the same way.
+    /// REVISED by Lee (YT-179): the YT-163 "pure backdrop, held clear of the arena" placement put the
+    /// shed far enough past the patio's back wall that the fixed camera never actually saw it — the
+    /// patio read as fenced on every side, with nothing behind it. So the shed now stands flush
+    /// against that wall instead: it replaces a section of the boundary right where the run starts,
+    /// rather than hiding metres behind it. It still carries no collider — the real wall is what
+    /// stops the player — so nothing about the arena's actual boundary changes, only what's visible
+    /// standing at it. Matches the intro's exterior shed look (plank walls, pitched roof, a door),
+    /// centred on the starting tap so the first hose plainly reads as running back to it. Built the
+    /// same self-installing, code-only way as <see cref="BackyardBackdrop"/> and
+    /// <see cref="BackyardDressing"/> — no scene wiring, and it re-installs itself on Replay the same
+    /// way.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class BackyardHomeShed : MonoBehaviour
@@ -34,11 +39,11 @@ namespace MaxWorlds.Arena
         public const float WallHeight = 2.6f;
         public const float RoofRise = 1.6f;
 
-        /// <summary>How far clear of the patio's own back wall the shed's front face stands, past the
-        /// wall's thickness and <see cref="BackyardBackdrop.MinClearance"/> — the same "never mistaken
-        /// for cover, never reachable" guarantee the neighbourhood keeps, plus a visible gap so the
-        /// shed reads as a landmark and not as part of the wall.</summary>
-        public const float ExtraSetback = 0.4f;
+        /// <summary>How far past the wall's own thickness the shed's front face stands — just enough
+        /// to clear it, not <see cref="BackyardBackdrop.MinClearance"/>'s whole metres of standoff.
+        /// The neighbourhood has to stay clear of the arena; this shed is deliberately attached to it,
+        /// the same way a real shed stands right at the back fence.</summary>
+        public const float WallGap = 0.15f;
 
         private Transform _root;
 
@@ -82,26 +87,28 @@ namespace MaxWorlds.Arena
         /// <summary>
         /// Where the shed stands: centred on <see cref="HoseDirector.StartTapPosition"/>'s X, so the
         /// tap Max plugs into at spawn sits directly in front of its door and the hose reads as coming
-        /// from the shed rather than from the middle of the lawn. Its front wall is
-        /// <see cref="ExtraSetback"/> beyond the clearance the arena already keeps past the patio's
-        /// back wall (<see cref="MapData.Bounds"/>'s Z minimum).
+        /// from the shed rather than from the middle of the lawn. Its front wall stands
+        /// <see cref="WallGap"/> past the patio's own back wall (<see cref="MapData.Bounds"/>'s Z
+        /// minimum) — flush against it, not held metres off it the way the rest of the neighbourhood
+        /// is, so it reads as part of the boundary rather than scenery beyond it (YT-179).
         /// </summary>
         public static Vector3 PlaceFor(MapData map)
         {
-            float pad = map.wallThickness + BackyardBackdrop.MinClearance;
-            float frontZ = map.Bounds().yMin - pad - ExtraSetback;
+            float pad = map.wallThickness + WallGap;
+            float frontZ = map.Bounds().yMin - pad;
             float centerZ = frontZ - Depth * 0.5f;
             return new Vector3(HoseDirector.StartTapPosition.x, 0f, centerZ);
         }
 
-        /// <summary>True when the shed's footprint is genuinely outside every room, by the arena's own
-        /// clearance rule — reusing <see cref="BackyardBackdrop.Rooms"/> so the shed is held to exactly
-        /// the same "not level, not cover, never reachable" line as the rest of the backdrop.</summary>
+        /// <summary>True when the shed's footprint is genuinely outside every room — grown only by the
+        /// wall's own thickness, not <see cref="BackyardBackdrop.MinClearance"/>'s whole standoff: the
+        /// shed is allowed to stand flush against the boundary, it just may never reach past the wall
+        /// into the room itself (still "not level, not cover, never reachable").</summary>
         public static bool Validate(MapData map, Vector3 center, out string reason)
         {
             var footprint = new Rect(center.x - Width * 0.5f, center.z - Depth * 0.5f, Width, Depth);
 
-            foreach (Rect room in BackyardBackdrop.Rooms(map))
+            foreach (Rect room in Rooms(map))
             {
                 if (!room.Overlaps(footprint)) continue;
                 reason = $"shed at {center} reaches into the arena";
@@ -110,6 +117,28 @@ namespace MaxWorlds.Arena
 
             reason = null;
             return true;
+        }
+
+        /// <summary>Every room, grown by the wall's own thickness only. Duplicated locally rather than
+        /// reusing <see cref="BackyardBackdrop.Rooms"/> — that helper grows rooms by
+        /// <see cref="BackyardBackdrop.MinClearance"/> too, a clearance this shed is deliberately built
+        /// to stand inside of.</summary>
+        private static Rect[] Rooms(MapData map)
+        {
+            if (map?.zones == null) return new Rect[0];
+
+            float pad = map.wallThickness;
+            var rooms = new List<Rect>(map.zones.Length);
+
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null) continue;
+
+                Rect f = zone.Footprint;
+                rooms.Add(new Rect(f.xMin - pad, f.yMin - pad, f.width + pad * 2f, f.height + pad * 2f));
+            }
+
+            return rooms.ToArray();
         }
 
         // --- building it -------------------------------------------------------------------------
