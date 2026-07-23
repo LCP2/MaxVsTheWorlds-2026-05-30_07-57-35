@@ -102,7 +102,7 @@ namespace MaxWorlds.UI
         private float _cellPop;              // one-shot scale pop when a cell is banked
         private RectTransform _partAlertRoot;
         private Image _partAlertBg;
-        private Text _partAlertLabel;
+        private Image _partAlertIcon;
 
         private void Awake()
         {
@@ -287,9 +287,9 @@ namespace MaxWorlds.UI
                 float s = 1f + 0.11f * t;
                 _partAlertRoot.localScale = new Vector3(s, s, 1f);
 
-                if (_partAlertLabel != null)
+                if (_partAlertIcon != null)
                 {
-                    var lc = BoneWhite; lc.a = 0.65f + 0.35f * t; _partAlertLabel.color = lc;
+                    var ic = Color.white; ic.a = 0.65f + 0.35f * t; _partAlertIcon.color = ic;
                 }
             }
         }
@@ -920,10 +920,13 @@ namespace MaxWorlds.UI
             chipButton.transition = Selectable.Transition.None;   // the flash pulse drives its colour
             chipButton.onClick.AddListener(OpenUpgrade);
 
-            _partAlertLabel = AddText(_partAlertRoot, 24f, BoneWhite, TextAnchor.MiddleCenter);
-            Stretch(_partAlertLabel.rectTransform);
-            _partAlertLabel.fontStyle = FontStyle.Bold;
-            _partAlertLabel.text = "PART";
+            // The part icon (YT-168): a black salvage-nut silhouette, not the old "PART" text — a
+            // shape reads faster than a word, and BLACK is the one tint that stays high-contrast
+            // against the chip's warm orange. The sprite bakes its own black, so tint white to render
+            // it as authored (the same trick the power-cell icon uses).
+            _partAlertIcon = AddImage(_partAlertRoot, WeaponHudIcons.Part(64), Color.white, "Part Icon");
+            Stretch(_partAlertIcon.rectTransform, -18f);   // inset from the chip edge
+            _partAlertIcon.raycastTarget = false;
 
             _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsPending > 0);
         }

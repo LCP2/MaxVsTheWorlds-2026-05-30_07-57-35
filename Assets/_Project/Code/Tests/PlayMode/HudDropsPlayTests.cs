@@ -106,6 +106,38 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>
+        /// YT-168: the chip must wear a purpose-built black part icon, not the old plain "PART" text —
+        /// black is the one tint that stays high-contrast against the chip's warm orange.
+        /// WeaponHudIcons.Part names its sprite "part".
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheChipWearsABlackPartIcon_NotTextLabel()
+        {
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            yield return null;
+
+            Image icon = null;
+            foreach (var img in _hudGo.GetComponentsInChildren<Image>(true))
+                if (img.name == "Part Icon") icon = img;
+
+            Assert.That(icon, Is.Not.Null, "the part chip has no icon");
+            Assert.That(icon.sprite, Is.Not.Null, "the part icon draws no sprite");
+            Assert.That(icon.sprite.name, Is.EqualTo("part"),
+                "the chip must wear the purpose-built part icon, not something generic");
+
+            var px = icon.sprite.texture.GetPixels32();
+            bool foundOpaqueDarkPixel = false;
+            foreach (var p in px)
+            {
+                if (p.a == 0) continue;
+                float brightness = (p.r + p.g + p.b) / (3f * 255f);
+                if (brightness < 0.15f) { foundOpaqueDarkPixel = true; break; }
+            }
+            Assert.That(foundOpaqueDarkPixel, Is.True,
+                "the part icon must be BLACK (high contrast), not a mid-tone shape");
+        }
+
+        /// <summary>
         /// YT-147: the raised chip the player actually sees must be the shared collectible orange and it
         /// must FLASH — not the old static gold. Drives the REAL widget (not just the pure pulse
         /// function), so a correct function left un-wired to the chip would fail here.
