@@ -59,6 +59,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator UntetheredHydroBurnsCellsAsItSprays()
         {
+            UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly (YT-165)
             UpgradeState.Install(PartKind.Hydro);
             DevTuning.HydroDrainRate = 40f;   // fast, so the test drains in a moment
             FillCells(10);
@@ -74,6 +75,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OnATapItLeavesTheCellsAlone()
         {
             var tap = Tap.Create("Tap", _max.transform.position);   // Max is standing on the tap
+            UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly (YT-165)
             UpgradeState.Install(PartKind.Hydro);
             DevTuning.HydroDrainRate = 40f;
             FillCells(10);
@@ -90,6 +92,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator AtZeroCellsHydroStalls_AndCollectingACellRestoresIt()
         {
+            UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly (YT-165)
             UpgradeState.Install(PartKind.Hydro);   // no cells at all
             yield return null;
 
@@ -107,6 +110,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator WithCellsTheHydroTankStaysSupplied()
         {
+            UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly (YT-165)
             UpgradeState.Install(PartKind.Hydro);
             DevTuning.HydroDrainRate = 0.01f;   // barely drains, so cells last through the test
             FillCells(20);

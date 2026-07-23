@@ -75,7 +75,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void HarnessAddsCapacity_AccelSpeeds_HydroUntethers()
+        public void HarnessAddsCapacity_AccelSpeeds_HydroUntethersOnceAssembled()
         {
             UpgradeState.Install(PartKind.AugmentationHarness);
             UpgradeState.Install(PartKind.AccelerationEngine);
@@ -83,7 +83,36 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(UpgradeState.CapacityBonus, Is.EqualTo(UpgradeCatalog.HarnessCapacityBonus));
             Assert.That(UpgradeState.MoveSpeedMultiplier, Is.EqualTo(UpgradeCatalog.AccelSpeedMultiplier));
-            Assert.That(UpgradeState.Untethered, Is.True, "the Hydro device must untether Max");
+            Assert.That(UpgradeState.Untethered, Is.True, "both detach parts installed must untether Max");
+        }
+
+        // ---------------------------------------------------------------- YT-165: Hydro sub-assembly
+
+        [Test]
+        public void HydroAlone_DoesNotUntether()
+        {
+            UpgradeState.Install(PartKind.Hydro);
+            Assert.That(UpgradeState.HydroAssembled, Is.False);
+            Assert.That(UpgradeState.Untethered, Is.False, "the condenser has nothing to clip into yet");
+        }
+
+        [Test]
+        public void HarnessAlone_DoesNotUntether()
+        {
+            UpgradeState.Install(PartKind.AugmentationHarness);
+            Assert.That(UpgradeState.HydroAssembled, Is.False);
+            Assert.That(UpgradeState.Untethered, Is.False, "the mount alone has no condenser seated");
+        }
+
+        [Test]
+        public void BothDetachPartsAssemble_AndUntether()
+        {
+            UpgradeState.Install(PartKind.AugmentationHarness);
+            Assert.That(UpgradeState.Untethered, Is.False, "precondition — one part in");
+
+            UpgradeState.Install(PartKind.Hydro);
+            Assert.That(UpgradeState.HydroAssembled, Is.True, "both parts collected must auto-assemble");
+            Assert.That(UpgradeState.Untethered, Is.True);
         }
 
         [Test]

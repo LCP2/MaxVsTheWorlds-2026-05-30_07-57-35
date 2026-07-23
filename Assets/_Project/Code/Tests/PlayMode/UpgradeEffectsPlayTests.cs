@@ -144,11 +144,17 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Hydro_Untethers()
+        public IEnumerator Hydro_NeedsTheHarnessMount_ThenUntethers()
         {
             Assert.That(UpgradeState.Untethered, Is.False, "precondition");
+
             yield return PickUpAndConfirm(PartKind.Hydro);
-            Assert.That(UpgradeState.Untethered, Is.True, "the Hydro device didn't untether Max");
+            Assert.That(UpgradeState.Untethered, Is.False,
+                "the condenser alone has nothing to clip into — the harness mount is still missing");
+
+            yield return PickUpAndConfirm(PartKind.AugmentationHarness);
+            Assert.That(UpgradeState.Untethered, Is.True,
+                "both detach parts collected must auto-assemble and untether Max");
         }
 
         [UnityTest]
