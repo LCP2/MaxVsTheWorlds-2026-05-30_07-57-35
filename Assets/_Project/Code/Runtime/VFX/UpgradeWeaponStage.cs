@@ -40,6 +40,8 @@ namespace MaxWorlds.VFX
         {
             { PartKind.BeamNozzle, new Vector3(0.44f, 0.0f, 0f) },
             { PartKind.PowerNozzle, new Vector3(0.46f, 0.0f, 0f) },
+            { PartKind.RangeExtender, new Vector3(0.48f, 0.0f, 0f) },
+            { PartKind.WideBore, new Vector3(0.50f, 0.0f, 0f) },
             { PartKind.AugmentationHarness, new Vector3(-0.26f, 0.0f, 0f) },
             { PartKind.AccelerationEngine, new Vector3(0.05f, -0.19f, 0f) },
             { PartKind.Hydro, new Vector3(-0.24f, 0.24f, 0f) },
@@ -53,7 +55,9 @@ namespace MaxWorlds.VFX
             switch (kind)
             {
                 case PartKind.BeamNozzle:
-                case PartKind.PowerNozzle: return Quaternion.Euler(0f, 0f, -90f);
+                case PartKind.PowerNozzle:
+                case PartKind.RangeExtender:
+                case PartKind.WideBore: return Quaternion.Euler(0f, 0f, -90f);
                 default: return Quaternion.identity;
             }
         }
@@ -210,7 +214,9 @@ namespace MaxWorlds.VFX
             switch (kind)
             {
                 case PartKind.BeamNozzle: return WeaponPartArt.Keys.BeamNozzle;
-                case PartKind.PowerNozzle: return WeaponPartArt.Keys.PowerNozzle;
+                case PartKind.PowerNozzle:
+                case PartKind.RangeExtender:
+                case PartKind.WideBore: return WeaponPartArt.Keys.PowerNozzle;
                 case PartKind.AugmentationHarness: return WeaponPartArt.Keys.AugmentationHarness;
                 case PartKind.AccelerationEngine: return WeaponPartArt.Keys.AccelerationEngine;
                 case PartKind.Hydro: return WeaponPartArt.Keys.HydroDevice;

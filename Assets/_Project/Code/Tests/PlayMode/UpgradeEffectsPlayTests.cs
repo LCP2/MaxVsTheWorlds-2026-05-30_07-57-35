@@ -98,6 +98,35 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator RangeExtender_LengthensFurther_OnTopOfPower()
+        {
+            yield return PickUpAndConfirm(PartKind.PowerNozzle);
+            float rangeAfterPower = Blaster.Range;
+
+            yield return PickUpAndConfirm(PartKind.RangeExtender);
+
+            Assert.That(Blaster.Range, Is.GreaterThan(rangeAfterPower + 0.5f),
+                "the range extender should lengthen the reach further, on top of the power nozzle");
+        }
+
+        [UnityTest]
+        public IEnumerator WideBore_WidensTheConeBackOut_AtTheExtendedReach()
+        {
+            yield return PickUpAndConfirm(PartKind.BeamNozzle);
+            yield return PickUpAndConfirm(PartKind.PowerNozzle);
+            yield return PickUpAndConfirm(PartKind.RangeExtender);
+            float narrowCone = Blaster.ConeHalfAngle;
+            float reach = Blaster.Range;
+
+            yield return PickUpAndConfirm(PartKind.WideBore);
+
+            Assert.That(Blaster.ConeHalfAngle, Is.GreaterThan(narrowCone + 1f),
+                "the wide-bore didn't widen the cone back out");
+            Assert.That(Blaster.Range, Is.EqualTo(reach).Within(0.01f),
+                "the wide-bore shouldn't change the reach, only the cone");
+        }
+
+        [UnityTest]
         public IEnumerator AugmentationHarness_GrowsTheTank()
         {
             float baseMax = Blaster.Energy.Max;

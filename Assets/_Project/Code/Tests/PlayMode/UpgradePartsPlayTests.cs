@@ -127,7 +127,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheDropTableGivesFiveDistinctPartsThenNoMore()
+        public IEnumerator TheDropTableGivesEveryDistinctPartThenNoMore()
         {
             foreach (var d in Object.FindObjectsByType<PickupDirector>(FindObjectsSortMode.None))
                 Object.Destroy(d.gameObject);
@@ -138,8 +138,9 @@ namespace MaxWorlds.Tests.PlayMode
             dir.AddComponent<PickupDirector>();
             yield return null;
 
-            DevTuning.PartDropInterval = 1f;   // one part per kill, so 6 kills exercises the whole table
-            for (int i = 0; i < 6; i++)   // six tough kills; only five parts exist
+            int total = UpgradeCatalog.AllKinds.Length;
+            DevTuning.PartDropInterval = 1f;   // one part per kill, so total+1 kills exercises the whole table
+            for (int i = 0; i < total + 1; i++)   // one extra tough kill beyond the number of parts
                 DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
             yield return null;
 
@@ -147,7 +148,7 @@ namespace MaxWorlds.Tests.PlayMode
             foreach (var p in Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None))
                 if (p.gameObject.activeInHierarchy && p.Kind == PickupKind.Part) parts.Add(p.Part);
 
-            Assert.That(parts.Count, Is.EqualTo(5), "the level must drop all five parts, each exactly once");
+            Assert.That(parts.Count, Is.EqualTo(total), "the level must drop every part, each exactly once");
         }
 
         [UnityTest]
