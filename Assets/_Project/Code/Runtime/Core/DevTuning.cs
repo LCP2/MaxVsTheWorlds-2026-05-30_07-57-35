@@ -82,6 +82,11 @@ namespace MaxWorlds.Core
         /// <summary>Max power cells the reserve holds — the meter's full mark (YT-137).</summary>
         public static float? PowerCellCapacity { get; set; }
 
+        /// <summary>Chance [0,1] that a rusher's death drops a single power cell (YT-171) — the common
+        /// kill's replenish trickle, on top of the bruiser's guaranteed drop. Not every robot need drop
+        /// one, so this is a roll rather than a guarantee.</summary>
+        public static float? PowerCellDropChance { get; set; }
+
         // --- upgrade-part effect magnitudes (YT-138 Weapons tab) ---
 
         /// <summary>Each nozzle's cone multiplier — smaller narrows the beam more.</summary>
@@ -125,6 +130,7 @@ namespace MaxWorlds.Core
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
             PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue ||
+            PowerCellDropChance.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue;
 
@@ -149,6 +155,7 @@ namespace MaxWorlds.Core
             PartDropInterval = null;
             HydroDrainRate = null;
             PowerCellCapacity = null;
+            PowerCellDropChance = null;
             NozzleConeMultiplier = null;
             PowerNozzleRange = null;
             RangeExtenderBonus = null;

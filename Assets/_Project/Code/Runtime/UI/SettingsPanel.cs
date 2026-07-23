@@ -294,6 +294,12 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PartDropInterval, PickupDirector.DefaultPartInterval),
                 v => DevTuning.PartDropInterval = v, tab: 1);
 
+            // Rusher cell-drop chance (YT-171): the common kill's trickle toward the Hydro reserve,
+            // separate from the bruiser's guaranteed drop.
+            Add("Cell drop chance", "x", 0f, 1f, PickupDirector.DefaultCellDropChance,
+                () => DevTuning.Or(DevTuning.PowerCellDropChance, PickupDirector.DefaultCellDropChance),
+                v => DevTuning.PowerCellDropChance = v, tab: 1);
+
             // Spawn cadence (YT-170). Reads live like the rest of this pacing group: EnemySpawner
             // pulls CurrentInterval fresh on every check, so the slider retimes every factory's
             // emergence the moment it moves, with no push needed.
@@ -454,9 +460,12 @@ namespace MaxWorlds.UI
             }
             y -= HeaderH + 8f;
 
-            // One container per tab; each holds its own two-column grid. The Gameplay tab has the most
-            // knobs (10 => five rows), so the footer sits below that height for both.
-            float colW = (PanelW - Pad * 2f - ColGap) * 0.5f;
+            // One container per tab; each holds its own grid. The Gameplay tab has the most knobs at
+            // two columns (10 => five rows), which is the phone-height ceiling (YT-126) — the footer
+            // sits below that height for every tab. A tab that outgrows 10 (YT-171's Weapons knob)
+            // spills into a THIRD column instead of a sixth row, so it stays inside that same ceiling;
+            // the untouched two-column tabs render pixel-identical to before.
+            float dumpColW = (PanelW - Pad * 2f - ColGap) * 0.5f;
             int maxRows = 0;
             for (int t = 0; t < TabNames.Length; t++)
             {
@@ -465,7 +474,9 @@ namespace MaxWorlds.UI
                 _pages[t] = page.gameObject;
 
                 var rows = _knobs.FindAll(k => k.Tab == t);
-                int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(rows.Count / 2f));
+                int cols = rows.Count > 10 ? 3 : 2;
+                float colW = (PanelW - Pad * 2f - ColGap * (cols - 1)) / cols;
+                int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(rows.Count / (float)cols));
                 maxRows = Mathf.Max(maxRows, rowsPerCol);
                 for (int i = 0; i < rows.Count; i++)
                 {
@@ -492,11 +503,11 @@ namespace MaxWorlds.UI
             // phone. Left half + right half of the value list, side by side.
             float dumpY = footerY - ButtonH - 8f;
             _dumpTextL = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
-            Place(_dumpTextL.rectTransform, Pad, dumpY, colW, DumpH);
+            Place(_dumpTextL.rectTransform, Pad, dumpY, dumpColW, DumpH);
             _dumpTextL.verticalOverflow = VerticalWrapMode.Truncate;
 
             _dumpTextR = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
-            Place(_dumpTextR.rectTransform, Pad + colW + ColGap, dumpY, colW, DumpH);
+            Place(_dumpTextR.rectTransform, Pad + dumpColW + ColGap, dumpY, dumpColW, DumpH);
             _dumpTextR.verticalOverflow = VerticalWrapMode.Truncate;
 
             ShowTab(0);   // start on the Gameplay tab
