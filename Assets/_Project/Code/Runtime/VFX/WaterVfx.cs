@@ -221,8 +221,10 @@ namespace MaxWorlds.VFX
 
         // --- construction ---
 
-        /// <summary>Distance the water still has to cover once it has left the nozzle.</summary>
-        private float Reach => Mathf.Max(0.1f, _range - _radius * muzzleOffset);
+        /// <summary>Distance the water still has to cover once it has left the nozzle — solved so
+        /// the widest visible edge of the spray (not just the centre line) still lands on the aim
+        /// outline (YT-177). See <see cref="WaterVfxTuning.ReachForCone"/> for the geometry.</summary>
+        private float Reach => WaterVfxTuning.ReachForCone(_range, _radius * muzzleOffset, streamAngle);
 
         private ParticleSystem BuildStream()
         {

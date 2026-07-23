@@ -50,5 +50,32 @@ namespace MaxWorlds.VFX
             Vector3 axis = -f * 0.55f + Vector3.up;
             return axis.normalized;
         }
+
+        /// <summary>
+        /// How far a particle must travel from the muzzle so that the WIDEST visible edge of the
+        /// spray — <paramref name="halfAngleDeg"/>, the stream's own half-angle — still lands
+        /// exactly on the aim outline at <paramref name="range"/> from the weapon's origin (YT-177).
+        ///
+        /// The muzzle sits <paramref name="muzzleOffset"/> out in front of that origin, so a
+        /// particle travelling straight down the centre line only has to cover
+        /// <c>range - muzzleOffset</c> — the old formula, and still exactly what this returns at
+        /// angle zero. But a particle emitted off to the side leaves from that SAME muzzle point at
+        /// an angle: its straight-line path is the third side of a triangle with the offset, not a
+        /// plain subtraction, and the wider the cone the shorter that subtraction fell — a wide
+        /// weapon (big half-angle) opened a visible gap between the water and the reticle that a
+        /// narrow one never showed enough to notice. Solving that triangle for the edge particle's
+        /// travel distance is what keeps every angle on the outline, not just the centre.
+        /// </summary>
+        public static float ReachForCone(float range, float muzzleOffset, float halfAngleDeg)
+        {
+            range = Mathf.Max(0.01f, range);
+            muzzleOffset = Mathf.Max(0f, muzzleOffset);
+            float rad = Mathf.Clamp(halfAngleDeg, 0f, 89f) * Mathf.Deg2Rad;
+            float cos = Mathf.Cos(rad);
+            float sin = Mathf.Sin(rad);
+            float underRoot = Mathf.Max(0f, range * range - muzzleOffset * muzzleOffset * sin * sin);
+            float reach = Mathf.Sqrt(underRoot) - muzzleOffset * cos;
+            return Mathf.Max(0.1f, reach);
+        }
     }
 }
