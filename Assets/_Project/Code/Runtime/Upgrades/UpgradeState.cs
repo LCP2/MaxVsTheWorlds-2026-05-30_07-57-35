@@ -82,9 +82,15 @@ namespace MaxWorlds.Upgrades
         public static float MoveSpeedMultiplier =>
             IsInstalled(PartKind.AccelerationEngine) ? DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier) : 1f;
 
-        /// <summary>Once the Hydro device is installed the hose detaches and Max is untethered from
-        /// the taps — he self-supplies water and roams free.</summary>
-        public static bool Untethered => IsInstalled(PartKind.Hydro);
+        /// <summary>The Hydro condenser needs a mount to clip into — the Augmentation harness's clip
+        /// bracket (see <c>WeaponPartArt.BuildAugmentationHarness</c>) — before it does anything.
+        /// Collecting either part alone leaves Max tethered; once BOTH are in, the game constructs the
+        /// sub-assembly automatically (YT-165) and only then is it seated.</summary>
+        public static bool HydroAssembled => IsInstalled(PartKind.AugmentationHarness) && IsInstalled(PartKind.Hydro);
+
+        /// <summary>Once the Hydro condenser is seated in its harness mount (<see cref="HydroAssembled"/>)
+        /// the hose detaches and Max is untethered from the taps — he self-supplies water and roams free.</summary>
+        public static bool Untethered => HydroAssembled;
 
         /// <summary>Drop everything (new run / test isolation), and tell the live systems to re-fit.</summary>
         public static void Reset()

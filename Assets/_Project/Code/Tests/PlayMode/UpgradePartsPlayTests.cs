@@ -114,6 +114,11 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             UpgradeState.Install(PartKind.Hydro);
+            yield return null;
+            Assert.That(tether.Tap, Is.Not.Null,
+                "the condenser alone has no mount to clip into — Max should stay tethered");
+
+            UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly
             yield return null;   // LateUpdate sees Untethered and detaches
 
             // Bolt far past the old leash. Untethered, nothing reels him in.

@@ -20,13 +20,16 @@ namespace MaxWorlds.Upgrades
         /// wide, the top of the hose tree.</summary>
         WideBore,
 
-        /// <summary>Backpack: more water capacity, and the mount the Hydro device clips into.</summary>
+        /// <summary>Backpack: more water capacity, and the mount the Hydro device clips into. Alone it
+        /// only grows the tank — the untether needs the Hydro condenser seated in it too (YT-165).</summary>
         AugmentationHarness,
 
         /// <summary>Max moves faster.</summary>
         AccelerationEngine,
 
-        /// <summary>Detaches the hose and self-supplies water from the air — untethers Max from the taps.</summary>
+        /// <summary>Detaches the hose and self-supplies water from the air — untethers Max from the taps.
+        /// Needs the Augmentation harness's mount to clip into first (<see cref="UpgradeState.HydroAssembled"/>,
+        /// YT-165); alone it does nothing.</summary>
         Hydro,
     }
 }
