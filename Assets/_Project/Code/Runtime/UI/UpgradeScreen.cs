@@ -34,11 +34,20 @@ namespace MaxWorlds.UI
 
         private const float RefW = 1920f, RefH = 1080f;
 
-        private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.72f);
+        // Near-opaque, same fix as the Home screen's save-slots redesign (YT-174): this has to read as
+        // its own dedicated screen, not a thin overlay you can see the live arena moving behind (Lee's
+        // 0.3.26 feedback, repeated on this exact screen as YT-176).
+        private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
         private static readonly Color PanelColor = new Color(0.06f, 0.08f, 0.10f, 0.98f);
         private static readonly Color CardColor = new Color(0.12f, 0.14f, 0.17f, 1f);
         private static readonly Color TextColor = Color.white;
         private static readonly Color Dim = new Color(1f, 1f, 1f, 0.6f);
+
+        // The family-progression pips (YT-176): parts not yet collected sit dim and locked, the ones
+        // Max already carries and the one just revealed light up in their own accent — so the reveal
+        // reads as "here's where you are in the HOSE/MOVEMENT/DETACH arc," not an isolated drop.
+        private static readonly Color Locked = new Color(0.20f, 0.23f, 0.27f);
+        private const int MaxFamilySize = 5;   // the HOSE family (Beam/Power/Range/WideBore/Harness) is the biggest
 
         // Animation timing (seconds, unscaled). reveal → fit → settle, then the continue prompt.
         private const float RevealTime = 0.45f;
@@ -54,7 +63,10 @@ namespace MaxWorlds.UI
         private Text _continueHint;
         private UpgradeWeaponStage _stage;    // the live 3D weapon render (YT-140)
         private Image _weaponGlow;            // rim flash behind the weapon as the new part seats
-        private Sprite _maxSprite;            // the art-bible portrait, on the left
+        private MaxPortraitStage _maxStage;   // the live low-poly Max render, on the left (YT-176)
+
+        private readonly Image[] _familyPipBg = new Image[MaxFamilySize];
+        private readonly Text[] _familyPipLabel = new Text[MaxFamilySize];
 
         private bool _open;
         private float _prevTimeScale = 1f;
@@ -96,10 +108,54 @@ namespace MaxWorlds.UI
             _partLabel.text = _part.Name;
             _partLabel.color = _part.Accent;
             _continueHint.text = "TAP TO CONTINUE";
+            UpdateFamilyRow();
 
             _root.SetActive(true);
             if (_stage != null) _stage.Show(_part.Kind);   // assemble the weapon + stage the new part
+            if (_maxStage != null) _maxStage.Show();       // start the live Max render (YT-176)
             ApplyAnim(0f);
+        }
+
+        /// <summary>
+        /// Lays out the pips for whichever family (YT-166) <see cref="_part"/> belongs to, in catalog
+        /// order: parts Max already carries and the one just revealed light up in the part's own
+        /// accent; anything still ahead of him in the arc stays locked and dim. Shows the reveal in the
+        /// context of a progression instead of as an isolated drop (YT-176).
+        /// </summary>
+        private void UpdateFamilyRow()
+        {
+            var family = UpgradeCatalog.FamilyFor(_part.Kind);
+            var members = new PartKind[MaxFamilySize];
+            int count = 0;
+            foreach (var kind in UpgradeCatalog.AllKinds)
+            {
+                if (UpgradeCatalog.FamilyFor(kind) != family) continue;
+                if (count < MaxFamilySize) members[count] = kind;
+                count++;
+            }
+
+            const float step = 96f;
+            float startX = -(count - 1) * step * 0.5f;
+
+            for (int i = 0; i < MaxFamilySize; i++)
+            {
+                bool active = i < count;
+                _familyPipBg[i].gameObject.SetActive(active);
+                if (!active) continue;
+
+                var kind = members[i];
+                var data = UpgradeCatalog.For(kind);
+                bool isCurrent = kind == _part.Kind;
+                bool owned = isCurrent || UpgradeState.IsInstalled(kind);
+
+                var rt = _familyPipBg[i].rectTransform;
+                rt.anchoredPosition = new Vector2(startX + i * step, 0f);
+                rt.sizeDelta = isCurrent ? new Vector2(78f, 78f) : new Vector2(64f, 64f);
+
+                _familyPipBg[i].color = owned ? data.Accent : Locked;
+                _familyPipLabel[i].text = data.Code;
+                _familyPipLabel[i].color = owned ? new Color(0.06f, 0.08f, 0.10f) : Dim;
+            }
         }
 
         /// <summary>Finish the upgrade: apply the part's effect (YT-133 — the weapon/player re-fit off
@@ -110,6 +166,7 @@ namespace MaxWorlds.UI
             _open = false;
             Time.timeScale = _prevTimeScale;
             if (_stage != null) _stage.Hide();  // stop the live weapon render (YT-140)
+            if (_maxStage != null) _maxStage.Hide();   // and the live Max render (YT-176)
             UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
             CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
             PickupWallet.SpendPart();
@@ -144,6 +201,7 @@ namespace MaxWorlds.UI
         {
             // The 3D weapon stage glides the new part onto its mount over the fit window (YT-140).
             if (_stage != null) _stage.Tick(t, RevealTime, FitTime);
+            if (_maxStage != null) _maxStage.Tick(t);   // Max's slow idle turn (YT-176)
 
             // The rim behind the weapon flashes in the part's accent as it locks on, then eases off.
             float settle = Mathf.Clamp01((t - RevealTime - FitTime) / SettleTime);
@@ -202,7 +260,7 @@ namespace MaxWorlds.UI
             scrimBtn.transition = Selectable.Transition.None;
             scrimBtn.onClick.AddListener(Continue);
 
-            _maxSprite = LoadPortrait();
+            _maxStage = MaxPortraitStage.Create(transform);
             _stage = UpgradeWeaponStage.Create(transform);
 
             BuildPanel(rootRt);
@@ -222,24 +280,15 @@ namespace MaxWorlds.UI
             _root.SetActive(false);
         }
 
-        /// <summary>The art-bible Max portrait (right half of the reference sheet), from Resources.
-        /// Falls back to null — the card just shows empty — rather than throwing if the art is missing.</summary>
-        private static Sprite LoadPortrait()
-        {
-            var tex = Resources.Load<Texture2D>("Art/max_portrait");
-            return tex == null ? null
-                : Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
-        }
-
         private void BuildPanel(RectTransform parent)
         {
             var panel = NewRect("Panel", parent, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            // Taller than the first cut (was 640) — the extra room is what fixes the "TAP TO CONTINUE"
-            // prompt sitting right on top of the part name (YT-166): both the title and the continue
-            // hint are anchored to the panel's top/bottom EDGES, so growing the panel around its fixed
-            // centre pushes them apart from the (unmoved) name in the middle without touching either
-            // one's own anchor math.
-            panel.sizeDelta = new Vector2(1180f, 740f);
+            // Taller than the YT-166 cut (was 740) — the extra room is the family-progression row
+            // (YT-176). Same trick as that ticket's fix: the title and the continue hint are anchored
+            // to the panel's top/bottom EDGES while the stage stays centre-anchored, so growing the
+            // panel only opens a gap between the title and the (unmoved) stage, without touching
+            // either one's own anchor math.
+            panel.sizeDelta = new Vector2(1180f, 820f);
             panel.anchoredPosition = Vector2.zero;
             var bg = AddImage(panel, HudTextures.RoundedBox(48, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = true;
@@ -249,6 +298,8 @@ namespace MaxWorlds.UI
             _title.rectTransform.sizeDelta = new Vector2(900f, 70f);
             _title.rectTransform.anchoredPosition = new Vector2(0f, -34f);
             _title.fontStyle = FontStyle.Bold;
+
+            BuildFamilyRow(panel);
 
             // A two-column stage: the real Max on the left, his weapon in all its glory on the right.
             var stage = NewRect("Stage", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
@@ -274,9 +325,12 @@ namespace MaxWorlds.UI
             portraitCard.rectTransform.anchoredPosition = new Vector2(-300f, 0f);
             portraitCard.type = Image.Type.Sliced;
 
-            var portrait = AddImage(portraitCard.rectTransform, _maxSprite, Color.white, "Max Portrait");
+            // The real Max, rendered live in 3D (YT-176) — replaces the 2D painted headshot that never
+            // matched the game's low-poly language. Same idiom as the weapon on the right: a stage far
+            // below the world, an orthographic camera, a RenderTexture this RawImage just shows.
+            var portrait = AddRawImage(portraitCard.rectTransform,
+                                       _maxStage != null ? _maxStage.Texture : null, "Max Portrait");
             Stretch(portrait.rectTransform, -12f);   // inset inside the card frame
-            portrait.preserveAspect = true;
 
             var mlabel = AddText(stage, 30, TextColor, TextAnchor.MiddleCenter);
             Anchor(mlabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
@@ -310,6 +364,33 @@ namespace MaxWorlds.UI
             Anchor(_continueHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             _continueHint.rectTransform.sizeDelta = new Vector2(700f, 44f);
             _continueHint.rectTransform.anchoredPosition = new Vector2(0f, 26f);
+        }
+
+        /// <summary>The family-progression strip (YT-176): up to <see cref="MaxFamilySize"/> pips,
+        /// built once here and repositioned/recoloured per reveal by <see cref="UpdateFamilyRow"/> —
+        /// the pip count and highlighting change with which part opened the screen, but the row itself
+        /// doesn't need rebuilding each time.</summary>
+        private void BuildFamilyRow(RectTransform panel)
+        {
+            var row = NewRect("Family Row", panel, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            row.pivot = new Vector2(0.5f, 1f);
+            row.sizeDelta = new Vector2(960f, 84f);
+            row.anchoredPosition = new Vector2(0f, -118f);
+
+            for (int i = 0; i < MaxFamilySize; i++)
+            {
+                var pip = AddImage(row, HudTextures.RoundedBox(20, 0.5f), Locked, $"Pip{i}");
+                pip.type = Image.Type.Sliced;
+                Anchor(pip.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                pip.rectTransform.sizeDelta = new Vector2(64f, 64f);
+
+                var label = AddText(pip.rectTransform, 20, TextColor, TextAnchor.MiddleCenter);
+                label.fontStyle = FontStyle.Bold;
+                Stretch(label.rectTransform);
+
+                _familyPipBg[i] = pip;
+                _familyPipLabel[i] = label;
+            }
         }
 
         // ------------------------------------------------------------------ helpers
