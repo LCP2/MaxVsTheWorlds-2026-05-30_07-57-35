@@ -27,9 +27,10 @@ namespace MaxWorlds.Intro
     /// inspector wiring, and a Timeline asset's track bindings are exactly that hand-wiring. So the
     /// "Timeline" is a committed C# sequence — same shape as the boss abilities (YT-157).
     ///
-    ///  * TRIGGER — <see cref="TryPlay"/> starts it once per process (the New Game). It fires
-    ///    automatically on first boot and is public so a future main menu (YT-151) can call it from its
-    ///    New Game button; it never fires on a Replay-triggered scene reload.
+    ///  * TRIGGER — <see cref="TryPlay"/> starts it once per process (the New Game). YT-151's Home
+    ///    screen calls it from its New Game button (never from Continue, and never on a Replay-triggered
+    ///    scene reload — <see cref="MaxWorlds.Save.SaveSystem.ActiveSlot"/> being already set is what
+    ///    skips the Home screen, and with it this call, on those loads).
     ///  * SKIP — a tap, click, or any key ends it immediately and drops straight into gameplay
     ///    (<see cref="Skip"/>, driven from <see cref="LateUpdate"/>; a "Tap to skip" prompt shows while
     ///    it runs).
@@ -47,14 +48,10 @@ namespace MaxWorlds.Intro
     {
         private static bool s_consumed;
 
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install() => TryPlay();
-
         /// <summary>
-        /// Start the opening cinematic — the New-Game trigger. Plays once per process (never on a
-        /// Replay-triggered scene reload) and only when there is a <c>Camera.main</c> to take over and
-        /// hand back to. Called automatically on first boot; public so a future main menu (YT-151) can
-        /// trigger it from its New Game button. Returns true if it started.
+        /// Start the opening cinematic — the New-Game trigger, called by the Home screen (YT-151). Plays
+        /// once per process (never on a Replay-triggered scene reload, and never on Continue) and only
+        /// when there is a <c>Camera.main</c> to take over and hand back to. Returns true if it started.
         /// </summary>
         public static bool TryPlay()
         {

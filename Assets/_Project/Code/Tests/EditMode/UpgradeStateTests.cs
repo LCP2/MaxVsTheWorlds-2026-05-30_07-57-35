@@ -68,6 +68,15 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void InstalledExposesEveryPartCurrentlyOn()
+        {
+            UpgradeState.Install(PartKind.BeamNozzle);
+            UpgradeState.Install(PartKind.Hydro);
+            Assert.That(UpgradeState.Installed, Is.EquivalentTo(new[] { PartKind.BeamNozzle, PartKind.Hydro }),
+                "a save slot (YT-151) reads the whole installed set off this");
+        }
+
+        [Test]
         public void ResetClearsEverything()
         {
             UpgradeState.Install(PartKind.Hydro);

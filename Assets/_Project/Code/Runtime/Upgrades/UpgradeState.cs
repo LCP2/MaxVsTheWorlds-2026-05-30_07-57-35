@@ -28,6 +28,10 @@ namespace MaxWorlds.Upgrades
         /// <summary>How many of the five are installed — the HUD/records can show set completion.</summary>
         public static int InstalledCount => s_installed.Count;
 
+        /// <summary>Everything installed right now, for a system that has to persist or display the
+        /// whole set (the save slot summary, YT-151) rather than ask about one part at a time.</summary>
+        public static IReadOnlyCollection<PartKind> Installed => s_installed;
+
         /// <summary>Install a part (idempotent — installing the same one twice is a no-op, since each
         /// drops only once anyway). Fires <see cref="Changed"/> so the live systems re-fit.</summary>
         public static void Install(PartKind kind)
