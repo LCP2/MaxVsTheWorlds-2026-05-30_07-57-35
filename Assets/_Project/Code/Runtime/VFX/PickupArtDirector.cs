@@ -1,23 +1,24 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Dresses the walk-over pickups with their real art (YT-134).
+    /// Dresses the walk-over pickups with their real art (YT-134), and drives the shared collectible
+    /// glow every pickup wears on the ground (YT-145).
     ///
     /// YT-131/133 drop the pickups as greybox stand-ins — a cyan sphere for a power cell and, for a
-    /// PART, a single gold cube that is the SAME for all five. So on the lawn the beam nozzle and the
-    /// Hydro device are indistinguishable, which is the one thing the five parts must never be. This
-    /// swaps each greybox for the matching <see cref="WeaponPartArt"/> prop the moment it appears.
+    /// PART, a single cube that is the SAME for all five. YT-134/145 swapped each greybox for a
+    /// distinct <see cref="WeaponPartArt"/> prop; YT-180 reversed that for the five parts — Lee wants
+    /// them to stay as boxes, just glowing and one consistent (non-brown) colour, per <c>Pickup</c>'s
+    /// own <c>PartColor</c>. Only the power cell still gets its wired-in prop swap here.
     ///
     /// A director, not an edit to <c>Pickup</c>, for the same reason the boss and the robots are dressed
     /// by directors (BigBermudaRig, RobotRigDirector): the pickup's greybox is pure cosmetic — no
     /// active-tap indicator or collider to preserve — so the art stream can replace it without reaching
-    /// into gameplay. Pickups are POOLED and re-placed with a different part, so this re-checks every
-    /// frame and rebuilds when a pooled cube comes back as a different component.
+    /// into gameplay. The cell's pickup is POOLED and reused as-is (its kind never changes), so the
+    /// once-built check below is all that's needed to keep it from rebuilding every frame.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupArtDirector : MonoBehaviour
@@ -58,32 +59,33 @@ namespace MaxWorlds.VFX
         {
             foreach (var pickup in FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                string want = ArtPrefix + KeyFor(pickup);
-                Transform art = FindArt(pickup.transform, want);
-
-                if (art == null)
+                // Only the power cell wears a swapped-in prop. The five parts keep their own greybox
+                // cube (YT-180) — Pickup already paints it the shared non-brown PartColor and spins/bobs
+                // it itself, so there is nothing more to dress here beyond the glow below.
+                if (pickup.Kind == PickupKind.PowerCell)
                 {
-                    // No child wears the right key. Clear any that wear the WRONG one (a pooled cube that
-                    // came back as a different part) and build the right prop. Keying "build only when the
-                    // right one is absent" is what keeps a deferred Destroy() — which lingers a frame —
-                    // from making us stack a fresh prop every frame until the old one finally goes.
-                    ClearWrongArt(pickup.transform, want);
-                    art = Build(pickup, want);
-                    HideGreybox(pickup.transform);
-                }
+                    string want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
+                    Transform art = FindArt(pickup.transform, want);
 
-                // Spin it here rather than lean on the pickup's own spin: the pickup spins its greybox
-                // child, which we hid, so the art needs its own turn. Unscaled so it keeps turning while
-                // the upgrade screen has the game paused with a part still on the ground.
-                if (art != null) art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                    if (art == null)
+                    {
+                        art = Build(pickup, want);
+                        HideGreybox(pickup.transform);
+                    }
+
+                    // Spin it here rather than lean on the pickup's own spin: the pickup spins its greybox
+                    // child, which we hid, so the art needs its own turn. Unscaled so it keeps turning while
+                    // the upgrade screen has the game paused with a cell still on the ground.
+                    if (art != null) art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                }
 
                 PulseGlow(EnsureGlow(pickup.transform));
             }
         }
 
         /// <summary>The pickup's collectible aura, built once and reused. A sibling of the art (not a
-        /// PartArt: child), so a pooled pickup swapping parts keeps its glow instead of rebuilding it,
-        /// and <see cref="ClearWrongArt"/> never touches it.</summary>
+        /// PartArt: child), so it survives a pooled cell rebuilding its prop instead of getting torn
+        /// down with it.</summary>
         private static Transform EnsureGlow(Transform pickup)
         {
             var existing = pickup.Find(GlowName);
@@ -123,28 +125,7 @@ namespace MaxWorlds.VFX
             }
         }
 
-        /// <summary>Which prop this pickup should wear. A power cell is a power cell; a part maps to one
-        /// of the hose-upgrade props by its <see cref="PartKind"/>. Range Extender and Wide-Bore
-        /// (YT-164) don't have bespoke art yet, so they wear the Power nozzle's — still reads as a hose
-        /// nozzle, not a stray power cell.</summary>
-        private static string KeyFor(Pickup pickup)
-        {
-            if (pickup.Kind == PickupKind.PowerCell) return WeaponPartArt.Keys.PowerCell;
-            switch (pickup.Part)
-            {
-                case PartKind.BeamNozzle: return WeaponPartArt.Keys.BeamNozzle;
-                case PartKind.PowerNozzle:
-                case PartKind.RangeExtender:
-                case PartKind.WideBore: return WeaponPartArt.Keys.PowerNozzle;
-                case PartKind.AugmentationHarness: return WeaponPartArt.Keys.AugmentationHarness;
-                case PartKind.AccelerationEngine: return WeaponPartArt.Keys.AccelerationEngine;
-                case PartKind.Hydro: return WeaponPartArt.Keys.HydroDevice;
-                default: return WeaponPartArt.Keys.PowerCell;
-            }
-        }
-
-        /// <summary>The child wearing exactly <paramref name="wantName"/>, or null. Ignores any
-        /// wrong-keyed child that is mid-Destroy from a part change.</summary>
+        /// <summary>The child wearing exactly <paramref name="wantName"/>, or null.</summary>
         private static Transform FindArt(Transform pickup, string wantName)
         {
             for (int i = 0; i < pickup.childCount; i++)
@@ -153,17 +134,6 @@ namespace MaxWorlds.VFX
                 if (c.name == wantName) return c;
             }
             return null;
-        }
-
-        /// <summary>Destroy any art child that is NOT the one we want — a pooled pickup that came back
-        /// as a different part.</summary>
-        private static void ClearWrongArt(Transform pickup, string wantName)
-        {
-            for (int i = pickup.childCount - 1; i >= 0; i--)
-            {
-                var c = pickup.GetChild(i);
-                if (c.name.StartsWith(ArtPrefix) && c.name != wantName) Destroy(c.gameObject);
-            }
         }
 
         private static Transform Build(Pickup pickup, string wantName)
