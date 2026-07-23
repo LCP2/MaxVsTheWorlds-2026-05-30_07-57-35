@@ -294,6 +294,13 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PartDropInterval, PickupDirector.DefaultPartInterval),
                 v => DevTuning.PartDropInterval = v, tab: 1);
 
+            // Spawn cadence (YT-170). Reads live like the rest of this pacing group: EnemySpawner
+            // pulls CurrentInterval fresh on every check, so the slider retimes every factory's
+            // emergence the moment it moves, with no push needed.
+            Add("Spawn interval", "s", 0.3f, 4f, SpawnIntervalDefault(),
+                () => DevTuning.Or(DevTuning.SpawnInterval, SpawnIntervalDefault()),
+                v => DevTuning.SpawnInterval = v, tab: 1);
+
             // Hose leash length (YT-129). The tether reads this through DevTuning every frame, so the
             // slider needs no push — moving it re-leashes Max on the next LateUpdate.
             float tetherDefault = MaxWorlds.Hose.HoseTether.AuthoredLength;
@@ -327,6 +334,20 @@ namespace MaxWorlds.UI
         {
             foreach (MowerHutch h in FactoryCensus.All) if (h != null) return h.AuthoredMax;
             return 350f;
+        }
+
+        /// <summary>The authored steady-state spawn interval for the 100% reference (YT-170): a live
+        /// factory's if the level has one, else the shipped default so the panel still works in a
+        /// bare test scene. Same fallback shape as <see cref="FactoryDefault"/>.</summary>
+        private static float SpawnIntervalDefault()
+        {
+            foreach (MowerHutch h in FactoryCensus.All)
+            {
+                if (h == null) continue;
+                var spawner = h.GetComponent<EnemySpawner>();
+                if (spawner != null) return spawner.AuthoredSpawnIntervalMin;
+            }
+            return 1.2f;
         }
 
         private void Add(string name, string unit, float min, float max, float def,

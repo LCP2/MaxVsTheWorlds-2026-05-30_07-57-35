@@ -114,9 +114,17 @@ namespace MaxWorlds.Enemies
             return n;
         }
 
-        /// <summary>Current seconds-between-spawns for the run time so far.</summary>
+        /// <summary>The authored steady-state interval, for the Settings panel's 100% reference
+        /// (YT-170) — same pattern as <see cref="MaxWorlds.Factories.MowerHutch.AuthoredMax"/>.</summary>
+        public float AuthoredSpawnIntervalMin => spawnIntervalMin;
+
+        /// <summary>Current seconds-between-spawns for the run time so far. Read live every call, so
+        /// a Settings-panel override takes effect on the very next check rather than needing a push
+        /// (YT-170) — a flat DevTuning rate replaces the whole start→min ramp outright, since a rate
+        /// the player dialled in is the rate they should get, not one more input the ramp blends away.</summary>
         public float CurrentInterval =>
-            SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, spawnIntervalMin, rampSeconds);
+            DevTuning.Or(DevTuning.SpawnInterval,
+                SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, spawnIntervalMin, rampSeconds));
 
         private void Update()
         {

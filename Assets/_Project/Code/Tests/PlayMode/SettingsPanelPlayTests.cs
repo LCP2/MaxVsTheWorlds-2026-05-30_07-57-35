@@ -80,9 +80,11 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(21),
-                "Ten Gameplay knobs, the seven Weapons-tab knobs (YT-138), and the four Boss-tab brood-volley " +
-                "knobs (YT-157): volley interval, adds per volley, max adds alive, volley windup.");
+            Assert.That(sliders.Length, Is.EqualTo(24),
+                "Ten Gameplay knobs, the ten Weapons-tab knobs (YT-138's seven, plus Range Extender " +
+                "and Wide-Bore from YT-164, plus Spawn interval from YT-170), and the four Boss-tab " +
+                "brood-volley knobs (YT-157): volley interval, adds per volley, max adds alive, " +
+                "volley windup.");
             yield return null;
         }
 
@@ -105,8 +107,9 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
                 "the Gameplay tab keeps its ten knobs");
-            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(7),
-                "the Weapons tab carries the seven upgrade/pacing/Hydro knobs");
+            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
+                "the Weapons tab carries the upgrade/pacing/Hydro knobs, Range Extender and Wide-Bore " +
+                "(YT-164), and Spawn interval (YT-170)");
             Assert.That(boss.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(4),
                 "the Boss tab carries the four brood-volley knobs (YT-157)");
             yield return null;
@@ -181,6 +184,23 @@ namespace MaxWorlds.Tests.PlayMode
             // And gameplay actually reads that override — no dev flag gating it any more (YT-120).
             Assert.That(DevTuning.Or(DevTuning.PlayerMoveSpeed, 6f), Is.EqualTo(11f).Within(0.001f),
                 "a moved slider must change the number gameplay uses, with dev mode off");
+        }
+
+        [UnityTest]
+        public IEnumerator TheSpawnIntervalSliderDrivesDevTuning()
+        {
+            // YT-170: the spawn-rate setting must actually take effect, live, from the panel.
+            var canvas = PanelCanvas();
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+            var spawn = System.Array.Find(sliders, s => s.transform.parent.name == "Spawn interval");
+            Assert.That(spawn, Is.Not.Null, "no Spawn interval slider (YT-170)");
+
+            spawn.value = 0.5f;
+            yield return null;
+
+            Assert.That(DevTuning.SpawnInterval, Is.Not.Null);
+            Assert.That(DevTuning.SpawnInterval.Value, Is.EqualTo(0.5f).Within(0.001f),
+                "moving the Spawn interval slider must drive DevTuning.SpawnInterval");
         }
 
         // ---------------------------------------------------------------- it is on screen

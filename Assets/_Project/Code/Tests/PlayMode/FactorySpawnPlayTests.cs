@@ -29,6 +29,8 @@ namespace MaxWorlds.Tests.PlayMode
         [SetUp]
         public void SetUp()
         {
+            DevTuning.Reset();
+
             // Something to stand on. Robots are CharacterControllers under constant gravity, and one
             // falling out of the world moves in a way no assertion about walking should have to
             // reason about — a blocked robot would simply drop below whatever was blocking it.
@@ -45,6 +47,7 @@ namespace MaxWorlds.Tests.PlayMode
         {
             foreach (GameObject go in new[] { _hutch, _hutch2, _ground })
                 if (go != null) Object.Destroy(go);
+            DevTuning.Reset();
         }
 
         /// <summary>The factory as the map builds it: a (3, 2, 3) body, which drags in the spawner.</summary>
@@ -180,6 +183,50 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.Greater(second.Emitted, secondAtDeath,
                 "the surviving factory stopped producing when the OTHER one was destroyed.");
             Assert.IsTrue(second.IsRunning);
+        }
+
+        // --- 1b. the cadence honours the configured rate (YT-170) ---------------------------------
+
+        [UnityTest]
+        public IEnumerator TheSpawnIntervalSettingGovernsHowOftenRobotsEmerge()
+        {
+            // A flat override, not just a faster ramp: DevTuning.SpawnInterval replaces the whole
+            // start->min ramp outright, so the count over a run is just duration / interval.
+            const float interval = 0.3f;
+            const float duration = 2.1f;
+            DevTuning.SpawnInterval = interval;
+
+            var spawner = _hutch.GetComponent<EnemySpawner>();
+            yield return Run(duration);
+
+            int expected = Mathf.FloorToInt(duration / interval);
+            Assert.That(spawner.Emitted, Is.EqualTo(expected).Within(1),
+                $"{duration}s at a configured {interval}s interval should produce ~{expected} spawns, " +
+                $"got {spawner.Emitted} — the setting is not driving real spawn timing.");
+        }
+
+        [UnityTest]
+        public IEnumerator ChangingTheSpawnIntervalSettingChangesHowOftenRobotsEmerge()
+        {
+            const float duration = 2.0f;
+            var spawner = _hutch.GetComponent<EnemySpawner>();
+
+            DevTuning.SpawnInterval = 1.0f;
+            yield return Run(duration);
+            int slowCount = spawner.Emitted;
+
+            Object.Destroy(_hutch);   // the GameObject, not the in-fiction TakeDamage kill
+            yield return null;
+            _hutch = NewHutch("Mower Hutch", new Vector3(0f, 1f, 15f));
+            spawner = _hutch.GetComponent<EnemySpawner>();
+
+            DevTuning.SpawnInterval = 0.3f;
+            yield return Run(duration);
+            int fastCount = spawner.Emitted;
+
+            Assert.Greater(fastCount, slowCount,
+                "dialling the spawn-rate setting down did not visibly change how often robots " +
+                $"emerge (slow={slowCount}, fast={fastCount}).");
         }
 
         // --- 2. robots emerge FROM the factory ----------------------------------------------------
