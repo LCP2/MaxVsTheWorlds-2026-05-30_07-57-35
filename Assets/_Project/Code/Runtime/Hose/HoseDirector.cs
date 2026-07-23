@@ -25,7 +25,7 @@ namespace MaxWorlds.Hose
         /// one to the next; small x-offsets keep them clear of centre-line cover and the boss gate.</summary>
         public static readonly Vector3[] TapPositions =
         {
-            new Vector3(3.5f, 0f, -12f),  // patio, by the back door (the start)
+            new Vector3(3.5f, 0f, -13.5f),  // patio, right at Max's shed door (the start; YT-163)
             new Vector3(0f,   0f,   4f),  // the lawn
             new Vector3(-2f,  0f,  20f),  // far lawn
             new Vector3(2f,   0f,  36f),  // the orchard
