@@ -60,8 +60,9 @@ namespace MaxWorlds.Dev
         }
 
         /// <summary>Only film when the process was explicitly launched to. A normal player or CI run
-        /// trips neither of these and this whole system stays asleep.</summary>
-        private static bool Armed()
+        /// trips neither of these and this whole system stays asleep. Public so the Home screen
+        /// (YT-151) can skip its pick-a-slot modal during a capture run — filming can't click through it.</summary>
+        public static bool Armed()
         {
             foreach (var a in Environment.GetCommandLineArgs())
                 if (string.Equals(a, "-presskit", StringComparison.OrdinalIgnoreCase)) return true;

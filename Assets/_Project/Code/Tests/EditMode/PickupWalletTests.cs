@@ -93,6 +93,31 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void SetPowerCellsClampsToCapacityAndFiresChange()
+        {
+            int seen = -1;
+            void Handler(int n) => seen = n;
+            PickupWallet.PowerCellsChanged += Handler;
+            try
+            {
+                PickupWallet.SetPowerCells(PickupWallet.Capacity + 50);
+                Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity),
+                    "a save slot (YT-151) restoring past the cap must clamp, same as AddPowerCell");
+                Assert.That(seen, Is.EqualTo(PickupWallet.Capacity));
+            }
+            finally { PickupWallet.PowerCellsChanged -= Handler; }
+        }
+
+        [Test]
+        public void PendingPartsPreservesFrontFirstOrder()
+        {
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart(PartKind.Hydro);
+            Assert.That(PickupWallet.PendingParts, Is.EqualTo(new[] { PartKind.BeamNozzle, PartKind.Hydro }),
+                "a save slot (YT-151) must persist the queue in install order, oldest first");
+        }
+
+        [Test]
         public void ResetClearsBothTallies()
         {
             PickupWallet.AddPowerCell();

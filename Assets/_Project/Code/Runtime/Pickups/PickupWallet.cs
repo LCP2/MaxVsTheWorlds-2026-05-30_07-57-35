@@ -26,6 +26,10 @@ namespace MaxWorlds.Pickups
         /// <summary>How many parts are collected but not yet installed (YT-132's chip shows while > 0).</summary>
         public static int PartsPending => s_parts.Count;
 
+        /// <summary>The pending queue, oldest (front) first — a save slot persisting exactly what's
+        /// waiting, in the order the upgrade screen will install it (YT-151).</summary>
+        public static IEnumerable<PartKind> PendingParts => s_parts;
+
         /// <summary>Fired when the power-cell count changes. Arg = the new total.</summary>
         public static event Action<int> PowerCellsChanged;
 
@@ -45,6 +49,16 @@ namespace MaxWorlds.Pickups
         {
             if (PowerCells >= Capacity) return;   // reserve is full (YT-137)
             PowerCells++;
+            PowerCellsChanged?.Invoke(PowerCells);
+        }
+
+        /// <summary>Set the banked total directly — a save slot restoring what was on disk (YT-151),
+        /// not a pickup. Clamped to the reserve the same way <see cref="AddPowerCell"/> is.</summary>
+        public static void SetPowerCells(int count)
+        {
+            int clamped = Mathf.Clamp(count, 0, Capacity);
+            if (clamped == PowerCells) return;
+            PowerCells = clamped;
             PowerCellsChanged?.Invoke(PowerCells);
         }
 
