@@ -107,6 +107,20 @@ namespace MaxWorlds.Core
         /// <summary>Move-speed multiplier the Acceleration engine gives.</summary>
         public static float? AccelSpeed { get; set; }
 
+        // --- Invasion Level / escalation (YT-181 DifficultyDirector) ---
+
+        /// <summary>Invasion Level at the run's start, before any time or shed kills have counted.</summary>
+        public static float? EscalationStart { get; set; }
+
+        /// <summary>How fast the Invasion Level climbs over time — units per second.</summary>
+        public static float? EscalationRate { get; set; }
+
+        /// <summary>The step-up the Invasion Level takes each time a factory shed is destroyed.</summary>
+        public static float? EscalationPerShedBump { get; set; }
+
+        /// <summary>The ceiling the Invasion Level climbs to.</summary>
+        public static float? EscalationMax { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -132,7 +146,9 @@ namespace MaxWorlds.Core
             PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue ||
             PowerCellDropChance.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
-            WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue;
+            WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
+            EscalationStart.HasValue || EscalationRate.HasValue || EscalationPerShedBump.HasValue ||
+            EscalationMax.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -162,6 +178,10 @@ namespace MaxWorlds.Core
             WideBoreConeMultiplier = null;
             HarnessCapacity = null;
             AccelSpeed = null;
+            EscalationStart = null;
+            EscalationRate = null;
+            EscalationPerShedBump = null;
+            EscalationMax = null;
         }
     }
 }

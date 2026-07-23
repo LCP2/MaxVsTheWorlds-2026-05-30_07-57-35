@@ -59,6 +59,10 @@ namespace MaxWorlds.Arena
             RetireSceneFactories();
             FactoryCensus.Reset();
 
+            // A new level is a new Invasion Level clock (YT-181) — a run's escalation must not carry
+            // over from whatever the last level (or the last test) left it at.
+            DifficultyDirector.Reset();
+
             // A new level is a new set of directions. The robots cache the map they navigate (YT-93),
             // and a cache that outlives its level would route this yard's robots around the last one's
             // walls.

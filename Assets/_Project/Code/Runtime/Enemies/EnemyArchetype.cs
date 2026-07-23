@@ -113,6 +113,16 @@ namespace MaxWorlds.Enemies
 
         public static EnemyArchetype Of(EnemyKind kind) =>
             kind == EnemyKind.Bruiser ? Bruiser : Rusher;
+
+        /// <summary>The same archetype, tougher (YT-181 Invasion Level): health and contact damage
+        /// scaled by <paramref name="multiplier"/>, everything else — speed, silhouette, timing —
+        /// untouched. Speed is deliberately left alone: the kiteability tuning (YT-63/YT-80/YT-106)
+        /// is a separate, already-balanced knob, and this escalation is meant to be answered by the
+        /// player's growing loadout, not by making the swarm literally faster to react to.</summary>
+        public EnemyArchetype Toughened(float multiplier) => new EnemyArchetype(
+            Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
+            MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
+            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>

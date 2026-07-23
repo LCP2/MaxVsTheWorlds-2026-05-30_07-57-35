@@ -256,6 +256,25 @@ namespace MaxWorlds.UI
                     if (b != null) b.RefreshMax();
                 });
 
+            // ---- Invasion Level / escalation (YT-181): the DifficultyDirector reads every one of
+            // these live, so a moved slider retimes the escalation mid-run — no push needed, same
+            // contract as the pacing knobs above.
+            Add("Escalation start", "lvl", 0f, 5f, DifficultyDirector.AuthoredStart,
+                () => DevTuning.Or(DevTuning.EscalationStart, DifficultyDirector.AuthoredStart),
+                v => DevTuning.EscalationStart = v);
+
+            Add("Escalation rate", "lvl/s", 0f, 0.5f, DifficultyDirector.AuthoredRatePerSecond,
+                () => DevTuning.Or(DevTuning.EscalationRate, DifficultyDirector.AuthoredRatePerSecond),
+                v => DevTuning.EscalationRate = v);
+
+            Add("Escalation per-shed bump", "lvl", 0f, 5f, DifficultyDirector.AuthoredPerShedBump,
+                () => DevTuning.Or(DevTuning.EscalationPerShedBump, DifficultyDirector.AuthoredPerShedBump),
+                v => DevTuning.EscalationPerShedBump = v);
+
+            Add("Escalation max", "lvl", 1f, 30f, DifficultyDirector.AuthoredMax,
+                () => DevTuning.Or(DevTuning.EscalationMax, DifficultyDirector.AuthoredMax),
+                v => DevTuning.EscalationMax = v);
+
             // ---- Weapons tab (YT-138): the upgrade-part magnitudes + the pacing/Hydro tunables. ----
             // Nozzle/range/harness re-fit the live weapon (RefreshUpgrades); the rest read live.
             Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,

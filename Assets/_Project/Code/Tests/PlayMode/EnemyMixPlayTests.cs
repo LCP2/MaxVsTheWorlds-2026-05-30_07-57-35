@@ -18,10 +18,23 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _go;
 
+        [UnitySetUp]
+        public IEnumerator SetUp()
+        {
+            // The Invasion Level (YT-181) is a static, run-wide clock — reset it so a robot spawned
+            // here always gets the AUTHORED, untoughened archetype. Without this, whichever fixture
+            // ran before could have left the level escalated and this file's exact health arithmetic
+            // (a rusher's own health vs. a bruiser's) would silently start comparing against the
+            // wrong numbers.
+            DifficultyDirector.Reset();
+            yield return null;
+        }
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
             if (_go != null) Object.Destroy(_go);
+            DifficultyDirector.Reset();
             yield return null;
         }
 

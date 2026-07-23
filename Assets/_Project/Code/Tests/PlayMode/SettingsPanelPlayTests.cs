@@ -80,8 +80,9 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(25),
-                "Ten Gameplay knobs, the eleven Weapons-tab knobs (YT-138's seven, plus Range Extender " +
+            Assert.That(sliders.Length, Is.EqualTo(29),
+                "Fourteen Gameplay knobs (ten, plus the four Invasion Level escalation knobs from " +
+                "YT-181), the eleven Weapons-tab knobs (YT-138's seven, plus Range Extender " +
                 "and Wide-Bore from YT-164, plus Spawn interval from YT-170, plus Cell drop chance " +
                 "from YT-171), and the four Boss-tab brood-volley knobs (YT-157): volley interval, " +
                 "adds per volley, max adds alive, volley windup.");
@@ -105,8 +106,8 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
             Assert.That(boss, Is.Not.Null, "no Boss page — the brood-volley tuning has nowhere to live (YT-157)");
 
-            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
-                "the Gameplay tab keeps its ten knobs");
+            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(14),
+                "the Gameplay tab keeps its ten knobs plus the four Invasion Level knobs (YT-181)");
             Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(11),
                 "the Weapons tab carries the upgrade/pacing/Hydro knobs, Range Extender and Wide-Bore " +
                 "(YT-164), Spawn interval (YT-170), and Cell drop chance (YT-171)");
@@ -218,6 +219,29 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(DevTuning.PowerCellDropChance, Is.Not.Null);
             Assert.That(DevTuning.PowerCellDropChance.Value, Is.EqualTo(0.75f).Within(0.001f),
                 "moving the Cell drop chance slider must drive DevTuning.PowerCellDropChance");
+        }
+
+        [UnityTest]
+        public IEnumerator TheEscalationSlidersDriveDevTuning()
+        {
+            // YT-181: the Invasion Level's four knobs must actually retune the DifficultyDirector,
+            // live, from the panel.
+            var canvas = PanelCanvas();
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+
+            var rate = System.Array.Find(sliders, s => s.transform.parent.name == "Escalation rate");
+            var max = System.Array.Find(sliders, s => s.transform.parent.name == "Escalation max");
+            Assert.That(rate, Is.Not.Null, "no Escalation rate slider (YT-181)");
+            Assert.That(max, Is.Not.Null, "no Escalation max slider (YT-181)");
+
+            rate.value = 0.2f;
+            max.value = 15f;
+            yield return null;
+
+            Assert.That(DevTuning.EscalationRate, Is.EqualTo(0.2f).Within(0.001f),
+                "moving the Escalation rate slider must drive DevTuning.EscalationRate");
+            Assert.That(DevTuning.EscalationMax, Is.EqualTo(15f).Within(0.001f),
+                "moving the Escalation max slider must drive DevTuning.EscalationMax");
         }
 
         // ---------------------------------------------------------------- it is on screen

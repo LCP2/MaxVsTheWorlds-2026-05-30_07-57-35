@@ -5,6 +5,7 @@ using UnityEngine.InputSystem.OnScreen;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
+using MaxWorlds.Enemies;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
@@ -85,6 +86,10 @@ namespace MaxWorlds.UI
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
 
+        // The Invasion Level clock (YT-181): counts run time UP, so the player reads the rising
+        // tide directly rather than having to infer it from the swarm alone.
+        private Text _levelClock;
+
         // Boss
         private RectTransform _bossRoot;
         private Image _bossFill;
@@ -125,6 +130,7 @@ namespace MaxWorlds.UI
             BuildDashButton();
             BuildJoysticks();
             BuildArenaIndicator();
+            BuildLevelClock();
             BuildBossBar();
             BuildWarning();
             BuildPowerCellCounter();
@@ -269,6 +275,7 @@ namespace MaxWorlds.UI
             UpdateAbilitySlots(dt);
             UpdateJoysticks();
             UpdateArena(dt);
+            UpdateLevelClock();
             UpdateBoss();
             UpdateWarnings(dt);
             UpdateDrops(dt);
@@ -801,6 +808,34 @@ namespace MaxWorlds.UI
         {
             var a = _model.Arena;
             _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+        }
+
+        /// <summary>The Invasion Level clock (YT-181): a small MM:SS readout so the time pressure the
+        /// DifficultyDirector is racing is actually felt, not just inferred from a swarm getting
+        /// gradually meaner. Sits centred just under the arena indicator — the other "how's the run
+        /// going" readout.</summary>
+        private void BuildLevelClock()
+        {
+            _levelClock = AddText(Root, 32f, BoneWhite, TextAnchor.MiddleCenter);
+            Anchor(_levelClock.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _levelClock.rectTransform.sizeDelta = new Vector2(220f, 40f);
+            _levelClock.rectTransform.anchoredPosition = new Vector2(0f, 110f); // just above the arena indicator
+            _levelClock.fontStyle = FontStyle.Bold;
+        }
+
+        private void UpdateLevelClock()
+        {
+            if (_levelClock == null) return;
+            _levelClock.text = FormatClock(DifficultyDirector.Elapsed);
+            // Calm white climbing to urgent red as the Invasion Level nears its ceiling — the same
+            // language HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one.
+            _levelClock.color = Color.Lerp(BoneWhite, HpColor, DifficultyDirector.Normalized);
+        }
+
+        private static string FormatClock(float seconds)
+        {
+            int total = Mathf.FloorToInt(Mathf.Max(0f, seconds));
+            return $"{total / 60:00}:{total % 60:00}";
         }
 
         /// <summary>The in-run map (YT-72) — its own component, so the minimap can reuse the same

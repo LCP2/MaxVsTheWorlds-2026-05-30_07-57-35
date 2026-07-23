@@ -121,10 +121,18 @@ namespace MaxWorlds.Enemies
         /// <summary>Current seconds-between-spawns for the run time so far. Read live every call, so
         /// a Settings-panel override takes effect on the very next check rather than needing a push
         /// (YT-170) — a flat DevTuning rate replaces the whole start→min ramp outright, since a rate
-        /// the player dialled in is the rate they should get, not one more input the ramp blends away.</summary>
+        /// the player dialled in is the rate they should get, not one more input the ramp blends away.
+        ///
+        /// The Invasion Level (YT-181) is layered OUTSIDE that override, not inside it: a manual
+        /// SpawnInterval pin is Lee dialling in an exact number, and escalation silently speeding
+        /// past it would break the one guarantee a pinned slider makes. Left alone, the computed
+        /// start→min ramp is further scaled down as the level climbs, so the same shed pumps out
+        /// robots faster late in a run without anyone having to touch a slider.</summary>
         public float CurrentInterval =>
-            DevTuning.Or(DevTuning.SpawnInterval,
-                SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, spawnIntervalMin, rampSeconds));
+            DevTuning.SpawnInterval.HasValue
+                ? DevTuning.SpawnInterval.Value
+                : SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, spawnIntervalMin, rampSeconds)
+                    * DifficultyDirector.SpawnIntervalMultiplier;
 
         private void Update()
         {
@@ -151,7 +159,10 @@ namespace MaxWorlds.Enemies
             if (!_running) return;
 
             EnemyKind kind = EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt);
-            EnemyArchetype archetype = EnemyArchetype.Of(kind);
+            // Toughened by the Invasion Level (YT-181): read live, so a robot spawned late in a run
+            // is tankier and hits harder than the one that came out at the opening bell — the swarm
+            // itself is what gets harder, not just how fast it arrives.
+            EnemyArchetype archetype = EnemyArchetype.Of(kind).Toughened(DifficultyDirector.ToughnessMultiplier);
             RobotEnemy e = Take(kind, archetype);
 
             // Out of the mouth, fanned, facing the way it's about to run. With a real door (YT-108)
@@ -223,7 +234,15 @@ namespace MaxWorlds.Enemies
 
         private RobotEnemy Take(EnemyKind kind, in EnemyArchetype archetype)
         {
-            if (_pools.TryGetValue(kind, out var pool) && pool.Count > 0) return pool.Pop();
+            if (_pools.TryGetValue(kind, out var pool) && pool.Count > 0)
+            {
+                // Re-stamp the pooled robot with THIS spawn's archetype (YT-181): the Invasion Level
+                // means the archetype changes over the course of a run, and a pooled robot last built
+                // when the level was low would otherwise keep carrying stale, softer stats forever.
+                RobotEnemy pooled = pool.Pop();
+                pooled.Apply(archetype);
+                return pooled;
+            }
             return CreateInstance(archetype);
         }
 
