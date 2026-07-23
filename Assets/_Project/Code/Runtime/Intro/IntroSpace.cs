@@ -114,8 +114,11 @@ namespace MaxWorlds.Intro
             if (_cometCore != null) IntroBuild.SetGlow(_cometCore, IntroPalette.CometCore * (1f - t));
             if (Comet != null && t > 0.02f) Comet.gameObject.SetActive(false);
 
-            const float podDuration = 0.55f;
-            const float stagger = 0.09f;
+            // Tightened from the original 0.55/0.09 (last pod landing at t=0.91, leaving almost no
+            // hang time before the beat cuts to the dive — YT-161): every pod is down by t≈0.62 now,
+            // leaving a real beat of hang time on the impacts before IntroCinematic's camera-hold ends.
+            const float podDuration = 0.4f;
+            const float stagger = 0.055f;
 
             for (int i = 0; i < PodCount; i++)
             {
@@ -151,12 +154,15 @@ namespace MaxWorlds.Intro
             _landed[i] = true;
             Vector3 world = _landings[i];
 
-            // A bright touch-down flash — white-hot at the core, cooling to the invaders' teal.
+            // A bright touch-down flash — white-hot at the core, cooling to the invaders' teal. Bigger
+            // and brighter than the original burst (YT-161): the framing is now a close hold on the
+            // impact site, and the strike needs to read as the subject, not a faint blip on the globe.
             Vector3 outward = (world - Root.position).normalized;
-            _flash.Emit(world, 30, outward, 70f, 4f, 11f, 0.5f, 1.4f, 0.35f, 0.75f,
+            _flash.Emit(world, 40, outward, 70f, 4f, 12f, 0.7f, 1.9f, 0.45f, 0.9f,
                         Color.white, IntroPalette.XenoTeal);
 
-            // A hot scorch left burning on the globe where it hit.
+            // A hot scorch left burning on the globe where it hit — enlarged (YT-161) to stay legible
+            // through the beat's hang time on the close-framed impact site.
             if (_scorch[i] != null)
             {
                 _scorch[i].gameObject.SetActive(true);
@@ -352,7 +358,7 @@ namespace MaxWorlds.Intro
                 // The scorch it leaves — a hot teal ember on the globe, lit only once it lands. Parented
                 // to Root (not the spinning Earth) so it stays on the pod's fixed landing target.
                 _scorch[i] = IntroBuild.Glow(Root, "Scorch",
-                                             _landingsLocal[i], 3.4f, IntroPalette.XenoTeal, flatten: 0.35f);
+                                             _landingsLocal[i], 4.0f, IntroPalette.XenoTeal, flatten: 0.35f);
                 _scorch[i].transform.rotation = Quaternion.LookRotation(-_landingsLocal[i].normalized);
                 _scorch[i].gameObject.SetActive(false);
             }

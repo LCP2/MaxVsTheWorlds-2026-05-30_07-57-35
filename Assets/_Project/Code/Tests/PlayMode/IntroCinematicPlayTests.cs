@@ -168,6 +168,60 @@ namespace MaxWorlds.Tests.PlayMode
             Object.Destroy(playerGo);
         }
 
+        // ------------------------------------------------------------------ YT-161: beats 3 & 4 read
+
+        [UnityTest]
+        public IEnumerator SplitLand_SeveralInvadersStrikeWithHangTimeBeforeTheDive()
+        {
+            var intro = Build();
+            yield return null;
+            while (intro.IsPlaying && intro.BeatName != "split-land") intro.Tick(0.1f);
+            Assert.AreEqual("split-land", intro.BeatName, "never reached the split-land beat.");
+
+            int ScorchesLit() => intro.Space.Root.GetComponentsInChildren<Transform>(true)
+                                       .Count(t => t.name == "Scorch" && t.gameObject.activeSelf);
+
+            // Tick through most (not all) of the beat: several invaders must already be down and
+            // visible with time still left in the beat, not all landing in the final instant before
+            // the cut to the dive.
+            float beatStart = intro.Elapsed;
+            while (intro.IsPlaying && intro.BeatName == "split-land" && intro.Elapsed - beatStart < 3.2f)
+                intro.Tick(0.05f);
+
+            Assert.AreEqual("split-land", intro.BeatName,
+                "the beat moved on before there was hang time to see the impacts.");
+            Assert.GreaterOrEqual(ScorchesLit(), 3,
+                "fewer than 3 invaders have struck with time left in the beat — the impacts are still rushed.");
+        }
+
+        [UnityTest]
+        public IEnumerator Descent_CameraSettlesOnTheRoofBeforeTheFlashCut()
+        {
+            var intro = Build();
+            yield return null;
+            while (intro.IsPlaying && intro.BeatName != "descent") intro.Tick(0.05f);
+            Assert.AreEqual("descent", intro.BeatName, "never reached the descent beat.");
+
+            const float descentDuration = 4.8f;   // mirrors the "descent" beat's Duration in BuildBeats
+            float beatStart = intro.Elapsed;
+            Vector3? pos90 = null, pos99 = null;
+
+            while (intro.IsPlaying && intro.BeatName == "descent")
+            {
+                intro.Tick(0.02f);
+                if (intro.BeatName != "descent") break;   // the next beat's OnEnter can move the camera
+                float frac = (intro.Elapsed - beatStart) / descentDuration;
+                if (pos90 == null && frac >= 0.9f) pos90 = intro.IntroCamera.transform.position;
+                if (pos99 == null && frac >= 0.99f) pos99 = intro.IntroCamera.transform.position;
+            }
+
+            Assert.IsTrue(pos90.HasValue, "never reached 90% through the descent beat.");
+            Assert.IsTrue(pos99.HasValue, "never reached 99% through the descent beat.");
+            Assert.Less(Vector3.Distance(pos90.Value, pos99.Value), 25f,
+                "the camera is still travelling fast in the last stretch of the dive — it arrives too " +
+                "late on the roof to read before the flash-cut.");
+        }
+
         [UnityTest]
         public IEnumerator NoPartOfTheSetShipsMagenta()
         {
