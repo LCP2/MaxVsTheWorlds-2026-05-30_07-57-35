@@ -171,5 +171,37 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(UpgradeCatalog.For(k).Kind, Is.EqualTo(k), $"catalog entry for {k} is mislabelled");
             Assert.That(UpgradeCatalog.AllKinds.Length, Is.EqualTo(7));
         }
+
+        // ---------------------------------------------------------------- YT-198: reordered progression
+
+        [Test]
+        public void DropOrderGrantsTwoNozzlesThenUntetherThenTheRest()
+        {
+            var table = new PartDropTable();
+
+            table.TryNext(out PartKind first);
+            table.TryNext(out PartKind second);
+            Assert.That(new[] { first, second }, Is.EquivalentTo(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle }),
+                "the first two drops must be the two nozzle feel-changers");
+
+            table.TryNext(out PartKind third);
+            table.TryNext(out PartKind fourth);
+            Assert.That(new[] { third, fourth }, Is.EquivalentTo(new[] { PartKind.AugmentationHarness, PartKind.Hydro }),
+                "the third and fourth drops must be the untether sub-assembly's two parts (YT-165)");
+
+            UpgradeState.Install(first);
+            UpgradeState.Install(second);
+            Assert.That(UpgradeState.Untethered, Is.False, "untether must not fire before its sub-assembly is granted");
+            UpgradeState.Install(third);
+            UpgradeState.Install(fourth);
+            Assert.That(UpgradeState.Untethered, Is.True, "granting both sub-assembly parts must untether Max");
+
+            var remaining = new System.Collections.Generic.List<PartKind>();
+            while (table.TryNext(out PartKind k)) remaining.Add(k);
+            Assert.That(remaining, Is.EquivalentTo(new[]
+            {
+                PartKind.RangeExtender, PartKind.WideBore, PartKind.AccelerationEngine,
+            }), "the rest follow the untether");
+        }
     }
 }
