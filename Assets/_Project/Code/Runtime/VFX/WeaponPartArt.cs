@@ -42,6 +42,15 @@ namespace MaxWorlds.VFX
         // collectibles, not rust.
         private static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
         private static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
+        // The GLISTEN (YT-167): near-white, not cyan — a specular highlight is the light source's
+        // colour reflecting off metal, not the cell's own charge colour. Kept off-white rather than
+        // pure white so it still reads as "on the cell" instead of a stray sprite. Public: PickupArtDirector
+        // reads it back to flicker the glints it built here (same idiom as CollectibleGlow).
+        public static readonly Color GlistenColor = new Color(0.92f, 0.98f, 1f);
+
+        /// <summary>Child name prefix for the power cell's specular glint dots (YT-167) — the director
+        /// finds them by this to animate the sparkle without knowing the cell's geometry.</summary>
+        public const string GlistenPrefix = "Glisten";
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -227,7 +236,26 @@ namespace MaxWorlds.VFX
                  new Vector3(0.14f, 0.03f, 0.14f), null, cap);
             Part(root, "Terminal", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
                  new Vector3(0.06f, 0.04f, 0.06f), null, cap);
+
+            // The GLISTEN (YT-167): the soft additive Core band above reads as a lit charge, but Lee's
+            // playtest on device still saw the cell as flat — an aura around a shape isn't the same as a
+            // shape looking SHINY. A specular highlight has to sit ON the surface, not haloed around it.
+            // Two dots, not one, at different heights/angles/sizes on the casing: PickupArtDirector spins
+            // this root and flickers each on its own phase, so between the spin and the twinkle at least
+            // one glint is always sweeping across a visible face rather than one dot parked on the back.
+            Glisten(root, GlistenPrefix + "0", OnCasing(35f, 0.24f), 0.05f);
+            Glisten(root, GlistenPrefix + "1", OnCasing(200f, 0.13f), 0.035f);
             return root;
+        }
+
+        /// <summary>A point on the casing cylinder's surface — <paramref name="angleDeg"/> around the
+        /// vertical axis at height <paramref name="y"/>. Unity's cylinder primitive has a 0.5 radius, so
+        /// the "Casing" part's 0.2 local scale is an actual world radius of 0.1, not 0.2 — this sits just
+        /// outside that so the glint reads as sitting on the metal rather than buried inside it.</summary>
+        private static Vector3 OnCasing(float angleDeg, float y, float radius = 0.105f)
+        {
+            float rad = angleDeg * Mathf.Deg2Rad;
+            return new Vector3(Mathf.Cos(rad) * radius, y, Mathf.Sin(rad) * radius);
         }
 
         // ---------------------------------------------------------------- helpers
@@ -275,6 +303,30 @@ namespace MaxWorlds.VFX
             var mpb = new MaterialPropertyBlock();
             r.GetPropertyBlock(mpb);
             mpb.SetColor(BaseColorId, color);
+            r.SetPropertyBlock(mpb);
+        }
+
+        /// <summary>A tight, near-white specular sparkle (YT-167) — small and bright rather than soft and
+        /// coloured, so it reads as light catching metal instead of another <see cref="Glow"/> light
+        /// source. Same additive glow sprite as <see cref="Glow"/>, just far smaller and off-centre on
+        /// the casing so it sits ON the surface, not haloed around the whole prop.</summary>
+        private static void Glisten(GameObject root, string name, Vector3 pos, float size)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            go.name = name;
+            Strip(go);
+            go.transform.SetParent(root.transform, worldPositionStays: false);
+            go.transform.localPosition = pos;
+            go.transform.localScale = Vector3.one * size;
+
+            var r = go.GetComponent<MeshRenderer>();
+            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
+
+            var mpb = new MaterialPropertyBlock();
+            r.GetPropertyBlock(mpb);
+            mpb.SetColor(BaseColorId, GlistenColor);
             r.SetPropertyBlock(mpb);
         }
 

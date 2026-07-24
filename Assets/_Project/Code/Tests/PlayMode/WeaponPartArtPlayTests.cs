@@ -103,6 +103,30 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsEmpty(_built.GetComponentsInChildren<Collider>(), "the tap prop kept a collider.");
         }
 
+        [UnityTest]
+        public IEnumerator ThePowerCell_CarriesSpecularGlintsOnItsCasing()
+        {
+            // YT-167: the soft additive Core band (YT-145) is the aura, not the glisten — Lee's playtest
+            // still read the shipped cell as flat because a halo isn't a specular highlight. Pin that the
+            // cell wears its own glint dots, separate from that Core, so this can't regress back to "just
+            // the aura" quietly.
+            _built = WeaponPartArt.Build(WeaponPartArt.Keys.PowerCell);
+
+            var glint0 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "0");
+            var glint1 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "1");
+            Assert.IsNotNull(glint0, "the power cell has no first glint dot.");
+            Assert.IsNotNull(glint1, "the power cell has no second glint dot.");
+            Assert.AreNotEqual(glint0.localPosition, glint1.localPosition,
+                "the two glints sit in the same spot — only one point on the casing would ever sparkle.");
+
+            var core = _built.transform.Find("Core");
+            Assert.IsNotNull(core, "the cell lost its YT-145 aura core.");
+            Assert.AreNotEqual(core.localPosition, glint0.localPosition,
+                "a glint sits exactly on the aura core — it would read as one glow, not a distinct sparkle.");
+
+            yield return null;   // let the collider-strip Destroy() land before TearDown
+        }
+
         [Test]
         public void ThePowerCellHudIcon_IsARealSprite()
         {
