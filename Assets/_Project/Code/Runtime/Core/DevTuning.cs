@@ -133,6 +133,28 @@ namespace MaxWorlds.Core
         /// <see cref="DeathSurgeBurstSize"/>.</summary>
         public static float? DeathSurgeEliteChance { get; set; }
 
+        // --- Swarm pacing (YT-194) — the front-of-curve fix: a couple of robots at run start, not a
+        // swarm; a more intuitive production unit; and a real toughness knob now that the field-wide
+        // cap (YT-186) means late-game danger has to come from durability rather than raw numbers. ---
+
+        /// <summary>Robots this factory allows alive at RUN START — ramps up to its authored
+        /// <c>maxLiveEnemies</c> as <see cref="MaxWorlds.Enemies.DifficultyDirector.Normalized"/>
+        /// climbs, so the opening reads as a couple of robots rather than the full swarm on frame
+        /// one.</summary>
+        public static float? StartingRobots { get; set; }
+
+        /// <summary>Steady-state robots produced per MINUTE — the same number
+        /// <see cref="SpawnInterval"/> expresses as raw seconds, but in the unit a player actually
+        /// thinks in. Converted to seconds (60 / value) at the point of use; only replaces the
+        /// steady-state end of the ramp, so the opening ease-in and the Invasion Level's
+        /// <see cref="MaxWorlds.Enemies.DifficultyDirector.SpawnIntervalMultiplier"/> both still
+        /// apply on top — unlike <see cref="SpawnInterval"/>, which pins a flat number outright.</summary>
+        public static float? RobotProductionPerMinute { get; set; }
+
+        /// <summary>Multiplies every archetype's base health (before the Invasion Level's own
+        /// toughening). 1 = the authored default; the panel's "Robot health" knob.</summary>
+        public static float? RobotHealthMultiplier { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -161,7 +183,8 @@ namespace MaxWorlds.Core
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
             EscalationStart.HasValue || EscalationRate.HasValue || EscalationPerShedBump.HasValue ||
             EscalationMax.HasValue ||
-            DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue;
+            DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue ||
+            StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -197,6 +220,9 @@ namespace MaxWorlds.Core
             EscalationMax = null;
             DeathSurgeBurstSize = null;
             DeathSurgeEliteChance = null;
+            StartingRobots = null;
+            RobotProductionPerMinute = null;
+            RobotHealthMultiplier = null;
         }
     }
 }

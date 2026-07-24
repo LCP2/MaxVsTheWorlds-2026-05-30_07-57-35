@@ -65,6 +65,10 @@ namespace MaxWorlds.Tests.PlayMode
             hutch.GetComponent<MowerHutch>().TakeDamage(
                 new DamageInfo(100000f, hutch.transform.position, Vector3.forward, Team.Player));
 
+        private static void Set(object o, string field, object value) =>
+            o.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)
+             .SetValue(o, value);
+
         private static IEnumerator Run(float seconds)
         {
             float t = 0f;
@@ -197,6 +201,10 @@ namespace MaxWorlds.Tests.PlayMode
             DevTuning.SpawnInterval = interval;
 
             var spawner = _hutch.GetComponent<EnemySpawner>();
+            // YT-194: the live cap now ramps up from startingRobots as the Invasion Level climbs.
+            // This test is about CADENCE, not population, so lift the cap out of the way.
+            Set(spawner, "startingRobots", 20);
+            Set(spawner, "maxLiveEnemies", 20);
             yield return Run(duration);
 
             int expected = Mathf.FloorToInt(duration / interval);
@@ -210,6 +218,10 @@ namespace MaxWorlds.Tests.PlayMode
         {
             const float duration = 2.0f;
             var spawner = _hutch.GetComponent<EnemySpawner>();
+            // YT-194: this test is about CADENCE, not population — lift the live cap out of the way
+            // on both spawners so it never masks a faster interval as an equal emitted count.
+            Set(spawner, "startingRobots", 20);
+            Set(spawner, "maxLiveEnemies", 20);
 
             DevTuning.SpawnInterval = 1.0f;
             yield return Run(duration);
@@ -219,6 +231,8 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             _hutch = NewHutch("Mower Hutch", new Vector3(0f, 1f, 15f));
             spawner = _hutch.GetComponent<EnemySpawner>();
+            Set(spawner, "startingRobots", 20);
+            Set(spawner, "maxLiveEnemies", 20);
 
             DevTuning.SpawnInterval = 0.3f;
             yield return Run(duration);

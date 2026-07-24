@@ -298,6 +298,27 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.DeathSurgeEliteChance, EnemySpawner.DeathSurgeEliteChanceMax),
                 v => DevTuning.DeathSurgeEliteChance = v);
 
+            // ---- Swarm pacing (YT-194): the front-of-curve fix for "overrun at 0, dominant once
+            // armed" — a couple of robots at run start (not a swarm), an intuitive production unit,
+            // and a real toughness knob now that the field-wide cap (YT-186) means late-game danger
+            // has to come from durability rather than raw numbers. All three read live: EnemySpawner
+            // re-derives its cap/interval on every check, and a freshly spawned or reused robot picks
+            // up the health multiplier the moment SpawnKind builds its archetype.
+            float startingRobotsDefault = StartingRobotsDefault();
+            float productionDefault = ProductionPerMinuteDefault();
+
+            Add("Starting robots", "bots", 0f, 10f, startingRobotsDefault,
+                () => DevTuning.Or(DevTuning.StartingRobots, startingRobotsDefault),
+                v => DevTuning.StartingRobots = v);
+
+            Add("Production/min", "bots/m", 5f, 120f, productionDefault,
+                () => DevTuning.Or(DevTuning.RobotProductionPerMinute, productionDefault),
+                v => DevTuning.RobotProductionPerMinute = v);
+
+            Add("Robot health", "x", 0.5f, 3f, 1f,
+                () => DevTuning.Or(DevTuning.RobotHealthMultiplier, 1f),
+                v => DevTuning.RobotHealthMultiplier = v);
+
             // ---- Weapons tab (YT-138): the upgrade-part magnitudes + the pacing/Hydro tunables. ----
             // Nozzle/range/harness re-fit the live weapon (RefreshUpgrades); the rest read live.
             Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,
@@ -396,6 +417,34 @@ namespace MaxWorlds.UI
                 if (spawner != null) return spawner.AuthoredSpawnIntervalMin;
             }
             return 1.2f;
+        }
+
+        /// <summary>The authored starting-robot count for the 100% reference (YT-194): a live
+        /// factory's if the level has one, else the shipped default. Same fallback shape as
+        /// <see cref="SpawnIntervalDefault"/>.</summary>
+        private static float StartingRobotsDefault()
+        {
+            foreach (MowerHutch h in FactoryCensus.All)
+            {
+                if (h == null) continue;
+                var spawner = h.GetComponent<EnemySpawner>();
+                if (spawner != null) return spawner.AuthoredStartingRobots;
+            }
+            return 1f;
+        }
+
+        /// <summary>The authored steady-state production rate in robots/minute for the 100%
+        /// reference (YT-194) — the same underlying number as <see cref="SpawnIntervalDefault"/>,
+        /// just in the unit this knob dials.</summary>
+        private static float ProductionPerMinuteDefault()
+        {
+            foreach (MowerHutch h in FactoryCensus.All)
+            {
+                if (h == null) continue;
+                var spawner = h.GetComponent<EnemySpawner>();
+                if (spawner != null) return spawner.AuthoredProductionPerMinute;
+            }
+            return 60f / 1.2f;
         }
 
         private void Add(string name, string unit, float min, float max, float def,
