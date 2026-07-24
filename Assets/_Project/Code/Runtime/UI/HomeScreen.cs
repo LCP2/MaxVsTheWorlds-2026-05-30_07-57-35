@@ -56,6 +56,7 @@ namespace MaxWorlds.UI
         private static readonly Color MaxOrange = CharacterSkin.BaseColorFor(CharacterRole.Player);
 
         private GameObject _root;
+        private MaxPortraitStage _maxStage;   // the live low-poly Max render, same crest as UpgradeScreen (YT-189)
         private float _prevTimeScale = 1f;
         private bool _open;
 
@@ -99,7 +100,13 @@ namespace MaxWorlds.UI
         {
             _open = false;
             Time.timeScale = _prevTimeScale;
+            if (_maxStage != null) _maxStage.Hide();
             if (_root != null) Destroy(_root);
+        }
+
+        private void Update()
+        {
+            if (_open && _maxStage != null) _maxStage.Tick(Time.unscaledTime);
         }
 
         // ------------------------------------------------------------------ actions
@@ -142,6 +149,12 @@ namespace MaxWorlds.UI
             var go = new GameObject("Home Canvas", typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
             go.transform.SetParent(transform, false);
             _root = go;
+
+            // The live low-poly Max render (YT-176's stage, reused here per YT-189), not the rejected
+            // 2D painted headshot — parented to this component (not the canvas root) so it survives
+            // Close()'s Destroy(_root) the same way UpgradeScreen keeps its stage alongside the canvas.
+            if (_maxStage == null) _maxStage = MaxPortraitStage.Create(transform);
+            _maxStage.Show();
             var canvas = go.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.ScreenSpaceOverlay;
             canvas.sortingOrder = 220;   // above Upgrade (210) and Result/Settings (200)
@@ -171,9 +184,8 @@ namespace MaxWorlds.UI
             Stretch(badgeCard.rectTransform, -8f);
             badgeCard.type = Image.Type.Sliced;
 
-            var badgePortrait = AddImage(badgeCard.rectTransform, LoadPortrait(), Color.white, "Badge Portrait");
+            var badgePortrait = AddRawImage(badgeCard.rectTransform, _maxStage.Texture, "Badge Portrait");
             Stretch(badgePortrait.rectTransform, -6f);
-            badgePortrait.preserveAspect = true;
 
             var title = AddText(panel.rectTransform, 46f, MaxOrange, TextAnchor.MiddleCenter, FontStyle.Bold);
             Top(title.rectTransform, 0f, -134f, 1000f, 64f);
@@ -188,16 +200,6 @@ namespace MaxWorlds.UI
             {
                 BuildSlotRow(panel.rectTransform, i, top - i * (RowHeight + RowGap));
             }
-        }
-
-        /// <summary>The art-bible Max portrait, same asset/idiom as <see cref="UpgradeScreen"/>'s crest
-        /// (YT-166). Falls back to null — the badge card just shows empty — rather than throwing if the
-        /// art is missing.</summary>
-        private static Sprite LoadPortrait()
-        {
-            var tex = Resources.Load<Texture2D>("Art/max_portrait");
-            return tex == null ? null
-                : Sprite.Create(tex, new Rect(0, 0, tex.width, tex.height), new Vector2(0.5f, 0.5f), 100f);
         }
 
         private void BuildSlotRow(RectTransform panel, int slot, float y)
@@ -300,6 +302,15 @@ namespace MaxWorlds.UI
             var img = go.GetComponent<Image>();
             img.sprite = sprite;
             img.color = color;
+            return img;
+        }
+
+        private static RawImage AddRawImage(Transform parent, Texture tex, string name)
+        {
+            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
+            go.transform.SetParent(parent, false);
+            var img = go.GetComponent<RawImage>();
+            img.texture = tex;
             return img;
         }
 

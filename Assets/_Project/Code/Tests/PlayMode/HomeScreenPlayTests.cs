@@ -153,5 +153,18 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(Screen.IsOpen, Is.False, "a live slot means the Home screen must stay out of the way");
             Assert.That(Time.timeScale, Is.EqualTo(1f), "it must not pause a run already in progress");
         }
+
+        [UnityTest]
+        public IEnumerator TheCrestIsALiveLowPolyRenderNotTheRejectedPaintedHeadshot()
+        {
+            // YT-189: the crest must reuse UpgradeScreen's live low-poly Max render (YT-176), not the
+            // 2D painted "Art/max_portrait" headshot Lee already rejected once for that screen.
+            yield return NewScreen();
+
+            var portrait = _screenGo.GetComponentsInChildren<RawImage>(true)
+                .FirstOrDefault(img => img.gameObject.name == "Badge Portrait");
+            Assert.That(portrait, Is.Not.Null, "no live-rendered Max crest found");
+            Assert.That(portrait.texture, Is.Not.Null, "the crest's render texture never got assigned");
+        }
     }
 }
