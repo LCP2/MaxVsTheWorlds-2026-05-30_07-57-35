@@ -111,7 +111,7 @@ namespace MaxWorlds.Tests.EditMode
             Vector2 max = map.First(EntityKind.PlayerSpawn).CenterXz;
 
             var factories = MapValidation.Kind(map, EntityKind.Factory);
-            Assert.AreEqual(3, factories.Count, "the yard has lost a factory");
+            Assert.AreEqual(4, factories.Count, "the yard has lost a factory");
 
             foreach (MapEntity factory in factories)
             {

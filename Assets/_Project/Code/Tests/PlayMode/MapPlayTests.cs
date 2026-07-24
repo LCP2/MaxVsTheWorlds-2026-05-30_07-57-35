@@ -189,9 +189,10 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>
-        /// The mission, proved from data: BOTH factories, then the gate. Nothing wires these factories
-        /// to this gate except the map's <c>opensOn</c>, and nothing tells the gate it takes two keys
-        /// except the fact that the map named two.
+        /// The mission, proved from data: every factory, then the gate. Nothing wires these factories
+        /// to this gate except the map's <c>opensOn</c>, and nothing tells the gate it takes four keys
+        /// except the fact that the map named four — including the central garden shed, which is a
+        /// real factory now too (YT-185), not a landmark the gate can ignore.
         ///
         /// The first kill NOT opening the gate is the assertion that matters. That is the difference
         /// between a run with a build-up and the one the playtest found — where you were through the
@@ -205,23 +206,30 @@ namespace MaxWorlds.Tests.PlayMode
             var door = _gate.GetComponent<Collider>();
             var gate = _gate.GetComponent<SubZoneGate>();
             Assert.IsTrue(door.enabled, "the boss gate should start closed");
-            Assert.AreEqual(3, gate.Keys, "the gate is not waiting on all three factories");
+            Assert.AreEqual(4, gate.Keys, "the gate is not waiting on all four factories");
 
             yield return Destroy(FactoryCensus.All[0]);
 
             Assert.IsTrue(door.enabled,
-                "the gate opened on the FIRST factory. Two are still standing and still spawning, " +
+                "the gate opened on the FIRST factory. Three are still standing and still spawning, " +
                 "and the player can walk past them to the boss.");
-            Assert.AreEqual(2, gate.KeysRemaining, "the gate did not count the first kill");
+            Assert.AreEqual(3, gate.KeysRemaining, "the gate did not count the first kill");
 
             yield return Destroy(FactoryCensus.All[1]);
 
             Assert.IsTrue(door.enabled,
-                "the gate opened on the SECOND factory. The third is still standing and still " +
-                "spawning, and the player can walk past it to the boss.");
-            Assert.AreEqual(1, gate.KeysRemaining, "the gate did not count the second kill");
+                "the gate opened on the SECOND factory. Two are still standing and still " +
+                "spawning, and the player can walk past them to the boss.");
+            Assert.AreEqual(2, gate.KeysRemaining, "the gate did not count the second kill");
 
             yield return Destroy(FactoryCensus.All[2]);
+
+            Assert.IsTrue(door.enabled,
+                "the gate opened on the THIRD factory. The fourth is still standing and still " +
+                "spawning, and the player can walk past it to the boss.");
+            Assert.AreEqual(1, gate.KeysRemaining, "the gate did not count the third kill");
+
+            yield return Destroy(FactoryCensus.All[3]);
 
             Assert.IsFalse(door.enabled,
                 "the gate never opened — with every factory down, the run cannot be finished");
@@ -239,12 +247,15 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsFalse(boss.Engaged, "the boss is awake before anything has been destroyed");
 
             yield return Destroy(FactoryCensus.All[0]);
-            Assert.IsFalse(boss.Engaged, "the boss woke on the first factory, with two still up");
+            Assert.IsFalse(boss.Engaged, "the boss woke on the first factory, with three still up");
 
             yield return Destroy(FactoryCensus.All[1]);
-            Assert.IsFalse(boss.Engaged, "the boss woke on the second factory, with one still up");
+            Assert.IsFalse(boss.Engaged, "the boss woke on the second factory, with two still up");
 
             yield return Destroy(FactoryCensus.All[2]);
+            Assert.IsFalse(boss.Engaged, "the boss woke on the third factory, with one still up");
+
+            yield return Destroy(FactoryCensus.All[3]);
             Assert.IsTrue(boss.Engaged, "the yard is clear and the boss never woke up");
         }
 

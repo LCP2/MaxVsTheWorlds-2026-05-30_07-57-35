@@ -194,7 +194,7 @@
             "depth": 0.6,
             "shape": "box",
             "dressing": "none",
-            "opensOn": "mower_hutch, greenhouse_hutch, toolshed_hutch"
+            "opensOn": "mower_hutch, greenhouse_hutch, toolshed_hutch, central_hutch"
         },
         {
             "id": "big_bermuda",
@@ -269,15 +269,15 @@
             "opensOn": ""
         },
         {
-            "id": "Cover Central Shed",
-            "kind": "cover",
-            "x": 11.5,
-            "z": 9.0,
-            "width": 4.0,
-            "height": 2.4,
-            "depth": 3.6,
+            "id": "central_hutch",
+            "kind": "factory",
+            "x": 0.0,
+            "z": 19.0,
+            "width": 3.0,
+            "height": 2.0,
+            "depth": 3.0,
             "shape": "box",
-            "dressing": "shed",
+            "dressing": "none",
             "opensOn": ""
         },
         {
