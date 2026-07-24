@@ -164,21 +164,25 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator PartsDropOnlyEveryNthToughKill_CellsEveryKill()
         {
             yield return NewDirector();
-            DevTuning.PartDropInterval = 3f;   // a part every 3rd bruiser (YT-143 pacing)
+            // Exercise the authored default pacing (YT-143 mechanism, spacing set to 6 in YT-183)
+            // rather than a hardcoded interval, so this test tracks the default automatically.
+            int interval = Mathf.RoundToInt(PickupDirector.DefaultPartInterval);
+            DevTuning.PartDropInterval = interval;
 
-            // First two kills: cells, but no part yet.
-            DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
-            DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
+            // All kills before the interval: cells, but no part yet.
+            for (int i = 0; i < interval - 1; i++)
+                DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
             yield return null;
             Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
                 "a part shouldn't drop before the pacing interval");
-            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(PickupDirector.CellsPerDrop * 2),
+            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(PickupDirector.CellsPerDrop * (interval - 1)),
                 "power cells keep dropping every kill regardless of the part pacing");
 
-            // Third kill hits the interval — the first part drops.
+            // The Nth kill hits the interval — the first part drops.
             DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
             yield return null;
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1), "the first part should drop on the 3rd kill");
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1),
+                $"the first part should drop on the {interval}th kill");
         }
     }
 }
