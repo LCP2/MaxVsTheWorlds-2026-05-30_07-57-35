@@ -88,10 +88,13 @@ namespace MaxWorlds.UI
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
 
-        // The Invasion Level clock (YT-181): counts run time UP, so the player reads the rising
-        // tide directly rather than having to infer it from the swarm alone.
-        private Text _levelClock;
-        private int _shownClockSeconds = int.MinValue;
+        // The Invasion Dial (YT-197): a fill meter across the three escalation bands, so the whole
+        // DifficultyDirector curve reads as a shape at a glance instead of a clock the player has
+        // to interpret.
+        private Image _dialFill;
+        private Text _dialStageLabel;
+        private DifficultyDirector.Stage? _shownStage;
+        private float _dialStageFlash;
 
         // Boss
         private RectTransform _bossRoot;
@@ -134,7 +137,7 @@ namespace MaxWorlds.UI
             BuildDashButton();
             BuildJoysticks();
             BuildArenaIndicator();
-            BuildLevelClock();
+            BuildInvasionDial();
             BuildBossBar();
             BuildWarning();
             BuildPowerCellCounter();
@@ -279,7 +282,7 @@ namespace MaxWorlds.UI
             UpdateAbilitySlots(dt);
             UpdateJoysticks();
             UpdateArena(dt);
-            UpdateLevelClock();
+            UpdateInvasionDial(dt);
             UpdateBoss();
             UpdateWarnings(dt);
             UpdateDrops(dt);
@@ -860,44 +863,74 @@ namespace MaxWorlds.UI
             _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
         }
 
-        /// <summary>The Invasion Level clock (YT-181): a small MM:SS readout so the time pressure the
-        /// DifficultyDirector is racing is actually felt, not just inferred from a swarm getting
-        /// gradually meaner. Sits centred just under the arena indicator — the other "how's the run
-        /// going" readout.</summary>
-        private void BuildLevelClock()
+        /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
+        /// — INVASION / INFESTATION / DOMINATION — so the DifficultyDirector curve the swarm is
+        /// racing is legible at a glance instead of a clock the player has to interpret. Sits
+        /// centred just under the arena indicator — the other "how's the run going" readout.
+        /// Replaces the old MM:SS level clock (YT-181).</summary>
+        private void BuildInvasionDial()
         {
-            _levelClock = AddText(Root, 32f, BoneWhite, TextAnchor.MiddleCenter);
-            Anchor(_levelClock.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            _levelClock.rectTransform.sizeDelta = new Vector2(220f, 40f);
-            _levelClock.rectTransform.anchoredPosition = new Vector2(0f, 110f); // just above the arena indicator
-            _levelClock.fontStyle = FontStyle.Bold;
-        }
+            var root = NewRect("Invasion Dial", Root);
+            Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            root.sizeDelta = new Vector2(220f, 18f);
+            root.anchoredPosition = new Vector2(0f, 104f); // just above the arena indicator
 
-        private void UpdateLevelClock()
-        {
-            if (_levelClock == null) return;
+            var bg = AddImage(root, HudTextures.RoundedBox(18, 0.5f), PanelColor, "BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
 
-            // Only rebuild the string/text-mesh when the printed second actually changes (YT-186 —
-            // same guard as WorldHealthBar.Refresh, same reason: a per-frame ToString/text rebuild is
-            // pure waste for a readout that visibly ticks once a second).
-            int seconds = Mathf.FloorToInt(Mathf.Max(0f, DifficultyDirector.Elapsed));
-            if (seconds != _shownClockSeconds)
+            _dialFill = AddImage(root, HudTextures.RoundedBox(18, 0.5f), BoneWhite, "Fill");
+            Stretch(_dialFill.rectTransform, -3f);
+            _dialFill.type = Image.Type.Filled;
+            _dialFill.fillMethod = Image.FillMethod.Horizontal;
+            _dialFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _dialFill.fillAmount = 0f;
+
+            // Two ticks mark the band boundaries at 1/3 and 2/3 — same language as RebuildBossSegments.
+            for (int i = 1; i < 3; i++)
             {
-                _shownClockSeconds = seconds;
-                _levelClock.text = FormatClock(seconds);
+                var tick = AddImage(root, HudTextures.Solid(), new Color(0f, 0f, 0f, 0.75f), $"Band {i}");
+                Anchor(tick.rectTransform, new Vector2(i / 3f, 0.5f), new Vector2(i / 3f, 0.5f), new Vector2(0.5f, 0.5f));
+                tick.rectTransform.sizeDelta = new Vector2(2f, 18f);
+                tick.raycastTarget = false;
             }
 
-            // Calm white climbing to urgent red as the Invasion Level nears its ceiling — the same
-            // language HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one. This
-            // still changes continuously, so it updates every frame.
-            _levelClock.color = Color.Lerp(BoneWhite, HpColor, DifficultyDirector.Normalized);
+            _dialStageLabel = AddText(Root, 24f, BoneWhite, TextAnchor.MiddleCenter);
+            Anchor(_dialStageLabel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _dialStageLabel.rectTransform.sizeDelta = new Vector2(260f, 28f);
+            _dialStageLabel.rectTransform.anchoredPosition = new Vector2(0f, 126f); // label rides above the fill
+            _dialStageLabel.fontStyle = FontStyle.Bold;
         }
 
-        private static string FormatClock(float seconds)
+        private void UpdateInvasionDial(float dt)
         {
-            int total = Mathf.FloorToInt(Mathf.Max(0f, seconds));
-            return $"{total / 60:00}:{total % 60:00}";
+            if (_dialFill == null) return;
+
+            float normalized = DifficultyDirector.Normalized;
+            _dialFill.fillAmount = normalized;
+            // Calm white climbing to urgent red as the Invasion Level nears its ceiling — the same
+            // language HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one.
+            _dialFill.color = Color.Lerp(BoneWhite, HpColor, normalized);
+
+            var stage = DifficultyDirector.CurrentStage;
+            if (stage != _shownStage)
+            {
+                _shownStage = stage;
+                _dialStageLabel.text = StageLabel(stage);
+                _dialStageFlash = 1f; // crossing into a new band is an escalation beat, not a silent tick
+            }
+
+            _dialStageFlash = Mathf.Max(0f, _dialStageFlash - dt / 0.4f);
+            float pop = 1f + 0.25f * _dialStageFlash;
+            _dialStageLabel.rectTransform.localScale = new Vector3(pop, pop, 1f);
+            _dialStageLabel.color = Color.Lerp(BoneWhite, ReadyGlow, _dialStageFlash);
         }
+
+        private static string StageLabel(DifficultyDirector.Stage stage) => stage switch
+        {
+            DifficultyDirector.Stage.Invasion => "INVASION",
+            DifficultyDirector.Stage.Infestation => "INFESTATION",
+            _ => "DOMINATION",
+        };
 
         /// <summary>The in-run map (YT-72) — its own component, so the minimap can reuse the same
         /// renderer at a different scale rather than the HUD growing a second copy of it.</summary>
