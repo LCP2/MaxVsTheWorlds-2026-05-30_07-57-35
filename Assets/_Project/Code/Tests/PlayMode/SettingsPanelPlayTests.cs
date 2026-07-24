@@ -349,5 +349,53 @@ namespace MaxWorlds.Tests.PlayMode
             }
             yield return null;
         }
+
+        [UnityTest]
+        public IEnumerator EveryKnobRowsLabelAndValueFitWithoutOverlapping()
+        {
+            // YT-190: the label had no width bound and could run rightward under the value's raw
+            // number, worst on the panel's narrowest (3-column) rows. This checks both halves of
+            // the fix, for every knob on every tab: the label/value rects never overlap (a real
+            // gap between their bounded zones), and each text actually fits its own zone at its
+            // font size (so it renders on one line, not wrapped into the row below).
+            var canvas = PanelCanvas();
+            GearButton(canvas).onClick.Invoke();
+            yield return null;
+
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+            Assert.That(sliders.Length, Is.GreaterThan(0));
+
+            foreach (var s in sliders)
+            {
+                var row = s.transform.parent;
+                var texts = row.GetComponentsInChildren<Text>(true);
+                Assert.That(texts.Length, Is.EqualTo(2),
+                    $"row '{row.name}' should have exactly a label and a value text");
+
+                var a = texts[0];
+                var b = texts[1];
+                bool aIsLabel = a.rectTransform.anchoredPosition.x <= b.rectTransform.anchoredPosition.x;
+                var label = aIsLabel ? a : b;
+                var value = aIsLabel ? b : a;
+
+                Assert.That(label.preferredWidth, Is.LessThanOrEqualTo(label.rectTransform.rect.width),
+                    $"'{row.name}' label \"{label.text}\" needs {label.preferredWidth:0}px but only " +
+                    $"has {label.rectTransform.rect.width:0}px — it would wrap instead of reading as " +
+                    "one line.");
+                Assert.That(value.preferredWidth, Is.LessThanOrEqualTo(value.rectTransform.rect.width),
+                    $"'{row.name}' value \"{value.text}\" needs {value.preferredWidth:0}px but only " +
+                    $"has {value.rectTransform.rect.width:0}px.");
+
+                var labelCorners = new Vector3[4];
+                var valueCorners = new Vector3[4];
+                label.rectTransform.GetWorldCorners(labelCorners);
+                value.rectTransform.GetWorldCorners(valueCorners);
+                float labelRight = labelCorners[2].x;
+                float valueLeft = valueCorners[0].x;
+                Assert.That(labelRight, Is.LessThanOrEqualTo(valueLeft + 0.5f),
+                    $"'{row.name}' label zone (right edge {labelRight:0}) overlaps the value zone " +
+                    $"(left edge {valueLeft:0}).");
+            }
+        }
     }
 }
