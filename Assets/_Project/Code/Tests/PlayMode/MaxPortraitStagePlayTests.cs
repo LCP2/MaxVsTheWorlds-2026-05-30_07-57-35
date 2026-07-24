@@ -1,6 +1,7 @@
 using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.TestTools;
 using MaxWorlds.VFX;
 
@@ -53,8 +54,13 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsNotNull(cam, "the stage has no camera rendering the bust.");
             Assert.IsFalse(cam.enabled, "the camera should start disabled — it only runs while the screen is up.");
 
+            // Show() only actually enables the camera when there's a real graphics device to render
+            // with (YT-189) — under a headless -nographics run it stays off, since an enabled camera
+            // pointed at a RenderTexture would try to render and log an engine-level error that fails
+            // whatever test happens to be running at the time, not just this one.
+            bool hasRealDevice = SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
             _stage.Show();
-            Assert.IsTrue(cam.enabled, "Show() should start the live render.");
+            Assert.AreEqual(hasRealDevice, cam.enabled, "Show() should start the live render iff a real graphics device exists.");
 
             _stage.Hide();
             Assert.IsFalse(cam.enabled, "Hide() should stop the live render.");
