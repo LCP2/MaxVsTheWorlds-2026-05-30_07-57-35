@@ -63,6 +63,10 @@ namespace MaxWorlds.Arena
             // over from whatever the last level (or the last test) left it at.
             DifficultyDirector.Reset();
 
+            // Belt-and-braces against a robot whose OnDisable hasn't run yet when the next level (or
+            // test) starts counting toward the field-wide spawn budget (YT-186).
+            RobotEnemy.ResetRegistry();
+
             // A new level is a new set of directions. The robots cache the map they navigate (YT-93),
             // and a cache that outlives its level would route this yard's robots around the last one's
             // walls.

@@ -30,6 +30,22 @@ namespace MaxWorlds.Enemies
         // is a real escalation over one at 12 — more pressure, from two directions — without becoming
         // the wall of bodies that kiteability tuning (YT-63/YT-80) exists to prevent.
         [SerializeField] private int maxLiveEnemies = 8;
+
+        /// <summary>
+        /// The FIELD-WIDE budget, across every factory (YT-186). <see cref="maxLiveEnemies"/> only
+        /// ever capped ONE factory's own count; nothing capped the sum, so when the yard had one or
+        /// two sources the effective ceiling was small by accident. YT-185 gave the yard a fourth
+        /// factory (mower/greenhouse/toolshed/central), which raised the field's worst-case
+        /// concurrent-robot count from 24 (3 x 8) to 32 with no compensating limit — more agents,
+        /// more nav, more telegraph/VFX draws, more shadow-casting bodies, all live at the same
+        /// instant. This restores the original 24-robot ceiling regardless of how many factories a
+        /// level has, so adding sources spreads the swarm across more doors rather than growing it.
+        /// </summary>
+        public const int GlobalMaxLiveEnemies = 24;
+
+        /// <summary>Room for one more robot ANYWHERE on the field, not just from this factory.</summary>
+        private static bool GlobalHasRoom => RobotEnemy.ActiveCount < GlobalMaxLiveEnemies;
+
         [Tooltip("Seconds between spawns at run start (breathable).")]
         [SerializeField] private float spawnIntervalStart = 1.8f;
         [Tooltip("Seconds between spawns at steady state (peak pressure).")]
@@ -92,7 +108,7 @@ namespace MaxWorlds.Enemies
         /// door watches this to know when to start hauling itself up, so that it is open by the time
         /// the robot is ready rather than the robot waiting on a door that had no reason to move.</summary>
         public bool WantsToEmit =>
-            _running && _timer >= CurrentInterval && _live.Count < maxLiveEnemies;
+            _running && _timer >= CurrentInterval && _live.Count < maxLiveEnemies && GlobalHasRoom;
 
         /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
         /// test can prove a dead factory emitted NOTHING — which <see cref="LiveCount"/> can't, since
@@ -156,7 +172,7 @@ namespace MaxWorlds.Enemies
             float dt = Time.deltaTime;
             _elapsed += dt;
             _timer += dt;
-            if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies) return;
+            if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies || !GlobalHasRoom) return;
 
             // Wait for the door, WITHOUT resetting the timer (YT-108) — so the robot comes out on the
             // frame the door finishes opening, not a full interval after it. Holding the timer is
@@ -198,7 +214,7 @@ namespace MaxWorlds.Enemies
                 Mathf.Lerp(0f, DeathSurgeEliteChanceMax, DifficultyDirector.Normalized));
 
             bool eliteSpawned = false;
-            for (int i = 0; i < burst && _live.Count < maxLiveEnemies; i++)
+            for (int i = 0; i < burst && _live.Count < maxLiveEnemies && GlobalHasRoom; i++)
             {
                 // At most one elite per surge — a wreck coughing up a single tough unit reads as a
                 // beat; a wreck coughing up a wall of them reads as a bug.

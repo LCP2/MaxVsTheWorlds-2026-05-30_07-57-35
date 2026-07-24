@@ -91,6 +91,7 @@ namespace MaxWorlds.UI
         // The Invasion Level clock (YT-181): counts run time UP, so the player reads the rising
         // tide directly rather than having to infer it from the swarm alone.
         private Text _levelClock;
+        private int _shownClockSeconds = int.MinValue;
 
         // Boss
         private RectTransform _bossRoot;
@@ -875,9 +876,20 @@ namespace MaxWorlds.UI
         private void UpdateLevelClock()
         {
             if (_levelClock == null) return;
-            _levelClock.text = FormatClock(DifficultyDirector.Elapsed);
+
+            // Only rebuild the string/text-mesh when the printed second actually changes (YT-186 —
+            // same guard as WorldHealthBar.Refresh, same reason: a per-frame ToString/text rebuild is
+            // pure waste for a readout that visibly ticks once a second).
+            int seconds = Mathf.FloorToInt(Mathf.Max(0f, DifficultyDirector.Elapsed));
+            if (seconds != _shownClockSeconds)
+            {
+                _shownClockSeconds = seconds;
+                _levelClock.text = FormatClock(seconds);
+            }
+
             // Calm white climbing to urgent red as the Invasion Level nears its ceiling — the same
-            // language HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one.
+            // language HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one. This
+            // still changes continuously, so it updates every frame.
             _levelClock.color = Color.Lerp(BoneWhite, HpColor, DifficultyDirector.Normalized);
         }
 

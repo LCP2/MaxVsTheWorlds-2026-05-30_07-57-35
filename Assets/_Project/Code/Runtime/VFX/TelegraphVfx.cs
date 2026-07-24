@@ -52,8 +52,13 @@ namespace MaxWorlds.VFX
 
         private void DrawEnemyWindups()
         {
-            foreach (var enemy in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+            // RobotEnemy.Active (YT-186), not FindObjectsByType<RobotEnemy>(): that scanned and
+            // allocated a fresh array of every robot on the field, every single frame, regardless of
+            // whether anything was even winding up — cost that grew with YT-185's fourth factory.
+            var enemies = RobotEnemy.Active;
+            for (int i = 0; i < enemies.Count; i++)
             {
+                var enemy = enemies[i];
                 if (!enemy.IsAlive) continue;
                 float p = enemy.TelegraphProgress;
                 if (p <= 0f) continue;

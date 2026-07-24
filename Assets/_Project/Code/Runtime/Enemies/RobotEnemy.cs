@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
@@ -81,6 +82,26 @@ namespace MaxWorlds.Enemies
         [SerializeField] private Renderer tellRenderer; // optional; the gold-ring/eye
         [SerializeField] private Color idleTell = new Color(0.85f, 0.7f, 0.2f);
         [SerializeField] private Color windupTell = new Color(1f, 0.2f, 0.1f);
+
+        // --- Field-wide registry (YT-186) ---------------------------------------------------------
+        // Tracked directly off OnEnable/OnDisable rather than tallied by hand, so it can never drift
+        // from what is actually switched on: a normal death, being pooled back out, and a test's
+        // blunt Object.Destroy all fire OnDisable the same way. This is what EnemySpawner's global
+        // spawn budget and TelegraphVfx's windup scan both read instead of a FindObjectsByType<>()
+        // sweep — a full-scene scan+allocation that used to run every single frame regardless of
+        // enemy count, and got more expensive exactly as YT-185 grew the population it was scanning.
+        private static readonly List<RobotEnemy> _active = new List<RobotEnemy>(32);
+
+        /// <summary>Every robot switched on right now, across every factory.</summary>
+        public static IReadOnlyList<RobotEnemy> Active => _active;
+
+        /// <summary>How many robots are switched on right now, field-wide (not per-factory).</summary>
+        public static int ActiveCount => _active.Count;
+
+        /// <summary>Empties the registry. Called when a level starts building, alongside
+        /// <see cref="MaxWorlds.Factories.FactoryCensus.Reset"/> — belt-and-braces against a robot
+        /// whose OnDisable hasn't run yet when the next level (or test) starts counting.</summary>
+        public static void ResetRegistry() => _active.Clear();
 
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
@@ -196,7 +217,13 @@ namespace MaxWorlds.Enemies
         private const float BarHeight = 1.15f;
         private const float BarWidth = 1.5f;   // YT-136: wider so a flat, short bar still reads at 23 m zoom
 
-        private void OnEnable() => ResetState(); // reset for pooling reuse
+        private void OnEnable()
+        {
+            _active.Add(this);
+            ResetState(); // reset for pooling reuse
+        }
+
+        private void OnDisable() => _active.Remove(this);
 
         /// <summary>Reset to a fresh, alive Chase state. Called from Awake/OnEnable and
         /// directly by tests (which don't get Unity lifecycle callbacks).</summary>

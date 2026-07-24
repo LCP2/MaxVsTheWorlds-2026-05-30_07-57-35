@@ -356,7 +356,16 @@ namespace MaxWorlds.VFX
             go.transform.localRotation = rot ?? Quaternion.identity;
             go.transform.localScale = scale;
 
-            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            var r = go.GetComponent<MeshRenderer>();
+            r.sharedMaterial = mat;
+
+            // No shadows (YT-186): every other rig in the game (Max, the boss) turns this off on
+            // every part it builds — this rig was the one place it got missed. At up to 8-13 parts
+            // per robot and up to 24 robots on the field at once, that is several hundred
+            // shadow-casting mesh renderers the GPU has to draw into the shadow map every frame for
+            // silhouettes the fixed top-down camera reads by shape and eye-colour, not by shadow.
+            r.shadowCastingMode = ShadowCastingMode.Off;
+            r.receiveShadows = false;
             return go.transform;
         }
 
