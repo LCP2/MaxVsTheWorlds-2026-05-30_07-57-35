@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
+using MaxWorlds.Core;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -173,6 +174,11 @@ namespace MaxWorlds.Intro
         private void BuildSet()
         {
             _root = IntroBuild.Pivot(transform, "IntroSet", IntroOrigin);
+            // RuntimeSurfaceDirector (and WorldMaterials) repaint any renderer that doesn't opt out —
+            // one guard on the set root protects the whole hierarchy (same idiom as
+            // BackyardHomeShed.cs), so the comet, pods, shed, hose and every glow keep the materials
+            // this cinematic actually built for them instead of being flattened to biome tones (YT-188).
+            _root.gameObject.AddComponent<KeepsOwnMaterial>();
             _space = new IntroSpace(_root, SpaceOffset);
             _descent = new IntroDescent(_root, DescentOffset);
             _shed = new IntroShed(_root, ShedOffset);
@@ -191,6 +197,10 @@ namespace MaxWorlds.Intro
             var r = go.GetComponent<MeshRenderer>();
             r.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
             r.shadowCastingMode = ShadowCastingMode.Off;
+            // Parented to the camera, not _root, so BuildSet's guard doesn't cover it — needs its own
+            // KeepsOwnMaterial or RuntimeSurfaceDirector flattens the fade quad's alpha-blend material
+            // to an opaque biome one and the fade-to-white/black stops working (YT-188).
+            go.AddComponent<KeepsOwnMaterial>();
             _fade = go.transform;
             ApplyFade();
         }
