@@ -199,7 +199,16 @@ namespace MaxWorlds.VFX
             if (_bust != null) _bust.localRotation = Quaternion.Euler(0f, Mathf.Sin(unscaledT * 0.6f) * 6f, 0f);
         }
 
-        public void Show() { if (_cam != null) _cam.enabled = true; }
+        /// <summary>Starts the live render — except under a headless <c>-nographics</c> run (no real
+        /// graphics device), where enabling a camera pointed at a RenderTexture makes the engine try to
+        /// render it and log an error that fails whatever automated test happens to be running at the
+        /// time, not just this one. Real players/builds always have a device, so this only ever changes
+        /// behaviour in an automated headless run, where nothing was going to be visible regardless.</summary>
+        public void Show()
+        {
+            if (_cam != null) _cam.enabled = SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
+        }
+
         public void Hide() { if (_cam != null) _cam.enabled = false; }
 
         private void OnDestroy()
