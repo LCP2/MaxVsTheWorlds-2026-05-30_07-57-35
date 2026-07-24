@@ -76,7 +76,16 @@ namespace MaxWorlds.VFX
                     // Spin it here rather than lean on the pickup's own spin: the pickup spins its greybox
                     // child, which we hid, so the art needs its own turn. Unscaled so it keeps turning while
                     // the upgrade screen has the game paused with a cell still on the ground.
-                    if (art != null) art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                    if (art != null)
+                    {
+                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                        // The GLISTEN (YT-167): flicker the two specular dots WeaponPartArt built onto the
+                        // casing. Combined with the spin above, this is what sells "shiny" over the plain
+                        // aura below — a highlight that visibly travels the surface and catches the light,
+                        // not just a halo sitting around the whole prop.
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                    }
                 }
 
                 PulseGlow(EnsureGlow(pickup.transform));
@@ -123,6 +132,28 @@ namespace MaxWorlds.VFX
                 mpb.SetColor(BaseColorId, GlowColor * (0.6f + 0.4f * t));   // additive: dimmer..full
                 r.SetPropertyBlock(mpb);
             }
+        }
+
+        /// <summary>Flickers one of the power cell's specular glint dots (YT-167) in a brief spike-and-fade,
+        /// not the aura's slow breathing sine — a sparkle is light catching a facet for an instant, not a
+        /// beacon glowing steadily. <paramref name="phase"/> offsets each dot's cycle so, together with the
+        /// prop's own spin, the two glints twinkle independently rather than flashing in lockstep.</summary>
+        private static void PulseGlisten(Transform art, string childName, float phase)
+        {
+            var glisten = art.Find(childName);
+            if (glisten == null || !glisten.TryGetComponent<MeshRenderer>(out var r)) return;
+
+            // Raising a sine to a high power narrows it from a smooth wave into a brief spike separated
+            // by dark gaps — the shape of a glint, not a lamp. Additive, so the peak is pushed past 1 for
+            // a genuinely hot flash rather than just a brighter version of the resting dot.
+            float wave = Mathf.Sin(Time.unscaledTime * 2.1f + phase) * 0.5f + 0.5f;
+            float spike = Mathf.Pow(wave, 10f);
+            float brightness = 0.15f + 2.4f * spike;
+
+            var mpb = new MaterialPropertyBlock();
+            r.GetPropertyBlock(mpb);
+            mpb.SetColor(BaseColorId, WeaponPartArt.GlistenColor * brightness);
+            r.SetPropertyBlock(mpb);
         }
 
         /// <summary>The child wearing exactly <paramref name="wantName"/>, or null.</summary>

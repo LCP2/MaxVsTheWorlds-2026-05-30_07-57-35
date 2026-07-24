@@ -114,6 +114,41 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator PowerCell_GlintsFlickerOnTheCasing()
+        {
+            // YT-167: the director has to actually drive the glints WeaponPartArt built, not just leave
+            // them sitting at their build-time colour — a static "highlight" isn't a sparkle.
+            var cell = MakeCell();
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(cell);
+            Assert.IsNotNull(art, "the power cell got no art model.");
+
+            var glint = art.Find(WeaponPartArt.GlistenPrefix + "0");
+            Assert.IsNotNull(glint, "the cell's art has no glint dot to animate.");
+            var r = glint.GetComponent<MeshRenderer>();
+            int baseColorId = Shader.PropertyToID("_BaseColor");
+
+            Color ColorAt()
+            {
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                return mpb.GetColor(baseColorId);
+            }
+
+            Color c0 = ColorAt();
+            bool changed = false;
+            for (int i = 0; i < 8; i++)
+            {
+                yield return null;
+                if (ColorAt() != c0) { changed = true; break; }
+            }
+
+            Assert.IsTrue(changed, "the power cell's glint never changes brightness — it isn't sparkling.");
+        }
+
+        [UnityTest]
         public IEnumerator PowerCell_StillWearsItsSwappedProp_WithTheGreyboxHidden()
         {
             var cell = MakeCell();
