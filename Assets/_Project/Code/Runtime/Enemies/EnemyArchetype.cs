@@ -79,7 +79,11 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 1.85f, maxHealth: 24f,   // YT-169: walk, not rush — ~60% of Max's 3.01 (was 2.18)
+            moveSpeed: 1.85f, maxHealth: 36f,   // YT-169: walk, not rush — ~60% of Max's 3.01 (was 2.18)
+            // YT-194: 24 -> 36 (1.5x, matching the Bruiser's own bump below so the health-contrast
+            // ratio the tests pin doesn't drift) — the field-wide live cap (YT-186) means late-game
+            // danger has to come from durability, not raw numbers, so the common kill needs to
+            // actually cost something even before the Invasion Level's own toughening leans in.
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -110,7 +114,7 @@ namespace MaxWorlds.Enemies
             // whatever the rusher/panel default is to stay the slow tank (was 1.09 = half of 2.18,
             // now 0.925 = half of the YT-169 1.85). Flag: if Lee wants ALL robots flat at the
             // rusher's speed, this is the one line to change.
-            moveSpeed: 0.925f, maxHealth: 100f,
+            moveSpeed: 0.925f, maxHealth: 150f,   // YT-194: 100 -> 150, the same 1.5x as the rusher
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
@@ -127,6 +131,16 @@ namespace MaxWorlds.Enemies
         public EnemyArchetype Toughened(float multiplier) => new EnemyArchetype(
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
+            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay);
+
+        /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
+        /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
+        /// <see cref="Toughened"/>, which scales health AND damage together for the Invasion Level:
+        /// this is the player-dialled baseline that escalation still layers its own toughening on
+        /// top of, so the two knobs compose rather than fight.</summary>
+        public EnemyArchetype WithHealthMultiplier(float multiplier) => new EnemyArchetype(
+            Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
+            MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay);
     }
 

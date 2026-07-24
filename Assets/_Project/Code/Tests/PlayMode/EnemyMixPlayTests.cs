@@ -56,6 +56,10 @@ namespace MaxWorlds.Tests.PlayMode
             Set(s, "spawnIntervalStart", 0f);   // spawn every frame — a test shouldn't wait 1.8 s
             Set(s, "spawnIntervalMin", 0f);
             Set(s, "maxLiveEnemies", 12);
+            // YT-194: the live cap now ramps up from startingRobots as the Invasion Level climbs —
+            // pin it at the ceiling so this file's tests (about pooling/kind-matching, not pacing)
+            // still fill the field immediately, exactly as before.
+            Set(s, "startingRobots", 12);
             Set(s, "bruiserEvery", 4);
             Set(s, "firstBruiserAt", 3);
             return s;

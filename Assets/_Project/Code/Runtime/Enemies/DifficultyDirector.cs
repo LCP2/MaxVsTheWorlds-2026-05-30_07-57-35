@@ -33,7 +33,11 @@ namespace MaxWorlds.Enemies
 
         // --- what the level actually buys, at full escalation (Normalized == 1) ---
         private const float SpawnIntervalFloor = 0.4f;  // spawns land ~2.5x as often
-        private const float ToughnessCeiling = 1.75f;   // robots carry 75% more health/damage
+        // YT-194: 1.75 -> 2.5 (robots carry 150% more health/damage, was 75%). The field-wide live
+        // cap (YT-186) means raw numbers can't carry late-game threat any more, so toughness has to
+        // lean harder to keep a fully-armed Max honest — a few tough robots to respect, not a puddle
+        // of weak ones he melts.
+        private const float ToughnessCeiling = 2.5f;
 
         private static float _elapsed;
         private static int _shedsDestroyed;

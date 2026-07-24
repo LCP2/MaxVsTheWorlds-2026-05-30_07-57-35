@@ -31,6 +31,15 @@ namespace MaxWorlds.Enemies
         // the wall of bodies that kiteability tuning (YT-63/YT-80) exists to prevent.
         [SerializeField] private int maxLiveEnemies = 8;
 
+        /// <summary>Robots THIS factory allows alive at RUN START (YT-194) — see
+        /// <see cref="EffectiveMaxLiveEnemies"/>, which ramps this up to <see cref="maxLiveEnemies"/>
+        /// as the Invasion Level climbs. Default of a couple, not a swarm: the playtest that opened
+        /// this ticket found Max overrun in the opening seconds, before he has any answer to it.</summary>
+        [Tooltip("Robots THIS factory allows alive at RUN START — ramps up to Max live enemies as " +
+                 "the Invasion Level climbs (YT-194). Overridable via the Settings panel's " +
+                 "'Starting robots' knob.")]
+        [SerializeField] private int startingRobots = 1;
+
         /// <summary>
         /// The FIELD-WIDE budget, across every factory (YT-186). <see cref="maxLiveEnemies"/> only
         /// ever capped ONE factory's own count; nothing capped the sum, so when the yard had one or
@@ -45,6 +54,24 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Room for one more robot ANYWHERE on the field, not just from this factory.</summary>
         private static bool GlobalHasRoom => RobotEnemy.ActiveCount < GlobalMaxLiveEnemies;
+
+        /// <summary>The live-count ceiling THIS factory actually enforces right now (YT-194): ramps
+        /// from <see cref="startingRobots"/> up to the authored <see cref="maxLiveEnemies"/> as
+        /// <see cref="DifficultyDirector.Normalized"/> climbs from 0 to 1, so a fresh run shows a
+        /// couple of robots and the field fills in as the Invasion Level rises. Clamped to
+        /// <see cref="maxLiveEnemies"/> at both ends — never past the authored ceiling, and never
+        /// above it even mid-ramp if a test or a dialled override put <c>maxLiveEnemies</c> itself
+        /// below <see cref="startingRobots"/>.</summary>
+        private int EffectiveMaxLiveEnemies => Mathf.Clamp(
+            Mathf.RoundToInt(Mathf.Lerp(
+                DevTuning.Or(DevTuning.StartingRobots, startingRobots),
+                maxLiveEnemies,
+                DifficultyDirector.Normalized)),
+            0, maxLiveEnemies);
+
+        /// <summary>The authored starting-robot count, for the Settings panel's reference default
+        /// (YT-194) — same pattern as <see cref="AuthoredSpawnIntervalMin"/>.</summary>
+        public int AuthoredStartingRobots => startingRobots;
 
         [Tooltip("Seconds between spawns at run start (breathable).")]
         [SerializeField] private float spawnIntervalStart = 1.8f;
@@ -108,7 +135,7 @@ namespace MaxWorlds.Enemies
         /// door watches this to know when to start hauling itself up, so that it is open by the time
         /// the robot is ready rather than the robot waiting on a door that had no reason to move.</summary>
         public bool WantsToEmit =>
-            _running && _timer >= CurrentInterval && _live.Count < maxLiveEnemies && GlobalHasRoom;
+            _running && _timer >= CurrentInterval && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom;
 
         /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
         /// test can prove a dead factory emitted NOTHING — which <see cref="LiveCount"/> can't, since
@@ -163,8 +190,24 @@ namespace MaxWorlds.Enemies
         public float CurrentInterval =>
             DevTuning.SpawnInterval.HasValue
                 ? DevTuning.SpawnInterval.Value
-                : SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, spawnIntervalMin, rampSeconds)
+                : SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, EffectiveSpawnIntervalMin, rampSeconds)
                     * DifficultyDirector.SpawnIntervalMultiplier;
+
+        /// <summary>The steady-state spawn interval in seconds — either the authored
+        /// <see cref="spawnIntervalMin"/> or, if the Settings panel's more intuitive "Robot
+        /// production / min" knob has been moved, that rate converted to seconds (YT-194: 60 /
+        /// robots-per-minute). Only replaces the STEADY-STATE end of the start→min ramp: the ramp
+        /// itself and the Invasion Level's <see cref="DifficultyDirector.SpawnIntervalMultiplier"/>
+        /// both still apply on top, unlike <see cref="DevTuning.SpawnInterval"/> above, which pins a
+        /// flat number and bypasses both.</summary>
+        private float EffectiveSpawnIntervalMin =>
+            DevTuning.RobotProductionPerMinute.HasValue && DevTuning.RobotProductionPerMinute.Value > 0f
+                ? 60f / DevTuning.RobotProductionPerMinute.Value
+                : spawnIntervalMin;
+
+        /// <summary>The authored steady-state production rate in robots/minute, for the Settings
+        /// panel's reference default (YT-194) — same pattern as <see cref="AuthoredSpawnIntervalMin"/>.</summary>
+        public float AuthoredProductionPerMinute => spawnIntervalMin > 0f ? 60f / spawnIntervalMin : 0f;
 
         private void Update()
         {
@@ -172,7 +215,7 @@ namespace MaxWorlds.Enemies
             float dt = Time.deltaTime;
             _elapsed += dt;
             _timer += dt;
-            if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies || !GlobalHasRoom) return;
+            if (_timer < CurrentInterval || _live.Count >= EffectiveMaxLiveEnemies || !GlobalHasRoom) return;
 
             // Wait for the door, WITHOUT resetting the timer (YT-108) — so the robot comes out on the
             // frame the door finishes opening, not a full interval after it. Holding the timer is
@@ -201,8 +244,9 @@ namespace MaxWorlds.Enemies
         ///
         /// Burst size and elite chance scale with the Invasion Level (<see cref="DifficultyDirector.Normalized"/>)
         /// unless a Settings-panel override pins them flat — same contract as <see cref="CurrentInterval"/>'s
-        /// <see cref="DevTuning.SpawnInterval"/> override. The loop still respects <see cref="maxLiveEnemies"/>:
-        /// a factory already near the cap gets a smaller (or no) burst rather than blowing past it.
+        /// <see cref="DevTuning.SpawnInterval"/> override. The loop still respects
+        /// <see cref="EffectiveMaxLiveEnemies"/>: a factory already near its (possibly still-ramping)
+        /// cap gets a smaller (or no) burst rather than blowing past it.
         /// </summary>
         public void SpawnSurge()
         {
@@ -214,7 +258,7 @@ namespace MaxWorlds.Enemies
                 Mathf.Lerp(0f, DeathSurgeEliteChanceMax, DifficultyDirector.Normalized));
 
             bool eliteSpawned = false;
-            for (int i = 0; i < burst && _live.Count < maxLiveEnemies && GlobalHasRoom; i++)
+            for (int i = 0; i < burst && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom; i++)
             {
                 // At most one elite per surge — a wreck coughing up a single tough unit reads as a
                 // beat; a wreck coughing up a wall of them reads as a bug.
@@ -232,8 +276,12 @@ namespace MaxWorlds.Enemies
         {
             // Toughened by the Invasion Level (YT-181): read live, so a robot spawned late in a run
             // is tankier and hits harder than the one that came out at the opening bell — the swarm
-            // itself is what gets harder, not just how fast it arrives.
-            EnemyArchetype archetype = EnemyArchetype.Of(kind).Toughened(DifficultyDirector.ToughnessMultiplier);
+            // itself is what gets harder, not just how fast it arrives. The Settings panel's "Robot
+            // health" knob (YT-194) is a separate, flat baseline applied first — the two compose
+            // rather than fight, since WithHealthMultiplier leaves ContactDamage untouched.
+            EnemyArchetype archetype = EnemyArchetype.Of(kind)
+                .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, 1f))
+                .Toughened(DifficultyDirector.ToughnessMultiplier);
             RobotEnemy e = Take(kind, archetype);
 
             // Out of the mouth, fanned, facing the way it's about to run. With a real door (YT-108)

@@ -80,12 +80,13 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(29),
-                "Fourteen Gameplay knobs (ten, plus the four Invasion Level escalation knobs from " +
-                "YT-181), the eleven Weapons-tab knobs (YT-138's seven, plus Range Extender " +
-                "and Wide-Bore from YT-164, plus Spawn interval from YT-170, plus Cell drop chance " +
-                "from YT-171), and the four Boss-tab brood-volley knobs (YT-157): volley interval, " +
-                "adds per volley, max adds alive, volley windup.");
+            Assert.That(sliders.Length, Is.EqualTo(34),
+                "Nineteen Gameplay knobs (ten, plus the four Invasion Level escalation knobs from " +
+                "YT-181, plus Surge burst/Surge elite chance from YT-182, plus Starting robots/" +
+                "Robot production per min/Robot health from YT-194), the eleven Weapons-tab knobs " +
+                "(YT-138's seven, plus Range Extender and Wide-Bore from YT-164, plus Spawn interval " +
+                "from YT-170, plus Cell drop chance from YT-171), and the four Boss-tab brood-volley " +
+                "knobs (YT-157): volley interval, adds per volley, max adds alive, volley windup.");
             yield return null;
         }
 
@@ -106,8 +107,9 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
             Assert.That(boss, Is.Not.Null, "no Boss page — the brood-volley tuning has nowhere to live (YT-157)");
 
-            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(14),
-                "the Gameplay tab keeps its ten knobs plus the four Invasion Level knobs (YT-181)");
+            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(19),
+                "the Gameplay tab keeps its ten knobs plus the four Invasion Level knobs (YT-181), " +
+                "the two death-throes surge knobs (YT-182), and the three swarm-pacing knobs (YT-194)");
             Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(11),
                 "the Weapons tab carries the upgrade/pacing/Hydro knobs, Range Extender and Wide-Bore " +
                 "(YT-164), Spawn interval (YT-170), and Cell drop chance (YT-171)");

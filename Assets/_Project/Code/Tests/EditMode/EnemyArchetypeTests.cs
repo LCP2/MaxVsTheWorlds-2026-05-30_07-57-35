@@ -185,5 +185,31 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < 10; i++)
                 Assert.AreEqual(EnemyKind.Rusher, EnemyMix.KindFor(i, 0, 0));
         }
+
+        // --- YT-194: the "Robot health" slider scales health only ------------------------------
+
+        [Test]
+        public void WithHealthMultiplier_ScalesHealthOnly_LeavingEverythingElseUntouched()
+        {
+            var scaled = Rusher.WithHealthMultiplier(2f);
+
+            Assert.AreEqual(Rusher.MaxHealth * 2f, scaled.MaxHealth, 1e-4,
+                "the health slider must actually double the health");
+            Assert.AreEqual(Rusher.ContactDamage, scaled.ContactDamage, 1e-4,
+                "a health-only override must not also buff the hit — that's Toughened()'s job");
+            Assert.AreEqual(Rusher.MoveSpeed, scaled.MoveSpeed, 1e-4);
+            Assert.AreEqual(Rusher.BodyScale, scaled.BodyScale);
+        }
+
+        [Test]
+        public void WithHealthMultiplier_ComposesWithToughened()
+        {
+            // The two knobs stack: the player's flat baseline, then the Invasion Level's own ramp on
+            // top of it — not one overriding the other.
+            var composed = Rusher.WithHealthMultiplier(2f).Toughened(1.5f);
+            Assert.AreEqual(Rusher.MaxHealth * 2f * 1.5f, composed.MaxHealth, 1e-4);
+            Assert.AreEqual(Rusher.ContactDamage * 1.5f, composed.ContactDamage, 1e-4,
+                "Toughened() still scales damage even when a health override was applied first");
+        }
     }
 }
