@@ -34,6 +34,10 @@ It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship 
 
 **On every start, run the git-merge hygiene step first:** `sh scripts/setup-git-merge.sh`. It's idempotent and keeps Unity YAML (`.unity`/`.prefab`/`.asset`) merging **headless** — git's 3-way text merge writes conflict markers instead of the Smart-Merge GUI that once blocked an autonomous merge (YT-103; see `docs/GIT_MERGE_SETUP.md`). The art-stream contract must carry the same step.
 
+**Jira cloudId is `5c3e53d8-fa09-4c72-a99f-9adf958e5fb9`** (site `https://codynamics.atlassian.net`, project key `YT`) — use it directly on every Jira MCP call, do NOT call `getAccessibleAtlassianResources` to rediscover it. Also recorded in `memory/jira_cloud_id.md`.
+
+**Never leave a ticket In Progress without a commit; and reclaim your own orphaned in-flight tickets before pulling new work.** Before querying "Ready for Dev", first check for a ticket carrying `needs-cc` that is in "In Progress" or "In Review" with no commit on `main` referencing it (`git log --grep=YT-XX`). There is a single-instance mutex, so any such ticket is by definition yours-but-interrupted, not another worker's — RESUME it rather than pulling a fresh one. Only fall through to a fresh "Ready for Dev" pull when no orphaned in-flight ticket exists. (This exists because YT-189 and YT-186 were stranded In Progress by runs that ended without committing and had to be hand-reset.)
+
 Then query Jira:
 
 ```
