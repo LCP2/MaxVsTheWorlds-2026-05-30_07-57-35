@@ -78,6 +78,18 @@ namespace MaxWorlds.UI
         private const int HeaderFont = 40;
         private const int DumpFont = 24;
 
+        // Knob row label/value (YT-190). The label and value used to share one baseline with no
+        // bound on the label's width, so on the 3-column GAMEPLAY/WEAPONS tabs a long label ran
+        // straight under the value's raw number. Fixed by giving the value a constant-width zone
+        // (wide enough for the on-row percent text at every knob's range) and letting the label
+        // take the rest of the row, with a gap between so they can never touch even at the
+        // narrowest (3-column) row width. KnobLabelFont is a notch down from LabelFont so the
+        // longest names fit that zone without wrapping; it still clears the 10pt-on-a-6-inch-phone
+        // floor (24 * 0.44 = 10.6pt), same as DumpFont.
+        private const int KnobLabelFont = 24;
+        private const float KnobValueW = 80f;
+        private const float KnobGap = 8f;
+
         // Basement-biome dark panel + bright green accent, from mockups/13-settings.html.
         private static readonly Color PanelColor = new Color(0.055f, 0.075f, 0.062f, 0.96f);
         private static readonly Color Accent = new Color(0.298f, 0.851f, 0.392f);      // #4CD964
@@ -229,7 +241,7 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.BlasterDrainPerSecond, drainDefault),
                 v => { DevTuning.BlasterDrainPerSecond = v; RefreshBlaster(); });
 
-            Add("Water replenish rate", "/s", 0f, 200f, regenDefault,
+            Add("Water refill rate", "/s", 0f, 200f, regenDefault,
                 () => DevTuning.Or(DevTuning.BlasterRegenPerSecond, regenDefault),
                 v => { DevTuning.BlasterRegenPerSecond = v; RefreshBlaster(); });
 
@@ -267,7 +279,7 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.EscalationRate, DifficultyDirector.AuthoredRatePerSecond),
                 v => DevTuning.EscalationRate = v);
 
-            Add("Escalation per-shed bump", "lvl", 0f, 5f, DifficultyDirector.AuthoredPerShedBump,
+            Add("Shed level bump", "lvl", 0f, 5f, DifficultyDirector.AuthoredPerShedBump,
                 () => DevTuning.Or(DevTuning.EscalationPerShedBump, DifficultyDirector.AuthoredPerShedBump),
                 v => DevTuning.EscalationPerShedBump = v);
 
@@ -548,11 +560,15 @@ namespace MaxWorlds.UI
             var row = NewRect(k.Name, parent, new Vector2(0f, 1f), new Vector2(0f, 1f));
             Place(row, x, y, w, RowH);
 
-            var name = AddText(row, k.Name, LabelFont, TextColor, TextAnchor.MiddleLeft);
-            Place(name.rectTransform, 0f, 0f, w * 0.5f, 34f);
+            float labelW = w - KnobValueW - KnobGap;
 
-            k.Value = AddText(row, "", LabelFont, Accent, TextAnchor.MiddleRight);
-            Place(k.Value.rectTransform, w * 0.5f, 0f, w * 0.5f, 34f);
+            var name = AddText(row, k.Name, KnobLabelFont, TextColor, TextAnchor.MiddleLeft);
+            Place(name.rectTransform, 0f, 0f, labelW, 34f);
+            name.horizontalOverflow = HorizontalWrapMode.Wrap;   // bounded — never bleeds into the value zone
+
+            k.Value = AddText(row, "", KnobLabelFont, Accent, TextAnchor.MiddleRight);
+            Place(k.Value.rectTransform, w - KnobValueW, 0f, KnobValueW, 34f);
+            k.Value.horizontalOverflow = HorizontalWrapMode.Wrap;
 
             k.Slider = BuildSlider(row, 0f, -40f, w, SliderH, k);
             UpdateValueText(k);
@@ -645,10 +661,11 @@ namespace MaxWorlds.UI
         {
             if (k.Value == null) return;
             float v = k.Get();
-            // Raw number AND percent of the authored default — the percent makes a value portable
-            // ("40% faster"), the raw number is what gets pasted back into the source.
+            // Percent of the authored default only (YT-190) — the raw number + unit doesn't fit the
+            // value's fixed-width zone next to a long label without the two overlapping. The exact
+            // raw value (what gets pasted back into the source) is still in "Copy current values".
             float pct = k.Default > 0f ? v / k.Default * 100f : 0f;
-            k.Value.text = $"{v:0.##} {k.Unit}  ({pct:0}%)";
+            k.Value.text = $"{pct:0}%";
         }
 
         /// <summary>
