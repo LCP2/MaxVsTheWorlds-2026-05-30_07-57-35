@@ -61,18 +61,20 @@ namespace MaxWorlds.Upgrades
         public static readonly UpgradePart Hydro = new UpgradePart(
             "HYDRO CONDENSER", "HYDRO", new Color(0.45f, 0.95f, 1.00f), PartKind.Hydro);
 
-        /// <summary>The seven, in a fixed order — the order the drop table dispenses them. The hose
-        /// curve (BeamNozzle -> PowerNozzle -> RangeExtender -> WideBore) sits together so it drops as
-        /// the intended progression (YT-164).</summary>
+        /// <summary>The seven, in a fixed order — the order the drop table dispenses them (YT-198): two
+        /// nozzle feel-changers first (Beam, Power), then the untether sub-assembly's two parts
+        /// (AugmentationHarness's mount, then the Hydro condenser that clips into it — YT-165), so Max
+        /// earns mobility mid-progression, then the long-tail reach/width (RangeExtender, WideBore),
+        /// then AccelerationEngine.</summary>
         public static readonly PartKind[] AllKinds =
         {
             PartKind.BeamNozzle,
             PartKind.PowerNozzle,
+            PartKind.AugmentationHarness,
+            PartKind.Hydro,
             PartKind.RangeExtender,
             PartKind.WideBore,
-            PartKind.AugmentationHarness,
             PartKind.AccelerationEngine,
-            PartKind.Hydro,
         };
 
         /// <summary>The display data for a kind.</summary>
