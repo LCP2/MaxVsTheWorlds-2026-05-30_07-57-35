@@ -35,10 +35,11 @@ namespace MaxWorlds.Pickups
         /// <summary>Power cells per bruiser drop. The part is always exactly one.</summary>
         public const int CellsPerDrop = 3;
 
-        /// <summary>Default tough-robot kills between part drops (YT-143). A part every 3rd bruiser
-        /// spreads the five across a level instead of handing them over in the first five kills; power
-        /// cells keep dropping every kill. Tunable via <see cref="DevTuning.PartDropInterval"/>.</summary>
-        public const float DefaultPartInterval = 3f;
+        /// <summary>Default tough-robot kills between part drops (YT-143, spacing set to 6 in YT-183). A
+        /// part every 6th bruiser spreads the five across a level instead of handing them over in the
+        /// first five kills; power cells keep dropping every kill. Tunable via
+        /// <see cref="DevTuning.PartDropInterval"/>.</summary>
+        public const float DefaultPartInterval = 6f;
 
         /// <summary>Default chance [0,1] that a rusher's death drops a single power cell (YT-171) — a
         /// trickle from the common kill so the Hydro reserve doesn't depend solely on the rare bruiser.
