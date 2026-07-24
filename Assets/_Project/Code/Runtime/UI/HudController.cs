@@ -3,9 +3,11 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.OnScreen;
 using UnityEngine.InputSystem.UI;
+using UnityEngine.SceneManagement;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
+using MaxWorlds.Save;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
@@ -126,6 +128,7 @@ namespace MaxWorlds.UI
             BuildBiomeTint();
             BuildStatusStrip();
             BuildUtilityIcons();
+            BuildHomeButton();
             BuildAbilitySlots();
             BuildDashButton();
             BuildJoysticks();
@@ -564,6 +567,52 @@ namespace MaxWorlds.UI
                 Stretch(t.rectTransform);
                 t.text = glyphs[i];
             }
+        }
+
+        /// <summary>The HOME button (YT-191): one tap from a live run back to the Home/save-slot
+        /// screen. Sits just right of the utility icon column — the one gap the top-left corner has
+        /// left, above where the minimap starts (y -228) and clear of the status strip, which is
+        /// centred.</summary>
+        private void BuildHomeButton()
+        {
+            var root = NewRect("Home Button", Root);
+            Anchor(root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            root.sizeDelta = new Vector2(64f, 64f);
+            root.anchoredPosition = new Vector2(90f, -24f);
+
+            var bg = AddImage(root, HudTextures.RoundedBox(64, 0.28f), PanelColor, "Home BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnHomeButtonTapped);
+
+            var label = AddText(root, 15f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform, -6f);
+            label.text = "HOME";
+            label.fontStyle = FontStyle.Bold;
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = 9;
+            label.resizeTextMaxSize = 16;
+            label.raycastTarget = false;
+        }
+
+        /// <summary>Tapping HOME (YT-191): snapshot the live run into its slot — the same capture
+        /// <see cref="SaveDriver"/> autosaves with, so it is a deliberate save, not a death/wipe — then
+        /// drop the active slot and reload the scene. The reload re-runs
+        /// <see cref="MaxWorlds.Core.SceneInstallers"/>, which reopens the Home screen since it now
+        /// finds no active slot, right onto the save that was just written (YT-151's resume path picks
+        /// it back up from there).</summary>
+        private void OnHomeButtonTapped()
+        {
+            if (SaveSystem.ActiveSlot >= 0)
+                SaveSystem.CaptureAndSave(SaveSystem.ActiveSlot, SaveSystem.DefaultLevelId);
+
+            SaveSystem.ActiveSlot = -1;
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(scene.buildIndex);
         }
 
         /// <summary>
