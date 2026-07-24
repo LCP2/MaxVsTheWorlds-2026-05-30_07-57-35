@@ -69,7 +69,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             // Everything that lives in the left column. The minimap was laid over the icons; that
             // was the bug. (The MAP button is gone since YT-123 — the minimap is the control now.)
-            var names = new[] { "Utility Icons", "Minimap" };
+            var names = new[] { "Utility Icons", "Home Button", "Minimap" };
             var rects = new List<(string name, Rect rect)>();
 
             foreach (var n in names)
@@ -102,6 +102,24 @@ namespace MaxWorlds.Tests.PlayMode
                 Assert.IsNotNull(rt, $"'{n}' is missing from the HUD");
                 Assert.IsFalse(mini.Overlaps(ScreenRect(rt)),
                     $"the minimap is covering '{n}' — it would eat the player's input");
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator TheHomeButtonStaysClearOfWeaponsDashAndTheTwinSticks()
+        {
+            yield return null;
+
+            // YT-191: the HOME button lives top-left, far from these — but it's a corner button
+            // added after the fact, which is exactly how the minimap/icon overlap happened.
+            Rect home = ScreenRect(Find("Home Button"));
+
+            foreach (var n in new[] { "Weapons Button", "Dash Button", "Move Joystick", "Aim Joystick" })
+            {
+                RectTransform rt = Find(n);
+                Assert.IsNotNull(rt, $"'{n}' is missing from the HUD");
+                Assert.IsFalse(home.Overlaps(ScreenRect(rt)),
+                    $"the HOME button {home} overlaps '{n}' {ScreenRect(rt)}");
             }
         }
 
