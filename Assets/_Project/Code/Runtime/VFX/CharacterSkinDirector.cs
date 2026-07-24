@@ -12,10 +12,14 @@ namespace MaxWorlds.VFX
     /// Finds every character body and gives it a <see cref="CharacterSkin"/> (YT-61), then routes
     /// damage events to the body that took them.
     ///
-    /// It scans every frame, not on a timer. That matters: enemies are pooled and a robot is created
-    /// and activated on the SAME frame, so a once-a-second sweep left it wearing Unity's magenta
-    /// default material while it charged at you. The scan is cheap — a handful of bodies — and being
-    /// a frame late is invisible where being a second late is not.
+    /// It scans every <see cref="ScanIntervalSeconds"/>, not every frame (YT-186). Once a frame was
+    /// affordable when the field held a handful of bodies; <c>FindObjectsByType&lt;MeshRenderer&gt;</c>
+    /// walks EVERY renderer in the scene (world geometry, VFX quads, every pooled robot ever created,
+    /// active or not) and with four factories able to hold ~20 concurrent robots that sweep, 60
+    /// times a second, was one of the biggest single frame costs in the 60→30fps regression. Enemies
+    /// are still pooled and a robot is still created and activated on the SAME frame, but a body a
+    /// few frames late to its skin is invisible where the sweep itself was not — the interval is
+    /// short enough that nothing ever reads as wearing Unity's magenta default.
     ///
     /// Reads state and signals; writes nothing back to gameplay.
     /// </summary>
@@ -33,10 +37,27 @@ namespace MaxWorlds.VFX
                  "carries a position, not a reference, so this is how a hit finds its victim.")]
         [SerializeField] private float hitMatchRadius = 1.6f;
 
-        private void OnEnable() => HudSignals.DamageDealt += OnDamage;
+        /// <summary>Seconds between scene sweeps (YT-186). Short enough that a freshly-activated
+        /// robot is dressed well within the time it takes to notice, far cheaper than every frame.</summary>
+        private const float ScanIntervalSeconds = 0.15f;
+        private float _scanTimer;
+
+        private void OnEnable()
+        {
+            HudSignals.DamageDealt += OnDamage;
+            _scanTimer = 0f;
+            DressCharacters(); // catch whatever already exists the instant this director wakes up
+        }
+
         private void OnDisable() => HudSignals.DamageDealt -= OnDamage;
 
-        private void Update() => DressCharacters();
+        private void Update()
+        {
+            _scanTimer += Time.deltaTime;
+            if (_scanTimer < ScanIntervalSeconds) return;
+            _scanTimer = 0f;
+            DressCharacters();
+        }
 
         /// <summary>
         /// Include INACTIVE objects: pooled enemies sit deactivated between lives, and catching them

@@ -92,7 +92,7 @@ namespace MaxWorlds.Enemies
         /// door watches this to know when to start hauling itself up, so that it is open by the time
         /// the robot is ready rather than the robot waiting on a door that had no reason to move.</summary>
         public bool WantsToEmit =>
-            _running && _timer >= CurrentInterval && _live.Count < maxLiveEnemies;
+            _running && _timer >= CurrentInterval && _live.Count < maxLiveEnemies && EnemyCensus.HasRoom;
 
         /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
         /// test can prove a dead factory emitted NOTHING — which <see cref="LiveCount"/> can't, since
@@ -156,7 +156,7 @@ namespace MaxWorlds.Enemies
             float dt = Time.deltaTime;
             _elapsed += dt;
             _timer += dt;
-            if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies) return;
+            if (_timer < CurrentInterval || _live.Count >= maxLiveEnemies || !EnemyCensus.HasRoom) return;
 
             // Wait for the door, WITHOUT resetting the timer (YT-108) — so the robot comes out on the
             // frame the door finishes opening, not a full interval after it. Holding the timer is
@@ -185,8 +185,9 @@ namespace MaxWorlds.Enemies
         ///
         /// Burst size and elite chance scale with the Invasion Level (<see cref="DifficultyDirector.Normalized"/>)
         /// unless a Settings-panel override pins them flat — same contract as <see cref="CurrentInterval"/>'s
-        /// <see cref="DevTuning.SpawnInterval"/> override. The loop still respects <see cref="maxLiveEnemies"/>:
-        /// a factory already near the cap gets a smaller (or no) burst rather than blowing past it.
+        /// <see cref="DevTuning.SpawnInterval"/> override. The loop still respects <see cref="maxLiveEnemies"/>
+        /// and <see cref="EnemyCensus"/> (YT-186): a factory already near its own cap, or a field already at
+        /// the global one, gets a smaller (or no) burst rather than blowing past it.
         /// </summary>
         public void SpawnSurge()
         {
@@ -198,7 +199,7 @@ namespace MaxWorlds.Enemies
                 Mathf.Lerp(0f, DeathSurgeEliteChanceMax, DifficultyDirector.Normalized));
 
             bool eliteSpawned = false;
-            for (int i = 0; i < burst && _live.Count < maxLiveEnemies; i++)
+            for (int i = 0; i < burst && _live.Count < maxLiveEnemies && EnemyCensus.HasRoom; i++)
             {
                 // At most one elite per surge — a wreck coughing up a single tough unit reads as a
                 // beat; a wreck coughing up a wall of them reads as a bug.
@@ -254,6 +255,7 @@ namespace MaxWorlds.Enemies
             LetThePlayerThrough(e.gameObject);
 
             _live.Add(e);
+            EnemyCensus.Register();
         }
 
         /// <summary>
@@ -370,12 +372,26 @@ namespace MaxWorlds.Enemies
         private void OnEnemyDied(RobotEnemy e)
         {
             _live.Remove(e);
+            EnemyCensus.Forget();
             if (!_pools.TryGetValue(e.Kind, out var pool))
             {
                 pool = new Stack<RobotEnemy>();
                 _pools[e.Kind] = pool;
             }
             pool.Push(e); // back to its OWN pool; reused on the next spawn of this kind (no leak)
+        }
+
+        /// <summary>
+        /// This spawner is going away with robots still on the field — a scene teardown, or a test's
+        /// raw <c>Object.Destroy(hutch)</c> rather than a proper kill that runs each robot through
+        /// <see cref="OnEnemyDied"/> individually. Those robots will never report themselves gone, so
+        /// without this <see cref="EnemyCensus"/>'s global count only ever climbs (YT-186) — exactly the
+        /// leaked-state trap <see cref="MaxWorlds.Factories.FactoryCensus.Forget"/> already exists to
+        /// avoid for factories themselves.
+        /// </summary>
+        private void OnDestroy()
+        {
+            for (int i = 0; i < _live.Count; i++) EnemyCensus.Forget();
         }
     }
 }
