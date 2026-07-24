@@ -25,15 +25,24 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private SpringGuts _director;
 
+        // The springs' lifetime and motion are driven by scaled game time (Time.deltaTime), and the
+        // ambient Time.timeScale can't be trusted at test start in this headless runner — pin it, same
+        // fix as YT-173/TelegraphVfxPlayTests. Root cause of YT-184: with timeScale stuck at 0, a spring
+        // never ages out and Springs_AllCleanUp_AfterTheirLifetime spun until the runner's own timeout.
         [SetUp]
         public void SetUp()
         {
+            Time.timeScale = 1f;
             ClearDirectors();
             _director = new GameObject("SpringGuts(Test)").AddComponent<SpringGuts>();
         }
 
         [TearDown]
-        public void TearDown() => ClearDirectors();
+        public void TearDown()
+        {
+            Time.timeScale = 1f;
+            ClearDirectors();
+        }
 
         /// <summary>Destroying the director takes its springs with it — they are its children.</summary>
         private static void ClearDirectors()
