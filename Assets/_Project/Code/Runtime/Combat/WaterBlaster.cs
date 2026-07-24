@@ -199,9 +199,9 @@ namespace MaxWorlds.Combat
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();
             if (_vfx == null) _vfx = gameObject.AddComponent<WaterVfx>();
-            // The cone goes in too (YT-110): the water is drawn at half the arc it damages, so the
-            // spray and the reticle above it are the same weapon described twice, not two numbers
-            // that happened to be authored on different days.
+            // The cone goes in too (YT-110/YT-187): the water is drawn across the same arc it
+            // damages, so the spray and the reticle above it are the same weapon described twice,
+            // not two numbers that happened to be authored on different days.
             _vfx.Init(range, Mathf.Max(radius, streamVisualRadius), coneHalfAngle);
 
             // The level-up ramp rides along with the gadget, same self-attaching rule as the VFX.

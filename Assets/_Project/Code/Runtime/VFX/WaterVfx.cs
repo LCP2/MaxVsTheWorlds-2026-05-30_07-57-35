@@ -47,12 +47,15 @@ namespace MaxWorlds.VFX
         /// <summary>
         /// How much of the blaster's cone the visible water fills.
         ///
-        /// A half, so the indicator ends up drawing twice the width of the spray — which is what
-        /// YT-110 asked for, and it is the right shape for the job: the water reads as a definite
-        /// jet with a softer envelope of reach around it, rather than a wall of particles that
-        /// hides the robots you are aiming at (Craft Bible: juice must never obscure readability).
+        /// The full cone (YT-187) — the water's widest visible edge must sit on the aim outline's
+        /// SIDE edge, the same way <see cref="WaterVfxTuning.ReachForCone"/> already puts it on the
+        /// outline's far arc. YT-110 originally shipped this at half the cone (a narrower jet inside
+        /// a wider indicator), but at the base/wide hose that read as the outline lying about width:
+        /// the spray looked like a thin jet inside a broad fan, and only matched once a narrow-beam
+        /// nozzle shrank the cone down near the jet's own width. Water, outline, and damage cone must
+        /// describe the same weapon at every setting, not just the narrow ones.
         /// </summary>
-        public const float SprayFillsFractionOfCone = 0.5f;
+        public const float SprayFillsFractionOfCone = 1f;
 
         /// <summary>The visible stream's cone half-angle for a weapon with this spread.</summary>
         public static float SprayHalfAngleFor(float coneHalfAngle) =>
