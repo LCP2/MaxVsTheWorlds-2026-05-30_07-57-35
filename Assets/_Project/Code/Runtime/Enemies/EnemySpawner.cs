@@ -51,6 +51,22 @@ namespace MaxWorlds.Enemies
                  "first, and the bruiser lands as an escalation.")]
         [SerializeField] private int firstBruiserAt = 3;
 
+        // --- Death-throes surge (YT-182) — the wreck's last wave. A shed dying shouldn't just go
+        // quiet: it spits out a short burst, and on a roll one Bruiser standing in as the "elite"
+        // crawling out of the wreck, so each kill is a spike of danger rather than the quietest
+        // moment in the fight. Both numbers scale with the Invasion Level (YT-181) — the same
+        // source that died calmly at minute one erupts at minute five. ---
+        private const int DeathSurgeBurstMin = 2;          // robots at Invasion Level 0 (run start)
+
+        /// <summary>Robots the death-throes surge spits out at full Invasion Level escalation — the
+        /// Settings panel's reference default for a pinned <see cref="DevTuning.DeathSurgeBurstSize"/>.</summary>
+        public const int DeathSurgeBurstMax = 5;
+
+        /// <summary>Chance [0,1] the surge includes an elite at full escalation (0 at the run's
+        /// start) — the Settings panel's reference default for a pinned
+        /// <see cref="DevTuning.DeathSurgeEliteChance"/>.</summary>
+        public const float DeathSurgeEliteChanceMax = 0.5f;
+
         // One pool PER KIND. A single pool would hand a dead bruiser back as the next rusher, still
         // wearing its box body and its collider — the classic pooling bug.
         private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _pools =
@@ -157,8 +173,47 @@ namespace MaxWorlds.Enemies
             // Guarded here too, not just in Update: SpawnOne is also called from outside (the press-kit
             // director reflects it to populate a shot). A dead factory must not emit down ANY path.
             if (!_running) return;
+            SpawnKind(EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt));
+        }
 
-            EnemyKind kind = EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt);
+        /// <summary>
+        /// Death-throes surge (YT-182): called once, at the instant this factory's health hits zero —
+        /// BEFORE <see cref="Stop"/> latches production off for good, so it rides the same <c>_running</c>
+        /// guard as every other spawn path rather than needing one of its own. A short burst emerges
+        /// (and, on a roll, one Bruiser standing in as the "elite"), so breaking the source reads as a
+        /// spike of danger, not the quietest moment in the fight.
+        ///
+        /// Burst size and elite chance scale with the Invasion Level (<see cref="DifficultyDirector.Normalized"/>)
+        /// unless a Settings-panel override pins them flat — same contract as <see cref="CurrentInterval"/>'s
+        /// <see cref="DevTuning.SpawnInterval"/> override. The loop still respects <see cref="maxLiveEnemies"/>:
+        /// a factory already near the cap gets a smaller (or no) burst rather than blowing past it.
+        /// </summary>
+        public void SpawnSurge()
+        {
+            if (!_running) return;
+
+            int burst = Mathf.RoundToInt(DevTuning.Or(DevTuning.DeathSurgeBurstSize,
+                Mathf.Lerp(DeathSurgeBurstMin, DeathSurgeBurstMax, DifficultyDirector.Normalized)));
+            float eliteChance = DevTuning.Or(DevTuning.DeathSurgeEliteChance,
+                Mathf.Lerp(0f, DeathSurgeEliteChanceMax, DifficultyDirector.Normalized));
+
+            bool eliteSpawned = false;
+            for (int i = 0; i < burst && _live.Count < maxLiveEnemies; i++)
+            {
+                // At most one elite per surge — a wreck coughing up a single tough unit reads as a
+                // beat; a wreck coughing up a wall of them reads as a bug.
+                bool spawnElite = !eliteSpawned && eliteChance > 0f && Random.value < eliteChance;
+                SpawnKind(spawnElite ? EnemyKind.Bruiser : EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt));
+                if (spawnElite) eliteSpawned = true;
+            }
+        }
+
+        /// <summary>The shared spawn machinery: builds/pools, doors it out the mouth, and starts the
+        /// emergence walk for one robot of the given <paramref name="kind"/>. <see cref="SpawnOne"/> is
+        /// the timer-driven path (asks the mix what's next); <see cref="SpawnSurge"/> is the
+        /// death-throes burst (picks the kind itself, so it can force in an elite).</summary>
+        private void SpawnKind(EnemyKind kind)
+        {
             // Toughened by the Invasion Level (YT-181): read live, so a robot spawned late in a run
             // is tankier and hits harder than the one that came out at the opening bell — the swarm
             // itself is what gets harder, not just how fast it arrives.

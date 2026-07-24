@@ -121,6 +121,18 @@ namespace MaxWorlds.Core
         /// <summary>The ceiling the Invasion Level climbs to.</summary>
         public static float? EscalationMax { get; set; }
 
+        // --- Death-throes surge (YT-182) — the wreck's last wave on shed destruction ---
+
+        /// <summary>Robots the death-throes surge spawns when a factory shed is destroyed. Overrides
+        /// the Invasion-Level curve outright — a pinned value doesn't grow bigger over a run, same
+        /// contract as <see cref="SpawnInterval"/> overriding the spawn-cadence ramp.</summary>
+        public static float? DeathSurgeBurstSize { get; set; }
+
+        /// <summary>Chance [0,1] the death-throes surge includes one "elite" (a Bruiser) crawling out
+        /// of the wreck. Overrides the Invasion-Level curve outright, same contract as
+        /// <see cref="DeathSurgeBurstSize"/>.</summary>
+        public static float? DeathSurgeEliteChance { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -148,7 +160,8 @@ namespace MaxWorlds.Core
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
             EscalationStart.HasValue || EscalationRate.HasValue || EscalationPerShedBump.HasValue ||
-            EscalationMax.HasValue;
+            EscalationMax.HasValue ||
+            DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -182,6 +195,8 @@ namespace MaxWorlds.Core
             EscalationRate = null;
             EscalationPerShedBump = null;
             EscalationMax = null;
+            DeathSurgeBurstSize = null;
+            DeathSurgeEliteChance = null;
         }
     }
 }

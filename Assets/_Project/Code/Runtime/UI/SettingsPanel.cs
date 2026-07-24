@@ -275,6 +275,17 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.EscalationMax, DifficultyDirector.AuthoredMax),
                 v => DevTuning.EscalationMax = v);
 
+            // ---- Death-throes surge (YT-182): the wreck's last wave. Left alone, both numbers scale
+            // with the Invasion Level above; a pinned value here replaces that curve outright with a
+            // flat number, same contract as "Spawn interval" pinning the cadence ramp.
+            Add("Surge burst", "bots", 0f, 10f, EnemySpawner.DeathSurgeBurstMax,
+                () => DevTuning.Or(DevTuning.DeathSurgeBurstSize, EnemySpawner.DeathSurgeBurstMax),
+                v => DevTuning.DeathSurgeBurstSize = v);
+
+            Add("Surge elite chance", "x", 0f, 1f, EnemySpawner.DeathSurgeEliteChanceMax,
+                () => DevTuning.Or(DevTuning.DeathSurgeEliteChance, EnemySpawner.DeathSurgeEliteChanceMax),
+                v => DevTuning.DeathSurgeEliteChance = v);
+
             // ---- Weapons tab (YT-138): the upgrade-part magnitudes + the pacing/Hydro tunables. ----
             // Nozzle/range/harness re-fit the live weapon (RefreshUpgrades); the rest read live.
             Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,

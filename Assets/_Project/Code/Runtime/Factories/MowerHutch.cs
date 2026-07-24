@@ -162,6 +162,11 @@ namespace MaxWorlds.Factories
 
         private void OnDestroyed()
         {
+            // Death-throes surge (YT-182): fire BEFORE Stop() latches production off for good — the
+            // wreck coughs up one last wave (and, on a roll, a tougher "elite") so breaking the
+            // source lands as a spike of danger instead of the quietest moment in the fight.
+            if (_spawner != null) _spawner.SpawnSurge();
+
             // Stop(), not enabled = false: dev mode re-asserts `enabled` on every spawner every
             // frame, so switching the component off stopped this factory for exactly one frame and
             // it produced robots for the rest of the run (YT-100).
