@@ -114,30 +114,43 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>Three factories, each standing in a room of its own, spread down the run — so
         /// clearing them is a sequence you fight your way through, not one beat (YT-92, YT-148). The
-        /// third is the toolshed off the orchard's right, flanking the greenhouse on the left.</summary>
+        /// third is the toolshed off the orchard's right, flanking the greenhouse on the left. A
+        /// fourth factory stands centrally in the lawn itself (YT-185) — it is not part of this
+        /// pocket sequence, so it is looked up by id rather than assumed to be absent.</summary>
         [Test]
         public void TheShippedMap_HasThreeFactories_OneOffEachFightPocket()
         {
             MapData map = Shipped();
             var factories = MapValidation.Kind(map, EntityKind.Factory);
 
-            Assert.AreEqual(3, factories.Count, "the run does not have three sources of pressure");
+            Assert.AreEqual(4, factories.Count, "the run does not have four sources of pressure");
 
-            Assert.AreEqual("shed", map.ZoneAt(factories[0].x, factories[0].z)?.id,
+            MapEntity shed = map.Entity("mower_hutch");
+            MapEntity greenhouse = map.Entity("greenhouse_hutch");
+            MapEntity toolshed = map.Entity("toolshed_hutch");
+
+            Assert.AreEqual("shed", map.ZoneAt(shed.x, shed.z)?.id,
                 "the first factory is not in the shed — the objective is standing in the open again");
-            Assert.AreEqual("greenhouse", map.ZoneAt(factories[1].x, factories[1].z)?.id,
+            Assert.AreEqual("greenhouse", map.ZoneAt(greenhouse.x, greenhouse.z)?.id,
                 "the second factory is not in the greenhouse");
-            Assert.AreEqual("toolshed", map.ZoneAt(factories[2].x, factories[2].z)?.id,
+            Assert.AreEqual("toolshed", map.ZoneAt(toolshed.x, toolshed.z)?.id,
                 "the third factory is not in the toolshed off the orchard's right (YT-148)");
 
             // The later ones are genuinely FURTHER IN. Factories side by side in the same room
             // would be more pressure and none of the build-up.
-            Assert.Greater(factories[1].z, factories[0].z + 10f,
+            Assert.Greater(greenhouse.z, shed.z + 10f,
                 "the second factory is not deep enough into the run to be a second objective");
             // The toolshed flanks the greenhouse — same depth, opposite side — so the orchard fight
             // has a source on each hand rather than a single objective to the west.
-            Assert.Greater(factories[2].x, factories[1].x,
+            Assert.Greater(toolshed.x, greenhouse.x,
                 "the toolshed is not on the orchard's opposite flank from the greenhouse");
+
+            // The central factory (YT-185) stands in the open lawn, not tucked in a fight pocket —
+            // that's what makes it the one Max sees the instant he walks in from the patio.
+            MapEntity central = map.Entity("central_hutch");
+            Assert.IsNotNull(central, "the central garden factory is missing (YT-185)");
+            Assert.AreEqual("lawn", map.ZoneAt(central.x, central.z)?.id,
+                "the central factory is not standing in the lawn");
         }
 
         [Test]
@@ -163,7 +176,8 @@ namespace MaxWorlds.Tests.EditMode
         /// <summary>The whole mission in one assertion: the gate into the boss arena is opened by
         /// destroying ALL the factories, and that is stated in the map rather than coded anywhere
         /// (YT-92, YT-148). One key would put the boss behind a door the player opens halfway
-        /// through.</summary>
+        /// through. Four factories now that the central garden shed is a real one too (YT-185) — the
+        /// gate has to name it or the door opens while it is still standing.</summary>
         [Test]
         public void TheShippedMap_OpensTheBossGateOnlyWhenEveryFactoryIsDown()
         {
@@ -171,7 +185,7 @@ namespace MaxWorlds.Tests.EditMode
             MapEntity gate = map.First(EntityKind.Gate);
 
             Assert.IsNotNull(gate);
-            Assert.AreEqual(3, gate.Keys.Length, "the boss gate is not waiting on all three factories");
+            Assert.AreEqual(4, gate.Keys.Length, "the boss gate is not waiting on all four factories");
 
             foreach (string key in gate.Keys)
             {
