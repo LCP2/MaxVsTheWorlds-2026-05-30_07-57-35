@@ -82,6 +82,23 @@ namespace MaxWorlds.Enemies
         /// against, so the curve's actual units never leak into "how much faster/tougher".</summary>
         public static float Normalized => Max > 0f ? Mathf.Clamp01(Level / Max) : 0f;
 
+        /// <summary>The three named bands the HUD dial (YT-197) shows: INVASION (bottom third) →
+        /// INFESTATION (middle third) → DOMINATION (top third).</summary>
+        public enum Stage { Invasion, Infestation, Domination }
+
+        /// <summary>Which band the run is in right now, off <see cref="Normalized"/> — the HUD dial
+        /// and any stage-crossing beat always agree with what the spawn/toughness multipliers above
+        /// are actually doing.</summary>
+        public static Stage CurrentStage => StageAt(Normalized);
+
+        /// <summary>Pure band lookup — unit-testable with no clock, same shape as <see cref="LevelAt"/>.</summary>
+        public static Stage StageAt(float normalized)
+        {
+            if (normalized < 1f / 3f) return Stage.Invasion;
+            if (normalized < 2f / 3f) return Stage.Infestation;
+            return Stage.Domination;
+        }
+
         /// <summary>Multiply a spawn interval by this: 1 at the run's start, down to
         /// <see cref="SpawnIntervalFloor"/> at full escalation — the same shed pumps out robots
         /// faster as the level climbs.</summary>

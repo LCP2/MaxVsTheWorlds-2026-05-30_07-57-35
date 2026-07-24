@@ -148,5 +148,47 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0f, DifficultyDirector.Elapsed, 1e-4);
             Assert.AreEqual(0, DifficultyDirector.ShedsDestroyed);
         }
+
+        // --- the HUD dial's bands (YT-197) ---
+
+        [Test]
+        public void StageAt_BottomThird_IsInvasion()
+        {
+            Assert.AreEqual(DifficultyDirector.Stage.Invasion, DifficultyDirector.StageAt(0f));
+            Assert.AreEqual(DifficultyDirector.Stage.Invasion, DifficultyDirector.StageAt(0.3f));
+        }
+
+        [Test]
+        public void StageAt_MiddleThird_IsInfestation()
+        {
+            Assert.AreEqual(DifficultyDirector.Stage.Infestation, DifficultyDirector.StageAt(1f / 3f));
+            Assert.AreEqual(DifficultyDirector.Stage.Infestation, DifficultyDirector.StageAt(0.6f));
+        }
+
+        [Test]
+        public void StageAt_TopThird_IsDomination()
+        {
+            Assert.AreEqual(DifficultyDirector.Stage.Domination, DifficultyDirector.StageAt(2f / 3f));
+            Assert.AreEqual(DifficultyDirector.Stage.Domination, DifficultyDirector.StageAt(1f));
+        }
+
+        [Test]
+        public void CurrentStage_TracksNormalized()
+        {
+            DifficultyDirector.Reset();
+            DevTuning.EscalationStart = 0f;
+            DevTuning.EscalationRate = 0f;
+            DevTuning.EscalationPerShedBump = 1f;
+            DevTuning.EscalationMax = 3f; // each shed is worth exactly one band
+
+            Assert.AreEqual(DifficultyDirector.Stage.Invasion, DifficultyDirector.CurrentStage);
+
+            DifficultyDirector.ReportShedDestroyed(); // 1/3 -> Infestation
+            Assert.AreEqual(DifficultyDirector.Stage.Infestation, DifficultyDirector.CurrentStage);
+
+            DifficultyDirector.ReportShedDestroyed(); // 2/3 -> Domination
+            DifficultyDirector.ReportShedDestroyed(); // 3/3, clamped -> still Domination
+            Assert.AreEqual(DifficultyDirector.Stage.Domination, DifficultyDirector.CurrentStage);
+        }
     }
 }
