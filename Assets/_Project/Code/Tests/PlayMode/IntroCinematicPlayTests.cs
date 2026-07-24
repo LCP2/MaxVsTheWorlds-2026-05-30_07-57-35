@@ -6,6 +6,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Intro;
 using MaxWorlds.Player;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -269,6 +270,45 @@ namespace MaxWorlds.Tests.PlayMode
                     Does.StartWith("Universal Render Pipeline").Or.StartWith("MaxWorlds")
                         .Or.StartWith("Sprites").Or.StartWith("Standard"),
                     $"'{r.name}' wears '{shader}' — a default material is magenta in the build.");
+            }
+        }
+
+        // ------------------------------------------------------------------ YT-188: survives the sweep
+
+        /// <summary>
+        /// RuntimeSurfaceDirector self-installs every scene and repaints any renderer it doesn't
+        /// recognise, flat, within a frame (YT-58, YT-75). The intro builds its whole set — Max, the
+        /// shed, the hose reel, every glow — through IntroBuild without ever opting out, so the
+        /// director was silently flattening the entire cinematic to biome tones the instant it ran
+        /// alongside it. <see cref="IntroCinematic.BuildSet"/> now tags the set root with
+        /// <see cref="MaxWorlds.Core.KeepsOwnMaterial"/> — this installs the director alongside the
+        /// intro, exactly as it runs in the game, and asserts an intro renderer keeps the material the
+        /// cinematic actually built for it, so a regression here fails loudly instead of shipping.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator RuntimeSurfaceDirectorDoesNotRepaintTheSet()
+        {
+            var surfaces = new GameObject("RuntimeSurfaces").AddComponent<RuntimeSurfaceDirector>();
+
+            try
+            {
+                var intro = Build();
+                yield return null;
+                yield return null;   // the director sweeps every Update; two frames is more than enough
+
+                var renderers = intro.gameObject.GetComponentsInChildren<MeshRenderer>(true);
+                Assert.IsNotEmpty(renderers, "the intro built no renderers to protect.");
+
+                foreach (var r in renderers)
+                {
+                    Assert.IsNull(r.GetComponent<SurfaceSkinned>(),
+                        $"RuntimeSurfaceDirector claimed '{r.name}' and repainted it flat — the intro set " +
+                        "is no longer guarded by KeepsOwnMaterial.");
+                }
+            }
+            finally
+            {
+                Object.Destroy(surfaces.gameObject);
             }
         }
     }
