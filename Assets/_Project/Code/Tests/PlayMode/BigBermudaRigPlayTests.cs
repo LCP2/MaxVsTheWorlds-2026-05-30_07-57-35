@@ -30,9 +30,18 @@ namespace MaxWorlds.Tests.PlayMode
         private BigBermudaBoss Boss => _boss.GetComponent<BigBermudaBoss>();
         private BigBermudaRig Rig => _rigHost.GetComponent<BigBermudaRig>();
 
+        // Every claim in this fixture is timed — the wind-up, the wake flicker, the hatch vent, the
+        // fall — off scaled game time (Time.deltaTime), and the ambient Time.timeScale can't be trusted
+        // at test start in this headless runner. Pin it, same fix as YT-173/TelegraphVfxPlayTests. Root
+        // cause of YT-184: with timeScale stuck at 0, the wake/vent/sleep timers never advanced and the
+        // fixture's own deadlines (which are real-time-independent) tripped instead. Tests that need
+        // Time.timeScale = 0 (TheMachineComesApart_WhenTheBossDies) already save and restore it locally,
+        // so pinning the baseline to 1 here just gives them a consistent starting point.
         [SetUp]
         public void SetUp()
         {
+            Time.timeScale = 1f;
+
             // The boss exactly as Stage27BossScaffold bakes it into Backyard_Slice: a cube on a
             // CharacterController, scaled 3.5 x 3 x 3.5. The rig replaces the cube's VISUAL only.
             _boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -50,6 +59,7 @@ namespace MaxWorlds.Tests.PlayMode
         [TearDown]
         public void TearDown()
         {
+            Time.timeScale = 1f;
             foreach (GameObject go in new[] { _rigHost, _boss, _player, _hutch })
                 if (go != null) Object.Destroy(go);
         }
