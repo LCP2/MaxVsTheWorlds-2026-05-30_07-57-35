@@ -168,6 +168,27 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void Cover_LawnHasRowsBothHorizontalAndVertical()
+        {
+            // YT-195: the lawn used to read as a flat brawl. It has to be planted in a loose grid —
+            // some rows running across (wide in X), some running up/down (deep in Z) — not just more
+            // of the same squarish planters.
+            MapData map = Shipped();
+
+            bool horizontal = false, vertical = false;
+            foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
+            {
+                if (c.shape != "box" || map.ZoneAt(c.x, c.z)?.id != "lawn") continue;
+
+                if (c.width > c.depth * 1.5f) horizontal = true;
+                if (c.depth > c.width * 1.5f) vertical = true;
+            }
+
+            Assert.IsTrue(horizontal, "no horizontal row of planting in the lawn");
+            Assert.IsTrue(vertical, "no vertical row of planting in the lawn");
+        }
+
+        [Test]
         public void Cover_SitsOnTheFloor()
         {
             foreach (MapEntity c in MapValidation.Kind(Shipped(), EntityKind.Cover))

@@ -169,13 +169,19 @@ namespace MaxWorlds.Arena
 
                 case CoverDressing.Hedge:
                 {
-                    float depth = Mathf.Min(c.Size.x, c.Size.z);
-                    int n = Mathf.Max(2, Mathf.RoundToInt(c.Size.x / depth));
+                    // A row runs along whichever axis the block is actually long on — a bed authored
+                    // wide (X) reads left-to-right, one authored deep (Z) reads front-to-back. Fixed to
+                    // X used to squash every vertical bed's bushes into a single clump at its middle
+                    // (YT-195).
+                    bool alongX = c.Size.x >= c.Size.z;
+                    float length = alongX ? c.Size.x : c.Size.z;
+                    float depth = alongX ? c.Size.z : c.Size.x;
+                    int n = Mathf.Max(2, Mathf.RoundToInt(length / depth));
                     for (int i = 0; i < n; i++)
                     {
                         float t = (i + 0.5f) / n - 0.5f;
-                        Fill(PropCatalog.BushDetailed, at + new Vector2(c.Size.x * t, 0f),
-                             c.Size.y, depth, i * 63f);
+                        Vector2 offset = alongX ? new Vector2(length * t, 0f) : new Vector2(0f, length * t);
+                        Fill(PropCatalog.BushDetailed, at + offset, c.Size.y, depth, i * 63f);
                     }
                     break;
                 }
