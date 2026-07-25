@@ -81,12 +81,10 @@ namespace MaxWorlds.Tests.PlayMode
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
             Assert.That(sliders.Length, Is.EqualTo(34),
-                "Nineteen Gameplay knobs (ten, plus the four Invasion Level escalation knobs from " +
-                "YT-181, plus Surge burst/Surge elite chance from YT-182, plus Starting robots/" +
-                "Robot production per min/Robot health from YT-194), the eleven Weapons-tab knobs " +
-                "(YT-138's seven, plus Range Extender and Wide-Bore from YT-164, plus Spawn interval " +
-                "from YT-170, plus Cell drop chance from YT-171), and the four Boss-tab brood-volley " +
-                "knobs (YT-157): volley interval, adds per volley, max adds alive, volley windup.");
+                "Seventeen Gameplay knobs, eleven Weapons-tab knobs, and six Boss-tab knobs (YT-196 " +
+                "sorted Boss move speed/Boss health onto Boss, Hose tether onto Weapons, and Spawn " +
+                "interval onto Gameplay, by the Max/robots/arena/escalation vs hose/upgrade vs " +
+                "boss-only rule) — 34 total.");
             yield return null;
         }
 
@@ -107,14 +105,19 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
             Assert.That(boss, Is.Not.Null, "no Boss page — the brood-volley tuning has nowhere to live (YT-157)");
 
-            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(19),
-                "the Gameplay tab keeps its ten knobs plus the four Invasion Level knobs (YT-181), " +
-                "the two death-throes surge knobs (YT-182), and the three swarm-pacing knobs (YT-194)");
+            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(17),
+                "the Gameplay tab keeps its Max/robots/arena/escalation knobs: eight core knobs (Boss " +
+                "move speed and Boss health moved to the Boss tab, YT-196) plus the four Invasion " +
+                "Level knobs (YT-181), the two death-throes surge knobs (YT-182), and the four " +
+                "swarm-pacing/spawn-cadence knobs (YT-194, plus Spawn interval moved from Weapons, " +
+                "YT-196)");
             Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(11),
-                "the Weapons tab carries the upgrade/pacing/Hydro knobs, Range Extender and Wide-Bore " +
-                "(YT-164), Spawn interval (YT-170), and Cell drop chance (YT-171)");
-            Assert.That(boss.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(4),
-                "the Boss tab carries the four brood-volley knobs (YT-157)");
+                "the Weapons tab carries the hose/upgrade knobs: the upgrade/pacing/Hydro knobs, " +
+                "Range Extender and Wide-Bore (YT-164), Cell drop chance (YT-171), and Hose tether " +
+                "(moved from Gameplay, YT-196) — with Spawn interval moved out to Gameplay (YT-196)");
+            Assert.That(boss.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(6),
+                "the Boss tab carries the four brood-volley knobs (YT-157) plus Boss move speed and " +
+                "Boss health, moved off the Gameplay tab where they defaulted to (YT-196)");
             yield return null;
         }
 
