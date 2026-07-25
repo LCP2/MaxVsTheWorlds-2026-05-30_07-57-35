@@ -269,6 +269,78 @@
             "opensOn": ""
         },
         {
+            "id": "Cover Row Northwest",
+            "kind": "cover",
+            "x": -11.0,
+            "z": -1.0,
+            "width": 5.0,
+            "height": 1.6,
+            "depth": 1.3,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Column West",
+            "kind": "cover",
+            "x": -13.0,
+            "z": 13.0,
+            "width": 1.3,
+            "height": 1.6,
+            "depth": 4.5,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Row Northeast",
+            "kind": "cover",
+            "x": 12.0,
+            "z": 6.0,
+            "width": 4.0,
+            "height": 1.6,
+            "depth": 1.3,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Column North",
+            "kind": "cover",
+            "x": -4.0,
+            "z": 2.0,
+            "width": 1.3,
+            "height": 1.6,
+            "depth": 4.0,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Row Southwest",
+            "kind": "cover",
+            "x": -2.5,
+            "z": 13.0,
+            "width": 4.0,
+            "height": 1.6,
+            "depth": 1.3,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
+            "id": "Cover Column Southeast",
+            "kind": "cover",
+            "x": 13.0,
+            "z": 19.0,
+            "width": 1.3,
+            "height": 1.6,
+            "depth": 4.5,
+            "shape": "box",
+            "dressing": "hedge",
+            "opensOn": ""
+        },
+        {
             "id": "central_hutch",
             "kind": "factory",
             "x": 0.0,
