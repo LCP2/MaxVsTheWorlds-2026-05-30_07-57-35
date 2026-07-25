@@ -226,7 +226,7 @@ namespace MaxWorlds.UI
 
             Add("Boss move speed", "m/s", 0.5f, 12f, bossDefault,
                 () => DevTuning.Or(DevTuning.BossMoveSpeed, bossDefault),
-                v => DevTuning.BossMoveSpeed = v);
+                v => DevTuning.BossMoveSpeed = v, tab: 2);
 
             Add("Max max-life", "hp", 25f, 500f, healthDefault,
                 () => DevTuning.Or(DevTuning.PlayerMaxHealth, healthDefault),
@@ -266,7 +266,7 @@ namespace MaxWorlds.UI
                     DevTuning.BossHealth = v;
                     var b = FindFirstObjectByType<BigBermudaBoss>();
                     if (b != null) b.RefreshMax();
-                });
+                }, tab: 2);
 
             // ---- Invasion Level / escalation (YT-181): the DifficultyDirector reads every one of
             // these live, so a moved slider retimes the escalation mid-run — no push needed, same
@@ -319,6 +319,13 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.RobotHealthMultiplier, 1f),
                 v => DevTuning.RobotHealthMultiplier = v);
 
+            // Spawn cadence (YT-170). Reads live: EnemySpawner pulls CurrentInterval fresh on every
+            // check, so the slider retimes every factory's emergence with no push needed. Lives on
+            // the Gameplay tab (YT-196 audit): it's a robots/arena knob, same group as the two above.
+            Add("Spawn interval", "s", 0.3f, 4f, SpawnIntervalDefault(),
+                () => DevTuning.Or(DevTuning.SpawnInterval, SpawnIntervalDefault()),
+                v => DevTuning.SpawnInterval = v);
+
             // ---- Weapons tab (YT-138): the upgrade-part magnitudes + the pacing/Hydro tunables. ----
             // Nozzle/range/harness re-fit the live weapon (RefreshUpgrades); the rest read live.
             Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,
@@ -363,19 +370,13 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PowerCellDropChance, PickupDirector.DefaultCellDropChance),
                 v => DevTuning.PowerCellDropChance = v, tab: 1);
 
-            // Spawn cadence (YT-170). Reads live like the rest of this pacing group: EnemySpawner
-            // pulls CurrentInterval fresh on every check, so the slider retimes every factory's
-            // emergence the moment it moves, with no push needed.
-            Add("Spawn interval", "s", 0.3f, 4f, SpawnIntervalDefault(),
-                () => DevTuning.Or(DevTuning.SpawnInterval, SpawnIntervalDefault()),
-                v => DevTuning.SpawnInterval = v, tab: 1);
-
             // Hose leash length (YT-129). The tether reads this through DevTuning every frame, so the
-            // slider needs no push — moving it re-leashes Max on the next LateUpdate.
+            // slider needs no push — moving it re-leashes Max on the next LateUpdate. Lives on the
+            // Weapons tab (YT-196 audit): it's a hose knob, same as Hydro drain below.
             float tetherDefault = MaxWorlds.Hose.HoseTether.AuthoredLength;
             Add("Hose tether", "m", 6f, 40f, tetherDefault,
                 () => DevTuning.Or(DevTuning.HoseTetherLength, tetherDefault),
-                v => DevTuning.HoseTetherLength = v);
+                v => DevTuning.HoseTetherLength = v, tab: 1);
 
             // ---- Boss tab (YT-157): the brood volley — Big Bermuda's side-hatch add-spawner. ----
             // All read live: the volley pulls each number through DevTuning the next time it fires, so a
