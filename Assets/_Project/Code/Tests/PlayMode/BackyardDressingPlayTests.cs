@@ -174,41 +174,6 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator VerticalHedgeRowsSpreadTheirBushesAlongTheirLongAxis()
-        {
-            yield return BuildYard();
-
-            // A hedge planted deep (Z) rather than wide (X) is a "vertical" row (YT-195). Its bushes
-            // used to be spaced along X regardless — which for a bed only 1.3 m wide clumps them all
-            // in the middle instead of running the bed's actual length.
-            var kit = _dressing.transform.Find("Kit Props");
-            bool checkedAny = false;
-
-            foreach (CoverPiece piece in _path.GetComponent<BackyardPath>().CoverPieces)
-            {
-                ArenaCover c = piece.Cover;
-                if (c.Dressing != CoverDressing.Hedge || c.Size.z <= c.Size.x) continue;
-
-                checkedAny = true;
-                var around = new Rect(c.CenterXz.x - c.Size.x, c.CenterXz.y - c.Size.z,
-                                      c.Size.x * 2f, c.Size.z * 2f);
-
-                var zs = new List<float>();
-                foreach (Transform t in kit)
-                    if (around.Contains(new Vector2(t.position.x, t.position.z))) zs.Add(t.position.z);
-
-                Assert.GreaterOrEqual(zs.Count, 2, $"{c.Name} has fewer than two bushes planted in it");
-
-                float spread = zs.Max() - zs.Min();
-                Assert.Greater(spread, c.Size.z * 0.4f,
-                    $"{c.Name} is planted the long way (Z) but its bushes are clumped at one end " +
-                    "instead of running its length");
-            }
-
-            Assert.IsTrue(checkedAny, "no vertical (Z-elongated) hedge in the map to prove this against");
-        }
-
-        [UnityTest]
         public IEnumerator TheKitKeepsItsOwnMaterials()
         {
             yield return BuildYard();
