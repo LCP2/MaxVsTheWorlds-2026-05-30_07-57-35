@@ -65,8 +65,10 @@ namespace MaxWorlds.UI
         private const float PanelW = 980f + SaveBtnW + SaveBtnGap;
         private const float SaveBtnW = 260f;
         private const float SaveBtnGap = 16f;
-        // Grew for the two durability sliders (YT-126): 9 knobs need 5 rows a column, not 4. Still
-        // inside the landscape-phone height (930 * 0.44 ≈ 409pt < 430), which the layout test guards.
+        // Grew for the two durability sliders (YT-126), then again in YT-192 so the three-column
+        // value dump has room below the footer without its box running past the panel's bottom
+        // edge. Still inside the landscape-phone height (970 * 0.44 ≈ 427pt < 430), which the
+        // layout test guards.
         private const float PanelH = 930f;
         private const float Pad = 20f;
         private const float ColGap = 20f;
@@ -75,8 +77,9 @@ namespace MaxWorlds.UI
         private const float HandleW = 64f;
         private const float HeaderH = 56f;
         private const float ButtonH = 84f;
-        // The copied-values dump is laid out in TWO columns (YT-126), so it stays full-content but
-        // only ~5 lines tall — a single 10-line column would push the panel off a phone.
+        // The copied-values dump is laid out in THREE columns (YT-126, widened from two in YT-192
+        // once the Gameplay tab grew to 17 knobs) — a single 10+-line column would need a taller
+        // DumpH than the phone-height ceiling has room for, so it's spread wider instead of taller.
         private const float DumpH = 170f;
         private const float GearSize = 96f;
 
@@ -94,7 +97,11 @@ namespace MaxWorlds.UI
         // floor (24 * 0.44 = 10.6pt), same as DumpFont.
         private const int KnobLabelFont = 24;
         private const float KnobValueW = 80f;
-        private const float KnobGap = 8f;
+        // Trimmed from 8f (YT-192): the new four-column Gameplay tab (17 knobs, see cols below) has
+        // less width per row than the three-column tabs, and "Robot move speed" needed those few
+        // extra px of label zone to stay on one line. Still a real, visible gap between label and
+        // value at every column count.
+        private const float KnobGap = 2f;
 
         // Basement-biome dark panel + bright green accent, from mockups/13-settings.html.
         private static readonly Color PanelColor = new Color(0.055f, 0.075f, 0.062f, 0.96f);
@@ -108,7 +115,7 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private GameObject _panelRoot;
         private GameObject _scrim;
-        private Text _dumpTextL, _dumpTextR;   // two-column value dump (YT-126)
+        private Text _dumpTextL, _dumpTextM, _dumpTextR;   // three-column value dump (YT-126, YT-192)
         private bool _open;
 
         private readonly List<Knob> _knobs = new List<Knob>();
@@ -556,8 +563,11 @@ namespace MaxWorlds.UI
             // two columns (10 => five rows), which is the phone-height ceiling (YT-126) — the footer
             // sits below that height for every tab. A tab that outgrows 10 (YT-171's Weapons knob)
             // spills into a THIRD column instead of a sixth row, so it stays inside that same ceiling;
-            // the untouched two-column tabs render pixel-identical to before.
-            float dumpColW = (PanelW - Pad * 2f - ColGap) * 0.5f;
+            // a tab that outgrows 15 (YT-194's Gameplay knobs, YT-192) spills into a FOURTH column
+            // instead of a sixth row, for the same reason — it's what keeps the footer/dump below it
+            // inside the panel. The untouched two- and three-column tabs render pixel-identical to
+            // before.
+            float dumpColW = (PanelW - Pad * 2f - ColGap * 2f) / 3f;
             int maxRows = 0;
             for (int t = 0; t < TabNames.Length; t++)
             {
@@ -566,7 +576,7 @@ namespace MaxWorlds.UI
                 _pages[t] = page.gameObject;
 
                 var rows = _knobs.FindAll(k => k.Tab == t);
-                int cols = rows.Count > 10 ? 3 : 2;
+                int cols = rows.Count > 15 ? 4 : rows.Count > 10 ? 3 : 2;
                 float colW = (PanelW - Pad * 2f - ColGap * (cols - 1)) / cols;
                 int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(rows.Count / (float)cols));
                 maxRows = Mathf.Max(maxRows, rowsPerCol);
@@ -599,15 +609,19 @@ namespace MaxWorlds.UI
             var close = BuildButton(rt, "Close", afterSave + 380f + 16f + 300f + 16f, footerY, 200f, ButtonH);
             close.onClick.AddListener(() => SetOpen(false));
 
-            // Two-column dump (YT-126): keeps all ten lines on the panel without pushing it off a
-            // phone. Left half + right half of the value list, side by side.
+            // Three-column dump (YT-126, YT-192): keeps every line on the panel without pushing it
+            // off a phone. Left/middle/right thirds of the value list, side by side.
             float dumpY = footerY - ButtonH - 8f;
             _dumpTextL = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
             Place(_dumpTextL.rectTransform, Pad, dumpY, dumpColW, DumpH);
             _dumpTextL.verticalOverflow = VerticalWrapMode.Truncate;
 
+            _dumpTextM = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
+            Place(_dumpTextM.rectTransform, Pad + dumpColW + ColGap, dumpY, dumpColW, DumpH);
+            _dumpTextM.verticalOverflow = VerticalWrapMode.Truncate;
+
             _dumpTextR = AddText(rt, "", DumpFont, TextColor, TextAnchor.UpperLeft);
-            Place(_dumpTextR.rectTransform, Pad + dumpColW + ColGap, dumpY, dumpColW, DumpH);
+            Place(_dumpTextR.rectTransform, Pad + (dumpColW + ColGap) * 2f, dumpY, dumpColW, DumpH);
             _dumpTextR.verticalOverflow = VerticalWrapMode.Truncate;
 
             ShowTab(0);   // start on the Gameplay tab
@@ -749,11 +763,16 @@ namespace MaxWorlds.UI
             GUIUtility.systemCopyBuffer = dump;
             Debug.Log("[Settings]\n" + dump);
 
-            // Split across the two on-panel columns so all of it stays inside the panel on a phone.
-            int half = Mathf.CeilToInt(lines.Count / 2f);
-            if (_dumpTextL != null) _dumpTextL.text = string.Join("\n", lines.GetRange(0, half));
+            // Split across the three on-panel columns so all of it stays inside the panel on a phone
+            // (YT-192: two columns ran the Gameplay tab's 17 knobs past DumpH).
+            int third = Mathf.CeilToInt(lines.Count / 3f);
+            int firstEnd = Mathf.Min(third, lines.Count);
+            int secondEnd = Mathf.Min(third * 2, lines.Count);
+            if (_dumpTextL != null) _dumpTextL.text = string.Join("\n", lines.GetRange(0, firstEnd));
+            if (_dumpTextM != null)
+                _dumpTextM.text = string.Join("\n", lines.GetRange(firstEnd, secondEnd - firstEnd));
             if (_dumpTextR != null)
-                _dumpTextR.text = string.Join("\n", lines.GetRange(half, lines.Count - half));
+                _dumpTextR.text = string.Join("\n", lines.GetRange(secondEnd, lines.Count - secondEnd));
         }
 
         /// <summary>Persist the current tuning app-wide (YT-201): every game — the home screen,
@@ -763,6 +782,7 @@ namespace MaxWorlds.UI
         {
             DevTuning.Save();
             if (_dumpTextL != null) _dumpTextL.text = "Settings saved.\nApplies app-wide from the\nnext launch on.";
+            if (_dumpTextM != null) _dumpTextM.text = "";
             if (_dumpTextR != null) _dumpTextR.text = "";
         }
 
@@ -783,6 +803,7 @@ namespace MaxWorlds.UI
                 UpdateValueText(k);
             }
             if (_dumpTextL != null) _dumpTextL.text = "";
+            if (_dumpTextM != null) _dumpTextM.text = "";
             if (_dumpTextR != null) _dumpTextR.text = "";
         }
 
