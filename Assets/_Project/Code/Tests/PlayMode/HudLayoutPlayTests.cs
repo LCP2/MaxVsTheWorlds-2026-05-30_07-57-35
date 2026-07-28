@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using UnityEngine.UI;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
@@ -121,6 +122,40 @@ namespace MaxWorlds.Tests.PlayMode
                 Assert.IsFalse(home.Overlaps(ScreenRect(rt)),
                     $"the HOME button {home} overlaps '{n}' {ScreenRect(rt)}");
             }
+        }
+
+        [UnityTest]
+        public IEnumerator TheHomeButtonIsVisibleOnScreenWithinTheSafeArea()
+        {
+            // YT-202: YT-191's HOME button existed and didn't overlap anything, yet a playtest
+            // still reported it unreadable on device — the "committed but doesn't read on device"
+            // pattern (cf. YT-188). The overlap checks above can't catch that class of bug, so this
+            // asserts the button is actually on, has non-zero alpha, and its footprint sits fully
+            // inside both the screen and the safe area — not just non-overlapping in the abstract.
+            yield return null;
+
+            RectTransform home = Find("Home Button");
+            Assert.IsNotNull(home, "the HOME button is missing from the HUD");
+            Assert.IsTrue(home.gameObject.activeInHierarchy, "the HOME button is disabled — it exists but can't render");
+
+            Image bg = home.GetComponentInChildren<Image>(true);
+            Assert.IsNotNull(bg, "the HOME button has no background graphic to be seen by");
+            Assert.Greater(bg.color.a, 0f, "the HOME button's background is fully transparent — invisible even though present");
+
+            Button button = home.GetComponentInChildren<Button>(true);
+            Assert.IsNotNull(button, "the HOME button has no Button component to tap");
+            Assert.IsTrue(button.enabled && button.interactable, "the HOME button exists but can't be tapped");
+
+            Rect screenRect = ScreenRect(home);
+            var screenBounds = new Rect(0f, 0f, Screen.width, Screen.height);
+            Assert.IsTrue(screenBounds.Contains(new Vector2(screenRect.xMin, screenRect.yMin))
+                && screenBounds.Contains(new Vector2(screenRect.xMax, screenRect.yMax)),
+                $"the HOME button {screenRect} is clipped outside the {Screen.width}x{Screen.height} screen");
+
+            Rect safeArea = Screen.safeArea;
+            Assert.IsTrue(safeArea.Contains(new Vector2(screenRect.xMin, screenRect.yMin))
+                && safeArea.Contains(new Vector2(screenRect.xMax, screenRect.yMax)),
+                $"the HOME button {screenRect} sits outside the safe area {safeArea} — a notch/rounded-corner device would clip it");
         }
 
         [UnityTest]
