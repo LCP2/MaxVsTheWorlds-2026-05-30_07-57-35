@@ -26,6 +26,7 @@ namespace MaxWorlds.Tests.PlayMode
         {
             DevMode.Reset();
             DevTuning.Reset();
+            DevTuning.ClearSaved();
 
             // The panel self-installs at AfterSceneLoad, so a play-mode test already has one. Clear
             // any pre-existing panel + canvas so there is exactly one under our control.
@@ -45,6 +46,7 @@ namespace MaxWorlds.Tests.PlayMode
             if (_host != null) Object.Destroy(_host);
             DevMode.Reset();
             DevTuning.Reset();
+            DevTuning.ClearSaved();
             SafeArea.SimulatedSafeArea = null;
             SafeArea.SimulatedScreenSize = null;
             yield return null;
@@ -249,6 +251,66 @@ namespace MaxWorlds.Tests.PlayMode
                 "moving the Escalation max slider must drive DevTuning.EscalationMax");
         }
 
+        // ---------------------------------------------------------------- it saves (YT-201)
+
+        private static Button FindButton(Canvas canvas, string name)
+        {
+            foreach (var b in canvas.GetComponentsInChildren<Button>(true))
+                if (b.name == name) return b;
+            return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TheSaveButtonPersistsTheCurrentTuning_AndItSurvivesASimulatedRelaunch()
+        {
+            var canvas = PanelCanvas();
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+            var speed = System.Array.Find(sliders, s => s.transform.parent.name == "Max move speed");
+            Assert.That(speed, Is.Not.Null);
+            speed.value = 11f;
+            yield return null;
+
+            var save = FindButton(canvas, "Save settings");
+            Assert.That(save, Is.Not.Null, "no Save settings button (YT-201)");
+            save.onClick.Invoke();
+
+            Assert.That(DevTuning.HasSaved, Is.True, "Save settings must persist to PlayerPrefs");
+
+            // A fresh launch starts with every override null (a new process, not this test's live
+            // objects) — DevTuning.Reset() simulates that without actually restarting Unity.
+            DevTuning.Reset();
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.Null, "precondition: session wiped like a relaunch");
+
+            DevTuning.LoadSaved();   // what ApplyOnLaunch runs before any scene's Awake
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.EqualTo(11f).Within(0.001f),
+                "the saved tuning must come back on the next launch, before any game starts");
+        }
+
+        [UnityTest]
+        public IEnumerator ResetToDefaultsAlsoClearsTheSavedOverride()
+        {
+            var canvas = PanelCanvas();
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+            var speed = System.Array.Find(sliders, s => s.transform.parent.name == "Max move speed");
+            speed.value = 11f;
+            yield return null;
+
+            FindButton(canvas, "Save settings").onClick.Invoke();
+            Assert.That(DevTuning.HasSaved, Is.True, "precondition: a save exists");
+
+            FindButton(canvas, "Reset to defaults").onClick.Invoke();
+            yield return null;
+
+            Assert.That(DevTuning.HasSaved, Is.False,
+                "Reset to defaults must clear the saved override too, or a relaunch would silently " +
+                "bring the old numbers back");
+
+            DevTuning.Reset();   // simulate the relaunch itself
+            DevTuning.LoadSaved();
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.Null,
+                "nothing should reload after Reset to defaults cleared the save");
+        }
+
         // ---------------------------------------------------------------- it is on screen
 
         [UnityTest]
@@ -263,7 +325,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             foreach (var rt in canvas.GetComponentsInChildren<RectTransform>(true))
             {
-                if (rt.name != "Panel" && rt.name != "Gear" &&
+                if (rt.name != "Panel" && rt.name != "Gear" && rt.name != "Save settings" &&
                     rt.name != "Copy current values" && rt.name != "Reset to defaults") continue;
 
                 rt.GetWorldCorners(corners);
