@@ -683,14 +683,48 @@ namespace MaxWorlds.UI
             slider.handleRect = handle;
             slider.targetGraphic = handleImg;
             slider.direction = Slider.Direction.LeftToRight;
-            slider.minValue = k.Min;
-            slider.maxValue = k.Max;
+            // Piecewise-normalised (YT-205): the slider always runs 0..1 with the default pinned to
+            // the visual middle, so every knob centres regardless of where Default sits in [Min,Max].
+            slider.minValue = 0f;
+            slider.maxValue = 1f;
             slider.wholeNumbers = false;
-            slider.SetValueWithoutNotify(Mathf.Clamp(k.Get(), k.Min, k.Max));
-            slider.onValueChanged.AddListener(v => { k.Set(v); UpdateValueText(k); });
+            slider.SetValueWithoutNotify(ValueToPos(k.Min, k.Max, k.Default, Mathf.Clamp(k.Get(), k.Min, k.Max)));
+            slider.onValueChanged.AddListener(pos =>
+                { k.Set(PosToValue(k.Min, k.Max, k.Default, pos)); UpdateValueText(k); });
+
+            // The real Min/Max/Default the slider maps to isn't recoverable from the slider itself
+            // any more (it only knows its own 0..1 position) — park it alongside for anything outside
+            // this method, including tests, that needs to convert a real value to a position or back.
+            var range = rt.gameObject.AddComponent<SliderRange>();
+            range.Min = k.Min;
+            range.Max = k.Max;
+            range.Default = k.Default;
 
             return slider;
         }
+
+        /// <summary>Real-value bounds for a normalised slider (YT-205), attached to the same
+        /// GameObject as its <see cref="Slider"/>.</summary>
+        public sealed class SliderRange : MonoBehaviour
+        {
+            public float Min;
+            public float Max;
+            public float Default;
+        }
+
+        /// <summary>Slider position (0..1, 0.5 = default) → the knob's real value. Piecewise-linear
+        /// around <c>def</c> so dragging left of centre always lowers the value and right always
+        /// raises it, symmetrically, no matter where the default sits in [min,max] (YT-205).</summary>
+        public static float PosToValue(float min, float max, float def, float pos) => pos <= 0.5f
+            ? Mathf.Lerp(min, def, pos / 0.5f)
+            : Mathf.Lerp(def, max, (pos - 0.5f) / 0.5f);
+
+        /// <summary>Inverse of <see cref="PosToValue"/>: a real value → its slider position. Guards the
+        /// degenerate half where the default equals min or max (e.g. Starting robots, Default==Min==0)
+        /// by pinning that side at 0.5 rather than dividing by zero.</summary>
+        public static float ValueToPos(float min, float max, float def, float value) => value <= def
+            ? (def > min ? 0.5f * (value - min) / (def - min) : 0.5f)
+            : (max > def ? 0.5f + 0.5f * (value - def) / (max - def) : 0.5f);
 
         private Button BuildButton(RectTransform parent, string label, float x, float y,
                                    float w, float h, bool primary = false)
@@ -732,11 +766,13 @@ namespace MaxWorlds.UI
         private void UpdateValueText(Knob k)
         {
             if (k.Value == null) return;
-            float v = k.Get();
             // Percent of the authored default only (YT-190) — the raw number + unit doesn't fit the
             // value's fixed-width zone next to a long label without the two overlapping. The exact
             // raw value (what gets pasted back into the source) is still in "Copy current values".
-            float pct = k.Default > 0f ? v / k.Default * 100f : 0f;
+            // Derived from the slider's own normalised position (YT-205), so it reads 100% at centre
+            // for every knob — including ones like Starting robots where Default==Min==0, which used
+            // to divide by zero and stick at 0% (YT-206).
+            float pct = k.Slider != null ? k.Slider.value * 200f : 100f;
             k.Value.text = $"{pct:0}%";
         }
 
@@ -755,7 +791,7 @@ namespace MaxWorlds.UI
             {
                 if (k.Tab != _tab) continue;
                 float v = k.Get();
-                float pct = k.Default > 0f ? v / k.Default * 100f : 0f;
+                float pct = k.Slider != null ? k.Slider.value * 200f : 100f;
                 lines.Add($"{k.Name}: {v:0.##} {k.Unit}  (default {k.Default:0.##}, {pct:0}%)");
             }
 
@@ -799,7 +835,7 @@ namespace MaxWorlds.UI
 
             foreach (var k in _knobs)
             {
-                if (k.Slider != null) k.Slider.SetValueWithoutNotify(Mathf.Clamp(k.Default, k.Min, k.Max));
+                if (k.Slider != null) k.Slider.SetValueWithoutNotify(0.5f); // Default always centres (YT-205)
                 UpdateValueText(k);
             }
             if (_dumpTextL != null) _dumpTextL.text = "";

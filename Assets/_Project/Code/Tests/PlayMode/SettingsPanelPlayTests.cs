@@ -59,6 +59,14 @@ namespace MaxWorlds.Tests.PlayMode
             return null;
         }
 
+        // The slider itself only runs 0..1 now (YT-205, piecewise-normalised around each knob's
+        // default) — this drives a slider to a real target value the way a player's drag would.
+        private static void SetSliderToValue(Slider slider, float value)
+        {
+            var range = slider.GetComponent<SettingsPanel.SliderRange>();
+            slider.value = SettingsPanel.ValueToPos(range.Min, range.Max, range.Default, value);
+        }
+
         private static Button GearButton(Canvas canvas)
         {
             var gear = canvas.transform.Find("Safe Area/Gear");
@@ -164,8 +172,8 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(factory, Is.Not.Null, "no Factory health slider (YT-126)");
             Assert.That(boss, Is.Not.Null, "no Boss health slider (YT-126)");
 
-            factory.value = 500f;
-            boss.value = 3000f;
+            SetSliderToValue(factory, 500f);
+            SetSliderToValue(boss, 3000f);
             yield return null;
 
             Assert.That(DevTuning.FactoryHealth, Is.EqualTo(500f).Within(0.001f),
@@ -184,7 +192,7 @@ namespace MaxWorlds.Tests.PlayMode
             var speed = System.Array.Find(sliders, s => s.transform.parent.name == "Max move speed");
             Assert.That(speed, Is.Not.Null);
 
-            speed.value = 11f;
+            SetSliderToValue(speed, 11f);
             yield return null;
 
             Assert.That(DevTuning.PlayerMoveSpeed, Is.Not.Null);
@@ -203,7 +211,7 @@ namespace MaxWorlds.Tests.PlayMode
             var spawn = System.Array.Find(sliders, s => s.transform.parent.name == "Spawn interval");
             Assert.That(spawn, Is.Not.Null, "no Spawn interval slider (YT-170)");
 
-            spawn.value = 0.5f;
+            SetSliderToValue(spawn, 0.5f);
             yield return null;
 
             Assert.That(DevTuning.SpawnInterval, Is.Not.Null);
@@ -220,7 +228,7 @@ namespace MaxWorlds.Tests.PlayMode
             var chance = System.Array.Find(sliders, s => s.transform.parent.name == "Cell drop chance");
             Assert.That(chance, Is.Not.Null, "no Cell drop chance slider (YT-171)");
 
-            chance.value = 0.75f;
+            SetSliderToValue(chance, 0.75f);
             yield return null;
 
             Assert.That(DevTuning.PowerCellDropChance, Is.Not.Null);
@@ -241,8 +249,8 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(rate, Is.Not.Null, "no Escalation rate slider (YT-181)");
             Assert.That(max, Is.Not.Null, "no Escalation max slider (YT-181)");
 
-            rate.value = 0.2f;
-            max.value = 15f;
+            SetSliderToValue(rate, 0.2f);
+            SetSliderToValue(max, 15f);
             yield return null;
 
             Assert.That(DevTuning.EscalationRate, Is.EqualTo(0.2f).Within(0.001f),
@@ -267,7 +275,7 @@ namespace MaxWorlds.Tests.PlayMode
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
             var speed = System.Array.Find(sliders, s => s.transform.parent.name == "Max move speed");
             Assert.That(speed, Is.Not.Null);
-            speed.value = 11f;
+            SetSliderToValue(speed, 11f);
             yield return null;
 
             var save = FindButton(canvas, "Save settings");
@@ -292,7 +300,7 @@ namespace MaxWorlds.Tests.PlayMode
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
             var speed = System.Array.Find(sliders, s => s.transform.parent.name == "Max move speed");
-            speed.value = 11f;
+            SetSliderToValue(speed, 11f);
             yield return null;
 
             FindButton(canvas, "Save settings").onClick.Invoke();
