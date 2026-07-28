@@ -22,10 +22,9 @@ namespace MaxWorlds.Factories
     {
         // ~4 s of focused fire to kill, so destroying it lands as a decisive beat (YT-65). Tunable.
         // Renamed from maxHealth so the lower value takes effect on the existing scene instance.
-        // YT-126: ~2.5x the old 140 — factories were dying almost instantly, which removed the
-        // tension of clearing them. This is the first-pass default; Lee dials the final on-device via
-        // the Settings panel's Factory-health slider.
-        [SerializeField] private float factoryHealth = 350f;
+        // YT-200: Lee's on-device number from the Settings panel's Factory-health slider (was 350,
+        // set by YT-126's first pass).
+        [SerializeField] private float factoryHealth = 1501.5f;
         [Tooltip("Gate opened when the factory dies. Optional — the path/gate is placed by YT-38.")]
         [SerializeField] private SubZoneGate gate;
         // Industrial hazard-orange so the factory reads as the objective, not another grey fence

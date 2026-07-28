@@ -25,10 +25,10 @@ namespace MaxWorlds.Enemies
     /// </summary>
     public static class DifficultyDirector
     {
-        // --- authored curve (YT-181 first pass; Lee dials the final via the Settings panel) ---
+        // --- authored curve (YT-181 first pass, re-baked to Lee's on-device numbers YT-200) ---
         public const float AuthoredStart = 0f;
-        public const float AuthoredRatePerSecond = 0.05f;   // ~200s (3m20s) to climb from 0 to the authored max
-        public const float AuthoredPerShedBump = 1.5f;      // a shed kill is worth ~30s of climbing
+        public const float AuthoredRatePerSecond = 0.011f;  // was 0.05 — a much slower time-driven climb
+        public const float AuthoredPerShedBump = 4.995f;    // was 1.5 — a shed kill counts for a lot more
         public const float AuthoredMax = 10f;
 
         // --- what the level actually buys, at full escalation (Normalized == 1) ---

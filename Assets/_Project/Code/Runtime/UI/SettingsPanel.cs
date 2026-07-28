@@ -315,8 +315,8 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.RobotProductionPerMinute, productionDefault),
                 v => DevTuning.RobotProductionPerMinute = v);
 
-            Add("Robot health", "x", 0.5f, 3f, 1f,
-                () => DevTuning.Or(DevTuning.RobotHealthMultiplier, 1f),
+            Add("Robot health", "x", 0.5f, 3f, EnemySpawner.DefaultRobotHealthMultiplier,
+                () => DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier),
                 v => DevTuning.RobotHealthMultiplier = v);
 
             // Spawn cadence (YT-170). Reads live: EnemySpawner pulls CurrentInterval fresh on every
@@ -403,22 +403,15 @@ namespace MaxWorlds.UI
         private static float FactoryDefault()
         {
             foreach (MowerHutch h in FactoryCensus.All) if (h != null) return h.AuthoredMax;
-            return 350f;
+            return 1501.5f;
         }
 
-        /// <summary>The authored steady-state spawn interval for the 100% reference (YT-170): a live
-        /// factory's if the level has one, else the shipped default so the panel still works in a
-        /// bare test scene. Same fallback shape as <see cref="FactoryDefault"/>.</summary>
-        private static float SpawnIntervalDefault()
-        {
-            foreach (MowerHutch h in FactoryCensus.All)
-            {
-                if (h == null) continue;
-                var spawner = h.GetComponent<EnemySpawner>();
-                if (spawner != null) return spawner.AuthoredSpawnIntervalMin;
-            }
-            return 1.2f;
-        }
+        /// <summary>The pinned Spawn-interval override's 100% reference (YT-170, decoupled from
+        /// Production/min's reference in YT-200 — see <see cref="EnemySpawner.DefaultSpawnIntervalPin"/>).
+        /// A fixed authored constant, not read off the live scene: unlike Production/min this knob
+        /// pins an exact flat number rather than tracking the level's spawner, so there's no live
+        /// value to follow.</summary>
+        private static float SpawnIntervalDefault() => EnemySpawner.DefaultSpawnIntervalPin;
 
         /// <summary>The authored starting-robot count for the 100% reference (YT-194): a live
         /// factory's if the level has one, else the shipped default. Same fallback shape as
@@ -431,12 +424,13 @@ namespace MaxWorlds.UI
                 var spawner = h.GetComponent<EnemySpawner>();
                 if (spawner != null) return spawner.AuthoredStartingRobots;
             }
-            return 1f;
+            return 0f;
         }
 
         /// <summary>The authored steady-state production rate in robots/minute for the 100%
-        /// reference (YT-194) — the same underlying number as <see cref="SpawnIntervalDefault"/>,
-        /// just in the unit this knob dials.</summary>
+        /// reference (YT-194): a live factory's if the level has one, else the shipped default so the
+        /// panel still works in a bare test scene. Was the same underlying number as
+        /// <see cref="SpawnIntervalDefault"/> before YT-200 decoupled the two.</summary>
         private static float ProductionPerMinuteDefault()
         {
             foreach (MowerHutch h in FactoryCensus.All)
@@ -445,7 +439,7 @@ namespace MaxWorlds.UI
                 var spawner = h.GetComponent<EnemySpawner>();
                 if (spawner != null) return spawner.AuthoredProductionPerMinute;
             }
-            return 60f / 1.2f;
+            return 60f / 12f;
         }
 
         private void Add(string name, string unit, float min, float max, float def,

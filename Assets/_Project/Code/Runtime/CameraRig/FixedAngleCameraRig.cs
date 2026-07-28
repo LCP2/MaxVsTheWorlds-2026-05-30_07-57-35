@@ -23,11 +23,12 @@ namespace MaxWorlds.CameraRig
         public const float MinDistance = 12f;
         public const float MaxDistance = 45f;
 
-        /// <summary>Phone-class default (YT-106): the tighter framing Lee dialed in on-device. Only
-        /// phones use it — desktop keeps the serialized wide value, because on a monitor the wider
-        /// shot read fine (if anything a touch zoomed-in). The panel reads whichever default this
-        /// device ends up with, so "Reset to defaults" returns to the right one per device.</summary>
-        public const float PhoneDistance = 23f;
+        /// <summary>Phone-class default (YT-106, re-baked YT-200 — was 23): the tighter framing Lee
+        /// dialed in on-device. Only phones use it — desktop keeps the serialized wide value, because
+        /// on a monitor the wider shot read fine (if anything a touch zoomed-in). The panel reads
+        /// whichever default this device ends up with, so "Reset to defaults" returns to the right
+        /// one per device.</summary>
+        public const float PhoneDistance = 16.1f;
 
         /// <summary>Test seam: force the device class. Null = ask the platform.</summary>
         public static bool? SimulatePhoneClass;

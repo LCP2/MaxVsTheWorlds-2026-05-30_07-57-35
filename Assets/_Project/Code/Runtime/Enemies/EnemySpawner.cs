@@ -38,7 +38,9 @@ namespace MaxWorlds.Enemies
         [Tooltip("Robots THIS factory allows alive at RUN START — ramps up to Max live enemies as " +
                  "the Invasion Level climbs (YT-194). Overridable via the Settings panel's " +
                  "'Starting robots' knob.")]
-        [SerializeField] private int startingRobots = 1;
+        // YT-200: Lee's on-device number is zero — the run starts with no robots on the field at all,
+        // arriving only via the Production/min ramp below.
+        [SerializeField] private int startingRobots = 0;
 
         /// <summary>
         /// The FIELD-WIDE budget, across every factory (YT-186). <see cref="maxLiveEnemies"/> only
@@ -76,7 +78,9 @@ namespace MaxWorlds.Enemies
         [Tooltip("Seconds between spawns at run start (breathable).")]
         [SerializeField] private float spawnIntervalStart = 1.8f;
         [Tooltip("Seconds between spawns at steady state (peak pressure).")]
-        [SerializeField] private float spawnIntervalMin = 1.2f;
+        // YT-200: Lee's on-device number, dialled via the Settings panel's Production/min knob (was
+        // 1.2s / 50 bots-per-min — this is 12s / 5 bots-per-min).
+        [SerializeField] private float spawnIntervalMin = 12f;
         [Tooltip("Seconds over which the cadence ramps from start to min.")]
         [SerializeField] private float rampSeconds = 45f;
 
@@ -109,6 +113,20 @@ namespace MaxWorlds.Enemies
         /// start) — the Settings panel's reference default for a pinned
         /// <see cref="DevTuning.DeathSurgeEliteChance"/>.</summary>
         public const float DeathSurgeEliteChanceMax = 0.5f;
+
+        /// <summary>Multiplies every archetype's base health when no Settings-panel override is set —
+        /// the "Robot health" knob's 100% reference (YT-194, re-baked to Lee's on-device number
+        /// YT-200 — was 1x).</summary>
+        public const float DefaultRobotHealthMultiplier = 1.42f;
+
+        /// <summary>The pinned <see cref="DevTuning.SpawnInterval"/> override's own 100% reference
+        /// (YT-200). Before this ticket it was read straight off <see cref="AuthoredSpawnIntervalMin"/>
+        /// — "the same underlying number [as Production/min], just in a different unit" — but Lee's
+        /// on-device values for the two independent sliders no longer agree (Production/min bakes to
+        /// 10% of the old 1.2s/50-bots-per-min pair, Spawn interval bakes to 333% of the same old
+        /// 1.2s), which the shared source can't represent at once. Decoupled so each knob gets its
+        /// own authored default; was 1.2f before YT-200.</summary>
+        public const float DefaultSpawnIntervalPin = 3.996f;
 
         // One pool PER KIND. A single pool would hand a dead bruiser back as the next rusher, still
         // wearing its box body and its collider — the classic pooling bug.
@@ -280,7 +298,7 @@ namespace MaxWorlds.Enemies
             // health" knob (YT-194) is a separate, flat baseline applied first — the two compose
             // rather than fight, since WithHealthMultiplier leaves ContactDamage untouched.
             EnemyArchetype archetype = EnemyArchetype.Of(kind)
-                .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, 1f))
+                .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
             RobotEnemy e = Take(kind, archetype);
 

@@ -7,9 +7,10 @@ using MaxWorlds.CameraRig;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The per-device-class camera default (YT-106): phones sit at 23 m, desktop keeps the wider
-    /// serialized framing. This is a default, not a hard override — the dev nudge and the tuning
-    /// slider still move it — so it only decides where a fresh session starts on each device.
+    /// The per-device-class camera default (YT-106, re-baked YT-200): phones sit at 16.1 m, desktop
+    /// keeps the wider serialized framing. This is a default, not a hard override — the dev nudge and
+    /// the tuning slider still move it — so it only decides where a fresh session starts on each
+    /// device.
     /// </summary>
     public sealed class CameraPhoneDefaultPlayTests
     {
@@ -32,12 +33,12 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator OnAPhoneItStartsAt23m()
+        public IEnumerator OnAPhoneItStartsAt16Point1m()
         {
             yield return MakeRig(phone: true);
             Assert.That(_go.GetComponent<FixedAngleCameraRig>().Distance,
-                        Is.EqualTo(23f).Within(0.001f),
-                        "a phone should get Lee's tighter 23 m framing by default");
+                        Is.EqualTo(16.1f).Within(0.001f),
+                        "a phone should get Lee's tighter 16.1 m framing by default");
         }
 
         [UnityTest]

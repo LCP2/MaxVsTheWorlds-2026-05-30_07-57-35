@@ -4,15 +4,18 @@ using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
 using MaxWorlds.Bosses;
+using MaxWorlds.CameraRig;
+using MaxWorlds.Factories;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The combat-feel defaults baked from Lee's on-device tuning (YT-106). These pin the shipped
-    /// numbers — and, for the two that are serialized on the player, guard against the scene silently
-    /// shadowing them back to the old values (the exact trap that bit BlasterTuning and moved it to
-    /// a const in the first place).
+    /// The combat-feel defaults baked from Lee's on-device tuning (YT-106, re-baked YT-200). These
+    /// pin the shipped numbers — and, for the ones that are serialized (on the player, the factory,
+    /// the spawner), guard against the scene silently shadowing them back to the old values (the
+    /// exact trap that bit BlasterTuning and moved it to a const in the first place).
     ///
     /// Robot speed was retuned again at YT-169: YT-106 paired the rusher's number with Max's own
     /// on-device slowdown and quietly drifted the ratio to ~72% of Max; YT-169 pulls it back to ~60%
@@ -25,10 +28,22 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheCodeAuthoredDefaultsAreLeesNumbers()
         {
-            Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(19.94f).Within(0.001f), "water deplete");
+            Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(10.57f).Within(0.001f), "water deplete");
             Assert.That(BlasterTuning.RegenPerSec, Is.EqualTo(55f).Within(0.001f), "water replenish — unchanged");
             Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(1.85f).Within(0.001f), "robot speed");
             Assert.That(BossTuning.MoveSpeed, Is.EqualTo(3.6f).Within(0.001f), "boss speed — unchanged");
+        }
+
+        [Test]
+        public void TheYT200AuthoredDefaultsAreLeesNumbers()
+        {
+            Assert.That(FixedAngleCameraRig.PhoneDistance, Is.EqualTo(16.1f).Within(0.001f), "camera zoom");
+            Assert.That(DifficultyDirector.AuthoredRatePerSecond, Is.EqualTo(0.011f).Within(0.0001f), "escalation rate");
+            Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(4.995f).Within(0.001f), "shed level bump");
+            Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.42f).Within(0.001f), "robot health");
+            Assert.That(WaterBlaster.DefaultHydroDrainRate, Is.EqualTo(0.53f).Within(0.001f), "hydro drain");
+            Assert.That(PickupDirector.DefaultPartInterval, Is.EqualTo(7.98f).Within(0.001f), "part pacing");
+            Assert.That(EnemySpawner.DefaultSpawnIntervalPin, Is.EqualTo(3.996f).Within(0.001f), "spawn interval");
         }
 
         [Test]
@@ -51,7 +66,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(go.GetComponent<PlayerController>().AuthoredMoveSpeed,
                             Is.EqualTo(3.01f).Within(0.001f), "Max move speed default");
                 Assert.That(go.GetComponent<PlayerHealth>().AuthoredMax,
-                            Is.EqualTo(69.82f).Within(0.001f), "Max max-life default");
+                            Is.EqualTo(140.34f).Within(0.001f), "Max max-life default");
             }
             finally
             {
@@ -61,16 +76,18 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>
         /// The shipped scene must carry the same numbers, or the scene's serialized value wins over
-        /// the code default and the player would still run at 6 m/s with 100 hp on the build.
+        /// the code default and the build would still ship the old numbers.
         /// </summary>
         [Test]
-        public void TheSceneDoesNotShadowThePlayerDefaultsBackToTheOldValues()
+        public void TheSceneDoesNotShadowTheSerializedDefaultsBackToTheOldValues()
         {
             string scene = Path.Combine(RepoRoot, "Assets", "_Project", "Scenes", "Backyard_Slice.unity");
             string text = File.ReadAllText(scene);
 
             AssertField(text, "MaxWorlds.Player.PlayerController", "moveSpeed", "3.01");
-            AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "69.82");
+            AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "140.34");
+            AssertField(text, "MaxWorlds.Factories.MowerHutch", "factoryHealth", "1501.5");
+            AssertField(text, "MaxWorlds.Enemies.EnemySpawner", "spawnIntervalMin", "12");
         }
 
         /// <summary>Assert the serialized field directly under a component's class identifier reads
