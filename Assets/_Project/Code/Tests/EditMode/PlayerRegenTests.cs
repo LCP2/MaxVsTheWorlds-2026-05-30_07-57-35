@@ -11,7 +11,7 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class PlayerRegenTests
     {
-        private const float Max = 69.82f;    // PlayerHealth.maxHealth (YT-106: Lee's number, was 100)
+        private const float Max = 140.34f;   // PlayerHealth.maxHealth (YT-200: Lee's number, was 69.82)
         private const float PerSec = PlayerTuning.RegenPerSec;
         private const float Delay = PlayerTuning.RegenDelay;
         private static readonly float RusherHit = EnemyArchetype.Rusher.ContactDamage;
@@ -61,8 +61,8 @@ namespace MaxWorlds.Tests.EditMode
         public void HealingAFullBarTakesLongEnoughToHurt()
         {
             float secondsToFull = Max / PerSec;
-            // Lee's smaller pool (YT-106) heals in ~23s rather than ~33s — but with less HP to lose,
-            // Max is more vulnerable, not less, so a full heal still has to be a real investment.
+            // Lee's larger pool (YT-200) takes even longer to top up than YT-106's ~23s — a full heal
+            // must stay a real investment, not a quick top-off.
             Assert.GreaterOrEqual(secondsToFull, 20f,
                 "if a full heal is quick, damage stops mattering and so does dodging");
         }
