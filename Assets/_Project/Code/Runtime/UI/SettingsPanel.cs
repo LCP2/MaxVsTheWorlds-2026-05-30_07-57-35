@@ -58,7 +58,13 @@ namespace MaxWorlds.UI
         private const float RefH = 1080f;
         private const float Scale6Inch = 0.44f;   // used by the layout test
 
-        private const float PanelW = 980f;
+        // Grew by SaveBtnW + SaveBtnGap (YT-201) to make room for the Save settings button without
+        // touching the other three footer buttons' proven widths. Width has huge slack against the
+        // 932pt phone-width ceiling (currently 552.6pt used), unlike height, which is nearly maxed —
+        // see PanelH below.
+        private const float PanelW = 980f + SaveBtnW + SaveBtnGap;
+        private const float SaveBtnW = 260f;
+        private const float SaveBtnGap = 16f;
         // Grew for the two durability sliders (YT-126): 9 knobs need 5 rows a column, not 4. Still
         // inside the landscape-phone height (930 * 0.44 ≈ 409pt < 430), which the layout test guards.
         private const float PanelH = 930f;
@@ -576,13 +582,21 @@ namespace MaxWorlds.UI
             float gridH = RowH * maxRows;
             float footerY = y - gridH - 12f;
 
-            var copy = BuildButton(rt, "Copy current values", Pad, footerY, 380f, ButtonH, primary: true);
+            // Save settings (YT-201) leads the footer — it's the one action that outlives the
+            // session — then the original three, untouched at their proven widths, just shifted
+            // right by the new button's footprint.
+            const float afterSave = Pad + SaveBtnW + SaveBtnGap;
+
+            var save = BuildButton(rt, "Save settings", Pad, footerY, SaveBtnW, ButtonH, primary: true);
+            save.onClick.AddListener(SaveSettings);
+
+            var copy = BuildButton(rt, "Copy current values", afterSave, footerY, 380f, ButtonH, primary: true);
             copy.onClick.AddListener(CopyValues);
 
-            var reset = BuildButton(rt, "Reset to defaults", Pad + 380f + 16f, footerY, 300f, ButtonH);
+            var reset = BuildButton(rt, "Reset to defaults", afterSave + 380f + 16f, footerY, 300f, ButtonH);
             reset.onClick.AddListener(ResetValues);
 
-            var close = BuildButton(rt, "Close", Pad + 380f + 16f + 300f + 16f, footerY, 200f, ButtonH);
+            var close = BuildButton(rt, "Close", afterSave + 380f + 16f + 300f + 16f, footerY, 200f, ButtonH);
             close.onClick.AddListener(() => SetOpen(false));
 
             // Two-column dump (YT-126): keeps all ten lines on the panel without pushing it off a
@@ -742,6 +756,16 @@ namespace MaxWorlds.UI
                 _dumpTextR.text = string.Join("\n", lines.GetRange(half, lines.Count - half));
         }
 
+        /// <summary>Persist the current tuning app-wide (YT-201): every game — the home screen,
+        /// existing saves, brand-new ones — inherits it from the next launch on, via
+        /// <see cref="DevTuning.Save"/> and the auto-load that runs before any scene does.</summary>
+        private void SaveSettings()
+        {
+            DevTuning.Save();
+            if (_dumpTextL != null) _dumpTextL.text = "Settings saved.\nApplies app-wide from the\nnext launch on.";
+            if (_dumpTextR != null) _dumpTextR.text = "";
+        }
+
         private void ResetValues()
         {
             // Push the authored value back through each knob's own setter first, so whatever cached
@@ -749,6 +773,9 @@ namespace MaxWorlds.UI
             // then drop the overrides — after which Or() returns the authored constant and they agree.
             foreach (var k in _knobs) k.Set(k.Default);
             DevTuning.Reset();
+            // Also drop the persisted save (YT-201 AC) — otherwise the next launch would quietly
+            // reload the old numbers this button just backed away from.
+            DevTuning.ClearSaved();
 
             foreach (var k in _knobs)
             {

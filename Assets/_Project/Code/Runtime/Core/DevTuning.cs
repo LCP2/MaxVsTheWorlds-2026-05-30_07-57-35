@@ -1,3 +1,6 @@
+using System;
+using UnityEngine;
+
 namespace MaxWorlds.Core
 {
     /// <summary>
@@ -16,9 +19,12 @@ namespace MaxWorlds.Core
     /// value until a slider is actually moved. No dev flag gates this any more (YT-120): the panel
     /// is always compiled in, so a moved slider always takes effect. That is the point of it.
     ///
-    /// Deliberately NOT persisted to disk. These are throwaway numbers you sweep past to find the
-    /// one you want; the panel's "Copy current values" button is the intended way for a good set to
-    /// leave a session, by being pasted back into the authored consts as new defaults.
+    /// A moved slider is still throwaway by default — it dies with the session unless the panel's
+    /// "Save settings" button explicitly commits it via <see cref="Save"/> (YT-201). That's the
+    /// difference from "Copy current values": Copy is for carrying a good set back into the authored
+    /// consts as new defaults; Save is for making the current tuning stick, app-wide, without a
+    /// rebuild, and it survives a full quit because <see cref="ApplyOnLaunch"/> reloads it before any
+    /// scene's own Awake runs.
     /// </summary>
     public static class DevTuning
     {
@@ -224,5 +230,96 @@ namespace MaxWorlds.Core
             RobotProductionPerMinute = null;
             RobotHealthMultiplier = null;
         }
+
+        // ------------------------------------------------------------------ persistence (YT-201)
+
+        private const string PrefsPrefix = "DevTuning.";
+        // Distinguishes "never saved" from "saved with every knob back at its authored default" —
+        // the latter is a real, deliberate save (e.g. after Reset then Save) and must still load.
+        private const string SavedMarkerKey = PrefsPrefix + "Saved";
+
+        /// <summary>Every override paired with its PlayerPrefs key, so Save/Load/Clear share one
+        /// loop instead of thirty-three near-identical lines apiece.</summary>
+        private static readonly (string Key, Func<float?> Get, Action<float?> Set)[] Persisted =
+        {
+            (PrefsPrefix + nameof(CameraDistance), () => CameraDistance, v => CameraDistance = v),
+            (PrefsPrefix + nameof(PlayerMoveSpeed), () => PlayerMoveSpeed, v => PlayerMoveSpeed = v),
+            (PrefsPrefix + nameof(RobotMoveSpeed), () => RobotMoveSpeed, v => RobotMoveSpeed = v),
+            (PrefsPrefix + nameof(SpawnInterval), () => SpawnInterval, v => SpawnInterval = v),
+            (PrefsPrefix + nameof(BossMoveSpeed), () => BossMoveSpeed, v => BossMoveSpeed = v),
+            (PrefsPrefix + nameof(PlayerMaxHealth), () => PlayerMaxHealth, v => PlayerMaxHealth = v),
+            (PrefsPrefix + nameof(BlasterDrainPerSecond), () => BlasterDrainPerSecond, v => BlasterDrainPerSecond = v),
+            (PrefsPrefix + nameof(BlasterRegenPerSecond), () => BlasterRegenPerSecond, v => BlasterRegenPerSecond = v),
+            (PrefsPrefix + nameof(FactoryHealth), () => FactoryHealth, v => FactoryHealth = v),
+            (PrefsPrefix + nameof(BossHealth), () => BossHealth, v => BossHealth = v),
+            (PrefsPrefix + nameof(BossVolleyInterval), () => BossVolleyInterval, v => BossVolleyInterval = v),
+            (PrefsPrefix + nameof(BossAddsPerVolley), () => BossAddsPerVolley, v => BossAddsPerVolley = v),
+            (PrefsPrefix + nameof(BossMaxAdds), () => BossMaxAdds, v => BossMaxAdds = v),
+            (PrefsPrefix + nameof(BossVolleyWindup), () => BossVolleyWindup, v => BossVolleyWindup = v),
+            (PrefsPrefix + nameof(HoseTetherLength), () => HoseTetherLength, v => HoseTetherLength = v),
+            (PrefsPrefix + nameof(PartDropInterval), () => PartDropInterval, v => PartDropInterval = v),
+            (PrefsPrefix + nameof(HydroDrainRate), () => HydroDrainRate, v => HydroDrainRate = v),
+            (PrefsPrefix + nameof(PowerCellCapacity), () => PowerCellCapacity, v => PowerCellCapacity = v),
+            (PrefsPrefix + nameof(PowerCellDropChance), () => PowerCellDropChance, v => PowerCellDropChance = v),
+            (PrefsPrefix + nameof(NozzleConeMultiplier), () => NozzleConeMultiplier, v => NozzleConeMultiplier = v),
+            (PrefsPrefix + nameof(PowerNozzleRange), () => PowerNozzleRange, v => PowerNozzleRange = v),
+            (PrefsPrefix + nameof(RangeExtenderBonus), () => RangeExtenderBonus, v => RangeExtenderBonus = v),
+            (PrefsPrefix + nameof(WideBoreConeMultiplier), () => WideBoreConeMultiplier, v => WideBoreConeMultiplier = v),
+            (PrefsPrefix + nameof(HarnessCapacity), () => HarnessCapacity, v => HarnessCapacity = v),
+            (PrefsPrefix + nameof(AccelSpeed), () => AccelSpeed, v => AccelSpeed = v),
+            (PrefsPrefix + nameof(EscalationStart), () => EscalationStart, v => EscalationStart = v),
+            (PrefsPrefix + nameof(EscalationRate), () => EscalationRate, v => EscalationRate = v),
+            (PrefsPrefix + nameof(EscalationPerShedBump), () => EscalationPerShedBump, v => EscalationPerShedBump = v),
+            (PrefsPrefix + nameof(EscalationMax), () => EscalationMax, v => EscalationMax = v),
+            (PrefsPrefix + nameof(DeathSurgeBurstSize), () => DeathSurgeBurstSize, v => DeathSurgeBurstSize = v),
+            (PrefsPrefix + nameof(DeathSurgeEliteChance), () => DeathSurgeEliteChance, v => DeathSurgeEliteChance = v),
+            (PrefsPrefix + nameof(StartingRobots), () => StartingRobots, v => StartingRobots = v),
+            (PrefsPrefix + nameof(RobotProductionPerMinute), () => RobotProductionPerMinute, v => RobotProductionPerMinute = v),
+            (PrefsPrefix + nameof(RobotHealthMultiplier), () => RobotHealthMultiplier, v => RobotHealthMultiplier = v),
+        };
+
+        /// <summary>True once a save has actually happened. Lets the panel and tests tell "never
+        /// saved" apart from "saved, and every knob happened to be at its authored default".</summary>
+        public static bool HasSaved => PlayerPrefs.HasKey(SavedMarkerKey);
+
+        /// <summary>Writes every current override to PlayerPrefs, keyed app-wide rather than to any
+        /// save slot — every game, existing saves and brand-new ones, picks it up from the next
+        /// launch on.</summary>
+        public static void Save()
+        {
+            foreach (var f in Persisted)
+            {
+                float? v = f.Get();
+                if (v.HasValue) PlayerPrefs.SetFloat(f.Key, v.Value);
+                else PlayerPrefs.DeleteKey(f.Key);
+            }
+            PlayerPrefs.SetInt(SavedMarkerKey, 1);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>Applies whatever was last saved on top of the current overrides. Runs
+        /// automatically before any scene loads (see <see cref="ApplyOnLaunch"/>); exposed publicly
+        /// so a test can simulate a relaunch without actually restarting the process.</summary>
+        public static void LoadSaved()
+        {
+            if (!HasSaved) return;
+            foreach (var f in Persisted)
+                if (PlayerPrefs.HasKey(f.Key)) f.Set(PlayerPrefs.GetFloat(f.Key));
+        }
+
+        /// <summary>Drops the persisted set entirely. The panel's "Reset to defaults" calls this
+        /// too, so a relaunch after a reset doesn't quietly bring the old saved numbers back.</summary>
+        public static void ClearSaved()
+        {
+            foreach (var f in Persisted) PlayerPrefs.DeleteKey(f.Key);
+            PlayerPrefs.DeleteKey(SavedMarkerKey);
+            PlayerPrefs.Save();
+        }
+
+        /// <summary>Loads the saved settings before any scene's own Awake runs, so the home screen
+        /// and every game — new or resumed — inherit them from frame one, with nothing hard-coded
+        /// into a scene to make that happen (YT-201).</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
+        private static void ApplyOnLaunch() => LoadSaved();
     }
 }

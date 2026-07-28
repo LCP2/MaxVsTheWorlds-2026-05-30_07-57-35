@@ -16,7 +16,11 @@ namespace MaxWorlds.Tests.EditMode
 
         [SetUp]
         [TearDown]
-        public void ClearOverrides() => DevTuning.Reset();
+        public void ClearOverrides()
+        {
+            DevTuning.Reset();
+            DevTuning.ClearSaved();
+        }
 
         // ---------------------------------------------------------------- the tuning applies flag-free
 
@@ -66,6 +70,74 @@ namespace MaxWorlds.Tests.EditMode
 
             DevTuning.Reset();
             Assert.That(DevTuning.AnyOverride, Is.False, "the panel's Reset button must clear everything");
+        }
+
+        // ---------------------------------------------------------------- persisted saves (YT-201)
+
+        [Test]
+        public void ANeverSavedSessionHasNoSavedFlag()
+        {
+            Assert.That(DevTuning.HasSaved, Is.False,
+                "precondition: nothing has been saved in this test yet");
+        }
+
+        [Test]
+        public void SaveWritesTheCurrentOverride_AndLoadSavedBringsItBackAfterAReset()
+        {
+            DevTuning.PlayerMoveSpeed = 11f;
+            DevTuning.Save();
+            Assert.That(DevTuning.HasSaved, Is.True);
+
+            // A fresh process starts with every override null — Reset() simulates exactly that,
+            // the same way it does for a real relaunch.
+            DevTuning.Reset();
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.Null, "precondition: session wiped");
+
+            DevTuning.LoadSaved();
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.EqualTo(11f).Within(0.001f),
+                "a saved override must come back once LoadSaved runs, the same call the game makes " +
+                "on launch before any scene's Awake");
+        }
+
+        [Test]
+        public void SaveWithNoOverridesIsStillARealSave()
+        {
+            // Reset then Save is a legitimate flow — it deliberately persists "no overrides" so a
+            // stale save from an earlier session can't quietly resurface after a relaunch.
+            DevTuning.Save();
+            Assert.That(DevTuning.HasSaved, Is.True,
+                "saving with every knob at its authored default must still count as a real save");
+        }
+
+        [Test]
+        public void ClearSavedDropsThePersistedOverride()
+        {
+            DevTuning.PlayerMoveSpeed = 11f;
+            DevTuning.Save();
+
+            DevTuning.ClearSaved();
+            Assert.That(DevTuning.HasSaved, Is.False);
+
+            DevTuning.Reset();
+            DevTuning.LoadSaved();
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.Null,
+                "after ClearSaved, a simulated relaunch must not bring the old value back");
+        }
+
+        [Test]
+        public void SavingAgainWithAKnobBackAtDefaultDropsItFromTheSavedSet()
+        {
+            DevTuning.PlayerMoveSpeed = 11f;
+            DevTuning.Save();
+
+            DevTuning.PlayerMoveSpeed = null;   // e.g. the panel's own Reset flow for one knob
+            DevTuning.Save();
+
+            DevTuning.Reset();
+            DevTuning.LoadSaved();
+            Assert.That(DevTuning.PlayerMoveSpeed, Is.Null,
+                "a second Save must overwrite the first — an unset knob should not resurrect its " +
+                "old saved value");
         }
 
         // ---------------------------------------------------------------- the fragile mechanism is gone
