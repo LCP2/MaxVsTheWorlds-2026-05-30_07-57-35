@@ -31,7 +31,8 @@ namespace MaxWorlds.Intro
     ///  * TRIGGER — <see cref="TryPlay"/> starts it once per process (the New Game). YT-151's Home
     ///    screen calls it from its New Game button (never from Continue, and never on a Replay-triggered
     ///    scene reload — <see cref="MaxWorlds.Save.SaveSystem.ActiveSlot"/> being already set is what
-    ///    skips the Home screen, and with it this call, on those loads).
+    ///    skips the Home screen, and with it this call, on those loads). Also gated on
+    ///    <see cref="Enabled"/> (YT-216, default OFF) — the sequence is parked, not deleted.
     ///  * SKIP — a tap, click, or any key ends it immediately and drops straight into gameplay
     ///    (<see cref="Skip"/>, driven from <see cref="LateUpdate"/>; a "Tap to skip" prompt shows while
     ///    it runs).
@@ -50,18 +51,38 @@ namespace MaxWorlds.Intro
         private static bool s_consumed;
 
         /// <summary>
+        /// Authored gate (YT-216, part of the v2 addictive restructure): the ~24 s cinematic sits
+        /// squarely on the critical path of every New Game, and with the run bounded to ~6 minutes
+        /// (YT-210) every restart has to be instant — so it defaults OFF. The intro code is parked, not
+        /// deleted: flip this on (e.g. for a later first-launch-only treatment) to bring it back.
+        /// </summary>
+        public static bool Enabled = false;
+
+        /// <summary>
         /// Start the opening cinematic — the New-Game trigger, called by the Home screen (YT-151). Plays
-        /// once per process (never on a Replay-triggered scene reload, and never on Continue) and only
-        /// when there is a <c>Camera.main</c> to take over and hand back to. Returns true if it started.
+        /// once per process (never on a Replay-triggered scene reload, and never on Continue), only when
+        /// <see cref="Enabled"/>, and only when there is a <c>Camera.main</c> to take over and hand back
+        /// to. Returns true if it started.
         /// </summary>
         public static bool TryPlay()
         {
+            if (!Enabled) return false;                          // YT-216 — off by default, instant play
             if (s_consumed) return false;                        // once per process — not on Replay
             if (FindFirstObjectByType<IntroCinematic>() != null) return false;
             if (Camera.main == null) return false;              // nothing to take over / hand back to
             s_consumed = true;
             new GameObject("IntroCinematic").AddComponent<IntroCinematic>();
             return true;
+        }
+
+        /// <summary>Test isolation: forget that a cinematic has already run this process, and drop back
+        /// to the authored default (<see cref="Enabled"/> off) — same idiom as
+        /// <see cref="MaxWorlds.Save.SaveSystem.ResetForTests"/>, since PlayMode tests share one domain
+        /// across a run and this static state would otherwise leak from test to test.</summary>
+        public static void ResetForTests()
+        {
+            s_consumed = false;
+            Enabled = false;
         }
 
         // The three acts live far apart in world space so nothing overlaps the yard (at the origin) or

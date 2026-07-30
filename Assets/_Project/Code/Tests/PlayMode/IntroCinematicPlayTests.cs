@@ -34,6 +34,7 @@ namespace MaxWorlds.Tests.PlayMode
             _camGo.AddComponent<Camera>();
 
             RenderSettings.fog = true;   // a known state the intro must restore
+            IntroCinematic.ResetForTests();   // YT-216's authored default; each test opts in explicitly
         }
 
         [TearDown]
@@ -41,6 +42,33 @@ namespace MaxWorlds.Tests.PlayMode
         {
             if (_intro != null) Object.Destroy(_intro.gameObject);
             if (_camGo != null) Object.Destroy(_camGo);
+            IntroCinematic.ResetForTests();   // never leak the flag/consumed-state into another test
+        }
+
+        // ------------------------------------------------------------------ YT-216: the authored gate
+
+        [UnityTest]
+        public IEnumerator TryPlay_DoesNothingWhileDisabled()
+        {
+            bool started = IntroCinematic.TryPlay();
+
+            Assert.IsFalse(started, "TryPlay must report false while Enabled is off.");
+            Assert.IsNull(Object.FindFirstObjectByType<IntroCinematic>(),
+                "TryPlay stood up a cinematic even though Enabled is off (YT-216).");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TryPlay_StartsItOnceEnabledIsOptedBackIn()
+        {
+            IntroCinematic.Enabled = true;
+
+            bool started = IntroCinematic.TryPlay();
+            yield return null;
+
+            Assert.IsTrue(started, "TryPlay must still work once Enabled is opted back in.");
+            _intro = Object.FindFirstObjectByType<IntroCinematic>();
+            Assert.IsNotNull(_intro, "TryPlay reported success but built nothing.");
         }
 
         private IntroCinematic Build()

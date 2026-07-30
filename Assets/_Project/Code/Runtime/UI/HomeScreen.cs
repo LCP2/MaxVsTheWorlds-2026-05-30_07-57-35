@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Core;
 using MaxWorlds.Dev;
 using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
@@ -65,7 +66,14 @@ namespace MaxWorlds.UI
 
         private void Start()
         {
-            if (SaveSystem.ActiveSlot >= 0) return;   // a slot is already live (defensive re-add)
+            if (SaveSystem.ActiveSlot >= 0)
+            {
+                // A slot is already live: either a defensive re-add, or exactly the Replay-triggered
+                // reload YT-216 targets (sub-3-second AC) — this is the earliest point that reload
+                // hands control back, so it's the "controllable" mark for that path.
+                BootTiming.Mark("controllable-replay");
+                return;
+            }
 
             if (PressKitDirector.Armed())
             {
@@ -76,6 +84,7 @@ namespace MaxWorlds.UI
                 return;
             }
 
+            BootTiming.Mark("home-shown");   // YT-216 — cold-launch reference point #2
             Open();
         }
 
@@ -102,6 +111,7 @@ namespace MaxWorlds.UI
             Time.timeScale = _prevTimeScale;
             if (_maxStage != null) _maxStage.Hide();
             if (_root != null) Destroy(_root);
+            BootTiming.Mark("controllable");   // YT-216 — a slot was just picked; Max is live and moving
         }
 
         private void Update()

@@ -28,6 +28,10 @@ namespace MaxWorlds.Core
             // First line in the log, so a browser console immediately answers "which build is this?"
             Debug.Log($"[Build] {Application.version}  ({Application.platform})");
 
+            // YT-216's cold-launch reference point — everything downstream (Home shown, controllable)
+            // diffs against this to verify time-to-fun on device from the log alone.
+            BootTiming.Mark("bootstrap-awake");
+
             QualitySettings.vSyncCount = 0;
 
 #if UNITY_WEBGL && !UNITY_EDITOR
