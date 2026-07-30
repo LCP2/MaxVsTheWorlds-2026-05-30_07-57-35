@@ -160,7 +160,6 @@ namespace MaxWorlds.UI
             BuildWeaponsButton();
             BuildPartAlert();
             BuildFloatingLayer();
-            BuildMap();
             BuildTouchControls();
 
             _model.Boss.ActiveChanged += OnBossActiveChanged;
@@ -659,8 +658,7 @@ namespace MaxWorlds.UI
 
         /// <summary>The HOME button (YT-191): one tap from a live run back to the Home/save-slot
         /// screen. Sits just right of the utility icon column — the one gap the top-left corner has
-        /// left, above where the minimap starts (y -228) and clear of the status strip, which is
-        /// centred.</summary>
+        /// left, clear of the status strip, which is centred.</summary>
         private void BuildHomeButton()
         {
             var root = NewRect("Home Button", Root);
@@ -1073,26 +1071,6 @@ namespace MaxWorlds.UI
             DifficultyDirector.Stage.Infestation => "INFESTATION",
             _ => "DOMINATION",
         };
-
-        /// <summary>The in-run map (YT-72) — its own component, so the minimap can reuse the same
-        /// renderer at a different scale rather than the HUD growing a second copy of it.</summary>
-        public MapScreen Map { get; private set; }
-
-        /// <summary>The always-on minimap (YT-73) — the same renderer, small and see-through.</summary>
-        public Minimap Minimap { get; private set; }
-
-        private void BuildMap()
-        {
-            var go = new GameObject("Map Screen");
-            go.transform.SetParent(FullRoot, false);
-            Map = go.AddComponent<MapScreen>();
-            Map.Build(FullRoot, RefW, RefH);
-
-            // Below the utility icon column (P / ? / S), which owns the top-left down to y = -208.
-            var mini = new GameObject("Minimap", typeof(RectTransform));
-            Minimap = mini.AddComponent<Minimap>();
-            Minimap.Build(Root, Map, new Vector2(24f, -228f));
-        }
 
         /// <summary>Slim boss bar + name card (YT-71). It was a 60%-wide, 34 px slab that read as a
         /// piece of furniture rather than a readout. A boss bar earns attention by being the only

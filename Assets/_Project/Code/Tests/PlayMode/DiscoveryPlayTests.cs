@@ -5,7 +5,6 @@ using UnityEngine.TestTools;
 using MaxWorlds.Arena;
 using MaxWorlds.Bosses;
 using MaxWorlds.Factories;
-using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -13,19 +12,18 @@ namespace MaxWorlds.Tests.PlayMode
     /// Fog of war on the real level (YT-107). The complaint was that a fresh run showed you every
     /// factory and the boss before you had walked anywhere, so the yard had nothing left to find.
     ///
-    /// These run against the shipped map and the real MapPanel rather than a stand-in, because the
-    /// interesting failure is not "the flag doesn't flip" — it's a landmark that never got marked, or
-    /// a marker the panel draws anyway. Both of those look completely fine in a unit test of the
-    /// record itself.
+    /// These run against the shipped map rather than a stand-in, because the interesting failure is
+    /// not "the flag doesn't flip" — it's a landmark that never got marked. That looks completely
+    /// fine in a unit test of the record itself.
     /// </summary>
     public sealed class DiscoveryPlayTests
     {
-        private GameObject _path, _player, _gate, _boss, _camera, _hud, _blocker, _hutch, _director;
+        private GameObject _path, _player, _gate, _boss, _camera, _blocker, _hutch, _director;
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
-            foreach (GameObject go in new[] { _path, _player, _gate, _boss, _camera, _hud, _blocker,
+            foreach (GameObject go in new[] { _path, _player, _gate, _boss, _camera, _blocker,
                                               _hutch, _director })
                 if (go != null) Object.Destroy(go);
 
@@ -128,39 +126,6 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(LineOfSight.Clear(_player.transform.position, bossAt, _boss.transform),
                         Is.True, "the gate opened and the boss is still hidden from sight");
-        }
-
-        // ---------------------------------------------------------------- the map draws nothing yet
-
-        [UnityTest]
-        public IEnumerator OnAFreshRun_TheMapShowsNoFactoryBossOrGateMarker()
-        {
-            yield return BuildLevelFromTheMap();
-
-            _hud = new GameObject("HUD", typeof(RectTransform), typeof(Canvas));
-            var panel = new GameObject("MapPanel", typeof(RectTransform)).AddComponent<MapPanel>();
-            panel.Build((RectTransform)_hud.transform, new Vector2(150f, 280f), 0.62f, 1.7f);
-            yield return null;
-
-            foreach (Transform marker in AllMarkers(panel))
-            {
-                if (marker.name == "Max") continue;   // the player dot is not a secret
-                Assert.That(marker.gameObject.activeSelf, Is.False,
-                            $"'{marker.name}' is drawn on the map before Max has found anything");
-            }
-        }
-
-        /// <summary>Every marker the panel built, by name, whether shown or not.</summary>
-        private static Transform[] AllMarkers(MapPanel panel)
-        {
-            var found = new System.Collections.Generic.List<Transform>();
-            foreach (RectTransform rt in panel.GetComponentsInChildren<RectTransform>(true))
-                if (rt.name == "Max" || rt.name == "Gate" || rt.name == "Boss" ||
-                    rt.name.StartsWith("Factory "))
-                    found.Add(rt);
-
-            Assert.That(found.Count, Is.GreaterThan(2), "the panel drew almost no markers — wrong names?");
-            return found.ToArray();
         }
 
         // ---------------------------------------------------------------- what counts as "in view"
