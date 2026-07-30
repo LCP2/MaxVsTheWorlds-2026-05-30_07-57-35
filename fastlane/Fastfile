@@ -118,7 +118,7 @@ platform :ios do
     # role YT-139's constant played for the flat 0.2.0. CFBundleVersion is left untouched: it stays
     # the auto-incrementing yyMMddHHmm timestamp (BuildStamp.ComposeIosBuildNumber, YT-117) that
     # keeps each upload unique.
-    milestone = 3
+    milestone = 4
     run_no = ENV["GITHUB_RUN_NUMBER"].to_s.strip
     run_no = "0" if run_no.empty?   # a local `fastlane ios beta` with no run number → 0.3.0 floor
     marketing_version = "0.#{milestone}.#{run_no}"

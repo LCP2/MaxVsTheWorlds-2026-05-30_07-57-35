@@ -51,7 +51,7 @@ namespace MaxWorlds.Editor
         /// available on the macOS runner, never inside GameCI's Unity container. Keep the milestone minor
         /// here in sync with <c>MILESTONE</c> in <c>fastlane/Fastfile</c>.
         /// </summary>
-        public const string MilestoneVersion = "0.3.0";
+        public const string MilestoneVersion = "0.4.0";
 
         /// <summary>
         /// The iOS marketing version (CFBundleShortVersionString) — always the hand-set

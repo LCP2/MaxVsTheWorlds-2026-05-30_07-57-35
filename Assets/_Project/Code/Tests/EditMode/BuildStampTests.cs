@@ -44,20 +44,20 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ComposeIosVersion_FallsBackToTheMilestoneWhenTheStampIsIllegal()
         {
-            // The SHA stamp and an empty env both fall back to the current milestone (YT-158: 0.3.0).
+            // The SHA stamp and an empty env both fall back to the current milestone (YT-220: 0.4.0).
             Assert.AreEqual(BuildStamp.MilestoneVersion, BuildStamp.ComposeIosVersion("60c7413-0512"));
             Assert.AreEqual(BuildStamp.MilestoneVersion, BuildStamp.ComposeIosVersion(null));
             Assert.AreEqual(BuildStamp.MilestoneVersion, BuildStamp.ComposeIosVersion(""));
         }
 
         [Test]
-        public void TheMilestoneVersionIs_0_3_0()
+        public void TheMilestoneVersionIs_0_4_0()
         {
-            // The milestone this build represents (YT-158: the boss/enemies/intro era; was 0.2.0, the
-            // weapon epic). Bump it by hand as the game hits each milestone; the build number
+            // The milestone this build represents (YT-220: the v2 addictive restructure; was 0.3.0, the
+            // boss/enemies/intro era). Bump it by hand as the game hits each milestone; the build number
             // auto-increments separately, and the iOS→TestFlight run stamps the run number onto it
-            // (0.3.<run_number>, YT-159).
-            Assert.AreEqual("0.3.0", BuildStamp.MilestoneVersion);
+            // (0.4.<run_number>, YT-159).
+            Assert.AreEqual("0.4.0", BuildStamp.MilestoneVersion);
             Assert.IsTrue(BuildStamp.IsValidIosVersion(BuildStamp.MilestoneVersion),
                 "the milestone must be a legal iOS CFBundleShortVersionString");
         }
