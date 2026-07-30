@@ -17,7 +17,8 @@ namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
     /// The Home screen (YT-151): three save slots, pausing the game until one is picked, and handing
-    /// off to <see cref="SaveSystem"/> — plus, on New Game only, the opening cinematic (YT-155/156).
+    /// off to <see cref="SaveSystem"/> — plus, on New Game, the (YT-216: now opt-in, default OFF)
+    /// opening cinematic (YT-155/156).
     /// </summary>
     public sealed class HomeScreenPlayTests
     {
@@ -41,6 +42,7 @@ namespace MaxWorlds.Tests.PlayMode
                 Object.Destroy(s.gameObject);
             foreach (var i in Object.FindObjectsByType<IntroCinematic>(FindObjectsSortMode.None))
                 Object.Destroy(i.gameObject);
+            IntroCinematic.ResetForTests();   // YT-216 — the authored default; tests restore it explicitly
 
             _playerGo = new GameObject("Player") { tag = "Player" };
             _playerGo.AddComponent<PlayerController>();   // RequireComponent brings the CharacterController
@@ -66,6 +68,7 @@ namespace MaxWorlds.Tests.PlayMode
             SaveSystem.ResetForTests();
             UpgradeState.Reset();
             PickupWallet.Reset();
+            IntroCinematic.ResetForTests();   // never leak the flag/consumed-state into another test
             if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
             yield return null;
         }
@@ -97,8 +100,10 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator NewGame_SeedsTheSlotResumesTimeAndPlaysTheIntro()
+        public IEnumerator NewGame_SeedsTheSlotAndResumesTimeWithoutTheIntro()
         {
+            // YT-216: the cinematic is gated OFF by default so a fresh run starts instantly — restart
+            // must never wait on the ~24s sequence.
             yield return NewScreen();
 
             Button newGame = _screenGo.GetComponentsInChildren<Button>(true)
@@ -110,8 +115,25 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the game must resume once a slot is picked");
             Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(0), "the first New Game button belongs to slot 0");
             Assert.That(SaveSystem.Load(0).HasData, Is.True, "New Game must seed the slot immediately");
+            Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Null,
+                "New Game must never show the cinematic while it defaults OFF (YT-216)");
+        }
+
+        [UnityTest]
+        public IEnumerator NewGame_StillPlaysTheIntroWhenTheFlagIsExplicitlyEnabled()
+        {
+            // The sequence is parked, not deleted — flipping the authored flag back on must still
+            // trigger it exactly as YT-155 built it.
+            IntroCinematic.Enabled = true;
+            yield return NewScreen();
+
+            Button newGame = _screenGo.GetComponentsInChildren<Button>(true)
+                .First(b => b.gameObject.name == "NEW GAME");
+            newGame.onClick.Invoke();
+            yield return null;
+
             Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Not.Null,
-                "New Game is the intro cinematic's trigger (YT-155)");
+                "New Game is still the intro cinematic's trigger once Enabled is opted back in (YT-155)");
         }
 
         [UnityTest]

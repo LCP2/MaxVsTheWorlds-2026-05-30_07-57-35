@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.SceneManagement;
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.UI
 {
@@ -51,6 +52,7 @@ namespace MaxWorlds.UI
 
         private void Replay()
         {
+            BootTiming.Mark("replay-tapped");   // YT-216 — diff against HomeScreen's "controllable-replay"
             Time.timeScale = 1f;
             var scene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(scene.buildIndex);
