@@ -3,8 +3,10 @@ using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
@@ -19,12 +21,14 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _runnerGo;
         private GameObject _hutch;
+        private GameObject _boss;
 
         [SetUp]
         public void SetUp()
         {
             DevTuning.Reset();
             DifficultyDirector.Reset();
+            FactoryCensus.Reset();
 
             // The runner self-installs once per test session (AfterSceneLoad), which does not repeat
             // between fixtures that share a scene. Take ownership of exactly one instance here, same
@@ -41,8 +45,10 @@ namespace MaxWorlds.Tests.PlayMode
         {
             if (_runnerGo != null) Object.Destroy(_runnerGo);
             if (_hutch != null) Object.Destroy(_hutch);
+            if (_boss != null) Object.Destroy(_boss);
             DevTuning.Reset();
             DifficultyDirector.Reset();
+            FactoryCensus.Reset();
         }
 
         private static IEnumerator Run(float seconds)
@@ -63,7 +69,10 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator AFactoryDeathBumpsTheInvasionLevel_ThroughTheRealSignal()
         {
-            DevTuning.EscalationRate = 0f; // isolate the shed bump from the time-based climb
+            // A shed kill (YT-210) only moves the Level by skipping the clock forward, so a huge
+            // RunLengthSeconds keeps the real-time climb negligible over this test's single frame
+            // while still letting the shed's skip register as a clear rise.
+            DevTuning.RunLengthSeconds = 1_000_000f;
 
             Assert.AreEqual(0, DifficultyDirector.ShedsDestroyed);
             HudSignals.EmitFactoryDestroyed(Vector3.zero); // exactly what MowerHutch.OnDestroyed emits
@@ -95,10 +104,12 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator AFullyEscalatedRun_SpawnsFasterThanARunAtItsStart()
         {
+            // A shed kill (YT-210) only moves the Level by skipping the clock forward, so drive it
+            // through RunLengthSeconds/the derived rate rather than pinning EscalationRate to zero.
             DevTuning.EscalationStart = 0f;
-            DevTuning.EscalationRate = 0f;
-            DevTuning.EscalationPerShedBump = 1f;
             DevTuning.EscalationMax = 1f;
+            DevTuning.RunLengthSeconds = 1000f;
+            DevTuning.EscalationPerShedBump = 1000f; // one shed's skip == the whole run length
 
             _hutch = NewHutch(new Vector3(0f, 1f, 15f));
             var spawner = _hutch.GetComponent<EnemySpawner>();
@@ -116,10 +127,12 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator AFullyEscalatedRun_SpawnsToughierRobots()
         {
+            // A shed kill (YT-210) only moves the Level by skipping the clock forward, so drive it
+            // through RunLengthSeconds/the derived rate rather than pinning EscalationRate to zero.
             DevTuning.EscalationStart = 0f;
-            DevTuning.EscalationRate = 0f;
-            DevTuning.EscalationPerShedBump = 1f;
             DevTuning.EscalationMax = 1f;
+            DevTuning.RunLengthSeconds = 1000f;
+            DevTuning.EscalationPerShedBump = 1000f; // one shed's skip == the whole run length
             DevTuning.SpawnInterval = 0f; // spawn on the very first check, no waiting on the ramp
 
             _hutch = NewHutch(new Vector3(0f, 1f, 15f));
@@ -143,6 +156,49 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.Greater(late.HealthCurrent, earlyHealth,
                 "a robot spawned at a fully escalated Invasion Level was not tougher than one spawned " +
                 "at the run's start — even a POOLED robot must pick up the new toughness on reuse");
+        }
+
+        // --- YT-210: the bounded run's OTHER wake path — the boss erupts at the top of the dial ---
+
+        [UnityTest]
+        public IEnumerator TheBossErupts_WhenTheInvasionLevelTopsOut_WithNoFactoryEverDestroyed()
+        {
+            // Level pinned exactly at its own ceiling from frame one — no elapsed time, no shed kill,
+            // and NO factory registered at all, so FactoryCensus.Cleared can never fire. If the boss
+            // still wakes, it can only be because the dial itself topped out.
+            DevTuning.EscalationStart = 5f;
+            DevTuning.EscalationMax = 5f;
+
+            Assert.AreEqual(0, FactoryCensus.Total, "this test must run with no factories in the census");
+
+            _boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _boss.name = "Big Bermuda";
+            _boss.AddComponent<BigBermudaBoss>();
+            var boss = _boss.GetComponent<BigBermudaBoss>();
+
+            Assert.IsFalse(boss.Engaged, "the boss should still be dormant the instant it wakes up");
+            yield return null;
+
+            Assert.IsTrue(boss.Engaged,
+                "the boss never erupted even though the Invasion Level was already at its ceiling");
+        }
+
+        [UnityTest]
+        public IEnumerator TheBossStaysDormant_WhileTheInvasionLevelIsBelowItsCeiling()
+        {
+            DevTuning.EscalationStart = 0f;
+            DevTuning.EscalationRate = 0f; // no time-driven climb
+            DevTuning.EscalationMax = 10f;
+
+            _boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _boss.name = "Big Bermuda";
+            _boss.AddComponent<BigBermudaBoss>();
+            var boss = _boss.GetComponent<BigBermudaBoss>();
+
+            yield return Run(0.2f);
+
+            Assert.IsFalse(boss.Engaged,
+                "the boss erupted before the Invasion Level ever reached its ceiling");
         }
     }
 }

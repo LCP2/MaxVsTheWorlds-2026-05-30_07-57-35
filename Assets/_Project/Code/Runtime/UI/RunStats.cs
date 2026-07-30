@@ -23,6 +23,11 @@ namespace MaxWorlds.UI
         public bool FactoryDestroyed => FactoriesDestroyed > 0;
         public float Elapsed { get; private set; }
 
+        /// <summary>The highest <c>DifficultyDirector.Normalized</c> (0..1) this run ever reached
+        /// (YT-210) — the "near-miss" the DEFEAT card leads with: how close to the top of the dial,
+        /// and the boss erupting, the run got before Max fell.</summary>
+        public float PeakNormalized { get; private set; }
+
         public bool IsOver => Outcome != RunOutcome.InProgress;
 
         /// <summary>Advance the run clock. No-op once the run is over.</summary>
@@ -30,6 +35,14 @@ namespace MaxWorlds.UI
         {
             if (IsOver) return;
             Elapsed += Mathf.Max(0f, dt);
+        }
+
+        /// <summary>Record a fresh reading of the Invasion Level's Normalized value; only the peak
+        /// survives. No-op once the run is over, same contract as <see cref="Tick"/>.</summary>
+        public void RecordDifficultyPeak(float normalized)
+        {
+            if (IsOver) return;
+            if (normalized > PeakNormalized) PeakNormalized = normalized;
         }
 
         public void AddKill()
@@ -54,6 +67,10 @@ namespace MaxWorlds.UI
             int total = Mathf.FloorToInt(seconds);
             return $"{total / 60}:{total % 60:00}";
         }
+
+        /// <summary>A 0..1 Normalized value as a whole-number percent, for the DEFEAT card's
+        /// near-miss line (YT-210).</summary>
+        public static int FormatPercent(float normalized) => Mathf.RoundToInt(Mathf.Clamp01(normalized) * 100f);
 
         /// <summary>Big banner title for the outcome.</summary>
         public string Title => Outcome switch

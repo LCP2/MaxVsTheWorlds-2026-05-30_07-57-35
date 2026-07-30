@@ -138,11 +138,13 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TheBurstSizeGrows_WithTheInvasionLevel()
         {
             // Two identical spawners, one left at Invasion Level 0 and one fully escalated — same
-            // shape as DifficultyDirectorPlayTests' toughness/cadence proofs.
+            // shape as DifficultyDirectorPlayTests' toughness/cadence proofs. A shed kill (YT-210)
+            // only moves the Level by skipping the clock forward, so drive it through
+            // RunLengthSeconds/the derived rate rather than pinning EscalationRate to zero.
             DevTuning.EscalationStart = 0f;
-            DevTuning.EscalationRate = 0f;
             DevTuning.EscalationMax = 1f;
-            DevTuning.EscalationPerShedBump = 1f;
+            DevTuning.RunLengthSeconds = 1000f;
+            DevTuning.EscalationPerShedBump = 1000f; // one shed's skip == the whole run length
 
             var atStart = _hutch.GetComponent<EnemySpawner>();
             Set(atStart, "maxLiveEnemies", 100);

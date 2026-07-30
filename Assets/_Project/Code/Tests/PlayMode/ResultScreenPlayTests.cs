@@ -4,6 +4,8 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using UnityEngine.EventSystems;
+using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
@@ -30,6 +32,8 @@ namespace MaxWorlds.Tests.PlayMode
                 if (canvas.name == "Result Canvas") Object.Destroy(canvas.gameObject);
             var es = Object.FindFirstObjectByType<EventSystem>();
             if (es != null) Object.Destroy(es.gameObject);
+            DevTuning.Reset();
+            DifficultyDirector.Reset();
             yield return null;
         }
 
@@ -88,6 +92,37 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsNotNull(canvas, "Result canvas should appear on death.");
             var texts = canvas.GetComponentsInChildren<UnityEngine.UI.Text>(true);
             Assert.IsTrue(texts.Any(t => t.text == "DEFEAT"), "Death should read DEFEAT.");
+        }
+
+        /// <summary>
+        /// YT-210: the DEFEAT card leads with the near-miss — how close to the top of the dial (and
+        /// the boss erupting) the run got before Max fell. Pins the Invasion Level at a known 50% via
+        /// DevTuning (rate 0, so elapsed time can't move it) so the assertion is exact, not a range.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator PlayerDeath_ShowsTheNearMissPeakOnTheDefeatCard()
+        {
+            DevTuning.EscalationRate = 0f;
+            DevTuning.EscalationMax = 10f;
+
+            _tracker = new GameObject("RunTracker Test");
+            var health = _tracker.AddComponent<MaxWorlds.Player.PlayerHealth>();
+            _tracker.AddComponent<RunTracker>();
+            yield return null;
+
+            DevTuning.EscalationStart = 5f; // Level pinned at 5 of 10 -> 50% Normalized
+            yield return null; // let RunTracker's Update record this as the run's peak
+
+            health.TakeDamage(new MaxWorlds.Core.DamageInfo(9999f, Vector3.zero, Vector3.forward,
+                MaxWorlds.Core.Team.Enemy));
+            yield return null;
+
+            var canvas = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None)
+                .FirstOrDefault(c => c.name == "Result Canvas");
+            Assert.IsNotNull(canvas, "Result canvas should appear on death.");
+            var texts = canvas.GetComponentsInChildren<UnityEngine.UI.Text>(true);
+            Assert.IsTrue(texts.Any(t => t.text == "YOU REACHED 50% OF DOMINATION"),
+                "the DEFEAT card should lead with the run's peak Invasion Level as a near-miss percent");
         }
 
         /// <summary>

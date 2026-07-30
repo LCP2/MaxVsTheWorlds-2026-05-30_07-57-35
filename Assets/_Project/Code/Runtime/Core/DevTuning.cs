@@ -121,11 +121,17 @@ namespace MaxWorlds.Core
         /// <summary>How fast the Invasion Level climbs over time — units per second.</summary>
         public static float? EscalationRate { get; set; }
 
-        /// <summary>The step-up the Invasion Level takes each time a factory shed is destroyed.</summary>
+        /// <summary>Seconds the Invasion Level clock SKIPS FORWARD each time a factory shed is
+        /// destroyed (YT-210) — aggression shortens the run rather than padding the level.</summary>
         public static float? EscalationPerShedBump { get; set; }
 
         /// <summary>The ceiling the Invasion Level climbs to.</summary>
         public static float? EscalationMax { get; set; }
+
+        /// <summary>How long a run is authored to last, seconds (YT-210) — the Invasion Level
+        /// reaches <see cref="EscalationMax"/> at this point with no shed kills, and
+        /// <c>BigBermudaBoss</c> erupts the moment it does.</summary>
+        public static float? RunLengthSeconds { get; set; }
 
         // --- Death-throes surge (YT-182) — the wreck's last wave on shed destruction ---
 
@@ -188,7 +194,7 @@ namespace MaxWorlds.Core
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
             EscalationStart.HasValue || EscalationRate.HasValue || EscalationPerShedBump.HasValue ||
-            EscalationMax.HasValue ||
+            EscalationMax.HasValue || RunLengthSeconds.HasValue ||
             DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue ||
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue;
 
@@ -224,6 +230,7 @@ namespace MaxWorlds.Core
             EscalationRate = null;
             EscalationPerShedBump = null;
             EscalationMax = null;
+            RunLengthSeconds = null;
             DeathSurgeBurstSize = null;
             DeathSurgeEliteChance = null;
             StartingRobots = null;
@@ -271,6 +278,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(EscalationRate), () => EscalationRate, v => EscalationRate = v),
             (PrefsPrefix + nameof(EscalationPerShedBump), () => EscalationPerShedBump, v => EscalationPerShedBump = v),
             (PrefsPrefix + nameof(EscalationMax), () => EscalationMax, v => EscalationMax = v),
+            (PrefsPrefix + nameof(RunLengthSeconds), () => RunLengthSeconds, v => RunLengthSeconds = v),
             (PrefsPrefix + nameof(DeathSurgeBurstSize), () => DeathSurgeBurstSize, v => DeathSurgeBurstSize = v),
             (PrefsPrefix + nameof(DeathSurgeEliteChance), () => DeathSurgeEliteChance, v => DeathSurgeEliteChance = v),
             (PrefsPrefix + nameof(StartingRobots), () => StartingRobots, v => StartingRobots = v),

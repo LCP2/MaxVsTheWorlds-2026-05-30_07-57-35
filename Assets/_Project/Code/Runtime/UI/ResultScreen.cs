@@ -85,8 +85,19 @@ namespace MaxWorlds.UI
             Top(sub.rectTransform, 0f, -140f, 680f, 40f);
             sub.text = win ? "Backyard slice cleared" : "Max was overrun";
 
-            // Stat rows.
+            // YT-210: the near-miss is the hook that starts the next run — the biggest thing on a
+            // DEFEAT card, bar the banner itself. Victory already has its own payoff (the boss kill),
+            // so this only shows on a loss.
             float y = -210f;
+            if (!win)
+            {
+                var nearMiss = AddText(panel.rectTransform, 44f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
+                Top(nearMiss.rectTransform, 0f, -185f, 680f, 56f);
+                nearMiss.text = $"YOU REACHED {RunStats.FormatPercent(stats.PeakNormalized)}% OF DOMINATION";
+                y = -260f;
+            }
+
+            // Stat rows.
             AddStatRow(panel.rectTransform, "TIME", RunStats.FormatTime(stats.Elapsed), ref y);
             AddStatRow(panel.rectTransform, "ROBOTS DESTROYED", stats.Kills.ToString(), ref y);
             AddStatRow(panel.rectTransform, "FACTORIES DESTROYED", stats.FactoriesDestroyed.ToString(), ref y);

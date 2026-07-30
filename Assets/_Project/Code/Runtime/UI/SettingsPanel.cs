@@ -67,9 +67,10 @@ namespace MaxWorlds.UI
         private const float SaveBtnGap = 16f;
         // Grew for the two durability sliders (YT-126), then again in YT-192 so the three-column
         // value dump has room below the footer without its box running past the panel's bottom
-        // edge. Still inside the landscape-phone height (970 * 0.44 ≈ 427pt < 430), which the
-        // layout test guards.
-        private const float PanelH = 930f;
+        // edge, then again at YT-210 to match DumpH's growth for the Gameplay tab's 18th knob
+        // (Run length). Still inside the landscape-phone height (955 * 0.44 ≈ 420pt < 430), which
+        // the layout test guards.
+        private const float PanelH = 955f;
         private const float Pad = 20f;
         private const float ColGap = 20f;
         private const float RowH = 112f;
@@ -80,7 +81,9 @@ namespace MaxWorlds.UI
         // The copied-values dump is laid out in THREE columns (YT-126, widened from two in YT-192
         // once the Gameplay tab grew to 17 knobs) — a single 10+-line column would need a taller
         // DumpH than the phone-height ceiling has room for, so it's spread wider instead of taller.
-        private const float DumpH = 170f;
+        // Grew again at YT-210 for the Gameplay tab's 18th knob (Run length), which pushed the
+        // header-plus-knobs line count in the tallest column from 6 to 7.
+        private const float DumpH = 195f;
         private const float GearSize = 96f;
 
         private const int LabelFont = 30;
@@ -289,10 +292,16 @@ namespace MaxWorlds.UI
                 v => DevTuning.EscalationStart = v);
 
             Add("Escalation rate", "lvl/s", 0f, 0.5f, DifficultyDirector.AuthoredRatePerSecond,
-                () => DevTuning.Or(DevTuning.EscalationRate, DifficultyDirector.AuthoredRatePerSecond),
+                () => DevTuning.Or(DevTuning.EscalationRate, DifficultyDirector.DerivedRatePerSecond),
                 v => DevTuning.EscalationRate = v);
 
-            Add("Shed level bump", "lvl", 0f, 5f, DifficultyDirector.AuthoredPerShedBump,
+            // YT-210: the run is now a bounded ~6-minute clock. Run length is the authored knob;
+            // the rate above derives from it unless explicitly pinned.
+            Add("Run length", "s", 30f, 900f, DifficultyDirector.AuthoredRunLengthSeconds,
+                () => DevTuning.Or(DevTuning.RunLengthSeconds, DifficultyDirector.AuthoredRunLengthSeconds),
+                v => DevTuning.RunLengthSeconds = v);
+
+            Add("Shed clock skip", "s", 0f, 300f, DifficultyDirector.AuthoredPerShedBump,
                 () => DevTuning.Or(DevTuning.EscalationPerShedBump, DifficultyDirector.AuthoredPerShedBump),
                 v => DevTuning.EscalationPerShedBump = v);
 
