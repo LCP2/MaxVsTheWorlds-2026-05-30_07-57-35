@@ -1,32 +1,24 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
-using MaxWorlds.Pickups;
-using MaxWorlds.Player;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Save
 {
     /// <summary>
-    /// Three save slots, on disk (YT-151). Reads/writes JSON under <c>Application.persistentDataPath</c>
-    /// (overridable — <see cref="DirectoryOverride"/> — so tests never touch a real device's save data),
-    /// and knows how to snapshot the live run (<see cref="UpgradeState"/> + <see cref="PickupWallet"/> +
-    /// Max's transform) into a <see cref="SaveSlotData"/> and back.
+    /// Three player profiles, on disk (YT-218; supersedes the mid-run resume slots from YT-151).
+    /// Reads/writes JSON under <c>Application.persistentDataPath</c> (overridable —
+    /// <see cref="DirectoryOverride"/> — so tests never touch a real device's save data).
     ///
-    /// Static, same idiom as <see cref="UpgradeState"/>/<see cref="PickupWallet"/>: one save game, no
-    /// reference-threading. <see cref="ActiveSlot"/> is the process's "which slot did the player pick"
-    /// flag — -1 means the Home screen hasn't handed off yet, which is also what gates
-    /// <see cref="SaveDriver"/>'s autosave and stops the Home screen reopening on a Replay-triggered
-    /// scene reload.
+    /// A profile is an identity plus a personal best, not a paused run: selecting one always drops
+    /// the player into a fresh fight. Static, same idiom as <see cref="MaxWorlds.Upgrades.UpgradeState"/>/
+    /// <see cref="MaxWorlds.Pickups.PickupWallet"/>: one live game, no reference-threading.
+    /// <see cref="ActiveSlot"/> is the process's "which profile did the player pick" flag — -1
+    /// means the Home screen hasn't handed off yet, which is also what gates the Home screen
+    /// reopening on a Replay-triggered scene reload.
     /// </summary>
     public static class SaveSystem
     {
         public const int SlotCount = 3;
-
-        /// <summary>The only level the current slice has. Carried in every save so the schema survives
-        /// a future multi-level build without a migration.</summary>
-        public const string DefaultLevelId = "Backyard_Slice";
 
         /// <summary>Slot the player picked this process; -1 until the Home screen hands off.</summary>
         public static int ActiveSlot { get; set; } = -1;
@@ -45,8 +37,13 @@ namespace MaxWorlds.Save
 
         private static string PathFor(int slot) => Path.Combine(Directory, $"save_slot_{slot}.json");
 
-        /// <summary>Read a slot. A missing or corrupt file reads as an empty slot rather than throwing —
-        /// a save is a convenience, not something that should be able to brick the Home screen.</summary>
+        /// <summary>Default identity for a never-played slot — a rename UI is a future seam, not
+        /// built here.</summary>
+        public static string DefaultDisplayName(int slot) => $"PLAYER {slot + 1}";
+
+        /// <summary>Read a profile. A missing or corrupt file reads as an empty profile rather than
+        /// throwing — a save is a convenience, not something that should be able to brick the Home
+        /// screen.</summary>
         public static SaveSlotData Load(int slot)
         {
             string path = PathFor(slot);
@@ -82,65 +79,31 @@ namespace MaxWorlds.Save
             if (File.Exists(path)) File.Delete(path);
         }
 
-        /// <summary>Build a slot payload off the live statics plus a given transform — pure, so it's
-        /// testable without a scene.</summary>
-        public static SaveSlotData Capture(Vector3 position, float yawDegrees, string levelId)
+        /// <summary>First pick of a never-played slot: create its profile with a default name and no
+        /// personal best yet. A no-op (returns the existing profile untouched) if the slot already
+        /// has data — picking an existing profile must never reset its best.</summary>
+        public static SaveSlotData EnsureProfile(int slot)
         {
-            return new SaveSlotData
-            {
-                HasData = true,
-                LevelId = levelId,
-                PosX = position.x,
-                PosY = position.y,
-                PosZ = position.z,
-                RotY = yawDegrees,
-                InstalledParts = new List<PartKind>(UpgradeState.Installed),
-                PowerCells = PickupWallet.PowerCells,
-                PendingParts = new List<PartKind>(PickupWallet.PendingParts),
-            };
+            SaveSlotData data = Load(slot);
+            if (data.HasData) return data;
+
+            data = new SaveSlotData { HasData = true, DisplayName = DefaultDisplayName(slot) };
+            Save(slot, data);
+            return data;
         }
 
-        /// <summary>Find Max in the live scene and write his current run straight to <paramref name="slot"/>.
-        /// A no-op if there's no player to snapshot (e.g. mid scene-load).</summary>
-        public static void CaptureAndSave(int slot, string levelId)
+        /// <summary>A run on <paramref name="slot"/> just ended (win or lose) having peaked at
+        /// <paramref name="peakNormalized"/> Domination — bank it as the profile's personal best if
+        /// it beats the existing one. No-op for no active profile (e.g. tests driving a run with no
+        /// Home screen involved).</summary>
+        public static void RecordResult(int slot, float peakNormalized)
         {
-            var player = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
-            if (player == null) return;
-            Vector3 pos = player.transform.position;
-            float yaw = player.transform.eulerAngles.y;
-            Save(slot, Capture(pos, yaw, levelId));
-        }
-
-        /// <summary>Push a loaded slot's upgrades/wallet back into the live statics. Does not move the
-        /// player — the caller (the Home screen) places Max once it has decided the slot is live.</summary>
-        public static void Apply(SaveSlotData data)
-        {
-            UpgradeState.Reset();
-            HydroBurst.Reset();   // a loaded run must not inherit a burst/cooldown in progress (YT-215)
-            foreach (PartKind part in data.InstalledParts) UpgradeState.Install(part);
-
-            PickupWallet.Reset();
-            PickupWallet.SetPowerCells(data.PowerCells);
-            foreach (PartKind part in data.PendingParts) PickupWallet.AddPart(part);
-        }
-
-        /// <summary>Drop Max at a slot's saved position/heading — a teleport, not a walk, so the
-        /// CharacterController is disabled around the move (it otherwise keeps its own notion of where
-        /// it stood, and fights a direct transform write).</summary>
-        public static void PlacePlayer(SaveSlotData data)
-        {
-            var player = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
-            if (player == null) return;
-
-            var cc = player.GetComponent<CharacterController>();
-            bool wasEnabled = cc != null && cc.enabled;
-            if (cc != null) cc.enabled = false;
-
-            player.transform.SetPositionAndRotation(
-                new Vector3(data.PosX, data.PosY, data.PosZ),
-                Quaternion.Euler(0f, data.RotY, 0f));
-
-            if (cc != null) cc.enabled = wasEnabled;
+            if (slot < 0) return;
+            SaveSlotData data = Load(slot);
+            if (!data.HasData) data = new SaveSlotData { HasData = true, DisplayName = DefaultDisplayName(slot) };
+            if (peakNormalized <= data.PersonalBestNormalized) return;
+            data.PersonalBestNormalized = peakNormalized;
+            Save(slot, data);
         }
 
         /// <summary>Test isolation / a fresh process: forget which slot is live and stop pointing at a

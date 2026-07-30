@@ -1,14 +1,16 @@
 using System;
-using System.Collections.Generic;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Save
 {
     /// <summary>
-    /// One save slot's payload (YT-151): plain data, JSON-serialised straight off
-    /// <see cref="UpgradeState"/> and <see cref="MaxWorlds.Pickups.PickupWallet"/> plus wherever Max was
-    /// standing. <c>[Serializable]</c> and fields-only so <c>JsonUtility</c> can round-trip it with no
-    /// custom converter.
+    /// One profile's payload (YT-218). A slot is a PLAYER, not a paused game: no mid-run state
+    /// (position, installed parts, wallet contents) survives between runs — picking a profile
+    /// always starts a fresh run. What persists is the player's identity and their best result,
+    /// so two brothers sharing a device each keep their own progress. <c>[Serializable]</c> and
+    /// fields-only so <c>JsonUtility</c> can round-trip it with no custom converter.
+    ///
+    /// Seams left deliberately unbuilt for the economy tickets: banked power cells and owned
+    /// weapons will live here once those systems exist — don't add fields for them yet.
     /// </summary>
     [Serializable]
     public sealed class SaveSlotData
@@ -16,22 +18,12 @@ namespace MaxWorlds.Save
         /// <summary>False for an untouched slot — the Home screen shows "Empty" and offers New Game.</summary>
         public bool HasData;
 
-        /// <summary>Which level/area this save resumes into. One value in the current slice
-        /// (<see cref="SaveSystem.DefaultLevelId"/>); carried so a save survives a future multi-level build.</summary>
-        public string LevelId = SaveSystem.DefaultLevelId;
+        /// <summary>The profile's own name, shown on its slot card. Defaults to a per-slot label
+        /// until a rename UI exists.</summary>
+        public string DisplayName = string.Empty;
 
-        public float PosX, PosY, PosZ;
-        public float RotY;
-
-        /// <summary>Every part Max has installed, in no particular order (<see cref="UpgradeState.Installed"/>
-        /// is a set).</summary>
-        public List<PartKind> InstalledParts = new List<PartKind>();
-
-        public int PowerCells;
-
-        /// <summary>Collected but not yet installed, oldest first — matches
-        /// <see cref="MaxWorlds.Pickups.PickupWallet.PendingParts"/>' order so a reload installs them
-        /// in the same sequence the upgrade screen would have.</summary>
-        public List<PartKind> PendingParts = new List<PartKind>();
+        /// <summary>The best peak Domination % (0..1, <c>DifficultyDirector.Normalized</c>) this
+        /// profile has ever reached across any run — the score hooks arrive with YT-209.</summary>
+        public float PersonalBestNormalized;
     }
 }

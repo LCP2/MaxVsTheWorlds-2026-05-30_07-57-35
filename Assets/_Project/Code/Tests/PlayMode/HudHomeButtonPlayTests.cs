@@ -12,8 +12,9 @@ using MaxWorlds.Save;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The in-game HOME button (YT-191): one tap from a live run back to the Home/save-slot screen,
-    /// with the run saved first so Continue picks it back up from exactly there — not a death/wipe.
+    /// The in-game HOME button (YT-191): one tap from a live run back to the Home/save-slot screen.
+    /// Since YT-218 removed mid-run resume, this is now a plain abandon-and-return — nothing is
+    /// checkpointed, and the profile's personal best is untouched by bailing out early.
     ///
     /// Loads the real shipped scene, the way <see cref="SceneReloadPlayTests"/> does, because the
     /// button's own job IS a scene reload — stood up by hand, there would be nothing to reload into.
@@ -52,10 +53,10 @@ namespace MaxWorlds.Tests.PlayMode
             var home = Object.FindFirstObjectByType<HomeScreen>();
             Assert.That(home, Is.Not.Null, "the Home screen should be up on a fresh scene load");
 
-            Button newGame = home.GetComponentsInChildren<Button>(true)
-                .Where(b => b.gameObject.name == "NEW GAME")
+            Button play = home.GetComponentsInChildren<Button>(true)
+                .Where(b => b.gameObject.name == "PLAY")
                 .ElementAt(slot);
-            newGame.onClick.Invoke();
+            play.onClick.Invoke();
             yield return null;
         }
 
@@ -67,10 +68,10 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Tapped_SavesTheRunThenReturnsToAResumableHomeScreen()
+        public IEnumerator Tapped_AbandonsTheRunAndReturnsToAFreshHomeScreen()
         {
             yield return EnterSlot(1);
-            Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(1), "picking slot 1's New Game must hand off to it");
+            Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(1), "picking slot 1's PLAY button must hand off to it");
 
             var hud = Object.FindFirstObjectByType<HudController>();
             Assert.That(hud, Is.Not.Null, "the HUD must be live once a slot is picked");
@@ -87,8 +88,6 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             yield return null;
 
-            Assert.That(SaveSystem.Load(1).HasData, Is.True,
-                "the HOME button must save the run before leaving it, so the slot is resumable");
             Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(-1),
                 "returning home must drop the active slot, the same way a fresh boot starts");
 
@@ -99,8 +98,10 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Tapped_KeepsUpgradesAndCellsForContinue()
+        public IEnumerator Tapped_LeavesThePersonalBestUntouched()
         {
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.4f });
+
             yield return EnterSlot(0);
 
             MaxWorlds.Upgrades.UpgradeState.Install(MaxWorlds.Upgrades.PartKind.Hydro);
@@ -115,10 +116,9 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             SaveSlotData data = SaveSystem.Load(0);
-            Assert.That(data.InstalledParts, Does.Contain(MaxWorlds.Upgrades.PartKind.Hydro),
-                "the HOME save must carry installed parts, exactly like the YT-151 resume path");
-            Assert.That(data.PowerCells, Is.EqualTo(1),
-                "the HOME save must carry banked cells, exactly like the YT-151 resume path");
+            Assert.That(data.DisplayName, Is.EqualTo("DEXTER"), "bailing out early must not touch the profile's identity");
+            Assert.That(data.PersonalBestNormalized, Is.EqualTo(0.4f).Within(1e-4f),
+                "bailing out early via HOME must not bank a personal best — only a finished run does (YT-218)");
         }
     }
 }

@@ -16,9 +16,10 @@ using MaxWorlds.Intro;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The Home screen (YT-151): three save slots, pausing the game until one is picked, and handing
-    /// off to <see cref="SaveSystem"/> — plus, on New Game, the (YT-216: now opt-in, default OFF)
-    /// opening cinematic (YT-155/156).
+    /// The Home screen (YT-151; profiles per YT-218): three player-profile slots, pausing the game
+    /// until one is picked, and handing off to <see cref="SaveSystem"/> — plus, on every pick, the
+    /// (YT-216: now opt-in, default OFF) opening cinematic (YT-155/156). A profile is an identity
+    /// plus a personal best, not a paused game, so there is no Continue/resume path any more.
     /// </summary>
     public sealed class HomeScreenPlayTests
     {
@@ -82,6 +83,11 @@ namespace MaxWorlds.Tests.PlayMode
 
         private HomeScreen Screen => _screenGo.GetComponent<HomeScreen>();
 
+        private Button PlayButton(int slot) =>
+            _screenGo.GetComponentsInChildren<Button>(true)
+                .Where(b => b.gameObject.name == "PLAY")
+                .ElementAt(slot);
+
         [UnityTest]
         public IEnumerator OnFreshBoot_ItOpensAndPausesWithThreeEmptySlots()
         {
@@ -92,77 +98,77 @@ namespace MaxWorlds.Tests.PlayMode
 
             var texts = _screenGo.GetComponentsInChildren<Text>(true);
             Assert.That(texts.Count(t => t.text == "Empty"), Is.EqualTo(SaveSystem.SlotCount),
-                "an untouched save should show three empty slots");
+                "an untouched profile should show three empty slots");
 
             var buttons = _screenGo.GetComponentsInChildren<Button>(true);
-            Assert.That(buttons.Count(b => b.gameObject.name == "NEW GAME"), Is.EqualTo(SaveSystem.SlotCount),
-                "every empty slot needs a New Game button");
+            Assert.That(buttons.Count(b => b.gameObject.name == "PLAY"), Is.EqualTo(SaveSystem.SlotCount),
+                "every slot needs a PLAY button");
         }
 
         [UnityTest]
-        public IEnumerator NewGame_SeedsTheSlotAndResumesTimeWithoutTheIntro()
+        public IEnumerator Play_SeedsTheProfileAndResumesTimeWithoutTheIntro()
         {
             // YT-216: the cinematic is gated OFF by default so a fresh run starts instantly — restart
             // must never wait on the ~24s sequence.
             yield return NewScreen();
 
-            Button newGame = _screenGo.GetComponentsInChildren<Button>(true)
-                .First(b => b.gameObject.name == "NEW GAME");
-            newGame.onClick.Invoke();
+            PlayButton(0).onClick.Invoke();
             yield return null;
 
             Assert.That(Screen.IsOpen, Is.False, "picking a slot should close the Home screen");
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the game must resume once a slot is picked");
-            Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(0), "the first New Game button belongs to slot 0");
-            Assert.That(SaveSystem.Load(0).HasData, Is.True, "New Game must seed the slot immediately");
+            Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(0), "the first PLAY button belongs to slot 0");
+            Assert.That(SaveSystem.Load(0).HasData, Is.True, "picking a slot must seed its profile immediately");
             Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Null,
-                "New Game must never show the cinematic while it defaults OFF (YT-216)");
+                "picking a slot must never show the cinematic while it defaults OFF (YT-216)");
         }
 
         [UnityTest]
-        public IEnumerator NewGame_StillPlaysTheIntroWhenTheFlagIsExplicitlyEnabled()
+        public IEnumerator Play_StillPlaysTheIntroWhenTheFlagIsExplicitlyEnabled()
         {
             // The sequence is parked, not deleted — flipping the authored flag back on must still
             // trigger it exactly as YT-155 built it.
             IntroCinematic.Enabled = true;
             yield return NewScreen();
 
-            Button newGame = _screenGo.GetComponentsInChildren<Button>(true)
-                .First(b => b.gameObject.name == "NEW GAME");
-            newGame.onClick.Invoke();
+            PlayButton(0).onClick.Invoke();
             yield return null;
 
             Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Not.Null,
-                "New Game is still the intro cinematic's trigger once Enabled is opted back in (YT-155)");
+                "PLAY is still the intro cinematic's trigger once Enabled is opted back in (YT-155)");
         }
 
         [UnityTest]
-        public IEnumerator Continue_RestoresPositionUpgradesAndWallet_WithoutTheIntro()
+        public IEnumerator Play_OnAnExistingProfile_StartsFreshWithoutResettingItsPersonalBest()
         {
+            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.6f });
             UpgradeState.Install(PartKind.Hydro);
             PickupWallet.AddPowerCell();
-            SaveSlotData saved = SaveSystem.Capture(new Vector3(40f, 0f, -6f), 90f, SaveSystem.DefaultLevelId);
-            SaveSystem.Save(1, saved);
-            UpgradeState.Reset();
-            PickupWallet.Reset();
 
             yield return NewScreen();
 
-            Button continueBtn = _screenGo.GetComponentsInChildren<Button>(true)
-                .First(b => b.gameObject.name == "CONTINUE");
-            continueBtn.onClick.Invoke();
+            PlayButton(1).onClick.Invoke();
             yield return null;
 
             Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(1));
-            Assert.That(UpgradeState.IsInstalled(PartKind.Hydro), Is.True, "Continue must restore installed parts");
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(1), "Continue must restore the banked cells");
+            Assert.That(SaveSystem.Load(1).PersonalBestNormalized, Is.EqualTo(0.6f).Within(1e-4f),
+                "picking an existing profile must never reset its personal best");
+            Assert.That(UpgradeState.IsInstalled(PartKind.Hydro), Is.False,
+                "a profile carries no mid-run state — every play starts fresh (YT-218)");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0),
+                "a profile carries no mid-run state — every play starts fresh (YT-218)");
+        }
 
-            Vector3 pos = _playerGo.transform.position;
-            Assert.That(pos.x, Is.EqualTo(40f).Within(1e-3f), "Continue must drop Max exactly where the save left him");
-            Assert.That(pos.z, Is.EqualTo(-6f).Within(1e-3f));
+        [UnityTest]
+        public IEnumerator AnExistingProfilesCardShowsItsNameAndPersonalBest()
+        {
+            SaveSystem.Save(2, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.82f });
 
-            Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Null,
-                "Continue must never replay the intro (YT-155)");
+            yield return NewScreen();
+
+            var texts = _screenGo.GetComponentsInChildren<Text>(true);
+            Assert.That(texts.Any(t => t.text == "DEXTER — best: 82%"), Is.True,
+                "the slot card must read '<name> — best: <pct>%'");
         }
 
         [UnityTest]

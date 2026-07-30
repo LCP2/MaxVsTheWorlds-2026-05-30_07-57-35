@@ -684,17 +684,14 @@ namespace MaxWorlds.UI
             label.raycastTarget = false;
         }
 
-        /// <summary>Tapping HOME (YT-191): snapshot the live run into its slot — the same capture
-        /// <see cref="SaveDriver"/> autosaves with, so it is a deliberate save, not a death/wipe — then
-        /// drop the active slot and reload the scene. The reload re-runs
+        /// <summary>Tapping HOME (YT-191): abandon the live run and reload the scene. A profile
+        /// (YT-218) carries no mid-run state — there is nothing to checkpoint — so this simply drops
+        /// the active slot and reloads. The reload re-runs
         /// <see cref="MaxWorlds.Core.SceneInstallers"/>, which reopens the Home screen since it now
-        /// finds no active slot, right onto the save that was just written (YT-151's resume path picks
-        /// it back up from there).</summary>
+        /// finds no active slot; the profile's personal best is unaffected, since it only banks on a
+        /// run actually finishing (<see cref="RunTracker"/>), not on bailing out early.</summary>
         private void OnHomeButtonTapped()
         {
-            if (SaveSystem.ActiveSlot >= 0)
-                SaveSystem.CaptureAndSave(SaveSystem.ActiveSlot, SaveSystem.DefaultLevelId);
-
             SaveSystem.ActiveSlot = -1;
             Time.timeScale = 1f;
             Scene scene = SceneManager.GetActiveScene();
