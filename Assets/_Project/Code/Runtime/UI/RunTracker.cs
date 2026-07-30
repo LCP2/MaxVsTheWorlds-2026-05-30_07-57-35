@@ -1,6 +1,7 @@
 using UnityEngine;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
+using MaxWorlds.Save;
 
 namespace MaxWorlds.UI
 {
@@ -109,6 +110,10 @@ namespace MaxWorlds.UI
             _sealed = true;
             _sealedRealtime = Time.unscaledTime;
             _stats.Finish(outcome);
+
+            // YT-218: a run that actually ends (win or lose) is what banks a profile's personal
+            // best — bailing out early via the HOME button records nothing.
+            SaveSystem.RecordResult(SaveSystem.ActiveSlot, _stats.PeakNormalized);
         }
 
         private void ShowResults()

@@ -13,10 +13,11 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// The game's Home screen (YT-151): the first thing up on boot, three save slots wide. An empty
-    /// slot offers New Game; an occupied one shows its progress and offers Continue (resume exactly
-    /// where Max stood) or New Game as an overwrite. Picking a slot hands off to
-    /// <see cref="SaveSystem.ActiveSlot"/>, which is also what stops this screen reopening on a
+    /// The game's Home screen (YT-151; profiles per YT-218): the first thing up on boot, three
+    /// player-profile slots wide. Every slot — empty or already played — offers exactly one action,
+    /// PLAY: a profile is an identity plus a personal best, not a paused game, so there is no
+    /// Continue/resume and picking one always drops the player into a fresh run. Picking a slot hands
+    /// off to <see cref="SaveSystem.ActiveSlot"/>, which is also what stops this screen reopening on a
     /// Replay-triggered scene reload — once a slot is live, <see cref="MaxWorlds.Core.SceneInstallers"/>
     /// re-running <see cref="Install"/> after a death/Replay finds the slot already set and leaves the
     /// run alone.
@@ -49,7 +50,6 @@ namespace MaxWorlds.UI
         private static readonly Color CardRim = new Color(0.20f, 0.23f, 0.27f, 1f);
         private static readonly Color Bone = new Color(0.96f, 0.94f, 0.86f);
         private static readonly Color Dim = new Color(1f, 1f, 1f, 0.55f);
-        private static readonly Color Muted = new Color(0.22f, 0.25f, 0.30f);
 
         // Max's own hoodie colour (CharacterSkin/MaxRig) — the same hot-orange identity treatment
         // as the Upgrade screen's portrait rim (YT-166), so this reads as unmistakably his menu
@@ -78,9 +78,8 @@ namespace MaxWorlds.UI
             if (PressKitDirector.Armed())
             {
                 // Filming has nothing to click the modal with — hand off to slot 0 straight away,
-                // resuming it if it has data, without pausing or showing anything (YT-97).
-                bool hasSave = SaveSystem.Load(0).HasData;
-                StartSlot(0, resume: hasSave, playIntro: false);
+                // without pausing or showing anything (YT-97).
+                StartSlot(0, playIntro: false);
                 return;
             }
 
@@ -121,35 +120,23 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ actions
 
-        private void StartSlot(int slot, bool resume, bool playIntro)
+        /// <summary>Picking a profile: create it if this is the first time (YT-218 — its identity
+        /// and personal best, seeded once, never reset by a later play), then drop the player into a
+        /// fresh run. There is no mid-run state to restore — no resume, no overwrite.</summary>
+        private void StartSlot(int slot, bool playIntro)
         {
             SaveSystem.ActiveSlot = slot;
+            SaveSystem.EnsureProfile(slot);
 
-            if (resume)
-            {
-                SaveSlotData data = SaveSystem.Load(slot);
-                SaveSystem.Apply(data);
-                SaveSystem.PlacePlayer(data);
-            }
-            else
-            {
-                UpgradeState.Reset();
-                HydroBurst.Reset();   // a fresh run must not inherit a burst/cooldown in progress (YT-215)
-                PickupWallet.Reset();
-                SaveSystem.CaptureAndSave(slot, SaveSystem.DefaultLevelId);   // seed the slot immediately
-                if (playIntro) IntroCinematic.TryPlay();
-            }
+            UpgradeState.Reset();
+            HydroBurst.Reset();   // a fresh run must not inherit a burst/cooldown in progress (YT-215)
+            PickupWallet.Reset();
+            if (playIntro) IntroCinematic.TryPlay();
         }
 
-        private void OnContinue(int slot)
+        private void OnPlay(int slot)
         {
-            StartSlot(slot, resume: true, playIntro: false);
-            Close();
-        }
-
-        private void OnNewGame(int slot)
-        {
-            StartSlot(slot, resume: false, playIntro: true);
+            StartSlot(slot, playIntro: true);
             Close();
         }
 
@@ -204,7 +191,7 @@ namespace MaxWorlds.UI
 
             var sub = AddText(panel.rectTransform, 24f, Dim, TextAnchor.MiddleCenter, FontStyle.Normal);
             Top(sub.rectTransform, 0f, -200f, 1000f, 36f);
-            sub.text = "SELECT A SAVE";
+            sub.text = "SELECT A PLAYER";
 
             const float top = -258f;
             for (int i = 0; i < SaveSystem.SlotCount; i++)
@@ -229,11 +216,12 @@ namespace MaxWorlds.UI
 
             // Occupied slots pick up Max's hot-orange for the slot label — a live save reads as
             // "his" progress at a glance, not just another empty box.
+            string displayName = data.HasData ? data.DisplayName : SaveSystem.DefaultDisplayName(slot);
             var label = AddText(row.rectTransform, 30f, data.HasData ? MaxOrange : Bone, TextAnchor.UpperLeft, FontStyle.Bold);
             Anchor(label.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             label.rectTransform.sizeDelta = new Vector2(400f, 40f);
             label.rectTransform.anchoredPosition = new Vector2(34f, -20f);
-            label.text = $"SLOT {slot + 1}";
+            label.text = displayName;
 
             var status = AddText(row.rectTransform, 22f, Dim, TextAnchor.UpperLeft, FontStyle.Normal);
             Anchor(status.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
@@ -241,31 +229,17 @@ namespace MaxWorlds.UI
             status.rectTransform.anchoredPosition = new Vector2(34f, -66f);
             status.text = data.HasData ? Summarise(data) : "Empty";
 
-            if (data.HasData)
-            {
-                var continueBtn = AddButton(row.rectTransform, "CONTINUE", MaxOrange, true, () => OnContinue(slot));
-                Anchor(continueBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-                continueBtn.sizeDelta = new Vector2(280f, 64f);
-                continueBtn.anchoredPosition = new Vector2(-190f, 18f);
-
-                var newGameBtn = AddButton(row.rectTransform, "NEW GAME", Muted, true, () => OnNewGame(slot));
-                Anchor(newGameBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-                newGameBtn.sizeDelta = new Vector2(200f, 44f);
-                newGameBtn.anchoredPosition = new Vector2(-40f, -46f);
-            }
-            else
-            {
-                var newGameBtn = AddButton(row.rectTransform, "NEW GAME", MaxOrange, true, () => OnNewGame(slot));
-                Anchor(newGameBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-                newGameBtn.sizeDelta = new Vector2(280f, 64f);
-                newGameBtn.anchoredPosition = new Vector2(-110f, 0f);
-            }
+            var playBtn = AddButton(row.rectTransform, "PLAY", MaxOrange, true, () => OnPlay(slot));
+            Anchor(playBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            playBtn.sizeDelta = new Vector2(280f, 64f);
+            playBtn.anchoredPosition = new Vector2(-110f, 0f);
         }
 
+        /// <summary>"NAME — best: NN%" (YT-218's own worked example) — nothing else survives between
+        /// runs, so the personal best is the whole story a slot card has to tell.</summary>
         private static string Summarise(SaveSlotData data)
         {
-            string level = data.LevelId == SaveSystem.DefaultLevelId ? "Backyard" : data.LevelId;
-            return $"{level}  ·  {data.InstalledParts.Count}/5 parts  ·  {data.PowerCells} cells";
+            return $"{data.DisplayName} — best: {RunStats.FormatPercent(data.PersonalBestNormalized)}%";
         }
 
         // ------------------------------------------------------------------ helpers (ResultScreen/UpgradeScreen idiom)
