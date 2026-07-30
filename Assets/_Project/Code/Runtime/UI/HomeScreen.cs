@@ -124,6 +124,7 @@ namespace MaxWorlds.UI
             else
             {
                 UpgradeState.Reset();
+                HydroBurst.Reset();   // a fresh run must not inherit a burst/cooldown in progress (YT-215)
                 PickupWallet.Reset();
                 SaveSystem.CaptureAndSave(slot, SaveSystem.DefaultLevelId);   // seed the slot immediately
                 if (playIntro) IntroCinematic.TryPlay();

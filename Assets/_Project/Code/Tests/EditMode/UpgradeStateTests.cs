@@ -20,7 +20,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(UpgradeState.RangeBonus, Is.EqualTo(0f));
             Assert.That(UpgradeState.CapacityBonus, Is.EqualTo(0f));
             Assert.That(UpgradeState.MoveSpeedMultiplier, Is.EqualTo(1f));
-            Assert.That(UpgradeState.Untethered, Is.False);
+            Assert.That(UpgradeState.HydroAssembled, Is.False);
         }
 
         [Test]
@@ -75,7 +75,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void HarnessAddsCapacity_AccelSpeeds_HydroUntethersOnceAssembled()
+        public void HarnessAddsCapacity_AccelSpeeds_HydroAssemblesOnceBothDetachPartsIn()
         {
             UpgradeState.Install(PartKind.AugmentationHarness);
             UpgradeState.Install(PartKind.AccelerationEngine);
@@ -83,36 +83,33 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(UpgradeState.CapacityBonus, Is.EqualTo(UpgradeCatalog.HarnessCapacityBonus));
             Assert.That(UpgradeState.MoveSpeedMultiplier, Is.EqualTo(UpgradeCatalog.AccelSpeedMultiplier));
-            Assert.That(UpgradeState.Untethered, Is.True, "both detach parts installed must untether Max");
+            Assert.That(UpgradeState.HydroAssembled, Is.True, "both detach parts installed must assemble Hydro");
         }
 
         // ---------------------------------------------------------------- YT-165: Hydro sub-assembly
 
         [Test]
-        public void HydroAlone_DoesNotUntether()
+        public void HydroAlone_DoesNotAssemble()
         {
             UpgradeState.Install(PartKind.Hydro);
-            Assert.That(UpgradeState.HydroAssembled, Is.False);
-            Assert.That(UpgradeState.Untethered, Is.False, "the condenser has nothing to clip into yet");
+            Assert.That(UpgradeState.HydroAssembled, Is.False, "the condenser has nothing to clip into yet");
         }
 
         [Test]
-        public void HarnessAlone_DoesNotUntether()
+        public void HarnessAlone_DoesNotAssemble()
         {
             UpgradeState.Install(PartKind.AugmentationHarness);
-            Assert.That(UpgradeState.HydroAssembled, Is.False);
-            Assert.That(UpgradeState.Untethered, Is.False, "the mount alone has no condenser seated");
+            Assert.That(UpgradeState.HydroAssembled, Is.False, "the mount alone has no condenser seated");
         }
 
         [Test]
-        public void BothDetachPartsAssemble_AndUntether()
+        public void BothDetachPartsAssemble()
         {
             UpgradeState.Install(PartKind.AugmentationHarness);
-            Assert.That(UpgradeState.Untethered, Is.False, "precondition — one part in");
+            Assert.That(UpgradeState.HydroAssembled, Is.False, "precondition — one part in");
 
             UpgradeState.Install(PartKind.Hydro);
             Assert.That(UpgradeState.HydroAssembled, Is.True, "both parts collected must auto-assemble");
-            Assert.That(UpgradeState.Untethered, Is.True);
         }
 
         [Test]
@@ -123,7 +120,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(UpgradeState.InstalledCount, Is.EqualTo(7), "installing a part twice must not double-count");
             Assert.That(UpgradeState.MoveSpeedMultiplier, Is.EqualTo(UpgradeCatalog.AccelSpeedMultiplier));
-            Assert.That(UpgradeState.Untethered, Is.True);
+            Assert.That(UpgradeState.HydroAssembled, Is.True);
         }
 
         [Test]
@@ -140,7 +137,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             UpgradeState.Install(PartKind.Hydro);
             UpgradeState.Reset();
-            Assert.That(UpgradeState.Untethered, Is.False);
+            Assert.That(UpgradeState.HydroAssembled, Is.False);
             Assert.That(UpgradeState.InstalledCount, Is.EqualTo(0));
         }
 
@@ -263,10 +260,10 @@ namespace MaxWorlds.Tests.EditMode
 
             UpgradeState.Install(first);
             UpgradeState.Install(second);
-            Assert.That(UpgradeState.Untethered, Is.False, "untether must not fire before its sub-assembly is granted");
+            Assert.That(UpgradeState.HydroAssembled, Is.False, "Hydro must not assemble before its sub-assembly is granted");
             UpgradeState.Install(third);
             UpgradeState.Install(fourth);
-            Assert.That(UpgradeState.Untethered, Is.True, "granting both sub-assembly parts must untether Max");
+            Assert.That(UpgradeState.HydroAssembled, Is.True, "granting both sub-assembly parts must assemble Hydro");
 
             var remaining = new System.Collections.Generic.List<PartKind>();
             while (table.TryNext(out PartKind k)) remaining.Add(k);

@@ -81,13 +81,21 @@ namespace MaxWorlds.Hose
             BuildHose();
         }
 
+        private void Update()
+        {
+            // The Hydro burst (YT-215) is a clock, not a state — someone has to advance it every frame,
+            // and the tether is the one system that reacts to it every frame regardless (it owns the
+            // leash LateUpdate reads below).
+            HydroBurst.Tick(Time.deltaTime);
+        }
+
         private void LateUpdate()
         {
-            // Hydro device installed (YT-133/137): no leash — Max roams free. But the tap is now
-            // OPTIONAL, not gone: stand on one and he plugs in for unlimited tap water; walk away and
-            // he runs off the condenser (which burns power cells, handled by the WaterBlaster). So the
-            // hose plugs/unplugs purely by proximity, and there is no clamp.
-            if (UpgradeState.Untethered)
+            // Hydro burst active (YT-215): no leash for its duration — Max roams free. But the tap is
+            // still OPTIONAL, not gone: stand on one and he plugs in for unlimited tap water; walk away
+            // and he runs off the condenser (which burns power cells, handled by the WaterBlaster). So
+            // the hose plugs/unplugs purely by proximity, and there is no clamp, until the burst ends.
+            if (HydroBurst.Active)
             {
                 SetTap(NearestTapInRange());   // may be null when he's out roaming
                 if (_hose != null) _hose.enabled = _tap != null;
@@ -95,7 +103,18 @@ namespace MaxWorlds.Hose
                 return;
             }
 
-            if (_tap == null) return;
+            // The burst just ended (or Max was never wired to a tap at all): re-leash to whichever tap
+            // is closest, regardless of range — a hard snap-back. Without this, a burst that ends while
+            // Max is out past PlugRange of every tap would leave _tap null forever, since the proximity
+            // re-plug below only ever runs once a tap is already current — exactly the softlock the
+            // acceptance criteria calls out (YT-215: "at timeout he re-leashes cleanly ... without
+            // softlocks").
+            if (_tap == null)
+            {
+                SetTap(NearestTap());
+                if (_tap == null) return;   // no taps exist at all — nothing to clamp to
+            }
+
             if (_hose != null && !_hose.enabled) _hose.enabled = true;
 
             TryReplug();   // walk up to a different tap and the hose swaps to it (YT-130)
@@ -136,6 +155,27 @@ namespace MaxWorlds.Hose
                 if (sq <= nearSq) { nearSq = sq; near = t; }
             }
             return near;
+        }
+
+        /// <summary>The single closest tap to Max, with no range limit — used only for the burst
+        /// snap-back (YT-215), which must re-anchor SOMEWHERE even if he's out past every
+        /// <see cref="PlugRange"/> when the timer runs out. Null only if no taps exist at all.</summary>
+        private Tap NearestTap()
+        {
+            var taps = Tap.All;
+            Tap nearest = null;
+            float bestSq = float.MaxValue;
+            Vector3 p = transform.position;
+            for (int i = 0; i < taps.Count; i++)
+            {
+                Tap t = taps[i];
+                if (t == null) continue;
+                float dx = t.transform.position.x - p.x;
+                float dz = t.transform.position.z - p.z;
+                float sq = dx * dx + dz * dz;
+                if (sq < bestSq) { bestSq = sq; nearest = t; }
+            }
+            return nearest;
         }
 
         /// <summary>Reposition Max honouring the CharacterController, which caches its own position and

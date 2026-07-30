@@ -28,6 +28,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator SetUp()
         {
             UpgradeState.Reset();
+            HydroBurst.Reset();
             PickupWallet.Reset();
             Time.timeScale = 1f;
             foreach (var s in Object.FindObjectsByType<UpgradeScreen>(FindObjectsSortMode.None))
@@ -54,6 +55,7 @@ namespace MaxWorlds.Tests.PlayMode
             if (_screenGo != null) Object.Destroy(_screenGo);
             yield return null;
             UpgradeState.Reset();
+            HydroBurst.Reset();
             PickupWallet.Reset();
         }
 
@@ -144,17 +146,25 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Hydro_NeedsTheHarnessMount_ThenUntethers()
+        public IEnumerator Hydro_NeedsTheHarnessMount_ThenAssembles_AndCanBurst()
         {
-            Assert.That(UpgradeState.Untethered, Is.False, "precondition");
+            Assert.That(UpgradeState.HydroAssembled, Is.False, "precondition");
+            Assert.That(HydroBurst.Ready, Is.False, "nothing to press before assembly");
 
             yield return PickUpAndConfirm(PartKind.Hydro);
-            Assert.That(UpgradeState.Untethered, Is.False,
+            Assert.That(UpgradeState.HydroAssembled, Is.False,
                 "the condenser alone has nothing to clip into — the harness mount is still missing");
 
             yield return PickUpAndConfirm(PartKind.AugmentationHarness);
-            Assert.That(UpgradeState.Untethered, Is.True,
-                "both detach parts collected must auto-assemble and untether Max");
+            Assert.That(UpgradeState.HydroAssembled, Is.True,
+                "both detach parts collected must auto-assemble");
+
+            // Assembling unlocks the BUTTON (YT-215) — it does not, by itself, untether Max any more.
+            Assert.That(HydroBurst.Active, Is.False, "assembly alone must not start a burst");
+            Assert.That(HydroBurst.Ready, Is.True, "assembled and never used — the burst must now be pressable");
+
+            HydroBurst.Trigger();
+            Assert.That(HydroBurst.Active, Is.True, "pressing the button once ready must start the burst");
         }
 
         [UnityTest]

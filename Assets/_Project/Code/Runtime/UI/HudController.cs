@@ -8,6 +8,7 @@ using MaxWorlds.Player;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
 using MaxWorlds.Save;
+using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
@@ -36,6 +37,10 @@ namespace MaxWorlds.UI
         private static readonly Color BoneWhite = new Color(0.96f, 0.94f, 0.86f);
         // Robot-drop colours (YT-131): cyan power cell — matched to the world pickup's cyan core.
         private static readonly Color CellColor = new Color(0.31f, 0.86f, 0.98f);
+        /// <summary>The Hydro burst button's colour (YT-215): the same cyan as the power-cell
+        /// counter/pickup — the burst spends the exact same resource, so button and meter read as
+        /// one system rather than two unrelated cyans.</summary>
+        private static readonly Color HydroColor = CellColor;
         // The part-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell and
         // the pickup it points at read as ONE language. Sourced from the constant the aura uses, not a
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
@@ -74,6 +79,16 @@ namespace MaxWorlds.UI
         // Ability slots (0 Dash, 1 Bomb, 2 Ultimate)
         private readonly Image[] _slotRadial = new Image[3];
         private readonly Image[] _slotGlow = new Image[3];
+
+        // The Hydro burst button (YT-215): hidden until UpgradeState.HydroAssembled, same TechRings
+        // visual language as the Dash button it sits above.
+        private RectTransform _hydroButtonRoot;
+        private Image _hydroGlow, _hydroRadial;
+        private Text _hydroLabel;
+        private bool _hydroWasReady;
+        private bool _hydroWasActive;
+        private float _hydroReadyFlash;
+        private float _hydroSnapFlash;
 
         // Joysticks
         private Image _moveRings, _moveArrow;
@@ -135,6 +150,7 @@ namespace MaxWorlds.UI
             BuildHomeButton();
             BuildAbilitySlots();
             BuildDashButton();
+            BuildHydroButton();
             BuildJoysticks();
             BuildArenaIndicator();
             BuildInvasionDial();
@@ -163,6 +179,7 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated += OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
+            UpgradeState.Changed += OnUpgradesChanged;
         }
 
         private void OnDisable()
@@ -178,6 +195,14 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated -= OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
+            UpgradeState.Changed -= OnUpgradesChanged;
+        }
+
+        /// <summary>The Hydro burst button appears the moment the harness + condenser are both
+        /// installed (YT-215 acceptance: "before assembly, no button; after assembly, button appears").</summary>
+        private void OnUpgradesChanged()
+        {
+            if (_hydroButtonRoot != null) _hydroButtonRoot.gameObject.SetActive(UpgradeState.HydroAssembled);
         }
 
         private void OnPowerCells(int total)
@@ -294,6 +319,7 @@ namespace MaxWorlds.UI
 
             UpdateStatusStrip(dt);
             UpdateAbilitySlots(dt);
+            UpdateHydroButton(dt);
             UpdateJoysticks();
             UpdateArena(dt);
             UpdateInvasionDial(dt);
@@ -414,6 +440,50 @@ namespace MaxWorlds.UI
 
             float pop = 1f + 0.12f * _slotReadyFlash[i];
             _slotGlow[i].rectTransform.localScale = new Vector3(pop, pop, 1f);
+        }
+
+        /// <summary>
+        /// Drives the Hydro burst button (YT-215) — a no-op while it's hidden (not yet assembled).
+        /// While bursting, the glow runs hot and the label counts the freedom down (acceptance: "a kid
+        /// knows the freedom is ticking"); once it ends, the radial darkens through the cooldown and a
+        /// bright one-shot flash sells the snap-back moment before settling into the ready-glow pulse
+        /// the ability slots already use (<see cref="SetSlot"/>).
+        /// </summary>
+        private void UpdateHydroButton(float dt)
+        {
+            if (_hydroButtonRoot == null || !_hydroButtonRoot.gameObject.activeSelf) return;
+
+            bool active = HydroBurst.Active;
+            bool ready = HydroBurst.Ready;
+
+            if (ready && !_hydroWasReady) _hydroReadyFlash = 1f;
+            _hydroWasReady = ready;
+            _hydroReadyFlash = Mathf.Max(0f, _hydroReadyFlash - dt * 3.2f);
+
+            // The snap-back beat: a bright flash the instant the burst ends, decaying independently
+            // of the ready pulse above.
+            if (_hydroWasActive && !active) _hydroSnapFlash = 1f;
+            _hydroWasActive = active;
+            _hydroSnapFlash = Mathf.Max(0f, _hydroSnapFlash - dt * 2f);
+
+            if (active)
+            {
+                float pulse = 0.7f + 0.3f * Mathf.Abs(Mathf.Sin(Time.time * 8f));
+                _hydroGlow.color = new Color(HydroColor.r, HydroColor.g, HydroColor.b, pulse);
+                _hydroRadial.fillAmount = 0f;
+                _hydroLabel.text = Mathf.CeilToInt(HydroBurst.RemainingSeconds) + "s";
+            }
+            else
+            {
+                _hydroLabel.text = "HYDRO";
+                _hydroRadial.fillAmount = HydroBurst.CooldownNormalized;
+
+                float readyPulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
+                Color glow = Color.Lerp(ReadyGlow, HydroColor, 0.5f);
+                glow = Color.Lerp(glow, Color.white, _hydroSnapFlash);
+                glow.a = ready ? Mathf.Clamp01(readyPulse + _hydroReadyFlash) : Mathf.Max(0f, _hydroSnapFlash * 0.8f);
+                _hydroGlow.color = glow;
+            }
         }
 
         private void UpdateJoysticks()
@@ -756,6 +826,64 @@ namespace MaxWorlds.UI
         // The dash gold — the colour Lee likes and asked to keep (YT-124). Same value the ready glow
         // pulses in, so the ring and its pulse are one hue.
         private static readonly Color DashColor = ReadyGlow;
+
+        /// <summary>
+        /// The Hydro burst button (YT-215) — "place near the Dash button; same visual language". Sits
+        /// directly above it, same TechRings ring/glow/radial construction, smaller (it's a situational
+        /// burst, not the core-loop dodge) and hidden until <see cref="UpgradeState.HydroAssembled"/>.
+        /// </summary>
+        private void BuildHydroButton()
+        {
+            var root = NewRect("Hydro Burst Button", Root);
+            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(-HydroButtonInset, HydroButtonRise);
+            root.sizeDelta = new Vector2(HydroButtonSize, HydroButtonSize);
+            _hydroButtonRoot = root;
+
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 4f);
+            glow.raycastTarget = false;
+            _hydroGlow = glow;
+
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), HydroColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = true;   // the tappable surface — the ring itself is the button
+            var button = ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnHydroButtonTapped);
+
+            _hydroLabel = AddText(root, 20f, HydroColor, TextAnchor.MiddleCenter);
+            Stretch(_hydroLabel.rectTransform);
+            _hydroLabel.text = "HYDRO";
+            _hydroLabel.fontStyle = FontStyle.Bold;
+            _hydroLabel.raycastTarget = false;
+            _hydroLabel.resizeTextForBestFit = true;
+            _hydroLabel.resizeTextMinSize = 10;
+            _hydroLabel.resizeTextMaxSize = 22;
+
+            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _hydroRadial = radial;
+
+            root.gameObject.SetActive(UpgradeState.HydroAssembled);   // hidden until assembled
+        }
+
+        /// <summary>Tapping HYDRO (YT-215): start the burst. <see cref="HydroBurst.Trigger"/> is
+        /// itself a no-op when not ready, so there is nothing to gate here beyond the button
+        /// existing at all.</summary>
+        private void OnHydroButtonTapped() => HydroBurst.Trigger();
+
+        // Stacked directly above the Dash button (same x inset), with a gap so the two rings
+        // never touch. Smaller than Dash's 140 — a situational burst, not the core-loop dodge.
+        private const float HydroButtonSize = 110f;
+        private const float HydroButtonInset = DashButtonInset;
+        private const float HydroButtonRise = DashButtonRise + DashButtonSize * 0.5f + HydroButtonSize * 0.5f + 24f;
 
         private void BuildJoysticks()
         {

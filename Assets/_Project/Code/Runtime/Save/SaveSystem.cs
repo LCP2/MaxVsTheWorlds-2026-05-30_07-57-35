@@ -116,6 +116,7 @@ namespace MaxWorlds.Save
         public static void Apply(SaveSlotData data)
         {
             UpgradeState.Reset();
+            HydroBurst.Reset();   // a loaded run must not inherit a burst/cooldown in progress (YT-215)
             foreach (PartKind part in data.InstalledParts) UpgradeState.Install(part);
 
             PickupWallet.Reset();

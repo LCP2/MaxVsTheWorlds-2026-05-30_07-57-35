@@ -85,6 +85,13 @@ namespace MaxWorlds.Core
         /// <summary>Power cells the Hydro device burns per second while untethered (YT-137).</summary>
         public static float? HydroDrainRate { get; set; }
 
+        /// <summary>How long the Hydro burst frees Max from the tap, seconds (YT-215) — the "free of
+        /// the hose!" prize window, self-supplied and burning power cells the same as before.</summary>
+        public static float? HydroBurstSeconds { get; set; }
+
+        /// <summary>Cooldown after a Hydro burst ends before it can fire again, seconds (YT-215).</summary>
+        public static float? HydroBurstCooldown { get; set; }
+
         /// <summary>Max power cells the reserve holds — the meter's full mark (YT-137).</summary>
         public static float? PowerCellCapacity { get; set; }
 
@@ -189,7 +196,8 @@ namespace MaxWorlds.Core
             FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
-            PartDropInterval.HasValue || HydroDrainRate.HasValue || PowerCellCapacity.HasValue ||
+            PartDropInterval.HasValue || HydroDrainRate.HasValue ||
+            HydroBurstSeconds.HasValue || HydroBurstCooldown.HasValue || PowerCellCapacity.HasValue ||
             PowerCellDropChance.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
@@ -218,6 +226,8 @@ namespace MaxWorlds.Core
             HoseTetherLength = null;
             PartDropInterval = null;
             HydroDrainRate = null;
+            HydroBurstSeconds = null;
+            HydroBurstCooldown = null;
             PowerCellCapacity = null;
             PowerCellDropChance = null;
             NozzleConeMultiplier = null;
@@ -266,6 +276,8 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(HoseTetherLength), () => HoseTetherLength, v => HoseTetherLength = v),
             (PrefsPrefix + nameof(PartDropInterval), () => PartDropInterval, v => PartDropInterval = v),
             (PrefsPrefix + nameof(HydroDrainRate), () => HydroDrainRate, v => HydroDrainRate = v),
+            (PrefsPrefix + nameof(HydroBurstSeconds), () => HydroBurstSeconds, v => HydroBurstSeconds = v),
+            (PrefsPrefix + nameof(HydroBurstCooldown), () => HydroBurstCooldown, v => HydroBurstCooldown = v),
             (PrefsPrefix + nameof(PowerCellCapacity), () => PowerCellCapacity, v => PowerCellCapacity = v),
             (PrefsPrefix + nameof(PowerCellDropChance), () => PowerCellDropChance, v => PowerCellDropChance = v),
             (PrefsPrefix + nameof(NozzleConeMultiplier), () => NozzleConeMultiplier, v => NozzleConeMultiplier = v),

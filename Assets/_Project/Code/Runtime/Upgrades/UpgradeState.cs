@@ -88,10 +88,6 @@ namespace MaxWorlds.Upgrades
         /// sub-assembly automatically (YT-165) and only then is it seated.</summary>
         public static bool HydroAssembled => IsInstalled(PartKind.AugmentationHarness) && IsInstalled(PartKind.Hydro);
 
-        /// <summary>Once the Hydro condenser is seated in its harness mount (<see cref="HydroAssembled"/>)
-        /// the hose detaches and Max is untethered from the taps — he self-supplies water and roams free.</summary>
-        public static bool Untethered => HydroAssembled;
-
         /// <summary>Drop everything (new run / test isolation), and tell the live systems to re-fit.</summary>
         public static void Reset()
         {
