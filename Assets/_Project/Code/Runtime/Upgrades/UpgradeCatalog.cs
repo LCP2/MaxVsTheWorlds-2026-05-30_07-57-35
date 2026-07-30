@@ -106,6 +106,24 @@ namespace MaxWorlds.Upgrades
             }
         }
 
+        /// <summary>A short, plain-language line of what installing this part does (YT-207) — the
+        /// draft-pick reveal's card text, so a player choosing between 3 candidates knows what each
+        /// one buys them without reading the effect off the live weapon.</summary>
+        public static string EffectLine(PartKind kind)
+        {
+            switch (kind)
+            {
+                case PartKind.BeamNozzle: return "Narrows the beam — tighter and more concentrated.";
+                case PartKind.PowerNozzle: return "Narrows and lengthens the beam — reach plus focus.";
+                case PartKind.RangeExtender: return "Lengthens the beam further still.";
+                case PartKind.WideBore: return "Widens the beam back out, keeping the extended reach.";
+                case PartKind.AugmentationHarness: return "More water capacity, and the mount the Hydro condenser needs.";
+                case PartKind.AccelerationEngine: return "Max moves faster.";
+                case PartKind.Hydro: return "Detaches the hose and self-supplies water — untethers Max from the taps.";
+                default: return string.Empty;
+            }
+        }
+
         /// <summary>The all-caps label the upgrade screen stamps for a family.</summary>
         public static string FamilyLabel(PartFamily family)
         {

@@ -164,6 +164,78 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(table.HasNext, Is.False);
         }
 
+        // ---------------------------------------------------------------- YT-207: draft-pick peek/commit
+
+        [Test]
+        public void PeekNextReturnsCandidatesWithoutRemovingThem()
+        {
+            var table = new PartDropTable();
+            int total = UpgradeCatalog.AllKinds.Length;
+
+            var peeked = table.PeekNext(3);
+            Assert.That(peeked.Length, Is.EqualTo(3), "should hand back exactly the number asked for while enough remain");
+            Assert.That(table.Remaining, Is.EqualTo(total), "peeking must not remove anything from the pool");
+
+            var peekedAgain = table.PeekNext(3);
+            Assert.That(peekedAgain, Is.EqualTo(peeked), "peeking twice in a row without a commit must return the same candidates");
+        }
+
+        [Test]
+        public void PeekNextShrinksAsThePoolDrainsAndIsEmptyOnceItsGone()
+        {
+            var table = new PartDropTable();
+            int total = UpgradeCatalog.AllKinds.Length;
+
+            for (int i = 0; i < total; i++) table.TryNext(out _);
+
+            Assert.That(table.PeekNext(3), Is.Empty, "nothing left to preview once the pool is drained");
+        }
+
+        [Test]
+        public void CommitRemovesExactlyTheChosenCandidateAndLeavesTheRestForLater()
+        {
+            var table = new PartDropTable();
+            var candidates = table.PeekNext(3);
+
+            Assert.That(table.Commit(candidates[1]), Is.True, "committing a candidate that's in the pool must succeed");
+            Assert.That(table.Remaining, Is.EqualTo(UpgradeCatalog.AllKinds.Length - 1),
+                "only the chosen candidate should leave the pool");
+
+            var stillThere = table.PeekNext(UpgradeCatalog.AllKinds.Length);
+            Assert.That(stillThere, Has.No.Member(candidates[1]), "the committed part must not be offered again");
+            Assert.That(stillThere, Has.Member(candidates[0]).And.Member(candidates[2]),
+                "the two unpicked candidates must still be available on a later draw");
+        }
+
+        [Test]
+        public void CommitTwiceOnTheSamePartIsANoOp()
+        {
+            var table = new PartDropTable();
+            var candidates = table.PeekNext(3);
+
+            Assert.That(table.Commit(candidates[0]), Is.True);
+            Assert.That(table.Commit(candidates[0]), Is.False, "double-committing the same part must not succeed or remove anything further");
+            Assert.That(table.Remaining, Is.EqualTo(UpgradeCatalog.AllKinds.Length - 1));
+        }
+
+        [Test]
+        public void CommittingEveryCandidateOneByOneDrainsThePoolToEmpty()
+        {
+            var table = new PartDropTable();
+            int total = UpgradeCatalog.AllKinds.Length;
+
+            for (int i = 0; i < total; i++)
+            {
+                var candidates = table.PeekNext(3);
+                Assert.That(candidates.Length, Is.EqualTo(System.Math.Min(3, total - i)));
+                table.Commit(candidates[0]);
+            }
+
+            Assert.That(table.Remaining, Is.EqualTo(0));
+            Assert.That(table.HasNext, Is.False);
+            Assert.That(table.PeekNext(3), Is.Empty);
+        }
+
         [Test]
         public void TheCatalogCoversEveryKind()
         {

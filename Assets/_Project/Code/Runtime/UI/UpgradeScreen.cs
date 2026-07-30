@@ -61,12 +61,25 @@ namespace MaxWorlds.UI
         private Text _partLabel;
         private Text _title;
         private Text _continueHint;
+        private GameObject _tapCatcher;       // full-screen "tap anywhere continues" layer (YT-141)
         private UpgradeWeaponStage _stage;    // the live 3D weapon render (YT-140)
         private Image _weaponGlow;            // rim flash behind the weapon as the new part seats
         private MaxPortraitStage _maxStage;   // the live low-poly Max render, on the left (YT-176)
 
         private readonly Image[] _familyPipBg = new Image[MaxFamilySize];
         private readonly Text[] _familyPipLabel = new Text[MaxFamilySize];
+
+        // The draft-pick reveal (YT-207): up to 3 tappable candidate cards, reusing the panel/scrim
+        // chrome but standing in for the single reveal-and-fit stage while a choice is pending.
+        private const int MaxCandidates = 3;
+        private RectTransform _choiceRoot;
+        private readonly Image[] _cardBg = new Image[MaxCandidates];
+        private readonly Button[] _cardButton = new Button[MaxCandidates];
+        private readonly Text[] _cardFamily = new Text[MaxCandidates];
+        private readonly Text[] _cardName = new Text[MaxCandidates];
+        private readonly Text[] _cardEffect = new Text[MaxCandidates];
+        private PartKind[] _candidates;
+        private bool _choiceMode;
 
         private bool _open;
         private bool _statusOnly;             // opened via OpenStatus (YT-178) — no part to install on Continue
@@ -98,6 +111,9 @@ namespace MaxWorlds.UI
 
             _part = part.IsValid ? part : UpgradePart.Generic;
             _statusOnly = false;
+            _choiceMode = false;
+            if (_choiceRoot != null) _choiceRoot.gameObject.SetActive(false);
+            if (_tapCatcher != null) _tapCatcher.SetActive(true);
             _open = true;
             _t = 0f;
             _prevTimeScale = Time.timeScale;
@@ -180,6 +196,9 @@ namespace MaxWorlds.UI
 
             _part = UpgradePart.Generic;   // unused for effect — Continue() skips Install/SpendPart below
             _statusOnly = true;
+            _choiceMode = false;
+            if (_choiceRoot != null) _choiceRoot.gameObject.SetActive(false);
+            if (_tapCatcher != null) _tapCatcher.SetActive(true);
             _open = true;
             _t = RevealTime + FitTime;     // nothing is flying in — skip straight to the settled state
             _prevTimeScale = Time.timeScale;
@@ -197,12 +216,100 @@ namespace MaxWorlds.UI
             ApplyAnim(_t);
         }
 
+        /// <summary>
+        /// The draft-pick reveal (YT-207): pause and show up to <see cref="MaxCandidates"/> tappable
+        /// part cards instead of auto-installing the one part that dropped. <paramref name="candidates"/>
+        /// is front-loaded with the part already collected (banked in <c>PickupWallet</c>) plus a peek
+        /// at whichever parts are still undispensed in the drop table, so there's always a real choice
+        /// even though only one part is ever guaranteed in hand. Tapping a card installs exactly that
+        /// part via <see cref="ChooseCandidate"/>; the others stay available for a later draw.
+        /// </summary>
+        public void OpenChoice(PartKind[] candidates)
+        {
+            if (_open) return;
+            if (candidates == null || candidates.Length == 0) return;
+            if (_canvas == null) Build();
+
+            _candidates = candidates;
+            _choiceMode = true;
+            _statusOnly = false;
+            _open = true;
+            _t = RevealTime + FitTime;   // no weapon/portrait fly-in for the choice screen
+            _prevTimeScale = Time.timeScale;
+            Time.timeScale = 0f;
+
+            _title.text = "CHOOSE AN UPGRADE";
+            _continueHint.gameObject.SetActive(false);   // no "tap anywhere" — must tap a specific card
+            HideFamilyRow();
+            ShowCandidates(candidates);
+
+            _root.SetActive(true);
+            _choiceRoot.gameObject.SetActive(true);
+            // The full-screen "tap anywhere" catcher (YT-141) sits ABOVE the panel so the single-reveal
+            // flow can dismiss from anywhere; that would swallow every tap before it reaches a card, so
+            // it must stand down while a choice is pending — only a specific card may resolve this screen.
+            if (_tapCatcher != null) _tapCatcher.SetActive(false);
+            // Deliberately no _stage/_maxStage Show() here — the cards ARE the reveal; keeping the 3D
+            // weapon/portrait stage out of the choice screen keeps this additive and cheap for the PoC.
+        }
+
+        /// <summary>Populates the up-to-<see cref="MaxCandidates"/> cards for a draft-pick reveal —
+        /// name, family tag, and effect line straight off <see cref="UpgradeCatalog"/>, with unused
+        /// card slots hidden when fewer candidates remain (YT-207: 2, then 1, near the end of the level).</summary>
+        private void ShowCandidates(PartKind[] candidates)
+        {
+            for (int i = 0; i < MaxCandidates; i++)
+            {
+                bool active = i < candidates.Length;
+                _cardBg[i].gameObject.SetActive(active);
+                if (!active) continue;
+
+                var kind = candidates[i];
+                var part = UpgradeCatalog.For(kind);
+                _cardName[i].text = part.Name;
+                _cardName[i].color = part.Accent;
+                _cardFamily[i].text = UpgradeCatalog.FamilyLabel(UpgradeCatalog.FamilyFor(kind));
+                _cardEffect[i].text = UpgradeCatalog.EffectLine(kind);
+            }
+        }
+
+        /// <summary>A card was tapped (YT-207): install exactly that part, take it off the pending queue
+        /// only if it's the one already banked there (the other, merely-previewed candidates were never
+        /// banked), commit it out of the drop table's pool so it can't be offered again, then resume.</summary>
+        private void ChooseCandidate(int index)
+        {
+            if (!_open || !_choiceMode) return;
+            if (_candidates == null || index < 0 || index >= _candidates.Length) return;
+
+            PartKind chosen = _candidates[index];
+            _open = false;
+            _choiceMode = false;
+            Time.timeScale = _prevTimeScale;
+            _choiceRoot.gameObject.SetActive(false);
+
+            UpgradeState.Install(chosen);
+            CommitToLiveWeapon();
+
+            // Only the front-of-wallet candidate was actually collected and banked; the others were
+            // previews still sitting in the drop table's pool. Spend the wallet entry only if that's
+            // the one chosen — otherwise it stays pending for the next reveal.
+            if (MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var pending) && pending == chosen)
+                MaxWorlds.Pickups.PickupWallet.SpendPart();
+
+            var director = FindFirstObjectByType<MaxWorlds.Pickups.PickupDirector>();
+            if (director != null) director.Table.Commit(chosen);
+
+            _root.SetActive(false);
+        }
+
         /// <summary>Finish the upgrade: apply the part's effect (YT-133 — the weapon/player re-fit off
         /// <see cref="UpgradeState"/>), take it off the pending queue, resume, hide. A status-only open
-        /// (YT-178) has no part to install — it just closes.</summary>
+        /// (YT-178) has no part to install — it just closes. The draft-pick reveal (YT-207) is
+        /// dismissed only through <see cref="ChooseCandidate"/> — a stray tap must not install a part
+        /// nobody chose, so this is a no-op while a choice is pending.</summary>
         public void Continue()
         {
-            if (!_open) return;
+            if (!_open || _choiceMode) return;
             _open = false;
             Time.timeScale = _prevTimeScale;
             if (_stage != null) _stage.Hide();  // stop the live weapon render (YT-140)
@@ -242,6 +349,14 @@ namespace MaxWorlds.UI
 
         private void ApplyAnim(float t)
         {
+            // The draft-pick reveal (YT-207) has no stage/portrait fly-in and no pulsing continue hint
+            // — the cards themselves are the input, tapped via ChooseCandidate rather than dismissed.
+            if (_choiceMode)
+            {
+                if (_weaponGlow != null) _weaponGlow.color = new Color(0f, 0f, 0f, 0f);
+                return;
+            }
+
             // The 3D weapon stage glides the new part onto its mount over the fit window (YT-140).
             if (_stage != null) _stage.Tick(t, RevealTime, FitTime);
             if (_maxStage != null) _maxStage.Tick(t);   // Max's slow idle turn (YT-176)
@@ -327,6 +442,7 @@ namespace MaxWorlds.UI
             var catchBtn = catcher.gameObject.AddComponent<Button>();
             catchBtn.transition = Selectable.Transition.None;
             catchBtn.onClick.AddListener(Continue);
+            _tapCatcher = catcher.gameObject;
 
             _root.SetActive(false);
         }
@@ -415,6 +531,63 @@ namespace MaxWorlds.UI
             Anchor(_continueHint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             _continueHint.rectTransform.sizeDelta = new Vector2(700f, 44f);
             _continueHint.rectTransform.anchoredPosition = new Vector2(0f, 26f);
+
+            BuildChoiceRoot(panel);
+        }
+
+        /// <summary>The draft-pick reveal's up to <see cref="MaxCandidates"/> tappable cards (YT-207),
+        /// occupying the same centred slot as the single-reveal "Stage" — the two screens share the
+        /// panel/scrim chrome but never show at once (<see cref="OpenChoice"/> vs <see cref="Open"/>).</summary>
+        private void BuildChoiceRoot(RectTransform panel)
+        {
+            _choiceRoot = NewRect("Choice Root", panel, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _choiceRoot.sizeDelta = new Vector2(1080f, 460f);
+            _choiceRoot.anchoredPosition = new Vector2(0f, -6f);
+
+            const float cardW = 340f, cardH = 440f, gap = 20f;
+            float startX = -(cardW + gap);
+
+            for (int i = 0; i < MaxCandidates; i++)
+            {
+                var bg = AddImage(_choiceRoot, HudTextures.RoundedBox(32, 0.5f), CardColor, $"Choice Card {i}");
+                Anchor(bg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                bg.rectTransform.sizeDelta = new Vector2(cardW, cardH);
+                bg.rectTransform.anchoredPosition = new Vector2(startX + i * (cardW + gap), 0f);
+                bg.type = Image.Type.Sliced;
+                bg.raycastTarget = true;
+
+                var button = bg.gameObject.AddComponent<Button>();
+                button.transition = Selectable.Transition.None;
+                int index = i;   // capture by value, not the loop variable
+                button.onClick.AddListener(() => ChooseCandidate(index));
+
+                var family = AddText(bg.rectTransform, 24, Dim, TextAnchor.UpperCenter);
+                family.fontStyle = FontStyle.Bold;
+                Anchor(family.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+                family.rectTransform.sizeDelta = new Vector2(cardW - 24f, 34f);
+                family.rectTransform.anchoredPosition = new Vector2(0f, -22f);
+
+                var name = AddText(bg.rectTransform, 28, TextColor, TextAnchor.UpperCenter);
+                name.fontStyle = FontStyle.Bold;
+                name.horizontalOverflow = HorizontalWrapMode.Wrap;
+                Anchor(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+                name.rectTransform.sizeDelta = new Vector2(cardW - 24f, 100f);
+                name.rectTransform.anchoredPosition = new Vector2(0f, -64f);
+
+                var effect = AddText(bg.rectTransform, 22, Dim, TextAnchor.MiddleCenter);
+                effect.horizontalOverflow = HorizontalWrapMode.Wrap;
+                Anchor(effect.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+                effect.rectTransform.sizeDelta = new Vector2(cardW - 32f, 220f);
+                effect.rectTransform.anchoredPosition = new Vector2(0f, 6f);
+
+                _cardBg[i] = bg;
+                _cardButton[i] = button;
+                _cardFamily[i] = family;
+                _cardName[i] = name;
+                _cardEffect[i] = effect;
+            }
+
+            _choiceRoot.gameObject.SetActive(false);
         }
 
         /// <summary>The family-progression strip (YT-176): up to <see cref="MaxFamilySize"/> pips,

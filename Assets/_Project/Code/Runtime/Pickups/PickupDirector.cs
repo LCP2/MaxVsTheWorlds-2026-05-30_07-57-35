@@ -62,6 +62,10 @@ namespace MaxWorlds.Pickups
         private Transform _max;
         private int _bruiserKills;
 
+        /// <summary>The shared drop table (YT-207): the draft-pick reveal peeks/commits against this
+        /// same instance so an unpicked preview candidate truly stays in the pool for a later draw.</summary>
+        public MaxWorlds.Upgrades.PartDropTable Table => _table;
+
         private void OnEnable() => DropSignals.RobotDied += OnRobotDied;
         private void OnDisable() => DropSignals.RobotDied -= OnRobotDied;
 

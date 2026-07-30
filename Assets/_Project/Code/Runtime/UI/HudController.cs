@@ -193,19 +193,33 @@ namespace MaxWorlds.UI
             if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(pending > 0);
         }
 
-        /// <summary>Tapping the WEAPONS button (YT-178): opens the reveal flow for whatever part is
-        /// waiting at the front of the pending queue (YT-132/133) if one is, otherwise opens the weapons
-        /// area to show Max's current loadout on demand — the button is always-available access now,
-        /// not gated on a part being pending.</summary>
+        /// <summary>Tapping the WEAPONS button (YT-178): opens the draft-pick reveal (YT-207) for
+        /// whatever part is waiting at the front of the pending queue (YT-132/133) plus a peek at the
+        /// next couple still undispensed in the drop table, so there's a real "1 of up to 3" choice
+        /// rather than an auto-install; otherwise opens the weapons area to show Max's current loadout
+        /// on demand — the button is always-available access now, not gated on a part being pending.</summary>
         private void OnWeaponsButtonTapped()
         {
             var screen = FindFirstObjectByType<UpgradeScreen>();
             if (screen == null) return;
 
-            if (MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var kind))
-                screen.Open(MaxWorlds.Upgrades.UpgradeCatalog.For(kind));
+            if (MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var pending))
+            {
+                var director = FindFirstObjectByType<MaxWorlds.Pickups.PickupDirector>();
+                var preview = director != null
+                    ? director.Table.PeekNext(2)
+                    : System.Array.Empty<MaxWorlds.Upgrades.PartKind>();
+
+                var candidates = new MaxWorlds.Upgrades.PartKind[1 + preview.Length];
+                candidates[0] = pending;
+                for (int i = 0; i < preview.Length; i++) candidates[i + 1] = preview[i];
+
+                screen.OpenChoice(candidates);
+            }
             else
+            {
                 screen.OpenStatus();
+            }
         }
 
         private void OnBossRegistered() => _model.UseExternalBoss();

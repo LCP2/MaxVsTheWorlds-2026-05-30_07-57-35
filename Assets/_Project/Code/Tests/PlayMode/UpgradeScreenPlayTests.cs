@@ -17,6 +17,7 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _screenGo;
         private GameObject _hudGo;
+        private GameObject _directorGo;   // YT-207: a PickupDirector, only for the tests that need its shared drop table
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -39,6 +40,7 @@ namespace MaxWorlds.Tests.PlayMode
             Time.timeScale = 1f;   // never leave the world frozen for the next test
             if (_screenGo != null) Object.Destroy(_screenGo);
             if (_hudGo != null) Object.Destroy(_hudGo);
+            if (_directorGo != null) Object.Destroy(_directorGo);
             PickupWallet.Reset();
             UpgradeState.Reset();
             yield return null;
@@ -335,6 +337,132 @@ namespace MaxWorlds.Tests.PlayMode
                 "opening the weapons area on demand must not spend a pending part");
             Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False,
                 "opening the weapons area on demand must not install anything");
+        }
+
+        // ---------------------------------------------------------------- YT-207: draft-pick reveal
+
+        private static Button FindButtonNamed(GameObject root, string name)
+        {
+            foreach (var b in root.GetComponentsInChildren<Button>(true))
+                if (b.gameObject.name == name) return b;
+            return null;
+        }
+
+        [UnityTest]
+        public IEnumerator OpenChoiceShowsEveryCandidateAsATappableCard()
+        {
+            yield return NewScreen();
+            var candidates = new[] { PartKind.BeamNozzle, PartKind.PowerNozzle, PartKind.WideBore };
+
+            Screen.OpenChoice(candidates);
+            yield return null;
+
+            Assert.That(Screen.IsOpen, Is.True, "the choice screen didn't open");
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "the game must pause while a choice is pending");
+            foreach (var kind in candidates)
+                Assert.That(FindText(_screenGo, UpgradeCatalog.For(kind).Name), Is.Not.Null,
+                    $"no card shows {kind}'s name");
+            Assert.That(FindButtonNamed(_screenGo, "Choice Card 0"), Is.Not.Null, "card 0 isn't tappable");
+            Assert.That(FindButtonNamed(_screenGo, "Choice Card 2"), Is.Not.Null, "card 2 isn't tappable");
+        }
+
+        [UnityTest]
+        public IEnumerator TappingACardInstallsExactlyThatPartAndResumes()
+        {
+            yield return NewScreen();
+            PickupWallet.AddPart(PartKind.BeamNozzle);   // the front-of-wallet, already-collected candidate
+            var candidates = new[] { PartKind.BeamNozzle, PartKind.PowerNozzle, PartKind.WideBore };
+
+            Screen.OpenChoice(candidates);
+            yield return null;
+            FindButtonNamed(_screenGo, "Choice Card 1").onClick.Invoke();   // pick PowerNozzle, not the banked part
+            yield return null;
+
+            Assert.That(Screen.IsOpen, Is.False, "choosing a card must close the screen");
+            Assert.That(Time.timeScale, Is.EqualTo(1f), "and resume the fight");
+            Assert.That(UpgradeState.IsInstalled(PartKind.PowerNozzle), Is.True, "the tapped card's part must install");
+            Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False, "an unpicked card must not install");
+            Assert.That(UpgradeState.IsInstalled(PartKind.WideBore), Is.False, "an unpicked card must not install");
+        }
+
+        [UnityTest]
+        public IEnumerator ChoosingTheAlreadyBankedCandidateSpendsIt()
+        {
+            yield return NewScreen();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
+            yield return null;
+
+            FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();   // the banked part itself
+            yield return null;
+
+            Assert.That(PickupWallet.PartsPending, Is.EqualTo(0),
+                "choosing the part that was actually collected must take it off the pending queue");
+        }
+
+        [UnityTest]
+        public IEnumerator ChoosingAMerelyPreviewedCandidateLeavesTheBankedOneStillPending()
+        {
+            // YT-207 AC: the two unpicked candidates stay available for a later draw. The front-of-wallet
+            // candidate was the one actually collected — if the player picks a DIFFERENT (merely
+            // previewed) one instead, the banked part must still be waiting next time the screen opens.
+            yield return NewScreen();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle, PartKind.WideBore });
+            yield return null;
+
+            FindButtonNamed(_screenGo, "Choice Card 2").onClick.Invoke();   // WideBore — not the banked part
+            yield return null;
+
+            Assert.That(UpgradeState.IsInstalled(PartKind.WideBore), Is.True);
+            Assert.That(PickupWallet.PartsPending, Is.EqualTo(1),
+                "the banked-but-unpicked part must still be pending for a later reveal");
+            Assert.That(PickupWallet.TryPeekPart(out var stillPending), Is.True);
+            Assert.That(stillPending, Is.EqualTo(PartKind.BeamNozzle));
+        }
+
+        [UnityTest]
+        public IEnumerator ChoosingAPreviewedCandidateCommitsItFromTheSharedDropTable()
+        {
+            yield return NewScreen();
+            foreach (var d in Object.FindObjectsByType<PickupDirector>(FindObjectsSortMode.None))
+                Object.Destroy(d.gameObject);
+            yield return null;
+
+            _directorGo = new GameObject("PickupDirector");
+            var director = _directorGo.AddComponent<PickupDirector>();
+            yield return null;
+
+            var candidates = director.Table.PeekNext(3);
+            Assert.That(candidates.Length, Is.EqualTo(3));
+            PickupWallet.AddPart(candidates[0]);   // simulate the front one already collected
+
+            Screen.OpenChoice(candidates);
+            yield return null;
+            FindButtonNamed(_screenGo, "Choice Card 2").onClick.Invoke();   // a merely-previewed candidate
+            yield return null;
+
+            Assert.That(director.Table.Remaining, Is.EqualTo(UpgradeCatalog.AllKinds.Length - 1),
+                "only the chosen candidate should leave the shared drop table");
+            var stillInPool = director.Table.PeekNext(UpgradeCatalog.AllKinds.Length);
+            Assert.That(stillInPool, Has.No.Member(candidates[2]), "the chosen part must not be offered again");
+            Assert.That(stillInPool, Has.Member(candidates[1]), "the other unpicked preview must still be in the pool");
+        }
+
+        [UnityTest]
+        public IEnumerator TappingTheScrimDuringAChoiceDoesNotInstallOrClose()
+        {
+            yield return NewScreen();
+            PickupWallet.AddPart(PartKind.BeamNozzle);
+            Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
+            yield return null;
+
+            FindButtonNamed(_screenGo, "Scrim").onClick.Invoke();   // a stray tap outside the cards
+            yield return null;
+
+            Assert.That(Screen.IsOpen, Is.True, "a choice must be made explicitly — tapping outside must not dismiss it");
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "and must not resume the fight");
+            Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False, "and must not install anything");
         }
 
         private static Text FindText(GameObject root, string content)
