@@ -67,9 +67,8 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return null;
 
-            // Everything that lives in the left column. The minimap was laid over the icons; that
-            // was the bug. (The MAP button is gone since YT-123 — the minimap is the control now.)
-            var names = new[] { "Utility Icons", "Home Button", "Minimap" };
+            // Everything that lives in the left column.
+            var names = new[] { "Utility Icons", "Home Button" };
             var rects = new List<(string name, Rect rect)>();
 
             foreach (var n in names)
@@ -86,22 +85,6 @@ namespace MaxWorlds.Tests.PlayMode
                     Assert.IsFalse(rects[i].rect.Overlaps(rects[j].rect),
                         $"'{rects[i].name}' {rects[i].rect} overlaps '{rects[j].name}' {rects[j].rect}");
                 }
-            }
-        }
-
-        [UnityTest]
-        public IEnumerator TheMinimapStaysOutOfTheThumbsticksAndTheAbilitySlots()
-        {
-            yield return null;
-
-            Rect mini = ScreenRect(Find("Minimap"));
-
-            foreach (var n in new[] { "Move Joystick", "Aim Joystick", "Ability Slots" })
-            {
-                RectTransform rt = Find(n);
-                Assert.IsNotNull(rt, $"'{n}' is missing from the HUD");
-                Assert.IsFalse(mini.Overlaps(ScreenRect(rt)),
-                    $"the minimap is covering '{n}' — it would eat the player's input");
             }
         }
 
@@ -124,17 +107,15 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ThereIsNoDedicatedMapButton_TheMinimapIsTheControl()
+        public IEnumerator ThereIsNoMapOrMinimapOnTheHud()
         {
             yield return null;
 
-            // YT-123: the MAP button is gone; tapping the minimap opens the full map.
+            // YT-217: a bounded single garden doesn't need a map. No minimap, no map screen, no
+            // dedicated MAP button — and nothing left over for a stray tap to land on.
+            Assert.That(Find("Minimap"), Is.Null, "the minimap should be removed from the HUD");
+            Assert.That(Find("Map Screen"), Is.Null, "the map screen should be removed from the HUD");
             Assert.That(Find("Map Button"), Is.Null, "the dedicated MAP button should be removed");
-
-            var mini = Find("Minimap");
-            Assert.IsNotNull(mini, "the minimap must still be present — it is the control now");
-            var button = mini.GetComponent<UnityEngine.UI.Button>();
-            Assert.IsNotNull(button, "the minimap is not tappable — it can no longer open the map");
         }
     }
 }
