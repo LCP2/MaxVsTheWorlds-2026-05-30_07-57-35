@@ -90,11 +90,11 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(34),
-                "Seventeen Gameplay knobs, eleven Weapons-tab knobs, and six Boss-tab knobs (YT-196 " +
+            Assert.That(sliders.Length, Is.EqualTo(35),
+                "Eighteen Gameplay knobs, eleven Weapons-tab knobs, and six Boss-tab knobs (YT-196 " +
                 "sorted Boss move speed/Boss health onto Boss, Hose tether onto Weapons, and Spawn " +
                 "interval onto Gameplay, by the Max/robots/arena/escalation vs hose/upgrade vs " +
-                "boss-only rule) — 34 total.");
+                "boss-only rule; YT-210 added Run length to the Invasion Level knobs) — 35 total.");
             yield return null;
         }
 
@@ -115,12 +115,12 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
             Assert.That(boss, Is.Not.Null, "no Boss page — the brood-volley tuning has nowhere to live (YT-157)");
 
-            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(17),
+            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(18),
                 "the Gameplay tab keeps its Max/robots/arena/escalation knobs: eight core knobs (Boss " +
-                "move speed and Boss health moved to the Boss tab, YT-196) plus the four Invasion " +
-                "Level knobs (YT-181), the two death-throes surge knobs (YT-182), and the four " +
-                "swarm-pacing/spawn-cadence knobs (YT-194, plus Spawn interval moved from Weapons, " +
-                "YT-196)");
+                "move speed and Boss health moved to the Boss tab, YT-196) plus the five Invasion " +
+                "Level knobs (YT-181, plus Run length added at YT-210), the two death-throes surge " +
+                "knobs (YT-182), and the four swarm-pacing/spawn-cadence knobs (YT-194, plus Spawn " +
+                "interval moved from Weapons, YT-196)");
             Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(11),
                 "the Weapons tab carries the hose/upgrade knobs: the upgrade/pacing/Hydro knobs, " +
                 "Range Extender and Wide-Bore (YT-164), Cell drop chance (YT-171), and Hose tether " +

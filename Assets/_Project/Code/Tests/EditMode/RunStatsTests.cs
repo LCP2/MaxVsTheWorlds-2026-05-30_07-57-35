@@ -72,5 +72,38 @@ namespace MaxWorlds.Tests.EditMode
             s.MarkFactoryDestroyed();
             Assert.IsTrue(s.FactoryDestroyed);
         }
+
+        // --- YT-210: the near-miss peak the DEFEAT card leads with ---
+
+        [Test]
+        public void RecordDifficultyPeak_OnlyTheHighestReadingSurvives()
+        {
+            var s = new RunStats();
+            s.RecordDifficultyPeak(0.2f);
+            s.RecordDifficultyPeak(0.6f);
+            s.RecordDifficultyPeak(0.4f); // a dip after the peak must not lower it
+
+            Assert.AreEqual(0.6f, s.PeakNormalized, 1e-4);
+        }
+
+        [Test]
+        public void RecordDifficultyPeak_FrozenAfterOutcome()
+        {
+            var s = new RunStats();
+            s.RecordDifficultyPeak(0.5f);
+            s.Finish(RunOutcome.Defeat);
+            s.RecordDifficultyPeak(0.9f); // ignored — run is over
+
+            Assert.AreEqual(0.5f, s.PeakNormalized, 1e-4);
+        }
+
+        [Test]
+        public void FormatPercent_RoundsToTheNearestWholeNumber()
+        {
+            Assert.AreEqual(0, RunStats.FormatPercent(0f));
+            Assert.AreEqual(50, RunStats.FormatPercent(0.5f));
+            Assert.AreEqual(100, RunStats.FormatPercent(1f));
+            Assert.AreEqual(74, RunStats.FormatPercent(0.735f));
+        }
     }
 }

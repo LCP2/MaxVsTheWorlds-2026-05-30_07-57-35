@@ -31,6 +31,9 @@ namespace MaxWorlds.Tests.PlayMode
             foreach (GameObject go in new[] { _path, _player, _gate, _boss, _strayHutch })
                 if (go != null) Object.Destroy(go);
 
+            DevTuning.Reset();
+            DifficultyDirector.Reset();
+
             yield return null;
         }
 
@@ -237,10 +240,16 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>Big Bermuda sleeps through the first kill. A boss that woke on it would come
-        /// through the gate while a factory was still pumping robots at the player's back.</summary>
+        /// through the gate while a factory was still pumping robots at the player's back. This is
+        /// purely about the FactoryCensus wake path (YT-92); YT-210's Invasion Level clock is the
+        /// OTHER reason the boss can erupt, and is neutralised here so three shed kills' worth of
+        /// clock-skip can't accidentally trip it before the fourth factory falls.</summary>
         [UnityTest]
         public IEnumerator TheBossSleepsUntilTheLastFactoryFalls()
         {
+            DevTuning.EscalationPerShedBump = 0f;
+            DevTuning.RunLengthSeconds = 1_000_000f;
+
             yield return BuildLevelFromTheMap();
 
             var boss = _boss.GetComponent<BigBermudaBoss>();

@@ -132,6 +132,11 @@ namespace MaxWorlds.Bosses
         // on the first kill — and a boss that woke up then would come through the gate while the
         // player still had a factory pumping robots at their back. FactoryCensus is the one thing that
         // knows how many sources the run has; it says when the last of them falls.
+        //
+        // YT-210 added a SECOND, independent reason: the run itself is bounded to ~6 minutes, and the
+        // boss erupts the moment the Invasion Level tops out — whichever happens first. A player who
+        // never breaks a single shed still gets a fight at the top of the dial; a player who clears
+        // every source still gets the reward of an immediate one.
         private void OnEnable() => FactoryCensus.Cleared += OnFactoriesCleared;
         private void OnDisable() => FactoryCensus.Cleared -= OnFactoriesCleared;
 
@@ -143,7 +148,18 @@ namespace MaxWorlds.Bosses
 
         private void OnFactoriesCleared()
         {
-            if (_phase != Phase.Dormant) return;
+            if (_phase == Phase.Dormant) Wake();
+        }
+
+        /// <summary>YT-210: the bounded run's own clock is the second reason to erupt — the Invasion
+        /// Level topping out at the end of the ~6-minute run, sheds standing or not.</summary>
+        private void TickDormant()
+        {
+            if (DifficultyDirector.Normalized >= 1f) Wake();
+        }
+
+        private void Wake()
+        {
             _phase = Phase.Intro;
             _introTimer = introTime;
             HudSignals.EmitBossEngaged(BossName, 2); // 2 phases -> HUD bar shows the 50% segment
@@ -155,6 +171,7 @@ namespace MaxWorlds.Bosses
             float dt = Time.deltaTime;
             switch (_phase)
             {
+                case Phase.Dormant: TickDormant(); break;
                 case Phase.Intro: TickIntro(dt); break;
                 case Phase.Fight: TickFight(dt); break;
             }

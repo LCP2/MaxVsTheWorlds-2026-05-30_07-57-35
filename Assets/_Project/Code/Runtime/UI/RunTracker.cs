@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Enemies;
 using MaxWorlds.Player;
 
 namespace MaxWorlds.UI
@@ -63,6 +64,7 @@ namespace MaxWorlds.UI
             if (!_sealed)
             {
                 _stats.Tick(Time.deltaTime);
+                _stats.RecordDifficultyPeak(DifficultyDirector.Normalized);
                 return;
             }
 

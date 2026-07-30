@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -42,6 +43,15 @@ namespace MaxWorlds.Tests.PlayMode
         {
             Time.timeScale = 1f;
 
+            // YT-210 gave the boss a SECOND wake path — TickDormant erupts it once the Invasion Level
+            // tops out, independent of FactoryCensus. Every Wake() in this fixture destroys a hutch,
+            // and that death's HudSignals.FactoryDestroyed signal reaches the real, static
+            // DifficultyDirector via the game's own wiring — so without a reset here, a few tests'
+            // worth of shed-kill clock-skips accumulate and can trip TickDormant on a LATER test's
+            // freshly-Dormant boss before its own FactoryCensus path ever fires.
+            DevTuning.Reset();
+            DifficultyDirector.Reset();
+
             // The boss exactly as Stage27BossScaffold bakes it into Backyard_Slice: a cube on a
             // CharacterController, scaled 3.5 x 3 x 3.5. The rig replaces the cube's VISUAL only.
             _boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -62,6 +72,8 @@ namespace MaxWorlds.Tests.PlayMode
             Time.timeScale = 1f;
             foreach (GameObject go in new[] { _rigHost, _boss, _player, _hutch })
                 if (go != null) Object.Destroy(go);
+            DevTuning.Reset();
+            DifficultyDirector.Reset();
         }
 
         /// <summary>Self-installs at AfterSceneLoad in the game; that moment is long gone inside a test,

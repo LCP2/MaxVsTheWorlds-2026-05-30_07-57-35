@@ -87,11 +87,13 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TheStartingCap_GrowsToTheFactorysMaxAsTheInvasionLevelClimbs()
         {
             // Same shape as DifficultyDirectorPlayTests' escalation proofs: pin the curve so
-            // "fully escalated" is one ReportShedDestroyed() away.
+            // "fully escalated" is one ReportShedDestroyed() away. A shed kill (YT-210) only moves
+            // the Level by skipping the clock forward, so drive it through RunLengthSeconds/the
+            // derived rate rather than pinning EscalationRate to zero.
             DevTuning.EscalationStart = 0f;
-            DevTuning.EscalationRate = 0f;
-            DevTuning.EscalationPerShedBump = 1f;
             DevTuning.EscalationMax = 1f;
+            DevTuning.RunLengthSeconds = 1000f;
+            DevTuning.EscalationPerShedBump = 1000f; // one shed's skip == the whole run length
             DevTuning.StartingRobots = 1f;
             DevTuning.SpawnInterval = 0.02f;
 

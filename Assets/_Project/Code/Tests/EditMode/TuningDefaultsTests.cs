@@ -38,8 +38,13 @@ namespace MaxWorlds.Tests.EditMode
         public void TheYT200AuthoredDefaultsAreLeesNumbers()
         {
             Assert.That(FixedAngleCameraRig.PhoneDistance, Is.EqualTo(16.1f).Within(0.001f), "camera zoom");
-            Assert.That(DifficultyDirector.AuthoredRatePerSecond, Is.EqualTo(0.011f).Within(0.0001f), "escalation rate");
-            Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(4.995f).Within(0.001f), "shed level bump");
+            // YT-210: the escalation rate is now DERIVED from Max/RunLengthSeconds rather than
+            // hand-tuned, and the shed bump is a clock skip in seconds rather than a level bump.
+            Assert.That(DifficultyDirector.AuthoredRatePerSecond,
+                Is.EqualTo(DifficultyDirector.AuthoredMax / DifficultyDirector.AuthoredRunLengthSeconds).Within(0.0001f),
+                "escalation rate");
+            Assert.That(DifficultyDirector.AuthoredRunLengthSeconds, Is.EqualTo(360f).Within(0.001f), "run length");
+            Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(180f).Within(0.001f), "shed clock skip");
             Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.42f).Within(0.001f), "robot health");
             Assert.That(WaterBlaster.DefaultHydroDrainRate, Is.EqualTo(0.53f).Within(0.001f), "hydro drain");
             Assert.That(PickupDirector.DefaultPartInterval, Is.EqualTo(7.98f).Within(0.001f), "part pacing");
