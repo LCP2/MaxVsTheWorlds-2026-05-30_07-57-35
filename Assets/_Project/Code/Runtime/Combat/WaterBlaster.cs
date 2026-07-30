@@ -220,13 +220,14 @@ namespace MaxWorlds.Combat
         /// YT-200: Lee's on-device number (was 0.5).</summary>
         public const float DefaultHydroDrainRate = 0.53f;
 
-        /// <summary>True when the water is coming from the Hydro condenser (Hydro installed and Max is
-        /// off a tap), not a tap (YT-137). Then power cells fuel it instead of the YT-106 economy.</summary>
+        /// <summary>True when the water is coming from the Hydro condenser (a burst is active and Max
+        /// is off a tap), not a tap (YT-137/YT-215). Then power cells fuel it instead of the YT-106
+        /// economy.</summary>
         private bool HydroActive
         {
             get
             {
-                if (!UpgradeState.Untethered) return false;
+                if (!HydroBurst.Active) return false;
                 if (_tether == null) _tether = GetComponent<HoseTether>();
                 return _tether == null || !_tether.OnTap;
             }

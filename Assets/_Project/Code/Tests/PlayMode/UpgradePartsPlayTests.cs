@@ -15,8 +15,9 @@ namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
     /// The five parts applied to the live game (YT-133): installing one re-fits the weapon or the
-    /// player on the spot, the Hydro device cuts the leash, the drop table hands out five distinct
-    /// parts, and the upgrade screen's dismiss is what installs the effect.
+    /// player on the spot, the Hydro burst (YT-215) frees Max from the leash for a timed window then
+    /// snaps it back, the drop table hands out five distinct parts, and the upgrade screen's dismiss
+    /// is what installs the effect.
     /// </summary>
     public sealed class UpgradePartsPlayTests
     {
@@ -26,6 +27,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator SetUp()
         {
             UpgradeState.Reset();
+            HydroBurst.Reset();
             PickupWallet.Reset();
             Time.timeScale = 1f;
             yield return null;
@@ -42,6 +44,7 @@ namespace MaxWorlds.Tests.PlayMode
                 Object.Destroy(t.gameObject);
             yield return null;
             UpgradeState.Reset();   // critical: don't leak installs into other test classes
+            HydroBurst.Reset();
             PickupWallet.Reset();
             DevTuning.Reset();
             Time.timeScale = 1f;
@@ -100,7 +103,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheHydroDeviceUntethersMax()
+        public IEnumerator AssemblingHydroAloneDoesNotUntetherMax()
         {
             var tap = Tap.Create("Tap", Vector3.zero);
             _spawned.Add(tap.gameObject);
@@ -119,16 +122,68 @@ namespace MaxWorlds.Tests.PlayMode
                 "the condenser alone has no mount to clip into — Max should stay tethered");
 
             UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly
-            yield return null;   // LateUpdate sees Untethered and detaches
+            yield return null;
 
-            // Bolt far past the old leash. Untethered, nothing reels him in.
+            // Assembling (YT-215) only unlocks the burst BUTTON now — it must not, by itself, cut the
+            // leash the way the old permanent untether did.
+            Assert.That(HydroBurst.Active, Is.False, "assembly alone must not start a burst");
+
+            max.transform.position = new Vector3(0f, 1f, 100f);
+            yield return null;
+
+            float dist = new Vector2(max.transform.position.x, max.transform.position.z).magnitude;
+            Assert.That(dist, Is.LessThanOrEqualTo(HoseTether.AuthoredLength + 0.5f),
+                "with no burst active the leash must still clamp him, even fully assembled");
+        }
+
+        [UnityTest]
+        public IEnumerator TriggeringTheBurstUntethersMax_ThenSnapsBackOnTimeout()
+        {
+            DevTuning.HydroBurstSeconds = 0.2f;     // short, so the test doesn't wait 10 real seconds
+            DevTuning.HydroBurstCooldown = 0.1f;
+
+            var tap = Tap.Create("Tap", Vector3.zero);
+            _spawned.Add(tap.gameObject);
+
+            var max = new GameObject("Max");
+            _spawned.Add(max);
+            max.AddComponent<CharacterController>();
+            var tether = max.AddComponent<HoseTether>();
+            max.transform.position = Vector3.zero;
+            tether.SetTap(tap);
+            yield return null;
+
+            UpgradeState.Install(PartKind.Hydro);
+            UpgradeState.Install(PartKind.AugmentationHarness);
+            yield return null;
+
+            HydroBurst.Trigger();
+            yield return null;   // LateUpdate sees Active and detaches
+
+            // Bolt far past the leash. Bursting, nothing reels him in.
             max.transform.position = new Vector3(0f, 1f, 100f);
             yield return null;
 
             float dist = new Vector2(max.transform.position.x, max.transform.position.z).magnitude;
             Assert.That(dist, Is.GreaterThan(HoseTether.AuthoredLength + 5f),
-                "with the Hydro device installed the leash must be gone — Max roams free");
-            Assert.That(tether.Tap, Is.Null, "the hose should have detached from the tap");
+                "while the burst is active the leash must be gone — Max roams free");
+            Assert.That(tether.Tap, Is.Null, "the hose should have detached from the tap while out of range");
+
+            // Wait out the (shortened) burst so it snaps back.
+            float t = 0f;
+            while (HydroBurst.Active && t < 2f) { t += Time.deltaTime; yield return null; }
+            Assert.That(HydroBurst.Active, Is.False, "the burst must end on its own");
+
+            // He's still 100 m out — past PlugRange of the only tap — when the timer runs out. The
+            // snap-back must re-anchor him to the nearest tap regardless of range and clamp him back
+            // in, with no manual walk-back required and no softlock (YT-215 acceptance).
+            yield return null;
+            yield return null;
+
+            Assert.That(tether.Tap, Is.Not.Null, "the burst ending must re-leash Max to a tap, not leave him stranded");
+            float distAfter = new Vector2(max.transform.position.x, max.transform.position.z).magnitude;
+            Assert.That(distAfter, Is.LessThanOrEqualTo(HoseTether.AuthoredLength + 0.5f),
+                "once the burst ends the leash must clamp him back in immediately, with no softlock");
         }
 
         [UnityTest]

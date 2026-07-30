@@ -378,6 +378,14 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.HydroDrainRate, WaterBlaster.DefaultHydroDrainRate),
                 v => DevTuning.HydroDrainRate = v, tab: 1);
 
+            Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
+                () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),
+                v => DevTuning.HydroBurstSeconds = v, tab: 1);
+
+            Add("Hydro cooldown", "s", 5f, 90f, HydroBurst.AuthoredCooldown,
+                () => DevTuning.Or(DevTuning.HydroBurstCooldown, HydroBurst.AuthoredCooldown),
+                v => DevTuning.HydroBurstCooldown = v, tab: 1);
+
             Add("Cell capacity", "cells", 5f, 60f, PickupWallet.DefaultCapacity,
                 () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.DefaultCapacity),
                 v => DevTuning.PowerCellCapacity = v, tab: 1);
