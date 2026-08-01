@@ -192,7 +192,7 @@ namespace MaxWorlds.Bosses
                 float dz = f.Pickup.transform.position.z - m.z;
                 if (dx * dx + dz * dz > r2) continue;
 
-                PickupWallet.AddPart(f.Pickup.Part);
+                PickupWallet.AddPart();   // a fungible token now, no identity to bank (WV-228)
                 UpgradePart part = UpgradeCatalog.For(f.Pickup.Part);
                 HudSignals.EmitPickup(f.Pickup.transform.position, part.Name, part.Accent);
 

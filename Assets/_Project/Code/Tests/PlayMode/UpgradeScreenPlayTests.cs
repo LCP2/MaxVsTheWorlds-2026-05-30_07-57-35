@@ -17,7 +17,6 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _screenGo;
         private GameObject _hudGo;
-        private GameObject _directorGo;   // YT-207: a PickupDirector, only for the tests that need its shared drop table
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -40,7 +39,6 @@ namespace MaxWorlds.Tests.PlayMode
             Time.timeScale = 1f;   // never leave the world frozen for the next test
             if (_screenGo != null) Object.Destroy(_screenGo);
             if (_hudGo != null) Object.Destroy(_hudGo);
-            if (_directorGo != null) Object.Destroy(_directorGo);
             PickupWallet.Reset();
             UpgradeState.Reset();
             yield return null;
@@ -59,7 +57,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OpeningPausesTheGameAndShowsThePart()
         {
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
 
             Screen.Open(UpgradePart.Generic);
             yield return null;
@@ -70,11 +68,11 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ContinueInstallsThePartAndResumes()
+        public IEnumerator ContinueSpendsTheBankedPartAndResumes()
         {
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(1));
+            PickupWallet.AddPart();
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1));
 
             Screen.Open(UpgradePart.Generic);
             yield return null;
@@ -83,14 +81,14 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(Screen.IsOpen, Is.False, "the screen didn't close");
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the game must resume to its previous speed on dismiss");
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(0), "dismissing must install (spend) the pending part");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "dismissing must spend the banked part");
         }
 
         [UnityTest]
         public IEnumerator ItRestoresWhateverTimescaleItPausedFrom()
         {
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
 
             Time.timeScale = 0.5f;   // e.g. a slow-mo beat
             Screen.Open(UpgradePart.Generic);
@@ -191,7 +189,7 @@ namespace MaxWorlds.Tests.PlayMode
             _hudGo.AddComponent<HudController>();
             yield return null;
 
-            PickupWallet.AddPart(PartKind.BeamNozzle);   // raises the pending-part badge
+            PickupWallet.AddPart();   // raises the part badge
             yield return null;
 
             // Find the WEAPONS button (YT-178: it's always there now, not just the chip) and tap it,
@@ -326,20 +324,23 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OpenStatusDoesNotInstallOrSpendAnything()
         {
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);   // left pending on purpose
+            PickupWallet.AddPart();   // left banked on purpose
 
             Screen.OpenStatus();
             yield return null;
             Screen.Continue();
             yield return null;
 
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(1),
-                "opening the weapons area on demand must not spend a pending part");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1),
+                "opening the weapons area on demand must not spend a banked part");
             Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False,
                 "opening the weapons area on demand must not install anything");
         }
 
-        // ---------------------------------------------------------------- YT-207: draft-pick reveal
+        // ---------------------------------------------------------------- YT-207 shell: choice cards
+        // (kept only as a structural test of UpgradeScreen's OpenChoice/ChooseCandidate plumbing — the
+        // live draft-pick popup itself is retired by WV-228; HudController never opens choice mode
+        // anymore, see UpgradeScreenPlayTests below and HudController.OnWeaponsButtonTapped)
 
         private static Button FindButtonNamed(GameObject root, string name)
         {
@@ -370,7 +371,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TappingACardInstallsExactlyThatPartAndResumes()
         {
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);   // the front-of-wallet, already-collected candidate
+            PickupWallet.AddPart();
             var candidates = new[] { PartKind.BeamNozzle, PartKind.PowerNozzle, PartKind.WideBore };
 
             Screen.OpenChoice(candidates);
@@ -386,74 +387,26 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ChoosingTheAlreadyBankedCandidateSpendsIt()
+        public IEnumerator ChoosingACandidateSpendsOneBankedPart()
         {
+            // WV-228: parts are fungible tokens now — any confirmed choice spends the next banked part,
+            // there's no more per-kind matching against which candidate was "actually collected".
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
             Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
             yield return null;
 
-            FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();   // the banked part itself
+            FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();
             yield return null;
 
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(0),
-                "choosing the part that was actually collected must take it off the pending queue");
-        }
-
-        [UnityTest]
-        public IEnumerator ChoosingAMerelyPreviewedCandidateLeavesTheBankedOneStillPending()
-        {
-            // YT-207 AC: the two unpicked candidates stay available for a later draw. The front-of-wallet
-            // candidate was the one actually collected — if the player picks a DIFFERENT (merely
-            // previewed) one instead, the banked part must still be waiting next time the screen opens.
-            yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
-            Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle, PartKind.WideBore });
-            yield return null;
-
-            FindButtonNamed(_screenGo, "Choice Card 2").onClick.Invoke();   // WideBore — not the banked part
-            yield return null;
-
-            Assert.That(UpgradeState.IsInstalled(PartKind.WideBore), Is.True);
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(1),
-                "the banked-but-unpicked part must still be pending for a later reveal");
-            Assert.That(PickupWallet.TryPeekPart(out var stillPending), Is.True);
-            Assert.That(stillPending, Is.EqualTo(PartKind.BeamNozzle));
-        }
-
-        [UnityTest]
-        public IEnumerator ChoosingAPreviewedCandidateCommitsItFromTheSharedDropTable()
-        {
-            yield return NewScreen();
-            foreach (var d in Object.FindObjectsByType<PickupDirector>(FindObjectsSortMode.None))
-                Object.Destroy(d.gameObject);
-            yield return null;
-
-            _directorGo = new GameObject("PickupDirector");
-            var director = _directorGo.AddComponent<PickupDirector>();
-            yield return null;
-
-            var candidates = director.Table.PeekNext(3);
-            Assert.That(candidates.Length, Is.EqualTo(3));
-            PickupWallet.AddPart(candidates[0]);   // simulate the front one already collected
-
-            Screen.OpenChoice(candidates);
-            yield return null;
-            FindButtonNamed(_screenGo, "Choice Card 2").onClick.Invoke();   // a merely-previewed candidate
-            yield return null;
-
-            Assert.That(director.Table.Remaining, Is.EqualTo(UpgradeCatalog.AllKinds.Length - 1),
-                "only the chosen candidate should leave the shared drop table");
-            var stillInPool = director.Table.PeekNext(UpgradeCatalog.AllKinds.Length);
-            Assert.That(stillInPool, Has.No.Member(candidates[2]), "the chosen part must not be offered again");
-            Assert.That(stillInPool, Has.Member(candidates[1]), "the other unpicked preview must still be in the pool");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "confirming a choice must spend a banked part");
         }
 
         [UnityTest]
         public IEnumerator TappingTheScrimDuringAChoiceDoesNotInstallOrClose()
         {
             yield return NewScreen();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
             Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
             yield return null;
 

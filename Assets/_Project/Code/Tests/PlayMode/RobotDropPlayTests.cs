@@ -5,6 +5,7 @@ using UnityEngine.TestTools;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -129,7 +130,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(PickupWallet.PowerCells, Is.GreaterThan(0),
                 "walking onto the drop must bank power cells — walk-over collection, no button");
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(1), "and pick up the part");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "and pick up the part");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(0), "collected cells must leave the ground");
         }
 
@@ -183,6 +184,23 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1),
                 $"the first part should drop on the {interval}th kill");
+        }
+
+        [UnityTest]
+        public IEnumerator PartsKeepDroppingPastTheOldSevenPartCap()
+        {
+            // WV-228: parts are universal upgrade tokens now, not a five/seven-and-done unique table
+            // (YT-133) — a long run must be able to earn far more than the old catalog's size.
+            yield return NewDirector();
+            DevTuning.PartDropInterval = 1f;   // one part per kill
+
+            int total = UpgradeCatalog.AllKinds.Length;
+            for (int i = 0; i < total + 5; i++)
+                DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
+            yield return null;
+
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(total + 5),
+                "a part must drop on every paced kill, with no cap once the old catalog's kinds are exhausted");
         }
     }
 }

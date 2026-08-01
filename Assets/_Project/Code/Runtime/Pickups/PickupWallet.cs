@@ -1,17 +1,16 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Pickups
 {
     /// <summary>
-    /// The player's banked drops (YT-131/133). Power cells accumulate into a count the HUD shows — a
-    /// future currency with no gameplay use yet. Parts collected but not yet installed queue up in the
-    /// order they were picked up (dropped-part-decides — each carries which of the five it is); the
-    /// HUD flashes while any wait, and the upgrade screen installs them front-first.
+    /// The player's banked drops (YT-131, recut WV-228). Power cells accumulate into a count the HUD
+    /// shows — a future currency with no gameplay use yet. Parts are now universal upgrade tokens
+    /// (WV-228): a plain banked count, no identity, no auto-install and no draft-pick popup on
+    /// collection — replaces the old dropped-part-decides queue (YT-133/YT-207). Spending one against a
+    /// chosen owned track/ability lives in <see cref="MaxWorlds.Weapons.PartSpend"/>.
     ///
-    /// Static because there is exactly one player and the HUD, the pickups, and the upgrade screen all
+    /// Static because there is exactly one player and the HUD, the pickups, and the weapons area all
     /// need to see the same tally without threading a reference through the scene. Event-driven so the
     /// HUD reacts rather than polls. <see cref="Reset"/> exists for a new run and for test isolation.
     /// </summary>
@@ -20,21 +19,15 @@ namespace MaxWorlds.Pickups
         /// <summary>Banked power cells (display-only currency for now).</summary>
         public static int PowerCells { get; private set; }
 
-        // Parts waiting to be installed, oldest first — the upgrade screen takes them front-first.
-        private static readonly Queue<PartKind> s_parts = new Queue<PartKind>();
-
-        /// <summary>How many parts are collected but not yet installed (YT-132's chip shows while > 0).</summary>
-        public static int PartsPending => s_parts.Count;
-
-        /// <summary>The pending queue, oldest (front) first — a save slot persisting exactly what's
-        /// waiting, in the order the upgrade screen will install it (YT-151).</summary>
-        public static IEnumerable<PartKind> PendingParts => s_parts;
+        /// <summary>Banked parts (WV-228) — universal upgrade tokens, no identity. The HUD's chip shows
+        /// while > 0; the weapons area spends them one at a time against a chosen owned track/ability.</summary>
+        public static int PartsBanked { get; private set; }
 
         /// <summary>Fired when the power-cell count changes. Arg = the new total.</summary>
         public static event Action<int> PowerCellsChanged;
 
-        /// <summary>Fired when the pending-parts count changes. Arg = the new count. The HUD raises its
-        /// flashing edge icon off this (YT-131); the upgrade screen consumes them (YT-132/133).</summary>
+        /// <summary>Fired when the banked-parts count changes. Arg = the new count. The HUD raises its
+        /// flashing edge icon off this (YT-131); the weapons area spends them (WV-228).</summary>
         public static event Action<int> PartsChanged;
 
         /// <summary>Max power cells the reserve holds (YT-137) — the meter's full mark. Collecting past
@@ -72,29 +65,21 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
-        /// <summary>Bank a collected part of a specific kind (YT-133).</summary>
-        public static void AddPart(PartKind kind)
+        /// <summary>Bank one collected part (WV-228) — a fungible token, no identity to carry.</summary>
+        public static void AddPart()
         {
-            s_parts.Enqueue(kind);
-            PartsChanged?.Invoke(s_parts.Count);
+            PartsBanked++;
+            PartsChanged?.Invoke(PartsBanked);
         }
 
-        /// <summary>The next part to install (front of the queue), without removing it — what the
-        /// upgrade screen reveals. False if none pending.</summary>
-        public static bool TryPeekPart(out PartKind kind)
+        /// <summary>Consume one banked part (WV-228) — the weapons area calls this once a spend on a
+        /// chosen owned track/ability actually raises its level. No-op with nothing banked. Returns
+        /// true if one was actually spent.</summary>
+        public static bool TrySpendPart()
         {
-            if (s_parts.Count == 0) { kind = default; return false; }
-            kind = s_parts.Peek();
-            return true;
-        }
-
-        /// <summary>Consume the next pending part (the upgrade screen calls this once it's installed).
-        /// No-op with nothing pending. Returns true if one was actually spent.</summary>
-        public static bool SpendPart()
-        {
-            if (s_parts.Count == 0) return false;
-            s_parts.Dequeue();
-            PartsChanged?.Invoke(s_parts.Count);
+            if (PartsBanked <= 0) return false;
+            PartsBanked--;
+            PartsChanged?.Invoke(PartsBanked);
             return true;
         }
 
@@ -103,7 +88,7 @@ namespace MaxWorlds.Pickups
         public static void Reset()
         {
             PowerCells = 0;
-            s_parts.Clear();
+            PartsBanked = 0;
             PowerCellsChanged?.Invoke(0);
             PartsChanged?.Invoke(0);
         }

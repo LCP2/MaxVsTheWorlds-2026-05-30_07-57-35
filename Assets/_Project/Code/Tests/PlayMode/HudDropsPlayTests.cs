@@ -5,7 +5,6 @@ using UnityEngine.UI;
 using UnityEngine.TestTools;
 using MaxWorlds.UI;
 using MaxWorlds.Pickups;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -109,12 +108,12 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var alert = FindRect("Part Alert");
 
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
             yield return null;
             Assert.That(alert.gameObject.activeSelf, Is.True, "a collected part must raise the edge chip");
 
-            // And it clears once the upgrade flow spends the part (YT-132 will call SpendPart).
-            PickupWallet.SpendPart();
+            // And it clears once the weapons area spends the part (WV-228).
+            PickupWallet.TrySpendPart();
             yield return null;
             Assert.That(alert.gameObject.activeSelf, Is.False, "spending the part must clear the chip");
         }
@@ -127,7 +126,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheChipWearsABlackPartIcon_NotTextLabel()
         {
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
             yield return null;
 
             Image icon = null;
@@ -159,7 +158,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheRaisedChipIsTheCollectibleOrange_AndFlashes()
         {
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
             yield return null;
 
             Image chip = null;

@@ -8,16 +8,14 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Hose;
 using MaxWorlds.Pickups;
-using MaxWorlds.UI;
 using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The five parts applied to the live game (YT-133): installing one re-fits the weapon or the
-    /// player on the spot, the Hydro burst (YT-215) frees Max from the leash for a timed window then
-    /// snaps it back, the drop table hands out five distinct parts, and the upgrade screen's dismiss
-    /// is what installs the effect.
+    /// The five legacy parts applied to the live game (YT-133): installing one re-fits the weapon or
+    /// the player on the spot, and the Hydro burst (YT-215) frees Max from the leash for a timed
+    /// window then snaps it back.
     /// </summary>
     public sealed class UpgradePartsPlayTests
     {
@@ -186,54 +184,9 @@ namespace MaxWorlds.Tests.PlayMode
                 "once the burst ends the leash must clamp him back in immediately, with no softlock");
         }
 
-        [UnityTest]
-        public IEnumerator TheDropTableGivesEveryDistinctPartThenNoMore()
-        {
-            foreach (var d in Object.FindObjectsByType<PickupDirector>(FindObjectsSortMode.None))
-                Object.Destroy(d.gameObject);
-            yield return null;
-
-            var dir = new GameObject("PickupDirector");
-            _spawned.Add(dir);
-            dir.AddComponent<PickupDirector>();
-            yield return null;
-
-            int total = UpgradeCatalog.AllKinds.Length;
-            DevTuning.PartDropInterval = 1f;   // one part per kill, so total+1 kills exercises the whole table
-            for (int i = 0; i < total + 1; i++)   // one extra tough kill beyond the number of parts
-                DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
-            yield return null;
-
-            var parts = new HashSet<PartKind>();
-            foreach (var p in Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None))
-                if (p.gameObject.activeInHierarchy && p.Kind == PickupKind.Part) parts.Add(p.Part);
-
-            Assert.That(parts.Count, Is.EqualTo(total), "the level must drop every part, each exactly once");
-        }
-
-        [UnityTest]
-        public IEnumerator DismissingTheUpgradeScreenInstallsTheEffect()
-        {
-            foreach (var s in Object.FindObjectsByType<UpgradeScreen>(FindObjectsSortMode.None))
-                Object.Destroy(s.gameObject);
-            yield return null;
-
-            var screenGo = new GameObject("UpgradeScreen");
-            _spawned.Add(screenGo);
-            var screen = screenGo.AddComponent<UpgradeScreen>();
-            yield return null;
-
-            PickupWallet.AddPart(PartKind.PowerNozzle);
-            screen.Open(UpgradeCatalog.For(PartKind.PowerNozzle));
-            yield return null;
-            Assert.That(UpgradeState.IsInstalled(PartKind.PowerNozzle), Is.False, "not installed until dismissed");
-
-            screen.Continue();
-            yield return null;
-
-            Assert.That(UpgradeState.IsInstalled(PartKind.PowerNozzle), Is.True,
-                "dismissing the screen must install the part's effect");
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(0), "and take it off the pending queue");
-        }
+        // The drop table exhausting after five/seven distinct parts, and the screen's dismiss auto-
+        // installing whatever was banked, are the "dropped-part-decides" mechanics WV-228 replaces —
+        // see RobotDropPlayTests.PartsKeepDroppingPastTheOldSevenPartCap and UpgradeEffectsPlayTests
+        // (which still exercises Open/Continue's effect application per part) for their replacements.
     }
 }

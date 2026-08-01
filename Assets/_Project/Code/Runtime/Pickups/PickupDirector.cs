@@ -22,8 +22,10 @@ namespace MaxWorlds.Pickups
     /// every rusher death rolls a tunable chance for a single cell — "not every robot need drop one,"
     /// per the ticket, hence a roll rather than a second guarantee.
     ///
-    /// The specific part identities and the guaranteed-unique drop table are YT-133 — here a part is
-    /// generic, and <see cref="OnRobotDied"/> is where that table will slot in.
+    /// Parts are now universal upgrade tokens (WV-228): every paced drop banks, there is no longer a
+    /// guaranteed-unique table to run dry against (YT-133's old <c>PartDropTable</c> is retired from
+    /// this loop). A dropped part's <see cref="MaxWorlds.Upgrades.PartKind"/> is purely cosmetic now —
+    /// it only steers <c>PickupArtDirector</c>'s occasional Hydro-device swap.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -57,14 +59,8 @@ namespace MaxWorlds.Pickups
         private readonly List<Pickup> _live = new List<Pickup>(32);
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
-        // The unique drop table (YT-133): the five parts, each dispensed exactly once across the level.
-        private readonly MaxWorlds.Upgrades.PartDropTable _table = new MaxWorlds.Upgrades.PartDropTable();
         private Transform _max;
         private int _bruiserKills;
-
-        /// <summary>The shared drop table (YT-207): the draft-pick reveal peeks/commits against this
-        /// same instance so an unpicked preview candidate truly stays in the pool for a later draw.</summary>
-        public MaxWorlds.Upgrades.PartDropTable Table => _table;
 
         private void OnEnable() => DropSignals.RobotDied += OnRobotDied;
         private void OnDisable() => DropSignals.RobotDied -= OnRobotDied;
@@ -82,14 +78,14 @@ namespace MaxWorlds.Pickups
 
             _bruiserKills++;
 
-            // Pace the parts (YT-143): one every Nth tough kill, so the five spread across the level
-            // instead of arriving in the first five kills. Cells (below) still drop every kill. Once
-            // all five parts are out, only cells drop.
+            // Pace the parts (YT-143): one every Nth tough kill, so they spread across the level
+            // instead of arriving all at once. Cells (below) still drop every kill. Parts are now
+            // universal tokens (WV-228) — there is no cap on how many can drop across a run, unlike the
+            // old five-and-done unique table.
             int interval = Mathf.Max(1, Mathf.RoundToInt(
                 DevTuning.Or(DevTuning.PartDropInterval, DefaultPartInterval)));
-            if (_bruiserKills % interval == 0
-                && _table.TryNext(out MaxWorlds.Upgrades.PartKind part))
-                SpawnDrop(PickupKind.Part, pos, part);
+            if (_bruiserKills % interval == 0)
+                SpawnDrop(PickupKind.Part, pos, DecorativeKind());
 
             for (int i = 0; i < CellsPerDrop; i++)
             {
@@ -98,6 +94,13 @@ namespace MaxWorlds.Pickups
                 SpawnDrop(PickupKind.PowerCell, pos + off);
             }
         }
+
+        /// <summary>A cosmetic-only flavour for a dropped part (WV-228) — parts carry no gameplay
+        /// identity anymore, but <c>PickupArtDirector</c> still swaps in the Hydro device's art for
+        /// <see cref="MaxWorlds.Upgrades.PartKind.Hydro"/>, so cycling through the old catalog keeps
+        /// that variety alive instead of every part looking identical forever.</summary>
+        private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
+            MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_bruiserKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
         private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default)
         {
@@ -138,9 +141,8 @@ namespace MaxWorlds.Pickups
             }
             else
             {
-                PickupWallet.AddPart(p.Part);   // banked with which of the five it is (YT-133)
-                var part = MaxWorlds.Upgrades.UpgradeCatalog.For(p.Part);
-                HudSignals.EmitPickup(p.transform.position, part.Name, part.Accent);
+                PickupWallet.AddPart();   // a fungible token now, no identity to bank (WV-228)
+                HudSignals.EmitPickup(p.transform.position, "+1 PART", MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
             }
 
             p.gameObject.SetActive(false);

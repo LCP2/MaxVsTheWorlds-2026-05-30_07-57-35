@@ -210,40 +210,23 @@ namespace MaxWorlds.UI
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
         }
 
-        private void OnParts(int pending)
+        private void OnParts(int banked)
         {
-            // The chip is shown while any part is waiting to be installed (YT-131). It flashes in
-            // Update; here we just toggle its presence. YT-132's upgrade screen spends the part.
-            if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(pending > 0);
+            // The chip is shown while any part is banked and unspent (YT-131). It flashes in Update;
+            // here we just toggle its presence. The weapons area spends parts one at a time (WV-228).
+            if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(banked > 0);
         }
 
-        /// <summary>Tapping the WEAPONS button (YT-178): opens the draft-pick reveal (YT-207) for
-        /// whatever part is waiting at the front of the pending queue (YT-132/133) plus a peek at the
-        /// next couple still undispensed in the drop table, so there's a real "1 of up to 3" choice
-        /// rather than an auto-install; otherwise opens the weapons area to show Max's current loadout
-        /// on demand — the button is always-available access now, not gated on a part being pending.</summary>
+        /// <summary>Tapping the WEAPONS button (YT-178) opens the weapons area to show Max's current
+        /// loadout on demand — the button is always-available access, not gated on a part being banked.
+        /// Parts are universal upgrade tokens now (WV-228): there is no more draft-pick reveal
+        /// (YT-207) to choose from on pickup — spending a banked part happens inside the weapons area.</summary>
         private void OnWeaponsButtonTapped()
         {
             var screen = FindFirstObjectByType<UpgradeScreen>();
             if (screen == null) return;
 
-            if (MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var pending))
-            {
-                var director = FindFirstObjectByType<MaxWorlds.Pickups.PickupDirector>();
-                var preview = director != null
-                    ? director.Table.PeekNext(2)
-                    : System.Array.Empty<MaxWorlds.Upgrades.PartKind>();
-
-                var candidates = new MaxWorlds.Upgrades.PartKind[1 + preview.Length];
-                candidates[0] = pending;
-                for (int i = 0; i < preview.Length; i++) candidates[i + 1] = preview[i];
-
-                screen.OpenChoice(candidates);
-            }
-            else
-            {
-                screen.OpenStatus();
-            }
+            screen.OpenStatus();
         }
 
         private void OnBossRegistered() => _model.UseExternalBoss();
@@ -1211,7 +1194,7 @@ namespace MaxWorlds.UI
             Stretch(_partAlertIcon.rectTransform, -8f);   // inset from the badge edge
             _partAlertIcon.raycastTarget = false;
 
-            _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsPending > 0);
+            _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsBanked > 0);
         }
 
         private void BuildFloatingLayer()

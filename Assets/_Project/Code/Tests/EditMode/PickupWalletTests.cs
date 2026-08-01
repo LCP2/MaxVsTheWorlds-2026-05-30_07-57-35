@@ -1,14 +1,13 @@
 using NUnit.Framework;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The banked-drops tally behind the HUD counter and the upgrade flow (YT-131): power cells
-    /// accumulate, parts accumulate as pending upgrades, and both fire a change event so the HUD
-    /// reacts rather than polls.
+    /// The banked-drops tally behind the HUD counter and the weapons area (YT-131, recut WV-228):
+    /// power cells and parts both accumulate as a plain count and fire a change event so the HUD
+    /// reacts rather than polls. Parts carry no identity — they're universal upgrade tokens.
     /// </summary>
     public sealed class PickupWalletTests
     {
@@ -40,12 +39,12 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void PartsAccumulateAsPending()
+        public void PartsAccumulateAsABankedCount()
         {
-            PickupWallet.AddPart(PartKind.BeamNozzle);
-            PickupWallet.AddPart(PartKind.BeamNozzle);
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(2),
-                "each collected part is a pending upgrade until the upgrade screen (YT-132) spends it");
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(2),
+                "each collected part banks as a fungible upgrade token (WV-228)");
         }
 
         [Test]
@@ -56,20 +55,20 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.PartsChanged += Handler;
             try
             {
-                PickupWallet.AddPart(PartKind.BeamNozzle);
+                PickupWallet.AddPart();
                 Assert.That(seen, Is.EqualTo(1), "the flashing edge icon is raised off this event");
             }
             finally { PickupWallet.PartsChanged -= Handler; }
         }
 
         [Test]
-        public void SpendingAPartDecrementsPending_AndIsANoOpWhenEmpty()
+        public void SpendingAPartDecrementsTheBank_AndIsANoOpWhenEmpty()
         {
-            Assert.That(PickupWallet.SpendPart(), Is.False, "there's nothing to spend yet");
-            PickupWallet.AddPart(PartKind.BeamNozzle);
-            Assert.That(PickupWallet.SpendPart(), Is.True);
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(0), "spending the only pending part clears it");
-            Assert.That(PickupWallet.SpendPart(), Is.False, "and can't be spent below zero");
+            Assert.That(PickupWallet.TrySpendPart(), Is.False, "there's nothing to spend yet");
+            PickupWallet.AddPart();
+            Assert.That(PickupWallet.TrySpendPart(), Is.True);
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "spending the only banked part clears it");
+            Assert.That(PickupWallet.TrySpendPart(), Is.False, "and can't be spent below zero");
         }
 
         [Test]
@@ -109,22 +108,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void PendingPartsPreservesFrontFirstOrder()
-        {
-            PickupWallet.AddPart(PartKind.BeamNozzle);
-            PickupWallet.AddPart(PartKind.Hydro);
-            Assert.That(PickupWallet.PendingParts, Is.EqualTo(new[] { PartKind.BeamNozzle, PartKind.Hydro }),
-                "a save slot (YT-151) must persist the queue in install order, oldest first");
-        }
-
-        [Test]
         public void ResetClearsBothTallies()
         {
             PickupWallet.AddPowerCell();
-            PickupWallet.AddPart(PartKind.BeamNozzle);
+            PickupWallet.AddPart();
             PickupWallet.Reset();
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
-            Assert.That(PickupWallet.PartsPending, Is.EqualTo(0));
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0));
         }
     }
 }

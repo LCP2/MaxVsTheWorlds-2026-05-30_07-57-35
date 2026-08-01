@@ -273,9 +273,8 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>A card was tapped (YT-207): install exactly that part, take it off the pending queue
-        /// only if it's the one already banked there (the other, merely-previewed candidates were never
-        /// banked), commit it out of the drop table's pool so it can't be offered again, then resume.</summary>
+        /// <summary>A card was tapped: install exactly that part and spend one banked part (WV-228 —
+        /// parts are fungible tokens now, so any confirm just spends the next one), then resume.</summary>
         private void ChooseCandidate(int index)
         {
             if (!_open || !_choiceMode) return;
@@ -289,15 +288,7 @@ namespace MaxWorlds.UI
 
             UpgradeState.Install(chosen);
             CommitToLiveWeapon();
-
-            // Only the front-of-wallet candidate was actually collected and banked; the others were
-            // previews still sitting in the drop table's pool. Spend the wallet entry only if that's
-            // the one chosen — otherwise it stays pending for the next reveal.
-            if (MaxWorlds.Pickups.PickupWallet.TryPeekPart(out var pending) && pending == chosen)
-                MaxWorlds.Pickups.PickupWallet.SpendPart();
-
-            var director = FindFirstObjectByType<MaxWorlds.Pickups.PickupDirector>();
-            if (director != null) director.Table.Commit(chosen);
+            MaxWorlds.Pickups.PickupWallet.TrySpendPart();
 
             _root.SetActive(false);
         }
@@ -318,7 +309,7 @@ namespace MaxWorlds.UI
             {
                 UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
                 CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
-                PickupWallet.SpendPart();
+                PickupWallet.TrySpendPart();
             }
             _root.SetActive(false);
         }
