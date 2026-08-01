@@ -216,9 +216,11 @@ namespace MaxWorlds.Combat
 
         private HoseTether _tether;
         private float _hydroDrainAccum;
-        /// <summary>Power cells the Hydro condenser burns per second of spray, before any dev override.
-        /// YT-200: Lee's on-device number (was 0.5).</summary>
-        public const float DefaultHydroDrainRate = 0.53f;
+        /// <summary>Cells the primary weapon burns per MINUTE of spray, before any dev override or
+        /// Power Efficiency reduction (WV-227's economy recut — supersedes the old cells/sec number).
+        /// Today this only meters the Hydro condenser while untethered (YT-137); WV-233 generalises it
+        /// to all primary fire once the hose detaches from taps entirely.</summary>
+        public const float DefaultPrimaryCellsPerMin = 6f;
 
         /// <summary>True when the water is coming from the Hydro condenser (a burst is active and Max
         /// is off a tap), not a tap (YT-137/YT-215). Then power cells fuel it instead of the YT-106
@@ -287,10 +289,15 @@ namespace MaxWorlds.Combat
             _lastEmitting = emitting;
 
             // While it IS spraying on the condenser, the water is paid for in power cells — burn them
-            // for the time it's actually spraying, so the meter ticks down as it's used.
+            // for the time it's actually spraying, so the meter ticks down as it's used (WV-227).
             if (HydroActive && emitting)
             {
-                float rate = Mathf.Max(0f, DevTuning.Or(DevTuning.HydroDrainRate, DefaultHydroDrainRate));
+                float perMin = Mathf.Max(0f, DevTuning.Or(DevTuning.PrimaryCellsPerMin, DefaultPrimaryCellsPerMin));
+                // Power Efficiency ability doesn't exist yet (WV-231) — level is always 0 (no
+                // reduction) until that ticket wires a real ability level in here.
+                float efficiency = CellEconomyTuning.EfficiencyMultiplier(0,
+                    DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel));
+                float rate = (perMin / 60f) * efficiency;
                 _hydroDrainAccum += rate * dt;
                 while (_hydroDrainAccum >= 1f && PickupWallet.TrySpendPowerCell()) _hydroDrainAccum -= 1f;
             }

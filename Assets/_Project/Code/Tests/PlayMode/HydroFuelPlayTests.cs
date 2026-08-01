@@ -72,7 +72,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator BurstingHydroBurnsCellsAsItSprays()
         {
             AssembleAndBurst();
-            DevTuning.HydroDrainRate = 40f;   // fast, so the test drains in a moment
+            DevTuning.PrimaryCellsPerMin = 2400f;   // fast, so the test drains in a moment
             FillCells(10);
             yield return null;
 
@@ -87,7 +87,7 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var tap = Tap.Create("Tap", _max.transform.position);   // Max is standing on the tap
             AssembleAndBurst();
-            DevTuning.HydroDrainRate = 40f;
+            DevTuning.PrimaryCellsPerMin = 2400f;
             FillCells(10);
             yield return null;   // the tether plugs into the tap by proximity
 
@@ -120,7 +120,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator WithCellsTheHydroTankStaysSupplied()
         {
             AssembleAndBurst();
-            DevTuning.HydroDrainRate = 0.01f;   // barely drains, so cells last through the test
+            DevTuning.PrimaryCellsPerMin = 0.6f;   // barely drains, so cells last through the test
             FillCells(20);
             yield return null;
 

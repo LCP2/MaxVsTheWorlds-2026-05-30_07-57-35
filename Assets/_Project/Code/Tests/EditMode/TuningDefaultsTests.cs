@@ -46,7 +46,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(DifficultyDirector.AuthoredRunLengthSeconds, Is.EqualTo(360f).Within(0.001f), "run length");
             Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(180f).Within(0.001f), "shed clock skip");
             Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.42f).Within(0.001f), "robot health");
-            Assert.That(WaterBlaster.DefaultHydroDrainRate, Is.EqualTo(0.53f).Within(0.001f), "hydro drain");
+            Assert.That(WaterBlaster.DefaultPrimaryCellsPerMin, Is.EqualTo(6f).Within(0.001f),
+                "primary cell drain (WV-227 recut, cells/min — supersedes the old cells/sec number)");
             Assert.That(PickupDirector.DefaultPartInterval, Is.EqualTo(7.98f).Within(0.001f), "part pacing");
             Assert.That(EnemySpawner.DefaultSpawnIntervalPin, Is.EqualTo(3.996f).Within(0.001f), "spawn interval");
         }

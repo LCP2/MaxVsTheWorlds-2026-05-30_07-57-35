@@ -1,6 +1,7 @@
 using System;
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Player
@@ -43,6 +44,14 @@ namespace MaxWorlds.Player
 
         public float Current => _health;
         public float Normalized => Max > 0f ? _health / Max : 0f;
+
+        /// <summary>Incoming-damage multiplier while Max is weakened at 0 power cells (WV-227).</summary>
+        public const float DefaultWeakenedDamageMultiplier = 1.5f;
+
+        /// <summary>True with an empty power-cell reserve — Max is weakened until he collects more
+        /// (WV-227). Read live off <see cref="PickupWallet.PowerCells"/> rather than cached, so
+        /// refilling mid-fight un-weakens him on the very next hit.</summary>
+        public static bool IsWeakened => PickupWallet.PowerCells <= 0;
 
         /// <summary>
         /// Re-settle current HP against a max that just changed underneath it (YT-105). Raising the
@@ -98,7 +107,14 @@ namespace MaxWorlds.Player
             if (DevMode.IsInvincible) return;                      // dev/filming only; off by default (YT-60)
             if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
             if (_controller != null && _controller.IsInvulnerable) return; // dash dodge
-            _health = Mathf.Max(0f, _health - info.Amount);
+            float amount = info.Amount;
+            // Empty power-cell reserve leaves Max weakened until he collects more (WV-227) — incoming
+            // hits land harder.
+            if (IsWeakened)
+            {
+                amount *= Mathf.Max(1f, DevTuning.Or(DevTuning.WeakenedDamageMultiplier, DefaultWeakenedDamageMultiplier));
+            }
+            _health = Mathf.Max(0f, _health - amount);
             // Only a hit that LANDS stalls the regen. A hit dashed through costs Max nothing —
             // neither health nor his recovery — which is the reward a clean dodge should carry.
             _timeSinceDamage = 0f;

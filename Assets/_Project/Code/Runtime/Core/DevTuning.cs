@@ -82,8 +82,24 @@ namespace MaxWorlds.Core
         /// further across a level. Power cells drop on their own faster rate regardless.</summary>
         public static float? PartDropInterval { get; set; }
 
-        /// <summary>Power cells the Hydro device burns per second while untethered (YT-137).</summary>
-        public static float? HydroDrainRate { get; set; }
+        /// <summary>Cells the primary weapon burns per minute of use (WV-227) — today that's only
+        /// the Hydro condenser while untethered (YT-137); WV-233 generalises it to all primary fire.</summary>
+        public static float? PrimaryCellsPerMin { get; set; }
+
+        /// <summary>Cells a secondary-weapon (Water Balloon) activation costs (WV-227). Not yet spent
+        /// by anything — the secondary weapon itself is WV-231.</summary>
+        public static float? SecondaryCellsPerUse { get; set; }
+
+        /// <summary>Cells a special-ability (Dash/Teleport) activation costs (WV-227). Not yet spent
+        /// by anything — special abilities are WV-231.</summary>
+        public static float? SpecialAbilityCellsPerUse { get; set; }
+
+        /// <summary>Fraction each Power Efficiency ability level shaves off the three cell drains
+        /// above (WV-227). The ability itself doesn't exist yet (WV-230/231).</summary>
+        public static float? PowerEfficiencyReductionPerLevel { get; set; }
+
+        /// <summary>Incoming-damage multiplier while Max is weakened at 0 power cells (WV-227).</summary>
+        public static float? WeakenedDamageMultiplier { get; set; }
 
         /// <summary>How long the Hydro burst frees Max from the tap, seconds (YT-215) — the "free of
         /// the hose!" prize window, self-supplied and burning power cells the same as before.</summary>
@@ -196,9 +212,11 @@ namespace MaxWorlds.Core
             FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
-            PartDropInterval.HasValue || HydroDrainRate.HasValue ||
+            PartDropInterval.HasValue || PrimaryCellsPerMin.HasValue ||
             HydroBurstSeconds.HasValue || HydroBurstCooldown.HasValue || PowerCellCapacity.HasValue ||
             PowerCellDropChance.HasValue ||
+            SecondaryCellsPerUse.HasValue || SpecialAbilityCellsPerUse.HasValue ||
+            PowerEfficiencyReductionPerLevel.HasValue || WeakenedDamageMultiplier.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
             EscalationStart.HasValue || EscalationRate.HasValue || EscalationPerShedBump.HasValue ||
@@ -225,11 +243,15 @@ namespace MaxWorlds.Core
             BossVolleyWindup = null;
             HoseTetherLength = null;
             PartDropInterval = null;
-            HydroDrainRate = null;
+            PrimaryCellsPerMin = null;
             HydroBurstSeconds = null;
             HydroBurstCooldown = null;
             PowerCellCapacity = null;
             PowerCellDropChance = null;
+            SecondaryCellsPerUse = null;
+            SpecialAbilityCellsPerUse = null;
+            PowerEfficiencyReductionPerLevel = null;
+            WeakenedDamageMultiplier = null;
             NozzleConeMultiplier = null;
             PowerNozzleRange = null;
             RangeExtenderBonus = null;
@@ -275,11 +297,15 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(BossVolleyWindup), () => BossVolleyWindup, v => BossVolleyWindup = v),
             (PrefsPrefix + nameof(HoseTetherLength), () => HoseTetherLength, v => HoseTetherLength = v),
             (PrefsPrefix + nameof(PartDropInterval), () => PartDropInterval, v => PartDropInterval = v),
-            (PrefsPrefix + nameof(HydroDrainRate), () => HydroDrainRate, v => HydroDrainRate = v),
+            (PrefsPrefix + nameof(PrimaryCellsPerMin), () => PrimaryCellsPerMin, v => PrimaryCellsPerMin = v),
             (PrefsPrefix + nameof(HydroBurstSeconds), () => HydroBurstSeconds, v => HydroBurstSeconds = v),
             (PrefsPrefix + nameof(HydroBurstCooldown), () => HydroBurstCooldown, v => HydroBurstCooldown = v),
             (PrefsPrefix + nameof(PowerCellCapacity), () => PowerCellCapacity, v => PowerCellCapacity = v),
             (PrefsPrefix + nameof(PowerCellDropChance), () => PowerCellDropChance, v => PowerCellDropChance = v),
+            (PrefsPrefix + nameof(SecondaryCellsPerUse), () => SecondaryCellsPerUse, v => SecondaryCellsPerUse = v),
+            (PrefsPrefix + nameof(SpecialAbilityCellsPerUse), () => SpecialAbilityCellsPerUse, v => SpecialAbilityCellsPerUse = v),
+            (PrefsPrefix + nameof(PowerEfficiencyReductionPerLevel), () => PowerEfficiencyReductionPerLevel, v => PowerEfficiencyReductionPerLevel = v),
+            (PrefsPrefix + nameof(WeakenedDamageMultiplier), () => WeakenedDamageMultiplier, v => WeakenedDamageMultiplier = v),
             (PrefsPrefix + nameof(NozzleConeMultiplier), () => NozzleConeMultiplier, v => NozzleConeMultiplier = v),
             (PrefsPrefix + nameof(PowerNozzleRange), () => PowerNozzleRange, v => PowerNozzleRange = v),
             (PrefsPrefix + nameof(RangeExtenderBonus), () => RangeExtenderBonus, v => RangeExtenderBonus = v),

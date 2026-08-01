@@ -374,9 +374,27 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier),
                 v => DevTuning.AccelSpeed = v, tab: 1);
 
-            Add("Hydro drain", "/s", 0f, 3f, WaterBlaster.DefaultHydroDrainRate,
-                () => DevTuning.Or(DevTuning.HydroDrainRate, WaterBlaster.DefaultHydroDrainRate),
-                v => DevTuning.HydroDrainRate = v, tab: 1);
+            Add("Primary drain", "/m", 0f, 30f, WaterBlaster.DefaultPrimaryCellsPerMin,
+                () => DevTuning.Or(DevTuning.PrimaryCellsPerMin, WaterBlaster.DefaultPrimaryCellsPerMin),
+                v => DevTuning.PrimaryCellsPerMin = v, tab: 1);
+
+            // Secondary/special don't exist yet (WV-231 builds Water Balloon/Dash/Teleport) — these
+            // are settings only for now, ready for that ticket to spend (WV-227's economy spec §5/§9).
+            Add("Secondary cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSecondaryCellsPerUse,
+                () => DevTuning.Or(DevTuning.SecondaryCellsPerUse, CellEconomyTuning.DefaultSecondaryCellsPerUse),
+                v => DevTuning.SecondaryCellsPerUse = v, tab: 1);
+
+            Add("Special cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSpecialAbilityCellsPerUse,
+                () => DevTuning.Or(DevTuning.SpecialAbilityCellsPerUse, CellEconomyTuning.DefaultSpecialAbilityCellsPerUse),
+                v => DevTuning.SpecialAbilityCellsPerUse = v, tab: 1);
+
+            Add("Power efficiency", "x", 0f, 0.3f, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel,
+                () => DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel),
+                v => DevTuning.PowerEfficiencyReductionPerLevel = v, tab: 1);
+
+            Add("Weakened damage", "x", 1f, 3f, PlayerHealth.DefaultWeakenedDamageMultiplier,
+                () => DevTuning.Or(DevTuning.WeakenedDamageMultiplier, PlayerHealth.DefaultWeakenedDamageMultiplier),
+                v => DevTuning.WeakenedDamageMultiplier = v, tab: 1);
 
             Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
                 () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),
@@ -402,7 +420,7 @@ namespace MaxWorlds.UI
 
             // Hose leash length (YT-129). The tether reads this through DevTuning every frame, so the
             // slider needs no push — moving it re-leashes Max on the next LateUpdate. Lives on the
-            // Weapons tab (YT-196 audit): it's a hose knob, same as Hydro drain below.
+            // Weapons tab (YT-196 audit): it's a hose knob, same as the cell-economy knobs above.
             float tetherDefault = MaxWorlds.Hose.HoseTether.AuthoredLength;
             Add("Hose tether", "m", 6f, 40f, tetherDefault,
                 () => DevTuning.Or(DevTuning.HoseTetherLength, tetherDefault),

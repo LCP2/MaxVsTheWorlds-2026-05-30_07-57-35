@@ -90,11 +90,13 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(35),
-                "Eighteen Gameplay knobs, eleven Weapons-tab knobs, and six Boss-tab knobs (YT-196 " +
+            Assert.That(sliders.Length, Is.EqualTo(41),
+                "Eighteen Gameplay knobs, seventeen Weapons-tab knobs, and six Boss-tab knobs (YT-196 " +
                 "sorted Boss move speed/Boss health onto Boss, Hose tether onto Weapons, and Spawn " +
                 "interval onto Gameplay, by the Max/robots/arena/escalation vs hose/upgrade vs " +
-                "boss-only rule; YT-210 added Run length to the Invasion Level knobs) — 35 total.");
+                "boss-only rule; YT-210 added Run length to the Invasion Level knobs; WV-227 added the " +
+                "cell-economy knobs — Secondary/Special cost, Power efficiency, Weakened damage) — " +
+                "41 total.");
             yield return null;
         }
 
@@ -121,10 +123,12 @@ namespace MaxWorlds.Tests.PlayMode
                 "Level knobs (YT-181, plus Run length added at YT-210), the two death-throes surge " +
                 "knobs (YT-182), and the four swarm-pacing/spawn-cadence knobs (YT-194, plus Spawn " +
                 "interval moved from Weapons, YT-196)");
-            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(11),
+            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(17),
                 "the Weapons tab carries the hose/upgrade knobs: the upgrade/pacing/Hydro knobs, " +
-                "Range Extender and Wide-Bore (YT-164), Cell drop chance (YT-171), and Hose tether " +
-                "(moved from Gameplay, YT-196) — with Spawn interval moved out to Gameplay (YT-196)");
+                "Range Extender and Wide-Bore (YT-164), Cell capacity, Part pacing, Cell drop chance " +
+                "(YT-171), and Hose tether (moved from Gameplay, YT-196) — with Spawn interval moved " +
+                "out to Gameplay (YT-196) — plus WV-227's cell-economy knobs: Primary drain (renamed " +
+                "from Hydro drain), Secondary cost, Special cost, Power efficiency, Weakened damage");
             Assert.That(boss.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(6),
                 "the Boss tab carries the four brood-volley knobs (YT-157) plus Boss move speed and " +
                 "Boss health, moved off the Gameplay tab where they defaulted to (YT-196)");
