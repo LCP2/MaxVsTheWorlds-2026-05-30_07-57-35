@@ -114,16 +114,16 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>Three factories, each standing in a room of its own, spread down the run — so
         /// clearing them is a sequence you fight your way through, not one beat (YT-92, YT-148). The
-        /// third is the toolshed off the orchard's right, flanking the greenhouse on the left. A
-        /// fourth factory stands centrally in the lawn itself (YT-185) — it is not part of this
-        /// pocket sequence, so it is looked up by id rather than assumed to be absent.</summary>
+        /// third is the toolshed off the orchard's right, flanking the greenhouse on the left. The
+        /// central garden factory (YT-185) was removed in the v0.5 recut (WV-229) — sheds are now the
+        /// ability-unlock mechanic, not one more fixed source of pressure in the open lawn.</summary>
         [Test]
         public void TheShippedMap_HasThreeFactories_OneOffEachFightPocket()
         {
             MapData map = Shipped();
             var factories = MapValidation.Kind(map, EntityKind.Factory);
 
-            Assert.AreEqual(4, factories.Count, "the run does not have four sources of pressure");
+            Assert.AreEqual(3, factories.Count, "the run does not have three sources of pressure");
 
             MapEntity shed = map.Entity("mower_hutch");
             MapEntity greenhouse = map.Entity("greenhouse_hutch");
@@ -145,12 +145,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(toolshed.x, greenhouse.x,
                 "the toolshed is not on the orchard's opposite flank from the greenhouse");
 
-            // The central factory (YT-185) stands in the open lawn, not tucked in a fight pocket —
-            // that's what makes it the one Max sees the instant he walks in from the patio.
-            MapEntity central = map.Entity("central_hutch");
-            Assert.IsNotNull(central, "the central garden factory is missing (YT-185)");
-            Assert.AreEqual("lawn", map.ZoneAt(central.x, central.z)?.id,
-                "the central factory is not standing in the lawn");
+            Assert.IsNull(map.Entity("central_hutch"),
+                "the central garden factory should be gone (WV-229) — sheds now grant abilities " +
+                "instead of standing as a fixed fourth source of pressure");
         }
 
         [Test]
@@ -176,8 +173,8 @@ namespace MaxWorlds.Tests.EditMode
         /// <summary>The whole mission in one assertion: the gate into the boss arena is opened by
         /// destroying ALL the factories, and that is stated in the map rather than coded anywhere
         /// (YT-92, YT-148). One key would put the boss behind a door the player opens halfway
-        /// through. Four factories now that the central garden shed is a real one too (YT-185) — the
-        /// gate has to name it or the door opens while it is still standing.</summary>
+        /// through. Three factories since the central garden shed was removed (WV-229) — the gate
+        /// only names the ones still standing.</summary>
         [Test]
         public void TheShippedMap_OpensTheBossGateOnlyWhenEveryFactoryIsDown()
         {
@@ -185,7 +182,7 @@ namespace MaxWorlds.Tests.EditMode
             MapEntity gate = map.First(EntityKind.Gate);
 
             Assert.IsNotNull(gate);
-            Assert.AreEqual(4, gate.Keys.Length, "the boss gate is not waiting on all four factories");
+            Assert.AreEqual(3, gate.Keys.Length, "the boss gate is not waiting on all three factories");
 
             foreach (string key in gate.Keys)
             {

@@ -194,7 +194,7 @@
             "depth": 0.6,
             "shape": "box",
             "dressing": "none",
-            "opensOn": "mower_hutch, greenhouse_hutch, toolshed_hutch, central_hutch"
+            "opensOn": "mower_hutch, greenhouse_hutch, toolshed_hutch"
         },
         {
             "id": "big_bermuda",
@@ -338,18 +338,6 @@
             "depth": 4.5,
             "shape": "box",
             "dressing": "hedge",
-            "opensOn": ""
-        },
-        {
-            "id": "central_hutch",
-            "kind": "factory",
-            "x": 0.0,
-            "z": 19.0,
-            "width": 3.0,
-            "height": 2.0,
-            "depth": 3.0,
-            "shape": "box",
-            "dressing": "none",
             "opensOn": ""
         },
         {

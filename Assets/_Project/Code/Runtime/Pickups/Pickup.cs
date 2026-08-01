@@ -2,6 +2,7 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.Upgrades;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Pickups
 {
@@ -29,6 +30,11 @@ namespace MaxWorlds.Pickups
         /// <summary>For a part pickup (YT-133), which of the five it is — set by the director from the
         /// unique drop table when it's placed. Meaningless for a power cell.</summary>
         public PartKind Part { get; set; }
+
+        /// <summary>For a device pickup (WV-229), the ability it grants on collection — set by the
+        /// director from <see cref="MaxWorlds.Weapons.WeaponSystemState.Unacquired"/> when it's placed.
+        /// Meaningless for any other kind.</summary>
+        public AbilityKind Ability { get; set; }
 
         private Transform _spin;
         private float _baseY = FloatHeight;

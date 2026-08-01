@@ -193,9 +193,9 @@ namespace MaxWorlds.Tests.PlayMode
 
         /// <summary>
         /// The mission, proved from data: every factory, then the gate. Nothing wires these factories
-        /// to this gate except the map's <c>opensOn</c>, and nothing tells the gate it takes four keys
-        /// except the fact that the map named four — including the central garden shed, which is a
-        /// real factory now too (YT-185), not a landmark the gate can ignore.
+        /// to this gate except the map's <c>opensOn</c>, and nothing tells the gate it takes three keys
+        /// except the fact that the map named three — the central garden shed (YT-185) was removed
+        /// in the v0.5 recut (WV-229), so the gate only waits on the three left standing.
         ///
         /// The first kill NOT opening the gate is the assertion that matters. That is the difference
         /// between a run with a build-up and the one the playtest found — where you were through the
@@ -209,30 +209,23 @@ namespace MaxWorlds.Tests.PlayMode
             var door = _gate.GetComponent<Collider>();
             var gate = _gate.GetComponent<SubZoneGate>();
             Assert.IsTrue(door.enabled, "the boss gate should start closed");
-            Assert.AreEqual(4, gate.Keys, "the gate is not waiting on all four factories");
+            Assert.AreEqual(3, gate.Keys, "the gate is not waiting on all three factories");
 
             yield return Destroy(FactoryCensus.All[0]);
 
             Assert.IsTrue(door.enabled,
-                "the gate opened on the FIRST factory. Three are still standing and still spawning, " +
+                "the gate opened on the FIRST factory. Two are still standing and still spawning, " +
                 "and the player can walk past them to the boss.");
-            Assert.AreEqual(3, gate.KeysRemaining, "the gate did not count the first kill");
+            Assert.AreEqual(2, gate.KeysRemaining, "the gate did not count the first kill");
 
             yield return Destroy(FactoryCensus.All[1]);
 
             Assert.IsTrue(door.enabled,
-                "the gate opened on the SECOND factory. Two are still standing and still " +
-                "spawning, and the player can walk past them to the boss.");
-            Assert.AreEqual(2, gate.KeysRemaining, "the gate did not count the second kill");
+                "the gate opened on the SECOND factory. One is still standing and still " +
+                "spawning, and the player can walk past it to the boss.");
+            Assert.AreEqual(1, gate.KeysRemaining, "the gate did not count the second kill");
 
             yield return Destroy(FactoryCensus.All[2]);
-
-            Assert.IsTrue(door.enabled,
-                "the gate opened on the THIRD factory. The fourth is still standing and still " +
-                "spawning, and the player can walk past it to the boss.");
-            Assert.AreEqual(1, gate.KeysRemaining, "the gate did not count the third kill");
-
-            yield return Destroy(FactoryCensus.All[3]);
 
             Assert.IsFalse(door.enabled,
                 "the gate never opened — with every factory down, the run cannot be finished");
@@ -242,8 +235,8 @@ namespace MaxWorlds.Tests.PlayMode
         /// <summary>Big Bermuda sleeps through the first kill. A boss that woke on it would come
         /// through the gate while a factory was still pumping robots at the player's back. This is
         /// purely about the FactoryCensus wake path (YT-92); YT-210's Invasion Level clock is the
-        /// OTHER reason the boss can erupt, and is neutralised here so three shed kills' worth of
-        /// clock-skip can't accidentally trip it before the fourth factory falls.</summary>
+        /// OTHER reason the boss can erupt, and is neutralised here so shed-kill clock-skip can't
+        /// accidentally trip it before the last of the three factories falls.</summary>
         [UnityTest]
         public IEnumerator TheBossSleepsUntilTheLastFactoryFalls()
         {
@@ -256,15 +249,12 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsFalse(boss.Engaged, "the boss is awake before anything has been destroyed");
 
             yield return Destroy(FactoryCensus.All[0]);
-            Assert.IsFalse(boss.Engaged, "the boss woke on the first factory, with three still up");
+            Assert.IsFalse(boss.Engaged, "the boss woke on the first factory, with two still up");
 
             yield return Destroy(FactoryCensus.All[1]);
-            Assert.IsFalse(boss.Engaged, "the boss woke on the second factory, with two still up");
+            Assert.IsFalse(boss.Engaged, "the boss woke on the second factory, with one still up");
 
             yield return Destroy(FactoryCensus.All[2]);
-            Assert.IsFalse(boss.Engaged, "the boss woke on the third factory, with one still up");
-
-            yield return Destroy(FactoryCensus.All[3]);
             Assert.IsTrue(boss.Engaged, "the yard is clear and the boss never woke up");
         }
 
