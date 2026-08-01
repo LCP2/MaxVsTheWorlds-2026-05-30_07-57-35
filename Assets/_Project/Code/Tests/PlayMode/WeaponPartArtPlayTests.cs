@@ -106,23 +106,54 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator ThePowerCell_CarriesSpecularGlintsOnItsCasing()
         {
-            // YT-167: the soft additive Core band (YT-145) is the aura, not the glisten — Lee's playtest
-            // still read the shipped cell as flat because a halo isn't a specular highlight. Pin that the
-            // cell wears its own glint dots, separate from that Core, so this can't regress back to "just
-            // the aura" quietly.
+            // YT-167, extended WV-236: the soft additive Core band (YT-145) is the aura, not the glisten —
+            // Lee's playtest still read the shipped cell as flat because a halo isn't a specular
+            // highlight, and "shine and glisten like DIAMONDS" (WV-236) means several facets, not one
+            // pair. Pin that the cell wears four distinct glint dots, separate from the Core, so this
+            // can't regress back to "just the aura" — or back to two facets — quietly.
             _built = WeaponPartArt.Build(WeaponPartArt.Keys.PowerCell);
 
-            var glint0 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "0");
-            var glint1 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "1");
-            Assert.IsNotNull(glint0, "the power cell has no first glint dot.");
-            Assert.IsNotNull(glint1, "the power cell has no second glint dot.");
-            Assert.AreNotEqual(glint0.localPosition, glint1.localPosition,
-                "the two glints sit in the same spot — only one point on the casing would ever sparkle.");
+            var glints = new Transform[4];
+            for (int i = 0; i < 4; i++)
+            {
+                glints[i] = _built.transform.Find(WeaponPartArt.GlistenPrefix + i);
+                Assert.IsNotNull(glints[i], $"the power cell has no glint dot #{i}.");
+            }
+            for (int i = 0; i < 4; i++)
+                for (int j = i + 1; j < 4; j++)
+                    Assert.AreNotEqual(glints[i].localPosition, glints[j].localPosition,
+                        $"glints #{i} and #{j} sit in the same spot — one of the four facets would never sparkle.");
 
             var core = _built.transform.Find("Core");
             Assert.IsNotNull(core, "the cell lost its YT-145 aura core.");
-            Assert.AreNotEqual(core.localPosition, glint0.localPosition,
+            Assert.AreNotEqual(core.localPosition, glints[0].localPosition,
                 "a glint sits exactly on the aura core — it would read as one glow, not a distinct sparkle.");
+
+            yield return null;   // let the collider-strip Destroy() land before TearDown
+        }
+
+        [UnityTest]
+        public IEnumerator TheHydroDevice_ShimmersLikeTheCellOnItsCoils()
+        {
+            // WV-236: "the shed device shimmers like a cell" — same glint language as the power cell,
+            // riding the coil rings instead of the casing.
+            _built = WeaponPartArt.Build(WeaponPartArt.Keys.HydroDevice);
+
+            var glint0 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "0");
+            var glint1 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "1");
+            var glint2 = _built.transform.Find(WeaponPartArt.GlistenPrefix + "2");
+            Assert.IsNotNull(glint0, "the shed device has no first glint dot.");
+            Assert.IsNotNull(glint1, "the shed device has no second glint dot.");
+            Assert.IsNotNull(glint2, "the shed device has no third glint dot.");
+            Assert.AreNotEqual(glint0.localPosition, glint1.localPosition,
+                "two of the shed device's glints sit in the same spot.");
+            Assert.AreNotEqual(glint1.localPosition, glint2.localPosition,
+                "two of the shed device's glints sit in the same spot.");
+
+            var core = _built.transform.Find("Core");
+            Assert.IsNotNull(core, "the shed device lost its condensation core glow.");
+            Assert.AreNotEqual(core.localPosition, glint0.localPosition,
+                "a glint sits exactly on the core — it would read as one glow, not a distinct shimmer.");
 
             yield return null;   // let the collider-strip Destroy() land before TearDown
         }

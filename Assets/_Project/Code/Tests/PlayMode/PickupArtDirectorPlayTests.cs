@@ -11,13 +11,15 @@ namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
     /// The pickups wear their real art (YT-134/145), and YT-180 reversed the part-like-model direction
-    /// for the five parts: they stay their own greybox cube, just glowing and one consistent (non-brown)
-    /// colour, while the power cell still wears its swapped-in <see cref="WeaponPartArt"/> prop.
+    /// for four of the five parts: they stay their own greybox cube, just glowing and one consistent
+    /// (non-brown) colour, while the power cell still wears its swapped-in <see cref="WeaponPartArt"/>
+    /// prop. WV-236 puts the Hydro device ("the shed device") back on the swapped-prop side too — it has
+    /// to read as a distinct "new weapon/ability" find, not another grey box.
     ///
-    /// The load-bearing assertions here are that a part pickup is NEVER given a PartArt: child (no
-    /// regression back to the reverted direction), that its own box stays visible and lit, that the cell
-    /// still gets its dedicated prop with the greybox hidden underneath, and that every pickup — box or
-    /// prop — carries the shared pulsing collectible glow.
+    /// The load-bearing assertions here are that a non-Hydro part pickup is NEVER given a PartArt: child
+    /// (no regression back to the fully-reverted direction), that its own box stays visible and lit, that
+    /// the cell and the Hydro device get their dedicated props with the greybox hidden underneath, and
+    /// that every pickup — box or prop — carries the shared pulsing collectible glow.
     /// </summary>
     public sealed class PickupArtDirectorPlayTests
     {
@@ -72,15 +74,14 @@ namespace MaxWorlds.Tests.PlayMode
         private static Transform GlowOf(Pickup p) => p.transform.Find("CollectibleGlow");
 
         [UnityTest]
-        public IEnumerator PartPickups_StayBoxes_WithNoPropSwap()
+        public IEnumerator NonHydroPartPickups_StayBoxes_WithNoPropSwap()
         {
             var beam = MakePart(PartKind.BeamNozzle);
             var harness = MakePart(PartKind.AugmentationHarness);
-            var hydro = MakePart(PartKind.Hydro);
 
             yield return InstallDirector();
 
-            foreach (var p in new[] { beam, harness, hydro })
+            foreach (var p in new[] { beam, harness })
             {
                 Assert.IsNull(ArtOf(p), $"{p.Part} was given a PartArt: prop — YT-180 reverted parts to boxes.");
 
@@ -89,6 +90,67 @@ namespace MaxWorlds.Tests.PlayMode
                 Assert.IsTrue(visual.GetComponent<MeshRenderer>().enabled,
                     $"{p.Part}'s box is hidden — it has to stay visible now that nothing replaces it.");
             }
+        }
+
+        [UnityTest]
+        public IEnumerator HydroDevice_GetsItsSwappedProp_BiggerThanTheCell_WithGreyboxHidden()
+        {
+            // WV-236: "the shed device" is the Hydro part's ground pickup — it goes back on the
+            // swapped-prop side of the YT-180 split, sized a chunk bigger than the cell so it reads as
+            // the special "new weapon/ability" find it is.
+            var hydro = MakePart(PartKind.Hydro);
+            var cell = MakeCell();
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(hydro);
+            Assert.IsNotNull(art, "the shed device (Hydro) got no PartArt: prop — WV-236 needs it swapped in.");
+            Assert.IsTrue(art.name.EndsWith(WeaponPartArt.Keys.HydroDevice),
+                $"the shed device wears '{art.name}', expected the Hydro device prop.");
+
+            var visual = hydro.transform.Find("Visual");
+            Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
+                "the greybox stand-in is still drawn under the shed device's real prop — you'd see both.");
+
+            Transform cellArt = ArtOf(cell);
+            Assert.IsNotNull(cellArt, "the power cell got no art model.");
+            Assert.Greater(art.localScale.x, cellArt.localScale.x,
+                "the shed device isn't scaled up over the cell — it should read a chunk bigger.");
+        }
+
+        [UnityTest]
+        public IEnumerator HydroDevice_GlintsShimmerOnItsCoils()
+        {
+            // Mirrors PowerCell_GlintsFlickerOnTheCasing: the shed device has to actually shimmer, not
+            // just sit at its build-time glint colour.
+            var hydro = MakePart(PartKind.Hydro);
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(hydro);
+            Assert.IsNotNull(art, "the shed device got no art model.");
+
+            var glint = art.Find(WeaponPartArt.GlistenPrefix + "0");
+            Assert.IsNotNull(glint, "the shed device's art has no glint dot to animate.");
+            var r = glint.GetComponent<MeshRenderer>();
+            int baseColorId = Shader.PropertyToID("_BaseColor");
+
+            Color ColorAt()
+            {
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                return mpb.GetColor(baseColorId);
+            }
+
+            Color c0 = ColorAt();
+            bool changed = false;
+            for (int i = 0; i < 8; i++)
+            {
+                yield return null;
+                if (ColorAt() != c0) { changed = true; break; }
+            }
+
+            Assert.IsTrue(changed, "the shed device's glint never changes brightness — it isn't shimmering.");
         }
 
         [UnityTest]

@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
+using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.VFX
 {
@@ -10,9 +11,11 @@ namespace MaxWorlds.VFX
     ///
     /// YT-131/133 drop the pickups as greybox stand-ins — a cyan sphere for a power cell and, for a
     /// PART, a single cube that is the SAME for all five. YT-134/145 swapped each greybox for a
-    /// distinct <see cref="WeaponPartArt"/> prop; YT-180 reversed that for the five parts — Lee wants
-    /// them to stay as boxes, just glowing and one consistent (non-brown) colour, per <c>Pickup</c>'s
-    /// own <c>PartColor</c>. Only the power cell still gets its wired-in prop swap here.
+    /// distinct <see cref="WeaponPartArt"/> prop; YT-180 reversed that for four of the five parts — Lee
+    /// wants THOSE to stay as boxes, just glowing and one consistent (non-brown) colour, per
+    /// <c>Pickup</c>'s own <c>PartColor</c>. The power cell always kept its wired-in prop swap; WV-236
+    /// adds the Hydro device ("the shed device") back to the swap too, sized and shimmering so it reads
+    /// as the special "new weapon/ability" find it is rather than another grey box.
     ///
     /// A director, not an edit to <c>Pickup</c>, for the same reason the boss and the robots are dressed
     /// by directors (BigBermudaRig, RobotRigDirector): the pickup's greybox is pure cosmetic — no
@@ -59,12 +62,17 @@ namespace MaxWorlds.VFX
         {
             foreach (var pickup in FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                // Only the power cell wears a swapped-in prop. The five parts keep their own greybox
-                // cube (YT-180) — Pickup already paints it the shared non-brown PartColor and spins/bobs
-                // it itself, so there is nothing more to dress here beyond the glow below.
-                if (pickup.Kind == PickupKind.PowerCell)
+                // The power cell and the Hydro device ("the shed device", WV-236) wear a swapped-in prop.
+                // The other four parts keep their own greybox cube (YT-180) — Pickup already paints it
+                // the shared non-brown PartColor and spins/bobs it itself, so there is nothing more to
+                // dress here beyond the glow below.
+                string want = null;
+                if (pickup.Kind == PickupKind.PowerCell) want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
+                else if (pickup.Kind == PickupKind.Part && pickup.Part == PartKind.Hydro)
+                    want = ArtPrefix + WeaponPartArt.Keys.HydroDevice;
+
+                if (want != null)
                 {
-                    string want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
                     Transform art = FindArt(pickup.transform, want);
 
                     if (art == null)
@@ -79,12 +87,17 @@ namespace MaxWorlds.VFX
                     if (art != null)
                     {
                         art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
-                        // The GLISTEN (YT-167): flicker the two specular dots WeaponPartArt built onto the
-                        // casing. Combined with the spin above, this is what sells "shiny" over the plain
-                        // aura below — a highlight that visibly travels the surface and catches the light,
-                        // not just a halo sitting around the whole prop.
+                        // The GLISTEN/SHIMMER (YT-167, extended WV-236): flicker whichever specular dots
+                        // WeaponPartArt built onto this prop — the cell wears four, the Hydro device three;
+                        // a missing index is a harmless no-op (PulseGlisten below bails if it can't find the
+                        // child), so one loop drives both without the director needing to know the count.
+                        // Combined with the spin above, this is what sells "shiny" over the plain aura
+                        // below — a highlight that visibly travels the surface and catches the light, not
+                        // just a halo sitting around the whole prop.
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "3", 4.6f);
                     }
                 }
 
@@ -134,10 +147,10 @@ namespace MaxWorlds.VFX
             }
         }
 
-        /// <summary>Flickers one of the power cell's specular glint dots (YT-167) in a brief spike-and-fade,
+        /// <summary>Flickers one of a prop's specular glint dots (YT-167, WV-236) in a brief spike-and-fade,
         /// not the aura's slow breathing sine — a sparkle is light catching a facet for an instant, not a
         /// beacon glowing steadily. <paramref name="phase"/> offsets each dot's cycle so, together with the
-        /// prop's own spin, the two glints twinkle independently rather than flashing in lockstep.</summary>
+        /// prop's own spin, its glints twinkle independently rather than flashing in lockstep.</summary>
         private static void PulseGlisten(Transform art, string childName, float phase)
         {
             var glisten = art.Find(childName);
@@ -176,6 +189,11 @@ namespace MaxWorlds.VFX
             // The props are authored base-at-zero and ~0.45 m tall; drop them so they hover centred on
             // the pickup point rather than floating above it.
             art.transform.localPosition = new Vector3(0f, -0.22f, 0f);
+            // The shed device reads "a chunk bigger" than the cell (WV-236) — scaled up on top of its
+            // authored geometry rather than re-tuned part-by-part, same idiom as every other size tweak
+            // in this catalog living as one named constant.
+            if (key == WeaponPartArt.Keys.HydroDevice)
+                art.transform.localScale = Vector3.one * WeaponPartArt.HydroDeviceGroundScale;
             return art.transform;
         }
 

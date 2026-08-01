@@ -48,8 +48,9 @@ namespace MaxWorlds.VFX
         // reads it back to flicker the glints it built here (same idiom as CollectibleGlow).
         public static readonly Color GlistenColor = new Color(0.92f, 0.98f, 1f);
 
-        /// <summary>Child name prefix for the power cell's specular glint dots (YT-167) — the director
-        /// finds them by this to animate the sparkle without knowing the cell's geometry.</summary>
+        /// <summary>Child name prefix for the power cell's and Hydro device's specular glint dots
+        /// (YT-167, WV-236) — the director finds them by this to animate the sparkle without knowing
+        /// either prop's geometry.</summary>
         public const string GlistenPrefix = "Glisten";
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
@@ -179,9 +180,16 @@ namespace MaxWorlds.VFX
             return root;
         }
 
+        /// <summary>The Hydro device's pickup reads a chunk bigger than the power cell (WV-236) — it's
+        /// "a new weapon/ability", not just another drop — applied by <c>PickupArtDirector</c> as a
+        /// uniform scale on top of this authored geometry, same idiom as the untouched four parts.</summary>
+        public const float HydroDeviceGroundScale = 1.6f;
+
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
-        /// one that GLOWS brightest, because it is the endgame part that frees Max from the hose.</summary>
+        /// one that GLOWS brightest, because it is the endgame part that frees Max from the hose — and,
+        /// as the ground pickup (WV-236, "the shed device"), it SHIMMERS like the power cell rather than
+        /// sitting flat like the other four parts' greybox (YT-180), so it reads as the special find it is.</summary>
         public static GameObject BuildHydroDevice(Transform parent = null)
         {
             var root = Root("HydroDevice", parent);
@@ -208,6 +216,15 @@ namespace MaxWorlds.VFX
                 Part(root, $"Fin{i}", PrimitiveType.Cube, dir * 0.24f + Vector3.up * 0.16f,
                      new Vector3(0.05f, 0.2f, 0.16f), Quaternion.Euler(0f, a, 0f), coil);
             }
+
+            // The SHIMMER (WV-236): "shimmers like a cell" — the same specular-dot language as the power
+            // cell's own glints (YT-167), riding the coil rings so the sparkle sits on a surface that's
+            // already part of the read rather than tacked onto a flat face. Three, not the cell's four,
+            // and bigger — this prop already reads busier than the cell, so it needs fewer, bolder catches
+            // of light rather than a dense cluster that would just blur into the coils.
+            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.22f, 0.31f), 0.06f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(150f, 0.33f, 0.28f), 0.05f);
+            Glisten(root, GlistenPrefix + "2", OnCircle(260f, 0.44f, 0.26f), 0.055f);
             return root;
         }
 
@@ -237,22 +254,31 @@ namespace MaxWorlds.VFX
             Part(root, "Terminal", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
                  new Vector3(0.06f, 0.04f, 0.06f), null, cap);
 
-            // The GLISTEN (YT-167): the soft additive Core band above reads as a lit charge, but Lee's
-            // playtest on device still saw the cell as flat — an aura around a shape isn't the same as a
-            // shape looking SHINY. A specular highlight has to sit ON the surface, not haloed around it.
-            // Two dots, not one, at different heights/angles/sizes on the casing: PickupArtDirector spins
-            // this root and flickers each on its own phase, so between the spin and the twinkle at least
-            // one glint is always sweeping across a visible face rather than one dot parked on the back.
-            Glisten(root, GlistenPrefix + "0", OnCasing(35f, 0.24f), 0.05f);
-            Glisten(root, GlistenPrefix + "1", OnCasing(200f, 0.13f), 0.035f);
+            // The GLISTEN (YT-167, extended WV-236): the soft additive Core band above reads as a lit
+            // charge, but Lee's playtest on device still saw the cell as flat — an aura around a shape
+            // isn't the same as a shape looking SHINY. A specular highlight has to sit ON the surface,
+            // not haloed around it. Four dots, not two — "shine and glisten like DIAMONDS" (WV-236) reads
+            // as several facets catching light at once, not a single pair — at different heights/angles/
+            // sizes on the casing: PickupArtDirector spins this root and flickers each on its own phase,
+            // so between the spin and the twinkle a facet is sweeping across the eye almost constantly
+            // rather than one dot parked on the back half of the turn.
+            Glisten(root, GlistenPrefix + "0", OnCircle(35f, 0.24f, CasingRadius), 0.05f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.13f, CasingRadius), 0.035f);
+            Glisten(root, GlistenPrefix + "2", OnCircle(120f, 0.30f, CasingRadius), 0.04f);
+            Glisten(root, GlistenPrefix + "3", OnCircle(300f, 0.05f, CasingRadius), 0.045f);
             return root;
         }
 
-        /// <summary>A point on the casing cylinder's surface — <paramref name="angleDeg"/> around the
-        /// vertical axis at height <paramref name="y"/>. Unity's cylinder primitive has a 0.5 radius, so
-        /// the "Casing" part's 0.2 local scale is an actual world radius of 0.1, not 0.2 — this sits just
-        /// outside that so the glint reads as sitting on the metal rather than buried inside it.</summary>
-        private static Vector3 OnCasing(float angleDeg, float y, float radius = 0.105f)
+        /// <summary>Unity's cylinder primitive has a 0.5 radius, so the power cell casing's 0.2 local
+        /// scale is an actual world radius of 0.1, not 0.2 — <see cref="OnCircle"/> callers sit just
+        /// outside that so a glint reads as sitting on the metal rather than buried inside it.</summary>
+        private const float CasingRadius = 0.105f;
+
+        /// <summary>A point on a circle — <paramref name="angleDeg"/> around the vertical axis at height
+        /// <paramref name="y"/> and the given <paramref name="radius"/>. Shared by the power cell's
+        /// casing glints and the Hydro device's coil-ring glints (WV-236) — both are "a sparkle riding a
+        /// cylindrical surface", just at different radii/heights.</summary>
+        private static Vector3 OnCircle(float angleDeg, float y, float radius)
         {
             float rad = angleDeg * Mathf.Deg2Rad;
             return new Vector3(Mathf.Cos(rad) * radius, y, Mathf.Sin(rad) * radius);
