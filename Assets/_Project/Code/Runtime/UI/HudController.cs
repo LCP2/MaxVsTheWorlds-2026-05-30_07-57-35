@@ -220,13 +220,15 @@ namespace MaxWorlds.UI
         /// <summary>Tapping the WEAPONS button (YT-178) opens the weapons area to show Max's current
         /// loadout on demand — the button is always-available access, not gated on a part being banked.
         /// Parts are universal upgrade tokens now (WV-228): there is no more draft-pick reveal
-        /// (YT-207) to choose from on pickup — spending a banked part happens inside the weapons area.</summary>
+        /// (YT-207) to choose from on pickup — spending a banked part happens inside the weapons area.
+        /// Opens <see cref="WeaponsScreen"/> (WV-232), the RCDA-tracks-and-abilities screen that
+        /// supersedes the legacy <see cref="UpgradeScreen"/> as this button's destination.</summary>
         private void OnWeaponsButtonTapped()
         {
-            var screen = FindFirstObjectByType<UpgradeScreen>();
+            var screen = FindFirstObjectByType<WeaponsScreen>();
             if (screen == null) return;
 
-            screen.OpenStatus();
+            screen.Open();
         }
 
         private void OnBossRegistered() => _model.UseExternalBoss();

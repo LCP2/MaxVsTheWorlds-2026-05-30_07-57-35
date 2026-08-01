@@ -173,36 +173,11 @@ namespace MaxWorlds.Tests.PlayMode
                 "the part name must sit clear above 'tap to continue', not overlap it");
         }
 
-        private static Button FindWeaponsButton(GameObject hud)
-        {
-            foreach (var b in hud.GetComponentsInChildren<Button>(true))
-                if (b.transform.parent != null && b.transform.parent.name == "Weapons Button") return b;
-            return null;
-        }
-
-        [UnityTest]
-        public IEnumerator TappingTheWeaponsButtonOpensTheScreen()
-        {
-            yield return NewScreen();
-
-            _hudGo = new GameObject("HUD");
-            _hudGo.AddComponent<HudController>();
-            yield return null;
-
-            PickupWallet.AddPart();   // raises the part badge
-            yield return null;
-
-            // Find the WEAPONS button (YT-178: it's always there now, not just the chip) and tap it,
-            // the way a finger would.
-            var weaponsButton = FindWeaponsButton(_hudGo);
-            Assert.That(weaponsButton, Is.Not.Null, "the WEAPONS button has no Button component");
-
-            weaponsButton.onClick.Invoke();
-            yield return null;
-
-            Assert.That(Screen.IsOpen, Is.True, "tapping the WEAPONS button should open the upgrade screen");
-            Assert.That(Time.timeScale, Is.EqualTo(0f), "and pause the game");
-        }
+        // The WEAPONS button (YT-178) opened THIS screen via OpenStatus() up through WV-231; WV-232
+        // rewires it to the new WeaponsScreen (RCDA tracks + acquired abilities) instead — see
+        // HudController.OnWeaponsButtonTapped and WeaponsScreenPlayTests.TappingTheWeaponsButtonOpensIt.
+        // OpenStatus() itself is exercised directly below (it's still a valid, just no-longer-wired,
+        // "show current loadout" entry point), same idiom as the retired OpenChoice tests further down.
 
         [UnityTest]
         public IEnumerator TheScrimIsNearOpaque()
@@ -279,32 +254,6 @@ namespace MaxWorlds.Tests.PlayMode
 
         private static Text FindTextInside(Image parent) =>
             parent == null ? null : parent.GetComponentInChildren<Text>(true);
-
-        /// <summary>
-        /// YT-178: with nothing pending, the WEAPONS button still opens the weapons area — it's an
-        /// always-available access point, not just a "part ready" alert.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator TappingTheWeaponsButtonWithNothingPendingOpensTheStatusView()
-        {
-            yield return NewScreen();
-
-            _hudGo = new GameObject("HUD");
-            _hudGo.AddComponent<HudController>();
-            yield return null;
-
-            var weaponsButton = FindWeaponsButton(_hudGo);
-            Assert.That(weaponsButton, Is.Not.Null, "the WEAPONS button has no Button component");
-
-            weaponsButton.onClick.Invoke();
-            yield return null;
-
-            Assert.That(Screen.IsOpen, Is.True,
-                "the WEAPONS button must open the weapons area even with nothing pending");
-            Assert.That(Time.timeScale, Is.EqualTo(0f), "and pause the game");
-            Assert.That(FindText(_screenGo, "GARDEN HOSE"), Is.Not.Null,
-                "with no upgrades installed the weapon must read GARDEN HOSE");
-        }
 
         [UnityTest]
         public IEnumerator OpenStatusShowsTheUpgradedNameOnceAPartIsInstalled()
