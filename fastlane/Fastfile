@@ -119,9 +119,16 @@ platform :ios do
     # the auto-incrementing yyMMddHHmm timestamp (BuildStamp.ComposeIosBuildNumber, YT-117) that
     # keeps each upload unique.
     milestone = 4
-    run_no = ENV["GITHUB_RUN_NUMBER"].to_s.strip
-    run_no = "0" if run_no.empty?   # a local `fastlane ios beta` with no run number → 0.3.0 floor
-    marketing_version = "0.#{milestone}.#{run_no}"
+    # A pushed tag `vX.Y.Z` IS the release version — use it verbatim (you control the number).
+    # Otherwise (manual dispatch or a local run) fall back to the auto scheme 0.<milestone>.<run_number>.
+    ref_name = ENV["GITHUB_REF_NAME"].to_s.strip   # tag push → "v0.4.35"; branch dispatch → "main"
+    if ref_name =~ /\Av(\d+\.\d+\.\d+)\z/
+      marketing_version = $1
+    else
+      run_no = ENV["GITHUB_RUN_NUMBER"].to_s.strip
+      run_no = "0" if run_no.empty?   # a local `fastlane ios beta` with no run number → 0.4.0 floor
+      marketing_version = "0.#{milestone}.#{run_no}"
+    end
     UI.message("Marketing version (CFBundleShortVersionString) → #{marketing_version}")
 
     update_info_plist(
