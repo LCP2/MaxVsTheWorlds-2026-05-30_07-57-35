@@ -38,5 +38,37 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(AbilityTuning.CooldownMultiplier(5, 1f), Is.EqualTo(0f).Within(1e-5f),
                 "an oversized reduction-per-level must clamp at 0x, not swing a cooldown negative");
         }
+
+        [Test]
+        public void WaterBalloonLevelOneThrowsTheBaseDistance()
+        {
+            Assert.That(AbilityTuning.WaterBalloonDistance(1, 4f, 1.5f), Is.EqualTo(4f).Within(1e-5f),
+                "level 1 is the ability's starting point — it should throw exactly the base distance");
+        }
+
+        [Test]
+        public void EachWaterBalloonLevelThrowsFurther()
+        {
+            // Spec §6a: "level = throw DISTANCE (further each level)" — the whole upgrade is this number.
+            float l1 = AbilityTuning.WaterBalloonDistance(1, 4f, 1.5f);
+            float l2 = AbilityTuning.WaterBalloonDistance(2, 4f, 1.5f);
+            float l3 = AbilityTuning.WaterBalloonDistance(3, 4f, 1.5f);
+            Assert.Greater(l2, l1, "level 2 must throw further than level 1");
+            Assert.Greater(l3, l2, "level 3 must throw further than level 2");
+            Assert.That(l3 - l2, Is.EqualTo(l2 - l1).Within(1e-5f), "the per-level step should be constant");
+        }
+
+        [Test]
+        public void TheSplashRadiusIsTheSpecMultipleOfTheLargeRobotsFootprint()
+        {
+            // Spec §6a: "an area ≈ 2× the large robot's footprint" — waterBalloonSplashMult defaults to 2.
+            Assert.That(AbilityTuning.WaterBalloonSplashRadius(0.55f, 2f), Is.EqualTo(1.1f).Within(1e-5f));
+        }
+
+        [Test]
+        public void TheSplashRadiusNeverGoesNegative()
+        {
+            Assert.That(AbilityTuning.WaterBalloonSplashRadius(-1f, -1f), Is.EqualTo(0f).Within(1e-5f));
+        }
     }
 }
