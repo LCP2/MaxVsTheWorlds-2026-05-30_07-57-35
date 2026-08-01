@@ -65,7 +65,30 @@ namespace MaxWorlds.VFX
             public const string AccelerationEngine = "acceleration_engine";
             public const string HydroDevice = "hydro_device";
             public const string PowerCell = "power_cell";
+
+            // WV-237 — the machine-internals designs a dropped part is randomly dressed as. Purely
+            // cosmetic (see MachineInternalsKeys below, which PickupArtDirector draws from); unlike
+            // BeamNozzle/PowerNozzle/etc. above, none of these carry a gameplay identity.
+            public const string Gear = "part_gear";
+            public const string Coil = "part_coil";
+            public const string CircuitBlock = "part_circuit_block";
+            public const string Piston = "part_piston";
+            public const string ValveManifold = "part_valve_manifold";
+            public const string CapacitorBank = "part_capacitor_bank";
+            public const string CogCluster = "part_cog_cluster";
+            public const string HydraulicRam = "part_hydraulic_ram";
+            public const string FuseBlock = "part_fuse_block";
+            public const string WiringLoom = "part_wiring_loom";
         }
+
+        /// <summary>The pool <see cref="PickupArtDirector"/> draws from to dress a dropped part
+        /// (WV-237) — one entry per machine-internals design, kept as one array so "how many designs
+        /// exist" and "which keys count" can't drift apart.</summary>
+        public static readonly string[] MachineInternalsKeys =
+        {
+            Keys.Gear, Keys.Coil, Keys.CircuitBlock, Keys.Piston, Keys.ValveManifold,
+            Keys.CapacitorBank, Keys.CogCluster, Keys.HydraulicRam, Keys.FuseBlock, Keys.WiringLoom,
+        };
 
         /// <summary>Build a prop by key (see <see cref="Keys"/>). Returns null for an unknown key rather
         /// than throwing, so a gameplay drop table with a typo drops nothing instead of erroring a run.</summary>
@@ -79,6 +102,16 @@ namespace MaxWorlds.VFX
                 case Keys.AccelerationEngine: return BuildAccelerationEngine(parent);
                 case Keys.HydroDevice: return BuildHydroDevice(parent);
                 case Keys.PowerCell: return BuildPowerCell(parent);
+                case Keys.Gear: return BuildGear(parent);
+                case Keys.Coil: return BuildCoil(parent);
+                case Keys.CircuitBlock: return BuildCircuitBlock(parent);
+                case Keys.Piston: return BuildPiston(parent);
+                case Keys.ValveManifold: return BuildValveManifold(parent);
+                case Keys.CapacitorBank: return BuildCapacitorBank(parent);
+                case Keys.CogCluster: return BuildCogCluster(parent);
+                case Keys.HydraulicRam: return BuildHydraulicRam(parent);
+                case Keys.FuseBlock: return BuildFuseBlock(parent);
+                case Keys.WiringLoom: return BuildWiringLoom(parent);
                 default:
                     Debug.LogWarning($"[WeaponPartArt] unknown part key '{key}' — no prop built.");
                     return null;
@@ -282,6 +315,250 @@ namespace MaxWorlds.VFX
         {
             float rad = angleDeg * Mathf.Deg2Rad;
             return new Vector3(Mathf.Cos(rad) * radius, y, Mathf.Sin(rad) * radius);
+        }
+
+        // ---------------------------------------------------------------- machine-internals parts (WV-237)
+
+        /// <summary>Every design below reads as "the guts of a machine" (gears, coils, circuit
+        /// blocks, pistons...) rather than the plain glowing box YT-180 shipped — that box direction
+        /// is retired now that a part is a purely cosmetic universal token (WV-228) with room to be
+        /// interesting on the ground. <see cref="PartPlinth"/> gives all ten the same base footprint
+        /// and height, so the ticket's "consistent pickup silhouette" holds even though the crown on
+        /// top of each is completely different; each also gets its own <see cref="Glisten"/> dot(s)
+        /// so every design shimmers, not just the old power-cell/Hydro-device pair.
+        /// <see cref="MachineInternalsKeys"/> is what <see cref="PickupArtDirector"/> actually draws
+        /// from, once per drop.</summary>
+        private const float PartPlinthRadius = 0.2f;
+        private const float PartPlinthHeight = 0.06f;
+
+        private static void PartPlinth(GameObject root, Material mat)
+        {
+            // A cylinder's local scale.y IS its half-height (default primitive spans -1..1), so
+            // position.y has to equal that half-height too for the plinth's underside to sit at y = 0
+            // instead of poking below the ground.
+            float half = PartPlinthHeight * 0.5f;
+            Part(root, "Plinth", PrimitiveType.Cylinder, new Vector3(0f, half, 0f),
+                 new Vector3(PartPlinthRadius, half, PartPlinthRadius), null, mat);
+        }
+
+        /// <summary>A toothed cog — a flat disc ringed with square teeth around a hub.</summary>
+        public static GameObject BuildGear(Transform parent = null)
+        {
+            var root = Root("Gear", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            PartPlinth(root, plinth);
+
+            Part(root, "Disc", PrimitiveType.Cylinder, new Vector3(0f, 0.24f, 0f),
+                 new Vector3(0.17f, 0.05f, 0.17f), null, body);
+            for (int i = 0; i < 8; i++)
+            {
+                float a = i * 45f;
+                Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                Part(root, $"Tooth{i}", PrimitiveType.Cube, dir * 0.18f + Vector3.up * 0.24f,
+                     new Vector3(0.05f, 0.06f, 0.05f), Quaternion.Euler(0f, a, 0f), body);
+            }
+            Part(root, "Hub", PrimitiveType.Cylinder, new Vector3(0f, 0.24f, 0f),
+                 new Vector3(0.05f, 0.07f, 0.05f), null, plinth);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.13f, 0.24f, 0.09f), 0.045f);
+            Glisten(root, GlistenPrefix + "1", new Vector3(-0.1f, 0.24f, -0.12f), 0.04f);
+            return root;
+        }
+
+        /// <summary>A wound induction coil — stacked rings around a lit core.</summary>
+        public static GameObject BuildCoil(Transform parent = null)
+        {
+            var root = Root("Coil", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
+            PartPlinth(root, plinth);
+
+            for (int i = 0; i < 5; i++)
+            {
+                float y = 0.12f + i * 0.07f;
+                float r = 0.16f - i * 0.008f;
+                Part(root, $"Ring{i}", PrimitiveType.Cylinder, new Vector3(0f, y, 0f),
+                     new Vector3(r, 0.02f, r), null, wire);
+            }
+            Glow(root, "Core", new Vector3(0f, 0.3f, 0f), 0.09f, PowerBlue);
+            Glisten(root, GlistenPrefix + "0", OnCircle(40f, 0.26f, 0.15f), 0.04f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(210f, 0.19f, 0.14f), 0.035f);
+            return root;
+        }
+
+        /// <summary>A circuit block — a board studded with mounted components and a lit trace.</summary>
+        public static GameObject BuildCircuitBlock(Transform parent = null)
+        {
+            var root = Root("CircuitBlock", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material board = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            Material trace = MaterialLibrary.Tinted(SurfaceKind.Metal, BeamCyan);
+            PartPlinth(root, plinth);
+
+            Part(root, "Board", PrimitiveType.Cube, new Vector3(0f, 0.18f, 0f),
+                 new Vector3(0.3f, 0.2f, 0.3f), null, board);
+            for (int x = -1; x <= 1; x += 2)
+            {
+                for (int z = -1; z <= 1; z += 2)
+                {
+                    Part(root, $"Stud{x}_{z}", PrimitiveType.Cube, new Vector3(x * 0.09f, 0.3f, z * 0.09f),
+                         new Vector3(0.06f, 0.05f, 0.06f), null, trace);
+                }
+            }
+            Glow(root, "Trace", new Vector3(0f, 0.29f, 0f), 0.05f, BeamCyan);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.1f, 0.29f, -0.1f), 0.04f);
+            return root;
+        }
+
+        /// <summary>A hydraulic piston — a barrel, rod and head, ready to fire.</summary>
+        public static GameObject BuildPiston(Transform parent = null)
+        {
+            var root = Root("Piston", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            PartPlinth(root, plinth);
+
+            Part(root, "Cylinder", PrimitiveType.Cylinder, new Vector3(0f, 0.22f, 0f),
+                 new Vector3(0.15f, 0.2f, 0.15f), null, housing);
+            Part(root, "Rod", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
+                 new Vector3(0.045f, 0.1f, 0.045f), null, plinth);
+            Part(root, "Head", PrimitiveType.Cylinder, new Vector3(0f, 0.5f, 0f),
+                 new Vector3(0.1f, 0.03f, 0.1f), null, housing);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.08f, 0.42f, 0f), 0.035f);
+            Glisten(root, GlistenPrefix + "1", new Vector3(0f, 0.5f, 0.08f), 0.04f);
+            return root;
+        }
+
+        /// <summary>A valve manifold — a body with radiating pipe nubs and a wheel handle on top.</summary>
+        public static GameObject BuildValveManifold(Transform parent = null)
+        {
+            var root = Root("ValveManifold", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material pipe = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material wheel = MaterialLibrary.Tinted(SurfaceKind.Metal, EngineOrange);
+            PartPlinth(root, plinth);
+
+            Part(root, "Body", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f),
+                 new Vector3(0.14f, 0.16f, 0.14f), null, pipe);
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i * 120f;
+                Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                Part(root, $"Nub{i}", PrimitiveType.Cylinder, dir * 0.2f + Vector3.up * 0.18f,
+                     new Vector3(0.035f, 0.08f, 0.035f), Quaternion.Euler(90f, a, 0f), pipe);
+            }
+            Part(root, "Wheel", PrimitiveType.Cylinder, new Vector3(0f, 0.4f, 0f),
+                 new Vector3(0.1f, 0.02f, 0.1f), null, wheel);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.07f, 0.4f, 0f), 0.04f);
+            return root;
+        }
+
+        /// <summary>A bank of three capacitor cans, each with a lit terminal cap.</summary>
+        public static GameObject BuildCapacitorBank(Transform parent = null)
+        {
+            var root = Root("CapacitorBank", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material can = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            PartPlinth(root, plinth);
+
+            for (int i = 0; i < 3; i++)
+            {
+                float x = (i - 1) * 0.12f;
+                Part(root, $"Can{i}", PrimitiveType.Cylinder, new Vector3(x, 0.2f, 0f),
+                     new Vector3(0.07f, 0.18f, 0.07f), null, can);
+                Glow(root, $"Tip{i}", new Vector3(x, 0.38f, 0f), 0.04f, CellCyan);
+            }
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.12f, 0.14f, 0.07f), 0.035f);
+            return root;
+        }
+
+        /// <summary>Two small interlocking gears at different heights — a busier cousin of <see cref="BuildGear"/>.</summary>
+        public static GameObject BuildCogCluster(Transform parent = null)
+        {
+            var root = Root("CogCluster", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material cog = MaterialLibrary.Tinted(SurfaceKind.Metal, HarnessGreen);
+            PartPlinth(root, plinth);
+
+            Vector3[] offsets = { new Vector3(0.08f, 0.2f, 0f), new Vector3(-0.09f, 0.3f, 0.04f) };
+            float[] radii = { 0.11f, 0.09f };
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                Part(root, $"Cog{i}", PrimitiveType.Cylinder, offsets[i],
+                     new Vector3(radii[i], 0.03f, radii[i]), null, cog);
+                for (int t = 0; t < 5; t++)
+                {
+                    float a = t * 72f;
+                    Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                    Part(root, $"Cog{i}Tooth{t}", PrimitiveType.Cube, offsets[i] + dir * radii[i],
+                         new Vector3(0.03f, 0.04f, 0.03f), Quaternion.Euler(0f, a, 0f), cog);
+                }
+            }
+            Glisten(root, GlistenPrefix + "0", offsets[0] + Vector3.up * 0.02f, 0.04f);
+            Glisten(root, GlistenPrefix + "1", offsets[1] + Vector3.up * 0.02f, 0.035f);
+            return root;
+        }
+
+        /// <summary>A hydraulic ram — a housing with a fluid-blue ram extended toward a cap.</summary>
+        public static GameObject BuildHydraulicRam(Transform parent = null)
+        {
+            var root = Root("HydraulicRam", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material fluid = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
+            PartPlinth(root, plinth);
+
+            Part(root, "Housing", PrimitiveType.Cylinder, new Vector3(0f, 0.16f, 0f),
+                 new Vector3(0.14f, 0.15f, 0.14f), null, housing);
+            Part(root, "Ram", PrimitiveType.Cylinder, new Vector3(0f, 0.36f, 0f),
+                 new Vector3(0.075f, 0.12f, 0.075f), null, fluid);
+            Part(root, "Cap", PrimitiveType.Cylinder, new Vector3(0f, 0.46f, 0f),
+                 new Vector3(0.095f, 0.02f, 0.095f), null, housing);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.07f, 0.36f, 0f), 0.04f);
+            Glisten(root, GlistenPrefix + "1", new Vector3(-0.06f, 0.16f, 0.06f), 0.035f);
+            return root;
+        }
+
+        /// <summary>A fuse block — three lit fuses of different colours set in a dark housing.</summary>
+        public static GameObject BuildFuseBlock(Transform parent = null)
+        {
+            var root = Root("FuseBlock", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material block = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            PartPlinth(root, plinth);
+
+            Part(root, "Block", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0f),
+                 new Vector3(0.28f, 0.16f, 0.17f), null, block);
+            Color[] fuseColors = { EngineOrange, BeamCyan, HarnessGreen };
+            for (int i = 0; i < 3; i++)
+            {
+                float x = (i - 1) * 0.1f;
+                Glow(root, $"Fuse{i}", new Vector3(x, 0.28f, 0f), 0.045f, fuseColors[i]);
+            }
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.13f, 0.14f, 0.09f), 0.035f);
+            return root;
+        }
+
+        /// <summary>A wiring loom — a connector block with looping cable runs and a lit junction.</summary>
+        public static GameObject BuildWiringLoom(Transform parent = null)
+        {
+            var root = Root("WiringLoom", parent);
+            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            PartPlinth(root, plinth);
+
+            Part(root, "Connector", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0f),
+                 new Vector3(0.13f, 0.14f, 0.13f), null, wire);
+            for (int i = 0; i < 3; i++)
+            {
+                float a = i * 40f - 40f;
+                Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                Part(root, $"Loop{i}", PrimitiveType.Cylinder, dir * 0.14f + Vector3.up * 0.24f,
+                     new Vector3(0.03f, 0.1f, 0.03f), Quaternion.Euler(60f, a, 0f), wire);
+            }
+            Glow(root, "Junction", new Vector3(0f, 0.22f, 0f), 0.05f, BeamCyan);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0f, 0.14f, 0.08f), 0.04f);
+            return root;
         }
 
         // ---------------------------------------------------------------- helpers

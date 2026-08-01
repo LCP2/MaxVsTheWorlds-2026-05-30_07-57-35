@@ -10,16 +10,16 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The pickups wear their real art (YT-134/145), and YT-180 reversed the part-like-model direction
-    /// for four of the five parts: they stay their own greybox cube, just glowing and one consistent
-    /// (non-brown) colour, while the power cell still wears its swapped-in <see cref="WeaponPartArt"/>
-    /// prop. WV-236 puts the Hydro device ("the shed device") back on the swapped-prop side too — it has
-    /// to read as a distinct "new weapon/ability" find, not another grey box.
+    /// The pickups wear their real art (YT-134/145). YT-180 had reversed the part-like-model direction
+    /// for four of the five parts, leaving them as a plain glowing box; WV-237 retires that box
+    /// direction entirely now that a part is a purely cosmetic universal token (WV-228) — every dropped
+    /// part wears one of <see cref="WeaponPartArt.MachineInternalsKeys"/>'s designs, rerolled at random
+    /// on each fresh drop, while the power cell keeps its own always-the-same swapped prop.
     ///
-    /// The load-bearing assertions here are that a non-Hydro part pickup is NEVER given a PartArt: child
-    /// (no regression back to the fully-reverted direction), that its own box stays visible and lit, that
-    /// the cell and the Hydro device get their dedicated props with the greybox hidden underneath, and
-    /// that every pickup — box or prop — carries the shared pulsing collectible glow.
+    /// The load-bearing assertions here are that every part pickup gets a machine-internals PartArt:
+    /// child with its own greybox hidden underneath, that a pooled part rerolls (and doesn't double up
+    /// on) its design when it's dropped again, that the cell keeps its dedicated prop, and that every
+    /// pickup — cell or part — carries the shared pulsing collectible glow and shimmers.
     /// </summary>
     public sealed class PickupArtDirectorPlayTests
     {
@@ -74,8 +74,10 @@ namespace MaxWorlds.Tests.PlayMode
         private static Transform GlowOf(Pickup p) => p.transform.Find("CollectibleGlow");
 
         [UnityTest]
-        public IEnumerator NonHydroPartPickups_StayBoxes_WithNoPropSwap()
+        public IEnumerator PartPickups_GetAMachineInternalsProp_WithGreyboxHidden()
         {
+            // WV-237 supersedes YT-180: every part now wears one of the machine-internals designs
+            // instead of staying a plain glowing box.
             var beam = MakePart(PartKind.BeamNozzle);
             var harness = MakePart(PartKind.AugmentationHarness);
 
@@ -83,55 +85,64 @@ namespace MaxWorlds.Tests.PlayMode
 
             foreach (var p in new[] { beam, harness })
             {
-                Assert.IsNull(ArtOf(p), $"{p.Part} was given a PartArt: prop — YT-180 reverted parts to boxes.");
+                Transform art = ArtOf(p);
+                Assert.IsNotNull(art, $"{p.Part} got no PartArt: prop — WV-237 needs every part dressed.");
+                string key = art.name.Substring("PartArt:".Length);
+                CollectionAssert.Contains(WeaponPartArt.MachineInternalsKeys, key,
+                    $"{p.Part} wears '{key}', which isn't one of the machine-internals designs.");
 
                 var visual = p.transform.Find("Visual");
-                Assert.IsNotNull(visual, $"{p.Part} lost its greybox box.");
-                Assert.IsTrue(visual.GetComponent<MeshRenderer>().enabled,
-                    $"{p.Part}'s box is hidden — it has to stay visible now that nothing replaces it.");
+                Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
+                    $"{p.Part}'s greybox box is still drawn under its machine-internals prop.");
             }
         }
 
         [UnityTest]
-        public IEnumerator HydroDevice_GetsItsSwappedProp_BiggerThanTheCell_WithGreyboxHidden()
+        public IEnumerator PartPickup_RerollsItsDesign_OnEveryFreshDrop_WithNoStaleLeftover()
         {
-            // WV-236: "the shed device" is the Hydro part's ground pickup — it goes back on the
-            // swapped-prop side of the YT-180 split, sized a chunk bigger than the cell so it reads as
-            // the special "new weapon/ability" find it is.
-            var hydro = MakePart(PartKind.Hydro);
-            var cell = MakeCell();
-
+            // WV-237: "randomly assigned per part drop for variety" — a pooled part pickup has to be
+            // able to change design when PickupDirector drops it again, and not leave its old prop
+            // attached alongside the new one.
+            var part = MakePart(PartKind.BeamNozzle);
             yield return InstallDirector();
 
-            Transform art = ArtOf(hydro);
-            Assert.IsNotNull(art, "the shed device (Hydro) got no PartArt: prop — WV-236 needs it swapped in.");
-            Assert.IsTrue(art.name.EndsWith(WeaponPartArt.Keys.HydroDevice),
-                $"the shed device wears '{art.name}', expected the Hydro device prop.");
+            Assert.IsNotNull(ArtOf(part), "the part never got a machine-internals prop in the first place.");
 
-            var visual = hydro.transform.Find("Visual");
-            Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
-                "the greybox stand-in is still drawn under the shed device's real prop — you'd see both.");
+            // Mirror the collect/redrop cycle PickupDirector runs on a pooled pickup.
+            part.gameObject.SetActive(false);
+            yield return null;
+            part.gameObject.SetActive(true);
+            yield return null;   // the reroll + stale-art Destroy() call land on this frame
+            yield return null;   // Destroy() only actually removes the child at end of frame
 
-            Transform cellArt = ArtOf(cell);
-            Assert.IsNotNull(cellArt, "the power cell got no art model.");
-            Assert.Greater(art.localScale.x, cellArt.localScale.x,
-                "the shed device isn't scaled up over the cell — it should read a chunk bigger.");
+            Transform art = ArtOf(part);
+            Assert.IsNotNull(art, "the part lost its machine-internals prop after being redropped.");
+            string key = art.name.Substring("PartArt:".Length);
+            CollectionAssert.Contains(WeaponPartArt.MachineInternalsKeys, key,
+                $"the redropped part wears '{key}', which isn't one of the machine-internals designs.");
+
+            int partArtChildren = 0;
+            foreach (Transform c in part.transform)
+                if (c.name.StartsWith("PartArt:")) partArtChildren++;
+            Assert.AreEqual(1, partArtChildren, "a stale machine-internals prop is still attached after redropping.");
         }
 
         [UnityTest]
-        public IEnumerator HydroDevice_GlintsShimmerOnItsCoils()
+        public IEnumerator PartPickup_GlintsShimmerOnItsMachineInternalsProp()
         {
-            // Mirrors PowerCell_GlintsFlickerOnTheCasing: the shed device has to actually shimmer, not
-            // just sit at its build-time glint colour.
-            var hydro = MakePart(PartKind.Hydro);
+            // Mirrors PowerCell_GlintsFlickerOnTheCasing: a part's random design has to actually
+            // shimmer, not just sit at its build-time glint colour.
+            var part = MakePart(PartKind.BeamNozzle);
 
             yield return InstallDirector();
 
-            Transform art = ArtOf(hydro);
-            Assert.IsNotNull(art, "the shed device got no art model.");
+            Transform art = ArtOf(part);
+            Assert.IsNotNull(art, "the part got no art model.");
 
-            var glint = art.Find(WeaponPartArt.GlistenPrefix + "0");
-            Assert.IsNotNull(glint, "the shed device's art has no glint dot to animate.");
+            Transform glint = null;
+            foreach (Transform c in art)
+                if (c.name.StartsWith(WeaponPartArt.GlistenPrefix)) { glint = c; break; }
+            Assert.IsNotNull(glint, "the part's prop has no glint dot to animate.");
             var r = glint.GetComponent<MeshRenderer>();
             int baseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -150,7 +161,7 @@ namespace MaxWorlds.Tests.PlayMode
                 if (ColorAt() != c0) { changed = true; break; }
             }
 
-            Assert.IsTrue(changed, "the shed device's glint never changes brightness — it isn't shimmering.");
+            Assert.IsTrue(changed, "the part's glint never changes brightness — it isn't shimmering.");
         }
 
         [UnityTest]

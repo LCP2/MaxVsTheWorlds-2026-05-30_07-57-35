@@ -1,7 +1,7 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
-using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.VFX
 {
@@ -11,23 +11,33 @@ namespace MaxWorlds.VFX
     ///
     /// YT-131/133 drop the pickups as greybox stand-ins — a cyan sphere for a power cell and, for a
     /// PART, a single cube that is the SAME for all five. YT-134/145 swapped each greybox for a
-    /// distinct <see cref="WeaponPartArt"/> prop; YT-180 reversed that for four of the five parts — Lee
-    /// wants THOSE to stay as boxes, just glowing and one consistent (non-brown) colour, per
-    /// <c>Pickup</c>'s own <c>PartColor</c>. The power cell always kept its wired-in prop swap; WV-236
-    /// adds the Hydro device ("the shed device") back to the swap too, sized and shimmering so it reads
-    /// as the special "new weapon/ability" find it is rather than another grey box.
+    /// distinct <see cref="WeaponPartArt"/> prop; YT-180 reversed that for four of the five parts so
+    /// they stayed boxes. WV-237 retires that box direction now that a part is a purely cosmetic
+    /// universal token (WV-228): every dropped part wears one of ~10 machine-internals designs
+    /// (<see cref="WeaponPartArt.MachineInternalsKeys"/>), picked at random each time it's placed, so
+    /// repeated drops read as varied rather than a carpet of identical boxes. The power cell keeps its
+    /// own always-the-same swapped prop.
     ///
     /// A director, not an edit to <c>Pickup</c>, for the same reason the boss and the robots are dressed
     /// by directors (BigBermudaRig, RobotRigDirector): the pickup's greybox is pure cosmetic — no
     /// active-tap indicator or collider to preserve — so the art stream can replace it without reaching
     /// into gameplay. The cell's pickup is POOLED and reused as-is (its kind never changes), so the
-    /// once-built check below is all that's needed to keep it from rebuilding every frame.
+    /// once-built check below is all that's needed to keep it from rebuilding every frame. A pooled
+    /// PART pickup, though, gets reused for a fresh drop with a fresh random design each time (WV-237)
+    /// — <see cref="_partWasActive"/>/<see cref="_partArtKey"/> track that reroll across the
+    /// deactivate/reactivate cycle <c>PickupDirector</c> pools it through.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupArtDirector : MonoBehaviour
     {
         private const string ArtPrefix = "PartArt:";   // child name carries the key it was built for
         private const float SpinDegreesPerSecond = 90f;
+
+        // WV-237: per-pickup bookkeeping so a pooled Part pickup rerolls its machine-internals design
+        // on every fresh drop rather than wearing whatever it first got forever. Keyed by reference —
+        // pooled Pickups are reused, never destroyed, so entries live for the pickup's whole lifetime.
+        private readonly Dictionary<Pickup, bool> _partWasActive = new Dictionary<Pickup, bool>();
+        private readonly Dictionary<Pickup, string> _partArtKey = new Dictionary<Pickup, string>();
 
         // The collectible glow (YT-145): a soft additive bloom aura on every dropped pickup + power cell,
         // with a subtle pulse, so they read as "grab me" from across the yard. One shared colour for the
@@ -62,14 +72,17 @@ namespace MaxWorlds.VFX
         {
             foreach (var pickup in FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                // The power cell and the Hydro device ("the shed device", WV-236) wear a swapped-in prop.
-                // The other four parts keep their own greybox cube (YT-180) — Pickup already paints it
-                // the shared non-brown PartColor and spins/bobs it itself, so there is nothing more to
-                // dress here beyond the glow below.
+                // The power cell always wears the same swapped-in prop. Every PART now wears one of
+                // the machine-internals designs too (WV-237) — which one is rerolled per drop below.
                 string want = null;
-                if (pickup.Kind == PickupKind.PowerCell) want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
-                else if (pickup.Kind == PickupKind.Part && pickup.Part == PartKind.Hydro)
-                    want = ArtPrefix + WeaponPartArt.Keys.HydroDevice;
+                if (pickup.Kind == PickupKind.PowerCell)
+                {
+                    want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
+                }
+                else if (pickup.Kind == PickupKind.Part)
+                {
+                    want = ArtPrefix + RollPartArtKey(pickup);
+                }
 
                 if (want != null)
                 {
@@ -167,6 +180,36 @@ namespace MaxWorlds.VFX
             r.GetPropertyBlock(mpb);
             mpb.SetColor(BaseColorId, WeaponPartArt.GlistenColor * brightness);
             r.SetPropertyBlock(mpb);
+        }
+
+        /// <summary>The machine-internals key this PART pickup should wear right now (WV-237). Rerolled
+        /// only on a fresh drop — detected as an inactive→active transition, the same edge
+        /// <c>PickupDirector</c> crosses when it pops a pooled pickup and calls <c>Place</c> — so the
+        /// design a player sees stays put while it sits on the ground and only varies drop to drop.</summary>
+        private string RollPartArtKey(Pickup pickup)
+        {
+            bool activeNow = pickup.gameObject.activeSelf;
+            bool wasActive = _partWasActive.TryGetValue(pickup, out bool prev) && prev;
+            _partWasActive[pickup] = activeNow;
+
+            if (!_partArtKey.TryGetValue(pickup, out string key) || (activeNow && !wasActive))
+            {
+                key = WeaponPartArt.MachineInternalsKeys[Random.Range(0, WeaponPartArt.MachineInternalsKeys.Length)];
+                _partArtKey[pickup] = key;
+                DestroyStaleArt(pickup.transform, ArtPrefix + key);
+            }
+            return key;
+        }
+
+        /// <summary>Removes any previously-built PartArt: child that isn't <paramref name="keep"/> — the
+        /// leftover from this pooled pickup's last drop, now that it's rerolled a different design.</summary>
+        private static void DestroyStaleArt(Transform pickup, string keep)
+        {
+            for (int i = pickup.childCount - 1; i >= 0; i--)
+            {
+                var c = pickup.GetChild(i);
+                if (c.name.StartsWith(ArtPrefix) && c.name != keep) Destroy(c.gameObject);
+            }
         }
 
         /// <summary>The child wearing exactly <paramref name="wantName"/>, or null.</summary>

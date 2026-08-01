@@ -18,12 +18,12 @@ namespace MaxWorlds.Tests.PlayMode
     /// </summary>
     public sealed class WeaponPartArtPlayTests
     {
-        private static readonly string[] AllKeys =
+        private static readonly string[] AllKeys = new[]
         {
             WeaponPartArt.Keys.BeamNozzle, WeaponPartArt.Keys.PowerNozzle,
             WeaponPartArt.Keys.AugmentationHarness, WeaponPartArt.Keys.AccelerationEngine,
             WeaponPartArt.Keys.HydroDevice, WeaponPartArt.Keys.PowerCell,
-        };
+        }.Concat(WeaponPartArt.MachineInternalsKeys).ToArray();
 
         private GameObject _built;
 
@@ -89,6 +89,44 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.AreEqual(signatures.Count, signatures.Distinct().Count(),
                 "two of the five parts read as the same shape — they have to be tellable apart at game zoom.");
+        }
+
+        [Test]
+        public void ThereAreAboutTenMachineInternalsDesigns()
+        {
+            // WV-237's acceptance criteria: "~10 distinct part designs."
+            Assert.That(WeaponPartArt.MachineInternalsKeys.Length, Is.InRange(8, 12),
+                "the machine-internals pool drifted away from the ticket's ~10 designs.");
+            Assert.AreEqual(WeaponPartArt.MachineInternalsKeys.Length, WeaponPartArt.MachineInternalsKeys.Distinct().Count(),
+                "two entries in the machine-internals pool point at the same key.");
+        }
+
+        [UnityTest]
+        public IEnumerator TheMachineInternalsDesigns_AllShimmer_WithAConsistentPickupSilhouette()
+        {
+            // WV-237: every design has to read as "machine internals" (many parts, not a plain box)
+            // and shimmer on the ground, while still sharing roughly the same pickup silhouette so a
+            // player doesn't have to re-learn "that's a part" for each random design.
+            float? refHeight = null;
+            foreach (string key in WeaponPartArt.MachineInternalsKeys)
+            {
+                var go = WeaponPartArt.Build(key);
+                var renderers = go.GetComponentsInChildren<MeshRenderer>();
+                Assert.Greater(renderers.Length, 2, $"'{key}' is barely a prop — it won't read as machine internals.");
+
+                bool hasGlisten = go.GetComponentsInChildren<Transform>()
+                    .Any(t => t.name.StartsWith(WeaponPartArt.GlistenPrefix));
+                Assert.IsTrue(hasGlisten, $"'{key}' has no glisten dot — it won't shimmer on the ground.");
+
+                var b = new Bounds(go.transform.position, Vector3.zero);
+                foreach (var r in renderers) b.Encapsulate(r.bounds);
+                refHeight ??= b.size.y;
+                Assert.That(b.size.y, Is.EqualTo(refHeight.Value).Within(0.4f),
+                    $"'{key}' stands {b.size.y:F2} m tall against the pool's {refHeight.Value:F2} m — too far off for a consistent pickup silhouette.");
+
+                Object.Destroy(go);
+                yield return null;
+            }
         }
 
         [UnityTest]
