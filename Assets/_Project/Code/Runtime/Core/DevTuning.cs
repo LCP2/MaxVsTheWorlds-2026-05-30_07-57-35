@@ -205,6 +205,10 @@ namespace MaxWorlds.Core
         /// ability's cooldown.</summary>
         public static float? WeaponCooldownReductionPerLevel { get; set; }
 
+        /// <summary>Velocity (m/s) each spray hit shoves a robot — a near-zero cosmetic stagger
+        /// only (WV-225), not the positional launch it used to be.</summary>
+        public static float? SprayKnockback { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -239,7 +243,8 @@ namespace MaxWorlds.Core
             DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue ||
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
             WaterBalloonCooldownSeconds.HasValue || DashCooldownSeconds.HasValue ||
-            TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue;
+            TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
+            SprayKnockback.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -289,6 +294,7 @@ namespace MaxWorlds.Core
             DashCooldownSeconds = null;
             TeleportCooldownSeconds = null;
             WeaponCooldownReductionPerLevel = null;
+            SprayKnockback = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -347,6 +353,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(DashCooldownSeconds), () => DashCooldownSeconds, v => DashCooldownSeconds = v),
             (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),
             (PrefsPrefix + nameof(WeaponCooldownReductionPerLevel), () => WeaponCooldownReductionPerLevel, v => WeaponCooldownReductionPerLevel = v),
+            (PrefsPrefix + nameof(SprayKnockback), () => SprayKnockback, v => SprayKnockback = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

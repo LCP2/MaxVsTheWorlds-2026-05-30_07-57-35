@@ -378,6 +378,11 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PrimaryCellsPerMin, WaterBlaster.DefaultPrimaryCellsPerMin),
                 v => DevTuning.PrimaryCellsPerMin = v, tab: 1);
 
+            // Spray knockback recut (WV-225): near-zero cosmetic stagger, not the old launch.
+            Add("Spray knockback", "m/s", 0f, 5f, WaterBlaster.DefaultSprayKnockback,
+                () => DevTuning.Or(DevTuning.SprayKnockback, WaterBlaster.DefaultSprayKnockback),
+                v => DevTuning.SprayKnockback = v, tab: 1);
+
             // Secondary/special don't exist yet (WV-231 builds Water Balloon/Dash/Teleport) — these
             // are settings only for now, ready for that ticket to spend (WV-227's economy spec §5/§9).
             Add("Secondary cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSecondaryCellsPerUse,

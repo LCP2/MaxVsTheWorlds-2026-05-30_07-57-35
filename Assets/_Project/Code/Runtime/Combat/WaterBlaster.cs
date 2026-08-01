@@ -43,10 +43,15 @@ namespace MaxWorlds.Combat
         [Header("Spray archetype (YT-64) — a threatening arc, not a thin dribble")]
         [Tooltip("Half-angle of the spray cone, degrees. Everything in this arc within range is hit.")]
         [SerializeField] private float coneHalfAngle = 48f;
-        [Tooltip("Velocity (m/s) each hit shoves an enemy back — sells 'pushing the swarm back'.")]
-        [SerializeField] private float knockbackForce = 5f;
         [Tooltip("Visual width of the stream, so it reads as a spray fan (cosmetic only).")]
         [SerializeField] private float streamVisualRadius = 1.1f;
+
+        // Deliberately NOT a [SerializeField] (WV-225): knockbackForce used to be one, and
+        // Backyard_Slice.unity carried a baked 5 m/s that read as a real launch — the swarm visibly
+        // scattering rather than giving ground. WV-225 reverses that direction: a near-zero cosmetic
+        // stagger only, so sustained fire doesn't fling robots around. Same "authored in code, the
+        // scene can't shadow it" reasoning as BlasterTuning.
+        public const float DefaultSprayKnockback = 0.5f;
 
         // Energy is authored in BlasterTuning, NOT here. These were [SerializeField]s until YT-80,
         // and the values baked into Backyard_Slice.unity quietly overrode every one of them — the
@@ -361,11 +366,13 @@ namespace MaxWorlds.Combat
                 d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true));
                 hitSomething = true;
 
-                // Light knockback — shove robots away from Max so the swarm visibly gives ground.
+                // Cosmetic stagger only (WV-225) — no meaningful positional launch any more.
                 if (comp is IKnockbackable kb)
                 {
                     Vector3 push = point - origin; push.y = 0f;
-                    if (push.sqrMagnitude > 1e-4f) kb.ApplyKnockback(push.normalized * knockbackForce);
+                    float sprayKnockback = DevTuning.Or(DevTuning.SprayKnockback, DefaultSprayKnockback);
+                    if (push.sqrMagnitude > 1e-4f && sprayKnockback > 0f)
+                        kb.ApplyKnockback(push.normalized * sprayKnockback);
                 }
 
                 // Cosmetic: splash on the target's surface facing the blaster, not at its

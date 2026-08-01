@@ -53,6 +53,15 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void SprayKnockbackIsNearZeroCosmeticNotALaunch()
+        {
+            // WV-225 reverses the YT-64 "more knockback" direction: a tiny stagger, not a shove that
+            // visibly scatters the swarm. Pin it well below the old 5 m/s launch value.
+            Assert.That(WaterBlaster.DefaultSprayKnockback, Is.LessThan(1f),
+                "spray knockback must be a near-zero cosmetic stagger, not a meaningful positional launch");
+        }
+
+        [Test]
         public void TheBruiserStaysHalfTheRushersSpeed()
         {
             // YT-66's fridge-on-legs: the tank is deliberately half-speed. Baking the rusher's new
@@ -94,6 +103,18 @@ namespace MaxWorlds.Tests.EditMode
             AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "140.34");
             AssertField(text, "MaxWorlds.Factories.MowerHutch", "factoryHealth", "1501.5");
             AssertField(text, "MaxWorlds.Enemies.EnemySpawner", "spawnIntervalMin", "12");
+        }
+
+        /// <summary>WV-225: knockbackForce was a [SerializeField] the scene baked to 5 — the exact
+        /// shadowing trap this class guards against elsewhere. It is now authored in code
+        /// (<see cref="WaterBlaster.DefaultSprayKnockback"/>) and must never reappear in the scene.</summary>
+        [Test]
+        public void TheSceneDoesNotResurrectTheOldKnockbackForceField()
+        {
+            string scene = Path.Combine(RepoRoot, "Assets", "_Project", "Scenes", "Backyard_Slice.unity");
+            Assert.That(File.ReadAllText(scene), Does.Not.Contain("knockbackForce"),
+                "knockbackForce is back in the scene — it would shadow WaterBlaster.DefaultSprayKnockback " +
+                "and reintroduce the old positional launch (WV-225)");
         }
 
         /// <summary>Assert the serialized field directly under a component's class identifier reads
