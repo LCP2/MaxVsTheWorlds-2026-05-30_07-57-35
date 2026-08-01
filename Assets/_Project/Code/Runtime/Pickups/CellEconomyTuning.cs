@@ -6,9 +6,9 @@ namespace MaxWorlds.Pickups
     /// Authored magnitudes for the power-cell economy recut (WV-227) that don't yet have an owning
     /// weapon/ability component to live on: Water Balloon (secondary) and Dash/Teleport (special)
     /// don't exist until WV-231 builds them, so their per-use costs are settings only for now, ready
-    /// for that ticket to spend. Same for Power Efficiency — the ability and its level don't exist
-    /// yet (WV-231/WV-230), so <see cref="EfficiencyMultiplier"/> is a pure formula ready for a real
-    /// level to be plugged in once one exists.
+    /// for that ticket to spend. <see cref="EfficiencyMultiplier"/> is a pure formula; Power
+    /// Efficiency's real level now comes from <see cref="MaxWorlds.Weapons.WeaponSystemState"/>
+    /// (WV-230) — see <see cref="MaxWorlds.Combat.WaterBlaster"/>'s Hydro drain.
     /// </summary>
     public static class CellEconomyTuning
     {

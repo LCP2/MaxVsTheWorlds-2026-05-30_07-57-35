@@ -190,6 +190,21 @@ namespace MaxWorlds.Core
         /// toughening). 1 = the authored default; the panel's "Robot health" knob.</summary>
         public static float? RobotHealthMultiplier { get; set; }
 
+        // --- weapon/ability backbone (WV-230) ---
+
+        /// <summary>Water Balloon's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
+        public static float? WaterBalloonCooldownSeconds { get; set; }
+
+        /// <summary>Dash's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
+        public static float? DashCooldownSeconds { get; set; }
+
+        /// <summary>Teleport's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
+        public static float? TeleportCooldownSeconds { get; set; }
+
+        /// <summary>Fraction each Weapon Cooldown ability level shaves off every other active
+        /// ability's cooldown.</summary>
+        public static float? WeaponCooldownReductionPerLevel { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -222,7 +237,9 @@ namespace MaxWorlds.Core
             EscalationStart.HasValue || EscalationRate.HasValue || EscalationPerShedBump.HasValue ||
             EscalationMax.HasValue || RunLengthSeconds.HasValue ||
             DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue ||
-            StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue;
+            StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
+            WaterBalloonCooldownSeconds.HasValue || DashCooldownSeconds.HasValue ||
+            TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -268,6 +285,10 @@ namespace MaxWorlds.Core
             StartingRobots = null;
             RobotProductionPerMinute = null;
             RobotHealthMultiplier = null;
+            WaterBalloonCooldownSeconds = null;
+            DashCooldownSeconds = null;
+            TeleportCooldownSeconds = null;
+            WeaponCooldownReductionPerLevel = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -322,6 +343,10 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(StartingRobots), () => StartingRobots, v => StartingRobots = v),
             (PrefsPrefix + nameof(RobotProductionPerMinute), () => RobotProductionPerMinute, v => RobotProductionPerMinute = v),
             (PrefsPrefix + nameof(RobotHealthMultiplier), () => RobotHealthMultiplier, v => RobotHealthMultiplier = v),
+            (PrefsPrefix + nameof(WaterBalloonCooldownSeconds), () => WaterBalloonCooldownSeconds, v => WaterBalloonCooldownSeconds = v),
+            (PrefsPrefix + nameof(DashCooldownSeconds), () => DashCooldownSeconds, v => DashCooldownSeconds = v),
+            (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),
+            (PrefsPrefix + nameof(WeaponCooldownReductionPerLevel), () => WeaponCooldownReductionPerLevel, v => WeaponCooldownReductionPerLevel = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

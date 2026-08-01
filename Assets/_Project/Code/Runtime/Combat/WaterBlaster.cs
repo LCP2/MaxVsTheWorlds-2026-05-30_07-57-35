@@ -7,6 +7,7 @@ using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Combat
 {
@@ -293,9 +294,10 @@ namespace MaxWorlds.Combat
             if (HydroActive && emitting)
             {
                 float perMin = Mathf.Max(0f, DevTuning.Or(DevTuning.PrimaryCellsPerMin, DefaultPrimaryCellsPerMin));
-                // Power Efficiency ability doesn't exist yet (WV-231) — level is always 0 (no
-                // reduction) until that ticket wires a real ability level in here.
-                float efficiency = CellEconomyTuning.EfficiencyMultiplier(0,
+                // Power Efficiency's real level (WV-230) — 0 (no reduction) until the ability is
+                // acquired from a shed (WV-229); the ability's own effect (WV-231) is just this level.
+                float efficiency = CellEconomyTuning.EfficiencyMultiplier(
+                    WeaponSystemState.AbilityLevel(AbilityKind.PowerEfficiency),
                     DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel));
                 float rate = (perMin / 60f) * efficiency;
                 _hydroDrainAccum += rate * dt;

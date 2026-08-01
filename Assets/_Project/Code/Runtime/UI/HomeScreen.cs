@@ -9,6 +9,7 @@ using MaxWorlds.Pickups;
 using MaxWorlds.Save;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.UI
 {
@@ -131,6 +132,7 @@ namespace MaxWorlds.UI
             UpgradeState.Reset();
             HydroBurst.Reset();   // a fresh run must not inherit a burst/cooldown in progress (YT-215)
             PickupWallet.Reset();
+            WeaponSystemState.Reset();   // fresh RCDA tracks at L1, no abilities owned (WV-230)
             if (playIntro) IntroCinematic.TryPlay();
         }
 
