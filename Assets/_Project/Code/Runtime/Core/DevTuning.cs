@@ -209,6 +209,17 @@ namespace MaxWorlds.Core
         /// only (WV-225), not the positional launch it used to be.</summary>
         public static float? SprayKnockback { get; set; }
 
+        // --- ability effects (WV-231) ---
+
+        /// <summary>Water Balloon's splash damage as a percentage of the target's own max health.</summary>
+        public static float? WaterBalloonDamagePct { get; set; }
+
+        /// <summary>How long a Water Balloon splash halts the robots it hits, seconds.</summary>
+        public static float? WaterBalloonStopDurationSeconds { get; set; }
+
+        /// <summary>Fraction each Speed ability level adds to Max's walk speed.</summary>
+        public static float? SpeedMultiplierPerLevel { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -244,7 +255,9 @@ namespace MaxWorlds.Core
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
             WaterBalloonCooldownSeconds.HasValue || DashCooldownSeconds.HasValue ||
             TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
-            SprayKnockback.HasValue;
+            SprayKnockback.HasValue ||
+            WaterBalloonDamagePct.HasValue || WaterBalloonStopDurationSeconds.HasValue ||
+            SpeedMultiplierPerLevel.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -295,6 +308,9 @@ namespace MaxWorlds.Core
             TeleportCooldownSeconds = null;
             WeaponCooldownReductionPerLevel = null;
             SprayKnockback = null;
+            WaterBalloonDamagePct = null;
+            WaterBalloonStopDurationSeconds = null;
+            SpeedMultiplierPerLevel = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -354,6 +370,9 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),
             (PrefsPrefix + nameof(WeaponCooldownReductionPerLevel), () => WeaponCooldownReductionPerLevel, v => WeaponCooldownReductionPerLevel = v),
             (PrefsPrefix + nameof(SprayKnockback), () => SprayKnockback, v => SprayKnockback = v),
+            (PrefsPrefix + nameof(WaterBalloonDamagePct), () => WaterBalloonDamagePct, v => WaterBalloonDamagePct = v),
+            (PrefsPrefix + nameof(WaterBalloonStopDurationSeconds), () => WaterBalloonStopDurationSeconds, v => WaterBalloonStopDurationSeconds = v),
+            (PrefsPrefix + nameof(SpeedMultiplierPerLevel), () => SpeedMultiplierPerLevel, v => SpeedMultiplierPerLevel = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

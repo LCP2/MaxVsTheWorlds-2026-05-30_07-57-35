@@ -70,5 +70,22 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(AbilityTuning.WaterBalloonSplashRadius(-1f, -1f), Is.EqualTo(0f).Within(1e-5f));
         }
+
+        // ---------------------------------------------------------------- Speed (WV-231)
+
+        [Test]
+        public void SpeedLevelZeroIsNoMultiplier()
+        {
+            Assert.That(AbilityTuning.SpeedMultiplier(0, 0.15f), Is.EqualTo(1f).Within(1e-5f),
+                "not owned (level 0) must not change Max's walk speed");
+        }
+
+        [Test]
+        public void EachSpeedLevelAddsTheSamePerLevelFraction()
+        {
+            Assert.That(AbilityTuning.SpeedMultiplier(1, 0.15f), Is.EqualTo(1.15f).Within(1e-5f));
+            Assert.That(AbilityTuning.SpeedMultiplier(4, 0.15f), Is.EqualTo(1.60f).Within(1e-5f),
+                "a maxed L4 Speed at the authored 15%/level should be +60%");
+        }
     }
 }

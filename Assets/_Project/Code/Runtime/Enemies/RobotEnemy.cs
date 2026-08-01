@@ -25,7 +25,7 @@ namespace MaxWorlds.Enemies
     /// mesh would be a second, drifting copy of an answer we author.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
-    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHealthReadout
+    public sealed class RobotEnemy : MonoBehaviour, IDamageable, IKnockbackable, IHaltable, IHealthReadout
     {
         // Emerging is appended, not inserted: these are serialized as ints, and renumbering the
         // existing members would silently re-label every one of them.
@@ -193,6 +193,27 @@ namespace MaxWorlds.Enemies
         public float HealthCurrent => _health;
         public string ReadoutName => Kind == EnemyKind.Bruiser ? "BRUISER" : "RUSHER";
 
+        /// <summary>This robot's full HP, unscaled by current damage — what Water Balloon's
+        /// percentage splash (WV-231, spec §9 <c>waterBalloonDamagePct</c>) is a fraction of.
+        /// Deliberately not part of <see cref="IHealthReadout"/>: that interface is a UI readout and
+        /// says nothing about max on purpose (see its own doc comment); this is a combat number a
+        /// weapon actually needs.</summary>
+        public float MaxHealth => maxHealth;
+
+        /// <summary>Seconds left on a Water Balloon halt (WV-231) — 0 when not halted.</summary>
+        private float _haltTimer;
+
+        /// <summary>True while frozen by a halt — the state machine and its timer are paused, but
+        /// knockback and gravity still apply (a halted robot can still be shoved or fall).</summary>
+        public bool IsHalted => _haltTimer > 0f;
+
+        // --- IHaltable (WV-231) ---
+        public void ApplyHalt(float seconds)
+        {
+            if (Current == State.Dead) return;
+            _haltTimer = Mathf.Max(_haltTimer, seconds);
+        }
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -236,6 +257,7 @@ namespace MaxWorlds.Enemies
             _closest = float.MaxValue; // ...nor its idea of how well the last one was doing
             _stallTimer = 0f;
             _knockback = Vector3.zero;
+            _haltTimer = 0f;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -259,21 +281,31 @@ namespace MaxWorlds.Enemies
         {
             if (Current == State.Dead) return;
             float dt = Time.deltaTime;
-            _stateTimer += dt;
 
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
             if (target != null)
                 _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
 
-            switch (Current)
+            // Water Balloon's halt (WV-231): a true freeze, not just a movement stop — the state
+            // timer doesn't advance either, so a robot caught mid-telegraph resumes exactly where it
+            // left off once the halt ends, rather than the wind-up quietly expiring while frozen.
+            if (_haltTimer > 0f)
             {
-                case State.Emerging: TickEmerge(dt);   break;
-                case State.Chase:    TickChase(dt);    break;
-                case State.Search:   TickSearch(dt);   break;
-                case State.Telegraph: TickTelegraph(dt); break;
-                case State.Lunge:    TickLunge(dt);    break;
-                case State.Recover:  TickRecover(dt);  break;
+                _haltTimer -= dt;
+            }
+            else
+            {
+                _stateTimer += dt;
+                switch (Current)
+                {
+                    case State.Emerging: TickEmerge(dt);   break;
+                    case State.Chase:    TickChase(dt);    break;
+                    case State.Search:   TickSearch(dt);   break;
+                    case State.Telegraph: TickTelegraph(dt); break;
+                    case State.Lunge:    TickLunge(dt);    break;
+                    case State.Recover:  TickRecover(dt);  break;
+                }
             }
 
             ApplyKnockback(dt);

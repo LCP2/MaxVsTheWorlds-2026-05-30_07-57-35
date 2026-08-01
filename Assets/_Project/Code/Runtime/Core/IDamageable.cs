@@ -66,4 +66,14 @@ namespace MaxWorlds.Core
         public static bool Applies(Team attacker, Team target)
             => attacker == Team.Neutral || attacker != target;
     }
+
+    /// <summary>Something that can be knocked out of action briefly without dying — the Water
+    /// Balloon splash's "stop" (WV-231, spec §6a). Separate from <see cref="IKnockbackable"/>: a
+    /// knockback shoves a receiver, a halt freezes whatever it was doing in place for a duration.</summary>
+    public interface IHaltable
+    {
+        /// <summary>Freeze for at least this many seconds. Calling it again while already halted
+        /// extends to the longer of the two, it never shortens an existing halt.</summary>
+        void ApplyHalt(float seconds);
+    }
 }

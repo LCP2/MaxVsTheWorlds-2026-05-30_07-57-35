@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using MaxWorlds.Core;
 using MaxWorlds.Upgrades;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Player
 {
@@ -24,9 +25,15 @@ namespace MaxWorlds.Player
         public float AuthoredMoveSpeed => moveSpeed;
 
         /// <summary>Max's effective walk speed right now — the authored/dev-tuned base scaled by the
-        /// Acceleration engine if it's installed (YT-133/141). The single number <see cref="Update"/>
-        /// moves him at; exposed so the effect can be measured without driving input.</summary>
-        public float WalkSpeed => DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed) * UpgradeState.MoveSpeedMultiplier;
+        /// Acceleration engine if it's installed (YT-133/141) and by the Speed ability's level (WV-231,
+        /// spec §6). The single number <see cref="Update"/> moves him at; exposed so the effect can be
+        /// measured without driving input.</summary>
+        public float WalkSpeed => DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed)
+            * UpgradeState.MoveSpeedMultiplier * SpeedAbilityMultiplier;
+
+        private static float SpeedAbilityMultiplier => AbilityTuning.SpeedMultiplier(
+            WeaponSystemState.AbilityLevel(AbilityKind.Speed),
+            DevTuning.Or(DevTuning.SpeedMultiplierPerLevel, AbilityTuning.DefaultSpeedMultiplierPerLevel));
         [SerializeField] private float rotationSpeed = 720f; // deg/s
         [SerializeField] private float gravity = 20f;
 
@@ -40,7 +47,6 @@ namespace MaxWorlds.Player
         [SerializeField] private float dashSpeed = 18f;
         [SerializeField] private float dashDuration = 0.18f;
         [SerializeField] private float dashInvulnerable = 0.18f;
-        [SerializeField] private float dashCooldown = 0.6f;
 
         private CharacterController _cc;
         private InputAction _move;
@@ -70,18 +76,31 @@ namespace MaxWorlds.Player
         /// The HUD (YT-30) reads this to light the movement joystick + direction arrow.</summary>
         public Vector2 MoveInput { get; private set; }
 
+        /// <summary>Dash's base cooldown before Max even owns it (WV-231): now a shed-acquired
+        /// ability (spec §6), so this reads the same catalog cooldown Water Balloon/Teleport use
+        /// (Weapon Cooldown reduces it) rather than a fixed local number.</summary>
+        private static float EffectiveDashCooldown => WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Dash);
+
         /// <summary>Dash cooldown as a 0..1 wipe (1 = just dashed, 0 = ready) for the HUD dash slot.</summary>
         public float DashCooldownNormalized
         {
             get
             {
-                float total = dashCooldown + dashDuration;
+                float total = EffectiveDashCooldown + dashDuration;
                 return total > 0f ? Mathf.Clamp01(_cooldownTimer / total) : 0f;
             }
         }
 
-        /// <summary>True when the dash is off cooldown (HUD dash slot "ready" glow).</summary>
-        public bool DashReady => _cooldownTimer <= 0f;
+        /// <summary>True when Dash is owned AND off cooldown (HUD dash slot "ready" glow). Dash is a
+        /// single shed-acquired unlock (WV-231) — unowned, it never reads ready.</summary>
+        public bool DashReady => _cooldownTimer <= 0f && WeaponSystemState.IsAcquired(AbilityKind.Dash);
+
+        /// <summary>Pure dash-trigger gate (unit-testable), mirroring
+        /// <see cref="MaxWorlds.Combat.WaterBlaster.ShouldEmit"/>: a press only fires a dash while
+        /// idle (not mid-dash), off cooldown, AND actually owned — Dash is a shed-acquired unlock
+        /// (WV-230/231), not base movement tech everyone starts with.</summary>
+        public static bool ShouldDash(bool pressed, bool idle, bool offCooldown, bool acquired) =>
+            pressed && idle && offCooldown && acquired;
 
         private void Awake()
         {
@@ -105,6 +124,10 @@ namespace MaxWorlds.Player
             _dash = new InputAction("Dash", InputActionType.Button);
             _dash.AddBinding("<Keyboard>/space");
             _dash.AddBinding("<Gamepad>/buttonSouth");
+
+            // Water Balloon + Teleport's live component self-attaches, same code-driven-scenes rule
+            // WaterBlaster's own sub-components follow (WV-231) — no scene wiring.
+            if (GetComponent<PlayerAbilities>() == null) gameObject.AddComponent<PlayerAbilities>();
         }
 
         private void OnEnable()
@@ -152,13 +175,17 @@ namespace MaxWorlds.Player
                 _facing = moveDir.normalized;
             }
 
-            // Dash trigger (ignored mid-dash or on cooldown).
-            if (_dash.WasPressedThisFrame() && _dashTimer <= 0f && _cooldownTimer <= 0f)
+            // Dash trigger (ignored mid-dash, on cooldown, unowned, or unaffordable). Dash is a
+            // shed-acquired ability (WV-231): a press that isn't owned yet must never spend cells or
+            // start a cooldown, so the acquisition check runs before the wallet touch.
+            if (ShouldDash(_dash.WasPressedThisFrame(), _dashTimer <= 0f, _cooldownTimer <= 0f,
+                    WeaponSystemState.IsAcquired(AbilityKind.Dash))
+                && AbilityCellSpend.TrySpendSpecial())
             {
                 _dashDir = moveDir.sqrMagnitude > 0.04f ? moveDir.normalized : _facing;
                 _dashTimer = dashDuration;
                 _iframeTimer = dashInvulnerable;
-                _cooldownTimer = dashCooldown + dashDuration;
+                _cooldownTimer = EffectiveDashCooldown + dashDuration;
             }
 
             // Dev tuning panel may be overriding the walk speed this session (YT-105); off by

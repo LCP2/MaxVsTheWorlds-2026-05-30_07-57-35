@@ -65,6 +65,19 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
+        /// <summary>Spend several power cells atomically for a single ability activation (WV-231) —
+        /// a Water Balloon throw or a Dash/Teleport use either affords its whole cost or doesn't fire
+        /// at all, never a partial spend. Returns false (and spends nothing) if the reserve can't
+        /// cover the full amount.</summary>
+        public static bool TrySpendPowerCells(int amount)
+        {
+            if (amount <= 0) return true;
+            if (PowerCells < amount) return false;
+            PowerCells -= amount;
+            PowerCellsChanged?.Invoke(PowerCells);
+            return true;
+        }
+
         /// <summary>Bank one collected part (WV-228) — a fungible token, no identity to carry.</summary>
         public static void AddPart()
         {

@@ -44,5 +44,24 @@ namespace MaxWorlds.Weapons
         /// <summary>The splash VFX's radius, metres, given the large robot's own footprint radius.</summary>
         public static float WaterBalloonSplashRadius(float largeRobotFootprintRadius, float splashMult) =>
             Mathf.Max(0f, largeRobotFootprintRadius) * Mathf.Max(0f, splashMult);
+
+        /// <summary>Water Balloon's damage as a percentage of the ROBOT'S OWN max health (spec §9:
+        /// <c>waterBalloonDamagePct</c>) — a percentage rather than a flat number, so one fixed-size
+        /// splash still threatens the WV-224 Heavy/Brute tiers without needing its own scaling curve.</summary>
+        public const float DefaultWaterBalloonDamagePct = 50f;
+
+        /// <summary>How long the splash halts the robots it hits, seconds (spec §9:
+        /// <c>waterBalloonStopDuration</c> — spec names the setting but doesn't pin a number; an
+        /// authored placeholder, same as the cooldowns above until Lee tunes it).</summary>
+        public const float DefaultWaterBalloonStopDurationSeconds = 1.5f;
+
+        /// <summary>Fraction each Speed level adds to Max's walk speed. The spec's settings list
+        /// (§9) doesn't name this one explicitly the way it does Water Balloon/Power
+        /// Efficiency/Weapon Cooldown; authored the same per-level-multiplier shape as those.</summary>
+        public const float DefaultSpeedMultiplierPerLevel = 0.15f;
+
+        /// <summary>Max's walk-speed multiplier at a given Speed level — 1x at level 0 (not owned).</summary>
+        public static float SpeedMultiplier(int level, float perLevel) =>
+            1f + Mathf.Max(0, level) * Mathf.Max(0f, perLevel);
     }
 }
