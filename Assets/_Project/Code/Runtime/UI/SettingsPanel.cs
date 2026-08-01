@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
@@ -14,6 +15,7 @@ using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Upgrades;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.UI
 {
@@ -59,10 +61,14 @@ namespace MaxWorlds.UI
         private const float Scale6Inch = 0.44f;   // used by the layout test
 
         // Grew by SaveBtnW + SaveBtnGap (YT-201) to make room for the Save settings button without
-        // touching the other three footer buttons' proven widths. Width has huge slack against the
-        // 932pt phone-width ceiling (currently 552.6pt used), unlike height, which is nearly maxed —
-        // see PanelH below.
-        private const float PanelW = 980f + SaveBtnW + SaveBtnGap;
+        // touching the other three footer buttons' proven widths. Grew again for the WV-234 tab
+        // restructure (5 tabs, 66 knobs) — the widest tabs (ENEMIES 19, WEAPONS 16) now spread across
+        // 4 columns, and each needs enough label width for names like "Surge elite chance" to render
+        // on one line. NOTE: the real ceiling here isn't the 932pt phone width (huge slack, 572pt
+        // used) — it's the play-mode test window itself (640x480, no CanvasScaler match to a phone),
+        // which the CanvasScaler's geometric-mean scale shrinks to ~0.385x rather than the phone's
+        // 0.44x; EverythingItDrawsIsOnScreen enforces this tighter bound.
+        private const float PanelW = 1024f + SaveBtnW + SaveBtnGap;
         private const float SaveBtnW = 260f;
         private const float SaveBtnGap = 16f;
         // Grew for the two durability sliders (YT-126), then again in YT-192 so the three-column
@@ -138,16 +144,26 @@ namespace MaxWorlds.UI
             public Action<float> Set;
             public Slider Slider;
             public Text Value;
-            public int Tab;   // 0 = Gameplay, 1 = Weapons (YT-138), 2 = Boss (YT-157)
+            public int Tab;   // see TabEnemies..TabFeel below
         }
 
-        // Tabs (YT-138): the panel is full at 10 gameplay knobs, so the upgrade tuning lives on a
-        // second page, and the boss's own attack tuning (YT-157) on a third. One container per tab;
-        // only the active one is shown.
-        private static readonly string[] TabNames = { "GAMEPLAY", "WEAPONS", "BOSS" };
+        // Tabs (YT-138, restructured WV-234): the panel outgrew a flat GAMEPLAY/WEAPONS/BOSS split at
+        // 41 knobs, and the recut spec (§9) adds 25 more. Restructured into the categories the spec
+        // itself names — Enemies / Economy / Weapons / Arena / Combat feel — so every settings-panel
+        // ticket from here on has an obvious tab to land its knob on. One container per tab; only the
+        // active one is shown.
+        private const int TabEnemies = 0;
+        private const int TabEconomy = 1;
+        private const int TabWeapons = 2;
+        private const int TabArena = 3;
+        private const int TabFeel = 4;
+        private static readonly string[] TabNames = { "ENEMIES", "ECONOMY", "WEAPONS", "ARENA", "FEEL" };
         private GameObject[] _pages;
         private Button[] _tabButtons;
         private int _tab;
+
+        // Pause-on-open (WV-234, spec §8) — same capture/zero/restore idiom as WeaponsScreen.Open/Close.
+        private float _prevTimeScale = 1f;
 
         // Built once, a frame after the scene loads (the objects it reads defaults from wake in their
         // own Awake first). Always — there is no gate any more.
@@ -155,6 +171,9 @@ namespace MaxWorlds.UI
 
         private void OnDestroy()
         {
+            // Never leave the world frozen if we're torn down mid-open (a scene swap, a test) — same
+            // safety net as WeaponsScreen.OnDestroy.
+            if (_open) Time.timeScale = _prevTimeScale;
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
@@ -222,6 +241,7 @@ namespace MaxWorlds.UI
             float drainDefault = BlasterTuning.EnergyPerSecond;
             float regenDefault = BlasterTuning.RegenPerSec;
 
+            // ---- FEEL tab: camera + Max's own handling + the spray's cosmetic knockback. ----
             Add("Camera zoom", "m", FixedAngleCameraRig.MinDistance, FixedAngleCameraRig.MaxDistance,
                 camDefault,
                 () => DevTuning.Or(DevTuning.CameraDistance, camDefault),
@@ -230,19 +250,11 @@ namespace MaxWorlds.UI
                     DevTuning.CameraDistance = v;
                     var r = FindFirstObjectByType<FixedAngleCameraRig>();
                     if (r != null) r.SetDistance(v);
-                });
+                }, tab: TabFeel);
 
             Add("Max move speed", "m/s", 1f, 15f, playerDefault,
                 () => DevTuning.Or(DevTuning.PlayerMoveSpeed, playerDefault),
-                v => DevTuning.PlayerMoveSpeed = v);
-
-            Add("Robot move speed", "m/s", 0.5f, 12f, robotDefault,
-                () => DevTuning.Or(DevTuning.RobotMoveSpeed, robotDefault),
-                v => DevTuning.RobotMoveSpeed = v);
-
-            Add("Boss move speed", "m/s", 0.5f, 12f, bossDefault,
-                () => DevTuning.Or(DevTuning.BossMoveSpeed, bossDefault),
-                v => DevTuning.BossMoveSpeed = v, tab: 2);
+                v => DevTuning.PlayerMoveSpeed = v, tab: TabFeel);
 
             Add("Max max-life", "hp", 25f, 500f, healthDefault,
                 () => DevTuning.Or(DevTuning.PlayerMaxHealth, healthDefault),
@@ -251,21 +263,29 @@ namespace MaxWorlds.UI
                     DevTuning.PlayerMaxHealth = v;
                     var h = FindFirstObjectByType<PlayerHealth>();
                     if (h != null) h.RefreshMax();
-                });
+                }, tab: TabFeel);
 
             Add("Water deplete rate", "/s", 0f, 60f, drainDefault,
                 () => DevTuning.Or(DevTuning.BlasterDrainPerSecond, drainDefault),
-                v => { DevTuning.BlasterDrainPerSecond = v; RefreshBlaster(); });
+                v => { DevTuning.BlasterDrainPerSecond = v; RefreshBlaster(); }, tab: TabFeel);
 
             Add("Water refill rate", "/s", 0f, 200f, regenDefault,
                 () => DevTuning.Or(DevTuning.BlasterRegenPerSecond, regenDefault),
-                v => { DevTuning.BlasterRegenPerSecond = v; RefreshBlaster(); });
+                v => { DevTuning.BlasterRegenPerSecond = v; RefreshBlaster(); }, tab: TabFeel);
 
-            // Durability sliders (YT-126). Factory default is read off a live hutch so it tracks the
-            // baked value; the boss default is its authored max. Both retune the live objects on the
-            // frame the slider moves, exactly like the speed/life/water knobs.
+            // Spray knockback recut (WV-225): near-zero cosmetic stagger, not the old launch. Spec §9
+            // names this under Combat feel explicitly.
+            Add("Spray knockback", "m/s", 0f, 5f, WaterBlaster.DefaultSprayKnockback,
+                () => DevTuning.Or(DevTuning.SprayKnockback, WaterBlaster.DefaultSprayKnockback),
+                v => DevTuning.SprayKnockback = v, tab: TabFeel);
+
+            Add("Weakened damage", "x", 1f, 3f, PlayerHealth.DefaultWeakenedDamageMultiplier,
+                () => DevTuning.Or(DevTuning.WeakenedDamageMultiplier, PlayerHealth.DefaultWeakenedDamageMultiplier),
+                v => DevTuning.WeakenedDamageMultiplier = v, tab: TabFeel);
+
+            // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights
+            // through, and the gated-area knobs (WV-234, spec §1/§9 — settings only until WV-222). ----
             float factoryHpDefault = FactoryDefault();
-            float bossHpDefault = BossTuning.Health;
 
             Add("Factory health", "hp", 50f, 1500f, factoryHpDefault,
                 () => DevTuning.Or(DevTuning.FactoryHealth, factoryHpDefault),
@@ -273,7 +293,113 @@ namespace MaxWorlds.UI
                 {
                     DevTuning.FactoryHealth = v;
                     foreach (MowerHutch h in FactoryCensus.All) if (h != null) h.RefreshMax();
-                });
+                }, tab: TabArena);
+
+            // Invasion Level / escalation (YT-181): the DifficultyDirector reads every one of these
+            // live, so a moved slider retimes the escalation mid-run — no push needed.
+            Add("Escalation start", "lvl", 0f, 5f, DifficultyDirector.AuthoredStart,
+                () => DevTuning.Or(DevTuning.EscalationStart, DifficultyDirector.AuthoredStart),
+                v => DevTuning.EscalationStart = v, tab: TabArena);
+
+            Add("Escalation rate", "lvl/s", 0f, 0.5f, DifficultyDirector.AuthoredRatePerSecond,
+                () => DevTuning.Or(DevTuning.EscalationRate, DifficultyDirector.DerivedRatePerSecond),
+                v => DevTuning.EscalationRate = v, tab: TabArena);
+
+            // YT-210: the run is now a bounded ~6-minute clock. Run length is the authored knob;
+            // the rate above derives from it unless explicitly pinned.
+            Add("Run length", "s", 30f, 900f, DifficultyDirector.AuthoredRunLengthSeconds,
+                () => DevTuning.Or(DevTuning.RunLengthSeconds, DifficultyDirector.AuthoredRunLengthSeconds),
+                v => DevTuning.RunLengthSeconds = v, tab: TabArena);
+
+            Add("Shed clock skip", "s", 0f, 300f, DifficultyDirector.AuthoredPerShedBump,
+                () => DevTuning.Or(DevTuning.EscalationPerShedBump, DifficultyDirector.AuthoredPerShedBump),
+                v => DevTuning.EscalationPerShedBump = v, tab: TabArena);
+
+            Add("Escalation max", "lvl", 1f, 30f, DifficultyDirector.AuthoredMax,
+                () => DevTuning.Or(DevTuning.EscalationMax, DifficultyDirector.AuthoredMax),
+                v => DevTuning.EscalationMax = v, tab: TabArena);
+
+            // Gated arena (WV-234, spec §1/§9) — not yet consumed by any live system (WV-222 builds
+            // it); the panel just needs to have somewhere for these to live per the spec's full list.
+            Add("Area count", "areas", 1f, 20f, ArenaTuning.DefaultAreaCount,
+                () => DevTuning.Or(DevTuning.AreaCount, ArenaTuning.DefaultAreaCount),
+                v => DevTuning.AreaCount = v, tab: TabArena);
+
+            Add("Gate break secs", "s", 1f, 20f, ArenaTuning.DefaultGateBreakSeconds,
+                () => DevTuning.Or(DevTuning.GateBreakSeconds, ArenaTuning.DefaultGateBreakSeconds),
+                v => DevTuning.GateBreakSeconds = v, tab: TabArena);
+
+            Add("Gate needs clear", "on/off", 0f, 1f, ArenaTuning.DefaultGateRequiresClear,
+                () => DevTuning.Or(DevTuning.GateRequiresClear, ArenaTuning.DefaultGateRequiresClear),
+                v => DevTuning.GateRequiresClear = v, tab: TabArena);
+
+            Add("Shed count", "sheds", 1f, 15f, ArenaTuning.DefaultShedCount,
+                () => DevTuning.Or(DevTuning.ShedCount, ArenaTuning.DefaultShedCount),
+                v => DevTuning.ShedCount = v, tab: TabArena);
+
+            // Boss brood-volley tuning (YT-157) — the boss fight is the run's climax, grouped here
+            // with the rest of the run's structure rather than on ENEMIES, which keeps ENEMIES at 4
+            // columns instead of 5 (label-width budget, see PanelW's comment).
+            Add("Add volley interval", "s", 2f, 20f, BossTuning.VolleyInterval,
+                () => DevTuning.Or(DevTuning.BossVolleyInterval, BossTuning.VolleyInterval),
+                v => DevTuning.BossVolleyInterval = v, tab: TabArena);
+
+            Add("Adds per volley", "bots", 1f, 8f, BossTuning.RobotsPerVolley,
+                () => DevTuning.Or(DevTuning.BossAddsPerVolley, BossTuning.RobotsPerVolley),
+                v => DevTuning.BossAddsPerVolley = v, tab: TabArena);
+
+            Add("Max adds alive", "bots", 1f, 20f, BossTuning.MaxConcurrentAdds,
+                () => DevTuning.Or(DevTuning.BossMaxAdds, BossTuning.MaxConcurrentAdds),
+                v => DevTuning.BossMaxAdds = v, tab: TabArena);
+
+            Add("Volley windup", "s", 0.3f, 3f, BossTuning.VolleyWindup,
+                () => DevTuning.Or(DevTuning.BossVolleyWindup, BossTuning.VolleyWindup),
+                v => DevTuning.BossVolleyWindup = v, tab: TabArena);
+
+            // ---- ENEMIES tab: robots, the boss (an enemy), and the robot-accumulation scheme
+            // (WV-234, spec §1-2/§9 — settings only until WV-222/223/224). ----
+            Add("Robot move speed", "m/s", 0.5f, 12f, robotDefault,
+                () => DevTuning.Or(DevTuning.RobotMoveSpeed, robotDefault),
+                v => DevTuning.RobotMoveSpeed = v, tab: TabEnemies);
+
+            Add("Robot health", "x", 0.5f, 3f, EnemySpawner.DefaultRobotHealthMultiplier,
+                () => DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier),
+                v => DevTuning.RobotHealthMultiplier = v, tab: TabEnemies);
+
+            // Swarm pacing (YT-194): a couple of robots at run start (not a swarm), an intuitive
+            // production unit, and a real toughness knob. Both read live off the factory.
+            float startingRobotsDefault = StartingRobotsDefault();
+            float productionDefault = ProductionPerMinuteDefault();
+
+            Add("Starting robots", "bots", 0f, 10f, startingRobotsDefault,
+                () => DevTuning.Or(DevTuning.StartingRobots, startingRobotsDefault),
+                v => DevTuning.StartingRobots = v, tab: TabEnemies);
+
+            Add("Production/min", "bots/m", 5f, 120f, productionDefault,
+                () => DevTuning.Or(DevTuning.RobotProductionPerMinute, productionDefault),
+                v => DevTuning.RobotProductionPerMinute = v, tab: TabEnemies);
+
+            // Spawn cadence (YT-170). Reads live: EnemySpawner pulls CurrentInterval fresh on every
+            // check, so the slider retimes every factory's emergence with no push needed.
+            Add("Spawn interval", "s", 0.3f, 4f, SpawnIntervalDefault(),
+                () => DevTuning.Or(DevTuning.SpawnInterval, SpawnIntervalDefault()),
+                v => DevTuning.SpawnInterval = v, tab: TabEnemies);
+
+            // Death-throes surge (YT-182): the wreck's last wave on shed destruction.
+            Add("Surge burst", "bots", 0f, 10f, EnemySpawner.DeathSurgeBurstMax,
+                () => DevTuning.Or(DevTuning.DeathSurgeBurstSize, EnemySpawner.DeathSurgeBurstMax),
+                v => DevTuning.DeathSurgeBurstSize = v, tab: TabEnemies);
+
+            Add("Surge elite chance", "x", 0f, 1f, EnemySpawner.DeathSurgeEliteChanceMax,
+                () => DevTuning.Or(DevTuning.DeathSurgeEliteChance, EnemySpawner.DeathSurgeEliteChanceMax),
+                v => DevTuning.DeathSurgeEliteChance = v, tab: TabEnemies);
+
+            // Boss — the field's toughest enemy, its own tuning grouped here with the rest.
+            float bossHpDefault = BossTuning.Health;
+
+            Add("Boss move speed", "m/s", 0.5f, 12f, bossDefault,
+                () => DevTuning.Or(DevTuning.BossMoveSpeed, bossDefault),
+                v => DevTuning.BossMoveSpeed = v, tab: TabEnemies);
 
             Add("Boss health", "hp", 500f, 8000f, bossHpDefault,
                 () => DevTuning.Or(DevTuning.BossHealth, bossHpDefault),
@@ -282,165 +408,162 @@ namespace MaxWorlds.UI
                     DevTuning.BossHealth = v;
                     var b = FindFirstObjectByType<BigBermudaBoss>();
                     if (b != null) b.RefreshMax();
-                }, tab: 2);
+                }, tab: TabEnemies);
 
-            // ---- Invasion Level / escalation (YT-181): the DifficultyDirector reads every one of
-            // these live, so a moved slider retimes the escalation mid-run — no push needed, same
-            // contract as the pacing knobs above.
-            Add("Escalation start", "lvl", 0f, 5f, DifficultyDirector.AuthoredStart,
-                () => DevTuning.Or(DevTuning.EscalationStart, DifficultyDirector.AuthoredStart),
-                v => DevTuning.EscalationStart = v);
+            // Robot-accumulation scheme (WV-234, spec §1-2/§9) — not yet consumed (WV-222/223/224
+            // build the gated arena + Heavy/Brute tiers this composition drift feeds).
+            Add("Start large count", "bots", 0f, 20f, RobotCompositionTuning.DefaultStartLargeCount,
+                () => DevTuning.Or(DevTuning.StartLargeCount, RobotCompositionTuning.DefaultStartLargeCount),
+                v => DevTuning.StartLargeCount = v, tab: TabEnemies);
 
-            Add("Escalation rate", "lvl/s", 0f, 0.5f, DifficultyDirector.AuthoredRatePerSecond,
-                () => DevTuning.Or(DevTuning.EscalationRate, DifficultyDirector.DerivedRatePerSecond),
-                v => DevTuning.EscalationRate = v);
+            Add("Start small count", "bots", 0f, 20f, RobotCompositionTuning.DefaultStartSmallCount,
+                () => DevTuning.Or(DevTuning.StartSmallCount, RobotCompositionTuning.DefaultStartSmallCount),
+                v => DevTuning.StartSmallCount = v, tab: TabEnemies);
 
-            // YT-210: the run is now a bounded ~6-minute clock. Run length is the authored knob;
-            // the rate above derives from it unless explicitly pinned.
-            Add("Run length", "s", 30f, 900f, DifficultyDirector.AuthoredRunLengthSeconds,
-                () => DevTuning.Or(DevTuning.RunLengthSeconds, DifficultyDirector.AuthoredRunLengthSeconds),
-                v => DevTuning.RunLengthSeconds = v);
+            Add("Area growth %", "%", 0f, 50f, RobotCompositionTuning.DefaultAreaGrowthPct,
+                () => DevTuning.Or(DevTuning.AreaGrowthPct, RobotCompositionTuning.DefaultAreaGrowthPct),
+                v => DevTuning.AreaGrowthPct = v, tab: TabEnemies);
 
-            Add("Shed clock skip", "s", 0f, 300f, DifficultyDirector.AuthoredPerShedBump,
-                () => DevTuning.Or(DevTuning.EscalationPerShedBump, DifficultyDirector.AuthoredPerShedBump),
-                v => DevTuning.EscalationPerShedBump = v);
+            Add("Large:small ratio", "x", 0.2f, 3f, RobotCompositionTuning.DefaultLargeToSmallRatio,
+                () => DevTuning.Or(DevTuning.LargeToSmallRatio, RobotCompositionTuning.DefaultLargeToSmallRatio),
+                v => DevTuning.LargeToSmallRatio = v, tab: TabEnemies);
 
-            Add("Escalation max", "lvl", 1f, 30f, DifficultyDirector.AuthoredMax,
-                () => DevTuning.Or(DevTuning.EscalationMax, DifficultyDirector.AuthoredMax),
-                v => DevTuning.EscalationMax = v);
+            Add("Large share drift", "x/area", 0f, 0.1f, RobotCompositionTuning.DefaultLargeShareDriftPerArea,
+                () => DevTuning.Or(DevTuning.LargeShareDriftPerArea, RobotCompositionTuning.DefaultLargeShareDriftPerArea),
+                v => DevTuning.LargeShareDriftPerArea = v, tab: TabEnemies);
 
-            // ---- Death-throes surge (YT-182): the wreck's last wave. Left alone, both numbers scale
-            // with the Invasion Level above; a pinned value here replaces that curve outright with a
-            // flat number, same contract as "Spawn interval" pinning the cadence ramp.
-            Add("Surge burst", "bots", 0f, 10f, EnemySpawner.DeathSurgeBurstMax,
-                () => DevTuning.Or(DevTuning.DeathSurgeBurstSize, EnemySpawner.DeathSurgeBurstMax),
-                v => DevTuning.DeathSurgeBurstSize = v);
+            Add("Max active robots", "bots", 4f, 40f, RobotCompositionTuning.DefaultMaxActiveRobots,
+                () => DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots),
+                v => DevTuning.MaxActiveRobots = v, tab: TabEnemies);
 
-            Add("Surge elite chance", "x", 0f, 1f, EnemySpawner.DeathSurgeEliteChanceMax,
-                () => DevTuning.Or(DevTuning.DeathSurgeEliteChance, EnemySpawner.DeathSurgeEliteChanceMax),
-                v => DevTuning.DeathSurgeEliteChance = v);
+            Add("Robot HP/area", "x", 0f, 3f, RobotCompositionTuning.DefaultRobotHpPerAreaMult,
+                () => DevTuning.Or(DevTuning.RobotHpPerAreaMult, RobotCompositionTuning.DefaultRobotHpPerAreaMult),
+                v => DevTuning.RobotHpPerAreaMult = v, tab: TabEnemies);
 
-            // ---- Swarm pacing (YT-194): the front-of-curve fix for "overrun at 0, dominant once
-            // armed" — a couple of robots at run start (not a swarm), an intuitive production unit,
-            // and a real toughness knob now that the field-wide cap (YT-186) means late-game danger
-            // has to come from durability rather than raw numbers. All three read live: EnemySpawner
-            // re-derives its cap/interval on every check, and a freshly spawned or reused robot picks
-            // up the health multiplier the moment SpawnKind builds its archetype.
-            float startingRobotsDefault = StartingRobotsDefault();
-            float productionDefault = ProductionPerMinuteDefault();
+            Add("Heavy intro area", "area", 1f, 10f, RobotCompositionTuning.DefaultHeavyIntroArea,
+                () => DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
+                v => DevTuning.HeavyIntroArea = v, tab: TabEnemies);
 
-            Add("Starting robots", "bots", 0f, 10f, startingRobotsDefault,
-                () => DevTuning.Or(DevTuning.StartingRobots, startingRobotsDefault),
-                v => DevTuning.StartingRobots = v);
+            Add("Brute intro area", "area", 1f, 10f, RobotCompositionTuning.DefaultBruteIntroArea,
+                () => DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
+                v => DevTuning.BruteIntroArea = v, tab: TabEnemies);
 
-            Add("Production/min", "bots/m", 5f, 120f, productionDefault,
-                () => DevTuning.Or(DevTuning.RobotProductionPerMinute, productionDefault),
-                v => DevTuning.RobotProductionPerMinute = v);
+            Add("Tough sub %", "%", 0f, 100f, RobotCompositionTuning.DefaultToughSubstitutionPct,
+                () => DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct),
+                v => DevTuning.ToughSubstitutionPct = v, tab: TabEnemies);
 
-            Add("Robot health", "x", 0.5f, 3f, EnemySpawner.DefaultRobotHealthMultiplier,
-                () => DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier),
-                v => DevTuning.RobotHealthMultiplier = v);
-
-            // Spawn cadence (YT-170). Reads live: EnemySpawner pulls CurrentInterval fresh on every
-            // check, so the slider retimes every factory's emergence with no push needed. Lives on
-            // the Gameplay tab (YT-196 audit): it's a robots/arena knob, same group as the two above.
-            Add("Spawn interval", "s", 0.3f, 4f, SpawnIntervalDefault(),
-                () => DevTuning.Or(DevTuning.SpawnInterval, SpawnIntervalDefault()),
-                v => DevTuning.SpawnInterval = v);
-
-            // ---- Weapons tab (YT-138): the upgrade-part magnitudes + the pacing/Hydro tunables. ----
-            // Nozzle/range/harness re-fit the live weapon (RefreshUpgrades); the rest read live.
-            Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,
-                () => DevTuning.Or(DevTuning.NozzleConeMultiplier, UpgradeCatalog.NozzleConeMultiplier),
-                v => { DevTuning.NozzleConeMultiplier = v; RefreshUpgrades(); }, tab: 1);
-
-            Add("Power reach", "m", 0f, 8f, UpgradeCatalog.PowerRangeBonus,
-                () => DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus),
-                v => { DevTuning.PowerNozzleRange = v; RefreshUpgrades(); }, tab: 1);
-
-            Add("Extender reach", "m", 0f, 8f, UpgradeCatalog.RangeExtenderBonus,
-                () => DevTuning.Or(DevTuning.RangeExtenderBonus, UpgradeCatalog.RangeExtenderBonus),
-                v => { DevTuning.RangeExtenderBonus = v; RefreshUpgrades(); }, tab: 1);
-
-            Add("Wide-bore widen", "x", 1f, 5f, UpgradeCatalog.WideBoreConeMultiplier,
-                () => DevTuning.Or(DevTuning.WideBoreConeMultiplier, UpgradeCatalog.WideBoreConeMultiplier),
-                v => { DevTuning.WideBoreConeMultiplier = v; RefreshUpgrades(); }, tab: 1);
-
-            Add("Harness capacity", "wtr", 0f, 150f, UpgradeCatalog.HarnessCapacityBonus,
-                () => DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus),
-                v => { DevTuning.HarnessCapacity = v; RefreshUpgrades(); }, tab: 1);
-
-            Add("Engine boost", "x", 1f, 2.5f, UpgradeCatalog.AccelSpeedMultiplier,
-                () => DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier),
-                v => DevTuning.AccelSpeed = v, tab: 1);
-
+            // ---- ECONOMY tab: the power-cell/part drops and drains (WV-227/228), plus Hydro's
+            // burst timing. ----
             Add("Primary drain", "/m", 0f, 30f, WaterBlaster.DefaultPrimaryCellsPerMin,
                 () => DevTuning.Or(DevTuning.PrimaryCellsPerMin, WaterBlaster.DefaultPrimaryCellsPerMin),
-                v => DevTuning.PrimaryCellsPerMin = v, tab: 1);
+                v => DevTuning.PrimaryCellsPerMin = v, tab: TabEconomy);
 
-            // Spray knockback recut (WV-225): near-zero cosmetic stagger, not the old launch.
-            Add("Spray knockback", "m/s", 0f, 5f, WaterBlaster.DefaultSprayKnockback,
-                () => DevTuning.Or(DevTuning.SprayKnockback, WaterBlaster.DefaultSprayKnockback),
-                v => DevTuning.SprayKnockback = v, tab: 1);
-
-            // Secondary/special don't exist yet (WV-231 builds Water Balloon/Dash/Teleport) — these
-            // are settings only for now, ready for that ticket to spend (WV-227's economy spec §5/§9).
             Add("Secondary cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSecondaryCellsPerUse,
                 () => DevTuning.Or(DevTuning.SecondaryCellsPerUse, CellEconomyTuning.DefaultSecondaryCellsPerUse),
-                v => DevTuning.SecondaryCellsPerUse = v, tab: 1);
+                v => DevTuning.SecondaryCellsPerUse = v, tab: TabEconomy);
 
             Add("Special cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSpecialAbilityCellsPerUse,
                 () => DevTuning.Or(DevTuning.SpecialAbilityCellsPerUse, CellEconomyTuning.DefaultSpecialAbilityCellsPerUse),
-                v => DevTuning.SpecialAbilityCellsPerUse = v, tab: 1);
+                v => DevTuning.SpecialAbilityCellsPerUse = v, tab: TabEconomy);
 
             Add("Power efficiency", "x", 0f, 0.3f, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel,
                 () => DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel),
-                v => DevTuning.PowerEfficiencyReductionPerLevel = v, tab: 1);
-
-            Add("Weakened damage", "x", 1f, 3f, PlayerHealth.DefaultWeakenedDamageMultiplier,
-                () => DevTuning.Or(DevTuning.WeakenedDamageMultiplier, PlayerHealth.DefaultWeakenedDamageMultiplier),
-                v => DevTuning.WeakenedDamageMultiplier = v, tab: 1);
-
-            Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
-                () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),
-                v => DevTuning.HydroBurstSeconds = v, tab: 1);
-
-            Add("Hydro cooldown", "s", 5f, 90f, HydroBurst.AuthoredCooldown,
-                () => DevTuning.Or(DevTuning.HydroBurstCooldown, HydroBurst.AuthoredCooldown),
-                v => DevTuning.HydroBurstCooldown = v, tab: 1);
+                v => DevTuning.PowerEfficiencyReductionPerLevel = v, tab: TabEconomy);
 
             Add("Cell capacity", "cells", 5f, 60f, PickupWallet.DefaultCapacity,
                 () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.DefaultCapacity),
-                v => DevTuning.PowerCellCapacity = v, tab: 1);
+                v => DevTuning.PowerCellCapacity = v, tab: TabEconomy);
 
             Add("Part pacing", "kills", 1f, 8f, PickupDirector.DefaultPartInterval,
                 () => DevTuning.Or(DevTuning.PartDropInterval, PickupDirector.DefaultPartInterval),
-                v => DevTuning.PartDropInterval = v, tab: 1);
+                v => DevTuning.PartDropInterval = v, tab: TabEconomy);
 
             // Rusher cell-drop chance (YT-171): the common kill's trickle toward the Hydro reserve,
             // separate from the bruiser's guaranteed drop.
             Add("Cell drop chance", "x", 0f, 1f, PickupDirector.DefaultCellDropChance,
                 () => DevTuning.Or(DevTuning.PowerCellDropChance, PickupDirector.DefaultCellDropChance),
-                v => DevTuning.PowerCellDropChance = v, tab: 1);
+                v => DevTuning.PowerCellDropChance = v, tab: TabEconomy);
 
-            // ---- Boss tab (YT-157): the brood volley — Big Bermuda's side-hatch add-spawner. ----
-            // All read live: the volley pulls each number through DevTuning the next time it fires, so a
-            // slider retimes or re-sizes the wave mid-fight with no push.
-            Add("Add volley interval", "s", 2f, 20f, BossTuning.VolleyInterval,
-                () => DevTuning.Or(DevTuning.BossVolleyInterval, BossTuning.VolleyInterval),
-                v => DevTuning.BossVolleyInterval = v, tab: 2);
+            // Cells per large-robot kill (WV-234, spec §5/§9) — not yet wired to PickupDirector's
+            // live drop count; see CellEconomyTuning.DefaultCellsPerLargeKill.
+            Add("Cells/large kill", "cells", 0f, 5f, CellEconomyTuning.DefaultCellsPerLargeKill,
+                () => DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill),
+                v => DevTuning.CellsPerLargeKill = v, tab: TabEconomy);
 
-            Add("Adds per volley", "bots", 1f, 8f, BossTuning.RobotsPerVolley,
-                () => DevTuning.Or(DevTuning.BossAddsPerVolley, BossTuning.RobotsPerVolley),
-                v => DevTuning.BossAddsPerVolley = v, tab: 2);
+            Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
+                () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),
+                v => DevTuning.HydroBurstSeconds = v, tab: TabEconomy);
 
-            Add("Max adds alive", "bots", 1f, 20f, BossTuning.MaxConcurrentAdds,
-                () => DevTuning.Or(DevTuning.BossMaxAdds, BossTuning.MaxConcurrentAdds),
-                v => DevTuning.BossMaxAdds = v, tab: 2);
+            Add("Hydro cooldown", "s", 5f, 90f, HydroBurst.AuthoredCooldown,
+                () => DevTuning.Or(DevTuning.HydroBurstCooldown, HydroBurst.AuthoredCooldown),
+                v => DevTuning.HydroBurstCooldown = v, tab: TabEconomy);
 
-            Add("Volley windup", "s", 0.3f, 3f, BossTuning.VolleyWindup,
-                () => DevTuning.Or(DevTuning.BossVolleyWindup, BossTuning.VolleyWindup),
-                v => DevTuning.BossVolleyWindup = v, tab: 2);
+            // ---- WEAPONS tab: the primary's upgrade-part magnitudes (YT-138/164) plus every
+            // acquired-ability magnitude (WV-230/231 — several of these DevTuning fields already
+            // existed but had no slider to reach them until now). ----
+            Add("Nozzle narrowing", "x", 0.3f, 1f, UpgradeCatalog.NozzleConeMultiplier,
+                () => DevTuning.Or(DevTuning.NozzleConeMultiplier, UpgradeCatalog.NozzleConeMultiplier),
+                v => { DevTuning.NozzleConeMultiplier = v; RefreshUpgrades(); }, tab: TabWeapons);
+
+            Add("Power reach", "m", 0f, 8f, UpgradeCatalog.PowerRangeBonus,
+                () => DevTuning.Or(DevTuning.PowerNozzleRange, UpgradeCatalog.PowerRangeBonus),
+                v => { DevTuning.PowerNozzleRange = v; RefreshUpgrades(); }, tab: TabWeapons);
+
+            Add("Extender reach", "m", 0f, 8f, UpgradeCatalog.RangeExtenderBonus,
+                () => DevTuning.Or(DevTuning.RangeExtenderBonus, UpgradeCatalog.RangeExtenderBonus),
+                v => { DevTuning.RangeExtenderBonus = v; RefreshUpgrades(); }, tab: TabWeapons);
+
+            Add("Wide-bore widen", "x", 1f, 5f, UpgradeCatalog.WideBoreConeMultiplier,
+                () => DevTuning.Or(DevTuning.WideBoreConeMultiplier, UpgradeCatalog.WideBoreConeMultiplier),
+                v => { DevTuning.WideBoreConeMultiplier = v; RefreshUpgrades(); }, tab: TabWeapons);
+
+            Add("Harness capacity", "wtr", 0f, 150f, UpgradeCatalog.HarnessCapacityBonus,
+                () => DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus),
+                v => { DevTuning.HarnessCapacity = v; RefreshUpgrades(); }, tab: TabWeapons);
+
+            Add("Engine boost", "x", 1f, 2.5f, UpgradeCatalog.AccelSpeedMultiplier,
+                () => DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier),
+                v => DevTuning.AccelSpeed = v, tab: TabWeapons);
+
+            Add("Balloon cooldown", "s", 0.5f, 15f, WeaponCatalog.DefaultWaterBalloonCooldownSeconds,
+                () => DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, WeaponCatalog.DefaultWaterBalloonCooldownSeconds),
+                v => DevTuning.WaterBalloonCooldownSeconds = v, tab: TabWeapons);
+
+            Add("Dash cooldown", "s", 0.5f, 15f, WeaponCatalog.DefaultDashCooldownSeconds,
+                () => DevTuning.Or(DevTuning.DashCooldownSeconds, WeaponCatalog.DefaultDashCooldownSeconds),
+                v => DevTuning.DashCooldownSeconds = v, tab: TabWeapons);
+
+            Add("Teleport cooldown", "s", 0.5f, 15f, WeaponCatalog.DefaultTeleportCooldownSeconds,
+                () => DevTuning.Or(DevTuning.TeleportCooldownSeconds, WeaponCatalog.DefaultTeleportCooldownSeconds),
+                v => DevTuning.TeleportCooldownSeconds = v, tab: TabWeapons);
+
+            Add("Cooldown %/lvl", "x", 0f, 0.3f, AbilityTuning.DefaultWeaponCooldownReductionPerLevel,
+                () => DevTuning.Or(DevTuning.WeaponCooldownReductionPerLevel, AbilityTuning.DefaultWeaponCooldownReductionPerLevel),
+                v => DevTuning.WeaponCooldownReductionPerLevel = v, tab: TabWeapons);
+
+            Add("Balloon base dist", "m", 1f, 15f, AbilityTuning.DefaultWaterBalloonBaseDistance,
+                () => DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance),
+                v => DevTuning.WaterBalloonBaseDistance = v, tab: TabWeapons);
+
+            Add("Balloon dist/lvl", "m", 0f, 5f, AbilityTuning.DefaultWaterBalloonDistancePerLevel,
+                () => DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel),
+                v => DevTuning.WaterBalloonDistancePerLevel = v, tab: TabWeapons);
+
+            Add("Balloon splash", "x", 0.5f, 5f, AbilityTuning.DefaultWaterBalloonSplashMult,
+                () => DevTuning.Or(DevTuning.WaterBalloonSplashMult, AbilityTuning.DefaultWaterBalloonSplashMult),
+                v => DevTuning.WaterBalloonSplashMult = v, tab: TabWeapons);
+
+            Add("Balloon damage %", "%", 0f, 100f, AbilityTuning.DefaultWaterBalloonDamagePct,
+                () => DevTuning.Or(DevTuning.WaterBalloonDamagePct, AbilityTuning.DefaultWaterBalloonDamagePct),
+                v => DevTuning.WaterBalloonDamagePct = v, tab: TabWeapons);
+
+            Add("Balloon stop", "s", 0f, 5f, AbilityTuning.DefaultWaterBalloonStopDurationSeconds,
+                () => DevTuning.Or(DevTuning.WaterBalloonStopDurationSeconds, AbilityTuning.DefaultWaterBalloonStopDurationSeconds),
+                v => DevTuning.WaterBalloonStopDurationSeconds = v, tab: TabWeapons);
+
+            Add("Speed %/level", "x", 0f, 0.5f, AbilityTuning.DefaultSpeedMultiplierPerLevel,
+                () => DevTuning.Or(DevTuning.SpeedMultiplierPerLevel, AbilityTuning.DefaultSpeedMultiplierPerLevel),
+                v => DevTuning.SpeedMultiplierPerLevel = v, tab: TabWeapons);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
@@ -579,7 +702,9 @@ namespace MaxWorlds.UI
             var header = AddText(rt, "SETTINGS", HeaderFont, Accent, TextAnchor.MiddleLeft);
             Place(header.rectTransform, Pad, y, PanelW * 0.34f, HeaderH);
 
-            const float TabW = 168f, TabGap = 8f;
+            // Re-sized for 5 tabs (WV-234, was 3) — still clears the header's PanelW*0.34 title zone
+            // with margin to spare.
+            const float TabW = 140f, TabGap = 8f;
             _pages = new GameObject[TabNames.Length];
             _tabButtons = new Button[TabNames.Length];
             for (int t = 0; t < TabNames.Length; t++)
@@ -608,7 +733,10 @@ namespace MaxWorlds.UI
                 _pages[t] = page.gameObject;
 
                 var rows = _knobs.FindAll(k => k.Tab == t);
-                int cols = rows.Count > 15 ? 4 : rows.Count > 10 ? 3 : 2;
+                // The page's height is a fixed RowH*5 (below), so every tab must fit within 5 rows —
+                // pick the fewest columns that keeps rowsPerCol <= 5, rather than the old fixed
+                // 2/3/4-column ladder, since WV-234's ENEMIES tab (23 knobs) needs a 5th column.
+                int cols = Mathf.Clamp(Mathf.CeilToInt(rows.Count / 5f), 2, 6);
                 float colW = (PanelW - Pad * 2f - ColGap * (cols - 1)) / cols;
                 int rowsPerCol = Mathf.Max(1, Mathf.CeilToInt(rows.Count / (float)cols));
                 maxRows = Mathf.Max(maxRows, rowsPerCol);
@@ -776,9 +904,28 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ behaviour
 
+        /// <summary>Open/close the Settings area. Entering it pauses the game (WV-234, spec §8), same
+        /// capture/zero/restore idiom as <c>WeaponsScreen.Open</c>/<c>Close</c> — no shared pause
+        /// manager exists in this codebase, so each screen owns its own <see cref="_prevTimeScale"/>.</summary>
         private void SetOpen(bool open)
         {
-            _open = open;
+            // Only touch the timescale on an actual transition — Build() calls this once with the
+            // panel already closed (its initial state) purely to SetActive(false) the freshly-built
+            // root and scrim, and that must not stomp whatever timescale the world was already at.
+            if (open != _open)
+            {
+                _open = open;
+                if (open)
+                {
+                    _prevTimeScale = Time.timeScale;
+                    Time.timeScale = 0f;
+                }
+                else
+                {
+                    Time.timeScale = _prevTimeScale;
+                }
+            }
+
             if (_panelRoot != null) _panelRoot.SetActive(open);
             if (_scrim != null) _scrim.SetActive(open);
         }

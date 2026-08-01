@@ -218,6 +218,75 @@ namespace MaxWorlds.Core
         /// <summary>Fraction each Speed ability level adds to Max's walk speed.</summary>
         public static float? SpeedMultiplierPerLevel { get; set; }
 
+        /// <summary>Water Balloon's throw distance at Level 1, metres (WV-234, spec §9
+        /// <c>waterBalloonBaseDistance</c>) — was an authored-only constant until now.</summary>
+        public static float? WaterBalloonBaseDistance { get; set; }
+
+        /// <summary>Extra Water Balloon throw distance per level beyond L1 (<c>waterBalloonDistancePerLevel</c>).</summary>
+        public static float? WaterBalloonDistancePerLevel { get; set; }
+
+        /// <summary>Water Balloon splash radius as a multiple of the large robot's own footprint
+        /// radius (<c>waterBalloonSplashMult</c>).</summary>
+        public static float? WaterBalloonSplashMult { get; set; }
+
+        // --- robot composition/accumulation (WV-234, spec §1-2/§9) — settings only for now, ready
+        // for WV-222/223/224 (the gated-arena + robot-accumulation tickets) to spend. ---
+
+        /// <summary>Large robots roaming Area 1 at run start (<c>startLargeCount</c>).</summary>
+        public static float? StartLargeCount { get; set; }
+
+        /// <summary>Small robots roaming Area 1 at run start (<c>startSmallCount</c>).</summary>
+        public static float? StartSmallCount { get; set; }
+
+        /// <summary>Percent population growth per area, compounding (<c>areaGrowthPct</c>).</summary>
+        public static float? AreaGrowthPct { get; set; }
+
+        /// <summary>Base large:small population ratio at Area 1 (<c>largeToSmallRatio</c>).</summary>
+        public static float? LargeToSmallRatio { get; set; }
+
+        /// <summary>How much the large share of the population drifts upward per area
+        /// (<c>largeShareDriftPerArea</c>).</summary>
+        public static float? LargeShareDriftPerArea { get; set; }
+
+        /// <summary>Concurrent robots on screen, field-wide (<c>maxActiveRobots</c>).</summary>
+        public static float? MaxActiveRobots { get; set; }
+
+        /// <summary>Per-area robot-HP multiplier, on top of the base archetype HP
+        /// (<c>robotHpPerAreaMult</c>).</summary>
+        public static float? RobotHpPerAreaMult { get; set; }
+
+        /// <summary>The area the Heavy tier starts appearing in (<c>heavyIntroArea</c>).</summary>
+        public static float? HeavyIntroArea { get; set; }
+
+        /// <summary>The area the Brute tier starts appearing in (<c>bruteIntroArea</c>).</summary>
+        public static float? BruteIntroArea { get; set; }
+
+        /// <summary>Percent of large slots a tough tier (Heavy/Brute) substitutes for once
+        /// introduced (<c>toughSubstitutionPct</c>).</summary>
+        public static float? ToughSubstitutionPct { get; set; }
+
+        /// <summary>Power cells a large-robot kill drops (WV-234, spec §5/§9 <c>cellsPerLargeKill</c>).
+        /// Not yet wired to the live drop table — <see cref="MaxWorlds.Pickups.PickupDirector"/>'s
+        /// drop counts are a separate economy-recut pass.</summary>
+        public static float? CellsPerLargeKill { get; set; }
+
+        // --- gated arena (WV-234, spec §1/§9) — settings only for now, ready for WV-222 to spend. ---
+
+        /// <summary>Sequential outdoor rooms in a run (<c>areaCount</c>).</summary>
+        public static float? AreaCount { get; set; }
+
+        /// <summary>Sustained primary fire, seconds, to break a gate (<c>gateBreakSeconds</c>).</summary>
+        public static float? GateBreakSeconds { get; set; }
+
+        /// <summary>Whether a gate requires its room cleared of robots before it can be attacked
+        /// (<c>gateRequiresClear</c>) — stored as 0/1, a boolean has no other slider shape in this
+        /// panel (YT-205's piecewise mapping still centres correctly at Default==Min==0).</summary>
+        public static float? GateRequiresClear { get; set; }
+
+        /// <summary>Sheds placed across the run's areas (<c>shed count/placement</c> — placement
+        /// itself isn't a scalar knob, so only the count is tunable here).</summary>
+        public static float? ShedCount { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -255,7 +324,15 @@ namespace MaxWorlds.Core
             TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
             SprayKnockback.HasValue ||
             WaterBalloonDamagePct.HasValue || WaterBalloonStopDurationSeconds.HasValue ||
-            SpeedMultiplierPerLevel.HasValue;
+            SpeedMultiplierPerLevel.HasValue ||
+            WaterBalloonBaseDistance.HasValue || WaterBalloonDistancePerLevel.HasValue ||
+            WaterBalloonSplashMult.HasValue ||
+            StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
+            LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
+            RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
+            ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue ||
+            AreaCount.HasValue || GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
+            ShedCount.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -308,6 +385,24 @@ namespace MaxWorlds.Core
             WaterBalloonDamagePct = null;
             WaterBalloonStopDurationSeconds = null;
             SpeedMultiplierPerLevel = null;
+            WaterBalloonBaseDistance = null;
+            WaterBalloonDistancePerLevel = null;
+            WaterBalloonSplashMult = null;
+            StartLargeCount = null;
+            StartSmallCount = null;
+            AreaGrowthPct = null;
+            LargeToSmallRatio = null;
+            LargeShareDriftPerArea = null;
+            MaxActiveRobots = null;
+            RobotHpPerAreaMult = null;
+            HeavyIntroArea = null;
+            BruteIntroArea = null;
+            ToughSubstitutionPct = null;
+            CellsPerLargeKill = null;
+            AreaCount = null;
+            GateBreakSeconds = null;
+            GateRequiresClear = null;
+            ShedCount = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -369,6 +464,24 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(WaterBalloonDamagePct), () => WaterBalloonDamagePct, v => WaterBalloonDamagePct = v),
             (PrefsPrefix + nameof(WaterBalloonStopDurationSeconds), () => WaterBalloonStopDurationSeconds, v => WaterBalloonStopDurationSeconds = v),
             (PrefsPrefix + nameof(SpeedMultiplierPerLevel), () => SpeedMultiplierPerLevel, v => SpeedMultiplierPerLevel = v),
+            (PrefsPrefix + nameof(WaterBalloonBaseDistance), () => WaterBalloonBaseDistance, v => WaterBalloonBaseDistance = v),
+            (PrefsPrefix + nameof(WaterBalloonDistancePerLevel), () => WaterBalloonDistancePerLevel, v => WaterBalloonDistancePerLevel = v),
+            (PrefsPrefix + nameof(WaterBalloonSplashMult), () => WaterBalloonSplashMult, v => WaterBalloonSplashMult = v),
+            (PrefsPrefix + nameof(StartLargeCount), () => StartLargeCount, v => StartLargeCount = v),
+            (PrefsPrefix + nameof(StartSmallCount), () => StartSmallCount, v => StartSmallCount = v),
+            (PrefsPrefix + nameof(AreaGrowthPct), () => AreaGrowthPct, v => AreaGrowthPct = v),
+            (PrefsPrefix + nameof(LargeToSmallRatio), () => LargeToSmallRatio, v => LargeToSmallRatio = v),
+            (PrefsPrefix + nameof(LargeShareDriftPerArea), () => LargeShareDriftPerArea, v => LargeShareDriftPerArea = v),
+            (PrefsPrefix + nameof(MaxActiveRobots), () => MaxActiveRobots, v => MaxActiveRobots = v),
+            (PrefsPrefix + nameof(RobotHpPerAreaMult), () => RobotHpPerAreaMult, v => RobotHpPerAreaMult = v),
+            (PrefsPrefix + nameof(HeavyIntroArea), () => HeavyIntroArea, v => HeavyIntroArea = v),
+            (PrefsPrefix + nameof(BruteIntroArea), () => BruteIntroArea, v => BruteIntroArea = v),
+            (PrefsPrefix + nameof(ToughSubstitutionPct), () => ToughSubstitutionPct, v => ToughSubstitutionPct = v),
+            (PrefsPrefix + nameof(CellsPerLargeKill), () => CellsPerLargeKill, v => CellsPerLargeKill = v),
+            (PrefsPrefix + nameof(AreaCount), () => AreaCount, v => AreaCount = v),
+            (PrefsPrefix + nameof(GateBreakSeconds), () => GateBreakSeconds, v => GateBreakSeconds = v),
+            (PrefsPrefix + nameof(GateRequiresClear), () => GateRequiresClear, v => GateRequiresClear = v),
+            (PrefsPrefix + nameof(ShedCount), () => ShedCount, v => ShedCount = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

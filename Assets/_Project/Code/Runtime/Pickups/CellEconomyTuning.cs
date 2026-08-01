@@ -12,6 +12,11 @@ namespace MaxWorlds.Pickups
     /// </summary>
     public static class CellEconomyTuning
     {
+        /// <summary>Power cells a large-robot kill drops (v0.5 recut spec §5 <c>cellsPerLargeKill</c>).
+        /// Settings only for now (WV-234) — <see cref="MaxWorlds.Pickups.PickupDirector"/>'s live drop
+        /// count (<c>CellsPerDrop</c>) is a separate economy-recut pass.</summary>
+        public const float DefaultCellsPerLargeKill = 1f;
+
         /// <summary>Cells a Water Balloon throw costs (v0.5 recut spec §5).</summary>
         public const float DefaultSecondaryCellsPerUse = 2f;
 

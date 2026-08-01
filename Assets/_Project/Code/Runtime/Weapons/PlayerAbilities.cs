@@ -61,7 +61,8 @@ namespace MaxWorlds.Weapons
         /// <summary>The splash radius the current settings would produce — what WV-241's landing
         /// circle and this component's own damage query both size themselves from.</summary>
         public static float SplashRadius => AbilityTuning.WaterBalloonSplashRadius(
-            EnemyArchetype.Bruiser.ColliderRadius, AbilityTuning.DefaultWaterBalloonSplashMult);
+            EnemyArchetype.Bruiser.ColliderRadius,
+            DevTuning.Or(DevTuning.WaterBalloonSplashMult, AbilityTuning.DefaultWaterBalloonSplashMult));
 
         private void Awake()
         {
@@ -111,8 +112,9 @@ namespace MaxWorlds.Weapons
             _waterBalloonCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.WaterBalloon);
 
             int level = WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon);
-            float distance = AbilityTuning.WaterBalloonDistance(
-                level, AbilityTuning.DefaultWaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
+            float baseDistance = DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance);
+            float perLevel = DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
+            float distance = AbilityTuning.WaterBalloonDistance(level, baseDistance, perLevel);
 
             Vector3 landing = transform.position + dir * distance;
 

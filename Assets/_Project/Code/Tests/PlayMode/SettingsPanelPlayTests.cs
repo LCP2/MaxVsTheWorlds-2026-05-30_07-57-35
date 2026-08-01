@@ -27,6 +27,7 @@ namespace MaxWorlds.Tests.PlayMode
             DevMode.Reset();
             DevTuning.Reset();
             DevTuning.ClearSaved();
+            Time.timeScale = 1f;
 
             // The panel self-installs at AfterSceneLoad, so a play-mode test already has one. Clear
             // any pre-existing panel + canvas so there is exactly one under our control.
@@ -49,6 +50,7 @@ namespace MaxWorlds.Tests.PlayMode
             DevTuning.ClearSaved();
             SafeArea.SimulatedSafeArea = null;
             SafeArea.SimulatedScreenSize = null;
+            Time.timeScale = 1f;   // never leave the world frozen for the next test
             yield return null;
         }
 
@@ -90,49 +92,48 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(40),
-                "Eighteen Gameplay knobs, sixteen Weapons-tab knobs, and six Boss-tab knobs (YT-196 " +
-                "sorted Boss move speed/Boss health onto Boss, and Spawn interval onto Gameplay, by " +
-                "the Max/robots/arena/escalation vs hose/upgrade vs boss-only rule; YT-210 added Run " +
-                "length to the Invasion Level knobs; WV-227 added the cell-economy knobs — " +
-                "Secondary/Special cost, Power efficiency, Weakened damage; WV-233 removed Hose " +
-                "tether, the leash no longer exists) — 40 total.");
+            Assert.That(sliders.Length, Is.EqualTo(66),
+                "WV-234 restructured the panel into five tabs — Enemies (19), Economy (10), Weapons " +
+                "(16), Arena (14), Feel (7) — 66 total. This includes the full v0.5 recut spec §9 " +
+                "list: the gated-arena/robot-composition knobs (settings only until WV-222/223/224) " +
+                "and the ability magnitudes that already had a DevTuning override but no slider to " +
+                "reach them until now (Water Balloon/Dash/Teleport cooldowns, Weapon Cooldown, " +
+                "Water Balloon distance/splash/damage/stop, Speed %/level).");
             yield return null;
         }
 
         [UnityTest]
-        public IEnumerator ItHasAWeaponsTabWithItsOwnSliders()
+        public IEnumerator ItHasFiveTabsWithTheirOwnSliders()
         {
             var canvas = PanelCanvas();
 
-            // One page container per tab (YT-138 Gameplay/Weapons, YT-157 Boss).
-            RectTransform gameplay = null, weapons = null, boss = null;
+            // One page container per tab (WV-234: Enemies / Economy / Weapons / Arena / Feel).
+            RectTransform enemies = null, economy = null, weapons = null, arena = null, feel = null;
             foreach (var rt in canvas.GetComponentsInChildren<RectTransform>(true))
             {
-                if (rt.name == "Page GAMEPLAY") gameplay = rt;
+                if (rt.name == "Page ENEMIES") enemies = rt;
+                if (rt.name == "Page ECONOMY") economy = rt;
                 if (rt.name == "Page WEAPONS") weapons = rt;
-                if (rt.name == "Page BOSS") boss = rt;
+                if (rt.name == "Page ARENA") arena = rt;
+                if (rt.name == "Page FEEL") feel = rt;
             }
-            Assert.That(gameplay, Is.Not.Null, "no Gameplay page");
-            Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade tuning has nowhere to live");
-            Assert.That(boss, Is.Not.Null, "no Boss page — the brood-volley tuning has nowhere to live (YT-157)");
+            Assert.That(enemies, Is.Not.Null, "no Enemies page");
+            Assert.That(economy, Is.Not.Null, "no Economy page");
+            Assert.That(weapons, Is.Not.Null, "no Weapons page — the upgrade/ability tuning has nowhere to live");
+            Assert.That(arena, Is.Not.Null, "no Arena page — the gated-area tuning has nowhere to live");
+            Assert.That(feel, Is.Not.Null, "no Feel page");
 
-            Assert.That(gameplay.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(18),
-                "the Gameplay tab keeps its Max/robots/arena/escalation knobs: eight core knobs (Boss " +
-                "move speed and Boss health moved to the Boss tab, YT-196) plus the five Invasion " +
-                "Level knobs (YT-181, plus Run length added at YT-210), the two death-throes surge " +
-                "knobs (YT-182), and the four swarm-pacing/spawn-cadence knobs (YT-194, plus Spawn " +
-                "interval moved from Weapons, YT-196)");
+            Assert.That(enemies.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(19),
+                "robots and the robot-accumulation scheme (spec §1-2/§9)");
+            Assert.That(economy.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
+                "the power-cell/part drains and drops, plus Hydro's burst timing");
             Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(16),
-                "the Weapons tab carries the hose/upgrade knobs: the upgrade/pacing/Hydro knobs, " +
-                "Range Extender and Wide-Bore (YT-164), Cell capacity, Part pacing, Cell drop chance " +
-                "(YT-171) — with Spawn interval moved out to Gameplay (YT-196) — plus WV-227's " +
-                "cell-economy knobs: Primary drain (renamed from Hydro drain), Secondary cost, " +
-                "Special cost, Power efficiency, Weakened damage (WV-233 removed Hose tether — the " +
-                "leash no longer exists)");
-            Assert.That(boss.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(6),
-                "the Boss tab carries the four brood-volley knobs (YT-157) plus Boss move speed and " +
-                "Boss health, moved off the Gameplay tab where they defaulted to (YT-196)");
+                "the primary's upgrade-part magnitudes plus every acquired-ability magnitude");
+            Assert.That(arena.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(14),
+                "the run's pacing/escalation knobs, the boss brood-volley knobs, and the gated-arena " +
+                "knobs (spec §1/§9)");
+            Assert.That(feel.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(7),
+                "camera + Max's own handling + the spray's cosmetic knockback");
             yield return null;
         }
 
@@ -153,6 +154,24 @@ namespace MaxWorlds.Tests.PlayMode
             gear.onClick.Invoke();
             yield return null;
             Assert.That(panel.activeInHierarchy, Is.False, "the gear did not close the panel again");
+        }
+
+        [UnityTest]
+        public IEnumerator EnteringSettingsPausesTheGame_AndClosingResumesIt()
+        {
+            // WV-234, spec §8: "Entering the Settings area pauses the game."
+            float before = Time.timeScale;
+            var canvas = PanelCanvas();
+            var gear = GearButton(canvas);
+
+            gear.onClick.Invoke();
+            yield return null;
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "opening Settings must pause the game");
+
+            gear.onClick.Invoke();
+            yield return null;
+            Assert.That(Time.timeScale, Is.EqualTo(before).Within(0.001f),
+                "closing Settings must resume at whatever speed it paused from");
         }
 
         [UnityTest]
@@ -262,6 +281,30 @@ namespace MaxWorlds.Tests.PlayMode
                 "moving the Escalation rate slider must drive DevTuning.EscalationRate");
             Assert.That(DevTuning.EscalationMax, Is.EqualTo(15f).Within(0.001f),
                 "moving the Escalation max slider must drive DevTuning.EscalationMax");
+        }
+
+        [UnityTest]
+        public IEnumerator TheNewRecutKnobsDriveDevTuning()
+        {
+            // WV-234, spec §9 spot-checks: one settings-only Arena knob (nothing consumes it yet,
+            // WV-222) and one ability knob that already had a live consumer (PlayerAbilities) but no
+            // slider to reach it until this ticket.
+            var canvas = PanelCanvas();
+            var sliders = canvas.GetComponentsInChildren<Slider>(true);
+
+            var areaCount = System.Array.Find(sliders, s => s.transform.parent.name == "Area count");
+            var balloonDist = System.Array.Find(sliders, s => s.transform.parent.name == "Balloon base dist");
+            Assert.That(areaCount, Is.Not.Null, "no Area count slider (spec §1/§9)");
+            Assert.That(balloonDist, Is.Not.Null, "no Balloon base dist slider (spec §6a/§9)");
+
+            SetSliderToValue(areaCount, 12f);
+            SetSliderToValue(balloonDist, 6f);
+            yield return null;
+
+            Assert.That(DevTuning.AreaCount, Is.EqualTo(12f).Within(0.001f),
+                "moving the Area count slider must drive DevTuning.AreaCount");
+            Assert.That(DevTuning.WaterBalloonBaseDistance, Is.EqualTo(6f).Within(0.001f),
+                "moving the Balloon base distance slider must drive DevTuning.WaterBalloonBaseDistance");
         }
 
         // ---------------------------------------------------------------- it saves (YT-201)
