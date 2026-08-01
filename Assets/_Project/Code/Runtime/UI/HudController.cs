@@ -10,6 +10,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Save;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.UI
 {
@@ -99,6 +100,20 @@ namespace MaxWorlds.UI
         // Touch controls (YT-98): the joystick/dash roots the on-screen sticks + button attach to.
         private RectTransform _moveJoystickRoot, _aimJoystickRoot, _dashButtonRoot;
 
+        // Active-ability on-screen controls (WV-240, spec §6a): Water Balloon's joystick and a new
+        // Teleport button, plus gating the existing Dash button on acquisition. AbilityControlArt
+        // (WV-241) bakes size/brightness into construction, so a level change rebuilds the control
+        // rather than tweening a property.
+        private PlayerAbilities _abilities;
+        private RectTransform _waterBalloonRoot;
+        private AbilityControlArt.JoystickVisual _waterBalloonVisual;
+        private Image _waterBalloonRadial;
+        private int _waterBalloonBuiltLevel = -1;
+
+        private RectTransform _teleportRoot;
+        private AbilityControlArt.ButtonVisual _teleportVisual;
+        private int _teleportBuiltLevel = -1;
+
         // Arena indicator
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
@@ -140,6 +155,7 @@ namespace MaxWorlds.UI
             _health = FindFirstObjectByType<PlayerHealth>();
             _blaster = FindFirstObjectByType<WaterBlaster>();
             _player = FindFirstObjectByType<PlayerController>();
+            _abilities = FindFirstObjectByType<PlayerAbilities>();
             _worldCamera = Camera.main;
             _model = new HudModel();
 
@@ -151,6 +167,8 @@ namespace MaxWorlds.UI
             BuildAbilitySlots();
             BuildDashButton();
             BuildHydroButton();
+            BuildWaterBalloonJoystick();
+            BuildTeleportButton();
             BuildJoysticks();
             BuildArenaIndicator();
             BuildInvasionDial();
@@ -179,6 +197,7 @@ namespace MaxWorlds.UI
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
             UpgradeState.Changed += OnUpgradesChanged;
+            WeaponSystemState.Changed += OnAbilitiesChanged;
         }
 
         private void OnDisable()
@@ -195,6 +214,7 @@ namespace MaxWorlds.UI
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
             UpgradeState.Changed -= OnUpgradesChanged;
+            WeaponSystemState.Changed -= OnAbilitiesChanged;
         }
 
         /// <summary>The Hydro burst button appears the moment the harness + condenser are both
@@ -202,6 +222,19 @@ namespace MaxWorlds.UI
         private void OnUpgradesChanged()
         {
             if (_hydroButtonRoot != null) _hydroButtonRoot.gameObject.SetActive(UpgradeState.HydroAssembled);
+        }
+
+        /// <summary>Water Balloon, Dash and Teleport each appear the moment they're acquired and grow
+        /// more prominent as they level (WV-240, spec §6a). Dash's own prominence never changes (a
+        /// single unlock, spec §6) so only its visibility toggles here; the other two rebuild through
+        /// <see cref="AbilityControlArt"/> whenever their level actually changed.</summary>
+        private void OnAbilitiesChanged()
+        {
+            if (_dashButtonRoot != null)
+                _dashButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Dash));
+
+            RebuildWaterBalloonJoystickIfNeeded();
+            RebuildTeleportButtonIfNeeded();
         }
 
         private void OnPowerCells(int total)
@@ -304,6 +337,7 @@ namespace MaxWorlds.UI
             UpdateStatusStrip(dt);
             UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
+            UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
             UpdateInvasionDial(dt);
@@ -467,6 +501,26 @@ namespace MaxWorlds.UI
                 glow = Color.Lerp(glow, Color.white, _hydroSnapFlash);
                 glow.a = ready ? Mathf.Clamp01(readyPulse + _hydroReadyFlash) : Mathf.Max(0f, _hydroSnapFlash * 0.8f);
                 _hydroGlow.color = glow;
+            }
+        }
+
+        /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
+        /// control shows a cooldown sweep and is disabled during cooldown"). Dash's own radial is
+        /// already driven in <see cref="UpdateAbilitySlots"/>.</summary>
+        private void UpdateAbilityControls()
+        {
+            if (_waterBalloonRadial != null && _waterBalloonRoot != null && _waterBalloonRoot.gameObject.activeSelf)
+            {
+                float cd = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.WaterBalloon);
+                float remaining = _abilities != null ? _abilities.WaterBalloonCooldownRemaining : 0f;
+                _waterBalloonRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
+            }
+
+            if (_teleportRoot != null && _teleportRoot.gameObject.activeSelf)
+            {
+                float cd = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
+                float remaining = _abilities != null ? _abilities.TeleportCooldownRemaining : 0f;
+                _teleportVisual.Radial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
             }
         }
 
@@ -795,6 +849,10 @@ namespace MaxWorlds.UI
             radial.fillAmount = 0f;
             radial.raycastTarget = false;
             _slotRadial[0] = radial;
+
+            // Dash is a shed-acquired ability now (WV-231/240, spec §6a): "each control appears only
+            // once acquired" applies to Dash too, not just the two controls that shipped after it.
+            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Dash));
         }
 
         // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
@@ -864,6 +922,131 @@ namespace MaxWorlds.UI
         private const float HydroButtonSize = 110f;
         private const float HydroButtonInset = DashButtonInset;
         private const float HydroButtonRise = DashButtonRise + DashButtonSize * 0.5f + HydroButtonSize * 0.5f + 24f;
+
+        // The left-hand mirror of the Dash/Hydro column (WV-240, spec §6a): Water Balloon's joystick
+        // sits above the Move stick the same way Dash sits above the Aim stick, so aiming a throw
+        // never costs the player their movement thumb. Teleport stacks above it, same gap discipline
+        // as Hydro-above-Dash — but with extra clearance for the joystick's own oversized invisible
+        // touch pad (matches AddOnScreenStick's ±30 px fat-finger margin), not just its artwork.
+        // Raised clear of the boss bar's y-band (rise 300, half 8) so a boss fight never crosses it.
+        // Expressed as a shared Root-local X so the two controls line up visually even though
+        // AbilityControlArt.BuildJoystick anchors to the parent's bottom-CENTER while BuildButton
+        // anchors to bottom-RIGHT — each conversion below accounts for that.
+        private const float AbilityControlColumnX = 450f;
+        private const float WaterBalloonJoystickRise = 480f;
+        private const float WaterBalloonJoystickMaxHalfSize = 100f;   // half of BuildJoystick's 200 px cap
+        private const float WaterBalloonTouchPadMargin = 30f;
+        private const float TeleportButtonSize = 140f;
+        private const float TeleportButtonRise = WaterBalloonJoystickRise + WaterBalloonJoystickMaxHalfSize
+            + WaterBalloonTouchPadMargin + TeleportButtonSize * 0.5f + 24f;
+
+        private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
+        private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
+
+        /// <summary>The Water Balloon joystick (WV-240, spec §6a): appears once acquired, grows more
+        /// prominent with level (<see cref="AbilityControlArt"/>), and its own
+        /// <see cref="WaterBalloonJoystickControl"/> drives the press/drag/release aim + throw.</summary>
+        private void BuildWaterBalloonJoystick() => RebuildWaterBalloonJoystick();
+
+        private void RebuildWaterBalloonJoystick()
+        {
+            if (_waterBalloonRoot != null) Destroy(_waterBalloonRoot.gameObject);
+
+            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon));
+            int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon);
+            Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, WaterBalloonJoystickRise);
+            _waterBalloonVisual = AbilityControlArt.BuildJoystick(
+                Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, level, maxLevel);
+            _waterBalloonRoot = _waterBalloonVisual.Root;
+
+            // Cooldown wipe, identical treatment to the other controls so the three read as one
+            // language (spec §6a: "every control shows a cooldown sweep").
+            var radial = AddImage(_waterBalloonRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _waterBalloonRadial = radial;
+
+            // Transparent raycastable pad over the joystick, the same fat-finger margin as
+            // AddOnScreenStick's own pads — the finger's touch surface; the rings/knob stay the
+            // visible control.
+            var pad = new GameObject("Water Balloon Touch", typeof(RectTransform), typeof(Image));
+            var padRect = (RectTransform)pad.transform;
+            padRect.SetParent(_waterBalloonRoot, false);
+            padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
+            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            var padImg = pad.GetComponent<Image>();
+            padImg.color = new Color(0f, 0f, 0f, 0f);
+            padImg.raycastTarget = true;
+
+            var control = pad.AddComponent<WaterBalloonJoystickControl>();
+            control.Init(_waterBalloonVisual.Knob, _player != null ? _player.transform : null, _abilities);
+
+            _waterBalloonBuiltLevel = level;
+            _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
+        }
+
+        private void RebuildWaterBalloonJoystickIfNeeded()
+        {
+            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon));
+            if (level == _waterBalloonBuiltLevel)
+            {
+                if (_waterBalloonRoot != null)
+                    _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
+                return;
+            }
+            RebuildWaterBalloonJoystick();
+        }
+
+        /// <summary>The Teleport button (WV-240, spec §6a): a button like Dash, appearing once
+        /// acquired and growing a detail pip at its aimed-blink second level.</summary>
+        private void BuildTeleportButton() => RebuildTeleportButton();
+
+        private void RebuildTeleportButton()
+        {
+            if (_teleportRoot != null) Destroy(_teleportRoot.gameObject);
+
+            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
+            int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.Teleport);
+            Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW, TeleportButtonRise);
+            _teleportVisual = AbilityControlArt.BuildButton(
+                Root, "Teleport Button", anchoredPos, TeleportButtonSize, TeleportColor, "BLINK", level, maxLevel);
+            _teleportRoot = _teleportVisual.Root;
+
+            _teleportVisual.Ring.raycastTarget = true;   // the tappable surface — the ring is the button
+            var button = _teleportVisual.Ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnTeleportButtonTapped);
+
+            _teleportBuiltLevel = level;
+            _teleportRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Teleport));
+        }
+
+        private void RebuildTeleportButtonIfNeeded()
+        {
+            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
+            if (level == _teleportBuiltLevel)
+            {
+                if (_teleportRoot != null)
+                    _teleportRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Teleport));
+                return;
+            }
+            RebuildTeleportButton();
+        }
+
+        /// <summary>Tapping BLINK (WV-240): blink toward wherever Max is currently facing — aim takes
+        /// priority over movement the same way <see cref="PlayerController.Facing"/> already resolves
+        /// it, so a level-2 aimed blink goes exactly where the player is looking.</summary>
+        private void OnTeleportButtonTapped()
+        {
+            if (_abilities == null) return;
+            Vector3 dir = _player != null ? _player.Facing : Vector3.forward;
+            _abilities.TryTeleport(dir);
+        }
 
         private void BuildJoysticks()
         {
