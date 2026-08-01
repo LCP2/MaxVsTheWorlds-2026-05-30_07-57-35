@@ -6,22 +6,22 @@ using MaxWorlds.Rendering;
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// The garden tap the hose plugs into (YT-134), as a low-poly greybox prop.
+    /// A garden standpipe (YT-134), as a low-poly greybox prop — model only, no interactive logic.
     ///
-    /// Model only — the tether anchor, the leash and the plug-in logic are YT-129's <c>Tap</c>. This
-    /// replaces the two-cylinder greybox that ticket stands up. It matters that this reads clearly as a
-    /// CONNECT POINT from across the yard, because tap-hopping is the early traversal mechanic (YT-130):
-    /// a standpipe with a brass valve wheel and a spout is unmistakably "plug the hose in here."
+    /// Originally built to read as a "plug the hose in here" connect point for the tap-hopping
+    /// traversal mechanic (YT-129/130). WV-233 detached the hose from taps entirely (Max carries it
+    /// freely, self-supplied by power cells) and WV-239 retires that read along with it: this is now
+    /// pure passive backyard plumbing — a standpipe standing in the yard, nothing to walk up to or
+    /// interact with.
     ///
-    /// The spout presents at <c>Tap.NozzleHeight</c> (0.9 m) so the hose line meets it where YT-129
-    /// couples the tether. Built the house way: primitives, colliders stripped, one
-    /// <see cref="KeepsOwnMaterial"/> on the root so the surface sweep can't repaint the pipe as stone.
-    /// Authored with the base at y = 0, the valve facing +Z.
+    /// Built the house way: primitives, colliders stripped, one <see cref="KeepsOwnMaterial"/> on the
+    /// root so the surface sweep can't repaint the pipe as stone. Authored with the base at y = 0, the
+    /// valve facing +Z.
     /// </summary>
     public static class GardenTapArt
     {
-        /// <summary>Where the hose couples — matches YT-129 <c>Tap.NozzleHeight</c>. If that constant
-        /// moves, move this with it so the spout stays under the hose end.</summary>
+        /// <summary>Where the spout sits, matching <c>Tap.NozzleHeight</c> — kept only so the two
+        /// stay in visual sync if that constant ever moves.</summary>
         public const float SpoutHeight = 0.9f;
 
         private static readonly Color Pipe = new Color(0.42f, 0.45f, 0.5f);   // galvanised standpipe
@@ -36,12 +36,11 @@ namespace MaxWorlds.VFX
             Material pipe = MaterialLibrary.Tinted(SurfaceKind.Metal, Pipe);
             Material brass = MaterialLibrary.Tinted(SurfaceKind.Metal, BrassTone);
 
-            // A chunk bigger than the first cut (YT-144), so it's easy to spot as a water source from
-            // across the yard at the ~72 deg camera. The mass and girth grow ~1.5x; the vertical layout
-            // is deliberately NOT scaled with it — the SPOUT has to stay at the hose-coupling height
-            // (SpoutHeight / Tap.NozzleHeight, 0.9 m) or the hose line meets it in mid-air and the
-            // retained cyan connection bulb (Tap's, at 1.02 m) floats off the valve. So it grows fat and
-            // a touch taller, not uniformly scaled: a beefier standpipe, same plug-in point.
+            // A chunk bigger than the first cut (YT-144), so it's easy to spot as a bit of yard
+            // plumbing from across the ~72 deg camera. The mass and girth grow ~1.5x; the vertical
+            // layout is deliberately NOT scaled with it — the spout stays at SpoutHeight (matching
+            // Tap.NozzleHeight, 0.9 m) so it lines up with the greybox it replaces. A beefier
+            // standpipe, same footprint.
 
             // A flange where it comes out of the ground, and the riser pipe up to the valve body.
             Part(root, "Flange", PrimitiveType.Cylinder, new Vector3(0f, 0.05f, 0f),
@@ -73,7 +72,7 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>The dripping-tap beacon (YT-142): a continuous water drip off the spout and a wet
-        /// patch pooling at the base, so a tap reads at a glance as a water source to plug into — the
+        /// patch pooling at the base, so a tap reads at a glance as ambient yard plumbing — the
         /// "here I am" locator Lee asked for, the way a pickup shimmers.</summary>
         private static void BuildDrip(GameObject root)
         {

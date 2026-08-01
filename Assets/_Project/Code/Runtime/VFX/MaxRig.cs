@@ -321,13 +321,6 @@ namespace MaxWorlds.VFX
         /// at to prove the weapon actually comes up when the aim stick does.</summary>
         public float AimPose => _aim;
 
-        /// <summary>World position of the hose sprayer's tip — where the water leaves and where the
-        /// visible tether should meet his hands (YT-134). The hose tether draws from a point off Max's
-        /// capsule today; this lets it re-anchor to the real nozzle. Falls back to a metre up if the
-        /// gadget has not built yet, so a caller never reads the world origin.</summary>
-        public Vector3 MuzzleWorldPosition =>
-            _nozzle != null ? _nozzle.position : transform.position + Vector3.up;
-
         /// <summary>Stride phase, in radians. Advances only while he is moving.</summary>
         public float Stride => _stride;
 
@@ -401,8 +394,9 @@ namespace MaxWorlds.VFX
             _steelTrimMat = DetailMaterial("Max_SteelTrim", Steel);
             _boneMat = DetailMaterial("Max_Bone", Bone);
             _tapeMat = DetailMaterial("Max_Tape", Tape);
-            // Garden-hose green — the same green the tether line is drawn in (HoseTether.HoseGreen), so
-            // the coil on his hip and the line running to the tap read as one continuous hose (YT-134).
+            // Garden-hose green, so the inlet at the gadget and the coil on his hip read as one
+            // continuous length of hose he carries on himself (YT-134; self-supplied per WV-239 — no
+            // line runs off him to a tap any more).
             _hoseMat = DetailMaterial("Max_Hose", new Color(0.24f, 0.55f, 0.30f));
 
             _charmMats = new Material[Charms.Length];
@@ -750,8 +744,9 @@ namespace MaxWorlds.VFX
 
             // YT-134 — read it as a HOSE, not a self-contained bottle-gun. A green rubber hose feeds
             // into the BACK of the sprayer and drops away toward the hip coil (built on the body), so
-            // the eye follows nozzle -> hose -> coil -> the tether line -> the tap. Two stub segments,
-            // angled, so it curves rather than sticking straight out.
+            // the eye follows nozzle -> hose -> coil and stops there: a self-supplied loop with nothing
+            // running off him to a tap (WV-239). Two stub segments, angled, so it curves rather than
+            // sticking straight out.
             Part("HoseInlet", _gun, PrimitiveType.Cylinder,
                  new Vector3(0f, -0.05f, -0.14f), new Vector3(0.06f, 0.12f, 0.06f), _hoseMat,
                  Quaternion.Euler(52f, 0f, 0f));
@@ -760,9 +755,10 @@ namespace MaxWorlds.VFX
                  Quaternion.Euler(78f, 0f, 0f));
         }
 
-        /// <summary>A coil of spare hose slung at Max's hip — where the tether line emanates, so the
-        /// hose reads as carried ON him rather than sprouting from his belly (YT-134). Flattened rings
-        /// stacked into a loop; parented to the torso so it bobs with him.</summary>
+        /// <summary>A coil of spare hose slung at Max's hip, so the hose reads as carried ON him rather
+        /// than sprouting from his belly (YT-134) — the self-supplied look WV-239 asks for, with
+        /// nothing running off him to a tap. Flattened rings stacked into a loop; parented to the torso
+        /// so it bobs with him.</summary>
         private void BuildHoseCoil()
         {
             var coil = Pivot("HoseCoil", _torso, new Vector3(-0.24f, -0.02f, -0.12f));

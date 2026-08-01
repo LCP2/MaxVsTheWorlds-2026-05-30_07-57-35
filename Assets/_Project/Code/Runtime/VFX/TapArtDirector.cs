@@ -5,14 +5,12 @@ namespace MaxWorlds.VFX
 {
     /// <summary>
     /// Dresses the garden taps with their real art (YT-134). YT-129/130 stand each tap up as a
-    /// greybox — a post, a spout, and a glowing connection bulb — and place a whole network of them
-    /// (YT-130), so every one of them is a bare two-cylinder stub the player is meant to read as a
-    /// "plug in here" landmark.
+    /// greybox — a bare post-and-spout stub. WV-233 detached the hose from taps entirely (Max carries
+    /// it freely, self-supplied by power cells), so WV-239 retires the "plug in here" read along with
+    /// it: taps are pure passive backyard set-dressing now, nothing on them implies a connection point.
     ///
-    /// This swaps the post + spout for the <see cref="GardenTapArt"/> standpipe. It deliberately KEEPS
-    /// the tap's own <c>TapIndicator</c> bulb — that one is functional (it glows cyan when Max is
-    /// plugged into this tap, and gameplay tints it per state), so unlike the post and spout it is not
-    /// ours to replace. It sits just above the new valve wheel, reading as the connection light.
+    /// This swaps the post + spout for the <see cref="GardenTapArt"/> standpipe — a plumbing prop, not
+    /// an interactive landmark.
     ///
     /// A director, not an edit to <c>Tap</c>, matching how the boss and robots are dressed — and gated
     /// on the game's <see cref="HoseDirector"/> so it never installs into a shared PlayMode test scene.
@@ -45,7 +43,6 @@ namespace MaxWorlds.VFX
                 GardenTapArt.Build(tap.transform).name = ArtName;
                 HideGreybox(tap.transform, "TapPost");
                 HideGreybox(tap.transform, "TapSpout");
-                // TapIndicator is left alone — it is the connection light gameplay drives.
             }
         }
 

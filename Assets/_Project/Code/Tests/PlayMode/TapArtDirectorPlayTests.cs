@@ -9,9 +9,8 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The taps wear their real art (YT-134). The load-bearing assertion is that the swap KEEPS the
-    /// functional connection bulb while replacing only the cosmetic post + spout — dress the tap and
-    /// lose its "you're plugged in here" light and you've broken a gameplay read to gain a prettier one.
+    /// The taps wear their real art (YT-134), as pure passive set-dressing with no connection point
+    /// implied (WV-239) — dressing swaps the cosmetic post + spout for the standpipe and nothing else.
     /// </summary>
     public sealed class TapArtDirectorPlayTests
     {
@@ -43,7 +42,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator DressesTheTap_ButKeepsTheConnectionBulb()
+        public IEnumerator DressesTheTap_AsPassiveSetDressing()
         {
             var tap = MakeTap();
             yield return InstallDirector();
@@ -58,11 +57,9 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsFalse(tap.transform.Find("TapSpout").GetComponent<MeshRenderer>().enabled,
                 "the greybox spout is still drawn inside the art tap.");
 
-            // ...but the functional connection light is untouched.
-            var bulb = tap.transform.Find("TapIndicator");
-            Assert.IsNotNull(bulb, "the connection bulb is gone.");
-            Assert.IsTrue(bulb.GetComponent<MeshRenderer>().enabled,
-                "the connection bulb was hidden — the player can no longer see which tap they're on.");
+            // No connection indicator of any kind (WV-239) — a tap implies nothing to plug into.
+            Assert.IsNull(tap.transform.Find("TapIndicator"),
+                "a connection indicator still exists on a tap that nothing can plug into.");
         }
 
         [UnityTest]
