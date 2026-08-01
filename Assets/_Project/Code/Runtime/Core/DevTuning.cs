@@ -75,15 +75,13 @@ namespace MaxWorlds.Core
         /// player's window to read the volley and reposition.</summary>
         public static float? BossVolleyWindup { get; set; }
 
-        /// <summary>Hard max length of the hose leash, metres — how far Max can range from his tap (YT-129).</summary>
-        public static float? HoseTetherLength { get; set; }
-
         /// <summary>Tough-robot kills between upgrade-part drops (YT-143) — bigger spreads the five parts
         /// further across a level. Power cells drop on their own faster rate regardless.</summary>
         public static float? PartDropInterval { get; set; }
 
-        /// <summary>Cells the primary weapon burns per minute of use (WV-227) — today that's only
-        /// the Hydro condenser while untethered (YT-137); WV-233 generalises it to all primary fire.</summary>
+        /// <summary>Cells the primary weapon burns per minute of use (WV-227) — generalised by WV-233
+        /// from metering only the Hydro condenser while untethered (YT-137) to all primary fire, now
+        /// that the hose has detached from taps entirely.</summary>
         public static float? PrimaryCellsPerMin { get; set; }
 
         /// <summary>Cells a secondary-weapon (Water Balloon) activation costs (WV-227). Not yet spent
@@ -239,7 +237,7 @@ namespace MaxWorlds.Core
             SpawnInterval.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             BlasterDrainPerSecond.HasValue || BlasterRegenPerSecond.HasValue ||
-            FactoryHealth.HasValue || BossHealth.HasValue || HoseTetherLength.HasValue ||
+            FactoryHealth.HasValue || BossHealth.HasValue ||
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
             PartDropInterval.HasValue || PrimaryCellsPerMin.HasValue ||
@@ -276,7 +274,6 @@ namespace MaxWorlds.Core
             BossAddsPerVolley = null;
             BossMaxAdds = null;
             BossVolleyWindup = null;
-            HoseTetherLength = null;
             PartDropInterval = null;
             PrimaryCellsPerMin = null;
             HydroBurstSeconds = null;
@@ -338,7 +335,6 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(BossAddsPerVolley), () => BossAddsPerVolley, v => BossAddsPerVolley = v),
             (PrefsPrefix + nameof(BossMaxAdds), () => BossMaxAdds, v => BossMaxAdds = v),
             (PrefsPrefix + nameof(BossVolleyWindup), () => BossVolleyWindup, v => BossVolleyWindup = v),
-            (PrefsPrefix + nameof(HoseTetherLength), () => HoseTetherLength, v => HoseTetherLength = v),
             (PrefsPrefix + nameof(PartDropInterval), () => PartDropInterval, v => PartDropInterval = v),
             (PrefsPrefix + nameof(PrimaryCellsPerMin), () => PrimaryCellsPerMin, v => PrimaryCellsPerMin = v),
             (PrefsPrefix + nameof(HydroBurstSeconds), () => HydroBurstSeconds, v => HydroBurstSeconds = v),

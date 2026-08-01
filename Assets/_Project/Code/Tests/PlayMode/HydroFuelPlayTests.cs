@@ -4,16 +4,15 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
-using MaxWorlds.Hose;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
 
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The Hydro device runs on power cells (YT-137), only while a burst is active (YT-215). Bursting
-    /// off a tap, it burns the reserve as it sprays; on a tap it uses the YT-106 water economy and
-    /// leaves the cells alone; at empty it can't sustain.
+    /// The hose runs on power cells, always (YT-137, generalised to every primary shot by WV-233 once
+    /// the hose detached from taps entirely): it burns the reserve as it sprays; at empty it can't
+    /// sustain.
     /// </summary>
     public sealed class HydroFuelPlayTests
     {
@@ -26,14 +25,10 @@ namespace MaxWorlds.Tests.PlayMode
             HydroBurst.Reset();
             PickupWallet.Reset();
             DevTuning.Reset();
-            // No stray taps/directors — this test controls whether Max is "on a tap".
-            foreach (var t in Object.FindObjectsByType<Tap>(FindObjectsSortMode.None)) Object.Destroy(t.gameObject);
-            foreach (var d in Object.FindObjectsByType<HoseDirector>(FindObjectsSortMode.None)) Object.Destroy(d.gameObject);
             yield return null;
 
-            _max = new GameObject("Max");   // NOT tagged Player, so the HoseDirector won't wire it
+            _max = new GameObject("Max");
             _max.AddComponent<WaterBlaster>();
-            _max.AddComponent<HoseTether>();
             yield return null;
         }
 
@@ -42,20 +37,10 @@ namespace MaxWorlds.Tests.PlayMode
         {
             if (_max != null) Object.Destroy(_max);
             yield return null;
-            foreach (var t in Object.FindObjectsByType<Tap>(FindObjectsSortMode.None)) Object.Destroy(t.gameObject);
             UpgradeState.Reset();
             HydroBurst.Reset();
             PickupWallet.Reset();
             DevTuning.Reset();
-        }
-
-        /// <summary>Assembles the sub-assembly and presses the burst button, the YT-215 precondition
-        /// every one of these tests needs before the Hydro fuel path is even live.</summary>
-        private static void AssembleAndBurst()
-        {
-            UpgradeState.Install(PartKind.AugmentationHarness);   // the mount — completes the sub-assembly (YT-165)
-            UpgradeState.Install(PartKind.Hydro);
-            HydroBurst.Trigger();
         }
 
         private WaterBlaster Blaster => _max.GetComponent<WaterBlaster>();
@@ -69,9 +54,8 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator BurstingHydroBurnsCellsAsItSprays()
+        public IEnumerator SprayingBurnsCells()
         {
-            AssembleAndBurst();
             DevTuning.PrimaryCellsPerMin = 2400f;   // fast, so the test drains in a moment
             FillCells(10);
             yield return null;
@@ -79,47 +63,27 @@ namespace MaxWorlds.Tests.PlayMode
             yield return Spray(0.5f);
 
             Assert.That(PickupWallet.PowerCells, Is.LessThan(10),
-                "spraying on the Hydro condenser must burn power cells");
+                "spraying must burn power cells — the hose is always self-supplied now (WV-233)");
         }
 
         [UnityTest]
-        public IEnumerator OnATapItLeavesTheCellsAlone()
+        public IEnumerator AtZeroCellsTheSprayStalls_AndCollectingACellRestoresIt()
         {
-            var tap = Tap.Create("Tap", _max.transform.position);   // Max is standing on the tap
-            AssembleAndBurst();
-            DevTuning.PrimaryCellsPerMin = 2400f;
-            FillCells(10);
-            yield return null;   // the tether plugs into the tap by proximity
-
-            Assert.That(_max.GetComponent<HoseTether>().OnTap, Is.True, "Max should be plugged into the tap");
-            yield return Spray(0.5f);
-
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(10),
-                "on a tap the YT-106 economy supplies the water — power cells must not drain, even mid-burst");
-            Object.Destroy(tap.gameObject);
-        }
-
-        [UnityTest]
-        public IEnumerator AtZeroCellsHydroStalls_AndCollectingACellRestoresIt()
-        {
-            AssembleAndBurst();   // no cells at all
-            yield return null;
-
+            // No cells at all.
             Blaster.SetFiring(true);
             yield return null;
             yield return null;
             Assert.That(Blaster.IsEmitting, Is.False,
-                "the Hydro spray must stall with an empty power-cell reserve — collect more or re-tap");
+                "the spray must stall with an empty power-cell reserve — collect more to keep firing");
 
             PickupWallet.AddPowerCell();
             yield return Spray(0.2f);
-            Assert.That(Blaster.IsEmitting, Is.True, "collecting a cell restores the Hydro spray");
+            Assert.That(Blaster.IsEmitting, Is.True, "collecting a cell restores the spray");
         }
 
         [UnityTest]
-        public IEnumerator WithCellsTheHydroTankStaysSupplied()
+        public IEnumerator WithCellsTheTankStaysSupplied()
         {
-            AssembleAndBurst();
             DevTuning.PrimaryCellsPerMin = 0.6f;   // barely drains, so cells last through the test
             FillCells(20);
             yield return null;
@@ -127,7 +91,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return Spray(0.6f);
 
             Assert.That(Blaster.Energy.Normalized, Is.GreaterThan(0.8f),
-                "while cells remain the condenser keeps the tank supplied — unlimited-feeling water");
+                "while cells remain the tank stays supplied — unlimited-feeling water");
         }
     }
 }

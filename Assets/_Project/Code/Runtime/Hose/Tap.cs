@@ -6,17 +6,15 @@ using MaxWorlds.Rendering;
 namespace MaxWorlds.Hose
 {
     /// <summary>
-    /// A garden tap — the fixed point Max's hose plugs into (YT-129, weapon epic YT-127).
-    ///
-    /// A tap is a leash anchor: <see cref="HoseTether"/> keeps Max within a hard radius of the tap
-    /// he's plugged into, so ranging across the garden is a decision about where the water reaches,
-    /// not free movement. For YT-129 there is exactly one tap, on the patio by the back door. YT-130
-    /// scatters more of them and lets Max re-plug instantly, which is what turns tap-hopping into
-    /// early traversal.
+    /// A garden tap (YT-129/130, weapon epic YT-127). It used to be a leash anchor — Max's hose
+    /// plugged in and he was held within a hard radius of it — but WV-233 detached the hose from taps
+    /// entirely: Max now carries it freely and it's self-supplied by power cells, so a tap is just an
+    /// inert landmark <c>HoseDirector</c> places along the run (art may dress it as set-dressing or
+    /// remove it, WV-239).
     ///
     /// Taps self-register into <see cref="All"/> on enable, the same registry idiom the factories use
-    /// (<c>FactoryCensus</c>), so the tether and the tap-switcher can find every tap in the level
-    /// without any scene wiring.
+    /// (<c>FactoryCensus</c>), so <c>TapArtDirector</c> can find every tap in the level without any
+    /// scene wiring.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class Tap : MonoBehaviour
@@ -65,25 +63,6 @@ namespace MaxWorlds.Hose
             _mpb.SetColor("_BaseColor", c);
             _mpb.SetColor("_EmissionColor", connected ? c : Color.black);
             _indicator.SetPropertyBlock(_mpb);
-        }
-
-        /// <summary>
-        /// Nearest tap to <paramref name="pos"/> within <paramref name="range"/> metres (planar), by
-        /// index into <paramref name="taps"/>; -1 if none is in range. Pure, so the "walk up to a tap
-        /// and it swaps" rule (YT-130) can be tested without a scene.
-        /// </summary>
-        public static int NearestWithin(Vector3 pos, IReadOnlyList<Vector3> taps, float range)
-        {
-            int best = -1;
-            float bestSq = range * range;
-            for (int i = 0; i < taps.Count; i++)
-            {
-                float dx = taps[i].x - pos.x;
-                float dz = taps[i].z - pos.z;
-                float sq = dx * dx + dz * dz;
-                if (sq <= bestSq) { bestSq = sq; best = i; }
-            }
-            return best;
         }
 
         /// <summary>Build and place a greybox tap standing on the lawn at <paramref name="groundPosition"/>.</summary>

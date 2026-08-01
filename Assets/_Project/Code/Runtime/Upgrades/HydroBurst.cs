@@ -7,14 +7,18 @@ namespace MaxWorlds.Upgrades
     /// The Hydro burst (YT-215). Assembling the harness + condenser
     /// (<see cref="UpgradeState.HydroAssembled"/>) used to untether Max from the taps FOREVER — the
     /// permanent state deleted the leash's tension for the rest of the run, which was the boring
-    /// late-game walkover. Now assembly only unlocks a burst button: pressing it frees Max, self-supplied
-    /// (same power-cell draw as before, see <c>WaterBlaster.HydroActive</c>), for a short window; then
-    /// the leash snaps back and the button goes on a cooldown. A resource, not a state.
+    /// late-game walkover. Then assembly only unlocked a burst button for a timed, self-supplied
+    /// window before the leash snapped back — a resource, not a state.
     ///
-    /// Static for the same reason as <see cref="UpgradeState"/> — one Max, several systems (the tether,
-    /// the blaster, the HUD button) all reading the same clock without a reference threaded around.
-    /// <see cref="Tick"/> must be called once a frame (by <see cref="MaxWorlds.Hose.HoseTether"/>, which
-    /// already owns the leash and reads <see cref="Active"/> every frame) to advance the state machine.
+    /// WV-233 has since removed the leash entirely (Max always carries the hose freely and it is
+    /// always power-cell supplied, <c>WaterBlaster.Update</c>), so pressing the button no longer
+    /// changes anything about how Max ranges or how the water is paid for — the state machine below
+    /// (and the HUD countdown it drives) is kept as-is pending its own retirement, not touched here.
+    ///
+    /// Static for the same reason as <see cref="UpgradeState"/> — one Max, several systems (the
+    /// blaster, the HUD button) all reading the same clock without a reference threaded around.
+    /// <see cref="Tick"/> must be called once a frame (by <c>WaterBlaster</c>, which runs every frame
+    /// for the armed Max) to advance the state machine.
     /// </summary>
     public static class HydroBurst
     {

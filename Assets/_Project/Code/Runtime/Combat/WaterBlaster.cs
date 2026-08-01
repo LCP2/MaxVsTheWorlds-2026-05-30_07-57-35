@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
-using MaxWorlds.Hose;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Upgrades;
@@ -21,9 +20,10 @@ namespace MaxWorlds.Combat
     /// Since the weapon epic (YT-127/YT-129) this is Max's <b>garden hose</b>: the water
     /// short-circuits the robots (the existing damage, re-themed — a spray shorts them out).
     /// Its OPENING spray is deliberately short and wide — weak but forgiving — the base state
-    /// before any nozzle upgrade (YT-133) narrows or lengthens it. The hose is tethered to a
-    /// tap by <see cref="MaxWorlds.Hose.HoseTether"/>, which leashes how far Max can range; the
-    /// spray reach here is a separate, much shorter number.
+    /// before any nozzle upgrade (YT-133) narrows or lengthens it. The hose no longer tethers
+    /// to a tap (WV-233 reverses YT-129/130): Max carries it freely and it self-supplies from
+    /// power cells (see <see cref="Update"/>); the spray reach here is a separate, much
+    /// shorter number, unrelated to how far Max may roam.
     ///
     /// All firing visuals live in <see cref="WaterVfx"/> (YT-47), which this attaches
     /// to itself at Awake and drives with cosmetic-only calls. The VFX never feeds back
@@ -90,7 +90,7 @@ namespace MaxWorlds.Combat
         public void SetFiring(bool firing) => IsFiring = firing;
 
         /// <summary>Is the stream actually coming out this frame? (Firing AND supplied.) Exposed so a
-        /// test can see the Hydro condenser stall the spray at zero power cells (YT-137).</summary>
+        /// test can see the spray stall at zero power cells (YT-137, generalised by WV-233).</summary>
         public bool IsEmitting => _lastEmitting;
 
         // --- Power ramp (YT-67) ---------------------------------------------------------------
@@ -220,42 +220,28 @@ namespace MaxWorlds.Combat
             _reticle.Init(transform, range, coneHalfAngle);
         }
 
-        private HoseTether _tether;
-        private float _hydroDrainAccum;
+        private float _cellDrainAccum;
         /// <summary>Cells the primary weapon burns per MINUTE of spray, before any dev override or
         /// Power Efficiency reduction (WV-227's economy recut — supersedes the old cells/sec number).
-        /// Today this only meters the Hydro condenser while untethered (YT-137); WV-233 generalises it
-        /// to all primary fire once the hose detaches from taps entirely.</summary>
+        /// WV-233 generalised this from metering only the Hydro condenser while untethered (YT-137) to
+        /// ALL primary fire, now that the hose has detached from taps entirely.</summary>
         public const float DefaultPrimaryCellsPerMin = 6f;
-
-        /// <summary>True when the water is coming from the Hydro condenser (a burst is active and Max
-        /// is off a tap), not a tap (YT-137/YT-215). Then power cells fuel it instead of the YT-106
-        /// economy.</summary>
-        private bool HydroActive
-        {
-            get
-            {
-                if (!HydroBurst.Active) return false;
-                if (_tether == null) _tether = GetComponent<HoseTether>();
-                return _tether == null || !_tether.OnTap;
-            }
-        }
 
         private void Update()
         {
             float dt = Time.deltaTime;
 
-            // Water supply (YT-137). On a tap (or with no Hydro), the YT-106 economy: the tank regens.
-            // On the Hydro condenser, power cells top the tank while any remain; at empty it can't, so
-            // the tank drains as Max fires and the spray stalls until he collects cells or re-taps.
-            if (HydroActive)
-            {
-                if (PickupWallet.PowerCells > 0) Energy.Refill();
-            }
-            else
-            {
-                Energy.Tick(dt);
-            }
+            // The Hydro burst (YT-215) is still a pressable HUD button/cooldown clock, so it still
+            // needs a frame tick; it used to ride along on the tether's LateUpdate (HoseTether owned
+            // the leash it released), but the leash is gone (WV-233), so the weapon — the other thing
+            // that runs every frame for the armed Max — ticks it now.
+            HydroBurst.Tick(dt);
+
+            // Water supply (WV-233): the hose is self-supplied from power cells, always — no tap to
+            // regen from. While cells remain, they top the tank; at empty they can't, so the tank
+            // drains as Max fires and the spray stalls until he collects more (generalises the old
+            // Hydro-condenser-only rule, YT-137, to all primary fire).
+            if (PickupWallet.PowerCells > 0) Energy.Refill();
 
             // Trigger is held only while the player is actively aiming. When bound,
             // orient along their facing too. If unbound, IsFiring stays false (no
@@ -286,17 +272,16 @@ namespace MaxWorlds.Combat
             if (_depleted && Energy.Normalized >= rechargeFraction) _depleted = false;
             else if (!_depleted && !Energy.CanSpend(energyPerTick)) _depleted = true;
 
-            // On the Hydro condenser the water is made from power cells — no cells, no water, so the
-            // spray stalls until Max collects more or re-plugs a tap (YT-137). On a tap this is false
-            // and the normal YT-106 tank rules apply.
-            bool hydroStarved = HydroActive && PickupWallet.PowerCells <= 0;
+            // The water is made from power cells — no cells, no water, so the spray stalls until Max
+            // collects more (WV-233 generalises the old Hydro-only rule, YT-137, to all primary fire).
+            bool cellsStarved = PickupWallet.PowerCells <= 0;
 
-            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick) && !hydroStarved);
+            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick) && !cellsStarved);
             _lastEmitting = emitting;
 
-            // While it IS spraying on the condenser, the water is paid for in power cells — burn them
-            // for the time it's actually spraying, so the meter ticks down as it's used (WV-227).
-            if (HydroActive && emitting)
+            // While it IS spraying, the water is paid for in power cells — burn them for the time it's
+            // actually spraying, so the meter ticks down as it's used (WV-227, generalised by WV-233).
+            if (emitting)
             {
                 float perMin = Mathf.Max(0f, DevTuning.Or(DevTuning.PrimaryCellsPerMin, DefaultPrimaryCellsPerMin));
                 // Power Efficiency's real level (WV-230) — 0 (no reduction) until the ability is
@@ -305,8 +290,8 @@ namespace MaxWorlds.Combat
                     WeaponSystemState.AbilityLevel(AbilityKind.PowerEfficiency),
                     DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel));
                 float rate = (perMin / 60f) * efficiency;
-                _hydroDrainAccum += rate * dt;
-                while (_hydroDrainAccum >= 1f && PickupWallet.TrySpendPowerCell()) _hydroDrainAccum -= 1f;
+                _cellDrainAccum += rate * dt;
+                while (_cellDrainAccum >= 1f && PickupWallet.TrySpendPowerCell()) _cellDrainAccum -= 1f;
             }
 
             if (_vfx != null) _vfx.SetStreaming(emitting);

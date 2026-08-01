@@ -4,7 +4,6 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.TestTools;
 using MaxWorlds.Combat;
-using MaxWorlds.Hose;
 using MaxWorlds.Player;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
@@ -40,7 +39,6 @@ namespace MaxWorlds.Tests.PlayMode
             _max.AddComponent<CharacterController>();
             _max.AddComponent<WaterBlaster>();
             _max.AddComponent<PlayerController>();
-            _max.AddComponent<HoseTether>();
 
             _screenGo = new GameObject("UpgradeScreen");
             _screenGo.AddComponent<UpgradeScreen>();

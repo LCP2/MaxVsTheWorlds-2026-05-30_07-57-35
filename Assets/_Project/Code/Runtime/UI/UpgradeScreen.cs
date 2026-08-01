@@ -316,7 +316,7 @@ namespace MaxWorlds.UI
 
         /// <summary>
         /// Push the new loadout onto the live weapon the instant a part is confirmed (YT-141), the way
-        /// the Hydro tether already pulls its state every frame — so a confirmed part measurably changes
+        /// the weapon already pulls its own state every frame — so a confirmed part measurably changes
         /// the weapon NOW, not only if a change-event happened to be wired to the right instance.
         ///
         /// Cone, reach and move speed are read at their point of use, so they are already live; this
