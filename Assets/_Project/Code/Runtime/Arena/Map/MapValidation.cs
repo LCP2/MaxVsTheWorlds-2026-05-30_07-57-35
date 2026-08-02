@@ -122,20 +122,27 @@ namespace MaxWorlds.Arena
                 }
             }
 
-            // A gate that fills no doorway is a slab standing in a field.
+            // A gate that fills no doorway is a slab standing in a field. An area gate (WV-222) is the
+            // same claim about a different entity kind — it seals a doorway exactly like the
+            // scene-adopted Gate does, it just opens on its own HP instead of a factory's death.
             foreach (MapEntity e in Kind(map, EntityKind.Gate))
-            {
-                bool filled = false;
-                if (map.links != null)
-                    foreach (MapLink link in map.links)
-                        if (link != null && link.gate == e.id) filled = true;
-
-                if (!filled)
+                if (!FillsADoorway(map, e.id))
                 { reason = $"gate '{e.id}' does not fill any doorway — no link names it"; return false; }
-            }
+
+            foreach (MapEntity e in Kind(map, EntityKind.AreaGate))
+                if (!FillsADoorway(map, e.id))
+                { reason = $"area gate '{e.id}' does not fill any doorway — no link names it"; return false; }
 
             reason = null;
             return true;
+        }
+
+        private static bool FillsADoorway(MapData map, string entityId)
+        {
+            if (map.links != null)
+                foreach (MapLink link in map.links)
+                    if (link != null && link.gate == entityId) return true;
+            return false;
         }
 
         private static bool Actors(MapData map, out string reason)
@@ -152,9 +159,10 @@ namespace MaxWorlds.Arena
                     if (e.Kind == EntityKind.Unknown)
                     { reason = $"entity '{e.id}' has unknown kind '{e.kind}'"; return false; }
 
-                    // A gate stands ON a wall line, so it is legitimately outside every room. Anything
-                    // else authored outside a room is standing in the void.
-                    if (e.Kind != EntityKind.Gate && map.ZoneAt(e.x, e.z) == null)
+                    // A gate stands ON a wall line, so it is legitimately outside every room — true of
+                    // an area gate (WV-222) exactly as it is the scene-adopted one. Anything else
+                    // authored outside a room is standing in the void.
+                    if (e.Kind != EntityKind.Gate && e.Kind != EntityKind.AreaGate && map.ZoneAt(e.x, e.z) == null)
                     { reason = $"'{e.id}' is at ({e.x}, {e.z}), which is not inside any zone"; return false; }
                 }
             }

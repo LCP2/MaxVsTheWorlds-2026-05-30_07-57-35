@@ -11,6 +11,15 @@ namespace MaxWorlds.Core
     public enum Team { Player, Enemy, Neutral }
 
     /// <summary>
+    /// Which of Max's arsenal dealt a hit. Nothing read this before the gated arena (WV-222): an area
+    /// gate only breaks to sustained PRIMARY fire, so a receiver that cares now has a way to tell that
+    /// apart from a Water Balloon splash or a future ability tick. Defaults to <see cref="Unspecified"/>
+    /// so every damage call site that existed before this stays correct without being touched — only
+    /// the primary weapon needs to say who it is.
+    /// </summary>
+    public enum DamageSource { Unspecified, PrimaryWeapon, SecondaryWeapon, Ability, Environment }
+
+    /// <summary>
     /// A single damage application. <see cref="Soak"/> is the light elemental
     /// "soak" tag the Water Blaster applies (slice = raw damage only; the tag is
     /// a hook for future elemental synergy, YT-28). <see cref="Attacker"/> is the
@@ -24,14 +33,17 @@ namespace MaxWorlds.Core
         public readonly Vector3 Direction;
         public readonly bool Soak;
         public readonly Team Attacker;
+        public readonly DamageSource Source;
 
-        public DamageInfo(float amount, Vector3 point, Vector3 direction, Team attacker, bool soak = false)
+        public DamageInfo(float amount, Vector3 point, Vector3 direction, Team attacker, bool soak = false,
+            DamageSource source = DamageSource.Unspecified)
         {
             Amount = amount;
             Point = point;
             Direction = direction;
             Attacker = attacker;
             Soak = soak;
+            Source = source;
         }
     }
 

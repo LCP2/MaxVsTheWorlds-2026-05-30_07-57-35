@@ -348,7 +348,8 @@ namespace MaxWorlds.Combat
                 var d = s_buffer[i];
                 var comp = d as Component;
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
-                d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true));
+                d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true,
+                    source: DamageSource.PrimaryWeapon));
                 hitSomething = true;
 
                 // Cosmetic stagger only (WV-225) — no meaningful positional launch any more.

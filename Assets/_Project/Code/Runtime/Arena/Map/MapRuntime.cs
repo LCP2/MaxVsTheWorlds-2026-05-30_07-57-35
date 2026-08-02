@@ -165,6 +165,10 @@ namespace MaxWorlds.Arena
                         built.Factories.Add(BuildFactory(e, root, built));
                         break;
 
+                    case EntityKind.AreaGate:
+                        BuildAreaGate(map, e, root, built);
+                        break;
+
                     case EntityKind.Gate:
                         GameObject gate = MarkDiscoverable(Adopt(e, built, Find<SubZoneGate>()));
                         // A gate is exactly as wide as the doorway it fills, plus the wall it seals
@@ -235,6 +239,32 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return hutch;
+        }
+
+        /// <summary>
+        /// A gated room boundary, from data (WV-222) — the reusable mechanic behind the recut's 10-area
+        /// arena (spec §1). Unlike the scene-adopted <see cref="EntityKind.Gate"/> — one per scene,
+        /// moved into place — a level can have as many area gates as it has rooms, so like a factory it
+        /// is BUILT, not adopted.
+        ///
+        /// Its width is NOT authored (see <see cref="MapEntity.width"/>'s doc) — it fills the doorway
+        /// of the link that names it, read off the exact same <see cref="SealWidth"/> the scene-adopted
+        /// gate uses, so the two kinds can never leave a doorway with a gap beside its seal.
+        /// </summary>
+        private static GameObject BuildAreaGate(MapData map, MapEntity e, Transform root, MapBuild built)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter,
+                new Vector3(SealWidth(map, e), e.height, e.depth));
+
+            MarkDiscoverable(body);
+            body.AddComponent<AreaGate>();
+
+            // Shut, an area gate blocks sight exactly like the scene-adopted one (YT-107) — AreaGate
+            // disables its own collider the instant it breaks, so the sight-line opens with the gate.
+            CoverLayer.Assign(body);
+
+            built.Actors[e.id] = body;
+            return body;
         }
 
         /// <summary>
