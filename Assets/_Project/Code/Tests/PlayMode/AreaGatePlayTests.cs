@@ -1,0 +1,211 @@
+using System.Collections;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
+using MaxWorlds.Arena;
+using MaxWorlds.Core;
+
+namespace MaxWorlds.Tests.PlayMode
+{
+    /// <summary>
+    /// The gated-arena mechanic against a real built gate (v0.5 recut spec §1, WV-222):
+    /// <see cref="AreaGateTests"/> proves the map format/validator accept the entity kind;
+    /// this proves the BUILT <see cref="AreaGate"/> actually blocks, takes only primary damage, and
+    /// opens on schedule.
+    ///
+    /// Built directly through <see cref="MapRuntime.Build"/> from an inline fixture rather than
+    /// through <see cref="MapLibrary"/>/<c>backyard_slice.json</c> — this is a reusable engine
+    /// capability landing with its own tested map, not a cutover of the shipped one (Lee's boss-fight
+    /// call on WV-222 is still open for a follow-up ticket).
+    /// </summary>
+    public sealed class AreaGatePlayTests
+    {
+        private GameObject _root;
+
+        [UnitySetUp]
+        public IEnumerator SetUp()
+        {
+            DevTuning.Reset();
+            yield return null;
+        }
+
+        [UnityTearDown]
+        public IEnumerator TearDown()
+        {
+            if (_root != null) Object.Destroy(_root);
+            DevTuning.Reset();
+            yield return null;
+        }
+
+        /// <summary>Two rooms sealed by one area gate — built fresh each call so a test that overrides
+        /// <see cref="DevTuning"/> beforehand gets a gate sized off that override.</summary>
+        private IEnumerator BuildTwoAreas(float doorway = 4f)
+        {
+            var map = new MapData
+            {
+                name = "Two Areas", wallHeight = 3f, wallThickness = 1f,
+                zones = new[]
+                {
+                    new MapZone { id = "area1", type = "entry", x = 0f, z = -10f, width = 20f, depth = 20f },
+                    new MapZone { id = "area2", type = "open",  x = 0f, z =  10f, width = 20f, depth = 20f },
+                },
+                links = new[] { new MapLink { from = "area1", to = "area2", doorway = doorway, gate = "gate1" } },
+                entities = new[]
+                {
+                    new MapEntity { id = "start", kind = "playerSpawn", x = 0f, z = -10f },
+                    new MapEntity { id = "gate1", kind = "areaGate", x = 0f, z = 0f, height = 3f, depth = 0.6f },
+                },
+            };
+
+            _root = new GameObject("AreaGate Test Root");
+            _built = MapRuntime.Build(map, _root.transform);
+            _map = map;
+            yield return null;
+        }
+
+        private MapBuild _built;
+        private MapData _map;
+
+        private AreaGate Gate() => _built.Actors["gate1"].GetComponent<AreaGate>();
+
+        private static DamageInfo Hit(float amount, DamageSource source, Team attacker = Team.Player) =>
+            new DamageInfo(amount, Vector3.zero, Vector3.forward, attacker, source: source);
+
+        [UnityTest]
+        public IEnumerator TheGateIsBuiltAlive_AndBlocksThePassage()
+        {
+            yield return BuildTwoAreas();
+
+            AreaGate gate = Gate();
+            Assert.IsNotNull(gate, "the map named an areaGate entity but built no AreaGate component");
+            Assert.IsTrue(gate.IsAlive, "the gate was born already broken");
+            Assert.IsFalse(gate.IsOpen);
+
+            var col = gate.GetComponent<Collider>();
+            Assert.IsTrue(col.enabled, "a fresh area gate should start closed");
+        }
+
+        [UnityTest]
+        public IEnumerator TheGateSealsTheDoorwayItFills()
+        {
+            yield return BuildTwoAreas(doorway: 6f);
+
+            MapEntity entity = _map.Entity("gate1");
+            Assert.AreEqual(MapRuntime.SealWidth(_map, entity), Gate().transform.localScale.x, 1e-3,
+                "the area gate is not as wide as its doorway — there is a sliver to squeeze through");
+        }
+
+        [UnityTest]
+        public IEnumerator NonPrimaryDamage_DoesNothing()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            gate.TakeDamage(Hit(9999f, DamageSource.SecondaryWeapon));
+            gate.TakeDamage(Hit(9999f, DamageSource.Ability));
+            gate.TakeDamage(Hit(9999f, DamageSource.Unspecified));
+
+            Assert.IsTrue(gate.IsAlive, "a Water Balloon (or an untagged hit) broke a gate only the primary should break");
+            Assert.AreEqual(1f, gate.Normalized, 1e-4);
+        }
+
+        [UnityTest]
+        public IEnumerator SustainedPrimaryFire_BreaksTheGateAtExactlyItsHp_NotBefore()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+            float maxHp = gate.MaxHp;
+
+            gate.TakeDamage(Hit(maxHp - 1f, DamageSource.PrimaryWeapon));
+            Assert.IsTrue(gate.IsAlive, "the gate broke before it was actually out of HP");
+            Assert.IsTrue(gate.GetComponent<Collider>().enabled, "the collider dropped early");
+
+            gate.TakeDamage(Hit(1f, DamageSource.PrimaryWeapon));
+            Assert.IsFalse(gate.IsAlive);
+            Assert.IsTrue(gate.IsOpen, "the gate has zero HP but never opened");
+            Assert.IsFalse(gate.GetComponent<Collider>().enabled, "an open gate still blocks the doorway");
+        }
+
+        [UnityTest]
+        public IEnumerator TheDefaultBreakTime_Is4SecondsOfBaseTierPrimaryFire()
+        {
+            yield return BuildTwoAreas();
+
+            // Spec §1: "sustained fire breaks it in ~gateBreakSeconds (default 4 s)". AssumedPrimaryDps
+            // is the primary's own authored base rate (WaterBlaster: damagePerTick 4 / fireInterval 0.1).
+            Assert.AreEqual(ArenaTuning.DefaultGateBreakSeconds * AreaGate.AssumedPrimaryDps, Gate().MaxHp, 1e-3);
+        }
+
+        [UnityTest]
+        public IEnumerator MovingTheGateBreakSecondsSlider_RetunesAFreshlyBuiltGate()
+        {
+            DevTuning.GateBreakSeconds = 2f;
+            yield return BuildTwoAreas();
+
+            // Moving the Settings-panel slider is meant to change how long a gate takes, not just sit
+            // there unread (WV-234's settings existed before this ticket made anything consume them).
+            Assert.AreEqual(2f * AreaGate.AssumedPrimaryDps, Gate().MaxHp, 1e-3);
+        }
+
+        [UnityTest]
+        public IEnumerator GateRequiresClear_DefaultsOff_AndDamageAppliesImmediately()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            Assert.IsFalse(gate.RequiresClear, "gateRequiresClear should default off (spec §1)");
+            gate.TakeDamage(Hit(10f, DamageSource.PrimaryWeapon));
+            Assert.Less(gate.Normalized, 1f, "the gate ignored a hit it had no reason to reject");
+        }
+
+        [UnityTest]
+        public IEnumerator GateRequiresClear_RejectsDamageOnlyWhileItsRoomHookSaysNotClear()
+        {
+            DevTuning.GateRequiresClear = 1f;
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            Assert.IsTrue(gate.RequiresClear);
+
+            // No robot-room system wired yet (WV-223) — an unwired hook must not deadlock the gate.
+            gate.TakeDamage(Hit(10f, DamageSource.PrimaryWeapon));
+            Assert.Less(gate.Normalized, 1f, "an area gate with nothing wired to RoomClear should behave as if clear");
+
+            float beforeHook = gate.Normalized;
+            gate.RoomClear = () => false;
+            gate.TakeDamage(Hit(10f, DamageSource.PrimaryWeapon));
+            Assert.AreEqual(beforeHook, gate.Normalized, 1e-4, "damage applied while the room hook said 'not clear'");
+
+            gate.RoomClear = () => true;
+            gate.TakeDamage(Hit(10f, DamageSource.PrimaryWeapon));
+            Assert.Less(gate.Normalized, beforeHook, "damage was still rejected once the room hook said 'clear'");
+        }
+
+        [UnityTest]
+        public IEnumerator FriendlyFire_AnEnemyTaggedHit_IsRejectedEvenIfMislabelledPrimary()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            gate.TakeDamage(Hit(9999f, DamageSource.PrimaryWeapon, attacker: Team.Enemy));
+
+            Assert.IsTrue(gate.IsAlive, "the gate's own team took damage from 'itself'");
+            Assert.AreEqual(1f, gate.Normalized, 1e-4);
+        }
+
+        [UnityTest]
+        public IEnumerator OpeningTheGate_FiresOpenedExactlyOnce()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            int opened = 0;
+            gate.Opened += () => opened++;
+
+            gate.TakeDamage(Hit(gate.MaxHp, DamageSource.PrimaryWeapon));
+            gate.TakeDamage(Hit(50f, DamageSource.PrimaryWeapon)); // after death — must be a no-op
+
+            Assert.AreEqual(1, opened, "Opened should fire exactly once, not once per hit past zero HP");
+        }
+    }
+}

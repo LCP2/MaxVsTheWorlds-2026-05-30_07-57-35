@@ -13,7 +13,7 @@ namespace MaxWorlds.Arena
     /// <summary>Everything that can stand in a map. <see cref="EntityKind.Unknown"/> is what an
     /// unrecognised string parses to — the loader skips those rather than throwing, so a map authored
     /// against a newer build still loads the parts this build understands.</summary>
-    public enum EntityKind { Unknown, PlayerSpawn, Factory, Gate, Boss, Cover, Prop, Pickup }
+    public enum EntityKind { Unknown, PlayerSpawn, Factory, Gate, Boss, Cover, Prop, Pickup, AreaGate }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
     /// in metres — the same way the design board draws it. Walls are NOT authored: they are derived
