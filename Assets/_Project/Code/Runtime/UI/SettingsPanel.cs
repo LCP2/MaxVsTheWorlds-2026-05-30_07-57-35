@@ -474,21 +474,15 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.DefaultCapacity),
                 v => DevTuning.PowerCellCapacity = v, tab: TabEconomy);
 
-            Add("Part pacing", "kills", 1f, 8f, PickupDirector.DefaultPartInterval,
-                () => DevTuning.Or(DevTuning.PartDropInterval, PickupDirector.DefaultPartInterval),
-                v => DevTuning.PartDropInterval = v, tab: TabEconomy);
-
-            // Rusher cell-drop chance (YT-171): the common kill's trickle toward the Hydro reserve,
-            // separate from the bruiser's guaranteed drop.
-            Add("Cell drop chance", "x", 0f, 1f, PickupDirector.DefaultCellDropChance,
-                () => DevTuning.Or(DevTuning.PowerCellDropChance, PickupDirector.DefaultCellDropChance),
-                v => DevTuning.PowerCellDropChance = v, tab: TabEconomy);
-
-            // Cells per large-robot kill (WV-234, spec §5/§9) — not yet wired to PickupDirector's
-            // live drop count; see CellEconomyTuning.DefaultCellsPerLargeKill.
+            // Small robots drop nothing at all (WV-226) — only large kills carry loot, paced by
+            // these two knobs.
             Add("Cells/large kill", "cells", 0f, 5f, CellEconomyTuning.DefaultCellsPerLargeKill,
                 () => DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill),
                 v => DevTuning.CellsPerLargeKill = v, tab: TabEconomy);
+
+            Add("Parts/large kill", "kills", 1f, 8f, CellEconomyTuning.DefaultPartsPerLargeKills,
+                () => DevTuning.Or(DevTuning.PartsPerLargeKills, CellEconomyTuning.DefaultPartsPerLargeKills),
+                v => DevTuning.PartsPerLargeKills = v, tab: TabEconomy);
 
             Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
                 () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),

@@ -244,20 +244,20 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheCellDropChanceSliderDrivesDevTuning()
+        public IEnumerator ThePartsPerLargeKillSliderDrivesDevTuning()
         {
-            // YT-171: the rusher cell-drop chance must actually take effect, live, from the panel.
+            // WV-226: the large-kill part pacing must actually take effect, live, from the panel.
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            var chance = System.Array.Find(sliders, s => s.transform.parent.name == "Cell drop chance");
-            Assert.That(chance, Is.Not.Null, "no Cell drop chance slider (YT-171)");
+            var pacing = System.Array.Find(sliders, s => s.transform.parent.name == "Parts/large kill");
+            Assert.That(pacing, Is.Not.Null, "no Parts/large kill slider (WV-226)");
 
-            SetSliderToValue(chance, 0.75f);
+            SetSliderToValue(pacing, 6f);
             yield return null;
 
-            Assert.That(DevTuning.PowerCellDropChance, Is.Not.Null);
-            Assert.That(DevTuning.PowerCellDropChance.Value, Is.EqualTo(0.75f).Within(0.001f),
-                "moving the Cell drop chance slider must drive DevTuning.PowerCellDropChance");
+            Assert.That(DevTuning.PartsPerLargeKills, Is.Not.Null);
+            Assert.That(DevTuning.PartsPerLargeKills.Value, Is.EqualTo(6f).Within(0.001f),
+                "moving the Parts/large kill slider must drive DevTuning.PartsPerLargeKills");
         }
 
         [UnityTest]

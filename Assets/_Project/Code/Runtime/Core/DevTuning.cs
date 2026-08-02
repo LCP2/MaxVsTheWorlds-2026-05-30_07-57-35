@@ -75,9 +75,9 @@ namespace MaxWorlds.Core
         /// player's window to read the volley and reposition.</summary>
         public static float? BossVolleyWindup { get; set; }
 
-        /// <summary>Tough-robot kills between upgrade-part drops (YT-143) — bigger spreads the five parts
-        /// further across a level. Power cells drop on their own faster rate regardless.</summary>
-        public static float? PartDropInterval { get; set; }
+        /// <summary>Large-robot kills between upgrade-part drops (WV-226) — bigger spreads parts
+        /// further across a level. Power cells drop on their own every large kill regardless.</summary>
+        public static float? PartsPerLargeKills { get; set; }
 
         /// <summary>Cells the primary weapon burns per minute of use (WV-227) — generalised by WV-233
         /// from metering only the Hydro condenser while untethered (YT-137) to all primary fire, now
@@ -108,11 +108,6 @@ namespace MaxWorlds.Core
 
         /// <summary>Max power cells the reserve holds — the meter's full mark (YT-137).</summary>
         public static float? PowerCellCapacity { get; set; }
-
-        /// <summary>Chance [0,1] that a rusher's death drops a single power cell (YT-171) — the common
-        /// kill's replenish trickle, on top of the bruiser's guaranteed drop. Not every robot need drop
-        /// one, so this is a roll rather than a guarantee.</summary>
-        public static float? PowerCellDropChance { get; set; }
 
         // --- upgrade-part effect magnitudes (YT-138 Weapons tab) ---
 
@@ -265,9 +260,9 @@ namespace MaxWorlds.Core
         /// introduced (<c>toughSubstitutionPct</c>).</summary>
         public static float? ToughSubstitutionPct { get; set; }
 
-        /// <summary>Power cells a large-robot kill drops (WV-234, spec §5/§9 <c>cellsPerLargeKill</c>).
-        /// Not yet wired to the live drop table — <see cref="MaxWorlds.Pickups.PickupDirector"/>'s
-        /// drop counts are a separate economy-recut pass.</summary>
+        /// <summary>Power cells a large-robot kill drops, guaranteed (WV-226, spec §5/§9
+        /// <c>cellsPerLargeKill</c>) — small robots drop nothing at all, so this is combat's only
+        /// cell source.</summary>
         public static float? CellsPerLargeKill { get; set; }
 
         // --- gated arena (WV-234, spec §1/§9) — settings only for now, ready for WV-222 to spend. ---
@@ -309,9 +304,8 @@ namespace MaxWorlds.Core
             FactoryHealth.HasValue || BossHealth.HasValue ||
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
-            PartDropInterval.HasValue || PrimaryCellsPerMin.HasValue ||
+            PartsPerLargeKills.HasValue || PrimaryCellsPerMin.HasValue ||
             HydroBurstSeconds.HasValue || HydroBurstCooldown.HasValue || PowerCellCapacity.HasValue ||
-            PowerCellDropChance.HasValue ||
             SecondaryCellsPerUse.HasValue || SpecialAbilityCellsPerUse.HasValue ||
             PowerEfficiencyReductionPerLevel.HasValue || WeakenedDamageMultiplier.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
@@ -351,12 +345,11 @@ namespace MaxWorlds.Core
             BossAddsPerVolley = null;
             BossMaxAdds = null;
             BossVolleyWindup = null;
-            PartDropInterval = null;
+            PartsPerLargeKills = null;
             PrimaryCellsPerMin = null;
             HydroBurstSeconds = null;
             HydroBurstCooldown = null;
             PowerCellCapacity = null;
-            PowerCellDropChance = null;
             SecondaryCellsPerUse = null;
             SpecialAbilityCellsPerUse = null;
             PowerEfficiencyReductionPerLevel = null;
@@ -430,12 +423,11 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(BossAddsPerVolley), () => BossAddsPerVolley, v => BossAddsPerVolley = v),
             (PrefsPrefix + nameof(BossMaxAdds), () => BossMaxAdds, v => BossMaxAdds = v),
             (PrefsPrefix + nameof(BossVolleyWindup), () => BossVolleyWindup, v => BossVolleyWindup = v),
-            (PrefsPrefix + nameof(PartDropInterval), () => PartDropInterval, v => PartDropInterval = v),
+            (PrefsPrefix + nameof(PartsPerLargeKills), () => PartsPerLargeKills, v => PartsPerLargeKills = v),
             (PrefsPrefix + nameof(PrimaryCellsPerMin), () => PrimaryCellsPerMin, v => PrimaryCellsPerMin = v),
             (PrefsPrefix + nameof(HydroBurstSeconds), () => HydroBurstSeconds, v => HydroBurstSeconds = v),
             (PrefsPrefix + nameof(HydroBurstCooldown), () => HydroBurstCooldown, v => HydroBurstCooldown = v),
             (PrefsPrefix + nameof(PowerCellCapacity), () => PowerCellCapacity, v => PowerCellCapacity = v),
-            (PrefsPrefix + nameof(PowerCellDropChance), () => PowerCellDropChance, v => PowerCellDropChance = v),
             (PrefsPrefix + nameof(SecondaryCellsPerUse), () => SecondaryCellsPerUse, v => SecondaryCellsPerUse = v),
             (PrefsPrefix + nameof(SpecialAbilityCellsPerUse), () => SpecialAbilityCellsPerUse, v => SpecialAbilityCellsPerUse = v),
             (PrefsPrefix + nameof(PowerEfficiencyReductionPerLevel), () => PowerEfficiencyReductionPerLevel, v => PowerEfficiencyReductionPerLevel = v),

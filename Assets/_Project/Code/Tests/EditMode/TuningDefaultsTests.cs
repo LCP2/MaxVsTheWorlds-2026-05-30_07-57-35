@@ -48,7 +48,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.42f).Within(0.001f), "robot health");
             Assert.That(WaterBlaster.DefaultPrimaryCellsPerMin, Is.EqualTo(6f).Within(0.001f),
                 "primary cell drain (WV-227 recut, cells/min — supersedes the old cells/sec number)");
-            Assert.That(PickupDirector.DefaultPartInterval, Is.EqualTo(7.98f).Within(0.001f), "part pacing");
+            Assert.That(CellEconomyTuning.DefaultPartsPerLargeKills, Is.EqualTo(4f).Within(0.001f),
+                "part pacing (WV-226 recut, per large kill)");
+            Assert.That(CellEconomyTuning.DefaultCellsPerLargeKill, Is.EqualTo(1f).Within(0.001f),
+                "cells per large kill (WV-226)");
             Assert.That(EnemySpawner.DefaultSpawnIntervalPin, Is.EqualTo(3.996f).Within(0.001f), "spawn interval");
         }
 

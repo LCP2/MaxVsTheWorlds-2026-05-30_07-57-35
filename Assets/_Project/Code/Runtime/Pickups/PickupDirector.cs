@@ -11,17 +11,15 @@ namespace MaxWorlds.Pickups
     /// Turns robot deaths into drops and collects them (YT-131) — a self-installing director, the
     /// project idiom (<c>GroundAnchorVfx</c>, <c>HoseDirector</c>), so it needs no scene wiring.
     ///
-    /// It owns the drop policy: only the tough tier — the <see cref="EnemyKind.Bruiser"/>, the closest
-    /// thing the slice has to a "medium" robot — leaves an upgrade part, so parts stay an occasional
-    /// event rather than a carpet under the rusher swarm. On a bruiser death it also scatters a few
-    /// power cells, guaranteed. Each frame it does the walk-over collection itself: one Max lookup, one
-    /// pool, a planar distance test per live pickup. Banking goes through <see cref="PickupWallet"/>;
-    /// the HUD reacts to that.
-    ///
-    /// Power cells alone also drop off the common rusher swarm (YT-171): once Hydro burns cells as
-    /// fuel (YT-137), a supply tied only to the rare bruiser leaves Max starved for most of a fight, so
-    /// every rusher death rolls a tunable chance for a single cell — "not every robot need drop one,"
-    /// per the ticket, hence a roll rather than a second guarantee.
+    /// The drop policy is a strict small/large split (WV-226): the small tier —
+    /// <see cref="EnemyKind.Rusher"/> — drops nothing at all, no roll, no trickle. Only the large tier
+    /// — <see cref="EnemyKind.Bruiser"/>, the closest thing the slice has to "large" until Heavy/Brute
+    /// (WV-223/224) land — drops loot: a guaranteed <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
+    /// power cells every kill, plus one part every
+    /// <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-th large kill, so parts stay an
+    /// occasional event rather than a carpet. Each frame it does the walk-over collection itself: one
+    /// Max lookup, one pool, a planar distance test per live pickup. Banking goes through
+    /// <see cref="PickupWallet"/>; the HUD reacts to that.
     ///
     /// Parts are now universal upgrade tokens (WV-228): every paced drop banks, there is no longer a
     /// guaranteed-unique table to run dry against (YT-133's old <c>PartDropTable</c> is retired from
@@ -40,22 +38,9 @@ namespace MaxWorlds.Pickups
         /// collected. Generous: this is a phone game, you shouldn't have to thread a needle.</summary>
         public const float CollectRadius = 1.4f;
 
-        /// <summary>Power cells per bruiser drop. The part is always exactly one.</summary>
-        public const int CellsPerDrop = 3;
-
-        /// <summary>Default tough-robot kills between part drops (YT-143, spacing set to 6 in YT-183,
-        /// re-baked to Lee's on-device number YT-200 — was 6). Power cells keep dropping every kill.
-        /// Tunable via <see cref="DevTuning.PartDropInterval"/>.</summary>
-        public const float DefaultPartInterval = 7.98f;
-
-        /// <summary>Default chance [0,1] that a rusher's death drops a single power cell (YT-171) — a
-        /// trickle from the common kill so the Hydro reserve doesn't depend solely on the rare bruiser.
-        /// Tunable via <see cref="DevTuning.PowerCellDropChance"/>.</summary>
-        public const float DefaultCellDropChance = 0.3f;
-
         /// <summary>Power cells in the "cell cache" a shed drops once every ability is owned (WV-229) —
-        /// bigger than a bruiser's <see cref="CellsPerDrop"/> since it's standing in for the ability
-        /// device the shed can no longer hand out.</summary>
+        /// bigger than a large kill's guaranteed drop (<see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>)
+        /// since it's standing in for the ability device the shed can no longer hand out.</summary>
         public const int ShedCellCacheAmount = 6;
 
         private const float ScatterRadius = 0.9f;
@@ -72,7 +57,7 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
         private Transform _max;
-        private int _bruiserKills;
+        private int _largeKills;
 
         private void OnEnable()
         {
@@ -88,32 +73,28 @@ namespace MaxWorlds.Pickups
 
         private void OnRobotDied(Vector3 pos, EnemyKind kind)
         {
-            if (kind != EnemyKind.Bruiser)
+            // WV-226: the small tier drops nothing at all — only large kills carry loot.
+            if (kind != EnemyKind.Bruiser) return;
+
+            _largeKills++;
+
+            int cells = Mathf.Max(0, Mathf.RoundToInt(
+                DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill)));
+            for (int i = 0; i < cells; i++)
             {
-                // The common tier (YT-171): no part, but a rolled chance at a single power cell so the
-                // Hydro reserve has a trickle that doesn't wait on the rare bruiser.
-                float chance = Mathf.Clamp01(DevTuning.Or(DevTuning.PowerCellDropChance, DefaultCellDropChance));
-                if (Random.value < chance) SpawnDrop(PickupKind.PowerCell, pos);
-                return;
-            }
-
-            _bruiserKills++;
-
-            // Pace the parts (YT-143): one every Nth tough kill, so they spread across the level
-            // instead of arriving all at once. Cells (below) still drop every kill. Parts are now
-            // universal tokens (WV-228) — there is no cap on how many can drop across a run, unlike the
-            // old five-and-done unique table.
-            int interval = Mathf.Max(1, Mathf.RoundToInt(
-                DevTuning.Or(DevTuning.PartDropInterval, DefaultPartInterval)));
-            if (_bruiserKills % interval == 0)
-                SpawnDrop(PickupKind.Part, pos, DecorativeKind());
-
-            for (int i = 0; i < CellsPerDrop; i++)
-            {
-                float ang = i * (Mathf.PI * 2f / CellsPerDrop);
+                float ang = i * (Mathf.PI * 2f / cells);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
                 SpawnDrop(PickupKind.PowerCell, pos + off);
             }
+
+            // Pace the parts (WV-226): one every Nth large kill, so they spread across the level
+            // instead of arriving all at once. Cells (above) still drop every kill. Parts are
+            // universal tokens (WV-228) — there is no cap on how many can drop across a run, unlike the
+            // old five-and-done unique table.
+            int interval = Mathf.Max(1, Mathf.RoundToInt(
+                DevTuning.Or(DevTuning.PartsPerLargeKills, CellEconomyTuning.DefaultPartsPerLargeKills)));
+            if (_largeKills % interval == 0)
+                SpawnDrop(PickupKind.Part, pos, DecorativeKind());
         }
 
         /// <summary>A cosmetic-only flavour for a dropped part (WV-228) — parts carry no gameplay
@@ -121,7 +102,7 @@ namespace MaxWorlds.Pickups
         /// <see cref="MaxWorlds.Upgrades.PartKind.Hydro"/>, so cycling through the old catalog keeps
         /// that variety alive instead of every part looking identical forever.</summary>
         private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
-            MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_bruiserKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
+            MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
         /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6): destroying one drops a
         /// device granting one random ability Max doesn't already own. Once all six are owned there is
