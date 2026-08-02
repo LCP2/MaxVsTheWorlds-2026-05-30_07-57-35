@@ -73,6 +73,23 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator HeavyAndBruteKillsDropLootTooTheyCountAsLarge()
+        {
+            // v0.5 recut spec §5, MV-224: "for economy purposes they count as 'large'".
+            yield return NewDirector();
+
+            DropSignals.EmitRobotDied(new Vector3(5f, 0f, 5f), EnemyKind.Heavy);
+            DropSignals.EmitRobotDied(new Vector3(-5f, 0f, 5f), EnemyKind.Brute);
+            yield return null;
+
+            int expectedCells = Mathf.RoundToInt(CellEconomyTuning.DefaultCellsPerLargeKill) * 2;
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(2),
+                "heavy and brute kills must pace parts the same as a bruiser kill");
+            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(expectedCells),
+                "heavy and brute kills must drop power cells the same as a bruiser kill");
+        }
+
+        [UnityTest]
         public IEnumerator ASmallKillDropsNothingAtAll()
         {
             // WV-226: the small tier drops nothing at all — no roll, no chance, no cell trickle.

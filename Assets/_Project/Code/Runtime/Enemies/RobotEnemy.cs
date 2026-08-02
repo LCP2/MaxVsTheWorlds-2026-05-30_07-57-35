@@ -191,7 +191,13 @@ namespace MaxWorlds.Enemies
         // --- IHealthReadout (YT-111): what the floating bar over this robot reads. ---
         public float HealthNormalized => maxHealth > 0f ? Mathf.Clamp01(_health / maxHealth) : 0f;
         public float HealthCurrent => _health;
-        public string ReadoutName => Kind == EnemyKind.Bruiser ? "BRUISER" : "RUSHER";
+        public string ReadoutName => Kind switch
+        {
+            EnemyKind.Bruiser => "BRUISER",
+            EnemyKind.Heavy => "HEAVY",
+            EnemyKind.Brute => "BRUTE",
+            _ => "RUSHER",
+        };
 
         /// <summary>This robot's full HP, unscaled by current damage — what Water Balloon's
         /// percentage splash (WV-231, spec §9 <c>waterBalloonDamagePct</c>) is a fraction of.

@@ -12,9 +12,9 @@ namespace MaxWorlds.Pickups
     /// project idiom (<c>GroundAnchorVfx</c>, <c>HoseDirector</c>), so it needs no scene wiring.
     ///
     /// The drop policy is a strict small/large split (WV-226): the small tier —
-    /// <see cref="EnemyKind.Rusher"/> — drops nothing at all, no roll, no trickle. Only the large tier
-    /// — <see cref="EnemyKind.Bruiser"/>, the closest thing the slice has to "large" until Heavy/Brute
-    /// (WV-223/224) land — drops loot: a guaranteed <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
+    /// <see cref="EnemyKind.Rusher"/> — drops nothing at all, no roll, no trickle. Only the large
+    /// tier — bruiser, heavy and brute (<see cref="EnemyArchetype.IsLarge"/>, MV-224) — drops loot:
+    /// a guaranteed <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
     /// power cells every kill, plus one part every
     /// <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-th large kill, so parts stay an
     /// occasional event rather than a carpet. Each frame it does the walk-over collection itself: one
@@ -73,8 +73,9 @@ namespace MaxWorlds.Pickups
 
         private void OnRobotDied(Vector3 pos, EnemyKind kind)
         {
-            // WV-226: the small tier drops nothing at all — only large kills carry loot.
-            if (kind != EnemyKind.Bruiser) return;
+            // WV-226: the small tier drops nothing at all — only large kills carry loot. Bruiser,
+            // heavy and brute (MV-224) all count as "large" for economy purposes.
+            if (!EnemyArchetype.IsLarge(kind)) return;
 
             _largeKills++;
 

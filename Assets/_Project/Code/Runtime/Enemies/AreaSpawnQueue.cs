@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -42,7 +43,27 @@ namespace MaxWorlds.Enemies
         /// area has drained — still reflects the area's actual composition instead of being skewed
         /// to whichever kind happened to be queued first.
         /// </summary>
-        public void Fill(int largeCount, int smallCount)
+        public void Fill(int largeCount, int smallCount) =>
+            FillInternal(largeCount, smallCount, _ => EnemyKind.Bruiser);
+
+        /// <summary>Queues one gated-arena area's worth of population, with its large slots further
+        /// split into bruiser/heavy/brute via <see cref="AreaPopulation.ToughSplitForArea"/> (v0.5
+        /// recut spec §2-3, MV-224) — otherwise identical to <see cref="Fill"/>, including the
+        /// proportional large/small interleave.</summary>
+        public void FillForArea(int areaIndex, int largeCount, int smallCount,
+            float heavyIntroArea, float bruteIntroArea, float toughSubstitutionPct)
+        {
+            var (bruiserCount, heavyCount, bruteCount) = AreaPopulation.ToughSplitForArea(
+                areaIndex, largeCount, heavyIntroArea, bruteIntroArea, toughSubstitutionPct);
+
+            FillInternal(largeCount, smallCount, slot =>
+            {
+                if (slot < bruiserCount) return EnemyKind.Bruiser;
+                return slot < bruiserCount + heavyCount ? EnemyKind.Heavy : EnemyKind.Brute;
+            });
+        }
+
+        private void FillInternal(int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)
         {
             int large = Mathf.Max(0, largeCount);
             int small = Mathf.Max(0, smallCount);
@@ -55,7 +76,7 @@ namespace MaxWorlds.Enemies
                 else if (placedSmall >= small) takeLarge = true;
                 else takeLarge = (placedLarge + 1) * small <= (placedSmall + 1) * large;
 
-                if (takeLarge) { _queued.Enqueue(EnemyKind.Bruiser); placedLarge++; }
+                if (takeLarge) { _queued.Enqueue(largeKindForSlot(placedLarge)); placedLarge++; }
                 else { _queued.Enqueue(EnemyKind.Rusher); placedSmall++; }
             }
         }

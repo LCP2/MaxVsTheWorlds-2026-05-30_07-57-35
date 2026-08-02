@@ -51,5 +51,33 @@ namespace MaxWorlds.Enemies
             int large = Mathf.RoundToInt(total * share);
             return (large, total - large);
         }
+
+        /// <summary>Splits an area's large-slot count into (bruiser, heavy, brute) sub-counts (v0.5
+        /// recut spec §2-3, MV-224). Once <paramref name="areaIndex"/> reaches
+        /// <paramref name="heavyIntroArea"/> / <paramref name="bruteIntroArea"/>, that tier
+        /// substitutes <paramref name="toughSubstitutionPct"/>% of the area's large slots —
+        /// independently of the other tier, so once both are live they stack (the spec's Area 8
+        /// table: ~25% heavy + ~25% brute + the remainder bruiser). Whatever's left after both
+        /// substitutions is bruiser; if the two substitutions would together exceed the area's
+        /// actual large count (an extreme <paramref name="toughSubstitutionPct"/>) they're scaled
+        /// back proportionally rather than allowed to invent robots.</summary>
+        public static (int Bruiser, int Heavy, int Brute) ToughSplitForArea(int areaIndex,
+            int largeCount, float heavyIntroArea, float bruteIntroArea, float toughSubstitutionPct)
+        {
+            int large = Mathf.Max(0, largeCount);
+            float pct = Mathf.Clamp01(toughSubstitutionPct / 100f);
+
+            int heavy = areaIndex >= heavyIntroArea ? Mathf.RoundToInt(large * pct) : 0;
+            int brute = areaIndex >= bruteIntroArea ? Mathf.RoundToInt(large * pct) : 0;
+
+            int tough = heavy + brute;
+            if (tough > large)
+            {
+                heavy = Mathf.RoundToInt((float)heavy / tough * large);
+                brute = large - heavy;
+            }
+
+            return (large - heavy - brute, heavy, brute);
+        }
     }
 }

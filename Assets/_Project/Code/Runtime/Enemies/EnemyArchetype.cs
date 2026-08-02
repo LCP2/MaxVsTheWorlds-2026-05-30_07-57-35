@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace MaxWorlds.Enemies
 {
-    public enum EnemyKind { Rusher, Bruiser }
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -120,8 +120,49 @@ namespace MaxWorlds.Enemies
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
             knockbackDecay: 70f);
 
-        public static EnemyArchetype Of(EnemyKind kind) =>
-            kind == EnemyKind.Bruiser ? Bruiser : Rusher;
+        /// <summary>The first later-area tier (v0.5 recut spec §2-3, MV-224): Area 5 onward
+        /// substitutes a slice of the bruiser's large slots with something that just plain outlasts
+        /// it. Lee's escalation plan (spec §2) is explicitly composition-driven, not count-driven —
+        /// this is the composition move, not a new fight pattern, so per the ticket "minimal distinct
+        /// behaviour is fine": same shape family as the bruiser, chunkier silhouette so the two large
+        /// tiers still tell apart at a glance (Pillar 4), same size ceiling as everything else in the
+        /// swarm (YT-74) — it's allowed to be the biggest robot, never bigger than Max.</summary>
+        public static EnemyArchetype Heavy => new EnemyArchetype(
+            EnemyKind.Heavy, EnemyShape.Box, new Vector3(1.2f, 1.35f, 1.2f),
+            colliderHeight: 1.55f, colliderRadius: 0.58f,
+            moveSpeed: 0.85f, maxHealth: 260f,   // ~1.73x the bruiser's 150
+            contactDamage: 32f, contactRadius: 1.5f,
+            lungeRange: 2.6f, telegraphTime: 1.05f,
+            lungeSpeed: 8.5f, lungeTime: 0.35f, recoverTime: 1.5f,
+            knockbackDecay: 95f);
+
+        /// <summary>The second later-area tier (Area 8 on, spec §2 table) — the top of the
+        /// composition ladder, introduced alongside <see cref="Heavy"/> rather than replacing it (the
+        /// spec table has both present from Area 8). Same "minimal distinct behaviour" idiom as
+        /// <see cref="Heavy"/>, sized apart from it the same way the bruiser sizes apart from the
+        /// rusher.</summary>
+        public static EnemyArchetype Brute => new EnemyArchetype(
+            EnemyKind.Brute, EnemyShape.Box, new Vector3(1.25f, 1.5f, 1.25f),
+            colliderHeight: 1.9f, colliderRadius: 0.6f,
+            moveSpeed: 0.75f, maxHealth: 420f,   // ~2.8x the bruiser's 150, well past the heavy's 260
+            contactDamage: 38f, contactRadius: 1.6f,
+            lungeRange: 2.6f, telegraphTime: 1.15f,
+            lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
+            knockbackDecay: 120f);
+
+        public static EnemyArchetype Of(EnemyKind kind) => kind switch
+        {
+            EnemyKind.Bruiser => Bruiser,
+            EnemyKind.Heavy => Heavy,
+            EnemyKind.Brute => Brute,
+            _ => Rusher,
+        };
+
+        /// <summary>Whether <paramref name="kind"/> counts as "large" for economy purposes (v0.5
+        /// recut spec §5, MV-224): the bruiser, heavy and brute tiers all drop the large-kill loot
+        /// and count toward the parts cadence — only the rusher is the small tier that drops
+        /// nothing (WV-226).</summary>
+        public static bool IsLarge(EnemyKind kind) => kind != EnemyKind.Rusher;
 
         /// <summary>The same archetype, tougher (YT-181 Invasion Level): health and contact damage
         /// scaled by <paramref name="multiplier"/>, everything else — speed, silhouette, timing —

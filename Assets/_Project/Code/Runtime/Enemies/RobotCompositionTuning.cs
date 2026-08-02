@@ -1,10 +1,12 @@
 namespace MaxWorlds.Enemies
 {
     /// <summary>
-    /// Authored magnitudes for the robot-accumulation scheme (v0.5 recut spec §1-2/§9) that don't yet
-    /// have an owning system to live on: the gated 10-area arena is WV-222, and the Heavy/Brute tiers
-    /// + composition drift are WV-223/224. Settings only for now (WV-234), ready for those tickets to
-    /// spend — same idiom as <see cref="MaxWorlds.Pickups.CellEconomyTuning"/>'s pre-WV-231 knobs.
+    /// Authored magnitudes for the robot-accumulation scheme (v0.5 recut spec §1-2/§9). The gated
+    /// 10-area arena is MV-222; the area-population maths (<see cref="AreaPopulation"/>) and
+    /// concurrent-cap queue (<see cref="AreaSpawnQueue"/>) that spend most of these are MV-223; the
+    /// heavy/brute intro-area + substitution knobs are spent by <see cref="AreaPopulation.ToughSplitForArea"/>
+    /// (MV-224). Still no live "current area" index to drive any of it from — that's MV-222's own
+    /// map-cutover follow-up.
     /// </summary>
     public static class RobotCompositionTuning
     {

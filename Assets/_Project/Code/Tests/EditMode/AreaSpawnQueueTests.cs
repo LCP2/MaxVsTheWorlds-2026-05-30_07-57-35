@@ -108,5 +108,64 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(1, queue.MaxActive);
         }
+
+        // --- FillForArea (v0.5 recut spec §2-3, MV-224) -----------------------------------------
+
+        [Test]
+        public void FillForArea_BeforeIntroAreas_QueuesOnlyBruiserForLargeSlots()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 100);
+            queue.FillForArea(areaIndex: 1, largeCount: 8, smallCount: 0,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+            int bruiser = 0;
+            while (queue.TryRelease(out EnemyKind kind))
+            {
+                Assert.AreEqual(EnemyKind.Bruiser, kind);
+                bruiser++;
+            }
+
+            Assert.AreEqual(8, bruiser);
+        }
+
+        [Test]
+        public void FillForArea_PastBothIntroAreas_QueuesTheSubstitutedTiers()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 100);
+            queue.FillForArea(areaIndex: 8, largeCount: 12, smallCount: 0,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+            int bruiser = 0, heavy = 0, brute = 0;
+            while (queue.TryRelease(out EnemyKind kind))
+            {
+                if (kind == EnemyKind.Bruiser) bruiser++;
+                else if (kind == EnemyKind.Heavy) heavy++;
+                else if (kind == EnemyKind.Brute) brute++;
+            }
+
+            Assert.AreEqual(6, bruiser);
+            Assert.AreEqual(3, heavy);
+            Assert.AreEqual(3, brute);
+        }
+
+        [Test]
+        public void FillForArea_StillInterleavesAgainstSmallSlots()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 100);
+            queue.FillForArea(areaIndex: 8, largeCount: 4, smallCount: 4,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+            Assert.AreEqual(8, queue.TotalRemaining);
+
+            int small = 0, large = 0;
+            while (queue.TryRelease(out EnemyKind kind))
+            {
+                if (kind == EnemyKind.Rusher) small++;
+                else large++;
+            }
+
+            Assert.AreEqual(4, small);
+            Assert.AreEqual(4, large, "the tough tiers still count as large slots for the interleave");
+        }
     }
 }

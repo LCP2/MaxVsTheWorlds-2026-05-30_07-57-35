@@ -11,6 +11,9 @@ namespace MaxWorlds.Tests.EditMode
     {
         private static readonly EnemyArchetype Rusher = EnemyArchetype.Rusher;
         private static readonly EnemyArchetype Bruiser = EnemyArchetype.Bruiser;
+        private static readonly EnemyArchetype Heavy = EnemyArchetype.Heavy;
+        private static readonly EnemyArchetype Brute = EnemyArchetype.Brute;
+        private static readonly EnemyArchetype[] AllArchetypes = { Rusher, Bruiser, Heavy, Brute };
 
         [Test]
         public void Bruiser_IsSlowerAndTougherThanTheRusher()
@@ -40,7 +43,7 @@ namespace MaxWorlds.Tests.EditMode
             // the time); YT-169 pulled it back to ~60% (1.85 against Max's 3.01), restoring the wider
             // ~1.16 m/s gap a retreat actually opens. It is still kiteable — Max is strictly faster —
             // which is the invariant this pins.
-            foreach (var a in new[] { Rusher, Bruiser })
+            foreach (var a in AllArchetypes)
                 Assert.Less(a.MoveSpeed, MaxSpeed,
                     $"the {a.Kind} can outrun Max — kiting stops being possible at all");
             Assert.LessOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.8f,
@@ -52,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             // The other edge. Shaving speed must not turn the swarm into scenery: a robot that can't
             // reach a stationary player is no longer a threat, and there's nothing to dodge.
-            foreach (var a in new[] { Rusher, Bruiser })
+            foreach (var a in AllArchetypes)
                 Assert.Greater(a.MoveSpeed, 0f, $"the {a.Kind} would never reach Max at all");
 
             // And the rusher specifically still has to feel like a rusher — quick enough to pressure
@@ -100,7 +103,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             // A crowd of things bigger than the player stops reading as a swarm and starts reading
             // as a moving wall. This is the regression that made the game unplayable.
-            foreach (var a in new[] { Rusher, Bruiser })
+            foreach (var a in AllArchetypes)
             {
                 Assert.LessOrEqual(a.ColliderRadius, EnemyArchetype.PlayerRadius * 1.2f,
                     $"the {a.Kind} is wider than Max");
@@ -131,7 +134,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void EveryArchetype_StandsOnTheGround()
         {
-            foreach (var a in new[] { Rusher, Bruiser })
+            foreach (var a in AllArchetypes)
             {
                 Assert.AreEqual(a.ColliderHeight * 0.5f, a.SpawnHeight, 1e-4,
                     $"{a.Kind} would spawn buried or floating");
@@ -145,7 +148,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             // Unity silently clamps a CharacterController's height up to 2*radius. If an archetype
             // relies on being squatter than that, the collider it gets is NOT the one it asked for.
-            foreach (var a in new[] { Rusher, Bruiser })
+            foreach (var a in AllArchetypes)
                 Assert.GreaterOrEqual(a.ColliderHeight, a.ColliderRadius * 2f - 1e-4f,
                     $"{a.Kind}'s collider would be silently clamped taller than authored");
         }
@@ -155,6 +158,44 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.AreEqual(EnemyKind.Bruiser, EnemyArchetype.Of(EnemyKind.Bruiser).Kind);
             Assert.AreEqual(EnemyKind.Rusher, EnemyArchetype.Of(EnemyKind.Rusher).Kind);
+            Assert.AreEqual(EnemyKind.Heavy, EnemyArchetype.Of(EnemyKind.Heavy).Kind);
+            Assert.AreEqual(EnemyKind.Brute, EnemyArchetype.Of(EnemyKind.Brute).Kind);
+        }
+
+        // --- Heavy & Brute (v0.5 recut spec §2-3, MV-224) ---------------------------------------
+
+        [Test]
+        public void HeavyAndBrute_HaveHigherHealthThanTheBruiser()
+        {
+            // The ticket's own AC: "higher HP than the current large robot".
+            Assert.Greater(Heavy.MaxHealth, Bruiser.MaxHealth);
+            Assert.Greater(Brute.MaxHealth, Bruiser.MaxHealth);
+        }
+
+        [Test]
+        public void BruteOutlaststHeavy_SoTheLadderKeepsEscalating()
+        {
+            // The spec table introduces heavy at Area 5 and brute at Area 8 — brute has to be a real
+            // step up, not a reskin, or Area 8+ would not read as tougher than Area 5-7.
+            Assert.Greater(Brute.MaxHealth, Heavy.MaxHealth);
+        }
+
+        [Test]
+        public void HeavyAndBrute_AreLargerSilhouettesThanTheBruiser()
+        {
+            // Pillar 4: the three large tiers must still tell apart at a glance.
+            Assert.Greater(Heavy.ColliderHeight, Bruiser.ColliderHeight);
+            Assert.Greater(Brute.ColliderHeight, Heavy.ColliderHeight);
+        }
+
+        [Test]
+        public void IsLarge_TreatsBruiserHeavyAndBruteAsLarge_OnlyRusherAsSmall()
+        {
+            // v0.5 recut spec §5: "for economy purposes they count as 'large'".
+            Assert.IsFalse(EnemyArchetype.IsLarge(EnemyKind.Rusher));
+            Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Bruiser));
+            Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Heavy));
+            Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Brute));
         }
 
         // --- The mix ---------------------------------------------------------------------------

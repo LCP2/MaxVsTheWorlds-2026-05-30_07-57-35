@@ -102,5 +102,60 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.Greater(shareAt10, shareAt1);
         }
+
+        // --- ToughSplitForArea (v0.5 recut spec §2-3, MV-224) -----------------------------------
+
+        [Test]
+        public void ToughSplit_BeforeHeavyIntroArea_IsAllBruiser()
+        {
+            var split = AreaPopulation.ToughSplitForArea(4, largeCount: 10,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+            Assert.AreEqual((10, 0, 0), split);
+        }
+
+        [Test]
+        public void ToughSplit_AtHeavyIntroArea_SubstitutesTheConfiguredPercent()
+        {
+            var split = AreaPopulation.ToughSplitForArea(5, largeCount: 12,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+            Assert.AreEqual((9, 3, 0), split, "25% of 12 large slots = 3 heavy, brute not introduced yet");
+        }
+
+        [Test]
+        public void ToughSplit_AtBruteIntroArea_StacksBothTiersOnTopOfEachOther()
+        {
+            // Spec §2 table, Area 8: Heavy + Brute both present. largeCount chosen so 25% lands on
+            // a whole number and the assertion isn't at the mercy of a rounding tie-break.
+            var split = AreaPopulation.ToughSplitForArea(8, largeCount: 12,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+            Assert.AreEqual((6, 3, 3), split,
+                "25% heavy + 25% brute stack once both are introduced, leaving the rest bruiser");
+        }
+
+        [Test]
+        public void ToughSplit_NeverExceedsTheAreasActualLargeCount()
+        {
+            // An extreme substitution % must not invent robots beyond what the area actually has.
+            var split = AreaPopulation.ToughSplitForArea(10, largeCount: 5,
+                heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 90f);
+
+            Assert.AreEqual(5, split.Bruiser + split.Heavy + split.Brute);
+            Assert.GreaterOrEqual(split.Bruiser, 0);
+        }
+
+        [Test]
+        public void ToughSplit_PartsAlwaysSumToTheLargeCount()
+        {
+            for (int area = 1; area <= 10; area++)
+            {
+                var split = AreaPopulation.ToughSplitForArea(area, largeCount: 13,
+                    heavyIntroArea: 5f, bruteIntroArea: 8f, toughSubstitutionPct: 25f);
+
+                Assert.AreEqual(13, split.Bruiser + split.Heavy + split.Brute, $"area {area}");
+            }
+        }
     }
 }
