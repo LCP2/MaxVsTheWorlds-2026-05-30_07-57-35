@@ -59,15 +59,15 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>Named rather than counted: it is the shed and the nook — the rooms that did not
-        /// exist when the fence was written out by hand — that this has to cover.</summary>
+        /// <summary>Named rather than counted: it is the factory rooms and the boss clearing — rooms
+        /// spread across the 10-area chain (MV-242) — that this has to cover.</summary>
         [Test]
-        public void TheShedAndTheNookAreBothFenced()
+        public void TheFactoryRoomsAndTheBossClearingAreBothFenced()
         {
             MapData map = Map;
             var set = Set();
 
-            foreach (string id in new[] { "shed", "nook", "gatehouse", "compost" })
+            foreach (string id in new[] { "area3", "area6", "area9", "compost" })
             {
                 MapZone zone = map.Zone(id);
                 Assert.IsTrue(
@@ -280,7 +280,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ABushInTheDoorwayIntoTheShedIsRejected()
+        public void ABushInTheDoorwayIntoAreaThreeIsRejected()
         {
             // The doorway the corridor-shaped dressing did not know existed. ASKED of the map rather
             // than typed in: a doorway's position is a thing the level decides, and a hardcoded one
@@ -288,7 +288,7 @@ namespace MaxWorlds.Tests.EditMode
             MapData map = Map;
             var bad = Set();
 
-            bad.Add(new DressingProp(PropCatalog.BushDetailed, DoorwayMouth(map, "lawn", "shed"),
+            bad.Add(new DressingProp(PropCatalog.BushDetailed, DoorwayMouth(map, "area2", "area3"),
                                      PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 1f)));
 
             Assert.IsFalse(BackyardDressingSet.Validate(map, bad, Cover, out string why));

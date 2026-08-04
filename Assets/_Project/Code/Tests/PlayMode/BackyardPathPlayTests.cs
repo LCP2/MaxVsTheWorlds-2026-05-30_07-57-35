@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Arena;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -52,36 +53,49 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsTrue(MapValidation.Validate(Shipped(), out string why), why);
         }
 
+        /// <summary>Every built <see cref="AreaGate"/>, broken with lethal primary-weapon fire — the
+        /// same "break all 10 gates in sequence" a full run does (MV-242 AC), collapsed into one call
+        /// so a mission-line test can check the WHOLE line, not just the first room.</summary>
+        private static void BreakEveryAreaGate(GameObject root)
+        {
+            foreach (AreaGate gate in root.GetComponentsInChildren<AreaGate>())
+                gate.TakeDamage(new DamageInfo(gate.MaxHp, Vector3.zero, Vector3.forward, Team.Player,
+                    source: DamageSource.PrimaryWeapon));
+        }
+
         [UnityTest]
-        public IEnumerator TheRouteFromTheSpawnUpTheLawnIsWalkable()
+        public IEnumerator TheRouteFromTheSpawnUpTheChainIsWalkable_OnceEveryAreaGateIsBroken()
         {
             yield return BuildPath();
+            BreakEveryAreaGate(_go);
+            Physics.SyncTransforms();
+            yield return null;
 
             MapData map = Shipped();
             MapEntity spawn = map.First(EntityKind.PlayerSpawn);
             MapEntity gate = map.First(EntityKind.Gate);
 
-            // Straight up the middle from where Max starts to the gate he has to open: the route he
-            // takes must never be blocked.
+            // Straight up the middle from where Max starts to the boss gate he has to open: the route
+            // he takes must never be blocked, once every area gate along the way has been broken.
             for (float z = spawn.z + 1f; z <= gate.z - 1f; z += 1f)
                 Assert.IsFalse(BlockedAt(new Vector3(spawn.x, 1f, z)), $"the mission line is blocked at z={z}");
         }
 
         [UnityTest]
-        public IEnumerator TheLawnOpensOutIntoARoomYouCanCircleIn()
+        public IEnumerator AnAreaRoomOpensOutIntoARoomYouCanCircleIn()
         {
             yield return BuildPath();
 
-            MapZone lawn = Shipped().Zone("lawn");
+            MapZone area2 = Shipped().Zone("area2");
 
-            // At a cover-free depth just inside the lawn, sweep the full width: where the old corridor
+            // At a cover-free depth just inside the room, sweep the full width: where the old corridor
             // had walls at ±4.5, there must now be open floor all the way out.
-            float z = lawn.ZMin + 2f;
-            for (float x = lawn.XMin + 0.6f; x <= lawn.XMax - 0.6f; x += 1f)
+            float z = area2.ZMin + 2f;
+            for (float x = area2.XMin + 0.6f; x <= area2.XMax - 0.6f; x += 1f)
                 Assert.IsFalse(BlockedAt(new Vector3(x, 1f, z)),
-                    $"the lawn is still walled in at x={x} — it's a corridor, not a fight room");
+                    $"area2 is still walled in at x={x} — it's a corridor, not a fight room");
 
-            Assert.GreaterOrEqual(lawn.InscribedRadius, 8f, "no room for a circling loop");
+            Assert.GreaterOrEqual(area2.InscribedRadius, 8f, "no room for a circling loop");
         }
 
         /// <summary>
@@ -130,20 +144,21 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheDoorwayIntoTheShedIsOpen_AndTheWallEitherSideOfItIsSolid()
+        public IEnumerator TheDoorwayIntoAreaThreeIsOpen_AndTheWallEitherSideOfItIsSolid()
         {
             yield return BuildPath();
             MapData map = Shipped();
 
-            Doorway(map, "lawn", "shed", out bool alongX, out float coord, out Span hole);
-            Assert.IsFalse(alongX, "the shed is meant to be off the lawn's SIDE — this doorway faces the wrong way");
+            Doorway(map, "area2", "area3", out bool alongX, out float coord, out Span hole);
+            Assert.IsTrue(alongX,
+                "areas in the linear chain (MV-242) are stacked front-to-back, not side by side");
 
-            Assert.IsFalse(BlockedAt(Mouth(alongX, coord, hole.Mid)), "the way into the shed is bricked up");
-
-            // …and the wall resumes either side of it, so the shed is a room with a door and not an
-            // open end of the lawn.
-            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Min - 1.5f)), "no shoulder below the shed doorway");
-            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Max + 1.5f)), "no shoulder above the shed doorway");
+            // Even though this area's gate is still closed, the doorway HOLE it fills is cut into the
+            // wall regardless (MapGeometry works from the link, not the gate's HP) — so a broken gate
+            // just uncovers a passage that was always there. What must never be open is the SHOULDER
+            // either side of it.
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Min - 1.5f)), "no shoulder below area3's doorway");
+            Assert.IsTrue(BlockedAt(Mouth(alongX, coord, hole.Max + 1.5f)), "no shoulder above area3's doorway");
         }
 
         [UnityTest]

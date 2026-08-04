@@ -247,10 +247,19 @@ namespace MaxWorlds.Arena
         {
             const float Clear = 1f;
 
+            // Capped, not just spaced at a fixed 2.4 m: the v0.5 recut (MV-242) stretched the arena
+            // from a ~64 m run to a ~265 m one, and a fixed spacing over a run that long is a hedge
+            // maze, not a hedge — the same "twenty is a forest and a frame budget" the trees below are
+            // held to. Past the cap, a long run gets its hedges spread FURTHER APART, never BIGGER —
+            // growing the shrub itself with the gap would balloon its footprint until a single one
+            // reaches back across the fence into a room several areas away.
+            const int MaxPerSide = 20;
+            const float NominalStep = 2.4f;
+
             float run = side.Length + 8f;
-            int n = Mathf.Max(2, Mathf.RoundToInt(run / 2.4f));
+            int n = Mathf.Clamp(Mathf.RoundToInt(run / NominalStep), 2, MaxPerSide);
             float step = run / n;
-            float size = step * 1.5f;
+            float size = NominalStep * 1.5f;
 
             for (int i = 0; i < n; i++)
             {

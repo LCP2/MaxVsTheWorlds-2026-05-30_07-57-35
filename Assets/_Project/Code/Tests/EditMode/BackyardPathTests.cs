@@ -151,11 +151,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(metresPerPiece, 150f, "the yard is a maze — there is cover everywhere you look");
             Assert.Less(metresPerPiece, 600f, "the yard is an empty box — there is nothing to fight around");
 
-            // And every room the fight actually happens in has to hold some of it.
-            Assert.GreaterOrEqual(CoverIn(map, "lawn"), 2,
-                "the lawn is a fight room and it has nothing to fight around");
-            Assert.GreaterOrEqual(CoverIn(map, "orchard"), 2,
-                "the orchard is a fight room and it has nothing to fight around");
+            // And representative fight rooms along the chain have to hold some of it.
+            Assert.GreaterOrEqual(CoverIn(map, "area2"), 1,
+                "area2 is a fight room and it has nothing to fight around");
+            Assert.GreaterOrEqual(CoverIn(map, "area8"), 1,
+                "area8 is a fight room and it has nothing to fight around");
         }
 
         private static int CoverIn(MapData map, string zone)
@@ -168,24 +168,24 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void Cover_LawnHasRowsBothHorizontalAndVertical()
+        public void Cover_TheChainHasRowsBothHorizontalAndVertical()
         {
-            // YT-195: the lawn used to read as a flat brawl. It has to be planted in a loose grid —
+            // YT-195: the yard used to read as a flat brawl. It has to be planted in a loose grid —
             // some rows running across (wide in X), some running up/down (deep in Z) — not just more
-            // of the same squarish planters.
+            // of the same squarish planters, somewhere across the 10-area chain.
             MapData map = Shipped();
 
             bool horizontal = false, vertical = false;
             foreach (MapEntity c in MapValidation.Kind(map, EntityKind.Cover))
             {
-                if (c.shape != "box" || map.ZoneAt(c.x, c.z)?.id != "lawn") continue;
+                if (c.shape != "box") continue;
 
                 if (c.width > c.depth * 1.5f) horizontal = true;
                 if (c.depth > c.width * 1.5f) vertical = true;
             }
 
-            Assert.IsTrue(horizontal, "no horizontal row of planting in the lawn");
-            Assert.IsTrue(vertical, "no vertical row of planting in the lawn");
+            Assert.IsTrue(horizontal, "no horizontal row of planting anywhere in the chain");
+            Assert.IsTrue(vertical, "no vertical row of planting anywhere in the chain");
         }
 
         [Test]

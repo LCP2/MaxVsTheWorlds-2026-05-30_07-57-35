@@ -151,8 +151,8 @@ namespace MaxWorlds.Tests.EditMode
                 "the routing this ticket added is not doing anything");
 
             MapZone stuckIn = map.ZoneAt(stoppedAt.x, stoppedAt.y);
-            Assert.AreEqual("shed", stuckIn?.id,
-                "it got stuck somewhere other than the shed it was born in");
+            Assert.AreEqual("area3", stuckIn?.id,
+                "it got stuck somewhere other than the room it was born in");
         }
 
         /// <summary>The chase as it was: straight at him, every step, whatever is in between.</summary>
@@ -183,10 +183,10 @@ namespace MaxWorlds.Tests.EditMode
         public void InTheSameRoom_TheWayToMaxIsStraightAtHim()
         {
             MapData map = Shipped();
-            MapZone lawn = map.Zone("lawn");
+            MapZone area2 = map.Zone("area2");
 
-            var from = new Vector2(lawn.XMin + 2f, lawn.z);
-            var goal = new Vector2(lawn.XMax - 2f, lawn.z);
+            var from = new Vector2(area2.XMin + 2f, area2.z);
+            var goal = new Vector2(area2.XMax - 2f, area2.z);
 
             Assert.AreEqual(goal, MapRoutes.Waypoint(map, from, goal),
                 "it took a detour across a room with nothing in it — a beeline is what a chase IS");
@@ -196,20 +196,21 @@ namespace MaxWorlds.Tests.EditMode
         public void FromAnotherRoom_TheWayOutIsThroughTheDoorway_NotThroughTheWall()
         {
             MapData map = Shipped();
-            MapZone shed = map.Zone("shed");
-            MapZone lawn = map.Zone("lawn");
+            MapZone area3 = map.Zone("area3");
+            MapZone area2 = map.Zone("area2");
 
-            Vector2 waypoint = MapRoutes.Waypoint(map, shed.CenterXz, lawn.CenterXz);
+            Vector2 waypoint = MapRoutes.Waypoint(map, area3.CenterXz, area2.CenterXz);
 
-            // The shed opens onto the lawn through a doorway in the wall they share (x = shed.XMin).
-            // The way out has to be THAT gap — beyond the wall line, and within the hole.
-            Assert.Less(waypoint.x, shed.XMin,
-                "it is heading for a point still inside the shed — it will walk into the wall");
+            // area3 opens onto area2 through a doorway in the wall they share (z = area3.ZMin) — the
+            // 10-area chain is stacked front-to-back, not side by side. The way out has to be THAT
+            // gap — beyond the wall line, and within the hole.
+            Assert.Less(waypoint.y, area3.ZMin,
+                "it is heading for a point still inside area3 — it will walk into the wall");
 
-            MapLink link = Link(map, "lawn", "shed");
+            MapLink link = Link(map, "area2", "area3");
             Assert.IsTrue(MapGeometry.Doorway(map, link, out _, out _, out Span hole));
-            Assert.GreaterOrEqual(waypoint.y, hole.Min, "the way out is not in the doorway");
-            Assert.LessOrEqual(waypoint.y, hole.Max, "the way out is not in the doorway");
+            Assert.GreaterOrEqual(waypoint.x, hole.Min, "the way out is not in the doorway");
+            Assert.LessOrEqual(waypoint.x, hole.Max, "the way out is not in the doorway");
         }
 
         /// <summary>A robot cannot be sent somewhere the level does not go. With no map to read, it
@@ -249,7 +250,7 @@ namespace MaxWorlds.Tests.EditMode
         public void AskingTheWay_SolvesTheYardOnce_NotOncePerQuestion()
         {
             MapData map = Shipped();
-            Vector2 from = map.Zone("greenhouse").CenterXz;
+            Vector2 from = map.Zone("area6").CenterXz;
             Vector2 goal = map.First(EntityKind.PlayerSpawn).CenterXz;
 
             MapRoutes.Waypoint(map, from, goal);   // the level is solved on the first question asked
@@ -268,11 +269,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            List<MapZone> route = MapRoutes.Rooms(map, map.Zone("greenhouse"), map.Zone("patio"));
+            List<MapZone> route = MapRoutes.Rooms(map, map.Zone("area6"), map.Zone("area1"));
 
-            Assert.AreEqual(new[] { "greenhouse", "orchard", "lawn", "patio" },
+            Assert.AreEqual(new[] { "area6", "area5", "area4", "area3", "area2", "area1" },
                             route.ConvertAll(z => z.id).ToArray(),
-                            "that is not the shortest way out of the greenhouse");
+                            "that is not the only way out of area6 — the chain is linear, not branching");
         }
 
         private static MapLink Link(MapData map, string a, string b)

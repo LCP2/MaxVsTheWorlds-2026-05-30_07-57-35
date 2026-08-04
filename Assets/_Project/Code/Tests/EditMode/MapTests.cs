@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -9,11 +10,13 @@ namespace MaxWorlds.Tests.EditMode
     /// The map engine (YT-89): the format, the wall solver, the validator, and the shipped Backyard
     /// map itself.
     ///
-    /// The shipped map is no longer the straight corridor the slice first shipped as — it has a nook
-    /// off the lawn, a shed housing the factory, a gatehouse and a boss clearing, and it TURNS. That
-    /// was the point of reshaping it. So what is pinned here is the new shape, room by room: the
-    /// proof that the engine derives a level with rooms hanging off it just as happily as it derived
-    /// a hallway, and that the run through it can still be finished.
+    /// The shipped map is the v0.5 recut's gated arena (spec §1-3, MV-242): a linear chain of 10
+    /// areas — area1 (the entry patio) through area10 — each sealed from the next by its own
+    /// <see cref="AreaGate"/>, with the three factories relocated into rooms along the chain
+    /// (Areas 3/6/9) and Big Bermuda's compost clearing unchanged at the far end, behind the
+    /// unchanged <c>boss_gate</c>. What is pinned here is that shape: the proof that the engine
+    /// derives a long gated chain just as happily as it derived a branching yard, and that the run
+    /// through it can still be finished.
     /// </summary>
     public sealed class MapTests
     {
@@ -64,102 +67,95 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
         }
 
-        /// <summary>The shape the slice is now: nine rooms, not three, and not in one straight line.
-        /// This is the thing the engine was built to make cheap, so it is the thing that gets
-        /// pinned. The ninth is the toolshed off the orchard's right (YT-148) — a third factory that
-        /// mirrors the greenhouse on the left, so the orchard fight has pressure from both flanks.</summary>
+        /// <summary>The shape the slice is now (v0.5 recut, MV-242): a linear chain of 10 areas plus
+        /// the unchanged compost clearing — 11 zones, not 9, and not a branching yard.</summary>
         [Test]
-        public void TheShippedMap_IsNineRooms_WithPocketsOffBothFightRooms()
+        public void TheShippedMap_IsTenAreasPlusTheCompostClearing()
         {
             MapData map = Shipped();
 
-            Assert.AreEqual(9, map.zones.Length,
-                "the slice is nine rooms — patio, lawn, nook, shed, orchard, greenhouse, gatehouse, " +
-                "compost, toolshed");
+            Assert.AreEqual(11, map.zones.Length,
+                "the slice is 10 gated areas plus the compost clearing");
 
-            foreach (string id in new[] { "patio", "lawn", "nook", "shed", "orchard", "greenhouse",
-                                          "gatehouse", "compost", "toolshed" })
-                Assert.IsNotNull(map.Zone(id), $"the map has no '{id}'");
+            for (int i = 1; i <= 10; i++)
+                Assert.IsNotNull(map.Zone($"area{i}"), $"the map has no 'area{i}'");
+            Assert.IsNotNull(map.Zone("compost"), "the map has no 'compost' clearing");
 
-            // The turn is the point. A nook off the lawn's left and a shed off its right mean the
-            // route is no longer "walk up Z", which is what every hard-coded thing in the yard assumed.
-            MapZone lawn = map.Zone("lawn");
-            Assert.Less(map.Zone("nook").x, lawn.XMin, "the nook is not off the lawn's left");
-            Assert.Greater(map.Zone("shed").x, lawn.XMax, "the shed is not off the lawn's right");
-
-            // And the orchard is a SECOND fight room past the lawn, flanked by TWO sheds — the
-            // greenhouse off its left and the toolshed off its right (YT-148) — so clearing the run
-            // is a sequence of factories you fight your way through, not one beat (YT-92).
-            MapZone orchard = map.Zone("orchard");
-            Assert.Greater(orchard.ZMin, lawn.ZMin, "the orchard is not up-field of the lawn");
-            Assert.Less(map.Zone("greenhouse").x, orchard.XMin, "the greenhouse is not off the orchard's left");
-            Assert.Greater(map.Zone("toolshed").x, orchard.XMax, "the toolshed is not off the orchard's right");
+            // The chain is LINEAR, not branching (spec §1's "option 1" — no orphaned pockets).
+            for (int i = 1; i < 10; i++)
+            {
+                MapZone here = map.Zone($"area{i}");
+                MapZone next = map.Zone($"area{i + 1}");
+                Assert.AreEqual(here.ZMax, next.ZMin, 1e-3,
+                    $"area{i} and area{i + 1} do not sit edge-to-edge along the chain");
+            }
         }
 
-        /// <summary>The run is noticeably bigger than the one-factory slice it grew out of (YT-92).
-        /// Pinned as an area, because "bigger" is a claim about how much ground there is to fight
-        /// across, and a map could grow one long thin corridor and satisfy anything less.</summary>
+        /// <summary>The run is noticeably bigger than the one-factory slice it grew out of (YT-92),
+        /// and much bigger again after the v0.5 recut stretched it to 10 areas (MV-242). Pinned as an
+        /// area, because "bigger" is a claim about how much ground there is to fight across.</summary>
         [Test]
         public void TheShippedMap_IsMuchBiggerThanTheOldOneFactorySlice()
         {
             Rect bounds = Shipped().Bounds();
             float area = bounds.width * bounds.height;
 
-            // The shipped slice was ~47 x 64 m = ~3,000 m². The playtest verdict was that you reach
-            // the boss before the fight has any build-up, and the arena being small is half of why.
             Assert.Greater(area, 5000f,
                 $"the arena is {bounds.width:0} x {bounds.height:0} m — barely bigger than the one you " +
                 "could cross before the fight started");
         }
 
-        /// <summary>Three factories, each standing in a room of its own, spread down the run — so
-        /// clearing them is a sequence you fight your way through, not one beat (YT-92, YT-148). The
-        /// third is the toolshed off the orchard's right, flanking the greenhouse on the left. The
-        /// central garden factory (YT-185) was removed in the v0.5 recut (WV-229) — sheds are now the
-        /// ability-unlock mechanic, not one more fixed source of pressure in the open lawn.</summary>
+        /// <summary>Three factories, each standing in a room of its own, spread down the 10-area chain
+        /// (MV-242's default: Areas 3/6/9) — so clearing them is a sequence you fight your way
+        /// through, not one beat (YT-92, YT-148).</summary>
         [Test]
-        public void TheShippedMap_HasThreeFactories_OneOffEachFightPocket()
+        public void TheShippedMap_HasThreeFactories_InAreasThreeSixAndNine()
         {
             MapData map = Shipped();
             var factories = MapValidation.Kind(map, EntityKind.Factory);
 
             Assert.AreEqual(3, factories.Count, "the run does not have three sources of pressure");
 
-            MapEntity shed = map.Entity("mower_hutch");
+            MapEntity mower = map.Entity("mower_hutch");
             MapEntity greenhouse = map.Entity("greenhouse_hutch");
             MapEntity toolshed = map.Entity("toolshed_hutch");
 
-            Assert.AreEqual("shed", map.ZoneAt(shed.x, shed.z)?.id,
-                "the first factory is not in the shed — the objective is standing in the open again");
-            Assert.AreEqual("greenhouse", map.ZoneAt(greenhouse.x, greenhouse.z)?.id,
-                "the second factory is not in the greenhouse");
-            Assert.AreEqual("toolshed", map.ZoneAt(toolshed.x, toolshed.z)?.id,
-                "the third factory is not in the toolshed off the orchard's right (YT-148)");
+            Assert.AreEqual("area3", map.ZoneAt(mower.x, mower.z)?.id,
+                "the first factory is not in area3");
+            Assert.AreEqual("area6", map.ZoneAt(greenhouse.x, greenhouse.z)?.id,
+                "the second factory is not in area6");
+            Assert.AreEqual("area9", map.ZoneAt(toolshed.x, toolshed.z)?.id,
+                "the third factory is not in area9");
 
-            // The later ones are genuinely FURTHER IN. Factories side by side in the same room
-            // would be more pressure and none of the build-up.
-            Assert.Greater(greenhouse.z, shed.z + 10f,
+            // The later ones are genuinely FURTHER IN — each factory sits deeper down the chain than
+            // the last, so clearing the run is a sequence, not three objectives side by side.
+            Assert.Greater(greenhouse.z, mower.z + 10f,
                 "the second factory is not deep enough into the run to be a second objective");
-            // The toolshed flanks the greenhouse — same depth, opposite side — so the orchard fight
-            // has a source on each hand rather than a single objective to the west.
-            Assert.Greater(toolshed.x, greenhouse.x,
-                "the toolshed is not on the orchard's opposite flank from the greenhouse");
+            Assert.Greater(toolshed.z, greenhouse.z + 10f,
+                "the third factory is not deep enough into the run to be a third objective");
 
             Assert.IsNull(map.Entity("central_hutch"),
                 "the central garden factory should be gone (WV-229) — sheds now grant abilities " +
                 "instead of standing as a fixed fourth source of pressure");
         }
 
+        /// <summary>The whole 10-area chain, walkable link by link, ending at the compost clearing —
+        /// the literal shape MV-242's AC asks for.</summary>
         [Test]
-        public void TheShippedMap_LetsYouWalkToTheShedAndOnToTheBoss()
+        public void TheShippedMap_ChainsAllTenAreasSequentially_WithNineAreaGates()
         {
             MapData map = Shipped();
 
-            Assert.IsTrue(Linked(map, "lawn", "shed"), "the shed cannot be entered from the lawn");
-            Assert.IsTrue(Linked(map, "lawn", "nook"), "the nook is walled off");
-            Assert.IsTrue(Linked(map, "gatehouse", "compost"), "the boss arena cannot be reached");
+            for (int i = 1; i < 10; i++)
+                Assert.IsTrue(Linked(map, $"area{i}", $"area{i + 1}"),
+                    $"area{i} is not linked to area{i + 1} — the chain is broken");
+            Assert.IsTrue(Linked(map, "area10", "compost"), "the boss arena cannot be reached from area10");
 
-            // And the engine agrees: validation refuses a boss you cannot walk to.
+            var gates = MapValidation.Kind(map, EntityKind.AreaGate);
+            Assert.AreEqual(9, gates.Count, "10 areas in a chain need exactly 9 area gates between them");
+
+            // And the engine agrees: validation refuses a boss you cannot walk to, and refuses any
+            // area gate that fills no doorway.
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
         }
 
@@ -174,7 +170,8 @@ namespace MaxWorlds.Tests.EditMode
         /// destroying ALL the factories, and that is stated in the map rather than coded anywhere
         /// (YT-92, YT-148). One key would put the boss behind a door the player opens halfway
         /// through. Three factories since the central garden shed was removed (WV-229) — the gate
-        /// only names the ones still standing.</summary>
+        /// only names the ones still standing. Unchanged by the v0.5 recut (MV-242): only the
+        /// factories' rooms moved, not this wiring.</summary>
         [Test]
         public void TheShippedMap_OpensTheBossGateOnlyWhenEveryFactoryIsDown()
         {
@@ -197,10 +194,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // Straight up the middle from the patio, through the lawn and the orchard, to the boss
-            // gate: never walled. The doorways between the rooms are on this line, which is what makes
-            // it the line.
-            for (float z = -13f; z <= 48f; z += 1f)
+            // Straight up the middle from the patio (area1), through every area, to the boss gate:
+            // never walled. The doorways between the areas are on this line, which is what makes it
+            // the line — and a doorway is cut into the wall regardless of whether its area gate has
+            // been broken yet (MapGeometry works from the link, not the gate's HP).
+            for (float z = -4f; z <= 220f; z += 1f)
                 Assert.IsFalse(WalledAt(map, 0f, z), $"the mission line is walled at z={z}");
         }
 
@@ -258,14 +256,14 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // The lawn spans x −16..16, so its left wall stands just outside that. z = 20 is above the
-            // nook's doorway, so this stretch of the edge is solid wall.
-            Assert.IsTrue(WalledAt(map, -16.5f, 20f), "the lawn's left wall is not where it started");
+            // area2 spans x −13..13, so its left wall stands just outside that. z = 17 is area2's own
+            // centre, well clear of either doorway at its edges.
+            Assert.IsTrue(WalledAt(map, -13.5f, 17f), "area2's left wall is not where it started");
 
-            map.Zone("lawn").x += 5f;   // slide the fight room right
+            map.Zone("area2").x += 5f;   // slide the fight room right
 
-            Assert.IsFalse(WalledAt(map, -16.5f, 20f), "the old wall is still standing where the lawn used to be");
-            Assert.IsTrue(WalledAt(map, -11.5f, 20f), "no wall was built along the lawn's new edge");
+            Assert.IsFalse(WalledAt(map, -13.5f, 17f), "the old wall is still standing where area2 used to be");
+            Assert.IsTrue(WalledAt(map, -8.5f, 17f), "no wall was built along area2's new edge");
         }
 
         [Test]
@@ -378,7 +376,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var withCover = new List<MapEntity>(map.entities)
             {
-                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 66f, width = 2f, height = 2f, depth = 2f },
+                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 234f, width = 2f, height = 2f, depth = 2f },
             };
             map.entities = withCover.ToArray();
 
@@ -420,7 +418,7 @@ namespace MaxWorlds.Tests.EditMode
         public void Validation_RejectsAFightRoomTooTightToCircleIn()
         {
             MapData map = Shipped();
-            map.Zone("lawn").width = 9f;   // back to the corridor YT-68 tore out
+            map.Zone("area2").width = 9f;   // back to the corridor YT-68 tore out
 
             Assert.IsFalse(MapValidation.Validate(map, out string why));
             StringAssert.Contains("circle-strafe", why);
@@ -440,7 +438,7 @@ namespace MaxWorlds.Tests.EditMode
         public void Validation_RejectsTwoZonesWithTheSameId()
         {
             MapData map = Shipped();
-            map.Zone("lawn").id = "patio";
+            map.Zone("area2").id = "area1";
 
             Assert.IsFalse(MapValidation.Validate(map, out string why));
             StringAssert.Contains("share the id", why);
@@ -457,7 +455,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(after);
             Assert.AreEqual(before.zones.Length, after.zones.Length);
             Assert.AreEqual(before.entities.Length, after.entities.Length);
-            Assert.AreEqual(before.Zone("lawn").width, after.Zone("lawn").width, 1e-3);
+            Assert.AreEqual(before.Zone("area2").width, after.Zone("area2").width, 1e-3);
             Assert.AreEqual(before.First(EntityKind.Gate).opensOn, after.First(EntityKind.Gate).opensOn);
         }
 
@@ -469,6 +467,43 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(EntityKind.PlayerSpawn, MapEnums.Entity("player_spawn"));
             Assert.AreEqual(EntityKind.PlayerSpawn, MapEnums.Entity("PLAYER-SPAWN"));
             Assert.AreEqual(EntityKind.Unknown, MapEnums.Entity("teleporter"));
+        }
+
+        // ---------------------------------------------------------------- robot accumulation (MV-242)
+
+        /// <summary>The runtime area index MV-223/MV-224 built with no live hook now has one — proved
+        /// against the ACTUAL shipped tuning, across every area the shipped map has
+        /// (<see cref="ArenaTuning.DefaultAreaCount"/>): population grows every area, and both tough
+        /// tiers appear exactly where the spec table says they do.</summary>
+        [Test]
+        public void AreaPopulation_EscalatesAcrossEveryShippedArea_HeavyFromFiveBruteFromEight()
+        {
+            int areaCount = (int)ArenaTuning.DefaultAreaCount;
+            Assert.AreEqual(10, areaCount, "the shipped chain is no longer 10 areas — update this test's range");
+
+            int previousTotal = -1;
+            for (int area = 1; area <= areaCount; area++)
+            {
+                var (large, small) = AreaPopulation.ComposeForArea(area,
+                    RobotCompositionTuning.DefaultStartLargeCount, RobotCompositionTuning.DefaultStartSmallCount,
+                    RobotCompositionTuning.DefaultAreaGrowthPct, RobotCompositionTuning.DefaultLargeToSmallRatio,
+                    RobotCompositionTuning.DefaultLargeShareDriftPerArea);
+
+                int total = large + small;
+                Assert.GreaterOrEqual(total, previousTotal, $"area {area}'s population did not grow");
+                previousTotal = total;
+
+                var (bruiser, heavy, brute) = AreaPopulation.ToughSplitForArea(area, large,
+                    RobotCompositionTuning.DefaultHeavyIntroArea, RobotCompositionTuning.DefaultBruteIntroArea,
+                    RobotCompositionTuning.DefaultToughSubstitutionPct);
+
+                Assert.AreEqual(area >= RobotCompositionTuning.DefaultHeavyIntroArea, heavy > 0,
+                    $"area {area}: Heavy should only appear from Area {RobotCompositionTuning.DefaultHeavyIntroArea}");
+                Assert.AreEqual(area >= RobotCompositionTuning.DefaultBruteIntroArea, brute > 0,
+                    $"area {area}: Brute should only appear from Area {RobotCompositionTuning.DefaultBruteIntroArea}");
+                Assert.AreEqual(large, bruiser + heavy + brute,
+                    $"area {area}: the tough split invented or lost large-slot robots");
+            }
         }
     }
 }

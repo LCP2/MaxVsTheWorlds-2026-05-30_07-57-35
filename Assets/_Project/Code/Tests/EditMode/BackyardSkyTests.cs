@@ -218,15 +218,15 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AHouseInTheShedIsRejected()
+        public void AHouseInAreaThreeIsRejected()
         {
-            // The room the corridor-shaped backdrop had never heard of.
+            // A room deep in the 10-area chain (MV-242) — the corridor-shaped backdrop never heard of it.
             MapData map = Map;
-            MapZone shed = map.Zone("shed");
+            MapZone area3 = map.Zone("area3");
 
             var bad = BackyardBackdrop.Build(map);
             bad.Add(new BackyardBackdrop.BackdropPiece(
-                new Vector3(shed.x, 0f, shed.z), new Vector3(6f, 7f, 6f),
+                new Vector3(area3.x, 0f, area3.z), new Vector3(6f, 7f, 6f),
                 BackyardBackdrop.Surface.HouseWall));
 
             Assert.IsFalse(BackyardBackdrop.Validate(map, bad, out string why));

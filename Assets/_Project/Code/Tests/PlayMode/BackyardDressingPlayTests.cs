@@ -77,14 +77,21 @@ namespace MaxWorlds.Tests.PlayMode
             yield return BuildYard();
             MapData map = Map;
 
-            // Straight up the middle of the lawn, from where Max starts to the gate: no cover is
-            // authored on that line, so nothing at all may stand there.
+            // Straight up the middle of the yard, from where Max starts to the boss gate: no cover is
+            // authored on that line, so no DRESSING may stand there. The 10-area chain's own AreaGates
+            // (MV-242) are meant to block this exact line while unbroken — that is the recut's whole
+            // point — so this only asks the question NoPieceOfDressingCanBlockAnything already answers
+            // for the map generally: is the thing standing here dressing, or the arena itself.
             MapEntity spawn = map.First(EntityKind.PlayerSpawn);
             MapEntity gate = map.First(EntityKind.Gate);
 
             for (float z = spawn.z + 1f; z <= gate.z - 1f; z += 2f)
-                Assert.IsFalse(BlockedAt(new Vector3(spawn.x, 1f, z)),
-                    $"the dressing blocked the path at z={z}");
+            {
+                Vector3 p = new Vector3(spawn.x, 1f, z);
+                foreach (Collider c in Physics.OverlapSphere(p, 0.4f))
+                    Assert.IsFalse(c.bounds.size.y >= 1.5f && c.transform.IsChildOf(_dressing.transform),
+                        $"the dressing blocked the path at z={z}");
+            }
 
             // And along the whole route to the factory — which turns into the shed and passes BEHIND a
             // hedge on the way — nothing the dressing placed may be in the way. The cover it threads
@@ -105,23 +112,23 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheLawnIsStillARoomYouCanCircleIn()
+        public IEnumerator AnAreaRoomIsStillARoomYouCanCircleIn()
         {
             yield return BuildYard();
-            MapZone lawn = Map.Zone("lawn");
+            MapZone area2 = Map.Zone("area2");
 
             // YT-68's whole point, re-checked with a garden in it: the fight room did not get narrower
             // because we planted it out.
-            float z = lawn.ZMin + 2f;
-            for (float x = lawn.XMin + 0.6f; x <= lawn.XMax - 0.6f; x += 1f)
-                Assert.IsFalse(BlockedAt(new Vector3(x, 1f, z)), $"the lawn is blocked at x={x}");
+            float z = area2.ZMin + 2f;
+            for (float x = area2.XMin + 0.6f; x <= area2.XMax - 0.6f; x += 1f)
+                Assert.IsFalse(BlockedAt(new Vector3(x, 1f, z)), $"area2 is blocked at x={x}");
         }
 
-        /// <summary>The rooms that did not exist when the dressing was hand-listed. They get fenced
-        /// and planted like everything else — and, like everything else, nothing that goes in them can
-        /// be walked into.</summary>
+        /// <summary>Two of the areas along the 10-area chain (MV-242). They get fenced and planted
+        /// like everything else — and, like everything else, nothing that goes in them can be walked
+        /// into.</summary>
         [UnityTest]
-        public IEnumerator TheShedAndTheNookAreDressedAndStillWalkable()
+        public IEnumerator TwoOfTheAreaRoomsAreDressedAndStillWalkable()
         {
             yield return BuildYard();
             MapData map = Map;
@@ -129,7 +136,7 @@ namespace MaxWorlds.Tests.PlayMode
             var kit = _dressing.transform.Find("Kit Props");
             Assert.IsNotNull(kit, "nothing was placed at all");
 
-            foreach (string id in new[] { "shed", "nook" })
+            foreach (string id in new[] { "area3", "area6" })
             {
                 MapZone zone = map.Zone(id);
 

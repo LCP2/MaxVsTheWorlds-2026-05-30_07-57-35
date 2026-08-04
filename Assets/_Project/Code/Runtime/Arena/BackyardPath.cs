@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
 {
@@ -44,9 +45,14 @@ namespace MaxWorlds.Arena
         private MapData _map;
         private MapBuild _build;
         private BackyardPathLayout _layout = BackyardPathLayout.Default;
+        private AreaAccumulationDirector _areaDirector;
 
         /// <summary>The map this level was built from. Null if it failed to load.</summary>
         public MapData Map => _map;
+
+        /// <summary>Drives the gated arena's ambient population (v0.5 recut spec §2, MV-242). Null if
+        /// the map failed to load — there is no run to populate.</summary>
+        public AreaAccumulationDirector AreaDirector => _areaDirector;
 
         /// <summary>The map, described in the rooms-and-gate terms the minimap and the dressing pass
         /// read. Derived from <see cref="Map"/> — not a source of truth.</summary>
@@ -78,6 +84,10 @@ namespace MaxWorlds.Arena
 
             _layout = MapLayoutBridge.ToLayout(_map);
             _build = MapRuntime.Build(_map, transform);
+
+            _areaDirector = new GameObject("Area Accumulation").AddComponent<AreaAccumulationDirector>();
+            _areaDirector.transform.SetParent(transform, false);
+            _areaDirector.Configure(_map);
         }
     }
 }

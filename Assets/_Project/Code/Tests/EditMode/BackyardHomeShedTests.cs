@@ -77,7 +77,7 @@ namespace MaxWorlds.Tests.EditMode
             // Scenery that reaches into the yard is not scenery — the same rule the neighbourhood is
             // held to (BackyardSkyTests.AHouseInTheLawnIsRejected).
             MapData map = Map;
-            var badCenter = new Vector3(0f, 0f, -10f);   // the middle of the patio
+            var badCenter = new Vector3(0f, 0f, 0f);   // the middle of the patio (area1)
 
             Assert.IsFalse(BackyardHomeShed.Validate(map, badCenter, out string why));
             StringAssert.Contains("reaches into the arena", why);
