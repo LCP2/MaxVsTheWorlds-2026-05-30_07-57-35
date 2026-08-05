@@ -67,18 +67,24 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator AtZeroCellsTheSprayStalls_AndCollectingACellRestoresIt()
+        public IEnumerator AtZeroCellsTheSprayIsWeakenedNeverBlocked_AndCollectingACellRestoresFullPower()
         {
-            // No cells at all.
+            // MV-243: a fresh run always starts at 0 power cells (PickupWallet.Reset()). If firing were
+            // gated on cells like it used to be, the primary weapon could never fire from t=0 — and
+            // since kills are the only way to earn cells, that was a permanent, unrecoverable deadlock.
+            // Firing must still emit at 0 cells; it only hits softer until Max collects one.
             Blaster.SetFiring(true);
             yield return null;
             yield return null;
-            Assert.That(Blaster.IsEmitting, Is.False,
-                "the spray must stall with an empty power-cell reserve — collect more to keep firing");
+            Assert.That(Blaster.IsEmitting, Is.True,
+                "the spray must still emit with an empty power-cell reserve — a fresh run starts at " +
+                "0 cells, so gating emission on cells deadlocks the weapon forever");
+            Assert.That(Blaster.IsWeakened, Is.True, "0 cells must weaken the stream, not silence it");
 
             PickupWallet.AddPowerCell();
             yield return Spray(0.2f);
-            Assert.That(Blaster.IsEmitting, Is.True, "collecting a cell restores the spray");
+            Assert.That(Blaster.IsEmitting, Is.True, "still emitting once a cell is collected");
+            Assert.That(Blaster.IsWeakened, Is.False, "collecting a cell restores full power");
         }
 
         [UnityTest]

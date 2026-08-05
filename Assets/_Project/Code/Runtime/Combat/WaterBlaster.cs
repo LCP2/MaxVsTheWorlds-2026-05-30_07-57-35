@@ -89,9 +89,20 @@ namespace MaxWorlds.Combat
         /// overrides it in Update.</summary>
         public void SetFiring(bool firing) => IsFiring = firing;
 
-        /// <summary>Is the stream actually coming out this frame? (Firing AND supplied.) Exposed so a
-        /// test can see the spray stall at zero power cells (YT-137, generalised by WV-233).</summary>
+        /// <summary>Is the stream actually coming out this frame? (Firing AND energy available.)
+        /// Cells being empty no longer stalls this — see <see cref="IsWeakened"/>.</summary>
         public bool IsEmitting => _lastEmitting;
+
+        /// <summary>Outgoing damage multiplier while the power-cell reserve is empty (MV-243 fix).
+        /// Mirrors <see cref="MaxWorlds.Player.PlayerHealth.IsWeakened"/>'s "empty = weakened, not
+        /// blocked" rule (WV-227) on the output side: the stream keeps firing at reduced effect rather
+        /// than stalling, so a fresh run (always 0 cells) can still land the kills that earn its first
+        /// cell instead of deadlocking forever.</summary>
+        public const float DefaultWeakenedFireDamageMultiplier = 0.5f;
+
+        /// <summary>True with an empty power-cell reserve — the stream still emits but hits softer
+        /// (<see cref="DefaultWeakenedFireDamageMultiplier"/>) until Max collects more.</summary>
+        public bool IsWeakened => PickupWallet.PowerCells <= 0;
 
         // --- Power ramp (YT-67) ---------------------------------------------------------------
         // The authored numbers, captured before any level-up scales them. Multipliers are always
@@ -272,15 +283,13 @@ namespace MaxWorlds.Combat
             if (_depleted && Energy.Normalized >= rechargeFraction) _depleted = false;
             else if (!_depleted && !Energy.CanSpend(energyPerTick)) _depleted = true;
 
-            // The water is made from power cells — no cells, no water, so the spray stalls until Max
-            // collects more (WV-233 generalises the old Hydro-only rule, YT-137, to all primary fire).
-            bool cellsStarved = PickupWallet.PowerCells <= 0;
-
-            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick) && !cellsStarved);
+            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick));
             _lastEmitting = emitting;
 
             // While it IS spraying, the water is paid for in power cells — burn them for the time it's
             // actually spraying, so the meter ticks down as it's used (WV-227, generalised by WV-233).
+            // Empty cells weaken the output (IsWeakened, MV-243) rather than stopping the spend loop —
+            // there's nothing left to spend, so TrySpendPowerCell() below just self-limits at 0.
             if (emitting)
             {
                 float perMin = Mathf.Max(0f, DevTuning.Or(DevTuning.PrimaryCellsPerMin, DefaultPrimaryCellsPerMin));
@@ -317,6 +326,9 @@ namespace MaxWorlds.Combat
             // and the VFX all read these same numbers, so the beam you see is the beam that hits.
             float reach = Range;
             float cone = ConeHalfAngle;
+            // Empty power cells weaken the hit, not the reach/spread/aim (MV-243) — a starved shot
+            // still finds and marks its targets, it just hits softer.
+            float tickDamage = damagePerTick * (IsWeakened ? DefaultWeakenedFireDamageMultiplier : 1f);
             // Spray: gather everything within range, then keep only what's inside the cone arc —
             // so one tick can wash a whole knot of robots, not a single-file tube (YT-64).
             int count = Physics.OverlapSphereNonAlloc(
@@ -348,7 +360,7 @@ namespace MaxWorlds.Combat
                 var d = s_buffer[i];
                 var comp = d as Component;
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
-                d.TakeDamage(new DamageInfo(damagePerTick, point, dir, Team.Player, soak: true,
+                d.TakeDamage(new DamageInfo(tickDamage, point, dir, Team.Player, soak: true,
                     source: DamageSource.PrimaryWeapon));
                 hitSomething = true;
 
@@ -365,7 +377,7 @@ namespace MaxWorlds.Combat
                 // centre (which is what the damage event reports). Nothing below feeds damage.
                 if (_vfx != null)
                 {
-                    _vfx.Splash(ContactPoint(origin, dir, s_contacts[i], point), dir, damagePerTick);
+                    _vfx.Splash(ContactPoint(origin, dir, s_contacts[i], point), dir, tickDamage);
                 }
             }
 
@@ -375,7 +387,7 @@ namespace MaxWorlds.Combat
             if (!hitSomething && _vfx != null)
             {
                 Vector3 end = origin + dir * reach;
-                _vfx.Splash(new Vector3(end.x, 0f, end.z), dir, damagePerTick * 0.5f);
+                _vfx.Splash(new Vector3(end.x, 0f, end.z), dir, tickDamage * 0.5f);
             }
         }
 
