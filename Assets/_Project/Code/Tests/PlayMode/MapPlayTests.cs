@@ -26,6 +26,15 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _path, _player, _gate, _boss, _strayHutch;
 
+        // The ambient Time.timeScale can't be trusted at test start in this headless runner — a prior
+        // fixture's screen (Home/Upgrade/Weapons/Settings/Result) can leave it pinned at 0 if it didn't
+        // get to its own TearDown. Same root cause as YT-173/YT-184 (see TelegraphVfxPlayTests,
+        // SpringGutsPlayTests): with timeScale stuck at 0, Time.deltaTime is 0 forever and any test that
+        // waits out simulated seconds (MV-244's ambient-population tests) spins until the 180s NUnit
+        // timeout instead of failing on its own assertion.
+        [SetUp]
+        public void SetUp() => Time.timeScale = 1f;
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -34,6 +43,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             DevTuning.Reset();
             DifficultyDirector.Reset();
+            Time.timeScale = 1f;
 
             yield return null;
         }
