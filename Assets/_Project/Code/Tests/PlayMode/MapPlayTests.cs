@@ -375,12 +375,12 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.AreEqual(1, backyardPath.AreaDirector.CurrentArea, "a fresh run should start in area 1");
         }
 
-        /// <summary>The literal AC (MV-245): a room's robots must already be standing when the player
-        /// gets there, not popping into view over a timed trickle after they arrive. Area 1 is checked
-        /// the instant the level is built (no player has moved yet), and area 2 the instant its gate
-        /// breaks (before anyone has walked through the doorway) — both with zero elapsed Update ticks,
-        /// which is exactly what would have failed under the old position-polled, paced-release
-        /// director.</summary>
+        /// <summary>The literal AC (MV-245, revised by MV-256): a room's robots must already be standing
+        /// when the player gets there, not popping into view over a timed trickle after they arrive.
+        /// Area 1 is now the non-combat entry/lead-in (MV-256) and must stay at zero; area 2 — the first
+        /// COMBAT room — is checked the instant its gate breaks (before anyone has walked through the
+        /// doorway), with zero elapsed Update ticks, which is exactly what would have failed under the
+        /// old position-polled, paced-release director.</summary>
         [UnityTest]
         public IEnumerator EnteringAnArea_FindsItsRosterAlreadyPresent_NotSpawnedInView()
         {
@@ -389,9 +389,8 @@ namespace MaxWorlds.Tests.PlayMode
             var backyardPath = _path.GetComponent<BackyardPath>();
             AreaAccumulationDirector director = backyardPath.AreaDirector;
 
-            int area1Active = director.ActiveCount;
-            Assert.Greater(area1Active, 0,
-                "area 1's robots should already be active the instant the level is built, not queued");
+            Assert.AreEqual(0, director.ActiveCount,
+                "the entry/lead-in room (area 1) should have zero robots the instant a fresh run starts (MV-256)");
 
             AreaGate gate1 = null;
             foreach (AreaGate g in _path.GetComponentsInChildren<AreaGate>())
@@ -403,12 +402,37 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.AreEqual(2, director.CurrentArea,
                 "breaking gate1 should hand the director area 2 before the player ever reaches it");
-            Assert.Greater(director.ActiveCount, area1Active,
+            Assert.Greater(director.ActiveCount, 0,
                 "area 2's robots should already be active the instant its gate breaks — not queued for " +
                 "a timed release the player would see happen in front of them");
             Assert.AreEqual(0, director.QueuedCount,
-                "area 1 + area 2's rosters fit under the concurrent cap and should release immediately, " +
+                "area 2's roster fits under the concurrent cap and should release immediately, " +
                 "not wait on ReleaseInterval ticks");
+        }
+
+        /// <summary>The literal AC (MV-256): a fresh run's entry/lead-in room contains zero enemies —
+        /// not "none active yet", actually zero, checked against the map's own zone bounds rather than
+        /// trusting the director's bookkeeping alone. Found by Lee playtesting the browser build: the
+        /// entry room was full of robots and a fresh run died almost instantly.</summary>
+        [UnityTest]
+        public IEnumerator TheLeadInZone_HasZeroEnemies_OnEntry()
+        {
+            yield return BuildLevelFromTheMap();
+
+            MapData map = Shipped();
+            MapZone leadIn = map.Zone("area1");
+            Assert.IsNotNull(leadIn, "the map has no 'area1' zone to check");
+            Assert.AreEqual(ZoneKind.Entry, leadIn.Kind,
+                "area1 is no longer the entry/lead-in zone — this test's premise has moved");
+
+            foreach (RobotEnemy robot in RobotEnemy.Active)
+            {
+                if (robot == null || !robot.gameObject.activeInHierarchy) continue;
+                Vector3 p = robot.transform.position;
+                Assert.IsFalse(leadIn.Contains(p.x, p.z),
+                    $"'{robot.name}' is standing in the lead-in zone at ({p.x:0.0}, {p.z:0.0}) — a fresh " +
+                    "run should spawn into an empty room");
+            }
         }
 
         private static void AssertStandsWhereTheMapSays(MapData map, string id, GameObject actor)
