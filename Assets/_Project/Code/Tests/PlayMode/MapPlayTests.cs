@@ -127,6 +127,16 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator BothFactoriesActuallyEmitRobots()
         {
+            // YT-200 dropped the authored starting-robot count to 0, so EffectiveMaxLiveEnemies now
+            // ramps up FROM ZERO with the Invasion Level (~22 s of real run time before it rounds up
+            // to even one) instead of being open from frame one. That is a deliberate opening-pace
+            // choice, not a claim that the factories don't work — so, same as EnemyPopulationPlayTests
+            // and SwarmPacingPlayTests, pin the knobs that gate emission rather than out-waiting the
+            // ramp: a couple of live slots open immediately and the cadence is fast enough that both
+            // sheds have every chance to prove they can put a robot on the field.
+            DevTuning.StartingRobots = 2f;
+            DevTuning.SpawnInterval = 0.05f;
+
             yield return BuildLevelFromTheMap();
 
             // The cadence starts at 1.8 s and the fixture has already burned a few frames; give both
