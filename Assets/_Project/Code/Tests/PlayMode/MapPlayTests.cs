@@ -26,6 +26,15 @@ namespace MaxWorlds.Tests.PlayMode
     {
         private GameObject _path, _player, _gate, _boss, _strayHutch;
 
+        // The ambient Time.timeScale can't be trusted at test start in this headless runner — a prior
+        // fixture's screen (Home/Upgrade/Weapons/Settings/Result) can leave it pinned at 0 if it didn't
+        // get to its own TearDown. Same root cause as YT-173/YT-184 (see TelegraphVfxPlayTests,
+        // SpringGutsPlayTests): with timeScale stuck at 0, Time.deltaTime is 0 forever and any test that
+        // waits out simulated seconds (MV-244's ambient-population tests) spins until the 180s NUnit
+        // timeout instead of failing on its own assertion.
+        [SetUp]
+        public void SetUp() => Time.timeScale = 1f;
+
         [UnityTearDown]
         public IEnumerator TearDown()
         {
@@ -34,6 +43,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             DevTuning.Reset();
             DifficultyDirector.Reset();
+            Time.timeScale = 1f;
 
             yield return null;
         }
@@ -363,6 +373,32 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsNotNull(backyardPath.AreaDirector,
                 "the map built without wiring the runtime area index (MV-223/MV-224's own follow-up)");
             Assert.AreEqual(1, backyardPath.AreaDirector.CurrentArea, "a fresh run should start in area 1");
+        }
+
+        /// <summary>MV-244's acceptance: no enemies in the lead-in. Area 1's ambient population starts
+        /// filling immediately (as it always has — <see cref="AreaAccumulationDirector.Configure"/>
+        /// seeds area 1 on the spot), but every robot it releases has to land inside area1's own
+        /// footprint, never in the non-combat approach ahead of it.</summary>
+        [UnityTest]
+        public IEnumerator NoRobotEverSpawnsInTheLeadIn()
+        {
+            yield return BuildLevelFromTheMap();
+
+            // Long enough for several ambient releases (ReleaseInterval 0.35 s) to have landed.
+            float t = 0f;
+            while (t < 5f) { t += Time.deltaTime; yield return null; }
+
+            MapZone gardenPath = Shipped().Zone("garden_path");
+            Assert.IsNotNull(gardenPath, "the map has no lead-in zone (MV-244)");
+
+            foreach (RobotEnemy robot in Object.FindObjectsByType<RobotEnemy>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                Vector3 p = robot.transform.position;
+                Assert.IsFalse(gardenPath.Contains(p.x, p.z),
+                    $"'{robot.name}' is standing in the lead-in at ({p.x:0.#}, {p.z:0.#}) — the approach " +
+                    "must stay non-combat");
+            }
         }
 
         private static void AssertStandsWhereTheMapSays(MapData map, string id, GameObject actor)

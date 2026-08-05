@@ -64,5 +64,34 @@ namespace MaxWorlds.Enemies
 
             return new Vector3(next.x, goal.y, next.y);
         }
+
+        /// <summary>How far clear of a no-robot zone's own edge a robot has to stop. Without this a
+        /// robot halts with its centre exactly ON the line — mathematically not "in" the zone, but a
+        /// zone's own <see cref="MapZone.Contains"/> is inclusive of that same line, so a check with no
+        /// margin lets a robot park on the one coordinate that reads as inside either room. A visible
+        /// gap reads as "stopped by the doorway"; a robot toeing the threshold reads as a bug.</summary>
+        private const float NoRobotZoneMargin = 1f;
+
+        /// <summary>True if a point stands in — or within <see cref="NoRobotZoneMargin"/> of — an Entry
+        /// zone that isn't an "area&lt;N&gt;": the non-combat lead-in ahead of area 1 (MV-244), never
+        /// any other Entry zone (area 1 itself is one, and it is exactly where the ambient population is
+        /// supposed to be). A robot chasing Max is stopped by this, not routed around it: the lead-in is
+        /// a few seconds of walking, not another room in the graph.</summary>
+        public static bool IsNoRobotZone(Vector3 pos)
+        {
+            MapData map = Map;
+            if (map == null || map.zones == null) return false;
+
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null || zone.Kind != ZoneKind.Entry || zone.id.StartsWith("area")) continue;
+
+                if (pos.x >= zone.XMin - NoRobotZoneMargin && pos.x <= zone.XMax + NoRobotZoneMargin &&
+                    pos.z >= zone.ZMin - NoRobotZoneMargin && pos.z <= zone.ZMax + NoRobotZoneMargin)
+                    return true;
+            }
+
+            return false;
+        }
     }
 }

@@ -287,6 +287,7 @@ namespace MaxWorlds.Enemies
         {
             if (Current == State.Dead) return;
             float dt = Time.deltaTime;
+            Vector3 posBeforeFrame = transform.position;
 
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
@@ -316,6 +317,19 @@ namespace MaxWorlds.Enemies
 
             ApplyKnockback(dt);
             ApplyGravity(dt);
+
+            // MV-244: the lead-in ahead of area 1 is never combat ground. FaceAndMove already refuses
+            // to walk a robot in on purpose, but a doorway with several robots pressing through it
+            // still shoves one across via ordinary CharacterController-vs-CharacterController overlap
+            // resolution, which runs outside any scripted position check. This is the backstop: undo
+            // the frame's net displacement rather than try to out-guess every source of it.
+            if (EnemyNavigation.IsNoRobotZone(transform.position))
+            {
+                bool wasEnabled = _cc.enabled;
+                _cc.enabled = false;
+                transform.position = posBeforeFrame;
+                _cc.enabled = wasEnabled;
+            }
         }
 
         /// <summary>Spray knockback (YT-64): a shove that decays over ~0.2s. Applied on top of the
@@ -539,7 +553,14 @@ namespace MaxWorlds.Enemies
             if (dir.sqrMagnitude > 0.001f)
             {
                 transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
-                _cc.Move(dir * speed * dt);
+
+                Vector3 delta = dir * speed * dt;
+                // MV-244: the lead-in ahead of area 1 is never combat ground. A robot facing it still
+                // turns to track Max — it just stops advancing at the threshold instead of following
+                // him in, the same way a shut gate stops it without needing a route around one.
+                if (EnemyNavigation.IsNoRobotZone(transform.position + delta)) return;
+
+                _cc.Move(delta);
             }
         }
 

@@ -67,16 +67,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
         }
 
-        /// <summary>The shape the slice is now (v0.5 recut, MV-242): a linear chain of 10 areas plus
-        /// the unchanged compost clearing — 11 zones, not 9, and not a branching yard.</summary>
+        /// <summary>The shape the slice is now (v0.5 recut, MV-242, plus MV-244's lead-in): a
+        /// non-combat garden path, a linear chain of 10 areas, and the unchanged compost clearing —
+        /// 12 zones, not 9, and not a branching yard.</summary>
         [Test]
         public void TheShippedMap_IsTenAreasPlusTheCompostClearing()
         {
             MapData map = Shipped();
 
-            Assert.AreEqual(11, map.zones.Length,
-                "the slice is 10 gated areas plus the compost clearing");
+            Assert.AreEqual(12, map.zones.Length,
+                "the slice is a lead-in, 10 gated areas, and the compost clearing");
 
+            Assert.IsNotNull(map.Zone("garden_path"), "the map has no lead-in zone (MV-244)");
             for (int i = 1; i <= 10; i++)
                 Assert.IsNotNull(map.Zone($"area{i}"), $"the map has no 'area{i}'");
             Assert.IsNotNull(map.Zone("compost"), "the map has no 'compost' clearing");
@@ -194,12 +196,107 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // Straight up the middle from the patio (area1), through every area, to the boss gate:
-            // never walled. The doorways between the areas are on this line, which is what makes it
-            // the line — and a doorway is cut into the wall regardless of whether its area gate has
-            // been broken yet (MapGeometry works from the link, not the gate's HP).
-            for (float z = -4f; z <= 220f; z += 1f)
+            // Straight up the middle from the lead-in (MV-244's garden path), through the patio and
+            // every area, to the boss gate: never walled. The doorways between the areas are on this
+            // line, which is what makes it the line — and a doorway is cut into the wall regardless of
+            // whether its area gate has been broken yet (MapGeometry works from the link, not the
+            // gate's HP). The garden_path→area1 seam is wide open by design (MV-244): no gate, no wall.
+            MapZone gardenPath = map.Zone("garden_path");
+            MapEntity bossGate = map.First(EntityKind.Gate);
+
+            for (float z = gardenPath.ZMin + 1f; z <= bossGate.z - 1f; z += 1f)
                 Assert.IsFalse(WalledAt(map, 0f, z), $"the mission line is walled at z={z}");
+        }
+
+        // ---------------------------------------------------------------- the lead-in & room sizing (MV-244)
+
+        /// <summary>The v0.5.0 playtest's first feel fix: Max no longer spawns inside Area 1. He
+        /// spawns in a lead-in zone of its own, ahead of the first gated area.</summary>
+        [Test]
+        public void TheShippedMap_SpawnsMaxInTheLeadIn_NotInsideAreaOne()
+        {
+            MapData map = Shipped();
+            MapEntity spawn = map.First(EntityKind.PlayerSpawn);
+            MapZone spawnZone = map.ZoneAt(spawn.x, spawn.z);
+
+            Assert.IsNotNull(spawnZone, "the player spawn is not inside any zone");
+            Assert.AreEqual("garden_path", spawnZone.id,
+                "Max should spawn in the lead-in, not inside area1 (the v0.5.0 playtest's complaint)");
+            Assert.AreNotEqual("area1", spawnZone.id);
+        }
+
+        /// <summary>The lead-in is a walk, not a fight: nothing that spawns robots, blocks a path with
+        /// cover, or gates progress stands inside it — only the doorway into area1, which is wide open
+        /// (no area gate) so walking forward is the only thing there is to do.</summary>
+        [Test]
+        public void TheLeadIn_CarriesNoCombat()
+        {
+            MapData map = Shipped();
+            MapZone gardenPath = map.Zone("garden_path");
+            Assert.IsNotNull(gardenPath, "the map has no lead-in zone");
+
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || e.Kind == EntityKind.PlayerSpawn) continue;
+                if (e.Kind == EntityKind.Gate || e.Kind == EntityKind.AreaGate) continue; // stand on wall lines
+
+                Assert.IsFalse(gardenPath.Contains(e.x, e.z),
+                    $"'{e.id}' ({e.kind}) stands in the lead-in — the approach must stay non-combat");
+            }
+
+            foreach (MapLink link in map.links)
+            {
+                if (link.from != "garden_path" && link.to != "garden_path") continue;
+                Assert.IsTrue(string.IsNullOrEmpty(link.gate),
+                    "the lead-in's doorway into area1 should be a plain opening, not a gated one");
+            }
+        }
+
+        /// <summary>Acceptance: Area 1's footprint is at least 50% bigger than the pre-MV-244 value
+        /// (14 m × 10 m = 140 m² — too small to fight in, per the v0.5.0 playtest).</summary>
+        [Test]
+        public void AreaOne_IsAtLeastFiftyPercentBiggerThanTheOldMV242Footprint()
+        {
+            const float OldFootprint = 14f * 10f;
+
+            MapZone area1 = Shipped().Zone("area1");
+            float footprint = area1.width * area1.depth;
+
+            Assert.GreaterOrEqual(footprint, OldFootprint * 1.5f,
+                $"area1 is {area1.width}×{area1.depth} = {footprint} m² — under 1.5× the old {OldFootprint} m²");
+        }
+
+        /// <summary>Acceptance: the 10 areas are not all the same size (the old MV-242 shape had areas
+        /// 2-10 identical at 26×24), and the chain trends larger toward Area 10 so the later, busier
+        /// areas (accumulation +10%/area, concurrent cap 18) have room to move.</summary>
+        [Test]
+        public void AreaFootprints_AreVaried_AndTrendLargerTowardAreaTen()
+        {
+            MapData map = Shipped();
+
+            var footprints = new float[10];
+            for (int i = 1; i <= 10; i++)
+            {
+                MapZone zone = map.Zone($"area{i}");
+                footprints[i - 1] = zone.width * zone.depth;
+            }
+
+            var distinct = new HashSet<float>(footprints);
+            Assert.Greater(distinct.Count, 1, "every area is still the same size — nothing is varied");
+
+            // Trend, not a strict staircase: the back half of the chain should be meaningfully bigger
+            // on average than the front half, and Area 10 must not be the smallest fight room.
+            float frontHalf = 0f, backHalf = 0f;
+            for (int i = 0; i < 5; i++) frontHalf += footprints[i];
+            for (int i = 5; i < 10; i++) backHalf += footprints[i];
+
+            Assert.Greater(backHalf / 5f, frontHalf / 5f,
+                "the back half of the chain (areas 6-10) is not bigger on average than the front half");
+
+            float smallestFightRoom = float.MaxValue;
+            for (int i = 1; i < 10; i++) smallestFightRoom = Mathf.Min(smallestFightRoom, footprints[i]);
+            Assert.GreaterOrEqual(footprints[9], smallestFightRoom,
+                "area10 should not be the smallest fight room in the chain");
         }
 
         // ---------------------------------------------------------------- the wall solver
@@ -256,8 +353,8 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // area2 spans x −13..13, so its left wall stands just outside that. z = 17 is area2's own
-            // centre, well clear of either doorway at its edges.
+            // area2 spans x −13..13, so its left wall stands just outside that. z = 17 sits inside
+            // area2's z-range, well clear of either doorway at its edges.
             Assert.IsTrue(WalledAt(map, -13.5f, 17f), "area2's left wall is not where it started");
 
             map.Zone("area2").x += 5f;   // slide the fight room right
@@ -376,7 +473,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var withCover = new List<MapEntity>(map.entities)
             {
-                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 234f, width = 2f, height = 2f, depth = 2f },
+                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 255f, width = 2f, height = 2f, depth = 2f },
             };
             map.entities = withCover.ToArray();
 
