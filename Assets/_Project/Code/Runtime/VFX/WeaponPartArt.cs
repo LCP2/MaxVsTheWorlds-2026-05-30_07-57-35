@@ -320,14 +320,13 @@ namespace MaxWorlds.VFX
         // ---------------------------------------------------------------- machine-internals parts (WV-237)
 
         /// <summary>Every design below reads as "the guts of a machine" (gears, coils, circuit
-        /// blocks, pistons...) rather than the plain glowing box YT-180 shipped — that box direction
-        /// is retired now that a part is a purely cosmetic universal token (WV-228) with room to be
-        /// interesting on the ground. <see cref="PartPlinth"/> gives all ten the same base footprint
-        /// and height, so the ticket's "consistent pickup silhouette" holds even though the crown on
-        /// top of each is completely different; each also gets its own <see cref="Glisten"/> dot(s)
-        /// so every design shimmers, not just the old power-cell/Hydro-device pair.
-        /// <see cref="MachineInternalsKeys"/> is what <see cref="PickupArtDirector"/> actually draws
-        /// from, once per drop.</summary>
+        /// blocks, pistons...) — built when a part was a purely cosmetic universal token (WV-228) with
+        /// room to be interesting on the ground. <see cref="PartPlinth"/> gives all ten the same base
+        /// footprint and height, so the ticket's "consistent pickup silhouette" holds even though the
+        /// crown on top of each is completely different; each also gets its own <see cref="Glisten"/>
+        /// dot(s) so every design shimmers, not just the old power-cell/Hydro-device pair.
+        /// MV-180 reversed the ground pickup back to a plain box (Lee's playtest call) — kept here as a
+        /// retained design library, not currently drawn from by <see cref="PickupArtDirector"/>.</summary>
         private const float PartPlinthRadius = 0.2f;
         private const float PartPlinthHeight = 0.06f;
 
