@@ -375,6 +375,42 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.AreEqual(1, backyardPath.AreaDirector.CurrentArea, "a fresh run should start in area 1");
         }
 
+        /// <summary>The literal AC (MV-245): a room's robots must already be standing when the player
+        /// gets there, not popping into view over a timed trickle after they arrive. Area 1 is checked
+        /// the instant the level is built (no player has moved yet), and area 2 the instant its gate
+        /// breaks (before anyone has walked through the doorway) — both with zero elapsed Update ticks,
+        /// which is exactly what would have failed under the old position-polled, paced-release
+        /// director.</summary>
+        [UnityTest]
+        public IEnumerator EnteringAnArea_FindsItsRosterAlreadyPresent_NotSpawnedInView()
+        {
+            yield return BuildLevelFromTheMap();
+
+            var backyardPath = _path.GetComponent<BackyardPath>();
+            AreaAccumulationDirector director = backyardPath.AreaDirector;
+
+            int area1Active = director.ActiveCount;
+            Assert.Greater(area1Active, 0,
+                "area 1's robots should already be active the instant the level is built, not queued");
+
+            AreaGate gate1 = null;
+            foreach (AreaGate g in _path.GetComponentsInChildren<AreaGate>())
+                if (g.name == "gate1") gate1 = g;
+            Assert.IsNotNull(gate1, "the map built no 'gate1' to break");
+
+            gate1.TakeDamage(LethalPrimaryHit(gate1.MaxHp));
+            Assert.IsTrue(gate1.IsOpen, "gate1 did not break under a lethal primary hit");
+
+            Assert.AreEqual(2, director.CurrentArea,
+                "breaking gate1 should hand the director area 2 before the player ever reaches it");
+            Assert.Greater(director.ActiveCount, area1Active,
+                "area 2's robots should already be active the instant its gate breaks — not queued for " +
+                "a timed release the player would see happen in front of them");
+            Assert.AreEqual(0, director.QueuedCount,
+                "area 1 + area 2's rosters fit under the concurrent cap and should release immediately, " +
+                "not wait on ReleaseInterval ticks");
+        }
+
         private static void AssertStandsWhereTheMapSays(MapData map, string id, GameObject actor)
         {
             MapEntity e = map.Entity(id);

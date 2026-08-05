@@ -87,7 +87,33 @@ namespace MaxWorlds.Arena
 
             _areaDirector = new GameObject("Area Accumulation").AddComponent<AreaAccumulationDirector>();
             _areaDirector.transform.SetParent(transform, false);
-            _areaDirector.Configure(_map);
+            _areaDirector.Configure(_map, _build.Cover);
+
+            WireAreaGatesToPopulation();
+        }
+
+        /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the
+        /// gate guarding it breaks, not the moment the player is later found standing inside it — the
+        /// gap between those two is exactly the time the player still needs to walk through the
+        /// doorway, which is what lets the room be fully populated before they can see it.</summary>
+        private void WireAreaGatesToPopulation()
+        {
+            if (_map.links == null) return;
+
+            foreach (MapLink link in _map.links)
+            {
+                if (link == null || string.IsNullOrEmpty(link.gate)) continue;
+
+                int nextArea = AreaAccumulationDirector.AreaIndexOf(link.to);
+                if (nextArea <= 0) continue;   // e.g. area10 -> compost: the boss arena, not gated by this
+
+                if (!_build.Actors.TryGetValue(link.gate, out GameObject gateGo) || gateGo == null) continue;
+
+                AreaGate gate = gateGo.GetComponent<AreaGate>();
+                if (gate == null) continue;   // e.g. boss_gate is the adopted SubZoneGate, not an AreaGate
+
+                gate.Opened += () => _areaDirector.EnterArea(nextArea);
+            }
         }
     }
 }
