@@ -56,6 +56,7 @@ namespace MaxWorlds.UI
         private static readonly Color SpendReady = PartsColor;
         private static readonly Color SpendDisabled = new Color(1f, 1f, 1f, 0.18f);
         private static readonly Color NewBadgeColor = new Color(0.45f, 0.95f, 0.55f);   // MV-250: newly-acquired flag
+        private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);       // MV-257: destructive-red
 
         // MV-251: every row's icon tile now tints by its OWN section accent (instead of a near-invisible
         // neutral box) and carries a short glyph, so a track/ability reads as a distinct tile at a glance
@@ -368,10 +369,13 @@ namespace MaxWorlds.UI
 
             // Right-hand cluster, laid out from the corner inward: a close affordance (the design has
             // none, but the HUD's WEAPONS button only ever opens — MV-234's OnWeaponsButtonTapped calls
-            // Open(), never a toggle — so this screen needs its own way back out), then PAUSED, then
-            // the PARTS/CELLS banks.
+            // Open(), never a toggle — so this screen needs its own way back out), then QUIT TO MENU
+            // (MV-257 — this screen's opaque scrim hides the HUD's own HOME button underneath it, so
+            // the only way back to the main menu while this is open used to be none at all), then
+            // PAUSED, then the PARTS/CELLS banks.
             float cursor = -16f;
             cursor = BuildCloseButton(bar, cursor) - 16f;
+            cursor = BuildQuitButton(bar, cursor) - 16f;
 
             var paused = AddText(bar, 26, PartsColor, TextAnchor.MiddleRight);
             Anchor(paused.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
@@ -412,6 +416,33 @@ namespace MaxWorlds.UI
             var label = AddText(bg.rectTransform, 24, PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.text = "✕ CLOSE";
+            label.fontStyle = FontStyle.Bold;
+            label.raycastTarget = false;
+
+            return rightEdge - w;
+        }
+
+        /// <summary>MV-257: a second, distinctly-coloured pill next to CLOSE — abandons the run and
+        /// returns to the Home/save-slot screen via <see cref="RunFlow.QuitToMenu"/>. Red rather than
+        /// CLOSE's amber so it never reads as "close this screen" by mistake: it's the destructive
+        /// one. Same right-edge-cursor chaining as <see cref="BuildCloseButton"/>.</summary>
+        private float BuildQuitButton(RectTransform bar, float rightEdge)
+        {
+            const float w = 200f, h = 56f;
+            var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), QuitColor, "Quit Button");
+            Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
+            bg.rectTransform.sizeDelta = new Vector2(w, h);
+            bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(RunFlow.QuitToMenu);
+
+            var label = AddText(bg.rectTransform, 22, TextColor, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform);
+            label.text = "QUIT TO MENU";
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
 

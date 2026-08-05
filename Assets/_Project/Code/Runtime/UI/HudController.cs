@@ -3,11 +3,9 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.OnScreen;
 using UnityEngine.InputSystem.UI;
-using UnityEngine.SceneManagement;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
-using MaxWorlds.Save;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
@@ -723,19 +721,10 @@ namespace MaxWorlds.UI
             label.raycastTarget = false;
         }
 
-        /// <summary>Tapping HOME (YT-191): abandon the live run and reload the scene. A profile
-        /// (YT-218) carries no mid-run state — there is nothing to checkpoint — so this simply drops
-        /// the active slot and reloads. The reload re-runs
-        /// <see cref="MaxWorlds.Core.SceneInstallers"/>, which reopens the Home screen since it now
-        /// finds no active slot; the profile's personal best is unaffected, since it only banks on a
-        /// run actually finishing (<see cref="RunTracker"/>), not on bailing out early.</summary>
-        private void OnHomeButtonTapped()
-        {
-            SaveSystem.ActiveSlot = -1;
-            Time.timeScale = 1f;
-            Scene scene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(scene.buildIndex);
-        }
+        /// <summary>Tapping HOME (YT-191): abandon the live run and return to the Home/save-slot
+        /// screen — now the shared <see cref="RunFlow.QuitToMenu"/> (MV-257), same effect this
+        /// button always had, so Settings and Weapons can offer it too.</summary>
+        private void OnHomeButtonTapped() => RunFlow.QuitToMenu();
 
         /// <summary>
         /// The top-right slots. Dash used to be the first of these (YT-116) — it now has its own
