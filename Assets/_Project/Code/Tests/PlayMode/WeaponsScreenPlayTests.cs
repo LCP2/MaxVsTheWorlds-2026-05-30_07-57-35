@@ -10,9 +10,13 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The weapons area (WV-232): entering pauses the game, the Primary section shows RCDA's four
-    /// tracks at their live level, the Abilities section shows only abilities Max has acquired (and
-    /// grows as he acquires more), and a tap spends one banked part on any owned track/ability.
+    /// The weapons area (MV-248): entering pauses the game, the Primary section shows RCDA's four
+    /// tracks as pip bars at their live level, the Abilities section shows only abilities Max has
+    /// acquired (and grows as he acquires more, with a placeholder naming what's still locked), and a
+    /// tap spends one banked part on any owned track/ability. Row copy is Title Case on screen
+    /// (<see cref="WeaponCatalog.TitleCase"/> over <see cref="WeaponCatalog.DisplayName(WeaponTrackKind)"/>
+    /// / <see cref="WeaponCatalog.DisplayName(AbilityKind)"/>), which the HUD pickup toast keeps in
+    /// ALL CAPS — so every lookup here goes through the same TitleCase call the screen itself uses.
     /// </summary>
     public sealed class WeaponsScreenPlayTests
     {
@@ -52,6 +56,9 @@ namespace MaxWorlds.Tests.PlayMode
 
         private WeaponsScreen Screen => _screenGo.GetComponent<WeaponsScreen>();
 
+        private static string Name(WeaponTrackKind kind) => WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
+        private static string Name(AbilityKind kind) => WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
+
         [UnityTest]
         public IEnumerator OpeningPausesTheGame()
         {
@@ -81,20 +88,37 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ShowsRcdaAndAllFourTracksAtTheirCurrentLevel()
+        public IEnumerator ShowsThePrimaryWeaponNameAndAllFourTracks()
         {
             yield return NewScreen();
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);   // Range -> Lv 2
 
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, WeaponCatalog.PrimaryShortName), Is.Not.Null, "RCDA isn't labelled");
+            Assert.That(FindText(_screenGo, WeaponCatalog.TitleCase(WeaponCatalog.PrimaryName)), Is.Not.Null,
+                "the primary weapon's full name isn't shown in the hero column");
             foreach (var kind in WeaponCatalog.AllTrackKinds)
-                Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(kind)), Is.Not.Null,
-                    $"{kind} track isn't listed");
-            Assert.That(FindText(_screenGo, "Lv 2/6"), Is.Not.Null, "Range's live level (2) isn't shown");
-            Assert.That(FindText(_screenGo, "Lv 1/4"), Is.Not.Null, "an unspent track should read Lv 1");
+                Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} track isn't listed");
+        }
+
+        [UnityTest]
+        public IEnumerator TrackLevelsRenderAsPipBarsNotText()
+        {
+            yield return NewScreen();
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);   // Range -> level 2 of 6
+
+            Screen.Open();
+            yield return null;
+
+            CountPips(_screenGo, Name(WeaponTrackKind.Range), out int rangeTotal, out int rangeFilled);
+            Assert.That(rangeTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Range)), "Range should show 6 pip segments");
+            Assert.That(rangeFilled, Is.EqualTo(2), "Range's live level (2) should show as 2 filled pips");
+
+            CountPips(_screenGo, Name(WeaponTrackKind.Capacity), out int capTotal, out int capFilled);
+            Assert.That(capTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity)), "Capacity should show 4 pip segments");
+            Assert.That(capFilled, Is.EqualTo(1), "an unspent track should show a single filled pip");
+
+            Assert.That(FindText(_screenGo, "Lv 2/6"), Is.Null, "levels must render as pips, not \"Lv x/y\" text");
         }
 
         [UnityTest]
@@ -106,32 +130,46 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(AbilityKind.Dash)), Is.Not.Null,
-                "the acquired ability isn't shown");
-            Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(AbilityKind.Teleport)), Is.Null,
-                "an unacquired ability must not be shown at all — no locked teasers");
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Not.Null, "the acquired ability isn't shown");
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Null,
+                "an unacquired ability must not be shown as its own row — no locked teasers");
         }
 
         [UnityTest]
-        public IEnumerator AbilitiesSectionGrowsAsMoreAreAcquired()
+        public IEnumerator AbilitiesSectionGrowsAsMoreAreAcquiredAndPlaceholderNamesTheRest()
         {
             yield return NewScreen();
             Screen.Open();
             yield return null;
 
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
-                Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(kind)), Is.Null,
-                    $"{kind} shouldn't show before Max owns anything");
+                Assert.That(FindText(_screenGo, Name(kind)), Is.Null, $"{kind} shouldn't show before Max owns anything");
+            Assert.That(FindTextContaining(_screenGo, "unlock from sheds"), Is.Not.Null,
+                "at run start the placeholder should name every not-yet-owned ability");
 
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             yield return null;
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
 
-            Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(AbilityKind.WaterBalloon)), Is.Not.Null);
-            Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(AbilityKind.Teleport)), Is.Not.Null);
-            Assert.That(FindText(_screenGo, WeaponCatalog.DisplayName(AbilityKind.Dash)), Is.Null,
-                "still-unacquired abilities must stay hidden");
+            Assert.That(FindText(_screenGo, Name(AbilityKind.WaterBalloon)), Is.Not.Null);
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Not.Null);
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Null, "still-unacquired abilities must stay hidden");
+            Assert.That(FindTextContaining(_screenGo, "unlock from sheds"), Is.Not.Null,
+                "the placeholder should still list the four abilities still not owned");
+        }
+
+        [UnityTest]
+        public IEnumerator PlaceholderDisappearsOnceEveryAbilityIsOwned()
+        {
+            yield return NewScreen();
+            foreach (var kind in WeaponCatalog.AllAbilityKinds) WeaponSystemState.Acquire(kind);
+
+            Screen.Open();
+            yield return null;
+
+            Assert.That(FindTextContaining(_screenGo, "unlock from sheds"), Is.Null,
+                "once all six abilities are owned there's nothing left to tease");
         }
 
         [UnityTest]
@@ -142,7 +180,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            FindRowButton(_screenGo, WeaponCatalog.DisplayName(WeaponTrackKind.Capacity)).onClick.Invoke();
+            FindRowButton(_screenGo, Name(WeaponTrackKind.Capacity)).onClick.Invoke();
             yield return null;
 
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(2),
@@ -159,7 +197,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            FindRowButton(_screenGo, WeaponCatalog.DisplayName(AbilityKind.Speed)).onClick.Invoke();
+            FindRowButton(_screenGo, Name(AbilityKind.Speed)).onClick.Invoke();
             yield return null;
 
             Assert.That(WeaponSystemState.AbilityLevel(AbilityKind.Speed), Is.EqualTo(2));
@@ -173,7 +211,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            FindRowButton(_screenGo, WeaponCatalog.DisplayName(WeaponTrackKind.Range)).onClick.Invoke();
+            FindRowButton(_screenGo, Name(WeaponTrackKind.Range)).onClick.Invoke();
             yield return null;
 
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1),
@@ -190,7 +228,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            FindRowButton(_screenGo, WeaponCatalog.DisplayName(WeaponTrackKind.Spread)).onClick.Invoke();
+            FindRowButton(_screenGo, Name(WeaponTrackKind.Spread)).onClick.Invoke();
             yield return null;
 
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), Is.EqualTo(cap),
@@ -199,20 +237,23 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator PartsBankedCountIsShownAndUpdatesLiveWhileOpen()
+        public IEnumerator CellsAndPartsBanksShowLiveValues()
         {
             yield return NewScreen();
             PickupWallet.AddPart();
+            PickupWallet.AddPowerCell();
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "PARTS BANKED: 1"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, "1 PARTS"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, "1 CELLS"), Is.Not.Null);
 
             PickupWallet.AddPart();   // e.g. a kill drops one while the screen happens to be open
+            PickupWallet.AddPowerCell();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "PARTS BANKED: 2"), Is.Not.Null,
-                "the banked count must reflect live state, not just what it was on open");
+            Assert.That(FindText(_screenGo, "2 PARTS"), Is.Not.Null, "the parts bank must reflect live state, not just what it was on open");
+            Assert.That(FindText(_screenGo, "2 CELLS"), Is.Not.Null, "the cells bank must reflect live state too");
         }
 
         [UnityTest]
@@ -268,19 +309,44 @@ namespace MaxWorlds.Tests.PlayMode
         /// walks up from the matching Text to its row, then finds that row's Button.</summary>
         private static Button FindRowButton(GameObject root, string rowName)
         {
-            foreach (var t in root.GetComponentsInChildren<Text>(true))
-            {
-                if (t.text != rowName) continue;
-                var row = t.transform.parent;
-                return row != null ? row.GetComponentInChildren<Button>(true) : null;
-            }
-            return null;
+            var label = FindTextComponent(root, rowName);
+            if (label == null) return null;
+            var row = label.transform.parent;
+            return row != null ? row.GetComponentInChildren<Button>(true) : null;
         }
 
-        private static Text FindText(GameObject root, string content)
+        /// <summary>Counts a row's pip segments — active ones (the track/ability's cap) and, among
+        /// those, the ones named "Pip Filled" by <c>WeaponsScreen.SetPips</c> (its current level).</summary>
+        private static void CountPips(GameObject root, string rowName, out int total, out int filled)
+        {
+            total = 0; filled = 0;
+            var label = FindTextComponent(root, rowName);
+            Assert.That(label, Is.Not.Null, $"no row named '{rowName}' found");
+            var pipsContainer = label.transform.parent.Find("Pips");
+            Assert.That(pipsContainer, Is.Not.Null, $"row '{rowName}' has no Pips container");
+
+            for (int i = 0; i < pipsContainer.childCount; i++)
+            {
+                var pip = pipsContainer.GetChild(i);
+                if (!pip.gameObject.activeSelf) continue;
+                total++;
+                if (pip.name == "Pip Filled") filled++;
+            }
+        }
+
+        private static Text FindTextComponent(GameObject root, string content)
         {
             foreach (var t in root.GetComponentsInChildren<Text>(true))
                 if (t.text == content) return t;
+            return null;
+        }
+
+        private static Text FindText(GameObject root, string content) => FindTextComponent(root, content);
+
+        private static Text FindTextContaining(GameObject root, string substring)
+        {
+            foreach (var t in root.GetComponentsInChildren<Text>(true))
+                if (t.text != null && t.text.Contains(substring)) return t;
             return null;
         }
     }

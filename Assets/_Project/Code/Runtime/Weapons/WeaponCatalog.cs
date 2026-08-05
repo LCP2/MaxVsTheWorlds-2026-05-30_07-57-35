@@ -1,3 +1,4 @@
+using System.Globalization;
 using MaxWorlds.Core;
 
 namespace MaxWorlds.Weapons
@@ -109,5 +110,14 @@ namespace MaxWorlds.Weapons
                 default: return kind.ToString();
             }
         }
+
+        private static readonly TextInfo s_textInfo = CultureInfo.InvariantCulture.TextInfo;
+
+        /// <summary>"WEAPON EFFICIENCY" -> "Weapon Efficiency". The weapons screen's v0.5 design
+        /// (MV-248) reads track/ability names in Title Case; the HUD pickup toast ("DASH UNLOCKED")
+        /// keeps the ALL-CAPS convention it shares with "+1 CELL"/"+1 PART", so this reformats
+        /// <see cref="DisplayName(WeaponTrackKind)"/>/<see cref="DisplayName(AbilityKind)"/> for
+        /// screen copy rather than changing what they return.</summary>
+        public static string TitleCase(string allCaps) => s_textInfo.ToTitleCase(allCaps.ToLowerInvariant());
     }
 }
