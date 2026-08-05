@@ -68,9 +68,12 @@ namespace MaxWorlds.UI
         // used) — it's the play-mode test window itself (640x480, no CanvasScaler match to a phone),
         // which the CanvasScaler's geometric-mean scale shrinks to ~0.385x rather than the phone's
         // 0.44x; EverythingItDrawsIsOnScreen enforces this tighter bound.
-        private const float PanelW = 1024f + SaveBtnW + SaveBtnGap;
+        // Grown again for MV-257's Quit to menu button, same footer-append idiom as the Save button.
+        private const float PanelW = 1024f + SaveBtnW + SaveBtnGap + QuitBtnW + QuitBtnGap;
         private const float SaveBtnW = 260f;
         private const float SaveBtnGap = 16f;
+        private const float QuitBtnW = 220f;
+        private const float QuitBtnGap = 16f;
         // Grew for the two durability sliders (YT-126), then again in YT-192 so the three-column
         // value dump has room below the footer without its box running past the panel's bottom
         // edge, then again at YT-210 to match DumpH's growth for the Gameplay tab's 18th knob
@@ -119,6 +122,7 @@ namespace MaxWorlds.UI
         private static readonly Color TrackColor = new Color(1f, 1f, 1f, 0.14f);
         private static readonly Color TextColor = Color.white;
         private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.55f);
+        private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);   // MV-257: destructive-red, matches WeaponsScreen's Quit button
 
         private Canvas _canvas;
         private RectTransform _safeRoot;
@@ -762,6 +766,15 @@ namespace MaxWorlds.UI
 
             var close = BuildButton(rt, "Close", afterSave + 380f + 16f + 300f + 16f, footerY, 200f, ButtonH);
             close.onClick.AddListener(() => SetOpen(false));
+
+            // MV-257: Settings is the closest thing this game has to a pause menu (it freezes the
+            // world the moment it opens), and its scrim hides the HUD's own HOME button underneath
+            // it — so this is the only way back to the main menu while it's open. Red rather than
+            // the other footer buttons' neutral/accent tones since it's the destructive one.
+            var quit = BuildButton(rt, "Quit to menu",
+                afterSave + 380f + 16f + 300f + 16f + 200f + 16f, footerY, QuitBtnW, ButtonH);
+            quit.GetComponent<Image>().color = QuitColor;
+            quit.onClick.AddListener(RunFlow.QuitToMenu);
 
             // Three-column dump (YT-126, YT-192): keeps every line on the panel without pushing it
             // off a phone. Left/middle/right thirds of the value list, side by side.
