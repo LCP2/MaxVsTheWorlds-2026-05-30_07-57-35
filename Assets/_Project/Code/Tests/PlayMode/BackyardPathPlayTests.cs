@@ -81,6 +81,26 @@ namespace MaxWorlds.Tests.PlayMode
                 Assert.IsFalse(BlockedAt(new Vector3(spawn.x, 1f, z)), $"the mission line is blocked at z={z}");
         }
 
+        /// <summary>MV-244's other feel fix: Max spawns in a non-combat lead-in ahead of Area 1, and
+        /// the seam between them is a plain opening — no area gate to break — so walking forward is
+        /// all it takes to get into the fight.</summary>
+        [UnityTest]
+        public IEnumerator TheLeadInOpensStraightIntoAreaOne_NoGateToBreak()
+        {
+            yield return BuildPath();
+            MapData map = Shipped();
+
+            MapZone gardenPath = map.Zone("garden_path");
+            MapZone area1 = map.Zone("area1");
+            Assert.IsNotNull(gardenPath, "the map has no lead-in zone (MV-244)");
+
+            // Straight from just inside the lead-in through the seam into area1 — nothing seals this
+            // doorway, so it has to be open before a single shot has been fired.
+            for (float z = gardenPath.ZMin + 1f; z <= area1.ZMin + 1f; z += 1f)
+                Assert.IsFalse(BlockedAt(new Vector3(0f, 1f, z)),
+                    $"the lead-in into area1 is blocked at z={z} — Max should be able to just walk in");
+        }
+
         [UnityTest]
         public IEnumerator AnAreaRoomOpensOutIntoARoomYouCanCircleIn()
         {

@@ -365,6 +365,32 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.AreEqual(1, backyardPath.AreaDirector.CurrentArea, "a fresh run should start in area 1");
         }
 
+        /// <summary>MV-244's acceptance: no enemies in the lead-in. Area 1's ambient population starts
+        /// filling immediately (as it always has — <see cref="AreaAccumulationDirector.Configure"/>
+        /// seeds area 1 on the spot), but every robot it releases has to land inside area1's own
+        /// footprint, never in the non-combat approach ahead of it.</summary>
+        [UnityTest]
+        public IEnumerator NoRobotEverSpawnsInTheLeadIn()
+        {
+            yield return BuildLevelFromTheMap();
+
+            // Long enough for several ambient releases (ReleaseInterval 0.35 s) to have landed.
+            float t = 0f;
+            while (t < 5f) { t += Time.deltaTime; yield return null; }
+
+            MapZone gardenPath = Shipped().Zone("garden_path");
+            Assert.IsNotNull(gardenPath, "the map has no lead-in zone (MV-244)");
+
+            foreach (RobotEnemy robot in Object.FindObjectsByType<RobotEnemy>(
+                         FindObjectsInactive.Exclude, FindObjectsSortMode.None))
+            {
+                Vector3 p = robot.transform.position;
+                Assert.IsFalse(gardenPath.Contains(p.x, p.z),
+                    $"'{robot.name}' is standing in the lead-in at ({p.x:0.#}, {p.z:0.#}) — the approach " +
+                    "must stay non-combat");
+            }
+        }
+
         private static void AssertStandsWhereTheMapSays(MapData map, string id, GameObject actor)
         {
             MapEntity e = map.Entity(id);
