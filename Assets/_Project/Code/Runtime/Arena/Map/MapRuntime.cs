@@ -251,10 +251,19 @@ namespace MaxWorlds.Arena
         /// of the link that names it, read off the exact same <see cref="SealWidth"/> the scene-adopted
         /// gate uses, so the two kinds can never leave a doorway with a gap beside its seal.
         /// </summary>
+        /// <summary>MV-246: a gate's authored depth is exactly <c>wallThickness</c> (both 0.6 in
+        /// backyard_slice.json), and <see cref="SealWidth"/> deliberately overlaps the gate into the
+        /// wall on each side of the doorway by that same thickness — so over the overlap, the gate's
+        /// front/back faces sit on the EXACT SAME plane as the wall's, and the two flicker (z-fight)
+        /// against each other. 2 cm proud on each face, the same margin <c>BackyardDressingSet</c>
+        /// gives its fence panels for the identical reason, is enough to always win the depth test
+        /// without being visible as a gap at this camera angle.</summary>
+        private const float AntiZFightMargin = 0.04f;
+
         private static GameObject BuildAreaGate(MapData map, MapEntity e, Transform root, MapBuild built)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter,
-                new Vector3(SealWidth(map, e), e.height, e.depth));
+                new Vector3(SealWidth(map, e), e.height, e.depth + AntiZFightMargin));
 
             MarkDiscoverable(body);
             body.AddComponent<AreaGate>();

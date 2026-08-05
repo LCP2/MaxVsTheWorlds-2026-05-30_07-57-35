@@ -5,6 +5,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Bosses;
 using MaxWorlds.Player;
 using MaxWorlds.Factories;
+using MaxWorlds.Arena;
 
 namespace MaxWorlds.VFX
 {
@@ -81,6 +82,13 @@ namespace MaxWorlds.VFX
             }
 
             if (r.GetComponentInParent<MowerHutch>() != null) return CharacterRole.Structure;
+
+            // Falling through to here without this check is MV-246: an AreaGate is IDamageable (so it
+            // isn't a WorldMaterials surface) but matched none of the roles above, so it fell all the
+            // way to the Robot default below and wore the rusher's turquoise as a flat, unlit-looking
+            // placeholder. It's a breakable barrier, not a character — Structure gives it the Hutch's
+            // painted-steel look and skips the per-frame flash/tint machinery machines don't need.
+            if (r.GetComponentInParent<AreaGate>() != null) return CharacterRole.Structure;
 
             return CharacterRole.Robot;
         }
