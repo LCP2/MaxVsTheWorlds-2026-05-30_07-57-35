@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -53,6 +54,8 @@ namespace MaxWorlds.UI
 
         private static readonly Color SpendReady = PartsColor;
         private static readonly Color SpendDisabled = new Color(1f, 1f, 1f, 0.18f);
+        private static readonly Color NewBadgeColor = new Color(0.45f, 0.95f, 0.55f);   // MV-250: newly-acquired flag
+        private static readonly Color IconNeutral = new Color(1f, 1f, 1f, 0.06f);
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start
         private const int MaxAbilityRows = 6;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
@@ -98,6 +101,14 @@ namespace MaxWorlds.UI
         private readonly Button[] _abilityButton = new Button[MaxAbilityRows];
         private readonly Image[] _abilityButtonBg = new Image[MaxAbilityRows];
         private readonly AbilityKind[] _abilityRowKind = new AbilityKind[MaxAbilityRows];
+        private readonly Image[] _abilityIcon = new Image[MaxAbilityRows];
+
+        // MV-250: "clear feedback when something is picked up". An ability that's acquired since the
+        // player last actually looked at this screen gets a NEW badge for the whole session it's first
+        // shown in, then never again — _newThisOpen is a snapshot taken at Open() (so it doesn't churn
+        // if something else triggers a Refresh while already up), folded into _seenAbilities at Close().
+        private readonly HashSet<AbilityKind> _seenAbilities = new HashSet<AbilityKind>();
+        private readonly HashSet<AbilityKind> _newThisOpen = new HashSet<AbilityKind>();
 
         private RectTransform _placeholderRow;
         private Text _placeholderText;
@@ -150,6 +161,10 @@ namespace MaxWorlds.UI
             _prevTimeScale = Time.timeScale;
             Time.timeScale = 0f;   // freeze the fight while the player reads/spends
 
+            _newThisOpen.Clear();
+            foreach (var kind in WeaponSystemState.Acquired)
+                if (!_seenAbilities.Contains(kind)) _newThisOpen.Add(kind);
+
             Refresh();
             _root.SetActive(true);
             if (_maxStage != null) _maxStage.Show();
@@ -160,6 +175,8 @@ namespace MaxWorlds.UI
         {
             if (!_open) return;
             _open = false;
+            foreach (var kind in _newThisOpen) _seenAbilities.Add(kind);   // NEW badges don't return
+            _newThisOpen.Clear();
             Time.timeScale = _prevTimeScale;
             _root.SetActive(false);
             if (_maxStage != null) _maxStage.Hide();
@@ -202,6 +219,9 @@ namespace MaxWorlds.UI
                 _abilityName[shown].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
                 SetPips(_abilityPips[shown], level, cap, AbilityAccent);
                 SetSpendable(_abilityButton[shown], _abilityButtonBg[shown], banked > 0 && level < cap);
+                // MV-250: "clear feedback when something is picked up" — an ability first seen this
+                // Open() gets its icon slot lit up instead of the row's appearance being the only tell.
+                _abilityIcon[shown].color = _newThisOpen.Contains(kind) ? NewBadgeColor : IconNeutral;
                 shown++;
             }
             // Un-acquired abilities are never shown at all — no locked teasers (spec §6) — so every
@@ -350,16 +370,19 @@ namespace MaxWorlds.UI
             cellsChip.name = "Cells Chip";
         }
 
-        /// <summary>A small round dismiss button pinned at <paramref name="rightEdge"/> from the bar's
-        /// right edge. Returns the edge's new cursor position (its left edge) for the next element to
-        /// chain from.</summary>
+        /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.
+        /// MV-250: the original dark-on-dark square (same colour as every other row) read as
+        /// invisible in playtest — nobody could tell it was a button, let alone the only way out.
+        /// Filled bright amber with a dark bold label so it reads as an obvious, unmistakable
+        /// call-to-action against the screen's near-black palette. Returns the edge's new cursor
+        /// position (its left edge) for the next element to chain from.</summary>
         private float BuildCloseButton(RectTransform bar, float rightEdge)
         {
-            const float size = 56f;
-            var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), RowColor, "Close Button");
+            const float w = 104f, h = 56f;
+            var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), PartsColor, "Close Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
-            bg.rectTransform.sizeDelta = new Vector2(size, size);   // >= 44pt tap target
+            bg.rectTransform.sizeDelta = new Vector2(w, h);   // wide pill, well above the 44pt tap-target floor
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
 
@@ -367,13 +390,13 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(Close);
 
-            var label = AddText(bg.rectTransform, 28, TextColor, TextAnchor.MiddleCenter);
+            var label = AddText(bg.rectTransform, 24, PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            label.text = "✕";
+            label.text = "✕ CLOSE";
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
 
-            return rightEdge - size;
+            return rightEdge - w;
         }
 
         /// <summary>A rounded pill: a small tinted dot + a live count/label, right-anchored at
@@ -447,7 +470,7 @@ namespace MaxWorlds.UI
             name.horizontalOverflow = HorizontalWrapMode.Wrap;
             name.text = WeaponCatalog.TitleCase(WeaponCatalog.PrimaryName);
 
-            var helper = AddText(column, 20, Dim, TextAnchor.UpperLeft);
+            var helper = AddText(column, 23, Dim, TextAnchor.UpperLeft);
             Anchor(helper.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
             helper.rectTransform.sizeDelta = new Vector2(0f, 90f);
             helper.rectTransform.anchoredPosition = new Vector2(0f, -616f);
@@ -480,7 +503,7 @@ namespace MaxWorlds.UI
             {
                 int index = i;   // capture by value, not the loop variable
                 BuildGridRow(column, "Track Row", i, gridTop, RowHeight, RowGap,
-                    out _trackName[i], out var pips, out _trackButton[i], out _trackButtonBg[i]);
+                    out _trackName[i], out var pips, out _trackButton[i], out _trackButtonBg[i], out _);
                 _trackPips[i] = pips;
                 _trackButton[i].onClick.AddListener(() => OnTrackButtonTapped(index));
             }
@@ -504,7 +527,7 @@ namespace MaxWorlds.UI
             {
                 int row = i;   // capture by value, not the loop variable
                 var rowRt = BuildGridRow(column, "Ability Row", i, gridTop, RowHeight, RowGap,
-                    out _abilityName[i], out var pips, out _abilityButton[i], out _abilityButtonBg[i]);
+                    out _abilityName[i], out var pips, out _abilityButton[i], out _abilityButtonBg[i], out _abilityIcon[i]);
                 _abilityPips[i] = pips;
                 _abilityButton[i].onClick.AddListener(() => OnAbilityButtonTapped(row));
                 _abilityRow[i] = rowRt.gameObject;
@@ -521,7 +544,7 @@ namespace MaxWorlds.UI
             var phBg = AddImage(ph, HudTextures.RoundedBox(24, 0.35f), new Color(1f, 1f, 1f, 0.05f), "BG");
             Stretch(phBg.rectTransform); phBg.type = Image.Type.Sliced;
 
-            _placeholderText = AddText(ph, 20, Dim, TextAnchor.MiddleCenter);
+            _placeholderText = AddText(ph, 23, Dim, TextAnchor.MiddleCenter);
             Stretch(_placeholderText.rectTransform, -20f);
             _placeholderText.horizontalOverflow = HorizontalWrapMode.Wrap;
         }
@@ -530,7 +553,8 @@ namespace MaxWorlds.UI
         /// <paramref name="slot"/>, anchored under <paramref name="top"/>. Shared by the primary tracks
         /// and the abilities section so the two can never drift apart in style.</summary>
         private RectTransform BuildGridRow(RectTransform column, string name, int slot, float top,
-            float rowHeight, float rowGap, out Text nameText, out Image[] pips, out Button plusButton, out Image plusBg)
+            float rowHeight, float rowGap, out Text nameText, out Image[] pips, out Button plusButton, out Image plusBg,
+            out Image icon)
         {
             var row = NewRect(name, column, new Vector2(0f, 1f), Vector2.one);
             row.pivot = new Vector2(0.5f, 1f);
@@ -540,15 +564,16 @@ namespace MaxWorlds.UI
             var bg = AddImage(row, HudTextures.RoundedBox(24, 0.35f), RowColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
 
-            var iconBg = AddImage(row, HudTextures.RoundedBox(24, 0.35f), new Color(1f, 1f, 1f, 0.06f), "Icon");
+            var iconBg = AddImage(row, HudTextures.RoundedBox(24, 0.35f), IconNeutral, "Icon");
             Anchor(iconBg.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             iconBg.rectTransform.anchoredPosition = new Vector2(16f, 0f);
             iconBg.rectTransform.sizeDelta = new Vector2(60f, 60f);
             iconBg.type = Image.Type.Sliced;
+            icon = iconBg;
 
             // Name sits in the row's upper half, pips in the lower half, both spanning the same
             // horizontal band between the icon and the + button (the [0.13, 0.82] fraction of the row).
-            nameText = AddText(row, 26, TextColor, TextAnchor.UpperLeft);
+            nameText = AddText(row, 29, TextColor, TextAnchor.UpperLeft);
             Anchor(nameText.rectTransform, new Vector2(0.13f, 0.5f), new Vector2(0.82f, 1f), new Vector2(0f, 1f));
             nameText.rectTransform.offsetMin = new Vector2(8f, 0f);
             nameText.rectTransform.offsetMax = new Vector2(0f, -10f);
@@ -626,7 +651,7 @@ namespace MaxWorlds.UI
             dot.rectTransform.anchoredPosition = new Vector2(28f, 0f);
             dot.rectTransform.sizeDelta = new Vector2(20f, 20f);
 
-            _spendbarText = AddText(bar, 22, TextColor, TextAnchor.MiddleLeft);
+            _spendbarText = AddText(bar, 25, TextColor, TextAnchor.MiddleLeft);
             Anchor(_spendbarText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0f, 0.5f));
             _spendbarText.rectTransform.offsetMin = new Vector2(50f, 0f);
             _spendbarText.rectTransform.offsetMax = new Vector2(-24f, 0f);
