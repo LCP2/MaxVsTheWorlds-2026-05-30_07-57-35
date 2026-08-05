@@ -176,7 +176,14 @@ namespace MaxWorlds.VFX
                 _attached.Add(go2);
             }
 
-            _cam.enabled = true;
+            // MV-251: under a headless -nographics run (no real graphics device — every automated test
+            // run), enabling a camera pointed at a RenderTexture makes the engine log an error that
+            // fails whatever test happens to be running, not just this one. Same guard as
+            // MaxPortraitStage.Show() — real players/builds always have a device, so this only ever
+            // changes behaviour in an automated headless run, where nothing was going to be visible
+            // regardless. Previously harmless because only the legacy UpgradeScreen (whose own tests
+            // already ran with this gap) called Show(); WeaponsScreen now shares this stage too.
+            _cam.enabled = SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;
         }
 
         /// <summary>Set the weapon up for a status view (YT-178): bolt on everything already installed,
@@ -191,7 +198,7 @@ namespace MaxWorlds.VFX
             foreach (var kind in Mounts.Keys)
                 if (UpgradeState.IsInstalled(kind)) Attach(kind, Mounts[kind]);
 
-            _cam.enabled = true;
+            _cam.enabled = SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null;   // see Show()
         }
 
         /// <summary>Animate the reveal: the new part glides from its staged spot down onto its mount,
