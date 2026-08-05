@@ -136,6 +136,29 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator NewlyAcquiredAbilityIconIsHighlightedOnlyTheFirstTimeItsSeen()
+        {
+            // MV-250: "picking something up gives clear immediate feedback" — an ability's icon lights
+            // up the first time the player actually looks at the screen after acquiring it, then blends
+            // back in with the rest on every open after that.
+            yield return NewScreen();
+            WeaponSystemState.Acquire(AbilityKind.Dash);
+
+            Screen.Open();
+            yield return null;
+            Color firstOpenColor = FindIcon(_screenGo, Name(AbilityKind.Dash)).color;
+
+            Screen.Close();
+            yield return null;
+            Screen.Open();
+            yield return null;
+            Color secondOpenColor = FindIcon(_screenGo, Name(AbilityKind.Dash)).color;
+
+            Assert.That(firstOpenColor, Is.Not.EqualTo(secondOpenColor),
+                "a newly-acquired ability should look different the first time it's shown, then not repeat");
+        }
+
+        [UnityTest]
         public IEnumerator AbilitiesSectionGrowsAsMoreAreAcquiredAndPlaceholderNamesTheRest()
         {
             yield return NewScreen();
@@ -313,6 +336,16 @@ namespace MaxWorlds.Tests.PlayMode
             if (label == null) return null;
             var row = label.transform.parent;
             return row != null ? row.GetComponentInChildren<Button>(true) : null;
+        }
+
+        /// <summary>Finds the icon slot inside the row whose name label reads <paramref name="rowName"/>.</summary>
+        private static Image FindIcon(GameObject root, string rowName)
+        {
+            var label = FindTextComponent(root, rowName);
+            if (label == null) return null;
+            var row = label.transform.parent;
+            var icon = row != null ? row.Find("Icon") : null;
+            return icon != null ? icon.GetComponent<Image>() : null;
         }
 
         /// <summary>Counts a row's pip segments — active ones (the track/ability's cap) and, among

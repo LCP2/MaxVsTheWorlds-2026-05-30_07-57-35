@@ -61,7 +61,8 @@ namespace MaxWorlds.Combat
         private float rechargeFraction;
 
         [Header("Debug")]
-        [Tooltip("Draw a live fire-state overlay (diagnostics). Turn off for release.")]
+        [Tooltip("Draw a live fire-state overlay (diagnostics) while DevMode is enabled. Never draws " +
+                 "otherwise, so a normal/shipping session never shows it (MV-250).")]
         [SerializeField] private bool debugOverlay = true;
 
         [Header("Aim source")]
@@ -405,7 +406,7 @@ namespace MaxWorlds.Combat
 
         private void OnGUI()
         {
-            if (!debugOverlay) return;
+            if (!debugOverlay || !DevMode.Enabled) return;
             bool aiming = aimSource != null && aimSource.IsAiming;
             string s = $"Blaster: IsFiring={IsFiring}  aimSource.IsAiming={aiming}  " +
                        $"emitting={_lastEmitting}  " +
