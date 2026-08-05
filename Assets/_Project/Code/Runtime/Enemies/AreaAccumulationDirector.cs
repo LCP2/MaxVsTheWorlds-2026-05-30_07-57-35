@@ -135,6 +135,12 @@ namespace MaxWorlds.Enemies
         {
             if (areaIndex <= 0 || !_filledAreas.Add(areaIndex)) return;
 
+            // The lead-in/entry room (area1's "Patio & Back Door") is where Max spawns — it must stay
+            // empty so a fresh run has a safe beat to orient before meeting a robot (MV-256). Marked
+            // filled above so nothing re-queues it later; just never queues anything into it now.
+            MapZone zone = _map.Zone($"area{areaIndex}");
+            if (zone != null && zone.Kind == ZoneKind.Entry) return;
+
             var (large, small) = AreaPopulation.ComposeForArea(areaIndex,
                 DevTuning.Or(DevTuning.StartLargeCount, RobotCompositionTuning.DefaultStartLargeCount),
                 DevTuning.Or(DevTuning.StartSmallCount, RobotCompositionTuning.DefaultStartSmallCount),
