@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.OnScreen;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
 using MaxWorlds.Enemies;
@@ -58,6 +59,12 @@ namespace MaxWorlds.UI
         /// <summary>The power-up shout (YT-67). Hot cyan-white: it has to out-shout the golden
         /// SPARKS numbers flying around it, or the one moment that matters gets lost in them.</summary>
         private static readonly Color BoostColor = new Color(0.45f, 0.95f, 1f);
+        // Minimap fog-of-war (MV-264): hidden stays near-invisible — an undiscovered slot, not a
+        // black hole punched in the HUD — visited is a plain dim readout, and current borrows the
+        // tech-ring cyan already used for "this is you" elsewhere on the HUD.
+        private static readonly Color MinimapHiddenColor = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.35f);
+        private static readonly Color MinimapVisitedColor = new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f);
+        private static readonly Color MinimapCurrentColor = TechRingColor;
 
         private const float RefW = 1920f, RefH = 1080f;
 
@@ -126,6 +133,15 @@ namespace MaxWorlds.UI
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
 
+        // Minimap (MV-264): the fog-of-war area strip. Built lazily from Update — not Awake — because
+        // BackyardPath loads its map in its own Awake, whose order relative to this one Unity does not
+        // promise; EnsureMinimapBuilt keeps retrying each frame until a map is actually there to read.
+        private BackyardPath _backyardPath;
+        private Image[] _minimapPips;
+        private AreaVisibility[] _minimapStates = System.Array.Empty<AreaVisibility>();
+        private int _minimapAreaCount;
+        private int _shownMinimapArea = -1;
+
         // The Invasion Dial (YT-197): a fill meter across the three escalation bands, so the whole
         // DifficultyDirector curve reads as a shape at a glance instead of a clock the player has
         // to interpret.
@@ -164,6 +180,7 @@ namespace MaxWorlds.UI
             _blaster = FindFirstObjectByType<WaterBlaster>();
             _player = FindFirstObjectByType<PlayerController>();
             _abilities = FindFirstObjectByType<PlayerAbilities>();
+            _backyardPath = FindFirstObjectByType<BackyardPath>();
             _worldCamera = Camera.main;
             _model = new HudModel();
 
@@ -348,6 +365,8 @@ namespace MaxWorlds.UI
             UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
+            EnsureMinimapBuilt();
+            UpdateMinimap();
             UpdateInvasionDial(dt);
             UpdateBoss();
             UpdateWarnings(dt);
@@ -1165,6 +1184,82 @@ namespace MaxWorlds.UI
         {
             var a = _model.Arena;
             _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+        }
+
+        /// <summary>Test hook (MV-264): what the minimap is currently showing, one entry per area in
+        /// order — the same states <see cref="UpdateMinimap"/> just painted, not a second computation
+        /// of them. Empty until a map with area zones has actually loaded.</summary>
+        public AreaVisibility[] MinimapStates => _minimapStates;
+
+        /// <summary>
+        /// The fog-of-war area strip (MV-264): reintroduces YT-217's minimap now that the v0.5 recut
+        /// replaced "a bounded single garden" with a 10-area gated arena — the scope YT-217 removed it
+        /// for no longer holds. One pip per "area&lt;N&gt;" zone the loaded map defines (never a
+        /// hardcoded ten), stacked under the ability slots — the one gap the top-right corner has left,
+        /// mirroring how <see cref="BuildHomeButton"/> found the top-left's.
+        ///
+        /// Deferred to <see cref="Update"/> rather than built in <see cref="Awake"/>: <see cref="BackyardPath"/>
+        /// loads its map inside its own Awake, and Unity does not promise this component's Awake runs
+        /// after that one's. Idempotent — bails the instant it has built (or given up on) a strip.
+        /// </summary>
+        private void EnsureMinimapBuilt()
+        {
+            if (_minimapPips != null) return;
+
+            MapData map = _backyardPath != null ? _backyardPath.Map : null;
+            if (map == null) return; // BackyardPath hasn't loaded its map yet — try again next frame
+
+            _minimapAreaCount = MinimapModel.CountAreas(map);
+            if (_minimapAreaCount <= 0)
+            {
+                _minimapPips = System.Array.Empty<Image>(); // no area-gated map here — stop retrying
+                return;
+            }
+
+            const float PipSize = 16f, Spacing = 20f;
+
+            var root = NewRect("Minimap", Root);
+            Anchor(root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            root.sizeDelta = new Vector2(PipSize, _minimapAreaCount * Spacing);
+            root.anchoredPosition = new Vector2(-32f, -210f); // under the ability slots column
+
+            _minimapPips = new Image[_minimapAreaCount];
+            for (int i = 0; i < _minimapAreaCount; i++)
+            {
+                var pip = AddImage(root, HudTextures.RoundedBox(16, 0.5f), MinimapHiddenColor, $"Area {i + 1}");
+                Anchor(pip.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+                pip.rectTransform.sizeDelta = new Vector2(PipSize, PipSize);
+                pip.rectTransform.anchoredPosition = new Vector2(0f, -i * Spacing);
+                pip.type = Image.Type.Sliced;
+                pip.raycastTarget = false;
+                _minimapPips[i] = pip;
+            }
+        }
+
+        /// <summary>Repaints the strip off the live <see cref="AreaAccumulationDirector.CurrentArea"/>
+        /// — only when it has actually changed, so a built strip costs nothing on the frames between
+        /// area entries.</summary>
+        private void UpdateMinimap()
+        {
+            if (_minimapPips == null || _minimapPips.Length == 0) return;
+
+            int currentArea = 1;
+            if (_backyardPath != null && _backyardPath.AreaDirector != null)
+                currentArea = _backyardPath.AreaDirector.CurrentArea;
+
+            if (currentArea == _shownMinimapArea) return;
+            _shownMinimapArea = currentArea;
+
+            _minimapStates = MinimapModel.BuildStates(_minimapAreaCount, currentArea);
+            for (int i = 0; i < _minimapPips.Length; i++)
+            {
+                _minimapPips[i].color = _minimapStates[i] switch
+                {
+                    AreaVisibility.Current => MinimapCurrentColor,
+                    AreaVisibility.Visited => MinimapVisitedColor,
+                    _ => MinimapHiddenColor,
+                };
+            }
         }
 
         /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
