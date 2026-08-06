@@ -57,6 +57,17 @@ namespace MaxWorlds.Arena
 
             if (!MapValidation.ValidateWorldConfig(cfg, out reason)) return false;
 
+            // Combat areas 1..dials.areaCount are renamed to the old engine's "area<N>" convention —
+            // AreaAccumulationDirector (MV-223/242/245) still resolves a zone's area number by parsing
+            // that literal prefix (MV-270), and this is the one place that can translate for it without
+            // touching that director's public surface. The entry stub and boss room keep their authored
+            // ids (they never match "area<N>" and are never meant to — the ambient-population system
+            // already treats an id it can't parse as index 0, exactly what a non-combat room wants).
+            int areaCount = cfg.dials?.areaCount ?? 0;
+            var zoneId = new Dictionary<string, string>(cfg.areas.Length);
+            foreach (WorldArea a in cfg.areas)
+                zoneId[a.id] = (a.index >= 1 && a.index <= areaCount) ? $"area{a.index}" : a.id;
+
             var zones = new MapZone[cfg.areas.Length];
             for (int i = 0; i < cfg.areas.Length; i++)
             {
@@ -64,7 +75,7 @@ namespace MaxWorlds.Arena
                 Vector2 c = a.CenterXz;
                 zones[i] = new MapZone
                 {
-                    id = a.id,
+                    id = zoneId[a.id],
                     name = string.IsNullOrEmpty(a.name) ? a.id : a.name,
                     type = ZoneType(a),
                     x = c.x,
@@ -98,7 +109,7 @@ namespace MaxWorlds.Arena
                     depth = 0.6f,
                 });
 
-                links[i] = new MapLink { from = g.from.area, to = g.to.area, doorway = g.width, gate = g.id };
+                links[i] = new MapLink { from = zoneId[g.from.area], to = zoneId[g.to.area], doorway = g.width, gate = g.id };
             }
 
             // The schema authors areas and gates, not individual entities — synthesise the one entity
@@ -106,6 +117,52 @@ namespace MaxWorlds.Arena
             WorldArea entry = FindEntry(cfg);
             Vector2 entryCenter = entry.CenterXz;
             entities.Add(new MapEntity { id = "spawn", kind = "playerSpawn", x = entryCenter.x, z = entryCenter.y });
+
+            // A shed area's factory (MV-270, World & Difficulty Framework §6): the same MowerHutch
+            // recipe every map's factory already builds through (MapRuntime.BuildFactory) — this is
+            // what makes "sheds produce reinforcements" real rather than authored-but-inert data.
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (!a.hasShed || a.shed == null) continue;
+                entities.Add(new MapEntity
+                {
+                    id = $"{a.id}_shed",
+                    kind = "factory",
+                    x = a.shed.x,
+                    z = a.shed.z,
+                    width = 3f,
+                    height = 2f,
+                    depth = 3f,
+                    dressing = "shed",
+                });
+            }
+
+            // The boss, adopted into place the same way the old corridor engine's compost clearing
+            // did (MV-270) — without this entity MapRuntime has nowhere to move BigBermudaBoss to.
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (!a.IsBossRole) continue;
+
+                // WorldBoss is a nested [Serializable] class — JsonUtility default-constructs it even
+                // when the JSON never authors a "boss" object (the same reason hasShed exists as an
+                // explicit flag rather than a shed != null check), so an unauthored boss reads back as
+                // (0,0), not null. Falling back to the area's own centre for that case is a sane
+                // default, and keeps a boss-role area with no authored boss position out of whatever
+                // zone happens to sit at the world origin.
+                Vector2 center = a.CenterXz;
+                bool authored = a.boss != null && (a.boss.x != 0f || a.boss.z != 0f);
+
+                entities.Add(new MapEntity
+                {
+                    id = authored && !string.IsNullOrEmpty(a.boss.id) ? a.boss.id : "big_bermuda",
+                    kind = "boss",
+                    x = authored ? a.boss.x : center.x,
+                    z = authored ? a.boss.z : center.y,
+                    width = authored ? (a.boss.size?.w ?? 3.5f) : 3.5f,
+                    height = 3f,
+                    depth = authored ? (a.boss.size?.d ?? 3.5f) : 3.5f,
+                });
+            }
 
             map = new MapData
             {

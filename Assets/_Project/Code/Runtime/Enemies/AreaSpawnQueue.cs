@@ -63,6 +63,21 @@ namespace MaxWorlds.Enemies
             });
         }
 
+        /// <summary>Queues an area's worth of population from an already-solved per-type composition
+        /// (MV-268's difficulty engine, <see cref="DifficultyEngine.SolveComposition"/>) — the counts
+        /// are exact, not re-derived from a large/small split, so a world's own budget solver is the
+        /// only thing that decided how many of each type this area gets (MV-270). Rusher/bruiser are
+        /// interleaved proportionally exactly as <see cref="Fill"/>/<see cref="FillForArea"/> do; heavy
+        /// and brute queue after them, heavy first — both are already rare enough that their relative
+        /// order almost never matters, and neither ever competes with the small/large interleave for
+        /// legibility the way rusher/bruiser do.</summary>
+        public void FillExact(DifficultyEngine.Composition composition)
+        {
+            FillInternal(composition.Bruiser, composition.Rusher, _ => EnemyKind.Bruiser);
+            for (int i = 0; i < composition.Heavy; i++) _queued.Enqueue(EnemyKind.Heavy);
+            for (int i = 0; i < composition.Brute; i++) _queued.Enqueue(EnemyKind.Brute);
+        }
+
         private void FillInternal(int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)
         {
             int large = Mathf.Max(0, largeCount);

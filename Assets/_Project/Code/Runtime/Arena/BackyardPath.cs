@@ -37,8 +37,10 @@ namespace MaxWorlds.Arena
     [DisallowMultipleComponent]
     public sealed class BackyardPath : MonoBehaviour
     {
-        [Tooltip("Which map to build — a JSON file under Resources/Maps/.")]
-        [SerializeField] private string mapKey = MapLibrary.BackyardSlice;
+        [Tooltip("Which world to build — a JSON file under Resources/Worlds/ (MV-270). Authored in " +
+                 "code, not the inspector default: a value baked into the scene would silently shadow " +
+                 "this the way BlasterTuning's old serialized fields once did.")]
+        [SerializeField] private string worldKey = WorldLibrary.World1;
 
         private static readonly List<CoverPiece> NoCover = new List<CoverPiece>(0);
 
@@ -46,6 +48,7 @@ namespace MaxWorlds.Arena
         private MapBuild _build;
         private BackyardPathLayout _layout = BackyardPathLayout.Default;
         private AreaAccumulationDirector _areaDirector;
+        private WorldRunner _worldRunner;
 
         /// <summary>The map this level was built from. Null if it failed to load.</summary>
         public MapData Map => _map;
@@ -68,16 +71,14 @@ namespace MaxWorlds.Arena
 
         private void Awake()
         {
-            if (string.IsNullOrWhiteSpace(mapKey)) mapKey = MapLibrary.BackyardSlice;
+            if (string.IsNullOrWhiteSpace(worldKey)) worldKey = WorldLibrary.World1;
 
-            _map = MapLibrary.Load(mapKey);
-            if (_map == null) return;   // MapLibrary has already said why
+            WorldConfig cfg = WorldLibrary.Load(worldKey);
+            if (cfg == null) return;   // WorldLibrary has already said why
 
-            // A map that would not play does not get built. Half a level is worse than a loud error:
-            // it looks like it worked.
-            if (!MapValidation.Validate(_map, out string reason))
+            if (!WorldMapLoader.TryLoad(cfg, out _map, out string reason))
             {
-                Debug.LogError($"[BackyardPath] map '{mapKey}' is not playable: {reason}");
+                Debug.LogError($"[BackyardPath] world '{worldKey}' is not playable: {reason}");
                 _map = null;
                 return;
             }
@@ -88,6 +89,11 @@ namespace MaxWorlds.Arena
             _areaDirector = new GameObject("Area Accumulation").AddComponent<AreaAccumulationDirector>();
             _areaDirector.transform.SetParent(transform, false);
             _areaDirector.Configure(_map, _build.Cover);
+            _areaDirector.ConfigureWorld(cfg);
+
+            _worldRunner = new GameObject("World Runner").AddComponent<WorldRunner>();
+            _worldRunner.transform.SetParent(transform, false);
+            _worldRunner.Configure(cfg, _build);
 
             WireAreaGatesToPopulation();
         }

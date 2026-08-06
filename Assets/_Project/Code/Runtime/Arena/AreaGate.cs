@@ -85,6 +85,14 @@ namespace MaxWorlds.Arena
         /// <summary>Fired once, the instant the gate opens.</summary>
         public event Action Opened;
 
+        /// <summary>Refuses ALL damage regardless of source while true — the boss gate's
+        /// <c>opensWith: all-sheds-destroyed</c> lock (World &amp; Difficulty Framework, MV-270). Unlike
+        /// <see cref="RequiresClear"/>, which only pauses a normal gate until its room clears, a locked
+        /// gate cannot be chipped down by fire at all; only <see cref="ForceOpen"/> opens it, once
+        /// whatever external condition it is waiting on (here, <c>SupplyLineNetwork.AllShedsDestroyed</c>)
+        /// is met. Every other gate leaves this false and behaves exactly as before.</summary>
+        public bool Locked { get; set; }
+
         private void Awake()
         {
             float breakSeconds = Mathf.Max(0.1f,
@@ -107,12 +115,23 @@ namespace MaxWorlds.Arena
 
         public void TakeDamage(in DamageInfo info)
         {
-            if (!IsAlive) return;
+            if (!IsAlive || Locked) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             if (info.Source != DamageSource.PrimaryWeapon) return; // only sustained primary fire counts
             if (RequiresClear && RoomClear != null && !RoomClear()) return;
 
             _health.TakeDamage(info.Amount);
+        }
+
+        /// <summary>Opens the gate immediately regardless of remaining HP or <see cref="Locked"/> — how
+        /// an <c>opensWith</c> condition other than sustained primary fire (currently just
+        /// <c>all-sheds-destroyed</c>) actually resolves (MV-270). Goes through the same
+        /// <see cref="DestructibleHealth.Destroyed"/> → <see cref="Open"/> path a normal break does, so
+        /// the hinge swing and every other break-time effect fire exactly as they would from fire.</summary>
+        public void ForceOpen()
+        {
+            if (!IsAlive) return;
+            _health.TakeDamage(_health.Max);
         }
 
         private void Open()
