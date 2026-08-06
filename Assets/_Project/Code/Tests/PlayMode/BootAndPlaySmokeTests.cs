@@ -152,9 +152,15 @@ namespace MaxWorlds.Tests.PlayMode
             RebuildWasdBoundAction(controller, "_aim", "<Keyboard>/upArrow", "<Keyboard>/downArrow", "<Keyboard>/leftArrow", "<Keyboard>/rightArrow", "<Gamepad>/rightStick");
 
             // --- 2. The player can move — hold Right for real frames and confirm it actually moved,
-            // while continuously re-checking the lead-in stays empty through this opening window (5). ---
+            // while continuously re-checking the lead-in stays empty through this opening window (5).
+            // Held for fewer frames than MV-259's original 30 (MV-270): World 1's entry stub is a
+            // deliberately tight 6 m-wide room ("Entry path", world1_config.json), not the old lead-in's
+            // much wider one, and 30 frames of sustained drift walks the player into its east wall —
+            // which then also puts step 3's robot (placed 2 m further right of wherever the player ends
+            // up) past the wall entirely, out of the primary weapon's line of sight. Short enough to stay
+            // clear of that wall with margin; still comfortably past the >0.05 m "it moved" bar below. ---
             Vector3 beforeMove = controller.transform.position;
-            for (int i = 0; i < 30; i++)
+            for (int i = 0; i < 6; i++)
             {
                 HoldKey(Key.D);
                 yield return null;
@@ -170,19 +176,20 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             float moved = Vector3.Distance(beforeMove, controller.transform.position);
-            Assert.Greater(moved, 0.05f, "holding Right for 30 frames should move the player; it didn't budge");
+            Assert.Greater(moved, 0.05f, "holding Right for a few frames should move the player; it didn't budge");
             Assert.IsTrue(health.IsAlive, "the player died just from walking");
 
             // --- 3. The primary weapon fires and can damage a robot. A hand-built robot dropped
             // directly in the blaster's cone/range (same pattern as BackyardLoopPlayTests' hand-built
-            // MowerHutch) so the test doesn't depend on a factory having spawned one naturally yet. ---
+            // MowerHutch) so the test doesn't depend on a factory having spawned one naturally yet.
+            // Offset shrunk alongside step 2's frame count (MV-270) for the same reason — see above. ---
             var blaster = health.GetComponent<WaterBlaster>();
             Assert.IsNotNull(blaster, "the player has no WaterBlaster — no primary weapon to fire");
 
             _testRobotGo = new GameObject("MV-259 smoke-test robot",
                 typeof(CharacterController), typeof(RobotEnemy));
             var robot = _testRobotGo.GetComponent<RobotEnemy>();
-            _testRobotGo.transform.position = controller.transform.position + Vector3.right * 2f;
+            _testRobotGo.transform.position = controller.transform.position + Vector3.right * 1.5f;
             yield return null; // Awake/OnEnable — acquires the player as its sight target
 
             Assert.IsTrue(robot.IsAlive, "the test robot should start alive");
@@ -192,7 +199,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             for (int i = 0; i < 90 && robot.IsAlive; i++)
             {
-                HoldKey(Key.RightArrow); // aims right, toward the robot at controller.position + right*2
+                HoldKey(Key.RightArrow); // aims right, toward the robot at controller.position + right*1.5
                 yield return null;
                 if (controller.IsAiming) everAimed = true;
                 if (blaster.IsEmitting) everEmitted = true;
@@ -220,14 +227,24 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsTrue(homeAgain.IsOpen, "the reopened Home screen should be open");
         }
 
+        /// <summary>The lead-in/safe zone of whatever is ACTUALLY live in the scene, not a hardcoded
+        /// map file re-read independently (MV-270: World 1 replaced <c>backyard_slice.json</c> as the
+        /// shipped content, and a fixed 'area1' id stopped being the entry the moment a world config's
+        /// own entry stub took that role). Resolved by <see cref="ZoneKind.Entry"/> rather than by id —
+        /// <see cref="MapValidation.WorldAreas"/> already guarantees a validated world has exactly one —
+        /// so this test's premise cannot silently drift out of sync with the content again.</summary>
         private static MapZone ResolveLeadInZone()
         {
-            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
-            Assert.IsNotNull(map, "no shipped map data to check the lead-in zone against");
-            MapZone leadIn = map.Zone("area1");
-            Assert.IsNotNull(leadIn, "the map has no 'area1' zone to check");
-            Assert.AreEqual(ZoneKind.Entry, leadIn.Kind,
-                "area1 is no longer the entry/lead-in zone — this test's premise has moved");
+            var path = Object.FindFirstObjectByType<BackyardPath>();
+            Assert.IsNotNull(path, "no BackyardPath in the scene — nothing built the level");
+            MapData map = path.Map;
+            Assert.IsNotNull(map, "the shipped world failed to load — nothing to check the lead-in zone against");
+
+            MapZone leadIn = null;
+            foreach (MapZone z in map.zones)
+                if (z != null && z.Kind == ZoneKind.Entry) { leadIn = z; break; }
+
+            Assert.IsNotNull(leadIn, "the map has no entry zone to check");
             return leadIn;
         }
 

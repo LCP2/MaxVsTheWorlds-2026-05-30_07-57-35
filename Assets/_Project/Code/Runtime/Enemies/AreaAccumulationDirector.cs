@@ -47,6 +47,7 @@ namespace MaxWorlds.Enemies
         [SerializeField] private RobotEnemy prefab;
 
         private MapData _map;
+        private WorldConfig _worldCfg;
         private IReadOnlyList<CoverPiece> _cover = System.Array.Empty<CoverPiece>();
         private Transform _target;
         private Transform _bodies;
@@ -79,6 +80,14 @@ namespace MaxWorlds.Enemies
             CurrentArea = 1;
             FillArea(1);
         }
+
+        /// <summary>Feeds this director a live world config (MV-270): once set, <see cref="FillArea"/>
+        /// sources an area's composition from the difficulty engine's own budget solver
+        /// (<see cref="WorldConfig.SolveComposition"/>) instead of the old hand-tuned
+        /// <see cref="AreaPopulation"/> formula — "drive its enemies through the difficulty engine"
+        /// (World &amp; Difficulty Framework §5/§10 step 4). Call any time before the area in question
+        /// is first filled; areas already filled are not retroactively re-composed.</summary>
+        public void ConfigureWorld(WorldConfig cfg) => _worldCfg = cfg;
 
         /// <summary>Grants a room's population a head start: called the instant the gate into it breaks
         /// (<see cref="AreaGate.Opened"/>), which is before the player has actually walked through the
@@ -141,17 +150,24 @@ namespace MaxWorlds.Enemies
             MapZone zone = _map.Zone($"area{areaIndex}");
             if (zone != null && zone.Kind == ZoneKind.Entry) return;
 
-            var (large, small) = AreaPopulation.ComposeForArea(areaIndex,
-                DevTuning.Or(DevTuning.StartLargeCount, RobotCompositionTuning.DefaultStartLargeCount),
-                DevTuning.Or(DevTuning.StartSmallCount, RobotCompositionTuning.DefaultStartSmallCount),
-                DevTuning.Or(DevTuning.AreaGrowthPct, RobotCompositionTuning.DefaultAreaGrowthPct),
-                DevTuning.Or(DevTuning.LargeToSmallRatio, RobotCompositionTuning.DefaultLargeToSmallRatio),
-                DevTuning.Or(DevTuning.LargeShareDriftPerArea, RobotCompositionTuning.DefaultLargeShareDriftPerArea));
+            if (_worldCfg != null)
+            {
+                _queue.FillExact(_worldCfg.SolveComposition(areaIndex));
+            }
+            else
+            {
+                var (large, small) = AreaPopulation.ComposeForArea(areaIndex,
+                    DevTuning.Or(DevTuning.StartLargeCount, RobotCompositionTuning.DefaultStartLargeCount),
+                    DevTuning.Or(DevTuning.StartSmallCount, RobotCompositionTuning.DefaultStartSmallCount),
+                    DevTuning.Or(DevTuning.AreaGrowthPct, RobotCompositionTuning.DefaultAreaGrowthPct),
+                    DevTuning.Or(DevTuning.LargeToSmallRatio, RobotCompositionTuning.DefaultLargeToSmallRatio),
+                    DevTuning.Or(DevTuning.LargeShareDriftPerArea, RobotCompositionTuning.DefaultLargeShareDriftPerArea));
 
-            _queue.FillForArea(areaIndex, large, small,
-                DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
-                DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
-                DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct));
+                _queue.FillForArea(areaIndex, large, small,
+                    DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
+                    DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
+                    DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct));
+            }
 
             // Instantly, not paced — this room's population must already be standing by the time the
             // player can see it (MV-245). Only what does not fit under the concurrent cap stays queued.

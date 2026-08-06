@@ -41,6 +41,35 @@ namespace MaxWorlds.Arena
         public float d;
     }
 
+    /// <summary>A shed area's factory position (MV-270) — where <see cref="WorldMapLoader"/> builds the
+    /// <c>MowerHutch</c> that makes <see cref="WorldArea.hasShed"/> real.</summary>
+    [Serializable]
+    public sealed class WorldShed
+    {
+        public float x;
+        public float z;
+        public string produces;
+    }
+
+    /// <summary>A shed-free area's guaranteed power-up source (MV-270, power-up cadence §5/§8.7) — a
+    /// world-authored parts cache, not derived at runtime.</summary>
+    [Serializable]
+    public sealed class WorldPartsCache
+    {
+        public float x;
+        public float z;
+    }
+
+    /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
+    [Serializable]
+    public sealed class WorldBoss
+    {
+        public string id;
+        public float x;
+        public float z;
+        public WorldAreaSize size;
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -65,6 +94,14 @@ namespace MaxWorlds.Arena
         // (MV-269): hasShed drives SupplyLineNetwork, garrisonDensity drives Garrison.SeedCount.
         public bool hasShed;
         public string garrisonDensity;
+
+        // World-content fields (MV-270): where a shed area's factory body and a shed-free area's
+        // guaranteed power-up source actually stand. Optional — most areas carry neither.
+        public float targetThreatBudget;
+        public string notes;
+        public WorldShed shed;
+        public WorldPartsCache partsCache;
+        public WorldBoss boss;
 
         public float XMin => origin?.x ?? 0f;
         public float XMax => XMin + (size?.w ?? 0f);

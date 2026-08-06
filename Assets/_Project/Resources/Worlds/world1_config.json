@@ -1,0 +1,45 @@
+{
+  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
+  "world": "World 1 — Backyard",
+  "revision": "LOCKED v1 (2026-08-05), THV calibrated to real robot/weapon stats MV-270",
+  "note": "Authored in-chat to trial the World & Difficulty Framework (Confluence MVW 34439170). enemyTypes.thv were relative placeholders (1.0/2.5/4.5/7.0) at LOCK time; MV-270 replaced them with values derived from EnemyArchetype's real hp/contact-damage/speed via THV=(hp+shield)*dps*speedFactor*archetypeWeight (shield=0, archetypeWeight=1, dps=contactDamage/attackCycle) then scaled by x1.2 so R=MPL/EPL (PowerScoring) lands in the 0.85-1.4 band against the Water Blaster's real per-level DPS across Areas 1-7 — see World1CalibrationTests. The derived shape (1.0 : 2.6 : 4.49 : 7.11) came out almost identical to the original placeholder ratio, so the curve's SHAPE stood; only the magnitude moved.",
+  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
+  "dials": {
+    "areaCount": 8,
+    "baseThreat": 14.0,
+    "threatGrowth": 0.1,
+    "band": { "up": 0.4, "down": -0.15 },
+    "pacingRhythm": [1.0, 1.1, 1.15, 0.9, 1.1, 1.2, 0.9, 1.25],
+    "toughnessCurve": { "heavyFromArea": 5, "bruteFromArea": 8, "toughSubstitutionPct": 0.25, "tankShareEnd": 0.7 },
+    "powerupCadence": 2
+  },
+  "enemyTypes": {
+    "small": { "thv": 1.2 },
+    "large": { "thv": 3.12 },
+    "heavy": { "thv": 5.38 },
+    "brute": { "thv": 8.53 }
+  },
+  "gates": [
+    { "id": "g0", "from": { "area": "stub", "wall": "N", "pos": 0.5 }, "to": { "area": "a1", "wall": "S", "pos": 0.5 }, "width": 3, "opensWith": "start" },
+    { "id": "g1", "from": { "area": "a1", "wall": "E", "pos": 0.67 }, "to": { "area": "a2", "wall": "W", "pos": 0.3 }, "width": 3, "opensWith": "primary" },
+    { "id": "g2", "from": { "area": "a2", "wall": "N", "pos": 0.5 }, "to": { "area": "a3", "wall": "S", "pos": 0.42 }, "width": 3, "opensWith": "primary" },
+    { "id": "g3", "from": { "area": "a3", "wall": "W", "pos": 0.56 }, "to": { "area": "a4", "wall": "E", "pos": 0.3 }, "width": 3, "opensWith": "primary" },
+    { "id": "g4", "from": { "area": "a4", "wall": "N", "pos": 0.5 }, "to": { "area": "a5", "wall": "S", "pos": 0.5 }, "width": 3, "opensWith": "primary" },
+    { "id": "g5", "from": { "area": "a5", "wall": "E", "pos": 0.45 }, "to": { "area": "a6", "wall": "W", "pos": 0.36 }, "width": 3, "opensWith": "primary" },
+    { "id": "g6", "from": { "area": "a6", "wall": "N", "pos": 0.5 }, "to": { "area": "a7", "wall": "S", "pos": 0.47 }, "width": 3, "opensWith": "primary" },
+    { "id": "g7", "from": { "area": "a7", "wall": "E", "pos": 0.5 }, "to": { "area": "a8", "wall": "W", "pos": 0.5 }, "width": 3, "opensWith": "primary" },
+    { "id": "bg", "from": { "area": "a8", "wall": "N", "pos": 0.5 }, "to": { "area": "boss", "wall": "S", "pos": 0.5 }, "width": 11, "opensWith": "all-sheds-destroyed" }
+  ],
+  "areas": [
+    { "id": "stub", "index": 0, "name": "Entry path", "role": "entry", "origin": { "x": -3, "z": -8 }, "size": { "w": 6, "d": 8 }, "hasShed": false, "garrisonDensity": "none" },
+    { "id": "a1", "index": 1, "name": "Area 1", "role": "normal", "origin": { "x": -11, "z": 0 }, "size": { "w": 22, "d": 18 }, "hasShed": false, "garrisonDensity": "light", "targetThreatBudget": 14.0, "notes": "first fight; ease in" },
+    { "id": "a2", "index": 2, "name": "Area 2", "role": "normal", "origin": { "x": 11, "z": 6 }, "size": { "w": 20, "d": 20 }, "hasShed": false, "garrisonDensity": "normal", "targetThreatBudget": 16.9, "partsCache": { "x": 21, "z": 14 }, "notes": "cache" },
+    { "id": "a3", "index": 3, "name": "Area 3 — The Shed", "role": "shed", "origin": { "x": 11, "z": 26 }, "size": { "w": 24, "d": 18 }, "hasShed": true, "garrisonDensity": "normal", "targetThreatBudget": 19.5, "shed": { "x": 23, "z": 35, "produces": "reinforcements + power-up on destroy" }, "notes": "defended shed; peak" },
+    { "id": "a4", "index": 4, "name": "Area 4", "role": "normal", "origin": { "x": -15, "z": 30 }, "size": { "w": 26, "d": 20 }, "hasShed": false, "garrisonDensity": "light", "targetThreatBudget": 16.8, "notes": "lull after shed 3" },
+    { "id": "a5", "index": 5, "name": "Area 5", "role": "normal", "origin": { "x": -15, "z": 50 }, "size": { "w": 26, "d": 22 }, "hasShed": false, "garrisonDensity": "normal", "targetThreatBudget": 22.5, "partsCache": { "x": -2, "z": 60 }, "notes": "Heavy introduced; cache" },
+    { "id": "a6", "index": 6, "name": "Area 6 — The Greenhouse", "role": "shed", "origin": { "x": 11, "z": 52 }, "size": { "w": 28, "d": 22 }, "hasShed": true, "garrisonDensity": "heavy", "targetThreatBudget": 27.1, "shed": { "x": 25, "z": 63, "produces": "reinforcements + power-up on destroy" }, "notes": "defended shed; peak" },
+    { "id": "a7", "index": 7, "name": "Area 7", "role": "normal", "origin": { "x": 11, "z": 74 }, "size": { "w": 30, "d": 22 }, "hasShed": false, "garrisonDensity": "light", "targetThreatBudget": 22.3, "partsCache": { "x": 30, "z": 86 }, "notes": "lull after shed 6; cache" },
+    { "id": "a8", "index": 8, "name": "Area 8 — The Toolshed", "role": "shed", "origin": { "x": 41, "z": 73 }, "size": { "w": 32, "d": 24 }, "hasShed": true, "garrisonDensity": "heavy", "targetThreatBudget": 34.1, "shed": { "x": 64, "z": 80, "produces": "reinforcements + power-up on destroy" }, "notes": "Brute introduced; pre-boss shed" },
+    { "id": "boss", "index": 9, "name": "Compost Clearing", "role": "boss+exit", "origin": { "x": 40, "z": 97 }, "size": { "w": 34, "d": 26 }, "hasShed": false, "garrisonDensity": "none", "boss": { "id": "big_bermuda", "x": 57, "z": 110, "size": { "w": 3.5, "d": 3.5 } }, "notes": "Big Bermuda; exit here" }
+  ]
+}
