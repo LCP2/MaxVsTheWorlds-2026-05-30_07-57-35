@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
 {
@@ -59,9 +60,9 @@ namespace MaxWorlds.Arena
         public WorldAreaOrigin origin;
         public WorldAreaSize size;
 
-        // Origination fields (garrison/sheds/threat budget) belong to MV-268/MV-269 — parsed here only
-        // so a world config that carries them round-trips without loss; this ticket's engine does not
-        // read them.
+        // Origination fields (garrison/sheds/threat budget) — parsed since MV-267 so a world config
+        // that carries them round-trips without loss; read for real by the origination engine
+        // (MV-269): hasShed drives SupplyLineNetwork, garrisonDensity drives Garrison.SeedCount.
         public bool hasShed;
         public string garrisonDensity;
 
@@ -124,19 +125,123 @@ namespace MaxWorlds.Arena
         public string opensWith = "start";
     }
 
+    /// <summary>The <c>band</c> dial — how far the fun ratio R = MPL÷EPL is allowed to swing in Max's
+    /// favour (<see cref="up"/>) or against him (<see cref="down"/>), Confluence MVW 34439170 §4/§8.4.
+    /// Carried for calibration reference; the band's actual enforcement is
+    /// <see cref="MaxWorlds.Enemies.PowerScoring.BandLow"/>/<c>BandHigh</c>, which this ticket does not
+    /// derive from these two numbers automatically — that mapping is a playtest-tuning question for
+    /// ticket 4/MV-270, not this ticket's engine.</summary>
+    [Serializable]
+    public sealed class WorldBand
+    {
+        public float up;
+        public float down;
+    }
+
+    /// <summary>The <c>toughnessCurve</c> sub-dial (Confluence MVW 34439170 §8.6). Field names match
+    /// the locked <c>world1_config.json</c> exactly — not <see cref="MaxWorlds.Enemies.ToughnessCurve"/>'s
+    /// own field names — so the config round-trips without loss; <see cref="ToEngineCurve"/> bridges to
+    /// the engine's own model. <see cref="toughSubstitutionPct"/> is carried losslessly but not read by
+    /// this ticket's engine — <see cref="tankShareEnd"/> is what actually drives
+    /// <see cref="MaxWorlds.Enemies.DifficultyEngine.SolveComposition"/> here.</summary>
+    [Serializable]
+    public sealed class WorldToughnessCurve
+    {
+        public int heavyFromArea = 5;
+        public int bruteFromArea = 8;
+        public float toughSubstitutionPct;
+        public float tankShareEnd = 0.70f;
+
+        /// <summary>Bridges to the engine's own linear-drift model (MV-268). Tank share starts at 0 at
+        /// <see cref="heavyFromArea"/> (nothing tanky before then, matching the engine class's own
+        /// default) and drifts to <see cref="tankShareEnd"/> by <paramref name="lastArea"/>.</summary>
+        public ToughnessCurve ToEngineCurve(int lastArea) => new ToughnessCurve
+        {
+            heavyFromArea = heavyFromArea,
+            bruteFromArea = bruteFromArea,
+            tankShareAtHeavyIntro = 0f,
+            tankShareAtEnd = tankShareEnd,
+            lastArea = Mathf.Max(1, lastArea),
+        };
+    }
+
+    /// <summary>The ~8 designer dials (Confluence MVW 34439170 §8, MV-269): everything a world tunes
+    /// by hand, with per-area budgets/composition/pacing all derived from these by the engine (MV-268)
+    /// rather than authored per-area.</summary>
+    [Serializable]
+    public sealed class WorldDials
+    {
+        public int areaCount;
+        public float baseThreat;
+        public float threatGrowth;
+        public WorldBand band;
+        public float[] pacingRhythm = Array.Empty<float>();
+        public WorldToughnessCurve toughnessCurve;
+        public int powerupCadence;
+
+        public PacingRhythm EnginePacing =>
+            new PacingRhythm(pacingRhythm != null && pacingRhythm.Length > 0 ? pacingRhythm : new[] { 1f });
+    }
+
+    /// <summary>One robot archetype's Threat Value (Confluence MVW 34439170 §4). The JSON's
+    /// <c>enemyTypes</c> object is keyed by a fixed, closed set of archetype names matching
+    /// <see cref="EnemyKind"/> (small/large/heavy/brute) — <c>JsonUtility</c> has no dictionary support,
+    /// but since the set never grows without a new <see cref="EnemyKind"/> to match, four named fields
+    /// round-trip it exactly as well as a map would.</summary>
+    [Serializable]
+    public sealed class WorldEnemyTypeEntry
+    {
+        public float thv;
+    }
+
+    /// <summary>The <c>enemyTypes</c> THV table (Confluence MVW 34439170 §4, MV-269) — a world's own
+    /// per-archetype Threat Values, read instead of <see cref="ThreatValues"/>'s flat placeholders once
+    /// a world config supplies them.</summary>
+    [Serializable]
+    public sealed class WorldEnemyTypes
+    {
+        public WorldEnemyTypeEntry small;
+        public WorldEnemyTypeEntry large;
+        public WorldEnemyTypeEntry heavy;
+        public WorldEnemyTypeEntry brute;
+
+        public float Thv(EnemyKind kind)
+        {
+            WorldEnemyTypeEntry e = kind switch
+            {
+                EnemyKind.Bruiser => large,
+                EnemyKind.Heavy => heavy,
+                EnemyKind.Brute => brute,
+                _ => small,
+            };
+            return e?.thv ?? 0f;
+        }
+
+        /// <summary>Σ THV of a solved area composition, weighted by THIS world's own table rather than
+        /// the engine's flat placeholders — what <see cref="WorldConfig.SigmaThreatValue"/> and, through
+        /// it, EPL (<see cref="MaxWorlds.Enemies.PowerScoring"/>) actually spend.</summary>
+        public float WeightedThv(DifficultyEngine.Composition c) =>
+            c.Rusher * Thv(EnemyKind.Rusher) + c.Bruiser * Thv(EnemyKind.Bruiser) +
+            c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute);
+    }
+
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170
-    /// §7-8). Deliberately narrow: only the fields the map engine itself reads (areas' geometry, gates'
-    /// wall placement) are declared. The dial set (MV-269) and per-type threat values (MV-268) live in
-    /// the same JSON file but are read by later tickets — <c>JsonUtility</c> ignores JSON keys with no
-    /// matching field, so a full <c>world1_config.json</c> parses cleanly through this today and gains
-    /// no fields it does not need yet.</summary>
+    /// §7-8), plus the 8 designer dials and per-type threat values a world tunes (MV-269, §4/§8). The
+    /// schema is <c>MaxVsTheWorlds/world-config@0.6-draft</c> — <c>$schema</c> and <c>revision</c> are
+    /// free-text provenance, not read by any engine, so JsonUtility (which cannot bind a field named
+    /// <c>$schema</c>) simply ignores the former; <see cref="revision"/> is carried because it IS a
+    /// valid identifier.</summary>
     [Serializable]
     public sealed class WorldConfig
     {
         public string world = "Untitled World";
+        public string revision;
 
         public WorldArea[] areas = Array.Empty<WorldArea>();
         public WorldGate[] gates = Array.Empty<WorldGate>();
+
+        public WorldDials dials;
+        public WorldEnemyTypes enemyTypes;
 
         public WorldArea Area(string areaId)
         {
@@ -145,5 +250,35 @@ namespace MaxWorlds.Arena
                 if (a != null && a.id == areaId) return a;
             return null;
         }
+
+        /// <summary>The combat area at the dials' 1-based <paramref name="index"/> (matches
+        /// <c>WorldArea.index</c> for a1..aN — distinct from the entry stub at 0 and the boss room at
+        /// N+1, neither of which carry a threat budget).</summary>
+        public WorldArea AreaByIndex(int index)
+        {
+            if (areas == null) return null;
+            foreach (WorldArea a in areas)
+                if (a != null && a.index == index) return a;
+            return null;
+        }
+
+        /// <summary>This world's solved enemy composition for combat area <paramref name="areaIndex"/>
+        /// (MV-268's budget solver, driven by THIS world's own <see cref="dials"/>) — the single source
+        /// both <see cref="MaxWorlds.Enemies.Garrison"/> and <see cref="MaxWorlds.Enemies.PowerScoring"/>
+        /// solve against, so garrison seeding and EPL scoring can never quietly disagree about how many
+        /// enemies area N has. Zero areas outside <c>[1, dials.areaCount]</c> — there is no budget for
+        /// the entry stub, the boss room, or anywhere past the world's own end.</summary>
+        public DifficultyEngine.Composition SolveComposition(int areaIndex)
+        {
+            if (dials == null || areaIndex < 1 || areaIndex > dials.areaCount) return default;
+
+            float budget = DifficultyEngine.TargetBudget(areaIndex, dials.baseThreat, dials.threatGrowth, dials.EnginePacing);
+            ToughnessCurve toughness = dials.toughnessCurve?.ToEngineCurve(dials.areaCount);
+            return DifficultyEngine.SolveComposition(areaIndex, budget, toughness);
+        }
+
+        /// <summary>Σ THV for combat area <paramref name="areaIndex"/>, weighted by this world's own
+        /// <see cref="enemyTypes"/> table — the per-area term EPL sums (Confluence MVW 34439170 §4).</summary>
+        public float SigmaThreatValue(int areaIndex) => enemyTypes?.WeightedThv(SolveComposition(areaIndex)) ?? 0f;
     }
 }
