@@ -270,7 +270,17 @@ namespace MaxWorlds.Combat
             // regen from. While cells remain, they top the tank; at empty they can't, so the tank
             // drains as Max fires and the spray stalls until he collects more (generalises the old
             // Hydro-condenser-only rule, YT-137, to all primary fire).
+            //
+            // MV-266: at empty cells the tank must still run its OWN regen clock (BlasterTuning's
+            // RegenPerSec/RegenDelay/RechargeFraction — "Water refill rate" in the tuning panel), not
+            // sit dead. A fresh run always starts at 0 cells, so before this fix the tank had no way to
+            // recover once drained: Energy.Tick() (the only thing that advances natural regen) was never
+            // called, so "Water deplete rate" ran the tank down once and it never came back — the run
+            // was unwinnable before the first kill could ever earn a cell. Cells still top the tank
+            // instantly on pickup/while held (unlimited-feeling water once earned); it's only the
+            // empty-cell case that now recovers on its own instead of staying dead.
             if (PickupWallet.PowerCells > 0) Energy.Refill();
+            else Energy.Tick(dt);
 
             // Trigger is held only while the player is actively aiming. When bound,
             // orient along their facing too. If unbound, IsFiring stays false (no

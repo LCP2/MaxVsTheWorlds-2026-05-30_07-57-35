@@ -99,5 +99,60 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(Blaster.Energy.Normalized, Is.GreaterThan(0.8f),
                 "while cells remain the tank stays supplied — unlimited-feeling water");
         }
+
+        [UnityTest]
+        public IEnumerator AtZeroCells_TheTankRecoversOnItsOwnRegenClock_AfterRunningDry()
+        {
+            // MV-266: a fresh run starts at 0 cells (SetUp's PickupWallet.Reset()). Drain the tank dry,
+            // then let go of the trigger — the tank must recover on its own (BlasterTuning's
+            // RegenPerSec/RegenDelay), the same as it always has with cells in hand. Before the fix,
+            // nothing ever advanced natural regen at 0 cells, so a dry tank stayed dry forever and the
+            // run was unwinnable before the first kill could earn a cell.
+            // 1400/s * the default 0.1s tick = 140 energy/tick, exactly the tank's size (BlasterTuning.
+            // MaxEnergy): affordable for one tick (spends it to 0) but not the next, so it empties
+            // in a single tick rather than getting stuck CanSpend-false on a per-tick cost bigger than
+            // the whole tank (which would never spend anything at all).
+            DevTuning.BlasterDrainPerSecond = 1400f;
+            Blaster.RefreshDevTuning();
+
+            yield return Spray(0.15f);
+            Assert.That(Blaster.Energy.Normalized, Is.LessThan(0.05f), "expected the tank to be run dry");
+
+            Blaster.SetFiring(false);
+            for (int i = 0; i < 60; i++) yield return null;   // let the regen delay + refill clock run
+
+            Assert.That(Blaster.Energy.Normalized, Is.GreaterThan(0.05f),
+                "an empty tank at 0 cells must still climb back up on its own regen clock, not stay dead");
+        }
+
+        [UnityTest]
+        public IEnumerator WaterDepleteRate_Low_LeavesTheTankClearlyFullerThanHigh()
+        {
+            // MV-266: the "Water deplete rate" tuning slider (BlasterDrainPerSecond) must actually move
+            // real in-game consumption — a low setting drains clearly slower than a high one. This is
+            // the exact resource Lee watched run dry, and the exact slider he moved with no measurable
+            // effect before this fix (the tank was force-refilled to full every frame it held any cells,
+            // and never advanced its own regen clock once it didn't — see the recovery test above).
+            DevTuning.BlasterDrainPerSecond = 1f;
+            Blaster.RefreshDevTuning();
+
+            yield return Spray(0.5f);
+
+            Assert.That(Blaster.Energy.Normalized, Is.GreaterThan(0.9f),
+                "a low deplete rate (1/s against a 140 tank) must barely dent the tank over 0.5s");
+        }
+
+        [UnityTest]
+        public IEnumerator WaterDepleteRate_High_DrainsTheTankClearlyFasterThanLow()
+        {
+            DevTuning.BlasterDrainPerSecond = 100f;
+            Blaster.RefreshDevTuning();
+
+            yield return Spray(0.5f);
+
+            Assert.That(Blaster.Energy.Normalized, Is.LessThan(0.7f),
+                "a high deplete rate (100/s against a 140 tank) must visibly drain the tank over 0.5s — " +
+                "if this and the low-rate test both pass, the slider is proven wired to real consumption");
+        }
     }
 }
