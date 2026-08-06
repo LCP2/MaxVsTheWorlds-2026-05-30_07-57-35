@@ -4,6 +4,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -124,6 +125,8 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsFalse(gate.IsAlive);
             Assert.IsTrue(gate.IsOpen, "the gate has zero HP but never opened");
             Assert.IsFalse(gate.GetComponent<Collider>().enabled, "an open gate still blocks the doorway");
+            Assert.AreEqual(0f, gate.HealthNormalized, 1e-4, "a destroyed gate should report zero health");
+            Assert.AreEqual(0f, gate.HealthCurrent, 1e-4, "a destroyed gate should report zero health");
         }
 
         [UnityTest]
@@ -206,6 +209,59 @@ namespace MaxWorlds.Tests.PlayMode
             gate.TakeDamage(Hit(50f, DamageSource.PrimaryWeapon)); // after death — must be a no-op
 
             Assert.AreEqual(1, opened, "Opened should fire exactly once, not once per hit past zero HP");
+        }
+
+        [UnityTest]
+        public IEnumerator AFreshGate_CarriesAnAlwaysShownHealthBar()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            var bar = gate.GetComponent<WorldHealthBar>();
+            Assert.IsNotNull(bar, "MV-265: a gate needs a health indicator so the player can tell it's breakable");
+            Assert.IsTrue(bar.Showing, "the gate's bar should be visible before it has ever been hit");
+        }
+
+        [UnityTest]
+        public IEnumerator DamagingTheGate_DepletesTheReadoutItsHealthBarBindsTo()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+            float maxHp = gate.MaxHp;
+
+            gate.TakeDamage(Hit(maxHp * 0.5f, DamageSource.PrimaryWeapon));
+
+            // WorldHealthBar reads IHealthReadout.HealthNormalized every frame — asserting this is
+            // what actually drives the bar's fill without reaching into its private UI internals.
+            Assert.AreEqual(0.5f, gate.HealthNormalized, 1e-3,
+                "the gate's readout should track the damage its bar is meant to show");
+        }
+
+        [UnityTest]
+        public IEnumerator OpeningTheGate_HingesItSwingOpen()
+        {
+            yield return BuildTwoAreas();
+            AreaGate gate = Gate();
+
+            Vector3 closedPosition = gate.transform.position;
+            Quaternion closedRotation = gate.transform.rotation;
+            float halfWidth = gate.transform.localScale.x * 0.5f;
+
+            gate.TakeDamage(Hit(gate.MaxHp, DamageSource.PrimaryWeapon));
+
+            // Let the hinge swing run to completion (well past its authored duration).
+            yield return new WaitForSeconds(0.6f);
+
+            float swept = Quaternion.Angle(closedRotation, gate.transform.rotation);
+            Assert.Greater(swept, 80f,
+                "a destroyed gate should visibly hinge open past 90 degrees, not just drop its collider");
+
+            // A rigid rotation around a nearby edge shouldn't fling the body far from where it stood —
+            // catches a mis-picked pivot (e.g. rotating around the world origin instead of the gate's
+            // own edge) without pinning the exact swept position.
+            float displacement = Vector3.Distance(closedPosition, gate.transform.position);
+            Assert.Less(displacement, halfWidth * 2f + 0.5f,
+                "the gate should swing on its own edge, not translate away from the doorway");
         }
     }
 }
