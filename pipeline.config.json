@@ -1,0 +1,21 @@
+{
+  "_comment": "Per-project parameters for the Codynamics Development Standard. NO SECRETS — the Atlassian token is set once via 'setx ATLASSIAN_API_TOKEN'.",
+
+  "jiraBaseUrl": "https://codynamics.atlassian.net",
+  "jiraEmail": "lee@codynamics.com.au",
+  "jiraProjectKey": "MV",
+
+  "repo": "LCP2/MaxVsTheWorlds-2026-05-30_07-57-35",
+  "integrationBranch": "main",
+  "productionBranch": "main",
+
+  "pullLabels": ["needs-cc-web"],
+  "humanBlockLabel": "needs-lee",
+
+  "verifyCommand": "cc-verify.bat",
+  "deployTarget": "pages+testflight",
+
+  "idleSleepSeconds": 120,
+  "maxTurns": 200,
+  "model": "sonnet"
+}
