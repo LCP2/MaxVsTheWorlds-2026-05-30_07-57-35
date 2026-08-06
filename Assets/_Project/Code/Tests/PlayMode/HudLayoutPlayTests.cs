@@ -107,15 +107,17 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ThereIsNoMapOrMinimapOnTheHud()
+        public IEnumerator ThereIsNoFullMapScreenOrButtonOnTheHud()
         {
             yield return null;
 
-            // YT-217: a bounded single garden doesn't need a map. No minimap, no map screen, no
-            // dedicated MAP button — and nothing left over for a stray tap to land on.
-            Assert.That(Find("Minimap"), Is.Null, "the minimap should be removed from the HUD");
-            Assert.That(Find("Map Screen"), Is.Null, "the map screen should be removed from the HUD");
-            Assert.That(Find("Map Button"), Is.Null, "the dedicated MAP button should be removed");
+            // MV-264 brought the minimap back (YT-217's "bounded single garden" no longer describes
+            // the v0.5 recut's 10-area gated arena) — but only the compact strip, not the old tappable
+            // full map screen or its dedicated button. This scene has no BackyardPath/map, so the
+            // strip itself never builds here (see MinimapPlayTests for that against a real map); this
+            // just pins the two pieces that should stay gone regardless.
+            Assert.That(Find("Map Screen"), Is.Null, "the full map screen should not have come back");
+            Assert.That(Find("Map Button"), Is.Null, "the dedicated MAP button should not have come back");
         }
     }
 }
