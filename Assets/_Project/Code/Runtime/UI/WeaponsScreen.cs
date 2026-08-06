@@ -15,13 +15,16 @@ namespace MaxWorlds.UI
     /// intended design (MV-248) after MV-234 shipped only a bare functional panel — a centred title,
     /// "Lv x/y" text rows and an empty Abilities column, none of the intended layout/colour/copy.
     ///
-    /// Layout: a title + CELLS/PARTS/PAUSED cluster up top, a hero column on the left (MV-251: Max's
-    /// own key art, a compact live render of the RCDA, and the primary's name), and on the right the
-    /// 2x2 primary-track grid followed by the abilities section (owned abilities only, plus a
-    /// placeholder naming what's still locked) and an amber spendbar. Levels render as pip/segment
-    /// bars, not text — <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon +
-    /// glyph, name, pip bar, + button) for both tracks and abilities so the two sections can never
-    /// drift apart in style.
+    /// Layout: a title + CELLS/PARTS/PAUSED cluster up top (MV-262: PARTS is now a spinning gear
+    /// glyph + count, not a static dot + word), a narrow hero column on the left (Max's own key art
+    /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
+    /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid and the abilities
+    /// grid. The abilities grid always shows all six slots (MV-262): owned ones by name, the rest as
+    /// greyed, unnamed placeholder tiles, so the count of "more to find" reads at a glance instead of
+    /// needing a text list. There is no bottom spendbar/instructional line any more — the parts count
+    /// lives solely in the top-bar chip. Levels render as pip/segment bars, not text —
+    /// <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon + glyph, name, pip
+    /// bar, + button) for both tracks and abilities so the two sections can never drift apart in style.
     ///
     /// Self-installing overlay, same pause idiom as UpgradeScreen/HomeScreen/ResultScreen: its own
     /// canvas above the HUD, hidden until opened, freezes with <see cref="Time.timeScale"/> = 0 and
@@ -57,6 +60,7 @@ namespace MaxWorlds.UI
         private static readonly Color SpendDisabled = new Color(1f, 1f, 1f, 0.18f);
         private static readonly Color NewBadgeColor = new Color(0.45f, 0.95f, 0.55f);   // MV-250: newly-acquired flag
         private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);       // MV-257: destructive-red
+        private static readonly Color LockedIconBg = new Color(1f, 1f, 1f, 0.05f);      // MV-262: unowned ability tile
 
         // MV-251: every row's icon tile now tints by its OWN section accent (instead of a near-invisible
         // neutral box) and carries a short glyph, so a track/ability reads as a distinct tile at a glance
@@ -73,20 +77,27 @@ namespace MaxWorlds.UI
         private const int MaxAbilityRows = 6;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
         private const int MaxPips = 6;           // largest cap across tracks (Range=6) and abilities (PowerEfficiency/WeaponCooldown=5)
 
-        // Sized so the worst-case ability grid (5 acquired + the placeholder = 4 rows: MaxAbilityRows-1
-        // acquired is the most crowded state that still needs the placeholder) fits inside the content
-        // budget below the top bar/spendbar with room to spare — see the layout arithmetic in
-        // BuildAbilitiesSection's siblings; there's no runtime overflow check, so this is verified by
-        // hand rather than measured.
-        private const float RowHeight = 100f;
+        // MV-262: the abilities grid is now a fixed 6-slot (3-row) grid regardless of how many are
+        // owned, so unlike the old dynamic "shown + placeholder" layout there's a single worst case
+        // to verify: primary header + primary grid (2 rows) + abilities header + abilities grid
+        // (3 rows) all fit inside the content budget below the top bar (there's no bottom spendbar
+        // any more) with room to spare for the hero-sized primary-name block above the grids — see
+        // the arithmetic in BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no
+        // runtime overflow check, so this is verified by hand rather than measured.
+        private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
         private const float SectionHeaderGap = 10f;
         private const float SectionGap = 16f;
         private const float TopBarHeight = 104f;
-        private const float SpendbarHeight = 92f;
         private const float ContentMargin = 28f;
         private const float ColGap = 0.04f;      // fraction of column width between the 2 grid cells
+
+        private const float HeroColumnFraction = 0.27f;   // MV-262: narrowed from ~0.335 to give the weapons UI more room
+        private const float HeroNameTagH = 28f;
+        private const int HeroNameFontSize = 42;           // MV-262: the hero label — much bigger than the old 26pt name
+        private const float HeroNameH = 150f;
+        private const float HeroNameGap = 20f;
 
         private Canvas _canvas;
         private RectTransform _safeRoot;
@@ -95,18 +106,20 @@ namespace MaxWorlds.UI
 
         private Text _cellsText;
         private Text _partsText;
+        private Image _partsIcon;          // MV-262: the gear glyph next to the parts count — spins while open
+        private Image _weaponGlowRing;     // MV-262: the "cooler under Max" tech-ring behind the RCDA render — spins while open
         private Text _abilitiesHeaderText;
-        private Text _spendbarText;
 
         private readonly Text[] _trackName = new Text[TrackCount];
         private readonly Image[][] _trackPips = new Image[TrackCount][];
         private readonly Button[] _trackButton = new Button[TrackCount];
         private readonly Image[] _trackButtonBg = new Image[TrackCount];
 
-        // One row slot per catalog ability; only the acquired ones are shown, in catalog order
-        // (WeaponSystemState.Acquired). Which AbilityKind occupies slot i changes as more get acquired,
-        // so the kind behind each slot's button is tracked live in _abilityRowKind rather than baked
-        // into the click handler at build time.
+        // One row slot per catalog ability, always active (MV-262): the leading slots are populated
+        // from WeaponSystemState.Acquired in catalog order, the rest greyed via SetAbilityLocked. Which
+        // AbilityKind occupies slot i changes as more get acquired, so the kind behind each slot's
+        // button is tracked live in _abilityRowKind rather than baked into the click handler at build
+        // time (locked slots' buttons are inactive, so their stale _abilityRowKind is never read).
         private readonly GameObject[] _abilityRow = new GameObject[MaxAbilityRows];
         private readonly Text[] _abilityName = new Text[MaxAbilityRows];
         private readonly Image[][] _abilityPips = new Image[MaxAbilityRows][];
@@ -125,10 +138,6 @@ namespace MaxWorlds.UI
         // MV-251: per-row glyph label and highlight ring, alongside the existing icon-tint tell.
         private readonly Text[] _abilityIconGlyph = new Text[MaxAbilityRows];
         private readonly Image[] _abilityOutline = new Image[MaxAbilityRows];
-
-        private RectTransform _placeholderRow;
-        private Text _placeholderText;
-        private float _abilitiesGridTop;
 
         private bool _open;
         private float _prevTimeScale = 1f;
@@ -161,7 +170,15 @@ namespace MaxWorlds.UI
 
         private void Update()
         {
-            if (_open && _weaponStage != null) _weaponStage.Tick(Time.unscaledTime, 0f, 0f);
+            if (!_open) return;
+            if (_weaponStage != null) _weaponStage.Tick(Time.unscaledTime, 0f, 0f);
+
+            // MV-262: "playful/animated, not a sentence" — the parts gear and the RCDA's glow ring
+            // spin while the screen is up. Time is frozen (Time.timeScale = 0 for the pause), so this
+            // has to ride unscaledDeltaTime rather than Update's usual scaled clock.
+            float dt = Time.unscaledDeltaTime;
+            if (_partsIcon != null) _partsIcon.rectTransform.Rotate(0f, 0f, -dt * 90f);
+            if (_weaponGlowRing != null) _weaponGlowRing.rectTransform.Rotate(0f, 0f, dt * 18f);
         }
 
         private void OnPartsChanged(int banked) => Refresh();
@@ -210,9 +227,7 @@ namespace MaxWorlds.UI
 
             int banked = PickupWallet.PartsBanked;
             _cellsText.text = $"{PickupWallet.PowerCells} CELLS";
-            _partsText.text = $"{banked} PARTS";
-            _spendbarText.text = $"You have {banked} parts banked — tap + on a track to spend one. " +
-                "Every ability has a cooldown; Weapon Cooldown (not yet owned) shortens them all.";
+            _partsText.text = $"{banked}";   // MV-262: the spinning gear glyph carries the "parts" meaning now
 
             for (int i = 0; i < TrackCount; i++)
             {
@@ -232,7 +247,10 @@ namespace MaxWorlds.UI
                 int cap = WeaponCatalog.MaxLevel(kind);
                 _abilityRowKind[shown] = kind;
                 _abilityRow[shown].SetActive(true);
+                _abilityButton[shown].gameObject.SetActive(true);   // a slot that was locked last Refresh needs its + back
+                _abilityName[shown].color = TextColor;
                 _abilityName[shown].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
+                _abilityIconGlyph[shown].color = TextColor;
                 _abilityIconGlyph[shown].text = AbilityGlyph(kind);
                 SetPips(_abilityPips[shown], level, cap, AbilityAccent);
                 SetSpendable(_abilityButton[shown], _abilityButtonBg[shown], banked > 0 && level < cap);
@@ -244,39 +262,27 @@ namespace MaxWorlds.UI
                 _abilityOutline[shown].color = isNew ? NewBadgeColor : Color.clear;
                 shown++;
             }
-            // Un-acquired abilities are never shown at all — no locked teasers (spec §6) — so every
-            // slot past the acquired count just goes inactive rather than showing a dimmed row.
+            // MV-262: every slot past the acquired count is now a greyed, unnamed placeholder tile
+            // (not hidden, and not a text list) — the fixed 6-slot grid itself communicates "there are
+            // more to find" at a glance.
             for (int i = shown; i < MaxAbilityRows; i++)
-                _abilityRow[i].SetActive(false);
+                SetAbilityLocked(i);
 
-            _abilitiesHeaderText.text = $"ABILITIES — acquired ({shown} of {MaxAbilityRows}) · shown only once owned";
-
-            RefreshPlaceholder(shown);
+            _abilitiesHeaderText.text = $"ABILITIES — {shown} of {MaxAbilityRows} unlocked";
         }
 
-        /// <summary>The dashed "unlock from sheds" row naming whatever abilities Max doesn't own yet —
-        /// sits directly under the last populated ability row, never shown once all six are owned.</summary>
-        private void RefreshPlaceholder(int shownCount)
+        /// <summary>Greys out ability slot <paramref name="i"/> into an unnamed "still to find" tile —
+        /// no name, no pips, no spend button, just a dim "?" glyph.</summary>
+        private void SetAbilityLocked(int i)
         {
-            var names = new System.Text.StringBuilder();
-            bool any = false;
-            foreach (var kind in WeaponSystemState.Unacquired)
-            {
-                if (any) names.Append("  ·  ");
-                names.Append(WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind)));
-                any = true;
-            }
-
-            _placeholderRow.gameObject.SetActive(any);
-            if (!any)
-            {
-                _placeholderText.text = string.Empty;   // don't leave stale copy behind an inactive row
-                return;
-            }
-
-            int rowsUsed = (shownCount + 1) / 2;   // ceil(shownCount / 2)
-            PlaceGridRow(_placeholderRow, rowsUsed, _abilitiesGridTop, RowHeight, RowGap, cols: 1);
-            _placeholderText.text = $"{names}  — unlock from sheds —";
+            _abilityRow[i].SetActive(true);
+            _abilityButton[i].gameObject.SetActive(false);
+            _abilityName[i].text = string.Empty;
+            _abilityIconGlyph[i].color = Dim;
+            _abilityIconGlyph[i].text = "?";
+            _abilityIcon[i].color = LockedIconBg;
+            _abilityOutline[i].color = Color.clear;
+            foreach (var pip in _abilityPips[i]) pip.gameObject.SetActive(false);
         }
 
         private static void SetPips(Image[] pips, int level, int cap, Color filled)
@@ -340,9 +346,7 @@ namespace MaxWorlds.UI
             var content = BuildContentRect(rootRt);
             BuildHeroColumn(content);
             var main = BuildMainColumn(content);
-            BuildPrimaryGrid(main);
-            BuildAbilitiesSection(main);
-            BuildSpendbar(rootRt);
+            BuildMainColumnContent(main);
 
             _root.SetActive(false);
         }
@@ -385,11 +389,15 @@ namespace MaxWorlds.UI
             paused.text = "II PAUSED";
             cursor -= 160f + 16f;
 
-            var partsChip = BuildChip(bar, new Vector2(cursor, 0f), PartsColor, out _partsText);
+            // MV-262: the parts chip's dot becomes a spinning gear glyph (see Update()) — the "fun
+            // symbol" the ticket asked for, replacing the flat static dot the cells chip still uses.
+            var partsChip = BuildChip(bar, new Vector2(cursor, 0f), PartsColor,
+                HudTextures.Gear(48, 8), 34f, out _partsText, out _partsIcon);
             partsChip.name = "Parts Chip";
             cursor -= 150f + 16f;
 
-            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), CellsColor, out _cellsText);
+            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), CellsColor,
+                HudTextures.Disc(32), 20f, out _cellsText, out _);
             cellsChip.name = "Cells Chip";
         }
 
@@ -449,10 +457,12 @@ namespace MaxWorlds.UI
             return rightEdge - w;
         }
 
-        /// <summary>A rounded pill: a small tinted dot + a live count/label, right-anchored at
-        /// <paramref name="offset"/> from the top bar's right edge (CELLS/PARTS, spec: cyan
-        /// diamond/amber dot).</summary>
-        private RectTransform BuildChip(RectTransform bar, Vector2 offset, Color accent, out Text label)
+        /// <summary>A rounded pill: a tinted icon + a live count/label, right-anchored at
+        /// <paramref name="offset"/> from the top bar's right edge (CELLS/PARTS). MV-262: the icon
+        /// sprite/size is now caller-supplied (and handed back via <paramref name="icon"/>) so the
+        /// PARTS chip can carry the spinning gear glyph while CELLS keeps the plain dot.</summary>
+        private RectTransform BuildChip(RectTransform bar, Vector2 offset, Color accent,
+            Sprite iconSprite, float iconSize, out Text label, out Image icon)
         {
             var chip = NewRect("Chip", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             chip.pivot = new Vector2(1f, 0.5f);
@@ -462,10 +472,11 @@ namespace MaxWorlds.UI
             var bg = AddImage(chip, HudTextures.RoundedBox(32, 0.5f), RowColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
 
-            var dot = AddImage(chip, HudTextures.Disc(32), accent, "Dot");
-            Anchor(dot.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            dot.rectTransform.anchoredPosition = new Vector2(24f, 0f);
-            dot.rectTransform.sizeDelta = new Vector2(20f, 20f);
+            icon = AddImage(chip, iconSprite, accent, "Icon");
+            Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            icon.rectTransform.anchoredPosition = new Vector2(24f, 0f);
+            icon.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
+            icon.raycastTarget = false;
 
             label = AddText(chip, 24, accent, TextAnchor.MiddleRight);
             Anchor(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f));
@@ -475,18 +486,22 @@ namespace MaxWorlds.UI
             return chip;
         }
 
-        /// <summary>The area between the top bar and the spendbar, holding the hero column and the
-        /// main (primary + abilities) column.</summary>
+        /// <summary>The area below the top bar, holding the hero column and the main (primary +
+        /// abilities) column. MV-262: there's no bottom spendbar reserving space any more — the
+        /// content rect now runs all the way down to the margin.</summary>
         private RectTransform BuildContentRect(RectTransform parent)
         {
             var content = NewRect("Content", parent, Vector2.zero, Vector2.one);
-            content.offsetMin = new Vector2(ContentMargin, SpendbarHeight + ContentMargin * 1.5f);
+            content.offsetMin = new Vector2(ContentMargin, ContentMargin);
             content.offsetMax = new Vector2(-ContentMargin, -(TopBarHeight + ContentMargin * 1.5f));
             return content;
         }
 
-        /// <summary>Left ~33%: MAX's own key-art portrait, a compact live-render of the RCDA primary,
-        /// and a short helper line.
+        /// <summary>Left strip (MV-262: narrowed to <see cref="HeroColumnFraction"/> so the weapons UI
+        /// on the right gets the reclaimed width): MAX's own key-art portrait, then the RCDA's live
+        /// render under a "LOADOUT" tag and a rotating tech-ring glow. The primary weapon's own name
+        /// now lives in the main column as the hero label (<see cref="BuildPrimaryNameHeader"/>) —
+        /// this column is purely Max + his gear.
         ///
         /// MV-251: the card here used to show a RawImage of <c>MaxPortraitStage</c> — Max's own bust —
         /// under a "PRIMARY WEAPON" tag; the screen never rendered the weapon at all. Split honestly in
@@ -495,16 +510,15 @@ namespace MaxWorlds.UI
         /// for the legacy pickup-reveal screen) under its own card.</summary>
         private RectTransform BuildHeroColumn(RectTransform content)
         {
-            var column = NewRect("Hero Column", content, new Vector2(0f, 0f), new Vector2(0.335f, 1f));
+            var column = NewRect("Hero Column", content, Vector2.zero, new Vector2(HeroColumnFraction, 1f));
             column.offsetMin = Vector2.zero;
             column.offsetMax = new Vector2(-16f, 0f);
 
-            // The hero column is a narrow strip (~a third of the content width, and the content width
-            // itself is only ever a phone's short edge — matchWidthOrHeight=1 keeps everything matched
-            // to height, not width). Every piece here stacks full-width, top to bottom, same convention
-            // the original tag/name/helper block already used — a side-by-side icon+text row has no
-            // room to breathe at this width.
-            const float portraitH = 400f, gap = 14f;
+            // The hero column is a narrow strip, and the content width itself is only ever a phone's
+            // short edge (matchWidthOrHeight=1 keeps everything matched to height, not width). Every
+            // piece here stacks full-width, top to bottom — a side-by-side icon+text row has no room
+            // to breathe at this width.
+            const float portraitH = 460f, gap = 18f;
             var card = NewRect("Portrait Card", column, new Vector2(0f, 1f), new Vector2(1f, 1f));
             card.pivot = new Vector2(0.5f, 1f);
             card.offsetMin = Vector2.zero; card.offsetMax = Vector2.zero;
@@ -538,13 +552,29 @@ namespace MaxWorlds.UI
             mlabel.fontStyle = FontStyle.Bold;
             mlabel.text = "MAX";
 
-            // The RCDA's own small hero — a live 3D render (same stage the legacy reveal screen uses),
-            // not the un-rendered blank the "PRIMARY WEAPON" tag used to sit over.
-            const float weaponCardH = 140f;
+            // MV-262: "the area under Max much cooler, not empty/plain" — a LOADOUT tag and a
+            // rotating tech-ring glow (same idiom as the joystick base) behind the RCDA's live render,
+            // instead of the old flat, static card.
+            const float captionH = 30f;
+            var caption = AddText(column, 20, PrimaryAccent, TextAnchor.UpperLeft);
+            Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
+            caption.rectTransform.sizeDelta = new Vector2(0f, captionH);
+            caption.rectTransform.anchoredPosition = new Vector2(0f, -(portraitH + gap));
+            caption.fontStyle = FontStyle.Bold;
+            caption.text = "LOADOUT";
+
+            const float weaponCardH = 210f;
             var weaponCard = NewRect("Weapon Card", column, new Vector2(0f, 1f), Vector2.one);
             weaponCard.pivot = new Vector2(0.5f, 1f);
             weaponCard.sizeDelta = new Vector2(0f, weaponCardH);
-            weaponCard.anchoredPosition = new Vector2(0f, -(portraitH + gap));
+            weaponCard.anchoredPosition = new Vector2(0f, -(portraitH + gap + captionH + 6f));
+
+            var ring = AddImage(weaponCard, HudTextures.TechRings(220, 3),
+                new Color(PrimaryAccent.r, PrimaryAccent.g, PrimaryAccent.b, 0.55f), "Glow Ring");
+            Anchor(ring.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            ring.rectTransform.sizeDelta = new Vector2(weaponCardH * 1.15f, weaponCardH * 1.15f);
+            ring.raycastTarget = false;
+            _weaponGlowRing = ring;
 
             var weaponBg = AddImage(weaponCard, HudTextures.RoundedBox(28, 0.4f), CardColor, "BG");
             Stretch(weaponBg.rectTransform); weaponBg.type = Image.Type.Sliced;
@@ -552,53 +582,66 @@ namespace MaxWorlds.UI
             var weaponRender = AddRawImage(weaponCard, _weaponStage != null ? _weaponStage.Texture : null, "Weapon Render");
             Stretch(weaponRender.rectTransform, -12f);
 
-            const float tagH = 28f;
-            var tag = AddText(column, 20, PrimaryAccent, TextAnchor.UpperLeft);
-            Anchor(tag.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            tag.rectTransform.sizeDelta = new Vector2(0f, tagH);
-            tag.rectTransform.anchoredPosition = new Vector2(0f, -(portraitH + gap + weaponCardH + gap));
-            tag.fontStyle = FontStyle.Bold;
-            tag.text = "PRIMARY WEAPON";
-
-            const float nameH = 70f;
-            var name = AddText(column, 26, TextColor, TextAnchor.UpperLeft);
-            Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            name.rectTransform.sizeDelta = new Vector2(0f, nameH);
-            name.rectTransform.anchoredPosition = new Vector2(0f, -(portraitH + gap + weaponCardH + gap + tagH + 4f));
-            name.fontStyle = FontStyle.Bold;
-            name.horizontalOverflow = HorizontalWrapMode.Wrap;
-            name.text = WeaponCatalog.TitleCase(WeaponCatalog.PrimaryName);
-
-            var helper = AddText(column, 23, Dim, TextAnchor.UpperLeft);
-            Anchor(helper.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            helper.rectTransform.sizeDelta = new Vector2(0f, 80f);
-            helper.rectTransform.anchoredPosition =
-                new Vector2(0f, -(portraitH + gap + weaponCardH + gap + tagH + 4f + nameH + gap));
-            helper.horizontalOverflow = HorizontalWrapMode.Wrap;
-            helper.text = "Spend a part on any owned track to level it up. Cells power everything you fire.";
-
             return column;
         }
 
-        /// <summary>Right ~67%: the primary-track grid, then the abilities section.</summary>
+        /// <summary>Right side (MV-262: widened via <see cref="HeroColumnFraction"/>): the hero-sized
+        /// primary-weapon name, the primary-track grid, then the abilities grid.</summary>
         private RectTransform BuildMainColumn(RectTransform content)
         {
-            var column = NewRect("Main Column", content, new Vector2(0.335f, 0f), new Vector2(1f, 1f));
+            var column = NewRect("Main Column", content, new Vector2(HeroColumnFraction, 0f), new Vector2(1f, 1f));
             column.offsetMin = new Vector2(16f, 0f);
             column.offsetMax = Vector2.zero;
             return column;
         }
 
-        private void BuildPrimaryGrid(RectTransform column)
+        /// <summary>Threads a single top-down "cursor" (y, 0 at the column's top edge, growing more
+        /// negative downward) through the primary-name header, the primary grid, and the abilities
+        /// grid — so each section's own height determines where the next one starts instead of the
+        /// three of them being laid out from independently hand-computed offsets.</summary>
+        private void BuildMainColumnContent(RectTransform main)
+        {
+            float y = BuildPrimaryNameHeader(main, 0f);
+            y = BuildPrimaryGrid(main, y);
+            BuildAbilitiesSection(main, y);
+        }
+
+        /// <summary>MV-262: the primary weapon's name, hoisted out of the cramped hero column into the
+        /// main column as a genuine hero label — "MUCH bigger" per the ticket, not a 26pt line under a
+        /// weapon-render card.</summary>
+        private float BuildPrimaryNameHeader(RectTransform column, float y)
+        {
+            var tag = AddText(column, 22, PrimaryAccent, TextAnchor.UpperLeft);
+            Anchor(tag.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
+            tag.rectTransform.sizeDelta = new Vector2(0f, HeroNameTagH);
+            tag.rectTransform.anchoredPosition = new Vector2(0f, y);
+            tag.fontStyle = FontStyle.Bold;
+            tag.text = "PRIMARY WEAPON";
+            y -= HeroNameTagH + 6f;
+
+            var name = AddText(column, HeroNameFontSize, TextColor, TextAnchor.UpperLeft);
+            Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
+            name.rectTransform.sizeDelta = new Vector2(0f, HeroNameH);
+            name.rectTransform.anchoredPosition = new Vector2(0f, y);
+            name.fontStyle = FontStyle.Bold;
+            name.horizontalOverflow = HorizontalWrapMode.Wrap;
+            name.verticalOverflow = VerticalWrapMode.Overflow;
+            name.text = WeaponCatalog.TitleCase(WeaponCatalog.PrimaryName);
+            y -= HeroNameH + HeroNameGap;
+
+            return y;
+        }
+
+        private float BuildPrimaryGrid(RectTransform column, float y)
         {
             var header = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
             Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
             header.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
-            header.rectTransform.anchoredPosition = Vector2.zero;
+            header.rectTransform.anchoredPosition = new Vector2(0f, y);
             header.fontStyle = FontStyle.Bold;
             header.text = $"PRIMARY — {TrackCount} upgrade tracks";
 
-            float gridTop = -(SectionHeaderHeight + SectionHeaderGap);
+            float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
             for (int i = 0; i < TrackCount; i++)
             {
                 int index = i;   // capture by value, not the loop variable
@@ -611,22 +654,24 @@ namespace MaxWorlds.UI
                 r.IconGlyph.text = TrackGlyph(kind);   // static per track — never revisited by Refresh
                 _trackButton[i].onClick.AddListener(() => OnTrackButtonTapped(index));
             }
+
+            float primaryRows = (TrackCount + 1) / 2;
+            return gridTop - (primaryRows * RowHeight + (primaryRows - 1) * RowGap) - SectionGap;
         }
 
-        private void BuildAbilitiesSection(RectTransform column)
+        /// <summary>MV-262: always builds all six ability slots as active rows (never SetActive(false)
+        /// past the acquired count) — <see cref="Refresh"/>/<see cref="SetAbilityLocked"/> then decide
+        /// per-slot whether a row shows real data or a greyed, unnamed placeholder. There is no
+        /// separate placeholder row any more; the grid itself is the "more to find" tell.</summary>
+        private void BuildAbilitiesSection(RectTransform column, float y)
         {
-            float primaryRows = (TrackCount + 1) / 2;
-            float abilitiesTop = -(SectionHeaderHeight + SectionHeaderGap) - primaryRows * RowHeight
-                - (primaryRows - 1) * RowGap - SectionGap;
-
             _abilitiesHeaderText = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
             Anchor(_abilitiesHeaderText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
             _abilitiesHeaderText.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
-            _abilitiesHeaderText.rectTransform.anchoredPosition = new Vector2(0f, abilitiesTop);
+            _abilitiesHeaderText.rectTransform.anchoredPosition = new Vector2(0f, y);
             _abilitiesHeaderText.fontStyle = FontStyle.Bold;
 
-            float gridTop = abilitiesTop - (SectionHeaderHeight + SectionHeaderGap);
-            _abilitiesGridTop = gridTop;
+            float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
             for (int i = 0; i < MaxAbilityRows; i++)
             {
                 int row = i;   // capture by value, not the loop variable
@@ -641,21 +686,6 @@ namespace MaxWorlds.UI
                 _abilityButton[i].onClick.AddListener(() => OnAbilityButtonTapped(row));
                 _abilityRow[i] = r.Row.gameObject;
             }
-
-            // The dashed "unlock from sheds" placeholder — built once here, re-homed each Refresh
-            // (RefreshPlaceholder) right after the last populated ability row.
-            var ph = NewRect("Placeholder Row", column, new Vector2(0f, 1f), Vector2.one);
-            ph.pivot = new Vector2(0.5f, 1f);
-            ph.sizeDelta = new Vector2(0f, RowHeight);
-            PlaceGridRow(ph, 0, gridTop, RowHeight, RowGap, cols: 1);
-            _placeholderRow = ph;
-
-            var phBg = AddImage(ph, HudTextures.RoundedBox(24, 0.35f), new Color(1f, 1f, 1f, 0.05f), "BG");
-            Stretch(phBg.rectTransform); phBg.type = Image.Type.Sliced;
-
-            _placeholderText = AddText(ph, 23, Dim, TextAnchor.MiddleCenter);
-            Stretch(_placeholderText.rectTransform, -20f);
-            _placeholderText.horizontalOverflow = HorizontalWrapMode.Wrap;
         }
 
         /// <summary>The refs a built grid row hands back — <see cref="BuildGridRow"/> grew a couple more
@@ -695,9 +725,8 @@ namespace MaxWorlds.UI
             PlaceGridRow(row, slot, top, rowHeight, rowGap);
 
             // A ring behind the card, only ever visible as a thin border once BG (inset 3px) sits over
-            // it — same layered idiom as the spendbar's own Outline/BG pair below. Transparent by
-            // default; MV-251's "newly-acquired" tell lights this to NewBadgeColor instead of relying
-            // on the icon tint alone.
+            // it. Transparent by default; MV-251's "newly-acquired" tell lights this to NewBadgeColor
+            // instead of relying on the icon tint alone.
             var outline = AddImage(row, HudTextures.RoundedBox(24, 0.35f), Color.clear, "Outline");
             Stretch(outline.rectTransform); outline.type = Image.Type.Sliced;
 
@@ -706,18 +735,18 @@ namespace MaxWorlds.UI
 
             var iconBg = AddImage(row, HudTextures.RoundedBox(24, 0.35f), iconColor, "Icon");
             Anchor(iconBg.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            iconBg.rectTransform.anchoredPosition = new Vector2(16f, 0f);
-            iconBg.rectTransform.sizeDelta = new Vector2(60f, 60f);
+            iconBg.rectTransform.anchoredPosition = new Vector2(18f, 0f);
+            iconBg.rectTransform.sizeDelta = new Vector2(66f, 66f);
             iconBg.type = Image.Type.Sliced;
 
-            var glyph = AddText(iconBg.rectTransform, 19, TextColor, TextAnchor.MiddleCenter);
+            var glyph = AddText(iconBg.rectTransform, 21, TextColor, TextAnchor.MiddleCenter);
             Stretch(glyph.rectTransform);
             glyph.fontStyle = FontStyle.Bold;
             glyph.raycastTarget = false;
 
             // Name sits in the row's upper half, pips in the lower half, both spanning the same
             // horizontal band between the icon and the + button (the [0.13, 0.82] fraction of the row).
-            var nameText = AddText(row, 29, TextColor, TextAnchor.UpperLeft);
+            var nameText = AddText(row, 32, TextColor, TextAnchor.UpperLeft);
             Anchor(nameText.rectTransform, new Vector2(0.13f, 0.5f), new Vector2(0.82f, 1f), new Vector2(0f, 1f));
             nameText.rectTransform.offsetMin = new Vector2(8f, 0f);
             nameText.rectTransform.offsetMax = new Vector2(0f, -10f);
@@ -728,7 +757,7 @@ namespace MaxWorlds.UI
             pipRow.offsetMax = new Vector2(0f, -6f);
 
             var pips = new Image[MaxPips];
-            const float pipW = 42f, pipGap = 6f;
+            const float pipW = 46f, pipGap = 7f;
             for (int i = 0; i < MaxPips; i++)
             {
                 var pip = AddImage(pipRow, HudTextures.RoundedBox(16, 0.5f), PipEmpty, "Pip Empty");
@@ -741,15 +770,15 @@ namespace MaxWorlds.UI
 
             var buttonBg = AddImage(row, HudTextures.RoundedBox(20, 0.5f), SpendDisabled, "Plus");
             Anchor(buttonBg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            buttonBg.rectTransform.anchoredPosition = new Vector2(-16f, 0f);
-            buttonBg.rectTransform.sizeDelta = new Vector2(64f, 64f);   // >= 44pt tap target at the height-matched scale
+            buttonBg.rectTransform.anchoredPosition = new Vector2(-18f, 0f);
+            buttonBg.rectTransform.sizeDelta = new Vector2(70f, 70f);   // >= 44pt tap target at the height-matched scale
             buttonBg.type = Image.Type.Sliced;
             buttonBg.raycastTarget = true;
 
             var plusButton = buttonBg.gameObject.AddComponent<Button>();
             plusButton.transition = Selectable.Transition.None;
 
-            var plusLabel = AddText(buttonBg.rectTransform, 32, TextColor, TextAnchor.MiddleCenter);
+            var plusLabel = AddText(buttonBg.rectTransform, 35, TextColor, TextAnchor.MiddleCenter);
             Stretch(plusLabel.rectTransform);
             plusLabel.text = "+";
             plusLabel.fontStyle = FontStyle.Bold;
@@ -789,46 +818,18 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Places a row at 2-column/N-row slot index <paramref name="slot"/> under
-        /// <paramref name="top"/> — used both for the fixed track/ability pool positions (built once)
-        /// and to re-home the "unlock from sheds" placeholder each Refresh as the acquired count
-        /// changes. <paramref name="cols"/> = 1 spans the full width (the placeholder row).</summary>
-        private static void PlaceGridRow(RectTransform row, int slot, float top, float rowHeight, float rowGap, int cols = 2)
+        /// <paramref name="top"/> — the fixed track/ability grid positions, built once.</summary>
+        private static void PlaceGridRow(RectTransform row, int slot, float top, float rowHeight, float rowGap)
         {
-            int r = cols == 1 ? slot : slot / 2;
-            int c = cols == 1 ? 0 : slot % 2;
+            int r = slot / 2;
+            int c = slot % 2;
             float y = top - r * (rowHeight + rowGap);
             row.anchoredPosition = new Vector2(0f, y);
 
-            float xMin, xMax;
-            if (cols == 1) { xMin = 0f; xMax = 1f; }
-            else { xMin = c == 0 ? 0f : 0.5f + ColGap * 0.5f; xMax = c == 0 ? 0.5f - ColGap * 0.5f : 1f; }
+            float xMin = c == 0 ? 0f : 0.5f + ColGap * 0.5f;
+            float xMax = c == 0 ? 0.5f - ColGap * 0.5f : 1f;
             row.anchorMin = new Vector2(xMin, row.anchorMin.y);
             row.anchorMax = new Vector2(xMax, row.anchorMax.y);
-        }
-
-        private void BuildSpendbar(RectTransform parent)
-        {
-            var bar = NewRect("Spendbar", parent, new Vector2(0f, 0f), new Vector2(1f, 0f));
-            bar.pivot = new Vector2(0.5f, 0f);
-            bar.sizeDelta = new Vector2(-2f * ContentMargin, SpendbarHeight);
-            bar.anchoredPosition = new Vector2(0f, ContentMargin);
-
-            var outline = AddImage(bar, HudTextures.RoundedBox(28, 0.4f), PartsColor, "Outline");
-            Stretch(outline.rectTransform); outline.type = Image.Type.Sliced;
-
-            var bg = AddImage(bar, HudTextures.RoundedBox(28, 0.4f), PanelColor, "BG");
-            Stretch(bg.rectTransform, -4f); bg.type = Image.Type.Sliced;
-
-            var dot = AddImage(bar, HudTextures.Disc(32), PartsColor, "Dot");
-            Anchor(dot.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            dot.rectTransform.anchoredPosition = new Vector2(28f, 0f);
-            dot.rectTransform.sizeDelta = new Vector2(20f, 20f);
-
-            _spendbarText = AddText(bar, 25, TextColor, TextAnchor.MiddleLeft);
-            Anchor(_spendbarText.rectTransform, new Vector2(0f, 0f), new Vector2(1f, 1f), new Vector2(0f, 0.5f));
-            _spendbarText.rectTransform.offsetMin = new Vector2(50f, 0f);
-            _spendbarText.rectTransform.offsetMax = new Vector2(-24f, 0f);
-            _spendbarText.horizontalOverflow = HorizontalWrapMode.Wrap;
         }
 
         // ------------------------------------------------------------------ helpers

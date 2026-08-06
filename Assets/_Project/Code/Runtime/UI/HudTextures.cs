@@ -41,6 +41,36 @@ namespace MaxWorlds.UI
             return Cache(key, tex, 100f);
         }
 
+        /// <summary>A cog/gear disc with notched teeth (MV-262: the Weapons screen's spinning
+        /// "parts available" symbol) — deliberately asymmetric so a rotation actually reads as
+        /// motion, unlike the symmetric <see cref="Disc"/>. Tint via Image.color.</summary>
+        public static Sprite Gear(int size = 64, int teeth = 8)
+        {
+            string key = $"gear{size}_{teeth}";
+            if (s_cache.TryGetValue(key, out var s)) return s;
+            var tex = NewTex(size, size);
+            float cx = size * 0.5f, cy = size * 0.5f;
+            float rOuter = size * 0.5f - 1f;
+            float rToothBase = rOuter * 0.72f;
+            float rHole = rOuter * 0.32f;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x - cx + 0.5f, dy = y - cy + 0.5f;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float ang = Mathf.Atan2(dy, dx);                               // -pi..pi
+                float sector = (ang + Mathf.PI) / (2f * Mathf.PI) * teeth;     // 0..teeth
+                float frac = sector - Mathf.Floor(sector);                    // 0..1 within its wedge
+                bool inTooth = frac > 0.22f && frac < 0.78f;                   // tooth fills the wedge's middle
+                float rMax = inTooth ? rOuter : rToothBase;
+                float a = (d <= rMax && d >= rHole) ? 1f : 0f;
+                px[y * size + x] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels32(px); tex.Apply();
+            return Cache(key, tex, 100f);
+        }
+
         /// <summary>Concentric glowing rings — the joystick base. Tint via Image.color.</summary>
         public static Sprite TechRings(int size = 160, int rings = 3)
         {

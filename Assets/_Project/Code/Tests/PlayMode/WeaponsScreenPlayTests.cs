@@ -10,10 +10,10 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The weapons area (MV-248): entering pauses the game, the Primary section shows RCDA's four
-    /// tracks as pip bars at their live level, the Abilities section shows only abilities Max has
-    /// acquired (and grows as he acquires more, with a placeholder naming what's still locked), and a
-    /// tap spends one banked part on any owned track/ability. Row copy is Title Case on screen
+    /// The weapons area (MV-248, MV-262): entering pauses the game, the Primary section shows RCDA's
+    /// four tracks as pip bars at their live level, the Abilities section always shows all six slots —
+    /// owned ones by name, the rest as greyed unnamed placeholders — and a tap spends one banked part
+    /// on any owned track/ability. Row copy is Title Case on screen
     /// (<see cref="WeaponCatalog.TitleCase"/> over <see cref="WeaponCatalog.DisplayName(WeaponTrackKind)"/>
     /// / <see cref="WeaponCatalog.DisplayName(AbilityKind)"/>), which the HUD pickup toast keeps in
     /// ALL CAPS — so every lookup here goes through the same TitleCase call the screen itself uses.
@@ -159,16 +159,19 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator AbilitiesSectionGrowsAsMoreAreAcquiredAndPlaceholderNamesTheRest()
+        public IEnumerator AbilitiesGridAlwaysShowsSixSlotsGreyedUntilOwned()
         {
+            // MV-262: the abilities grid is a fixed 6-slot grid from the start — locked slots are
+            // greyed, unnamed placeholder tiles (no name, no pips, no + button), not hidden rows and
+            // not a text list naming what's still locked.
             yield return NewScreen();
             Screen.Open();
             yield return null;
 
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Null, $"{kind} shouldn't show before Max owns anything");
-            Assert.That(FindTextContaining(_screenGo, "unlock from sheds"), Is.Not.Null,
-                "at run start the placeholder should name every not-yet-owned ability");
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(6), "all six ability slots should be visible from the start");
+            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 6 unlocked"), Is.Not.Null);
 
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             yield return null;
@@ -177,13 +180,13 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(FindText(_screenGo, Name(AbilityKind.WaterBalloon)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Not.Null);
-            Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Null, "still-unacquired abilities must stay hidden");
-            Assert.That(FindTextContaining(_screenGo, "unlock from sheds"), Is.Not.Null,
-                "the placeholder should still list the four abilities still not owned");
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Null, "still-unacquired abilities must stay unnamed");
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(6), "the grid stays at six slots as more are acquired");
+            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 6 unlocked"), Is.Not.Null);
         }
 
         [UnityTest]
-        public IEnumerator PlaceholderDisappearsOnceEveryAbilityIsOwned()
+        public IEnumerator AllSixAbilitiesOwnedShowsNoLockedSlots()
         {
             yield return NewScreen();
             foreach (var kind in WeaponCatalog.AllAbilityKinds) WeaponSystemState.Acquire(kind);
@@ -191,8 +194,9 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindTextContaining(_screenGo, "unlock from sheds"), Is.Null,
-                "once all six abilities are owned there's nothing left to tease");
+            Assert.That(FindText(_screenGo, "ABILITIES — 6 of 6 unlocked"), Is.Not.Null);
+            foreach (var kind in WeaponCatalog.AllAbilityKinds)
+                Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} should be named once owned");
         }
 
         [UnityTest]
@@ -268,14 +272,16 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "1 PARTS"), Is.Not.Null);
+            // MV-262: the parts chip is now just the live count (the spinning gear glyph carries the
+            // "parts" meaning) — CELLS keeps its word suffix.
+            Assert.That(FindText(_screenGo, "1"), Is.Not.Null);
             Assert.That(FindText(_screenGo, "1 CELLS"), Is.Not.Null);
 
             PickupWallet.AddPart();   // e.g. a kill drops one while the screen happens to be open
             PickupWallet.AddPowerCell();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "2 PARTS"), Is.Not.Null, "the parts bank must reflect live state, not just what it was on open");
+            Assert.That(FindText(_screenGo, "2"), Is.Not.Null, "the parts bank must reflect live state, not just what it was on open");
             Assert.That(FindText(_screenGo, "2 CELLS"), Is.Not.Null, "the cells bank must reflect live state too");
         }
 
@@ -367,6 +373,16 @@ namespace MaxWorlds.Tests.PlayMode
             }
         }
 
+        /// <summary>Counts active "Ability Row" slots — MV-262's fixed 6-slot grid should always
+        /// report 6, whether a slot is showing real data or a greyed placeholder.</summary>
+        private static int CountActiveAbilityRows(GameObject root)
+        {
+            int count = 0;
+            foreach (var t in root.GetComponentsInChildren<Transform>(true))
+                if (t.name == "Ability Row" && t.gameObject.activeSelf) count++;
+            return count;
+        }
+
         private static Text FindTextComponent(GameObject root, string content)
         {
             foreach (var t in root.GetComponentsInChildren<Text>(true))
@@ -375,12 +391,5 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         private static Text FindText(GameObject root, string content) => FindTextComponent(root, content);
-
-        private static Text FindTextContaining(GameObject root, string substring)
-        {
-            foreach (var t in root.GetComponentsInChildren<Text>(true))
-                if (t.text != null && t.text.Contains(substring)) return t;
-            return null;
-        }
     }
 }
