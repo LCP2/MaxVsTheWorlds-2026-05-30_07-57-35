@@ -42,6 +42,7 @@ namespace MaxWorlds.Tests.PlayMode
     public sealed class BootAndPlaySmokeTests : InputTestFixture
     {
         private const int Slice = 0; // Backyard_Slice — scene 0 is the playable scene
+        private const int BootAndPlayTimeoutMs = 90_000; // ticket bound: must terminate within ~90s
         private string _dir;
         private Keyboard _keyboard;
         private GameObject _testRobotGo;
@@ -110,7 +111,16 @@ namespace MaxWorlds.Tests.PlayMode
             field.SetValue(controller, fresh);
         }
 
+        /// <summary>
+        /// MV-260: MV-259's frame-counted loops only bound progress once the coroutine is actually
+        /// resuming each frame — they cannot save it from a stall *inside* a single frame elsewhere in
+        /// the boot path (headless CI hung 3.5h+ on run #252). <c>[Timeout]</c> is Unity Test
+        /// Framework's own wall-clock watchdog for a <c>[UnityTest]</c> coroutine: independent of frame
+        /// count, it force-fails and tears down the test if this method is still running past the
+        /// budget, so the run always terminates pass or fail instead of hanging the gate.
+        /// </summary>
         [UnityTest]
+        [Timeout(BootAndPlayTimeoutMs)]
         public IEnumerator OpeningIsPlayable_SpawnMoveFireMenu_LeadInStaysEmpty()
         {
             // Added right before it's needed rather than in [UnitySetUp] — something between that
