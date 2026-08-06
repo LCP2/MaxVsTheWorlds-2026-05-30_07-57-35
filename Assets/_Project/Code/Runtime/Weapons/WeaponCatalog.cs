@@ -1,4 +1,5 @@
 using System.Globalization;
+using UnityEngine;
 using MaxWorlds.Core;
 
 namespace MaxWorlds.Weapons
@@ -49,6 +50,27 @@ namespace MaxWorlds.Weapons
         /// <summary>The level cap for an RCDA track (spec §6): Capacity/Weapon Efficiency/Spread cap
         /// at 4, Range at 6.</summary>
         public static int MaxLevel(WeaponTrackKind kind) => kind == WeaponTrackKind.Range ? 6 : 4;
+
+        /// <summary>Extra spray reach in metres each Range track level above 1 adds (MV-263) — layered
+        /// additively on the weapon's authored base reach, the same shape as the legacy nozzle bonuses
+        /// (<see cref="MaxWorlds.Upgrades.UpgradeState.RangeBonus"/>) it runs alongside during the
+        /// WV-230 migration. Level 1 is every track's starting level (spec §6), so it adds nothing.</summary>
+        public const float DefaultRcdaRangePerLevel = 0.6f;
+
+        /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263) — Level 1
+        /// is the authored base, unmodified.</summary>
+        public const float DefaultRcdaSpreadPerLevel = 0.08f;
+
+        /// <summary>Effective spray reach at a given Range-track level, given the weapon's authored
+        /// base reach. Found by Lee playtesting (MV-263): the Range track raised no number at all, so
+        /// spending parts on it did nothing — reach, VFX and the aim-arc outline all read this.</summary>
+        public static float EffectiveRange(float baseRange, int rangeLevel, float perLevel) =>
+            baseRange + perLevel * (Mathf.Max(1, rangeLevel) - 1);
+
+        /// <summary>Effective spray half-angle at a given Spread-track level, given the weapon's
+        /// authored base half-angle (MV-263, same bug as <see cref="EffectiveRange"/> for Spread).</summary>
+        public static float EffectiveConeHalfAngle(float baseHalfAngle, int spreadLevel, float perLevel) =>
+            baseHalfAngle * (1f + perLevel * (Mathf.Max(1, spreadLevel) - 1));
 
         /// <summary>The level cap for an ability once acquired (spec §6): Water Balloon 3, Speed 4,
         /// Dash a single unlock (1), Teleport 2, Power Efficiency/Weapon Cooldown 5.</summary>
