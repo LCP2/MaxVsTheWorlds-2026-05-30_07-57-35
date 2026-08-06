@@ -25,6 +25,16 @@ namespace MaxWorlds.UI
     /// </summary>
     public sealed class HudController : MonoBehaviour
     {
+        /// <summary>
+        /// MV-259: test-only escape hatch. The on-screen touch controls back onto a shared virtual
+        /// Gamepad device (Unity's <c>OnScreenControl</c>) that <c>InputTestFixture</c>-based tests
+        /// cannot cleanly tear down across a scene reload — an engine-level device-lifecycle
+        /// conflict unrelated to anything this flag's callers are testing. Touch input itself is
+        /// covered by <c>TouchControlsPlayTests</c>, which does not derive from
+        /// <c>InputTestFixture</c> and leaves this false. Defaults false so real play is unaffected.
+        /// </summary>
+        public static bool SkipTouchControlsForTests = false;
+
         // Backyard palette (Art Direction §Colour identity + HUD spec).
         private static readonly Color HpColor = new Color(0.90f, 0.22f, 0.20f);
         private static readonly Color XpColor = new Color(0.957f, 0.788f, 0.365f); // #F4C95D golden
@@ -176,7 +186,7 @@ namespace MaxWorlds.UI
             BuildWeaponsButton();
             BuildPartAlert();
             BuildFloatingLayer();
-            BuildTouchControls();
+            if (!SkipTouchControlsForTests) BuildTouchControls();
 
             _model.Boss.ActiveChanged += OnBossActiveChanged;
         }
