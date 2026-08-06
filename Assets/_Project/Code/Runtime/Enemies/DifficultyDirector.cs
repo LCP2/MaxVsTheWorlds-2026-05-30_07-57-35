@@ -1,5 +1,6 @@
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Factories;
 
 namespace MaxWorlds.Enemies
 {
@@ -44,10 +45,15 @@ namespace MaxWorlds.Enemies
         /// escalation curve and "the run is ~6 minutes" can never quietly drift apart.</summary>
         public const float AuthoredRunLengthSeconds = 360f;
 
-        /// <summary>Seconds the clock SKIPS FORWARD when a factory shed is destroyed — half the
-        /// authored run length, carried over from the old per-shed level bump's own weight (half of
-        /// a 10-point ceiling). A shed kill still counts for a lot; now it counts against the clock
-        /// instead of the level directly, so it shortens the run rather than padding the score.</summary>
+        /// <summary>Seconds the clock SKIPS FORWARD when EVERY factory shed in the run has been
+        /// destroyed — half the authored run length, carried over from the old per-shed level bump's
+        /// own weight (half of a 10-point ceiling). This is the TOTAL budget clearing every source is
+        /// worth, not a flat per-shed number: <see cref="ReportShedDestroyed"/> divides it across
+        /// however many sheds <see cref="FactoryCensus"/> says this run actually has (MV-261). The
+        /// slice was authored with exactly one shed, when "per shed" and "total" were the same
+        /// number; the v0.5 recut's three-shed map is what pulled them apart — undivided, the second
+        /// of three shed kills alone maxed the Invasion Level and woke the boss long before the final
+        /// area, however early in the run that second kill happened to land.</summary>
         public const float AuthoredPerShedBump = AuthoredRunLengthSeconds * 0.5f;
 
         /// <summary>The rate implied by the authored curve: reach <see cref="AuthoredMax"/> at
@@ -90,11 +96,21 @@ namespace MaxWorlds.Enemies
         public static void Tick(float dt) => _elapsed += Mathf.Max(0f, dt);
 
         /// <summary>A factory shed just went down — skip the clock forward a step (YT-210), so
-        /// clearing a source shortens the run and raises the stakes rather than lowering them.</summary>
+        /// clearing a source shortens the run and raises the stakes rather than lowering them.
+        ///
+        /// The step is the per-shed budget (<see cref="DevTuning.EscalationPerShedBump"/>, or
+        /// <see cref="AuthoredPerShedBump"/> unset) divided across this run's actual shed count
+        /// (<see cref="FactoryCensus.Total"/>) — MV-261. Every factory registers in <c>Awake</c>,
+        /// before any of them can die in <c>Start</c>-or-later gameplay, so the count is stable by
+        /// the time a kill is ever reported. Falls back to a single shed if the census is empty (a
+        /// hand-built test fixture with no factories at all), so the budget still means something
+        /// with nothing registered to divide it by.</summary>
         public static void ReportShedDestroyed()
         {
             _shedsDestroyed++;
-            _shedSkipSeconds += DevTuning.Or(DevTuning.EscalationPerShedBump, AuthoredPerShedBump);
+            float perShedBudget = DevTuning.Or(DevTuning.EscalationPerShedBump, AuthoredPerShedBump);
+            float shedCount = Mathf.Max(1, FactoryCensus.Total);
+            _shedSkipSeconds += perShedBudget / shedCount;
         }
 
         /// <summary>The ceiling the level climbs to, live — a Settings-panel override retunes the

@@ -1,6 +1,8 @@
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -138,6 +140,54 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(10f, DifficultyDirector.Level, 1e-3,
                 "two 180s skips on a 360s run must land exactly on the ceiling");
+        }
+
+        [Test]
+        public void ShedBudget_IsDividedAcrossTheRunsActualShedCount_NotAppliedFlatPerShed()
+        {
+            // MV-261: EscalationPerShedBump (or its authored default) is the TOTAL clock-skip budget
+            // clearing every source in the run is worth, not a flat amount charged per shed. A run
+            // with three registered factories must only skip a THIRD of that budget per kill — or two
+            // of three kills alone would max the level, which is the bug this guards against. 180s of
+            // skip at rate 10/360 is a 5-level jump (Normalized 0.5) — see
+            // ShedDestroyed_SkipsTheClockForward_RatherThanBumpingTheLevelDirectly above for that same
+            // arithmetic against a single (undivided) shed; all three of THIS run's sheds together
+            // must land on that identical total, not three times it.
+            DifficultyDirector.Reset();
+            FactoryCensus.Reset();
+            DevTuning.EscalationStart = 0f;
+            DevTuning.EscalationMax = 10f;
+            DevTuning.RunLengthSeconds = 360f;
+            DevTuning.EscalationPerShedBump = 180f; // the authored TOTAL budget for the whole run
+
+            var hutches = new GameObject[3];
+            try
+            {
+                for (int i = 0; i < 3; i++)
+                {
+                    hutches[i] = new GameObject($"Hutch {i}");
+                    // AddComponent alone is not enough here: EditMode tests run outside Play Mode, so
+                    // MowerHutch.Awake (where it normally registers itself) never fires. Register it
+                    // by hand — FactoryCensus.Total is all this test needs to be true.
+                    FactoryCensus.Register(hutches[i].AddComponent<MowerHutch>());
+                }
+                Assert.AreEqual(3, FactoryCensus.Total, "test fixture must register three factories");
+
+                DifficultyDirector.ReportShedDestroyed();
+                DifficultyDirector.ReportShedDestroyed();
+                Assert.Less(DifficultyDirector.Normalized, 1f,
+                    "two of three shed kills must not alone max a three-shed run's Invasion Level");
+
+                DifficultyDirector.ReportShedDestroyed();
+                Assert.AreEqual(0.5f, DifficultyDirector.Normalized, 1e-3,
+                    "all three shed kills together must land on the SAME total skip a single-shed " +
+                    "run's one kill would have produced, not three times it");
+            }
+            finally
+            {
+                foreach (var go in hutches) if (go != null) Object.DestroyImmediate(go);
+                FactoryCensus.Reset();
+            }
         }
 
         [Test]
