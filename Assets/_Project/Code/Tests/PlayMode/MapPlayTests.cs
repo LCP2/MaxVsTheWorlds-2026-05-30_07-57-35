@@ -269,6 +269,41 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsTrue(boss.Engaged, "the yard is clear and the boss never woke up");
         }
 
+        /// <summary>
+        /// MV-261: the exact bug Lee hit playtesting. <c>AuthoredPerShedBump</c> (half the run
+        /// length) is the TOTAL clock-skip budget clearing every source in the run is worth, not a
+        /// flat amount per shed — but it was authored back when the slice had exactly one shed, when
+        /// "per shed" and "total" were the same number. The v0.5 recut's real map has three; left
+        /// undivided, two of them alone skip a FULL run length and the Invasion Level dial maxes out
+        /// on its own, waking the boss (the HUD bar, the screen-shake intro spectacle) while the
+        /// player is still back around Area 2/3 — nowhere near the compost clearing.
+        ///
+        /// Uses the AUTHORED defaults (no DevTuning override), unlike
+        /// <see cref="TheBossSleepsUntilTheLastFactoryFalls"/> just above, which deliberately
+        /// neutralises this exact mechanism to isolate the OTHER wake path.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheBossDoesNotErupt_FromTwoOfThreeRealShedKills_AtAuthoredDefaults()
+        {
+            yield return BuildLevelFromTheMap();
+
+            Assert.AreEqual(3, FactoryCensus.Total, "this test assumes the shipped map's three factory sheds");
+
+            var boss = _boss.GetComponent<BigBermudaBoss>();
+            Assert.IsFalse(boss.Engaged, "the boss is awake before anything has been destroyed");
+
+            yield return Destroy(FactoryCensus.All[0]);
+            yield return Destroy(FactoryCensus.All[1]);
+
+            Assert.Less(DifficultyDirector.Normalized, 1f,
+                "two of the run's three sheds must not alone max the Invasion Level — only the " +
+                "boss's own end-of-run conditions (every source down, or the run's real length) " +
+                "should do that");
+            Assert.IsFalse(boss.Engaged,
+                "the boss erupted on two of three shed kills — the undivided clock-skip maxed the " +
+                "Invasion Level long before the run's real end (the MV-261 regression)");
+        }
+
         /// <summary>Guards the wiring tests' premise. If someone quietly re-wires a gate through the
         /// serialized slot again, those tests would still pass while proving nothing — so assert a
         /// freshly built factory really has an empty slot until the map fills it.</summary>
