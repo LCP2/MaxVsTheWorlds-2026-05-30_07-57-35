@@ -6,6 +6,7 @@
         "MaxWorlds.Gameplay",
         "MaxWorlds.Rendering",
         "Unity.InputSystem",
+        "Unity.InputSystem.TestFramework",
         "UnityEngine.TestRunner",
         "UnityEditor.TestRunner"
     ],
