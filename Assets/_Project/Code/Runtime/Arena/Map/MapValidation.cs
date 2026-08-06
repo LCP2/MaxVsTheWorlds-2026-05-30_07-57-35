@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -352,6 +353,249 @@ namespace MaxWorlds.Arena
                 if (e != null && e.Kind == kind) found.Add(e);
 
             return found;
+        }
+
+        // ---------------------------------------------------------------------------------------
+        // World-config validation (MV-267) — the 2D-area-placement + gates-on-any-wall-at-a-fraction
+        // schema (Confluence MVW 34439170 §7). This runs BEFORE a WorldConfig is converted to a
+        // MapData (WorldMapLoader): it is the only place that still knows which WALL and FRACTION a
+        // gate was authored against, which is lost the moment it becomes an absolute doorway. Once
+        // converted, the resulting MapData still passes through the ordinary Validate() above —
+        // belt and suspenders, and it is what actually proves "renders with correctly aligned
+        // openings" rather than merely "the numbers were self-consistent".
+        // ---------------------------------------------------------------------------------------
+
+        public static bool ValidateWorldConfig(WorldConfig cfg, out string reason)
+        {
+            if (cfg == null) { reason = "the world config is null"; return false; }
+
+            return WorldAreas(cfg, out reason)
+                && WorldGates(cfg, out reason)
+                && WorldReachability(cfg, out reason)
+                && WorldBossGate(cfg, out reason);
+        }
+
+        private static bool WorldAreas(WorldConfig cfg, out string reason)
+        {
+            if (cfg.areas == null || cfg.areas.Length == 0)
+            { reason = "the world config has no areas"; return false; }
+
+            var seen = new HashSet<string>();
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (a == null) { reason = "an area is null"; return false; }
+
+                if (string.IsNullOrWhiteSpace(a.id))
+                { reason = "an area has no id — gates refer to areas by id"; return false; }
+
+                if (!seen.Add(a.id))
+                { reason = $"two areas share the id '{a.id}'"; return false; }
+
+                if (a.origin == null)
+                { reason = $"area '{a.id}' has no origin"; return false; }
+
+                if (a.size == null || a.size.w <= 0f || a.size.d <= 0f)
+                { reason = $"area '{a.id}' has no area ({a.size?.w ?? 0f}×{a.size?.d ?? 0f})"; return false; }
+            }
+
+            for (int i = 0; i < cfg.areas.Length; i++)
+            for (int j = i + 1; j < cfg.areas.Length; j++)
+            {
+                if (AreasOverlap(cfg.areas[i], cfg.areas[j]))
+                {
+                    reason = $"area '{cfg.areas[i].id}' overlaps area '{cfg.areas[j].id}'";
+                    return false;
+                }
+            }
+
+            int entryCount = 0;
+            foreach (WorldArea a in cfg.areas) if (a.IsEntryRole) entryCount++;
+            if (entryCount != 1)
+            {
+                reason = $"the world config has {entryCount} entry areas — it needs exactly one " +
+                         "('An entry stub precedes Area 1', spec §7)";
+                return false;
+            }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>True only for a genuine overlap — areas that merely touch along a shared wall
+        /// (the normal case for two gated neighbours) are not overlapping.</summary>
+        private static bool AreasOverlap(WorldArea a, WorldArea b) =>
+            a.XMin < b.XMax - Geo.Epsilon && a.XMax > b.XMin + Geo.Epsilon &&
+            a.ZMin < b.ZMax - Geo.Epsilon && a.ZMax > b.ZMin + Geo.Epsilon;
+
+        private static bool WorldGates(WorldConfig cfg, out string reason)
+        {
+            var seenIds = new HashSet<string>();
+            foreach (WorldGate g in cfg.gates)
+            {
+                if (g == null) { reason = "a gate is null"; return false; }
+
+                if (string.IsNullOrWhiteSpace(g.id))
+                { reason = "a gate has no id"; return false; }
+
+                if (!seenIds.Add(g.id))
+                { reason = $"two gates share the id '{g.id}'"; return false; }
+
+                if (!ResolveEndpoint(cfg, g.from, out WorldArea fromArea, out Wall fromWall, out reason)) return false;
+                if (!ResolveEndpoint(cfg, g.to, out WorldArea toArea, out Wall toWall, out reason)) return false;
+
+                if (toWall != WallEnums.Opposite(fromWall))
+                {
+                    reason = $"gate '{g.id}' joins '{fromArea.id}'s {fromWall} wall to '{toArea.id}'s {toWall} wall — " +
+                             $"they must be opposite walls ({fromWall}↔{WallEnums.Opposite(fromWall)})";
+                    return false;
+                }
+
+                if (!Geo.Same(fromArea.WallCoord(fromWall), toArea.WallCoord(toWall)))
+                {
+                    reason = $"gate '{g.id}': '{fromArea.id}'s {fromWall} wall and '{toArea.id}'s {toWall} wall " +
+                             "do not sit on the same line — move one area so the walls coincide";
+                    return false;
+                }
+
+                if (g.width < MinDoorway)
+                {
+                    reason = $"gate '{g.id}' is {g.width} m wide — under {MinDoorway} m Max and a swarm cannot both fit through";
+                    return false;
+                }
+
+                Span fromSpan = fromArea.WallSpan(fromWall);
+                Span toSpan = toArea.WallSpan(toWall);
+                var overlap = new Span(Mathf.Max(fromSpan.Min, toSpan.Min), Mathf.Min(fromSpan.Max, toSpan.Max));
+
+                if (overlap.IsEmpty)
+                {
+                    reason = $"gate '{g.id}': '{fromArea.id}' and '{toArea.id}' walls do not overlap at all — " +
+                             "the opening has nowhere to sit";
+                    return false;
+                }
+
+                if (overlap.Length < g.width - Geo.Epsilon)
+                {
+                    reason = $"gate '{g.id}' is {g.width} m wide but its two walls only share {overlap.Length:0.#} m " +
+                             "— the opening does not fit";
+                    return false;
+                }
+
+                float posFrom = fromSpan.Min + Mathf.Clamp01(g.from.pos) * fromSpan.Length;
+                float posTo = toSpan.Min + Mathf.Clamp01(g.to.pos) * toSpan.Length;
+                float along = (posFrom + posTo) * 0.5f;
+                float half = g.width * 0.5f;
+
+                if (along - half < overlap.Min - Geo.Epsilon || along + half > overlap.Max + Geo.Epsilon)
+                {
+                    reason = $"gate '{g.id}' at {along:0.#} spills past the shared wall [{overlap.Min:0.#}, {overlap.Max:0.#}] " +
+                             $"— move its pos closer to the middle or narrow it below {overlap.Length:0.#} m";
+                    return false;
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        private static bool ResolveEndpoint(WorldConfig cfg, WorldGateEndpoint ep, out WorldArea area, out Wall wall, out string reason)
+        {
+            area = null; wall = default;
+
+            if (ep == null) { reason = "a gate endpoint is missing"; return false; }
+
+            area = cfg.Area(ep.area);
+            if (area == null)
+            { reason = $"a gate references area '{ep.area}', which does not exist"; return false; }
+
+            if (!WallEnums.TryParse(ep.wall, out wall))
+            { reason = $"gate endpoint on '{ep.area}' has an unknown wall '{ep.wall}' — expected N, E, S or W"; return false; }
+
+            if (ep.pos < 0f || ep.pos > 1f)
+            { reason = $"gate endpoint on '{ep.area}' has pos {ep.pos} — must be between 0 and 1"; return false; }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>Every area reachable from the entry stub via the gate graph (spec rule (b)) —
+        /// unlike <see cref="Reachable"/> above, which only checks the boss, this checks ALL of them,
+        /// because a free-2D layout can strand a side area a straight corridor never could.</summary>
+        private static bool WorldReachability(WorldConfig cfg, out string reason)
+        {
+            WorldArea entry = FindEntry(cfg);
+
+            var reached = new HashSet<string> { entry.id };
+            var queue = new Queue<string>();
+            queue.Enqueue(entry.id);
+
+            while (queue.Count > 0)
+            {
+                string here = queue.Dequeue();
+                foreach (WorldGate g in cfg.gates)
+                {
+                    if (g?.from == null || g.to == null) continue;
+
+                    string next = g.from.area == here ? g.to.area
+                                : g.to.area == here ? g.from.area
+                                : null;
+
+                    if (next != null && reached.Add(next)) queue.Enqueue(next);
+                }
+            }
+
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (!reached.Contains(a.id))
+                {
+                    reason = $"area '{a.id}' is not reachable from the entry stub '{entry.id}' — no chain of gates reaches it";
+                    return false;
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>The boss area must sit behind its gate — every gate touching it has to require
+        /// every shed down first (spec rule (c)). A boss you can walk in on before the sheds fall is
+        /// the one bug this framework exists to make structurally impossible, not just balanced away.</summary>
+        private static bool WorldBossGate(WorldConfig cfg, out string reason)
+        {
+            const string requiredCondition = "all-sheds-destroyed";
+
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (!a.IsBossRole) continue;
+
+                bool hasGate = false;
+                foreach (WorldGate g in cfg.gates)
+                {
+                    bool touches = g?.from != null && g.to != null &&
+                                   (g.from.area == a.id || g.to.area == a.id);
+                    if (!touches) continue;
+
+                    hasGate = true;
+                    if (!string.Equals(g.opensWith, requiredCondition, StringComparison.OrdinalIgnoreCase))
+                    {
+                        reason = $"boss area '{a.id}' is opened by gate '{g.id}' with opensWith='{g.opensWith}' " +
+                                 $"— it must be '{requiredCondition}' so the boss sits behind every shed";
+                        return false;
+                    }
+                }
+
+                if (!hasGate)
+                { reason = $"boss area '{a.id}' has no gate at all — it cannot sit behind anything"; return false; }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        private static WorldArea FindEntry(WorldConfig cfg)
+        {
+            foreach (WorldArea a in cfg.areas) if (a.IsEntryRole) return a;
+            return null;
         }
     }
 }
