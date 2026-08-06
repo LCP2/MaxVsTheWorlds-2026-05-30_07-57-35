@@ -113,15 +113,23 @@ namespace MaxWorlds.Combat
         private float _baseEnergyPerSecond;
 
         /// <summary>How far the stream actually reaches, in metres — the authored reach plus any reach
-        /// the Power nozzle adds (YT-133). Public so the aim reticle (YT-84) is drawn from the number
-        /// the hit test uses, rather than from a shape someone drew — the moment those two disagree,
-        /// the reticle is a lie the player has been taught to trust. The serialized <c>range</c> stays
-        /// the authored base; upgrades are layered on here.</summary>
-        public float Range => range + UpgradeState.RangeBonus;
+        /// the Power nozzle adds (YT-133) plus the RCDA Range track's own bonus (MV-263). Public so the
+        /// aim reticle (YT-84) is drawn from the number the hit test uses, rather than from a shape
+        /// someone drew — the moment those two disagree, the reticle is a lie the player has been
+        /// taught to trust. The serialized <c>range</c> stays the authored base; upgrades are layered
+        /// on here.</summary>
+        public float Range => WeaponCatalog.EffectiveRange(
+            range + UpgradeState.RangeBonus,
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Range),
+            WeaponCatalog.DefaultRcdaRangePerLevel);
 
         /// <summary>HALF the spray's total spread, in degrees — the same convention
-        /// <see cref="SprayHit.InCone"/> uses. Narrowed by any nozzle Max has fitted (YT-133).</summary>
-        public float ConeHalfAngle => coneHalfAngle * UpgradeState.ConeMultiplier;
+        /// <see cref="SprayHit.InCone"/> uses. Narrowed by any nozzle Max has fitted (YT-133), widened
+        /// by the RCDA Spread track (MV-263).</summary>
+        public float ConeHalfAngle => WeaponCatalog.EffectiveConeHalfAngle(
+            coneHalfAngle * UpgradeState.ConeMultiplier,
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Spread),
+            WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
         /// <summary>Damage one tick of the stream deals, after the power ramp.</summary>
         public float DamagePerTick => damagePerTick;
@@ -171,15 +179,24 @@ namespace MaxWorlds.Combat
         private void OnEnable()
         {
             UpgradeState.Changed += RefreshUpgrades;
+            // The RCDA Range/Spread tracks (WV-230) also feed Range/ConeHalfAngle above, so a spend
+            // on either has to re-fit the reticle and stream the same way an installed part does
+            // (MV-263) — without this the level goes up but nothing on screen or in the hit test moves.
+            WeaponSystemState.Changed += RefreshUpgrades;
             RefreshUpgrades();   // fit to whatever's already installed (e.g. Max spawned into a run in progress)
         }
 
-        private void OnDisable() => UpgradeState.Changed -= RefreshUpgrades;
+        private void OnDisable()
+        {
+            UpgradeState.Changed -= RefreshUpgrades;
+            WeaponSystemState.Changed -= RefreshUpgrades;
+        }
 
         /// <summary>
-        /// Re-fit the weapon to Max's installed parts (YT-133): rebuild the reticle and stream at the
-        /// new reach/spread the nozzles give, and resize the tank to its upgraded capacity. Fires on
-        /// every install. No-ops safely before <see cref="Awake"/> has built the sub-objects.
+        /// Re-fit the weapon to Max's installed parts and RCDA track levels (YT-133/MV-263): rebuild
+        /// the reticle and stream at the new reach/spread, and resize the tank to its upgraded
+        /// capacity. Fires on every install or track spend. No-ops safely before <see cref="Awake"/>
+        /// has built the sub-objects.
         /// </summary>
         public void RefreshUpgrades()
         {
