@@ -284,5 +284,100 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Fail($"no link between '{a}' and '{b}'");
             return null;
         }
+
+        // ---------------------------------------------------------------- MV-272: shut gates
+
+        /// <summary>
+        /// The pile-up, this time from a closed gate rather than an unrouted wall (MV-272).
+        ///
+        /// Every doorway in the shipped yard is filled by an <c>areaGate</c> — nine of them, chained
+        /// area1 through area10 — and every one of them is born shut. Before this ticket, a shut gate
+        /// was invisible to the router: it solved a route straight across the doorway anyway, and a
+        /// robot obediently walked at (and ground against) the closed gate's collider, one to a
+        /// doorway, which is what "piling up behind closed gates" IS.
+        ///
+        /// So this is the same test the YT-93 pile-up got, asked with a gate reported shut: the
+        /// question is not "is there a doorway", it's "is there a way through RIGHT NOW", and a caller
+        /// that says gate1 is closed should get told there is no way past it.
+        /// </summary>
+        [Test]
+        public void ARoomBehindAShutGate_HasNoRouteAcrossIt()
+        {
+            MapData map = Shipped();
+
+            List<MapZone> route = MapRoutes.Rooms(map, map.Zone("area1"), map.Zone("area2"),
+                                                   gateOpen: id => id != "gate1");
+
+            Assert.Less(route.Count, 2,
+                "a route was found straight across a gate reported shut — the router isn't asking");
+        }
+
+        /// <summary>The other half of the same bug: not just "no route", but what the chaser actually
+        /// gets told to walk at. It must not be a point through (or even at) the gate — that is the
+        /// beeline into a collider that reads as a pile-up. It has to be exactly where the robot already
+        /// stands, which is the "hold" the ticket asks for: no further progress, so the chaser's own
+        /// stall clock (<c>RobotEnemy.TickChase</c>) takes it from there.</summary>
+        [Test]
+        public void WithTheOnlyGateShut_TheWaypointIsWhereTheRobotAlreadyStands()
+        {
+            MapData map = Shipped();
+            MapZone area1 = map.Zone("area1");
+            MapZone area2 = map.Zone("area2");
+
+            Vector2 from = area1.CenterXz;
+            Vector2 goal = area2.CenterXz;
+
+            Vector2 waypoint = MapRoutes.Waypoint(map, from, goal, gateOpen: id => id != "gate1");
+
+            Assert.AreEqual(from, waypoint,
+                "a robot with no way past a shut gate should hold, not walk toward the gate or the goal");
+        }
+
+        /// <summary>Open the same gate and the same query finds the same doorway mouth the unfiltered
+        /// route already proves correct (<see cref="FromAnotherRoom_TheWayOutIsThroughTheDoorway_NotThroughTheWall"/>)
+        /// — the cache has to let go of a "no way through" answer the moment the gate no longer means
+        /// that, exactly as <see cref="MapRoutes.Forget"/> is wired to a real gate's
+        /// <c>AreaGate.Opened</c> in play (<see cref="MaxWorlds.Enemies.EnemyNavigation.RegisterGate"/>).</summary>
+        [Test]
+        public void OnceTheGateReportsOpen_TheRouteAcrossItResolvesAgain()
+        {
+            MapData map = Shipped();
+            MapZone area1 = map.Zone("area1");
+            MapZone area2 = map.Zone("area2");
+
+            Vector2 from = area1.CenterXz;
+            Vector2 goal = area2.CenterXz;
+
+            MapRoutes.Waypoint(map, from, goal, gateOpen: id => id != "gate1"); // solved as shut
+            MapRoutes.Forget();                                                // the gate just opened
+            Vector2 waypoint = MapRoutes.Waypoint(map, from, goal, gateOpen: _ => true);
+
+            Assert.AreNotEqual(from, waypoint,
+                "the route stayed stuck on 'no way through' after the gate reported open");
+            Assert.Greater(waypoint.y, area1.ZMax,
+                "the way out should be through the doorway into area2, not still inside area1");
+        }
+
+        /// <summary>A route with no gate named at all — most of a map's own geometry, cover and props
+        /// never carry one — must not be affected by a caller that DOES ask about gates elsewhere. A
+        /// gate query only ever says no about a link that actually names a gate.</summary>
+        [Test]
+        public void ALinkWithNoGateAtAll_IsNeverBlockedByAGateQuery()
+        {
+            MapData map = new MapData
+            {
+                zones = new[]
+                {
+                    new MapZone { id = "a", x = 0f, z = 0f, width = 10f, depth = 10f },
+                    new MapZone { id = "b", x = 0f, z = 20f, width = 10f, depth = 10f },
+                },
+                links = new[] { new MapLink { from = "a", to = "b", doorway = 4f } }, // gate left unset
+            };
+
+            List<MapZone> route = MapRoutes.Rooms(map, map.Zone("a"), map.Zone("b"),
+                                                   gateOpen: _ => false); // "every gate is shut"
+
+            Assert.AreEqual(2, route.Count, "an ungated link was excluded by a query about gates");
+        }
     }
 }
