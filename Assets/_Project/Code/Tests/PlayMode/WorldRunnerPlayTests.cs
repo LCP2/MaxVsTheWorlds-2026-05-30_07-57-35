@@ -92,9 +92,9 @@ namespace MaxWorlds.Tests.PlayMode
 
         private MapBuild _built;
 
-        private IEnumerator Build()
+        private IEnumerator Build(WorldConfig cfg = null)
         {
-            WorldConfig cfg = OneShedWorld();
+            cfg ??= OneShedWorld();
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
             _root = new GameObject("WorldRunner Test Root");
@@ -133,6 +133,86 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.IsFalse(bossGate.Locked, "the boss gate stayed locked after the only shed was destroyed");
             Assert.IsTrue(bossGate.IsOpen, "the boss gate never opened once all sheds were destroyed");
+        }
+
+        // ---------------------------------------------------------------- gate orientation (MV-271)
+
+        /// <summary>Same entry stub as <see cref="OneShedWorld"/>, but 'a1' and 'a2' sit side by side
+        /// (an E/W-wall doorway between them) instead of stacked — the regression shape for MV-271:
+        /// g1/g3/g5/g7 in world1_config are exactly this pattern, and used to render with the N/S
+        /// gate's box (wide along X, thin along Z), leaving the opening effectively unblocked.</summary>
+        private static WorldConfig EastWestWorld() => new WorldConfig
+        {
+            world = "Orientation Test World",
+            dials = new WorldDials
+            {
+                areaCount = 2, baseThreat = 1f, threatGrowth = 0f,
+                pacingRhythm = new[] { 1f, 1f }, toughnessCurve = new WorldToughnessCurve(), powerupCadence = 1,
+                band = new WorldBand(),
+            },
+            enemyTypes = new WorldEnemyTypes
+            {
+                small = new WorldEnemyTypeEntry { thv = 1f }, large = new WorldEnemyTypeEntry { thv = 1f },
+                heavy = new WorldEnemyTypeEntry { thv = 1f }, brute = new WorldEnemyTypeEntry { thv = 1f },
+            },
+            areas = new[]
+            {
+                new WorldArea
+                {
+                    id = "stub", index = 0, role = "entry",
+                    origin = new WorldAreaOrigin { x = -2f, z = -6f }, size = new WorldAreaSize { w = 4f, d = 6f },
+                },
+                new WorldArea
+                {
+                    id = "a1", index = 1, role = "normal",
+                    origin = new WorldAreaOrigin { x = -10f, z = 0f }, size = new WorldAreaSize { w = 20f, d = 20f },
+                },
+                new WorldArea
+                {
+                    id = "a2", index = 2, role = "normal",
+                    origin = new WorldAreaOrigin { x = 10f, z = 0f }, size = new WorldAreaSize { w = 20f, d = 20f },
+                },
+            },
+            gates = new[]
+            {
+                new WorldGate
+                {
+                    id = "g0", width = 3f, opensWith = "start",
+                    from = new WorldGateEndpoint { area = "stub", wall = "N", pos = 0.5f },
+                    to = new WorldGateEndpoint { area = "a1", wall = "S", pos = 0.5f },
+                },
+                new WorldGate
+                {
+                    id = "g1", width = 3f, opensWith = "primary",
+                    from = new WorldGateEndpoint { area = "a1", wall = "E", pos = 0.5f },
+                    to = new WorldGateEndpoint { area = "a2", wall = "W", pos = 0.5f },
+                },
+            },
+        };
+
+        [UnityTest]
+        public IEnumerator AnEastWestGate_RendersVertical_NotWithTheNorthSouthGatesBox()
+        {
+            WorldConfig cfg = EastWestWorld();
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
+
+            yield return Build(cfg);
+
+            GameObject nsGate = _built.Actors["g0"];
+            GameObject ewGate = _built.Actors["g1"];
+
+            Bounds nsBounds = nsGate.GetComponent<Collider>().bounds;
+            Bounds ewBounds = ewGate.GetComponent<Collider>().bounds;
+
+            Assert.Greater(nsBounds.size.x, nsBounds.size.z,
+                "'g0' (an N/S-wall gate) should stay wide along X, thin along Z");
+            Assert.Greater(ewBounds.size.z, ewBounds.size.x,
+                "'g1' (an E/W-wall gate) rendered wide along X, thin along Z — it is horizontal, so " +
+                "the doorway it should seal is effectively left open (MV-271)");
+
+            // The rotation must not have shrunk or grown the seal — only turned it.
+            Assert.AreEqual(MapRuntime.SealWidth(map, map.Entity("g1")), ewBounds.size.z, 0.05f,
+                "the E/W gate's seal width changed when it was turned to face the right way");
         }
     }
 }
