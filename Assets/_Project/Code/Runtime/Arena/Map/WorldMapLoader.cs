@@ -85,6 +85,10 @@ namespace MaxWorlds.Arena
                 };
             }
 
+            // Not authored (0) → the same default MapData itself falls back to, so an un-tuned world
+            // still builds the wall height it always has.
+            float wallHeight = cfg.wallHeight > 0f ? cfg.wallHeight : MapData.DefaultWallHeight;
+
             var links = new MapLink[cfg.gates.Length];
             var entities = new List<MapEntity>(cfg.gates.Length + 1);
 
@@ -105,7 +109,9 @@ namespace MaxWorlds.Arena
                     kind = "areagate",
                     x = gx,
                     z = gz,
-                    height = 3f,
+                    // Matches the wall it is set into (MV-277) — a fixed height here would leave the
+                    // gate towering over (or sunk into) a wall/fence line tuned to a different height.
+                    height = wallHeight,
                     depth = 0.6f,
                 });
 
@@ -167,6 +173,7 @@ namespace MaxWorlds.Arena
             map = new MapData
             {
                 name = string.IsNullOrEmpty(cfg.world) ? "World" : cfg.world,
+                wallHeight = wallHeight,
                 zones = zones,
                 links = links,
                 entities = entities.ToArray(),
