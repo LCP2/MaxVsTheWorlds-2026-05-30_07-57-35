@@ -59,9 +59,12 @@ namespace MaxWorlds.Weapons
         /// the Range cap (level 6) land at ~3x base (3 + 1.2*5 = 9) — change the two together.</summary>
         public const float DefaultRcdaRangePerLevel = 1.2f;
 
-        /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263) — Level 1
-        /// is the authored base, unmodified.</summary>
-        public const float DefaultRcdaSpreadPerLevel = 0.08f;
+        /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263, retuned
+        /// MV-281): the Spread track caps at level 4 (<see cref="MaxLevel(WeaponTrackKind)"/>), so 3
+        /// steps at this rate take the cone from its authored base to 10x — tuned against
+        /// <see cref="WaterBlaster.DefaultConeHalfAngle"/> so the base spray is a narrow ~10° total
+        /// arc and the maxed Spread track opens it to ~100° total (change the two together).</summary>
+        public const float DefaultRcdaSpreadPerLevel = 3f;
 
         /// <summary>Effective spray reach at a given Range-track level, given the weapon's authored
         /// base reach. Found by Lee playtesting (MV-263): the Range track raised no number at all, so

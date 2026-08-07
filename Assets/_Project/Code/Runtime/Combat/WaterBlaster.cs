@@ -45,9 +45,23 @@ namespace MaxWorlds.Combat
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
         [SerializeField] private LayerMask hitMask = ~0;
 
+        /// <summary>Authored base spray half-angle in degrees (retuned MV-281): NARROW — a ~10° total
+        /// arc, weak but forgiving, matching the short base reach MV-280 gave the stream. The RCDA
+        /// Spread track widens this by up to 10x at its max level
+        /// (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is tuned against THIS value — change
+        /// them together). Nozzle upgrades (YT-133) narrow/widen it further.</summary>
+        public const float DefaultConeHalfAngle = 5f;
+
+        /// <summary>Damage multiplier at the outer edge of the spray cone (MV-281). Full power (1x) on
+        /// the centre-line, linearly falling to this at the cone's half-angle — see
+        /// <see cref="SprayHit.DamageFalloff"/>. The spray reads as a real fan with a hot core, not a
+        /// uniform-power wall.</summary>
+        public const float DefaultEdgeDamageMultiplier = 0.4f;
+
         [Header("Spray archetype (YT-64) — a threatening arc, not a thin dribble")]
         [Tooltip("Half-angle of the spray cone, degrees. Everything in this arc within range is hit.")]
-        [SerializeField] private float coneHalfAngle = 48f;
+        // Also baked in Backyard_Slice.unity — keep that value in sync with DefaultConeHalfAngle above.
+        [SerializeField] private float coneHalfAngle = DefaultConeHalfAngle;
         [Tooltip("Visual width of the stream, so it reads as a spray fan (cosmetic only).")]
         [SerializeField] private float streamVisualRadius = 1.1f;
 
@@ -393,7 +407,11 @@ namespace MaxWorlds.Combat
                 var d = s_buffer[i];
                 var comp = d as Component;
                 Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
-                d.TakeDamage(new DamageInfo(tickDamage, point, dir, Team.Player, soak: true,
+                // Falloff (MV-281): full power on the centre-line, softening toward the cone's
+                // outer edge — the same angle the cone test above already approved this hit on.
+                float falloff = SprayHit.DamageFalloff(
+                    SprayHit.AngleDeg(origin, dir, point), cone, DefaultEdgeDamageMultiplier);
+                d.TakeDamage(new DamageInfo(tickDamage * falloff, point, dir, Team.Player, soak: true,
                     source: DamageSource.PrimaryWeapon));
                 hitSomething = true;
 

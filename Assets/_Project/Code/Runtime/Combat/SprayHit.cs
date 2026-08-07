@@ -25,5 +25,32 @@ namespace MaxWorlds.Combat
             float ang = Vector3.Angle(aim.normalized, to / dist);
             return ang <= halfAngleDeg;
         }
+
+        /// <summary>Angle in degrees between <paramref name="aimDir"/> and <paramref name="targetPos"/>,
+        /// planar (top-down) — the same calculation <see cref="InCone"/> uses internally, exposed so
+        /// damage falloff (MV-281) reads the identical angle the hit test already approved. 0° for a
+        /// point-blank target or an unset aim direction, matching <see cref="InCone"/>'s always-hit
+        /// fallback for those cases.</summary>
+        public static float AngleDeg(Vector3 origin, Vector3 aimDir, Vector3 targetPos)
+        {
+            Vector3 to = targetPos - origin;
+            to.y = 0f;
+            if (to.sqrMagnitude < 0.0025f) return 0f;
+            Vector3 aim = new Vector3(aimDir.x, 0f, aimDir.z);
+            if (aim.sqrMagnitude < 1e-6f) return 0f;
+            return Vector3.Angle(aim.normalized, to.normalized);
+        }
+
+        /// <summary>Per-hit damage multiplier for the spray cone (MV-281): full power (1x) on the
+        /// centre-line, falling off linearly to <paramref name="edgeMultiplier"/> at the cone's outer
+        /// edge (<paramref name="halfAngleDeg"/>) — so the spray reads as a real fan with a hot core
+        /// rather than a uniform-power wall. Clamped beyond the edge in case a caller passes an angle
+        /// wider than the cone that admitted the hit.</summary>
+        public static float DamageFalloff(float angleDeg, float halfAngleDeg, float edgeMultiplier)
+        {
+            if (halfAngleDeg <= 0f) return 1f;
+            float t = Mathf.Clamp01(angleDeg / halfAngleDeg);
+            return Mathf.Lerp(1f, edgeMultiplier, t);
+        }
     }
 }

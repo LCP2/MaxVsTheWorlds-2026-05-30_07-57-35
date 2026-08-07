@@ -56,5 +56,42 @@ namespace MaxWorlds.Tests.EditMode
             // A robot standing a little higher than the muzzle is still in the planar cone.
             Assert.IsTrue(SprayHit.InCone(Origin, Aim, new Vector3(0, 1.5f, 4f), 6f, 35f));
         }
+
+        [Test]
+        public void AngleDeg_ZeroStraightAhead()
+        {
+            Assert.That(SprayHit.AngleDeg(Origin, Aim, new Vector3(0, 0, 4f)), Is.EqualTo(0f).Within(1e-3f));
+        }
+
+        [Test]
+        public void AngleDeg_NinetyDegreesToTheSide()
+        {
+            Assert.That(SprayHit.AngleDeg(Origin, Aim, new Vector3(4f, 0, 0)), Is.EqualTo(90f).Within(1e-3f));
+        }
+
+        [Test]
+        public void DamageFalloff_FullPowerOnCentreLine()
+        {
+            Assert.That(SprayHit.DamageFalloff(0f, 35f, 0.4f), Is.EqualTo(1f).Within(1e-5f));
+        }
+
+        [Test]
+        public void DamageFalloff_ReducedAtTheOuterEdge()
+        {
+            Assert.That(SprayHit.DamageFalloff(35f, 35f, 0.4f), Is.EqualTo(0.4f).Within(1e-5f));
+        }
+
+        [Test]
+        public void DamageFalloff_InterpolatesBetweenCentreAndEdge()
+        {
+            Assert.That(SprayHit.DamageFalloff(17.5f, 35f, 0.4f), Is.EqualTo(0.7f).Within(1e-4f),
+                "halfway to the edge = lerp(1, 0.4, 0.5) = 0.7");
+        }
+
+        [Test]
+        public void DamageFalloff_ClampsPastTheOuterEdge()
+        {
+            Assert.That(SprayHit.DamageFalloff(90f, 35f, 0.4f), Is.EqualTo(0.4f).Within(1e-5f));
+        }
     }
 }
