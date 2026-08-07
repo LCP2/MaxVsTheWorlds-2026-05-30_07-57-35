@@ -288,7 +288,8 @@ namespace MaxWorlds.UI
                 v => DevTuning.WeakenedDamageMultiplier = v, tab: TabFeel);
 
             // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights
-            // through, and the gated-area knobs (WV-234, spec §1/§9 — settings only until WV-222). ----
+            // through, the gated-area knobs (WV-234, spec §1/§9), and the World & Difficulty
+            // Framework's own dials (below). ----
             float factoryHpDefault = FactoryDefault();
 
             Add("Factory health", "hp", 50f, 1500f, factoryHpDefault,
@@ -323,12 +324,6 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.EscalationMax, DifficultyDirector.AuthoredMax),
                 v => DevTuning.EscalationMax = v, tab: TabArena);
 
-            // Gated arena (WV-234, spec §1/§9) — not yet consumed by any live system (WV-222 builds
-            // it); the panel just needs to have somewhere for these to live per the spec's full list.
-            Add("Area count", "areas", 1f, 20f, ArenaTuning.DefaultAreaCount,
-                () => DevTuning.Or(DevTuning.AreaCount, ArenaTuning.DefaultAreaCount),
-                v => DevTuning.AreaCount = v, tab: TabArena);
-
             Add("Gate break secs", "s", 1f, 20f, ArenaTuning.DefaultGateBreakSeconds,
                 () => DevTuning.Or(DevTuning.GateBreakSeconds, ArenaTuning.DefaultGateBreakSeconds),
                 v => DevTuning.GateBreakSeconds = v, tab: TabArena);
@@ -337,9 +332,38 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.GateRequiresClear, ArenaTuning.DefaultGateRequiresClear),
                 v => DevTuning.GateRequiresClear = v, tab: TabArena);
 
-            Add("Shed count", "sheds", 1f, 15f, ArenaTuning.DefaultShedCount,
-                () => DevTuning.Or(DevTuning.ShedCount, ArenaTuning.DefaultShedCount),
-                v => DevTuning.ShedCount = v, tab: TabArena);
+            // World & Difficulty Framework dials (MV-269/270, Confluence MVW 34439170 §8) — the
+            // level-config's own high-leverage levers. These drive WorldConfig.SolveComposition for
+            // real (every area's enemy budget/toughness split), in place of the gated-arena/robot-
+            // accumulation knobs below that predated the framework and were never actually consumed —
+            // the live game always runs with a loaded WorldConfig, so that fallback path never ran.
+            var worldCfg = FindFirstObjectByType<AreaAccumulationDirector>()?.ActiveWorldConfig;
+            WorldToughnessCurve toughness = worldCfg?.dials?.toughnessCurve;
+            float baseThreatDefault = worldCfg?.dials != null ? worldCfg.dials.baseThreat : 14f;
+            float threatGrowthDefault = worldCfg?.dials != null ? worldCfg.dials.threatGrowth : 0.1f;
+            float heavyFromAreaDefault = toughness != null ? toughness.heavyFromArea : 5f;
+            float bruteFromAreaDefault = toughness != null ? toughness.bruteFromArea : 8f;
+            float tankShareEndDefault = toughness != null ? toughness.tankShareEnd : 0.70f;
+
+            Add("Base threat", "pwr", 1f, 60f, baseThreatDefault,
+                () => DevTuning.Or(DevTuning.WorldBaseThreat, baseThreatDefault),
+                v => DevTuning.WorldBaseThreat = v, tab: TabArena);
+
+            Add("Threat growth", "x/area", 0f, 0.5f, threatGrowthDefault,
+                () => DevTuning.Or(DevTuning.WorldThreatGrowth, threatGrowthDefault),
+                v => DevTuning.WorldThreatGrowth = v, tab: TabArena);
+
+            Add("Heavy from area", "area", 1f, 10f, heavyFromAreaDefault,
+                () => DevTuning.Or(DevTuning.WorldHeavyFromArea, heavyFromAreaDefault),
+                v => DevTuning.WorldHeavyFromArea = v, tab: TabArena);
+
+            Add("Brute from area", "area", 1f, 10f, bruteFromAreaDefault,
+                () => DevTuning.Or(DevTuning.WorldBruteFromArea, bruteFromAreaDefault),
+                v => DevTuning.WorldBruteFromArea = v, tab: TabArena);
+
+            Add("Tank share end", "x", 0f, 1f, tankShareEndDefault,
+                () => DevTuning.Or(DevTuning.WorldTankShareEnd, tankShareEndDefault),
+                v => DevTuning.WorldTankShareEnd = v, tab: TabArena);
 
             // Boss brood-volley tuning (YT-157) — the boss fight is the run's climax, grouped here
             // with the rest of the run's structure rather than on ENEMIES, which keeps ENEMIES at 4
@@ -360,8 +384,7 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.BossVolleyWindup, BossTuning.VolleyWindup),
                 v => DevTuning.BossVolleyWindup = v, tab: TabArena);
 
-            // ---- ENEMIES tab: robots, the boss (an enemy), and the robot-accumulation scheme
-            // (WV-234, spec §1-2/§9 — settings only until WV-222/223/224). ----
+            // ---- ENEMIES tab: robots and the boss (an enemy). ----
             Add("Robot move speed", "m/s", 0.5f, 12f, robotDefault,
                 () => DevTuning.Or(DevTuning.RobotMoveSpeed, robotDefault),
                 v => DevTuning.RobotMoveSpeed = v, tab: TabEnemies);
@@ -414,47 +437,15 @@ namespace MaxWorlds.UI
                     if (b != null) b.RefreshMax();
                 }, tab: TabEnemies);
 
-            // Robot-accumulation scheme (WV-234, spec §1-2/§9) — not yet consumed (WV-222/223/224
-            // build the gated arena + Heavy/Brute tiers this composition drift feeds).
-            Add("Start large count", "bots", 0f, 20f, RobotCompositionTuning.DefaultStartLargeCount,
-                () => DevTuning.Or(DevTuning.StartLargeCount, RobotCompositionTuning.DefaultStartLargeCount),
-                v => DevTuning.StartLargeCount = v, tab: TabEnemies);
-
-            Add("Start small count", "bots", 0f, 20f, RobotCompositionTuning.DefaultStartSmallCount,
-                () => DevTuning.Or(DevTuning.StartSmallCount, RobotCompositionTuning.DefaultStartSmallCount),
-                v => DevTuning.StartSmallCount = v, tab: TabEnemies);
-
-            Add("Area growth %", "%", 0f, 50f, RobotCompositionTuning.DefaultAreaGrowthPct,
-                () => DevTuning.Or(DevTuning.AreaGrowthPct, RobotCompositionTuning.DefaultAreaGrowthPct),
-                v => DevTuning.AreaGrowthPct = v, tab: TabEnemies);
-
-            Add("Large:small ratio", "x", 0.2f, 3f, RobotCompositionTuning.DefaultLargeToSmallRatio,
-                () => DevTuning.Or(DevTuning.LargeToSmallRatio, RobotCompositionTuning.DefaultLargeToSmallRatio),
-                v => DevTuning.LargeToSmallRatio = v, tab: TabEnemies);
-
-            Add("Large share drift", "x/area", 0f, 0.1f, RobotCompositionTuning.DefaultLargeShareDriftPerArea,
-                () => DevTuning.Or(DevTuning.LargeShareDriftPerArea, RobotCompositionTuning.DefaultLargeShareDriftPerArea),
-                v => DevTuning.LargeShareDriftPerArea = v, tab: TabEnemies);
-
+            // Concurrent-robot cap — still real and always consumed (Configure()), unlike the rest of
+            // the old robot-accumulation scheme (WV-234, spec §1-2/§9) that lived here: that scheme's
+            // composition knobs are retired, superseded for real by the World & Difficulty dials on
+            // the ARENA tab (Base threat/Threat growth/Heavy from area/Brute from area/Tank share end)
+            // — the live game always runs with a loaded WorldConfig, so the old knobs' code path
+            // (AreaAccumulationDirector.FillArea's pre-WorldConfig fallback) never actually ran.
             Add("Max active robots", "bots", 4f, 40f, RobotCompositionTuning.DefaultMaxActiveRobots,
                 () => DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots),
                 v => DevTuning.MaxActiveRobots = v, tab: TabEnemies);
-
-            Add("Robot HP/area", "x", 0f, 3f, RobotCompositionTuning.DefaultRobotHpPerAreaMult,
-                () => DevTuning.Or(DevTuning.RobotHpPerAreaMult, RobotCompositionTuning.DefaultRobotHpPerAreaMult),
-                v => DevTuning.RobotHpPerAreaMult = v, tab: TabEnemies);
-
-            Add("Heavy intro area", "area", 1f, 10f, RobotCompositionTuning.DefaultHeavyIntroArea,
-                () => DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
-                v => DevTuning.HeavyIntroArea = v, tab: TabEnemies);
-
-            Add("Brute intro area", "area", 1f, 10f, RobotCompositionTuning.DefaultBruteIntroArea,
-                () => DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
-                v => DevTuning.BruteIntroArea = v, tab: TabEnemies);
-
-            Add("Tough sub %", "%", 0f, 100f, RobotCompositionTuning.DefaultToughSubstitutionPct,
-                () => DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct),
-                v => DevTuning.ToughSubstitutionPct = v, tab: TabEnemies);
 
             // ---- ECONOMY tab: the power-cell/part drops and drains (WV-227/228), plus Hydro's
             // burst timing. ----

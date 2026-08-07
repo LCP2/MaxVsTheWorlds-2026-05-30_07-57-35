@@ -75,6 +75,12 @@ namespace MaxWorlds.Enemies
         /// <summary>Robots still queued for the current (or a past) area, not yet released.</summary>
         public int QueuedCount => _queue?.QueuedCount ?? 0;
 
+        /// <summary>The live world config this director solves composition against, once
+        /// <see cref="ConfigureWorld"/> has been called — exposed so the Settings panel can show the
+        /// World &amp; Difficulty dials' authored values as their 100% reference, the same way every
+        /// other knob reads its authored default off a live object.</summary>
+        public WorldConfig ActiveWorldConfig => _worldCfg;
+
         /// <summary>Wires this director to a built map and starts Area 1's population. Call once, right
         /// after <see cref="MapRuntime.Build"/>. <paramref name="cover"/> is the cover the same build
         /// actually placed — used so a robot is never spawned on top of a hedge or planter.</summary>
