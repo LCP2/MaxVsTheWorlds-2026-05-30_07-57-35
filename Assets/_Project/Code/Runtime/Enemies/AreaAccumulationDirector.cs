@@ -40,9 +40,17 @@ namespace MaxWorlds.Enemies
         /// a cover prop's footprint — placement retries rather than allowing an overlap.</summary>
         private const float PlacementSpacing = 1.5f;
 
-        /// <summary>Candidate points tried before giving up and taking whatever the last attempt found —
-        /// placement must always succeed, even in a room too small to satisfy every preference.</summary>
+        /// <summary>Candidate points tried for the ideal spot — clear of cover/robots AND outside the
+        /// camera's view — before widening the search (see <see cref="MaxOffScreenAttempts"/>).</summary>
         private const int MaxPlacementAttempts = 12;
+
+        /// <summary>Candidate points tried, ignoring cover/robot overlap, once <see cref="MaxPlacementAttempts"/>
+        /// fails to find a spot that is both clear AND off-screen. Never popping into view matters more
+        /// than a clean gap from cover or another robot (MV-273) — a robot briefly overlapping cover is
+        /// a minor visual glitch; one materialising in front of the player is the bug this exists to
+        /// prevent. Only once this ALSO fails (no off-screen point exists in the room at all) does
+        /// placement fall back to whatever candidate was last tried.</summary>
+        private const int MaxOffScreenAttempts = 24;
 
         [SerializeField] private RobotEnemy prefab;
 
@@ -192,11 +200,14 @@ namespace MaxWorlds.Enemies
         }
 
         /// <summary>Picks a point inside the room, clear of walls, cover and other active robots, and —
-        /// when a camera exists to ask — outside its view: an overflow robot that only gets to enter
-        /// once the player has already been fighting in the room for a while must never be seen popping
-        /// into existence (MV-245). Placement always succeeds; if nothing in budget satisfies every
-        /// preference (a small room, a crowded one), the last candidate tried is used rather than
-        /// refusing to place the robot at all.</summary>
+        /// when a camera exists to ask — outside its view: a robot must never be seen popping into
+        /// existence, whether it's part of a room's instant fill or an overflow robot let in once the
+        /// player has already been fighting there for a while (MV-245, MV-273). Never being seen matters
+        /// more than a clean gap from cover or another robot, so a second, wider pass ignores overlap
+        /// once the ideal search comes up empty (see <see cref="MaxOffScreenAttempts"/>) rather than
+        /// falling straight back to an on-screen spawn. Placement always succeeds; only if no off-screen
+        /// point exists in the room at all (both passes exhausted) does the last candidate tried get
+        /// used rather than refusing to place the robot.</summary>
         private Vector3 SpawnPointInArea(int areaIndex, float height)
         {
             MapZone zone = _map.Zone($"area{areaIndex}");
@@ -208,17 +219,30 @@ namespace MaxWorlds.Enemies
 
             for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
             {
-                float x = Random.Range(zone.XMin + EdgeMargin, zone.XMax - EdgeMargin);
-                float z = Random.Range(zone.ZMin + EdgeMargin, zone.ZMax - EdgeMargin);
-                candidate = new Vector3(x, height, z);
-
+                candidate = RandomPointIn(zone, height);
                 if (OverlapsCoverOrRobot(candidate)) continue;
                 if (cam != null && IsOnScreen(cam, candidate)) continue;
 
                 return candidate;
             }
 
+            if (cam != null)
+            {
+                for (int attempt = 0; attempt < MaxOffScreenAttempts; attempt++)
+                {
+                    candidate = RandomPointIn(zone, height);
+                    if (!IsOnScreen(cam, candidate)) return candidate;
+                }
+            }
+
             return candidate;
+        }
+
+        private static Vector3 RandomPointIn(MapZone zone, float height)
+        {
+            float x = Random.Range(zone.XMin + EdgeMargin, zone.XMax - EdgeMargin);
+            float z = Random.Range(zone.ZMin + EdgeMargin, zone.ZMax - EdgeMargin);
+            return new Vector3(x, height, z);
         }
 
         private bool OverlapsCoverOrRobot(Vector3 point)
