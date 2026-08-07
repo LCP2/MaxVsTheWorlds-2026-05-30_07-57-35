@@ -138,6 +138,7 @@ namespace MaxWorlds.UI
         // promise; EnsureMinimapBuilt keeps retrying each frame until a map is actually there to read.
         private BackyardPath _backyardPath;
         private Image[] _minimapPips;
+        private Image _minimapBg;
         private AreaVisibility[] _minimapStates = System.Array.Empty<AreaVisibility>();
         private int _minimapAreaCount;
         private int _shownMinimapArea = -1;
@@ -1191,6 +1192,11 @@ namespace MaxWorlds.UI
         /// of them. Empty until a map with area zones has actually loaded.</summary>
         public AreaVisibility[] MinimapStates => _minimapStates;
 
+        /// <summary>Test hook (MV-278): true once the strip has a visible backing panel behind its
+        /// pips, so the widget reads against any 3D background instead of the pips floating bare over
+        /// the world. False until a map with area zones has loaded and built the strip.</summary>
+        public bool MinimapHasBackdrop => _minimapBg != null && _minimapBg.color.a > 0f;
+
         /// <summary>
         /// The fog-of-war area strip (MV-264): reintroduces YT-217's minimap now that the v0.5 recut
         /// replaced "a bounded single garden" with a 10-area gated arena — the scope YT-217 removed it
@@ -1216,12 +1222,23 @@ namespace MaxWorlds.UI
                 return;
             }
 
-            const float PipSize = 16f, Spacing = 20f;
+            const float PipSize = 16f, Spacing = 20f, BgPadding = 10f;
 
             var root = NewRect("Minimap", Root);
             Anchor(root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             root.sizeDelta = new Vector2(PipSize, _minimapAreaCount * Spacing);
             root.anchoredPosition = new Vector2(-32f, -210f); // under the ability slots column
+
+            // A backing panel (MV-278): every other HUD readout — status bar, ability slots, utility
+            // icons — sits on a solid PanelColor backdrop. The pip strip alone was bare Image dots
+            // straight over the live 3D world, so a near-black Hidden pip (or even a Visited/Current
+            // one) could read as invisible against whatever terrain happened to be behind it. This
+            // gives the strip the same "unmistakably a HUD widget" backdrop as everything around it.
+            var bg = AddImage(root, HudTextures.RoundedBox(28, 0.3f), PanelColor, "Minimap BG");
+            Stretch(bg.rectTransform, BgPadding);
+            bg.type = Image.Type.Sliced;
+            bg.raycastTarget = false;
+            _minimapBg = bg;
 
             _minimapPips = new Image[_minimapAreaCount];
             for (int i = 0; i < _minimapAreaCount; i++)
