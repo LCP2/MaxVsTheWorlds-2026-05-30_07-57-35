@@ -277,6 +277,11 @@ namespace MaxWorlds.Arena
         public string world = "Untitled World";
         public string revision;
 
+        /// <summary>Height, in metres, of the arena's walls/fences (MV-277). 0 (the JSON default when
+        /// the field is omitted) means "not authored" — <see cref="WorldMapLoader.TryLoad"/> falls back
+        /// to <see cref="MapData.DefaultWallHeight"/> rather than building unwalkable zero-height walls.</summary>
+        public float wallHeight;
+
         public WorldArea[] areas = Array.Empty<WorldArea>();
         public WorldGate[] gates = Array.Empty<WorldGate>();
 

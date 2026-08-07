@@ -84,7 +84,7 @@ namespace MaxWorlds.Arena
                 && GateHalfWidth > 1.5f                    // a doorway Max and the swarm fit through
                 && GateHalfWidth < LawnHalfWidth           // …but still a doorway, not an open end
                 && ArenaHalfWidth >= LawnHalfWidth         // the boss arena doesn't shrink the fight
-                && WallHeight >= 2f;                       // tall enough to block Max and read as a wall
+                && WallHeight >= MapValidation.MinWallHeight;   // still tall enough to read as a wall
         }
 
         /// <summary>Gate width needed to seal the doorway (covers the opening plus the wall

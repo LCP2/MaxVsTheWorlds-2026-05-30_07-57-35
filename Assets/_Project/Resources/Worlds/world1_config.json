@@ -4,6 +4,7 @@
   "revision": "LOCKED v1 (2026-08-05), THV calibrated to real robot/weapon stats MV-270",
   "note": "Authored in-chat to trial the World & Difficulty Framework (Confluence MVW 34439170). enemyTypes.thv were relative placeholders (1.0/2.5/4.5/7.0) at LOCK time; MV-270 replaced them with values derived from EnemyArchetype's real hp/contact-damage/speed via THV=(hp+shield)*dps*speedFactor*archetypeWeight (shield=0, archetypeWeight=1, dps=contactDamage/attackCycle) then scaled by x1.2 so R=MPL/EPL (PowerScoring) lands in the 0.85-1.4 band against the Water Blaster's real per-level DPS across Areas 1-7 — see World1CalibrationTests. The derived shape (1.0 : 2.6 : 4.49 : 7.11) came out almost identical to the original placeholder ratio, so the curve's SHAPE stood; only the magnitude moved.",
   "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
+  "wallHeight": 1.75,
   "dials": {
     "areaCount": 8,
     "baseThreat": 14.0,

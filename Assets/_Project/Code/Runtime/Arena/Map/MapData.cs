@@ -134,7 +134,12 @@ namespace MaxWorlds.Arena
     {
         public string name = "Untitled";
 
-        public float wallHeight = 3.5f;
+        /// <summary>Used when a <see cref="WorldConfig"/> does not author its own wall height
+        /// (<see cref="WorldConfig.wallHeight"/>) — kept as a named constant rather than a bare literal
+        /// so <see cref="WorldMapLoader"/> can fall back to the exact same number.</summary>
+        public const float DefaultWallHeight = 3.5f;
+
+        public float wallHeight = DefaultWallHeight;
         public float wallThickness = 1f;
 
         public MapZone[] zones = Array.Empty<MapZone>();

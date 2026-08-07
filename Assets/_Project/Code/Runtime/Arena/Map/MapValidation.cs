@@ -18,6 +18,13 @@ namespace MaxWorlds.Arena
         /// <summary>Narrowest doorway Max and a chasing swarm both fit through.</summary>
         public const float MinDoorway = 3f;
 
+        /// <summary>Shortest a wall/fence may be and still read as a wall from the fixed 72°
+        /// top-down camera. Not tied to Max's own 1.83 m height (<c>MaxRig.cs</c>) — a wall only needs
+        /// enough vertical face to throw a clear silhouette against the floor, not to loom over him.
+        /// Lowered from 2 m for the 0.6.1 lower-wall pass (MV-277); still comfortably above cover's own
+        /// 1 m minimum (below), which only has to break a chase, not read as a boundary.</summary>
+        public const float MinWallHeight = 1.5f;
+
         /// <summary>A room narrower than this is a corridor, not a room. Only enforced on rooms the
         /// author called a fight room (Open/Dense) — an entry patio is allowed to be tight, that is
         /// what makes the lawn beyond it read as a release.</summary>
@@ -55,8 +62,8 @@ namespace MaxWorlds.Arena
             if (map.zones == null || map.zones.Length == 0)
             { reason = "the map has no zones — there is nothing to stand in"; return false; }
 
-            if (map.wallHeight < 2f)
-            { reason = $"wallHeight {map.wallHeight} is too short to block Max or read as a wall"; return false; }
+            if (map.wallHeight < MinWallHeight)
+            { reason = $"wallHeight {map.wallHeight} is too short to read as a wall (min {MinWallHeight})"; return false; }
 
             if (map.wallThickness <= 0f)
             { reason = "wallThickness must be positive"; return false; }
