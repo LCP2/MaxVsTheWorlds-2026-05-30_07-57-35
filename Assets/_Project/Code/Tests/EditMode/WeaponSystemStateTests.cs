@@ -5,10 +5,11 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The weapon/ability backbone (WV-230): the RCDA primary's four tracks start owned at Level 1,
-    /// the six abilities start unowned at Level 0 and are granted (not leveled) one at a time, both
+    /// The weapon/ability backbone (WV-230): the RCDA primary's tracks start owned at Level 1,
+    /// the abilities start unowned at Level 0 and are granted (not leveled) one at a time, both
     /// respect their catalog caps, and the Weapon Cooldown ability shortens every other active
-    /// ability's cooldown.
+    /// ability's cooldown. (Capacity/Weapon Efficiency tracks and the Power Efficiency ability were
+    /// retired by MV-290.)
     /// </summary>
     public sealed class WeaponSystemStateTests
     {
@@ -47,8 +48,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void LevelUpTrackIncrementsByOne()
         {
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Capacity), Is.True);
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(2));
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.True);
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(2));
         }
 
         [Test]
@@ -63,11 +64,9 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeCapsHigherThanTheOtherThreeTracks()
+        public void RangeCapsHigherThanSpread()
         {
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(6));
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity), Is.EqualTo(4));
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.WeaponEfficiency), Is.EqualTo(4));
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(4));
         }
 
@@ -127,7 +126,7 @@ namespace MaxWorlds.Tests.EditMode
 
             CollectionAssert.AreEquivalent(new[] { AbilityKind.Speed, AbilityKind.Dash }, WeaponSystemState.Acquired);
             CollectionAssert.AreEquivalent(
-                new[] { AbilityKind.WaterBalloon, AbilityKind.Teleport, AbilityKind.PowerEfficiency, AbilityKind.WeaponCooldown },
+                new[] { AbilityKind.WaterBalloon, AbilityKind.Teleport, AbilityKind.WeaponCooldown },
                 WeaponSystemState.Unacquired);
         }
 
@@ -137,7 +136,6 @@ namespace MaxWorlds.Tests.EditMode
         public void PassiveAbilitiesHaveZeroBaseCooldown()
         {
             Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Speed), Is.EqualTo(0f));
-            Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.PowerEfficiency), Is.EqualTo(0f));
             Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.WeaponCooldown), Is.EqualTo(0f));
         }
 
@@ -189,12 +187,12 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ResetClearsTracksAndAbilities()
         {
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Capacity);
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
             WeaponSystemState.Acquire(AbilityKind.Dash);
 
             WeaponSystemState.Reset();
 
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
             Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Dash), Is.False);
         }
 
@@ -222,10 +220,10 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllSixAbilitiesAndFourTracks()
+        public void CatalogListsAllFiveAbilitiesAndTwoTracks()
         {
-            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(6));
-            Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4));
+            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(5));
+            Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(2));
         }
 
         [Test]
@@ -235,7 +233,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Speed), Is.EqualTo(4));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Dash), Is.EqualTo(1));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(2));
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.PowerEfficiency), Is.EqualTo(5));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown), Is.EqualTo(5));
         }
     }

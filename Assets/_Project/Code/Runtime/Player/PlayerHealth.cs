@@ -1,7 +1,6 @@
 using System;
 using UnityEngine;
 using MaxWorlds.Core;
-using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Player
@@ -45,14 +44,6 @@ namespace MaxWorlds.Player
         public float Current => _health;
         public float Normalized => Max > 0f ? _health / Max : 0f;
 
-        /// <summary>Incoming-damage multiplier while Max is weakened at 0 power cells (WV-227).</summary>
-        public const float DefaultWeakenedDamageMultiplier = 1.5f;
-
-        /// <summary>True with an empty power-cell reserve — Max is weakened until he collects more
-        /// (WV-227). Read live off <see cref="PickupWallet.PowerCells"/> rather than cached, so
-        /// refilling mid-fight un-weakens him on the very next hit.</summary>
-        public static bool IsWeakened => PickupWallet.PowerCells <= 0;
-
         /// <summary>
         /// Re-settle current HP against a max that just changed underneath it (YT-105). Raising the
         /// ceiling leaves Max where he stood — you get headroom, not a free heal — while lowering it
@@ -77,28 +68,16 @@ namespace MaxWorlds.Player
         /// origin at the centre, so his head is at +1.0 and this clears it.</summary>
         private const float BarHeight = 1.65f;
         private const float BarWidth = 2.1f;   // wider than a robot's — it's you; prominence comes from width now (YT-136)
-        private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f); // #33A0EB
-
-        private MaxWorlds.Combat.WaterBlaster _blaster;
 
         private void Awake()
         {
             _controller = GetComponent<PlayerController>();
             _health = Max;
 
-            // Max's whole status now lives over his head (YT-121): the water gauge stacked directly
-            // above his life bar, and no top-of-screen HUD. Always shown, unlike a robot's — you
-            // should be able to find your own health without waiting to be hit.
-            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
-                                  secondary: WaterNormalized, secondaryColor: WaterColor);
-        }
-
-        /// <summary>Max's blaster tank, 0..1, for the floating water gauge. Resolved lazily and
-        /// cached — the blaster attaches itself to Max and may not exist on the frame this runs.</summary>
-        private float WaterNormalized()
-        {
-            if (_blaster == null) _blaster = GetComponent<MaxWorlds.Combat.WaterBlaster>();
-            return _blaster != null && _blaster.Energy != null ? _blaster.Energy.Normalized : 1f;
+            // Max's whole status now lives over his head (YT-121). MV-290: the water gauge that used
+            // to stack above it is gone along with the primary's tank — the blaster never depletes, so
+            // there is nothing left to show a level for.
+            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true);
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -108,12 +87,6 @@ namespace MaxWorlds.Player
             if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
             if (_controller != null && _controller.IsInvulnerable) return; // dash dodge
             float amount = info.Amount;
-            // Empty power-cell reserve leaves Max weakened until he collects more (WV-227) — incoming
-            // hits land harder.
-            if (IsWeakened)
-            {
-                amount *= Mathf.Max(1f, DevTuning.Or(DevTuning.WeakenedDamageMultiplier, DefaultWeakenedDamageMultiplier));
-            }
             _health = Mathf.Max(0f, _health - amount);
             // Only a hit that LANDS stalls the regen. A hit dashed through costs Max nothing —
             // neither health nor his recovery — which is the reward a clean dodge should carry.

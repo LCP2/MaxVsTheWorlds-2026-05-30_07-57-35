@@ -6,30 +6,23 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// Regression guard (YT-36): the Water Blaster must NOT discharge when no aim
     /// input is held. The bug was gamepad right-stick drift reading non-zero with
-    /// no input, driving IsFiring true. These tests lock the fire gate: emission
-    /// (and therefore every damage tick + VFX spawn, which are downstream of it)
-    /// only happens when the trigger is actively held AND energy is available.
+    /// no input, driving IsFiring true. MV-290: the primary never depletes, so
+    /// holding the trigger is the whole fire gate now.
     /// </summary>
     public sealed class WaterBlasterFireGateTests
     {
         [Test]
-        public void NoAimHeld_DoesNotEmit_EvenWithFullEnergy()
+        public void NoAimHeld_DoesNotEmit()
         {
             // firingHeld=false models "no aim input" -> must never emit.
-            Assert.IsFalse(WaterBlaster.ShouldEmit(firingHeld: false, hasEnergy: true),
+            Assert.IsFalse(WaterBlaster.ShouldEmit(firingHeld: false),
                 "Blaster emitted with no aim input held — auto-discharge regression.");
         }
 
         [Test]
-        public void AimHeld_NoEnergy_DoesNotEmit()
+        public void AimHeld_Emits()
         {
-            Assert.IsFalse(WaterBlaster.ShouldEmit(firingHeld: true, hasEnergy: false));
-        }
-
-        [Test]
-        public void AimHeld_WithEnergy_Emits()
-        {
-            Assert.IsTrue(WaterBlaster.ShouldEmit(firingHeld: true, hasEnergy: true));
+            Assert.IsTrue(WaterBlaster.ShouldEmit(firingHeld: true));
         }
 
         [Test]

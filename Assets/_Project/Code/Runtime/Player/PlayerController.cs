@@ -175,12 +175,11 @@ namespace MaxWorlds.Player
                 _facing = moveDir.normalized;
             }
 
-            // Dash trigger (ignored mid-dash, on cooldown, unowned, or unaffordable). Dash is a
-            // shed-acquired ability (WV-231): a press that isn't owned yet must never spend cells or
-            // start a cooldown, so the acquisition check runs before the wallet touch.
+            // Dash trigger (ignored mid-dash, on cooldown, or unowned). Dash is a shed-acquired
+            // ability (WV-231, cooldown-gated only since MV-290): a press that isn't owned yet must
+            // never start a cooldown, so the acquisition check runs before anything else.
             if (ShouldDash(_dash.WasPressedThisFrame(), _dashTimer <= 0f, _cooldownTimer <= 0f,
-                    WeaponSystemState.IsAcquired(AbilityKind.Dash))
-                && AbilityCellSpend.TrySpendSpecial())
+                    WeaponSystemState.IsAcquired(AbilityKind.Dash)))
             {
                 _dashDir = moveDir.sqrMagnitude > 0.04f ? moveDir.normalized : _facing;
                 _dashTimer = dashDuration;

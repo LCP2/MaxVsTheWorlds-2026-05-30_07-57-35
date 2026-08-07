@@ -24,8 +24,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void SpendingOnATrackWithNoBankedPartsFails()
         {
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Capacity), Is.False);
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(1));
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.False);
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
         }
 
         [Test]
@@ -34,9 +34,9 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.AddPart();
             PickupWallet.AddPart();
 
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Capacity), Is.True);
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.True);
 
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(2));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(2));
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "exactly one part must be spent per level");
         }
 
@@ -94,9 +94,9 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.AddPowerCell();
             PickupWallet.AddPowerCell();
 
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Capacity), Is.False,
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.False,
                 "power cells must never buy a track upgrade");
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a rejected upgrade spend must not touch cells");
         }
 
@@ -119,7 +119,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.AddPowerCell();
             PickupWallet.AddPowerCell();
 
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Capacity), Is.True);
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.True);
 
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "the track upgrade must consume the part");
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a part spend must never also spend cells");

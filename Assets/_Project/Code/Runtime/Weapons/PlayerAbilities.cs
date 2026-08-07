@@ -11,18 +11,17 @@ namespace MaxWorlds.Weapons
     /// The two shed-acquired abilities that need a live component to actually DO something (WV-231):
     /// Water Balloon's throw/landing/splash, and Teleport's blink. Dash stays inside
     /// <see cref="PlayerController"/> — it was already the base movement tech there, gated on
-    /// ownership in place (WV-231) rather than duplicated here. Speed, Power Efficiency and Weapon
-    /// Cooldown are pure passive multipliers with no activation and need nothing beyond the reads
-    /// <see cref="PlayerController.WalkSpeed"/> and <see cref="AbilityCellSpend"/> already do.
+    /// ownership in place (WV-231) rather than duplicated here. Speed and Weapon Cooldown are pure
+    /// passive multipliers with no activation and need nothing beyond the read
+    /// <see cref="PlayerController.WalkSpeed"/> already does.
     ///
     /// Self-attaches to Max from <see cref="PlayerController.Awake"/> — no scene wiring, the same
     /// code-driven-scenes rule <see cref="MaxWorlds.Combat.WaterBlaster"/> follows for its own
     /// sub-components.
     ///
-    /// Every activation is gated the same order (spec §6a): must be acquired, must be off cooldown,
-    /// then must afford its cell cost — cheapest checks first, so an inactive or on-cooldown press
-    /// never touches the wallet. The on-screen controls that call these (WV-240) are out of this
-    /// ticket's scope; the public Try* methods are the hand-off point.
+    /// MV-290: every activation is gated on cooldown only now (spec §6a's cell cost is retired) —
+    /// must be acquired, then must be off cooldown. The on-screen controls that call these (WV-240)
+    /// are out of this ticket's scope; the public Try* methods are the hand-off point.
     /// </summary>
     [RequireComponent(typeof(PlayerController))]
     [RequireComponent(typeof(CharacterController))]
@@ -96,8 +95,7 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Throw a Water Balloon toward <paramref name="aimDirection"/> (WV-240 drives this
         /// from the joystick release). Level only changes throw DISTANCE (spec §6a) — never damage or
-        /// splash size. Returns false (nothing spent, no cooldown started) if unowned, on cooldown, or
-        /// unaffordable.</summary>
+        /// splash size. Returns false (no cooldown started) if unowned or on cooldown.</summary>
         public bool TryThrowWaterBalloon(Vector3 aimDirection)
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon)) return false;
@@ -106,8 +104,6 @@ namespace MaxWorlds.Weapons
             Vector3 dir = new Vector3(aimDirection.x, 0f, aimDirection.z);
             if (dir.sqrMagnitude < 1e-4f) return false;
             dir.Normalize();
-
-            if (!AbilityCellSpend.TrySpendSecondary()) return false;
 
             _waterBalloonCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.WaterBalloon);
 
@@ -172,12 +168,11 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Blink (spec §6a): L1 is a random hop, L2 blinks toward <paramref name="aimDirection"/>.
         /// Moved via the CharacterController so a blink stops at a wall rather than clipping through
-        /// it. Returns false if unowned, on cooldown, or unaffordable.</summary>
+        /// it. Returns false if unowned or on cooldown.</summary>
         public bool TryTeleport(Vector3 aimDirection)
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.Teleport)) return false;
             if (_teleportCooldown > 0f) return false;
-            if (!AbilityCellSpend.TrySpendSpecial()) return false;
 
             _teleportCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
 

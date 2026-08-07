@@ -58,16 +58,13 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator AFireRateBoostIsNotSecretlySelfCancelling()
+        public IEnumerator AFireRateBoostAlwaysIncreasesOutput()
         {
-            // The trap: more ticks per second at the same energy cost per tick just empties the tank
-            // proportionally faster, so the player fires more often, runs dry sooner, and does the
-            // same damage per tankful. The upgrade would feel like nothing. Holding the trigger must
-            // therefore cost the SAME per second at every level, while output climbs.
+            // MV-290: the primary never depletes, so a fire-rate boost has nothing left to cancel
+            // itself against — this just pins that output keeps climbing at every level.
             yield return NewBlaster();
             var blaster = _go.GetComponent<WaterBlaster>();
 
-            float energyPerSecondAtStart = blaster.EnergyPerSecond;
             float dpsAtStart = blaster.DamagePerSecond;
 
             for (int level = 2; level <= 8; level++)
@@ -75,8 +72,6 @@ namespace MaxWorlds.Tests.PlayMode
                 HudSignals.EmitLevelUp(level, Vector3.zero);
                 yield return null;
 
-                Assert.AreEqual(energyPerSecondAtStart, blaster.EnergyPerSecond, 0.01f,
-                    $"level {level} made the stream thirstier — the boost pays for itself and vanishes");
                 Assert.Greater(blaster.DamagePerSecond, dpsAtStart,
                     $"level {level} didn't increase output");
             }

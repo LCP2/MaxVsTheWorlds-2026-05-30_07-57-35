@@ -2,7 +2,6 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
-using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
@@ -13,21 +12,20 @@ namespace MaxWorlds.Combat
     /// <summary>
     /// Slice gadget (YT-35) — Spray archetype. While <see cref="IsFiring"/> is
     /// driven true (player holds aim), auto-fires a short-range stream: ticks at
-    /// a fixed cadence, spends energy, sphere-casts forward, and applies damage
-    /// (+soak tag) to every <see cref="IDamageable"/> in the stream. Energy binds
-    /// to the HUD (YT-30) via <see cref="Energy"/>.
+    /// a fixed cadence, sphere-casts forward, and applies damage (+soak tag) to
+    /// every <see cref="IDamageable"/> in the stream.
     ///
     /// Since the weapon epic (YT-127/YT-129) this is Max's <b>garden hose</b>: the water
     /// short-circuits the robots (the existing damage, re-themed — a spray shorts them out).
     /// Its OPENING spray is deliberately short and wide — weak but forgiving — the base state
-    /// before any nozzle upgrade (YT-133) narrows or lengthens it. The hose no longer tethers
-    /// to a tap (WV-233 reverses YT-129/130): Max carries it freely and it self-supplies from
-    /// power cells (see <see cref="Update"/>); the spray reach here is a separate, much
-    /// shorter number, unrelated to how far Max may roam.
+    /// before any nozzle upgrade (YT-133) narrows or lengthens it.
+    ///
+    /// MV-290: the primary never depletes — no tank, no fuel, no weakened state. Max is never left
+    /// running with a dead weapon; holding the trigger fires for as long as it's held, full stop.
     ///
     /// All firing visuals live in <see cref="WaterVfx"/> (YT-47), which this attaches
     /// to itself at Awake and drives with cosmetic-only calls. The VFX never feeds back
-    /// into fire gating, energy, or damage.
+    /// into fire gating or damage.
     /// </summary>
     public sealed class WaterBlaster : MonoBehaviour
     {
@@ -79,13 +77,6 @@ namespace MaxWorlds.Combat
         // scene can't shadow it" reasoning as BlasterTuning.
         public const float DefaultSprayKnockback = 0.5f;
 
-        // Energy is authored in BlasterTuning, NOT here. These were [SerializeField]s until YT-80,
-        // and the values baked into Backyard_Slice.unity quietly overrode every one of them — the
-        // gun the code described was not the gun anyone played. Tune it there; the scene can't
-        // shadow a static.
-        private float energyPerTick;
-        private float rechargeFraction;
-
         [Header("Debug")]
         [Tooltip("Draw a live fire-state overlay (diagnostics) while DevMode is enabled. Never draws " +
                  "otherwise, so a normal/shipping session never shows it (MV-250).")]
@@ -96,47 +87,32 @@ namespace MaxWorlds.Combat
                  "If null, IsFiring drives it directly (useful for isolated testing).")]
         [SerializeField] private PlayerController aimSource;
 
-        public EnergyPool Energy { get; private set; }
-
         /// <summary>Whether the trigger is currently held. Driven by <see cref="aimSource"/>'s
         /// aim each frame when bound. Defaults <c>false</c> — an unbound/idle blaster never
         /// auto-fires (YT-36 regression: it must NOT discharge with no aim input).</summary>
         public bool IsFiring { get; private set; }
 
         /// <summary>
-        /// Pure fire-gate decision (unit-testable): the stream emits only while the
-        /// trigger is actively held AND there is enough energy for a tick. With no
-        /// aim held (<paramref name="firingHeld"/> false) this is always false — no
-        /// emission, no damage tick, no VFX.
+        /// Pure fire-gate decision (unit-testable): the stream emits only while the trigger is
+        /// actively held. MV-290: the primary never depletes, so there is no fuel check here any
+        /// more — holding the trigger is the whole gate.
         /// </summary>
-        public static bool ShouldEmit(bool firingHeld, bool hasEnergy) => firingHeld && hasEnergy;
+        public static bool ShouldEmit(bool firingHeld) => firingHeld;
 
         /// <summary>Drive the trigger directly when there is no <see cref="aimSource"/>
         /// (isolated testing / scripted fire). Ignored on frames where a bound aim source
         /// overrides it in Update.</summary>
         public void SetFiring(bool firing) => IsFiring = firing;
 
-        /// <summary>Is the stream actually coming out this frame? (Firing AND energy available.)
-        /// Cells being empty no longer stalls this — see <see cref="IsWeakened"/>.</summary>
+        /// <summary>Is the stream actually coming out this frame? (MV-290: mirrors <see cref="IsFiring"/> —
+        /// the primary never stalls or depletes.)</summary>
         public bool IsEmitting => _lastEmitting;
-
-        /// <summary>Outgoing damage multiplier while the power-cell reserve is empty (MV-243 fix).
-        /// Mirrors <see cref="MaxWorlds.Player.PlayerHealth.IsWeakened"/>'s "empty = weakened, not
-        /// blocked" rule (WV-227) on the output side: the stream keeps firing at reduced effect rather
-        /// than stalling, so a fresh run (always 0 cells) can still land the kills that earn its first
-        /// cell instead of deadlocking forever.</summary>
-        public const float DefaultWeakenedFireDamageMultiplier = 0.5f;
-
-        /// <summary>True with an empty power-cell reserve — the stream still emits but hits softer
-        /// (<see cref="DefaultWeakenedFireDamageMultiplier"/>) until Max collects more.</summary>
-        public bool IsWeakened => PickupWallet.PowerCells <= 0;
 
         // --- Power ramp (YT-67) ---------------------------------------------------------------
         // The authored numbers, captured before any level-up scales them. Multipliers are always
         // applied to these, never compounded onto the live values, so re-applying is harmless.
         private float _baseDamage;
         private float _baseInterval;
-        private float _baseEnergyPerSecond;
 
         /// <summary>How far the stream actually reaches, in metres — the authored reach plus any reach
         /// the Power nozzle adds (YT-133) plus the RCDA Range track's own bonus (MV-263). Public so the
@@ -161,45 +137,16 @@ namespace MaxWorlds.Combat
         public float DamagePerTick => damagePerTick;
         /// <summary>Seconds between ticks, after the power ramp.</summary>
         public float FireInterval => fireInterval;
-        /// <summary>Energy one tick costs, after the power ramp.</summary>
-        public float EnergyPerTick => energyPerTick;
         /// <summary>What the stream actually outputs per second — the number the player feels.</summary>
         public float DamagePerSecond => fireInterval > 0f ? damagePerTick / fireInterval : 0f;
-        /// <summary>What holding the trigger actually costs per second. Held CONSTANT by the ramp.</summary>
-        public float EnergyPerSecond => fireInterval > 0f ? energyPerTick / fireInterval : 0f;
 
         /// <summary>
         /// Scale the stream by the power ramp (YT-67).
-        ///
-        /// The energy cost is re-derived so that holding the trigger costs the same PER SECOND as
-        /// it always did. That's the whole trick, and without it a fire-rate boost is a lie: more
-        /// ticks per second at the same cost per tick just drains the tank proportionally faster,
-        /// so the player fires more often, runs dry sooner, and ends up doing the same damage per
-        /// tankful. The upgrade would have felt like nothing. Now the pump gets faster, not
-        /// thirstier, and the boost is real damage rather than a shuffled cost.
         /// </summary>
         public void ApplyPower(float damageMultiplier, float fireRateMultiplier)
         {
             damagePerTick = _baseDamage * Mathf.Max(0f, damageMultiplier);
             fireInterval = _baseInterval / Mathf.Max(0.01f, fireRateMultiplier);
-            energyPerTick = _baseEnergyPerSecond * fireInterval;
-        }
-
-        /// <summary>
-        /// Re-read the drain/refill numbers through <see cref="DevTuning"/> (YT-105). Called by the
-        /// tuning panel after a slider move.
-        ///
-        /// Drain is re-derived against the CURRENT <see cref="fireInterval"/>, not the authored one,
-        /// so tuning the tank mid-run doesn't quietly undo the power ramp that's already applied.
-        /// </summary>
-        public void RefreshDevTuning()
-        {
-            _baseEnergyPerSecond = DevTuning.Or(DevTuning.BlasterDrainPerSecond, BlasterTuning.EnergyPerSecond);
-            energyPerTick = _baseEnergyPerSecond * fireInterval;
-            if (Energy != null)
-            {
-                Energy.RegenPerSec = DevTuning.Or(DevTuning.BlasterRegenPerSecond, BlasterTuning.RegenPerSec);
-            }
         }
 
         private void OnEnable()
@@ -220,19 +167,16 @@ namespace MaxWorlds.Combat
 
         /// <summary>
         /// Re-fit the weapon to Max's installed parts and RCDA track levels (YT-133/MV-263): rebuild
-        /// the reticle and stream at the new reach/spread, and resize the tank to its upgraded
-        /// capacity. Fires on every install or track spend. No-ops safely before <see cref="Awake"/>
-        /// has built the sub-objects.
+        /// the reticle and stream at the new reach/spread. Fires on every install or track spend.
+        /// No-ops safely before <see cref="Awake"/> has built the sub-objects.
         /// </summary>
         public void RefreshUpgrades()
         {
             if (_reticle != null) _reticle.Init(transform, Range, ConeHalfAngle);
             if (_vfx != null) _vfx.Init(Range, Mathf.Max(radius, streamVisualRadius), ConeHalfAngle);
-            if (Energy != null) Energy.Retune(BlasterTuning.MaxEnergy + UpgradeState.CapacityBonus);
         }
 
         private float _tickTimer;
-        private bool _depleted;
         private bool _lastEmitting;
         private WaterVfx _vfx;
         private AimReticle _reticle;
@@ -244,18 +188,9 @@ namespace MaxWorlds.Combat
 
         private void Awake()
         {
-            Energy = new EnergyPool(
-                BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
-            rechargeFraction = BlasterTuning.RechargeFraction;
-
-            // Per-tick cost is derived from the per-second cost, because per-second is the number
-            // that was authored and the one the ramp holds constant (YT-67/YT-80).
-            energyPerTick = BlasterTuning.EnergyPerSecond * fireInterval;
-
             // Capture the authored numbers before anything scales them (YT-67).
             _baseDamage = damagePerTick;
             _baseInterval = fireInterval;
-            _baseEnergyPerSecond = BlasterTuning.EnergyPerSecond;
 
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();
@@ -275,13 +210,6 @@ namespace MaxWorlds.Combat
             _reticle.Init(transform, range, coneHalfAngle);
         }
 
-        private float _cellDrainAccum;
-        /// <summary>Cells the primary weapon burns per MINUTE of spray, before any dev override or
-        /// Power Efficiency reduction (WV-227's economy recut — supersedes the old cells/sec number).
-        /// WV-233 generalised this from metering only the Hydro condenser while untethered (YT-137) to
-        /// ALL primary fire, now that the hose has detached from taps entirely.</summary>
-        public const float DefaultPrimaryCellsPerMin = 6f;
-
         private void Update()
         {
             float dt = Time.deltaTime;
@@ -291,22 +219,6 @@ namespace MaxWorlds.Combat
             // the leash it released), but the leash is gone (WV-233), so the weapon — the other thing
             // that runs every frame for the armed Max — ticks it now.
             HydroBurst.Tick(dt);
-
-            // Water supply (WV-233): the hose is self-supplied from power cells, always — no tap to
-            // regen from. While cells remain, they top the tank; at empty they can't, so the tank
-            // drains as Max fires and the spray stalls until he collects more (generalises the old
-            // Hydro-condenser-only rule, YT-137, to all primary fire).
-            //
-            // MV-266: at empty cells the tank must still run its OWN regen clock (BlasterTuning's
-            // RegenPerSec/RegenDelay/RechargeFraction — "Water refill rate" in the tuning panel), not
-            // sit dead. A fresh run always starts at 0 cells, so before this fix the tank had no way to
-            // recover once drained: Energy.Tick() (the only thing that advances natural regen) was never
-            // called, so "Water deplete rate" ran the tank down once and it never came back — the run
-            // was unwinnable before the first kill could ever earn a cell. Cells still top the tank
-            // instantly on pickup/while held (unlimited-feeling water once earned); it's only the
-            // empty-cell case that now recovers on its own instead of staying dead.
-            if (PickupWallet.PowerCells > 0) Energy.Refill();
-            else Energy.Tick(dt);
 
             // Trigger is held only while the player is actively aiming. When bound,
             // orient along their facing too. If unbound, IsFiring stays false (no
@@ -326,36 +238,12 @@ namespace MaxWorlds.Combat
             // told what the gadget is doing and never gets a say in it.
             if (_reticle != null) _reticle.SetAiming(IsFiring);
 
-            // Dev/filming only; both are false in a normal session (YT-60).
+            // Dev/filming only; false in a normal session (YT-60).
             if (DevMode.IsAutoFiring) IsFiring = true;
-            if (DevMode.IsInfiniteEnergy) Energy.Refill();
 
-            // Hysteresis: once the tank runs dry, lock fire out until it recharges to
-            // rechargeFraction of max. Without this, an empty tank dribbles a single
-            // puff every regenDelay (the "clouds of bubbles" stutter) instead of a
-            // clean stream → deplete → recharge → stream cycle.
-            if (_depleted && Energy.Normalized >= rechargeFraction) _depleted = false;
-            else if (!_depleted && !Energy.CanSpend(energyPerTick)) _depleted = true;
-
-            bool emitting = ShouldEmit(IsFiring, !_depleted && Energy.CanSpend(energyPerTick));
+            // MV-290: the primary never depletes — holding the trigger is the whole gate.
+            bool emitting = ShouldEmit(IsFiring);
             _lastEmitting = emitting;
-
-            // While it IS spraying, the water is paid for in power cells — burn them for the time it's
-            // actually spraying, so the meter ticks down as it's used (WV-227, generalised by WV-233).
-            // Empty cells weaken the output (IsWeakened, MV-243) rather than stopping the spend loop —
-            // there's nothing left to spend, so TrySpendPowerCell() below just self-limits at 0.
-            if (emitting)
-            {
-                float perMin = Mathf.Max(0f, DevTuning.Or(DevTuning.PrimaryCellsPerMin, DefaultPrimaryCellsPerMin));
-                // Power Efficiency's real level (WV-230) — 0 (no reduction) until the ability is
-                // acquired from a shed (WV-229); the ability's own effect (WV-231) is just this level.
-                float efficiency = CellEconomyTuning.EfficiencyMultiplier(
-                    WeaponSystemState.AbilityLevel(AbilityKind.PowerEfficiency),
-                    DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel));
-                float rate = (perMin / 60f) * efficiency;
-                _cellDrainAccum += rate * dt;
-                while (_cellDrainAccum >= 1f && PickupWallet.TrySpendPowerCell()) _cellDrainAccum -= 1f;
-            }
 
             if (_vfx != null) _vfx.SetStreaming(emitting);
             if (!emitting)
@@ -368,7 +256,6 @@ namespace MaxWorlds.Combat
             if (_tickTimer > 0f) return;
             _tickTimer = fireInterval;
 
-            if (!Energy.TrySpend(energyPerTick)) return;
             FireTick();
         }
 
@@ -380,9 +267,7 @@ namespace MaxWorlds.Combat
             // and the VFX all read these same numbers, so the beam you see is the beam that hits.
             float reach = Range;
             float cone = ConeHalfAngle;
-            // Empty power cells weaken the hit, not the reach/spread/aim (MV-243) — a starved shot
-            // still finds and marks its targets, it just hits softer.
-            float tickDamage = damagePerTick * (IsWeakened ? DefaultWeakenedFireDamageMultiplier : 1f);
+            float tickDamage = damagePerTick;
             // Spray: gather everything within range, then keep only what's inside the cone arc —
             // so one tick can wash a whole knot of robots, not a single-file tube (YT-64).
             int count = Physics.OverlapSphereNonAlloc(
@@ -466,8 +351,7 @@ namespace MaxWorlds.Combat
             if (!debugOverlay || !DevMode.Enabled) return;
             bool aiming = aimSource != null && aimSource.IsAiming;
             string s = $"Blaster: IsFiring={IsFiring}  aimSource.IsAiming={aiming}  " +
-                       $"emitting={_lastEmitting}  " +
-                       $"energy={Energy?.Normalized:0.00}  depleted={_depleted}";
+                       $"emitting={_lastEmitting}";
             GUI.color = _lastEmitting ? Color.cyan : Color.white;
             GUI.Label(new Rect(12f, 64f, 900f, 24f), s);
         }

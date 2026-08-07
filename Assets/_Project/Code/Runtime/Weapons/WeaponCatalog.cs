@@ -27,28 +27,26 @@ namespace MaxWorlds.Weapons
         public const float DefaultDashCooldownSeconds = 2.5f;
         public const float DefaultTeleportCooldownSeconds = 4f;
 
-        /// <summary>The four tracks, in the order the weapons screen lists them (spec §6).</summary>
+        /// <summary>The tracks, in the order the weapons screen lists them (spec §6; Capacity/Weapon
+        /// Efficiency retired by MV-290).</summary>
         public static readonly WeaponTrackKind[] AllTrackKinds =
         {
-            WeaponTrackKind.Capacity,
-            WeaponTrackKind.WeaponEfficiency,
             WeaponTrackKind.Range,
             WeaponTrackKind.Spread,
         };
 
-        /// <summary>The six abilities, in the shed drop-pool's fixed order (spec §4/§6).</summary>
+        /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
+        /// retired by MV-290).</summary>
         public static readonly AbilityKind[] AllAbilityKinds =
         {
             AbilityKind.WaterBalloon,
             AbilityKind.Speed,
             AbilityKind.Dash,
             AbilityKind.Teleport,
-            AbilityKind.PowerEfficiency,
             AbilityKind.WeaponCooldown,
         };
 
-        /// <summary>The level cap for an RCDA track (spec §6): Capacity/Weapon Efficiency/Spread cap
-        /// at 4, Range at 6.</summary>
+        /// <summary>The level cap for an RCDA track (spec §6): Spread caps at 4, Range at 6.</summary>
         public static int MaxLevel(WeaponTrackKind kind) => kind == WeaponTrackKind.Range ? 6 : 4;
 
         /// <summary>Extra spray reach in metres each Range track level above 1 adds (MV-263) — layered
@@ -79,7 +77,7 @@ namespace MaxWorlds.Weapons
             baseHalfAngle * (1f + perLevel * (Mathf.Max(1, spreadLevel) - 1));
 
         /// <summary>The level cap for an ability once acquired (spec §6): Water Balloon 3, Speed 4,
-        /// Dash a single unlock (1), Teleport 2, Power Efficiency/Weapon Cooldown 5.</summary>
+        /// Dash a single unlock (1), Teleport 2, Weapon Cooldown 5.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
@@ -88,7 +86,6 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Dash: return 1;
                 case AbilityKind.Teleport: return 2;
-                case AbilityKind.PowerEfficiency: return 5;
                 case AbilityKind.WeaponCooldown: return 5;
                 default: return 1;
             }
@@ -96,8 +93,8 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Water Balloon, Dash
         /// and Teleport are the three active abilities with an on-screen control (spec §6a) and a real
-        /// cooldown; Speed, Power Efficiency and Weapon Cooldown are passive — continuous, no control
-        /// to gate — so their base cooldown is 0.</summary>
+        /// cooldown; Speed and Weapon Cooldown are passive — continuous, no control to gate — so their
+        /// base cooldown is 0.</summary>
         public static float BaseCooldownSeconds(AbilityKind kind)
         {
             switch (kind)
@@ -109,7 +106,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Teleport:
                     return DevTuning.Or(DevTuning.TeleportCooldownSeconds, DefaultTeleportCooldownSeconds);
                 default:
-                    return 0f;   // Speed, Power Efficiency, Weapon Cooldown — passive, no cooldown
+                    return 0f;   // Speed, Weapon Cooldown — passive, no cooldown
             }
         }
 
@@ -117,8 +114,6 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case WeaponTrackKind.Capacity: return "CAPACITY";
-                case WeaponTrackKind.WeaponEfficiency: return "WEAPON EFFICIENCY";
                 case WeaponTrackKind.Range: return "RANGE";
                 case WeaponTrackKind.Spread: return "SPREAD";
                 default: return kind.ToString();
@@ -133,7 +128,6 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Speed: return "SPEED";
                 case AbilityKind.Dash: return "DASH";
                 case AbilityKind.Teleport: return "TELEPORT";
-                case AbilityKind.PowerEfficiency: return "POWER EFFICIENCY";
                 case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
                 default: return kind.ToString();
             }

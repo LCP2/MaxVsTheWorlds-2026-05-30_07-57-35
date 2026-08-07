@@ -70,7 +70,6 @@ namespace MaxWorlds.UI
 
         private HudModel _model;
         private PlayerHealth _health;
-        private WaterBlaster _blaster;
         private PlayerController _player;
         private Camera _worldCamera;
 
@@ -178,7 +177,6 @@ namespace MaxWorlds.UI
         private void Awake()
         {
             _health = FindFirstObjectByType<PlayerHealth>();
-            _blaster = FindFirstObjectByType<WaterBlaster>();
             _player = FindFirstObjectByType<PlayerController>();
             _abilities = FindFirstObjectByType<PlayerAbilities>();
             _backyardPath = FindFirstObjectByType<BackyardPath>();
@@ -611,10 +609,6 @@ namespace MaxWorlds.UI
             else if (_health != null && _health.IsAlive && _health.Normalized > 0f && _health.Normalized < 0.25f)
             {
                 msg = "HEALTH LOW"; col = HpColor;
-            }
-            else if (_blaster != null && _blaster.Energy != null && _blaster.Energy.Normalized <= 0.001f)
-            {
-                msg = "ENERGY OUT"; col = XpColor;
             }
 
             if (msg == null) { _warning.gameObject.SetActive(false); return; }

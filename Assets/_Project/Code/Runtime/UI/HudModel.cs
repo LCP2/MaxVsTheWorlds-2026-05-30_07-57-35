@@ -4,8 +4,9 @@ namespace MaxWorlds.UI
 {
     /// <summary>
     /// Slice run-state the HUD (YT-30) reads: XP track, arena progress, the Ultimate
-    /// charge, the auto-cycling Bomb cooldown, and the boss. HP and Energy are NOT here —
-    /// those bind directly to the live <c>PlayerHealth</c> / <c>WaterBlaster.Energy</c>.
+    /// charge, the auto-cycling Bomb cooldown, and the boss. HP is NOT here — it binds
+    /// directly to the live <c>PlayerHealth</c>. (The primary never depletes since MV-290,
+    /// so there is no Energy readout left to bind at all.)
     ///
     /// Because the real economy, destructible factories, and boss fight are later tickets,
     /// this model is driven off one signal — <see cref="RegisterKill"/> — so every HUD

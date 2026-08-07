@@ -127,14 +127,6 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator AugmentationHarness_GrowsTheTank()
-        {
-            float baseMax = Blaster.Energy.Max;
-            yield return PickUpAndConfirm(PartKind.AugmentationHarness);
-            Assert.That(Blaster.Energy.Max, Is.GreaterThan(baseMax + 1f), "the harness didn't enlarge the tank");
-        }
-
-        [UnityTest]
         public IEnumerator AccelerationEngine_SpeedsMaxUp()
         {
             float baseSpeed = _max.GetComponent<PlayerController>().WalkSpeed;
