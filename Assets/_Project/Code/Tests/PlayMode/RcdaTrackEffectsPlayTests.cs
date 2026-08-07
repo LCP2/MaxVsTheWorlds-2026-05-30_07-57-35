@@ -138,6 +138,30 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator DamageTrack_IncreasesThePerTickDamage()
+        {
+            float baseDamage = Blaster.EffectiveDamagePerTick;
+            SpendOnTrack(WeaponTrackKind.Damage);
+            yield return null;
+
+            Assert.That(Blaster.EffectiveDamagePerTick, Is.GreaterThan(baseDamage + 0.1f),
+                "spending on the Damage track should have raised the per-tick damage (MV-291) — the primary's damage was a flat number nobody's upgrade ever touched");
+        }
+
+        [UnityTest]
+        public IEnumerator DamageTrack_CompoundsAcrossLevels()
+        {
+            SpendOnTrack(WeaponTrackKind.Damage);
+            yield return null;
+            float afterOne = Blaster.EffectiveDamagePerTick;
+
+            SpendOnTrack(WeaponTrackKind.Damage);
+            yield return null;
+
+            Assert.That(Blaster.EffectiveDamagePerTick, Is.GreaterThan(afterOne + 0.1f), "a second level should hit harder still");
+        }
+
+        [UnityTest]
         public IEnumerator SpreadTrack_TheReticleReFits()
         {
             var mesh = ReticleMesh();

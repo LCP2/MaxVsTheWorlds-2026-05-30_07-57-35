@@ -28,14 +28,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeTrack_MaxLevelReachIsRoughlyThreeTimesBase_MV280()
+        public void RangeTrack_MaxLevelReachIsRoughlyTwoAndAHalfTimesBase_MV291()
         {
             float baseReach = WaterBlaster.DefaultRange;
             float maxReach = WeaponCatalog.EffectiveRange(
                 baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
 
-            Assert.That(maxReach, Is.EqualTo(baseReach * 3f).Within(0.05f),
-                "MV-280: retuning the base reach or the per-level step must keep the max Range level at ~3x base");
+            Assert.That(maxReach, Is.EqualTo(baseReach * 2.5f).Within(0.05f),
+                "MV-291: retuning the base reach or the per-level step must keep the max Range level at ~2.5x base");
         }
 
         [Test]
@@ -67,14 +67,42 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_MaxLevelArcIsOneHundredDegreesTotal_MV281()
+        public void SpreadTrack_MaxLevelArcIsNinetyFiveDegreesTotal_MV291()
         {
             float baseHalfAngle = WaterBlaster.DefaultConeHalfAngle;
             float maxHalfAngle = WeaponCatalog.EffectiveConeHalfAngle(
                 baseHalfAngle, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-            Assert.That(maxHalfAngle * 2f, Is.EqualTo(100f).Within(0.5f),
-                "MV-281: retuning the base angle or the per-level step must keep the maxed Spread track at ~100° total");
+            Assert.That(maxHalfAngle * 2f, Is.EqualTo(95f).Within(0.5f),
+                "MV-291: retuning the base angle or the per-level step must keep the maxed Spread track at ~95° total");
+        }
+
+        [Test]
+        public void DamageLevelOneIsTheBaseDamageUnmodified()
+        {
+            Assert.That(WeaponCatalog.EffectiveDamagePerTick(4f, 1, 0.2f), Is.EqualTo(4f).Within(1e-5f),
+                "level 1 is every track's starting level — it must not add anything yet (MV-291)");
+        }
+
+        [Test]
+        public void EachDamageLevelAddsTheSamePerLevelStep()
+        {
+            float l1 = WeaponCatalog.EffectiveDamagePerTick(4f, 1, 0.2f);
+            float l2 = WeaponCatalog.EffectiveDamagePerTick(4f, 2, 0.2f);
+            float l6 = WeaponCatalog.EffectiveDamagePerTick(4f, 6, 0.2f);
+            Assert.That(l2 - l1, Is.EqualTo(4f * 0.2f).Within(1e-5f), "the first upgrade must already be a visible step (MV-291)");
+            Assert.That(l6 - l1, Is.EqualTo(4f * 0.2f * 5f).Within(1e-5f), "5 even steps above L1 up to the L6 cap");
+        }
+
+        [Test]
+        public void DamageTrack_MaxLevelIsRoughlyTwiceBase_MV291()
+        {
+            float baseDamage = WaterBlaster.DefaultDamagePerTick;
+            float maxDamage = WeaponCatalog.EffectiveDamagePerTick(
+                baseDamage, WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), WeaponCatalog.DefaultRcdaDamagePerLevel);
+
+            Assert.That(maxDamage, Is.EqualTo(baseDamage * 2f).Within(0.05f),
+                "MV-291: retuning the base damage or the per-level step must keep the maxed Damage track at ~2x base");
         }
     }
 }

@@ -32,7 +32,7 @@ namespace MaxWorlds.Combat
         /// <summary>Authored base spray reach in metres (YT-129, retuned MV-280, widened MV-289): the
         /// 0.6 recut's 3m base — combined with the recalibrated robots and an under-tough Max — made
         /// Area 1 unplayable, so MV-289 widens the opening reach to a forgiving 5m. The RCDA Range
-        /// track (MV-263) extends this base by up to 3x at its max level
+        /// track (MV-263, re-retuned MV-291) extends this base by up to ~2.5x at its max level
         /// (<see cref="WeaponCatalog.DefaultRcdaRangePerLevel"/> is tuned against THIS value — change
         /// them together). Nozzle upgrades (YT-133) narrow/lengthen it further.</summary>
         public const float DefaultRange = 5f;
@@ -41,11 +41,16 @@ namespace MaxWorlds.Combat
         // Also baked in Backyard_Slice.unity — keep that value in sync with DefaultRange above.
         [SerializeField] private float range = DefaultRange;
         [SerializeField] private float radius = 0.6f;
-        // Unchanged by MV-289 (still 4/0.1 = 40 DPS): the retuned Rusher HP (32 base, ~45 effective)
-        // already lands the ~1.1-1.5s TTK AC1 asks for at the existing DPS — cutting DPS too would
-        // ripple into AreaGate.AssumedPrimaryDps and BossFight's RawDps, separately-tuned systems
-        // this ticket does not touch.
-        [SerializeField] private float damagePerTick = 4f;
+
+        /// <summary>Authored base per-tick damage (unchanged by MV-289: still 4/0.1 = 40 DPS — the
+        /// retuned Rusher HP, 32 base/~45 effective, already lands the ~1.1-1.5s TTK AC1 asks for at
+        /// the existing DPS, and cutting it would ripple into AreaGate.AssumedPrimaryDps and
+        /// BossFight's RawDps, separately-tuned systems this ticket does not touch). Still the
+        /// authored BASE at track level 1 — the RCDA Damage track (MV-291) scales up from here via
+        /// <see cref="EffectiveDamagePerTick"/>, so those level-1-assuming systems are untouched.</summary>
+        public const float DefaultDamagePerTick = 4f;
+
+        [SerializeField] private float damagePerTick = DefaultDamagePerTick;
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
         [SerializeField] private LayerMask hitMask = ~0;
 
@@ -53,7 +58,7 @@ namespace MaxWorlds.Combat
         /// 0.6 recut's ~10° total arc read as unplayably narrow for Area 1's opening fight, so MV-289
         /// widens it to a forgiving ~45° total arc. The RCDA Spread track widens this further by up to
         /// its max level (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is retuned against THIS
-        /// value to hold the same ~100° total ceiling — change them together). Nozzle upgrades
+        /// value to hold a ~95° total ceiling, MV-291 — change them together). Nozzle upgrades
         /// (YT-133) narrow/widen it further.</summary>
         public const float DefaultConeHalfAngle = 22.5f;
 
@@ -127,12 +132,22 @@ namespace MaxWorlds.Combat
             WeaponSystemState.TrackLevel(WeaponTrackKind.Spread),
             WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-        /// <summary>Damage one tick of the stream deals.</summary>
+        /// <summary>Damage one tick of the stream deals, before the RCDA Damage track's bonus.</summary>
         public float DamagePerTick => damagePerTick;
+
+        /// <summary>Damage one tick actually deals right now — the authored base plus the RCDA Damage
+        /// track's bonus (MV-291), the same "level 1 adds nothing, every level after is a visible step"
+        /// shape as <see cref="Range"/> and <see cref="ConeHalfAngle"/>. This is what <see cref="FireTick"/>
+        /// applies and what the splash VFX reads, so a Damage spend is felt, not just banked.</summary>
+        public float EffectiveDamagePerTick => WeaponCatalog.EffectiveDamagePerTick(
+            damagePerTick,
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Damage),
+            WeaponCatalog.DefaultRcdaDamagePerLevel);
+
         /// <summary>Seconds between ticks.</summary>
         public float FireInterval => fireInterval;
         /// <summary>What the stream actually outputs per second — the number the player feels.</summary>
-        public float DamagePerSecond => fireInterval > 0f ? damagePerTick / fireInterval : 0f;
+        public float DamagePerSecond => fireInterval > 0f ? EffectiveDamagePerTick / fireInterval : 0f;
 
         private void OnEnable()
         {
@@ -245,7 +260,10 @@ namespace MaxWorlds.Combat
             // and the VFX all read these same numbers, so the beam you see is the beam that hits.
             float reach = Range;
             float cone = ConeHalfAngle;
-            float tickDamage = damagePerTick;
+            // The RCDA Damage track's bonus (MV-291) — the same number the splash VFX below scales
+            // its droplet count from, so a maxed Damage track reads as a heavier hit, not just a
+            // bigger number in a combat log nobody sees.
+            float tickDamage = EffectiveDamagePerTick;
             // Spray: gather everything within range, then keep only what's inside the cone arc —
             // so one tick can wash a whole knot of robots, not a single-file tube (YT-64).
             int count = Physics.OverlapSphereNonAlloc(

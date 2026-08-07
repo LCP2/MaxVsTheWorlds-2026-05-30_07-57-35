@@ -115,7 +115,7 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(rangeFilled, Is.EqualTo(2), "Range's live level (2) should show as 2 filled pips");
 
             CountPips(_screenGo, Name(WeaponTrackKind.Spread), out int spreadTotal, out int spreadFilled);
-            Assert.That(spreadTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread)), "Spread should show 4 pip segments");
+            Assert.That(spreadTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread)), "Spread should show 6 pip segments (MV-291: unified with Range/Damage)");
             Assert.That(spreadFilled, Is.EqualTo(1), "an unspent track should show a single filled pip");
 
             Assert.That(FindText(_screenGo, "Lv 2/6"), Is.Null, "levels must render as pips, not \"Lv x/y\" text");
