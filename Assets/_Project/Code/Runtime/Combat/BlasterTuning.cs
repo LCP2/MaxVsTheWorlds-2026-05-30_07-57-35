@@ -13,9 +13,8 @@ namespace MaxWorlds.Combat
     /// <see cref="MaxWorlds.Rendering.BackyardLook"/>.
     ///
     /// The unit that matters is ENERGY PER SECOND, not energy per tick: per-tick cost is meaningless
-    /// on its own because the power ramp (YT-67) speeds the fire rate up, and it is per-second cost
-    /// that the ramp deliberately holds constant. Author the number the player actually feels and
-    /// let the tick cost be derived from it.
+    /// on its own because fire rate can vary (nozzle upgrades, RCDA tracks). Author the number the
+    /// player actually feels and let the tick cost be derived from it.
     /// </summary>
     public static class BlasterTuning
     {

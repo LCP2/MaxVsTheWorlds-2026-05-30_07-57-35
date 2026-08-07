@@ -39,12 +39,6 @@ namespace MaxWorlds.Bosses
         /// tell you cannot outrun is not a tell.</summary>
         public const float PlayerSpeed = 6f;
 
-        /// <summary>The level Max tends to reach by the time he gets to the boss: two factories' worth
-        /// of robots is roughly forty-odd kills, and the XP track puts that at level 7. It matters
-        /// because the power ramp more than doubles his DPS on the way (YT-67) — tune the boss's HP
-        /// against a level-1 blaster and you have tuned it against a gun nobody brings.</summary>
-        public const int LevelAtTheBoss = 7;
-
         /// <summary>Fraction of the fight the player is actually inside the blaster's 6 m range AND
         /// pointing it at the boss. The rest is spent repositioning, dodging, and closing the gap the
         /// boss keeps opening — it circles at exactly the blaster's reach.</summary>
@@ -88,26 +82,27 @@ namespace MaxWorlds.Bosses
 
         // ---------------------------------------------------------------- how long does it last?
 
-        /// <summary>What the blaster actually does to the boss, per second, in the hands of the player
-        /// who gets there: the gun's raw output, ramped by his level, cut by the tank running dry, and
-        /// cut again by all the time he spends not pointing it at anything.</summary>
-        public static float PlayerDps(int level, float engagement)
+        /// <summary>What the blaster actually does to the boss, per second: the gun's raw output, cut
+        /// by the tank running dry, and cut again by all the time he spends not pointing it at
+        /// anything. MV-287 removed the per-run level/power ramp — Max's DPS is now permanently the
+        /// weapon's base output (no automatic scaling) until a chosen upgrade changes it, so there is
+        /// no level input here any more.</summary>
+        public static float PlayerDps(float engagement)
         {
             const float RawDps = 40f;   // 4 damage a tick, a tick every 0.1 s (WaterBlaster)
 
             return RawDps
-                 * PowerRamp.DpsMultiplier(level)
                  * BlasterTuning.WorstCaseUptime
                  * Mathf.Clamp01(engagement);
         }
 
-        public static float PlayerDps(int level) => PlayerDps(level, Engagement);
+        public static float PlayerDps() => PlayerDps(Engagement);
 
         /// <summary>Seconds to put the boss down.</summary>
-        public static float SecondsToKill(int level, float engagement) =>
-            BossTuning.Health / Mathf.Max(0.01f, PlayerDps(level, engagement));
+        public static float SecondsToKill(float engagement) =>
+            BossTuning.Health / Mathf.Max(0.01f, PlayerDps(engagement));
 
-        public static float SecondsToKill(int level) => SecondsToKill(level, Engagement);
+        public static float SecondsToKill() => SecondsToKill(Engagement);
 
         // ---------------------------------------------------------------- can you survive it?
 
@@ -144,9 +139,9 @@ namespace MaxWorlds.Bosses
 
         /// <summary>Damage taken over a whole fight — half of it enraged, because the enrage is at
         /// half health and the player's damage is roughly even across the fight.</summary>
-        public static float DamageOverTheFight(float dodge, int level)
+        public static float DamageOverTheFight(float dodge)
         {
-            float seconds = SecondsToKill(level);
+            float seconds = SecondsToKill();
 
             return (IncomingDps(dodge, enraged: false) + IncomingDps(dodge, enraged: true))
                  * 0.5f * seconds;
@@ -154,14 +149,14 @@ namespace MaxWorlds.Bosses
 
         /// <summary>What the slow trickle of out-of-combat regen gives back across a fight in which you
         /// are rarely out of combat.</summary>
-        public static float RegenOverTheFight(int level) =>
-            PlayerTuning.RegenPerSec * CleanFraction * SecondsToKill(level);
+        public static float RegenOverTheFight() =>
+            PlayerTuning.RegenPerSec * CleanFraction * SecondsToKill();
 
         /// <summary>Health left at the end, for a player of this skill. At or below zero, he died.</summary>
-        public static float HealthLeft(float dodge, int level, float playerHealth = 100f) =>
-            playerHealth + RegenOverTheFight(level) - DamageOverTheFight(dodge, level);
+        public static float HealthLeft(float dodge, float playerHealth = 100f) =>
+            playerHealth + RegenOverTheFight() - DamageOverTheFight(dodge);
 
-        public static bool Survives(float dodge, int level, float playerHealth = 100f) =>
-            HealthLeft(dodge, level, playerHealth) > 0f;
+        public static bool Survives(float dodge, float playerHealth = 100f) =>
+            HealthLeft(dodge, playerHealth) > 0f;
     }
 }

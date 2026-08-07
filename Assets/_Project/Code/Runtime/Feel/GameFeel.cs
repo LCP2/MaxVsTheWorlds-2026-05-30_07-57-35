@@ -43,9 +43,6 @@ namespace MaxWorlds.Feel
         [SerializeField] private float killTrauma = 0.2f;
         [SerializeField] private float factoryTrauma = 0.75f;
         [SerializeField] private float bossDefeatTrauma = 0.85f;
-        [Tooltip("The level-up thump (YT-67). Bigger than a kill so the power spike lands as an " +
-                 "event, well short of the factory so it doesn't read as an explosion.")]
-        [SerializeField] private float levelUpTrauma = 0.45f;
 
         [Header("Blaster kick")]
         [Tooltip("Recoil per fire tick while the stream is on.")]
@@ -67,7 +64,6 @@ namespace MaxWorlds.Feel
             HudSignals.EnemyKilled += OnKill;
             HudSignals.FactoryDestroyed += OnFactory;
             HudSignals.BossDefeated += OnBossDefeated;
-            HudSignals.LevelUp += OnLevelUp;
         }
 
         private void OnDisable()
@@ -76,7 +72,6 @@ namespace MaxWorlds.Feel
             HudSignals.EnemyKilled -= OnKill;
             HudSignals.FactoryDestroyed -= OnFactory;
             HudSignals.BossDefeated -= OnBossDefeated;
-            HudSignals.LevelUp -= OnLevelUp;
         }
 
         /// <summary>The shake lives on the camera, not here — it has to run after the Cinemachine
@@ -112,14 +107,6 @@ namespace MaxWorlds.Feel
         private void OnBossDefeated()
         {
             Shake()?.AddTrauma(bossDefeatTrauma);
-            TryStop(bigStopSeconds, bigStopScale);
-        }
-
-        /// <summary>Max got stronger (YT-67). A hit-stop as well as a shake: the beat of held time
-        /// is what turns "a number went up" into a moment you feel in your hands.</summary>
-        private void OnLevelUp(int level, Vector3 pos)
-        {
-            Shake()?.AddTrauma(levelUpTrauma);
             TryStop(bigStopSeconds, bigStopScale);
         }
 

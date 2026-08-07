@@ -18,12 +18,8 @@ namespace MaxWorlds.UI
         /// <summary>A pickup/reward dropped. (worldPos, label, colour)</summary>
         public static event Action<Vector3, string, Color> Pickup;
 
-        /// <summary>An enemy died — HUD converts to XP + a SPARKS pickup. (worldPos)</summary>
+        /// <summary>An enemy died — HUD converts to a SPARKS pickup. (worldPos)</summary>
         public static event Action<Vector3> EnemyKilled;
-
-        /// <summary>Max levelled up (YT-67). (newLevel, worldPos) — gameplay listens to get
-        /// stronger, the feel layer listens to make it land.</summary>
-        public static event Action<int, Vector3> LevelUp;
 
         /// <summary>A real factory came online — HUD stops driving the arena tracker off kills
         /// and waits for <see cref="FactoryDestroyed"/> instead (YT-37).</summary>
@@ -58,9 +54,6 @@ namespace MaxWorlds.UI
 
         public static void EmitEnemyKilled(Vector3 worldPos)
             => EnemyKilled?.Invoke(worldPos);
-
-        public static void EmitLevelUp(int level, Vector3 worldPos)
-            => LevelUp?.Invoke(level, worldPos);
 
         public static void EmitFactoryRegistered()
             => FactoryRegistered?.Invoke();

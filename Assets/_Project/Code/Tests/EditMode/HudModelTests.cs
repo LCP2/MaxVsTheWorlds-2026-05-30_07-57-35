@@ -5,8 +5,8 @@ using MaxWorlds.UI;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>Unit tests for the YT-30 HUD's pure-logic models: ability cooldowns,
-    /// XP rollover, arena progress, boss phases, floating-text motion, and the slice
-    /// kill-driver in <see cref="HudModel"/>.</summary>
+    /// arena progress, boss phases, floating-text motion, and the slice kill-driver in
+    /// <see cref="HudModel"/>.</summary>
     public sealed class HudModelTests
     {
         // ---- AbilityCooldown ----
@@ -49,35 +49,6 @@ namespace MaxWorlds.Tests.EditMode
             var cd = new AbilityCooldown(0f);
             Assert.IsTrue(cd.Trigger());
             Assert.IsTrue(cd.Ready);
-        }
-
-        // ---- XpTrack ----
-
-        [Test]
-        public void Xp_FillsWithoutLevellingBelowThreshold()
-        {
-            var xp = new XpTrack(baseRequirement: 20, perLevelGrowth: 10);
-            Assert.AreEqual(0, xp.Add(10));
-            Assert.AreEqual(1, xp.Level);
-            Assert.AreEqual(0.5f, xp.Normalized, 1e-4);
-        }
-
-        [Test]
-        public void Xp_RollsOverAndCarriesRemainder()
-        {
-            var xp = new XpTrack(baseRequirement: 20, perLevelGrowth: 10);
-            Assert.AreEqual(1, xp.Add(25)); // 20 clears L1 (needs 20), 5 into L2 (needs 30)
-            Assert.AreEqual(2, xp.Level);
-            Assert.AreEqual(5, xp.XpIntoLevel);
-        }
-
-        [Test]
-        public void Xp_MultiLevelJump()
-        {
-            var xp = new XpTrack(baseRequirement: 10, perLevelGrowth: 0);
-            Assert.AreEqual(3, xp.Add(35)); // 10+10+10 clears three levels, 5 remainder
-            Assert.AreEqual(4, xp.Level);
-            Assert.AreEqual(5, xp.XpIntoLevel);
         }
 
         // ---- ArenaProgress ----
@@ -174,9 +145,9 @@ namespace MaxWorlds.Tests.EditMode
         // ---- HudModel slice kill-driver ----
 
         [Test]
-        public void Model_KillGrantsXpAndChargesUltimate()
+        public void Model_KillIncrementsKillsAndChargesUltimate()
         {
-            var m = new HudModel(xpPerKill: 6, ultimateChargePerKill: 0.25f);
+            var m = new HudModel(sparksPerKill: 6, ultimateChargePerKill: 0.25f);
             m.RegisterKill();
             Assert.AreEqual(1, m.Kills);
             Assert.AreEqual(0.25f, m.UltimateCharge, 1e-4);
