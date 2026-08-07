@@ -2,7 +2,9 @@ using UnityEngine;
 
 namespace MaxWorlds.Enemies
 {
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute }
+    // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Bomber/Blinker are new
+    // archetype ROWS, not a renumbering of the existing tiers.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Bomber, Blinker }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -38,10 +40,21 @@ namespace MaxWorlds.Enemies
         public readonly float RecoverTime;
         public readonly float KnockbackDecay;
 
+        /// <summary>How close a RANGED kind (<see cref="EnemyKind.Gunner"/>/<see cref="EnemyKind.Bomber"/>)
+        /// tries to stay from Max — inside this it backs off instead of closing, which is the whole
+        /// difference between "keeps its distance" and a rusher wearing a different silhouette (MV-293).
+        /// Zero for every melee kind: they have nothing to retreat from.</summary>
+        public readonly float StandoffRange;
+
+        /// <summary>How often <see cref="EnemyKind.Blinker"/> may teleport-flank while it hasn't yet
+        /// closed to melee range (MV-293). Zero for every other kind — they only ever walk.</summary>
+        public readonly float TeleportCooldown;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
-            float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay)
+            float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay,
+            float standoffRange = 0f, float teleportCooldown = 0f)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -50,6 +63,7 @@ namespace MaxWorlds.Enemies
             LungeRange = lungeRange; TelegraphTime = telegraphTime;
             LungeSpeed = lungeSpeed; LungeTime = lungeTime; RecoverTime = recoverTime;
             KnockbackDecay = knockbackDecay;
+            StandoffRange = standoffRange; TeleportCooldown = teleportCooldown;
         }
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
@@ -144,11 +158,86 @@ namespace MaxWorlds.Enemies
             lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
             knockbackDecay: 120f);
 
+        /// <summary>
+        /// Ranged laser (MV-293): keeps its distance in the 4.5–9 m band — inside that it backs off
+        /// rather than closing, so the answer to a Gunner is never just "walk at it" the way it is for
+        /// every melee kind. Aims live while telegraphing, then commits to a LOCKED beam (the same
+        /// "no info through the wind-up" rule as a lunge, see <see cref="RobotEnemy"/>'s Telegraph):
+        /// stand still after the tell fires and it hits, side-step out of the beam's width or break
+        /// line of sight and it doesn't. <see cref="ContactDamage"/> here means damage/second while the
+        /// beam holds, not a single hit; <see cref="ContactRadius"/> means the beam's half-width.
+        /// Same small-tier silhouette and health band as the rusher — its threat is the ranged pressure,
+        /// not a bigger body.
+        /// </summary>
+        public static EnemyArchetype Gunner => new EnemyArchetype(
+            EnemyKind.Gunner, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
+            colliderHeight: 1.4f, colliderRadius: 0.4f,
+            moveSpeed: 2.2f, maxHealth: 26f,
+            contactDamage: 18f,   // DPS while the beam holds
+            contactRadius: 0.6f,  // beam half-width — wider than Max's 0.5 m radius, still side-steppable
+            lungeRange: 9f,       // max fire range
+            telegraphTime: 0.5f,  // aim wind-up — the dodge window
+            lungeSpeed: 0f,       // it never moves during the shot
+            lungeTime: 1.1f,      // beam duration
+            recoverTime: 1.3f,
+            knockbackDecay: 28f,
+            standoffRange: 4.5f);
+
+        /// <summary>
+        /// Lobs a slow homing missile (MV-293) rather than closing — pure area denial, forcing the
+        /// player to keep moving instead of camping a good spot. Keeps a wider distance band than the
+        /// Gunner (5–10 m) and its wind-up is heavier, since the payoff (a splash, not a beam-thin
+        /// laser) is bigger. <see cref="ContactDamage"/>/<see cref="ContactRadius"/> here are the
+        /// missile's explosion damage and splash radius; <see cref="LungeSpeed"/> is the missile's
+        /// flight speed — deliberately slow (<see cref="HomingMissile"/>'s own turn rate is gentle
+        /// too), so a player who's watching can outwalk or juke it rather than eat a guaranteed hit.
+        /// </summary>
+        public static EnemyArchetype Bomber => new EnemyArchetype(
+            EnemyKind.Bomber, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
+            colliderHeight: 1.45f, colliderRadius: 0.42f,
+            // MV-293: kept BELOW the rusher's 32 HP on purpose — every new small-tier kind stays a
+            // one-rusher-shot kill (EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame
+            // pins that only the Bruiser survives a full-health rusher's-worth of damage). A Bomber's
+            // threat is its range, not its ability to soak fire once you close the gap on it.
+            moveSpeed: 1.8f, maxHealth: 30f,
+            contactDamage: 22f,   // splash damage
+            contactRadius: 2.0f,  // splash radius
+            lungeRange: 10f,      // max fire range
+            telegraphTime: 0.7f,  // lob wind-up — heavier tell than the Gunner's aim
+            lungeSpeed: 4.5f,     // missile flight speed — slow and dodgeable
+            lungeTime: 0.3f,      // release beat before it recovers
+            recoverTime: 2.2f,    // area-denial cadence, not rapid fire
+            knockbackDecay: 28f,
+            standoffRange: 5f);
+
+        /// <summary>
+        /// Teleport-flanks Max (MV-293) instead of relying on raw pursuit speed — the one kind you
+        /// cannot simply out-position by backing away in a straight line, because it cheats the
+        /// distance instead of closing it. Otherwise a rusher: once it lands from a blink it fights
+        /// with the same melee lunge as every other close-range kind (<see cref="RobotEnemy"/>'s
+        /// default Lunge case covers it). <see cref="TeleportCooldown"/> is how often it may blink
+        /// while it hasn't yet reached melee range; <see cref="EnemyArchetype.TelegraphTime"/> doubles
+        /// as the blink's own charge-up (it has no other use for a kind that's never mid-lunge and
+        /// mid-teleport at once).
+        /// </summary>
+        public static EnemyArchetype Blinker => new EnemyArchetype(
+            EnemyKind.Blinker, EnemyShape.Capsule, new Vector3(0.75f, 0.75f, 0.75f),
+            colliderHeight: 1.35f, colliderRadius: 0.4f,
+            moveSpeed: 2.4f, maxHealth: 30f,
+            contactDamage: 14f, contactRadius: 1.0f,
+            lungeRange: 2.2f, telegraphTime: 0.5f,
+            lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
+            knockbackDecay: 28f,
+            teleportCooldown: 4.5f);
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
             EnemyKind.Heavy => Heavy,
             EnemyKind.Brute => Brute,
+            EnemyKind.Gunner => Gunner,
+            EnemyKind.Bomber => Bomber,
+            EnemyKind.Blinker => Blinker,
             _ => Rusher,
         };
 
@@ -166,7 +255,8 @@ namespace MaxWorlds.Enemies
         public EnemyArchetype Toughened(float multiplier) => new EnemyArchetype(
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
-            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay);
+            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
+            StandoffRange, TeleportCooldown);
 
         /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
         /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
@@ -176,7 +266,8 @@ namespace MaxWorlds.Enemies
         public EnemyArchetype WithHealthMultiplier(float multiplier) => new EnemyArchetype(
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
-            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay);
+            LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
+            StandoffRange, TeleportCooldown);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>
@@ -193,5 +284,44 @@ namespace MaxWorlds.Enemies
             if (bruiserEvery <= 0 || emitted < firstBruiserAt) return EnemyKind.Rusher;
             return emitted % bruiserEvery == 0 ? EnemyKind.Bruiser : EnemyKind.Rusher;
         }
+
+        /// <summary>Every kind's "every Nth, not before firstAt" cadence (MV-293) — the same idiom
+        /// <see cref="KindFor(int,int,int)"/> already used for the bruiser, so a factory's mix stays a
+        /// handful of small integer knobs (the per-area placement <c>MV-284</c> would give this is a
+        /// separate ticket; this is what actually drives the live spawner today).</summary>
+        public readonly struct MixRates
+        {
+            public readonly int BruiserEvery, FirstBruiserAt;
+            public readonly int GunnerEvery, FirstGunnerAt;
+            public readonly int BomberEvery, FirstBomberAt;
+            public readonly int BlinkerEvery, FirstBlinkerAt;
+
+            public MixRates(int bruiserEvery, int firstBruiserAt,
+                int gunnerEvery, int firstGunnerAt,
+                int bomberEvery, int firstBomberAt,
+                int blinkerEvery, int firstBlinkerAt)
+            {
+                BruiserEvery = bruiserEvery; FirstBruiserAt = firstBruiserAt;
+                GunnerEvery = gunnerEvery; FirstGunnerAt = firstGunnerAt;
+                BomberEvery = bomberEvery; FirstBomberAt = firstBomberAt;
+                BlinkerEvery = blinkerEvery; FirstBlinkerAt = firstBlinkerAt;
+            }
+        }
+
+        /// <summary>Places the three new archetypes (MV-293) alongside the existing bruiser mix, each
+        /// checked in a fixed priority order — rarest first — so two cadences landing on the same
+        /// emitted count don't silently starve one another (a Blinker slot always wins over a
+        /// coincident Bruiser slot, etc.). Falls through to <see cref="KindFor(int,int,int)"/> for the
+        /// bruiser/rusher split once none of the new kinds' cadences match.</summary>
+        public static EnemyKind KindFor(int emitted, in MixRates rates)
+        {
+            if (Matches(emitted, rates.BlinkerEvery, rates.FirstBlinkerAt)) return EnemyKind.Blinker;
+            if (Matches(emitted, rates.BomberEvery, rates.FirstBomberAt)) return EnemyKind.Bomber;
+            if (Matches(emitted, rates.GunnerEvery, rates.FirstGunnerAt)) return EnemyKind.Gunner;
+            return KindFor(emitted, rates.BruiserEvery, rates.FirstBruiserAt);
+        }
+
+        private static bool Matches(int emitted, int every, int firstAt) =>
+            every > 0 && emitted >= firstAt && emitted % every == 0;
     }
 }
