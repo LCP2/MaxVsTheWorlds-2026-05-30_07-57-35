@@ -784,7 +784,7 @@ MonoBehaviour:
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  coneHalfAngle: 48
+  coneHalfAngle: 5
   streamVisualRadius: 1.1
   debugOverlay: 1
   aimSource: {fileID: 435318708}
