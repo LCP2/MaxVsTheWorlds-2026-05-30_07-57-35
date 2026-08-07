@@ -98,6 +98,30 @@ namespace MaxWorlds.Enemies
                  "first, and the bruiser lands as an escalation.")]
         [SerializeField] private int firstBruiserAt = 3;
 
+        [Header("Archetype mix (MV-293) — the same 'every Nth, not before firstAt' idiom as the " +
+                "bruiser above, one cadence per new kind. Checked rarest-first, so a coincident slot " +
+                "always favours the rarer kind.")]
+        [Tooltip("Every Nth robot is a Gunner (ranged laser).")]
+        [SerializeField] private int gunnerEvery = 6;
+        [Tooltip("No Gunners until this many robots have come out.")]
+        [SerializeField] private int firstGunnerAt = 5;
+        [Tooltip("Every Nth robot is a Bomber (homing missile).")]
+        [SerializeField] private int bomberEvery = 8;
+        [Tooltip("No Bombers until this many robots have come out.")]
+        [SerializeField] private int firstBomberAt = 7;
+        [Tooltip("Every Nth robot is a Blinker (teleport-flank).")]
+        [SerializeField] private int blinkerEvery = 10;
+        [Tooltip("No Blinkers until this many robots have come out.")]
+        [SerializeField] private int firstBlinkerAt = 9;
+
+        /// <summary>This factory's full archetype mix (MV-293), read live so a Settings-panel or test
+        /// override to any cadence takes effect on the very next spawn.</summary>
+        private EnemyMix.MixRates CurrentMixRates => new EnemyMix.MixRates(
+            bruiserEvery, firstBruiserAt,
+            gunnerEvery, firstGunnerAt,
+            bomberEvery, firstBomberAt,
+            blinkerEvery, firstBlinkerAt);
+
         // --- Death-throes surge (YT-182) — the wreck's last wave. A shed dying shouldn't just go
         // quiet: it spits out a short burst, and on a roll one Bruiser standing in as the "elite"
         // crawling out of the wreck, so each kill is a spike of danger rather than the quietest
@@ -250,7 +274,7 @@ namespace MaxWorlds.Enemies
             // Guarded here too, not just in Update: SpawnOne is also called from outside (the press-kit
             // director reflects it to populate a shot). A dead factory must not emit down ANY path.
             if (!_running) return;
-            SpawnKind(EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt));
+            SpawnKind(EnemyMix.KindFor(_emitted, CurrentMixRates));
         }
 
         /// <summary>
@@ -281,7 +305,7 @@ namespace MaxWorlds.Enemies
                 // At most one elite per surge — a wreck coughing up a single tough unit reads as a
                 // beat; a wreck coughing up a wall of them reads as a bug.
                 bool spawnElite = !eliteSpawned && eliteChance > 0f && Random.value < eliteChance;
-                SpawnKind(spawnElite ? EnemyKind.Bruiser : EnemyMix.KindFor(_emitted, bruiserEvery, firstBruiserAt));
+                SpawnKind(spawnElite ? EnemyKind.Bruiser : EnemyMix.KindFor(_emitted, CurrentMixRates));
                 if (spawnElite) eliteSpawned = true;
             }
         }

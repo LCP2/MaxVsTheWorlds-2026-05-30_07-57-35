@@ -29,7 +29,9 @@ namespace MaxWorlds.Enemies
     {
         // Emerging is appended, not inserted: these are serialized as ints, and renumbering the
         // existing members would silently re-label every one of them.
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging }
+        // Teleport (MV-293) follows the same rule — it's the Blinker's flank-blink, appended after
+        // Emerging rather than inserted anywhere earlier.
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -57,6 +59,12 @@ namespace MaxWorlds.Enemies
         [SerializeField] private float recoverTime = 0.7f;
         [SerializeField] private float contactDamage = 12f;
         [SerializeField] private float contactRadius = 1.0f;
+
+        [Header("Ranged / teleport (MV-293) — Gunner/Bomber/Blinker only, 0 for every melee kind")]
+        [Tooltip("A ranged kind backs off inside this instead of closing — see EnemyArchetype.StandoffRange.")]
+        [SerializeField] private float standoffRange = 0f;
+        [Tooltip("How often a Blinker may flank-teleport while still out of melee range.")]
+        [SerializeField] private float teleportCooldown = 0f;
 
         [Header("Health")]
         [SerializeField] private float maxHealth = 24f;
@@ -126,6 +134,8 @@ namespace MaxWorlds.Enemies
             lungeTime = a.LungeTime;
             recoverTime = a.RecoverTime;
             knockbackDecay = a.KnockbackDecay;
+            standoffRange = a.StandoffRange;
+            teleportCooldown = a.TeleportCooldown;
             ResetState();
         }
 
@@ -182,6 +192,14 @@ namespace MaxWorlds.Enemies
         private float _closest = float.MaxValue;
         private float _stallTimer;
 
+        /// <summary>Seconds until a Blinker may next flank-teleport (MV-293); irrelevant, and never
+        /// counted down, for every other kind.</summary>
+        private float _teleportTimer;
+
+        /// <summary>Where a Blinker is warping to — computed the instant the teleport triggers, in
+        /// <see cref="TickChase"/>, then executed after the charge-up in <see cref="TickTeleport"/>.</summary>
+        private Vector3 _teleportTarget;
+
         /// <summary>What this robot knows about where Max is — which, since YT-83, is no longer the
         /// same thing as where he is. Read-only outside; the state machine drives it.</summary>
         public Perception Sight => _sight;
@@ -196,6 +214,9 @@ namespace MaxWorlds.Enemies
             EnemyKind.Bruiser => "BRUISER",
             EnemyKind.Heavy => "HEAVY",
             EnemyKind.Brute => "BRUTE",
+            EnemyKind.Gunner => "GUNNER",
+            EnemyKind.Bomber => "BOMBER",
+            EnemyKind.Blinker => "BLINKER",
             _ => "RUSHER",
         };
 
@@ -264,6 +285,9 @@ namespace MaxWorlds.Enemies
             _stallTimer = 0f;
             _knockback = Vector3.zero;
             _haltTimer = 0f;
+            // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
+            // else before its first attack, rather than an instant blink the moment it's born.
+            _teleportTimer = teleportCooldown;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -311,6 +335,7 @@ namespace MaxWorlds.Enemies
                     case State.Telegraph: TickTelegraph(dt); break;
                     case State.Lunge:    TickLunge(dt);    break;
                     case State.Recover:  TickRecover(dt);  break;
+                    case State.Teleport: TickTeleport(dt); break;
                 }
             }
 
@@ -383,6 +408,24 @@ namespace MaxWorlds.Enemies
             to.y = 0f;
             float dist = to.magnitude;   // to the GOAL — what "arrived" and "close enough to lunge" mean
 
+            // Blinker (MV-293): the one kind that cheats the distance instead of closing it. Checked
+            // here, ahead of the ordinary chase, so a Blinker still out of melee range blinks rather
+            // than plodding the rest of the way like a rusher.
+            if (Kind == EnemyKind.Blinker)
+            {
+                _teleportTimer -= dt;
+                if (_teleportTimer <= 0f && _sight.HasSight && dist > lungeRange)
+                {
+                    float sign = UnityEngine.Random.value < 0.5f ? 1f : -1f;
+                    _teleportTarget = BlinkerTeleport.FlankPoint(
+                        target.position, transform.position, lungeRange * 0.85f, sign);
+                    Current = State.Teleport;
+                    _stateTimer = 0f;
+                    SetTell(windupTell);
+                    return;
+                }
+            }
+
             // Ask the level the way (YT-93). In the same room this is the goal itself and the chase is
             // the beeline it always was; from another room it is the next doorway, so a robot leaving
             // the shed walks out of the shed instead of into the side of it. The route is computed to
@@ -406,6 +449,13 @@ namespace MaxWorlds.Enemies
                 _wallTimer -= dt;
                 dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
             }
+
+            // Gunner/Bomber (MV-293): the answer to a ranged kind must never be "walk at it" — inside
+            // its standoff band it backs off along the same line it was closing on, rather than
+            // committing to melee range like everything else in the swarm.
+            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Bomber;
+            bool tooClose = ranged && standoffRange > 0f && _sight.HasSight && dist < standoffRange;
+            if (tooClose) dir = -dir;
 
             bool hunting = !_sight.HasSight;
             float speed = EffectiveMoveSpeed;
@@ -436,7 +486,12 @@ namespace MaxWorlds.Enemies
 
             // Only wind up at something you can actually SEE. Without this a robot lunges at the
             // tree Max is standing behind, which looks broken and is free damage for the player.
-            if (_sight.HasSight && dist <= lungeRange)
+            //
+            // A ranged kind also withholds the wind-up until it has actually opened its standoff gap
+            // (MV-293) — without this check it "retreats" for exactly one frame and then fires from
+            // point-blank anyway, since Telegraph holds position and dist <= lungeRange was already
+            // true before it took that one step back.
+            if (_sight.HasSight && dist <= lungeRange && !tooClose)
             {
                 Current = State.Telegraph;
                 _stateTimer = 0f;
@@ -497,10 +552,71 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>What "commit to the attack" means for this kind (MV-293) — a melee dash for
+        /// everything that closes to contact range, or the Gunner/Bomber's ranged payoff for the two
+        /// kinds that don't. Same state, same Telegraph→Lunge→Recover shape; only the middle beat
+        /// differs, which is what keeps a second and third ranged kind cheap to add later.</summary>
         private void TickLunge(float dt)
+        {
+            switch (Kind)
+            {
+                case EnemyKind.Gunner: TickBeam(dt); break;
+                case EnemyKind.Bomber: TickMissileFire(dt); break;
+                default:               TickMeleeLunge(dt); break;
+            }
+        }
+
+        private void TickMeleeLunge(float dt)
         {
             _cc.Move(_lungeDir * lungeSpeed * dt);
             if (!_dealtThisLunge) TryContactDamage();
+            if (_stateTimer >= lungeTime)
+            {
+                Current = State.Recover;
+                _stateTimer = 0f;
+                SetTell(idleTell);
+            }
+        }
+
+        /// <summary>Gunner's laser (MV-293): <see cref="_lungeDir"/> was locked the instant the
+        /// telegraph ended (<see cref="TickTelegraph"/> re-aims live only up to that point) — this
+        /// state never re-aims, it only checks whether the target is still standing in the beam it
+        /// already committed to, and whether anything now blocks it. <see cref="contactDamage"/> is
+        /// applied as damage PER SECOND while both hold, not as a single hit.</summary>
+        private void TickBeam(float dt)
+        {
+            if (target != null && _sight.HasSight &&
+                BeamGeometry.Hits(transform.position, _lungeDir, lungeRange, contactRadius, target.position))
+            {
+                _targetDamageable ??= target.GetComponent<IDamageable>();
+                if (_targetDamageable != null && _targetDamageable.IsAlive)
+                {
+                    _targetDamageable.TakeDamage(new DamageInfo(
+                        contactDamage * dt, transform.position, _lungeDir, Team.Enemy));
+                }
+            }
+
+            if (_stateTimer >= lungeTime)
+            {
+                Current = State.Recover;
+                _stateTimer = 0f;
+                SetTell(idleTell);
+            }
+        }
+
+        /// <summary>Bomber's homing missile (MV-293): fired once, on the first tick of the state —
+        /// <see cref="_dealtThisLunge"/> is the same "already acted this cycle" flag the melee lunge
+        /// uses to gate its contact damage to a single hit, reused here to gate the launch to one shot.
+        /// The rest of the state is just the release beat before Recover.</summary>
+        private void TickMissileFire(float dt)
+        {
+            if (!_dealtThisLunge)
+            {
+                _dealtThisLunge = true;
+                if (target != null)
+                    HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage, contactRadius);
+            }
+
             if (_stateTimer >= lungeTime)
             {
                 Current = State.Recover;
@@ -516,6 +632,28 @@ namespace MaxWorlds.Enemies
                 Current = State.Chase;
                 _stateTimer = 0f;
             }
+        }
+
+        /// <summary>The Blinker's blink (MV-293): a held charge-up (<see cref="telegraphTime"/> doing
+        /// double duty as the teleport's own tell, since this kind is never mid-lunge and mid-teleport
+        /// at once) then an instant reposition to the flank point <see cref="TickChase"/> already
+        /// computed. Lands back in Chase, not straight into a lunge — it's now close enough that the
+        /// very next tick reads the range and telegraphs normally, same as if it had walked there.</summary>
+        private void TickTeleport(float dt)
+        {
+            if (_stateTimer < telegraphTime) return;
+
+            // CharacterController owns its own internal position state; setting the transform directly
+            // while it's enabled fights that on the next Move(). Disable around the jump so the
+            // controller re-reads the new spot instead of resisting it.
+            _cc.enabled = false;
+            transform.position = _teleportTarget;
+            _cc.enabled = true;
+
+            _teleportTimer = teleportCooldown;
+            Current = State.Chase;
+            _stateTimer = 0f;
+            SetTell(idleTell);
         }
 
         private void TryContactDamage()

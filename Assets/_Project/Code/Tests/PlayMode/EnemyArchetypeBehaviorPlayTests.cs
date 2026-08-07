@@ -1,0 +1,131 @@
+using System.Collections;
+using System.Reflection;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.TestTools;
+using MaxWorlds.Enemies;
+using MaxWorlds.Player;
+
+namespace MaxWorlds.Tests.PlayMode
+{
+    /// <summary>
+    /// The three new archetypes (MV-293) against real Update() ticks, not just their tuning data —
+    /// EnemyArchetypeTests pins the NUMBERS, this proves the numbers actually produce the behaviour
+    /// the ticket asks for: a Gunner that backs off and lands a beam, a Bomber whose missile actually
+    /// reaches the player, a Blinker that closes the gap by cheating instead of walking it.
+    /// </summary>
+    public sealed class EnemyArchetypeBehaviorPlayTests
+    {
+        private static void Set(object o, string field, object value) =>
+            o.GetType().GetField(field, BindingFlags.NonPublic | BindingFlags.Instance)
+             .SetValue(o, value);
+
+        private static float FlatDistance(Vector3 a, Vector3 b) =>
+            Vector2.Distance(new Vector2(a.x, a.z), new Vector2(b.x, b.z));
+
+        /// <summary>A bare "Player"-tagged transform — enough for chase/sight/standoff tests that
+        /// don't need to be damaged.</summary>
+        private static GameObject NewMaxMarker(Vector3 pos)
+        {
+            var go = new GameObject("Max");
+            go.tag = "Player";
+            go.transform.position = pos;
+            return go;
+        }
+
+        /// <summary>The real, damageable Max (same construction as GroundAnchorPlayTests' contract
+        /// test) — for the two tests that need a hit to actually register.</summary>
+        private static GameObject NewRealMax(Vector3 pos, out PlayerHealth health)
+        {
+            var go = new GameObject("Max");
+            go.tag = "Player";
+            go.transform.position = pos;
+            go.AddComponent<CharacterController>();
+            go.AddComponent<PlayerController>();
+            health = go.AddComponent<PlayerHealth>();
+            return go;
+        }
+
+        private static RobotEnemy NewRobotAt(Vector3 pos, EnemyArchetype archetype)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            go.name = $"Robot ({archetype.Kind})";
+            go.transform.position = pos;
+            go.AddComponent<CharacterController>();
+            var e = go.AddComponent<RobotEnemy>();
+            e.Apply(archetype);
+            return e;
+        }
+
+        [UnityTest]
+        public IEnumerator Gunner_BacksOffWhenMaxGetsInsideItsStandoffRange()
+        {
+            var max = NewMaxMarker(Vector3.zero);
+            var gunner = NewRobotAt(new Vector3(0f, 0.7f, 2f), EnemyArchetype.Gunner); // inside the 4.5 m band
+
+            float start = FlatDistance(gunner.transform.position, max.transform.position);
+            yield return new WaitForSeconds(0.5f);
+            float end = FlatDistance(gunner.transform.position, max.transform.position);
+
+            Object.Destroy(gunner.gameObject);
+            Object.Destroy(max);
+
+            Assert.Greater(end, start, "a Gunner caught too close to Max must back off, not close the gap");
+        }
+
+        [UnityTest]
+        public IEnumerator Gunner_LandsItsBeamOnAStationaryTarget()
+        {
+            var max = NewRealMax(new Vector3(0f, 1f, 6f), out var health); // inside firing range, outside standoff
+            var gunner = NewRobotAt(Vector3.zero, EnemyArchetype.Gunner);
+
+            // Telegraph (0.5s) then a 1.1s beam — give it real margin either side.
+            yield return new WaitForSeconds(2.2f);
+
+            Object.Destroy(gunner.gameObject);
+            Object.Destroy(max);
+
+            Assert.Less(health.Current, health.Max, "the Gunner's beam never landed on a target it had a clear shot at");
+        }
+
+        [UnityTest]
+        public IEnumerator Bomber_HomingMissileReachesAStationaryTarget()
+        {
+            var max = NewRealMax(new Vector3(0f, 1f, 6f), out var health); // inside firing range, outside standoff
+            var bomber = NewRobotAt(Vector3.zero, EnemyArchetype.Bomber);
+
+            // Telegraph (0.7s) + missile flight (6 m at 4.5 m/s ≈ 1.3s) — generous margin.
+            yield return new WaitForSeconds(3f);
+
+            Object.Destroy(bomber.gameObject);
+            Object.Destroy(max);
+
+            Assert.Less(health.Current, health.Max, "the Bomber's missile never reached a stationary target");
+        }
+
+        [UnityTest]
+        public IEnumerator Blinker_ClosesTheGapByTeleportingRatherThanWalkingIt()
+        {
+            var max = NewMaxMarker(new Vector3(0f, 1f, 10f)); // well outside lunge range — a plain
+                                                                // walk can't meaningfully close this
+            var blinker = NewRobotAt(Vector3.zero, EnemyArchetype.Blinker);
+
+            // Shrink the cooldown/charge-up so the test doesn't have to wait out the authored 4.5s —
+            // then re-seed the timer the shrunk cooldown feeds, same as Apply() would have.
+            Set(blinker, "teleportCooldown", 0.05f);
+            Set(blinker, "telegraphTime", 0.05f);
+            blinker.ResetState();
+
+            float start = FlatDistance(blinker.transform.position, max.transform.position);
+            yield return new WaitForSeconds(0.5f);
+            float end = FlatDistance(blinker.transform.position, max.transform.position);
+
+            Object.Destroy(blinker.gameObject);
+            Object.Destroy(max);
+
+            // 0.5s of ordinary chase speed (~2.4 m/s) covers little over 1 m; a teleport lands it
+            // roughly lungeRange*0.85 (~1.9 m) from Max. Either way this only holds if it blinked.
+            Assert.Less(end, start - 3f, "the Blinker should have closed most of a 10 m gap by now — it didn't blink");
+        }
+    }
+}
