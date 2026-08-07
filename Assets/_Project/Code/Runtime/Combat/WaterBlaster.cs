@@ -31,10 +31,15 @@ namespace MaxWorlds.Combat
     /// </summary>
     public sealed class WaterBlaster : MonoBehaviour
     {
+        /// <summary>Authored base spray reach in metres (YT-129, retuned MV-280): SHORT — weak but
+        /// forgiving. The RCDA Range track (MV-263) extends this base by up to 3x at its max level
+        /// (<see cref="WeaponCatalog.DefaultRcdaRangePerLevel"/> is tuned against THIS value — change
+        /// them together). Nozzle upgrades (YT-133) narrow/lengthen it further.</summary>
+        public const float DefaultRange = 3f;
+
         [Header("Stream")]
-        // Opening hose spray (YT-129): SHORT reach, WIDE arc — weak but forgiving. Nozzle
-        // upgrades (YT-133) narrow/lengthen it from this base. Also baked in Backyard_Slice.unity.
-        [SerializeField] private float range = 4.5f;
+        // Also baked in Backyard_Slice.unity — keep that value in sync with DefaultRange above.
+        [SerializeField] private float range = DefaultRange;
         [SerializeField] private float radius = 0.6f;
         [SerializeField] private float damagePerTick = 4f;
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks

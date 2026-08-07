@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using MaxWorlds.Combat;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -24,6 +25,17 @@ namespace MaxWorlds.Tests.EditMode
             float l6 = WeaponCatalog.EffectiveRange(4.5f, 6, 0.6f);
             Assert.That(l2 - l1, Is.EqualTo(0.6f).Within(1e-5f));
             Assert.That(l6 - l1, Is.EqualTo(0.6f * 5f).Within(1e-5f), "5 steps above L1 up to the L6 cap");
+        }
+
+        [Test]
+        public void RangeTrack_MaxLevelReachIsRoughlyThreeTimesBase_MV280()
+        {
+            float baseReach = WaterBlaster.DefaultRange;
+            float maxReach = WeaponCatalog.EffectiveRange(
+                baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
+
+            Assert.That(maxReach, Is.EqualTo(baseReach * 3f).Within(0.05f),
+                "MV-280: retuning the base reach or the per-level step must keep the max Range level at ~3x base");
         }
 
         [Test]

@@ -54,8 +54,10 @@ namespace MaxWorlds.Weapons
         /// <summary>Extra spray reach in metres each Range track level above 1 adds (MV-263) — layered
         /// additively on the weapon's authored base reach, the same shape as the legacy nozzle bonuses
         /// (<see cref="MaxWorlds.Upgrades.UpgradeState.RangeBonus"/>) it runs alongside during the
-        /// WV-230 migration. Level 1 is every track's starting level (spec §6), so it adds nothing.</summary>
-        public const float DefaultRcdaRangePerLevel = 0.6f;
+        /// WV-230 migration. Level 1 is every track's starting level (spec §6), so it adds nothing.
+        /// Retuned (MV-280) against <c>WaterBlaster</c>'s 3m authored base reach so the 5 steps up to
+        /// the Range cap (level 6) land at ~3x base (3 + 1.2*5 = 9) — change the two together.</summary>
+        public const float DefaultRcdaRangePerLevel = 1.2f;
 
         /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263) — Level 1
         /// is the authored base, unmodified.</summary>
