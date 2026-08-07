@@ -198,6 +198,12 @@ namespace MaxWorlds.Core
         /// radius (<c>waterBalloonSplashMult</c>).</summary>
         public static float? WaterBalloonSplashMult { get; set; }
 
+        /// <summary>Teleport's blink distance at Level 1, metres (MV-292).</summary>
+        public static float? TeleportBaseDistance { get; set; }
+
+        /// <summary>Extra Teleport blink distance at its Level 2 cap (MV-292).</summary>
+        public static float? TeleportDistancePerLevel { get; set; }
+
         // --- robot composition/accumulation (WV-234, spec §1-2/§9) — settings only for now, ready
         // for WV-222/223/224 (the gated-arena + robot-accumulation tickets) to spend. ---
 
@@ -305,6 +311,7 @@ namespace MaxWorlds.Core
             SpeedMultiplierPerLevel.HasValue ||
             WaterBalloonBaseDistance.HasValue || WaterBalloonDistancePerLevel.HasValue ||
             WaterBalloonSplashMult.HasValue ||
+            TeleportBaseDistance.HasValue || TeleportDistancePerLevel.HasValue ||
             StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
@@ -359,6 +366,8 @@ namespace MaxWorlds.Core
             WaterBalloonBaseDistance = null;
             WaterBalloonDistancePerLevel = null;
             WaterBalloonSplashMult = null;
+            TeleportBaseDistance = null;
+            TeleportDistancePerLevel = null;
             StartLargeCount = null;
             StartSmallCount = null;
             AreaGrowthPct = null;
@@ -433,6 +442,8 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(WaterBalloonBaseDistance), () => WaterBalloonBaseDistance, v => WaterBalloonBaseDistance = v),
             (PrefsPrefix + nameof(WaterBalloonDistancePerLevel), () => WaterBalloonDistancePerLevel, v => WaterBalloonDistancePerLevel = v),
             (PrefsPrefix + nameof(WaterBalloonSplashMult), () => WaterBalloonSplashMult, v => WaterBalloonSplashMult = v),
+            (PrefsPrefix + nameof(TeleportBaseDistance), () => TeleportBaseDistance, v => TeleportBaseDistance = v),
+            (PrefsPrefix + nameof(TeleportDistancePerLevel), () => TeleportDistancePerLevel, v => TeleportDistancePerLevel = v),
             (PrefsPrefix + nameof(StartLargeCount), () => StartLargeCount, v => StartLargeCount = v),
             (PrefsPrefix + nameof(StartSmallCount), () => StartSmallCount, v => StartSmallCount = v),
             (PrefsPrefix + nameof(AreaGrowthPct), () => AreaGrowthPct, v => AreaGrowthPct = v),

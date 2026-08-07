@@ -22,10 +22,13 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Placeholder base cooldowns (v0.5 recut spec §9 names these as settings —
         /// <c>waterBalloonCooldown</c>/<c>dashCooldown</c>/<c>teleportCooldown</c> — without pinning
-        /// numbers; live-tune via DevTuning once the Settings tab exists, WV-234).</summary>
+        /// numbers; live-tune via DevTuning once the Settings tab exists, WV-234). Teleport's
+        /// (MV-292) is deliberately well past Dash's: Dash is the short, frequent dodge; Teleport is
+        /// the long, infrequent escape/engage tool — the cooldown gap has to read as clearly as the
+        /// distance gap does.</summary>
         public const float DefaultWaterBalloonCooldownSeconds = 3f;
         public const float DefaultDashCooldownSeconds = 2.5f;
-        public const float DefaultTeleportCooldownSeconds = 4f;
+        public const float DefaultTeleportCooldownSeconds = 6f;
 
         /// <summary>The tracks, in the order the weapons screen lists them (spec §6; Capacity/Weapon
         /// Efficiency retired by MV-290).</summary>
