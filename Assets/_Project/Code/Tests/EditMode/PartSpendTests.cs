@@ -84,5 +84,45 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.Dash), Is.False);
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "a failed spend must not cost a part");
         }
+
+        // MV-274: power cells are exclusively primary/ability fuel — they must never buy an upgrade,
+        // even when the bank is flush with cells and empty of parts.
+
+        [Test]
+        public void BankedPowerCellsCannotSubstituteForPartsOnATrack()
+        {
+            PickupWallet.AddPowerCell();
+            PickupWallet.AddPowerCell();
+
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Capacity), Is.False,
+                "power cells must never buy a track upgrade");
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(1));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a rejected upgrade spend must not touch cells");
+        }
+
+        [Test]
+        public void BankedPowerCellsCannotSubstituteForPartsOnAnAbility()
+        {
+            WeaponSystemState.Acquire(AbilityKind.Speed);
+            PickupWallet.AddPowerCell();
+
+            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.Speed), Is.False,
+                "power cells must never buy an ability upgrade");
+            Assert.That(WeaponSystemState.AbilityLevel(AbilityKind.Speed), Is.EqualTo(1));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(1), "a rejected upgrade spend must not touch cells");
+        }
+
+        [Test]
+        public void SpendingOnATrackLeavesPowerCellsUntouched()
+        {
+            PickupWallet.AddPart();
+            PickupWallet.AddPowerCell();
+            PickupWallet.AddPowerCell();
+
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Capacity), Is.True);
+
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "the track upgrade must consume the part");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a part spend must never also spend cells");
+        }
     }
 }
