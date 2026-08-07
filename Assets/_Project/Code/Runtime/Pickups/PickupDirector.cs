@@ -45,13 +45,6 @@ namespace MaxWorlds.Pickups
 
         private const float ScatterRadius = 0.9f;
 
-        /// <summary>Radius <see cref="SeedPartsCache"/> scatters its parts on (MV-295) — deliberately
-        /// wider than <see cref="ScatterRadius"/> so adjacent parts in the same cache sit more than
-        /// <c>2 * CollectRadius</c> apart. At <see cref="ScatterRadius"/> the whole cache fit inside one
-        /// walk-over: a fresh-run playtest saw a single visit bank several parts at once from what read
-        /// as "one box". Each part in a cache must still cost its own separate walk-over.</summary>
-        private const float PartsCacheRadius = 2.0f;
-
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -59,19 +52,12 @@ namespace MaxWorlds.Pickups
             new GameObject("PickupDirector").AddComponent<PickupDirector>();
         }
 
-        /// <summary>The scene's one director, for a runner that needs to seed drops that were never a
-        /// robot or a factory death (MV-270's parts caches). Null only before <see cref="Install"/> has
-        /// run, which happens before any other RuntimeInitializeOnLoadMethod that would want it.</summary>
-        public static PickupDirector Instance { get; private set; }
-
         private readonly List<Pickup> _live = new List<Pickup>(32);
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
         private Transform _max;
         private int _largeKills;
-
-        private void Awake() => Instance = this;
 
         private void OnEnable()
         {
@@ -139,19 +125,6 @@ namespace MaxWorlds.Pickups
                 float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
                 SpawnDrop(PickupKind.PowerCell, pos + off);
-            }
-        }
-
-        /// <summary>A world-authored parts cache (MV-270, power-up cadence §5/§8.7): a shed-free area's
-        /// guaranteed power-up source, standing from the moment the level loads rather than dropping
-        /// from a kill. Collected the same walk-over way as any other pickup.</summary>
-        public void SeedPartsCache(Vector3 pos, int count = 3)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                float ang = i * (Mathf.PI * 2f / count);
-                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * PartsCacheRadius;
-                SpawnDrop(PickupKind.Part, pos + off);
             }
         }
 
