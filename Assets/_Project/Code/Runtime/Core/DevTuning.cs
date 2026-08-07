@@ -260,15 +260,32 @@ namespace MaxWorlds.Core
         /// introduced (<c>toughSubstitutionPct</c>).</summary>
         public static float? ToughSubstitutionPct { get; set; }
 
+        // --- World & Difficulty Framework dials (MV-269/270, Confluence MVW 34439170 §8) — the
+        // level-config's own high-leverage levers. Read live by WorldConfig.SolveComposition /
+        // WorldToughnessCurve.ToEngineCurve, so a moved slider retunes composition from the next
+        // area filled on, the same Or() idiom as every other knob. ---
+
+        /// <summary>Overrides the loaded world's <c>dials.baseThreat</c>.</summary>
+        public static float? WorldBaseThreat { get; set; }
+
+        /// <summary>Overrides the loaded world's <c>dials.threatGrowth</c>.</summary>
+        public static float? WorldThreatGrowth { get; set; }
+
+        /// <summary>Overrides the loaded world's <c>dials.toughnessCurve.heavyFromArea</c>.</summary>
+        public static float? WorldHeavyFromArea { get; set; }
+
+        /// <summary>Overrides the loaded world's <c>dials.toughnessCurve.bruteFromArea</c>.</summary>
+        public static float? WorldBruteFromArea { get; set; }
+
+        /// <summary>Overrides the loaded world's <c>dials.toughnessCurve.tankShareEnd</c>.</summary>
+        public static float? WorldTankShareEnd { get; set; }
+
         /// <summary>Power cells a large-robot kill drops, guaranteed (WV-226, spec §5/§9
         /// <c>cellsPerLargeKill</c>) — small robots drop nothing at all, so this is combat's only
         /// cell source.</summary>
         public static float? CellsPerLargeKill { get; set; }
 
-        // --- gated arena (WV-234, spec §1/§9) — settings only for now, ready for WV-222 to spend. ---
-
-        /// <summary>Sequential outdoor rooms in a run (<c>areaCount</c>).</summary>
-        public static float? AreaCount { get; set; }
+        // --- gated arena (WV-234, spec §1/§9) ---
 
         /// <summary>Sustained primary fire, seconds, to break a gate (<c>gateBreakSeconds</c>).</summary>
         public static float? GateBreakSeconds { get; set; }
@@ -277,10 +294,6 @@ namespace MaxWorlds.Core
         /// (<c>gateRequiresClear</c>) — stored as 0/1, a boolean has no other slider shape in this
         /// panel (YT-205's piecewise mapping still centres correctly at Default==Min==0).</summary>
         public static float? GateRequiresClear { get; set; }
-
-        /// <summary>Sheds placed across the run's areas (<c>shed count/placement</c> — placement
-        /// itself isn't a scalar knob, so only the count is tunable here).</summary>
-        public static float? ShedCount { get; set; }
 
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
@@ -325,8 +338,9 @@ namespace MaxWorlds.Core
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
             ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue ||
-            AreaCount.HasValue || GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
-            ShedCount.HasValue;
+            GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
+            WorldBaseThreat.HasValue || WorldThreatGrowth.HasValue || WorldHeavyFromArea.HasValue ||
+            WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -392,10 +406,13 @@ namespace MaxWorlds.Core
             BruteIntroArea = null;
             ToughSubstitutionPct = null;
             CellsPerLargeKill = null;
-            AreaCount = null;
             GateBreakSeconds = null;
             GateRequiresClear = null;
-            ShedCount = null;
+            WorldBaseThreat = null;
+            WorldThreatGrowth = null;
+            WorldHeavyFromArea = null;
+            WorldBruteFromArea = null;
+            WorldTankShareEnd = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -470,10 +487,13 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(BruteIntroArea), () => BruteIntroArea, v => BruteIntroArea = v),
             (PrefsPrefix + nameof(ToughSubstitutionPct), () => ToughSubstitutionPct, v => ToughSubstitutionPct = v),
             (PrefsPrefix + nameof(CellsPerLargeKill), () => CellsPerLargeKill, v => CellsPerLargeKill = v),
-            (PrefsPrefix + nameof(AreaCount), () => AreaCount, v => AreaCount = v),
             (PrefsPrefix + nameof(GateBreakSeconds), () => GateBreakSeconds, v => GateBreakSeconds = v),
             (PrefsPrefix + nameof(GateRequiresClear), () => GateRequiresClear, v => GateRequiresClear = v),
-            (PrefsPrefix + nameof(ShedCount), () => ShedCount, v => ShedCount = v),
+            (PrefsPrefix + nameof(WorldBaseThreat), () => WorldBaseThreat, v => WorldBaseThreat = v),
+            (PrefsPrefix + nameof(WorldThreatGrowth), () => WorldThreatGrowth, v => WorldThreatGrowth = v),
+            (PrefsPrefix + nameof(WorldHeavyFromArea), () => WorldHeavyFromArea, v => WorldHeavyFromArea = v),
+            (PrefsPrefix + nameof(WorldBruteFromArea), () => WorldBruteFromArea, v => WorldBruteFromArea = v),
+            (PrefsPrefix + nameof(WorldTankShareEnd), () => WorldTankShareEnd, v => WorldTankShareEnd = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never

@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using MaxWorlds.Arena;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -162,6 +163,44 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsFalse(WorldConfigLoader.TryLoad(json, out _, out string reason));
             StringAssert.Contains("no areas", reason);
+        }
+
+        // --- MV-275: the Settings panel's World & Difficulty dial overrides must actually reach
+        // SolveComposition, the single source both Garrison and PowerScoring solve against ---
+
+        [TearDown]
+        public void TearDown() => DevTuning.Reset();
+
+        [Test]
+        public void SolveComposition_RespectsBaseThreatAndThreatGrowthOverrides()
+        {
+            Assert.IsTrue(WorldConfigLoader.TryLoad(World1ConfigJson, out WorldConfig cfg, out string reason), reason);
+            float authored = cfg.SolveComposition(1).TotalThreatValue;
+
+            DevTuning.WorldBaseThreat = cfg.dials.baseThreat * 3f;
+            DevTuning.WorldThreatGrowth = cfg.dials.threatGrowth;
+            float overridden = cfg.SolveComposition(1).TotalThreatValue;
+
+            Assert.Greater(overridden, authored,
+                "moving the Base threat dial must raise the solved area budget, not just the JSON field");
+        }
+
+        [Test]
+        public void SolveComposition_RespectsToughnessCurveOverrides()
+        {
+            Assert.IsTrue(WorldConfigLoader.TryLoad(World1ConfigJson, out WorldConfig cfg, out string reason), reason);
+
+            // Area 3 sits before the authored heavyFromArea (5), so nothing tanky spawns yet.
+            var authored = cfg.SolveComposition(3);
+            Assert.AreEqual(0, authored.Heavy + authored.Brute,
+                "authored world1 shouldn't field Heavy/Brute this early");
+
+            DevTuning.WorldHeavyFromArea = 1f;
+            DevTuning.WorldTankShareEnd = 0.9f;
+            var overridden = cfg.SolveComposition(3);
+
+            Assert.Greater(overridden.Heavy + overridden.Brute, 0,
+                "pulling Heavy from area forward must actually field a Heavy/Brute earlier");
         }
     }
 }

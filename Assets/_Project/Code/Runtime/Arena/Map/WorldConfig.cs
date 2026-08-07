@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
@@ -191,13 +192,15 @@ namespace MaxWorlds.Arena
 
         /// <summary>Bridges to the engine's own linear-drift model (MV-268). Tank share starts at 0 at
         /// <see cref="heavyFromArea"/> (nothing tanky before then, matching the engine class's own
-        /// default) and drifts to <see cref="tankShareEnd"/> by <paramref name="lastArea"/>.</summary>
+        /// default) and drifts to <see cref="tankShareEnd"/> by <paramref name="lastArea"/>. Reads the
+        /// Settings panel's World-dial overrides (<see cref="DevTuning.WorldHeavyFromArea"/> etc.) the
+        /// same <c>Or()</c> idiom as every other live-tunable number in the game.</summary>
         public ToughnessCurve ToEngineCurve(int lastArea) => new ToughnessCurve
         {
-            heavyFromArea = heavyFromArea,
-            bruteFromArea = bruteFromArea,
+            heavyFromArea = Mathf.RoundToInt(DevTuning.Or(DevTuning.WorldHeavyFromArea, heavyFromArea)),
+            bruteFromArea = Mathf.RoundToInt(DevTuning.Or(DevTuning.WorldBruteFromArea, bruteFromArea)),
             tankShareAtHeavyIntro = 0f,
-            tankShareAtEnd = tankShareEnd,
+            tankShareAtEnd = DevTuning.Or(DevTuning.WorldTankShareEnd, tankShareEnd),
             lastArea = Mathf.Max(1, lastArea),
         };
     }
@@ -309,7 +312,9 @@ namespace MaxWorlds.Arena
         {
             if (dials == null || areaIndex < 1 || areaIndex > dials.areaCount) return default;
 
-            float budget = DifficultyEngine.TargetBudget(areaIndex, dials.baseThreat, dials.threatGrowth, dials.EnginePacing);
+            float baseThreat = DevTuning.Or(DevTuning.WorldBaseThreat, dials.baseThreat);
+            float threatGrowth = DevTuning.Or(DevTuning.WorldThreatGrowth, dials.threatGrowth);
+            float budget = DifficultyEngine.TargetBudget(areaIndex, baseThreat, threatGrowth, dials.EnginePacing);
             ToughnessCurve toughness = dials.toughnessCurve?.ToEngineCurve(dials.areaCount);
             return DifficultyEngine.SolveComposition(areaIndex, budget, toughness);
         }

@@ -17,9 +17,5 @@ namespace MaxWorlds.Arena
         /// <summary>Whether a gate requires its room cleared of robots before it can be attacked
         /// (<c>gateRequiresClear</c>) — off by default, stored as 0/1.</summary>
         public const float DefaultGateRequiresClear = 0f;
-
-        /// <summary>Sheds placed across the run's areas (spec §4: "roughly one shed every other
-        /// room, ~7 sheds").</summary>
-        public const float DefaultShedCount = 7f;
     }
 }

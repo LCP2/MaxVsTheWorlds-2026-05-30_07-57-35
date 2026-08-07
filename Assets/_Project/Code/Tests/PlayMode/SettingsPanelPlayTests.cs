@@ -286,23 +286,23 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheNewRecutKnobsDriveDevTuning()
         {
-            // WV-234, spec §9 spot-checks: one settings-only Arena knob (nothing consumes it yet,
-            // WV-222) and one ability knob that already had a live consumer (PlayerAbilities) but no
-            // slider to reach it until this ticket.
+            // Spot-checks: one World & Difficulty Framework dial (MV-275, replacing the old
+            // settings-only gated-arena knobs) and one ability knob that already had a live consumer
+            // (PlayerAbilities) but no slider to reach it until WV-234.
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
 
-            var areaCount = System.Array.Find(sliders, s => s.transform.parent.name == "Area count");
+            var baseThreat = System.Array.Find(sliders, s => s.transform.parent.name == "Base threat");
             var balloonDist = System.Array.Find(sliders, s => s.transform.parent.name == "Balloon base dist");
-            Assert.That(areaCount, Is.Not.Null, "no Area count slider (spec §1/§9)");
+            Assert.That(baseThreat, Is.Not.Null, "no Base threat slider (World & Difficulty Framework)");
             Assert.That(balloonDist, Is.Not.Null, "no Balloon base dist slider (spec §6a/§9)");
 
-            SetSliderToValue(areaCount, 12f);
+            SetSliderToValue(baseThreat, 20f);
             SetSliderToValue(balloonDist, 6f);
             yield return null;
 
-            Assert.That(DevTuning.AreaCount, Is.EqualTo(12f).Within(0.001f),
-                "moving the Area count slider must drive DevTuning.AreaCount");
+            Assert.That(DevTuning.WorldBaseThreat, Is.EqualTo(20f).Within(0.001f),
+                "moving the Base threat slider must drive DevTuning.WorldBaseThreat");
             Assert.That(DevTuning.WaterBalloonBaseDistance, Is.EqualTo(6f).Within(0.001f),
                 "moving the Balloon base distance slider must drive DevTuning.WaterBalloonBaseDistance");
         }
