@@ -67,7 +67,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return BuildLevelAndHud();
 
             AreaVisibility[] states = Hud().MinimapStates;
-            Assert.AreEqual(10, states.Length, "the shipped backyard_slice map defines 10 areas");
+            Assert.AreEqual(8, states.Length, "World 1 (world1_config.json, MV-270) defines 8 combat areas");
             Assert.AreEqual(AreaVisibility.Current, states[0], "a fresh run should mark area 1 current");
             for (int i = 1; i < states.Length; i++)
                 Assert.AreEqual(AreaVisibility.Hidden, states[i], $"area {i + 1} should still be hidden");
@@ -80,8 +80,8 @@ namespace MaxWorlds.Tests.PlayMode
 
             AreaGate gate1 = null;
             foreach (AreaGate g in _path.GetComponentsInChildren<AreaGate>())
-                if (g.name == "gate1") gate1 = g;
-            Assert.IsNotNull(gate1, "the shipped map built no 'gate1' to break");
+                if (g.name == "g1") gate1 = g; // world1_config.json's g1: a1 -> a2 (MV-270)
+            Assert.IsNotNull(gate1, "World 1 built no 'g1' gate to break");
 
             gate1.TakeDamage(new DamageInfo(gate1.MaxHp, Vector3.zero, Vector3.forward,
                 Team.Player, source: DamageSource.PrimaryWeapon));
@@ -91,6 +91,18 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.AreEqual(AreaVisibility.Visited, states[0], "area 1 should now read as visited, not current");
             Assert.AreEqual(AreaVisibility.Current, states[1], "area 2 should be marked current the instant its gate opens");
             Assert.AreEqual(AreaVisibility.Hidden, states[2], "area 3 is still ahead — must stay hidden");
+        }
+
+        /// <summary>MV-278: the strip used to be bare Image dots with nothing behind them, easy to
+        /// lose against the live 3D world — a plausible reading of "the map isn't displaying" from a
+        /// playtest. It must now sit on a visible backing panel like every other HUD readout.</summary>
+        [UnityTest]
+        public IEnumerator TheStrip_HasAVisibleBackdropPanel()
+        {
+            yield return BuildLevelAndHud();
+
+            Assert.IsTrue(Hud().MinimapHasBackdrop,
+                "the minimap strip must have a visible backing panel, not bare pips over the world");
         }
     }
 }
