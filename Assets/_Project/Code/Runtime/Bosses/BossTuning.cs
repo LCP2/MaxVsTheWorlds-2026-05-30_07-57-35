@@ -31,8 +31,13 @@ namespace MaxWorlds.Bosses
         /// <summary>Boss HP. THIS is the fight-length knob — the only one. At the DPS a player
         /// actually brings to the boss (see <see cref="BossFight"/>) it buys a fight of about two
         /// minutes, which is the YT-27 target this ticket asks to return to. Halve it for a one-minute
-        /// duel; nothing else has to move.</summary>
-        public const float Health = 4000f;
+        /// duel; nothing else has to move.
+        ///
+        /// Recalibrated by MV-287 (was 4000): removing the per-run level/power ramp means Max's DPS
+        /// on the way to the boss is now permanently the un-ramped base output — about the same as the
+        /// old level-1 floor — so this is scaled down by the same ~2.32x the old level-7 ramp used to
+        /// assume, preserving the original ~2 minute target rather than silently tripling the fight.</summary>
+        public const float Health = 1725f;
 
         /// <summary>Below this fraction it enrages: faster, and it starts raining blades.</summary>
         public const float EnrageThreshold = 0.5f;

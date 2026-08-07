@@ -48,12 +48,6 @@ namespace MaxWorlds.VFX
         private VfxBurst _boomDebris;   // factory: chunks
         private VfxBurst _boomSmoke;    // factory: lingering smoke
         private VfxBurst _dash;         // Max's dash trail
-        private VfxBurst _levelUp;      // Max got stronger (YT-67)
-
-        /// <summary>The power-up colour — cyan-white, so it can't be mistaken for the gold/orange
-        /// that means "something took damage". Getting stronger must look like nothing else.</summary>
-        private static readonly Color BoostBright = new Color(0.65f, 0.98f, 1f, 1f);
-        private static readonly Color BoostDeep = new Color(0.20f, 0.65f, 1f, 1f);
 
         private PlayerController _player;
         private Vector3 _lastDashPos;
@@ -74,9 +68,6 @@ namespace MaxWorlds.VFX
             _boomDebris = new VfxBurst("FactoryDebris", solid, 180, 2.4f, perFrameCap: 2);
             _boomSmoke = new VfxBurst("FactorySmoke", soft, 140, -0.25f, perFrameCap: 2);
             _dash = new VfxBurst("DashTrail", additive, 200, 0f, perFrameCap: 90);
-            // Negative gravity: the motes RISE. Everything else in this file falls, which is what
-            // makes a rush upward read instantly as "you gained something" and not "something broke".
-            _levelUp = new VfxBurst("LevelUp", additive, 160, -1.6f, perFrameCap: 2);
         }
 
         private void OnEnable()
@@ -84,7 +75,6 @@ namespace MaxWorlds.VFX
             HudSignals.DamageDealt += OnDamage;
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
-            HudSignals.LevelUp += OnLevelUp;
         }
 
         private void OnDisable()
@@ -94,26 +84,12 @@ namespace MaxWorlds.VFX
             HudSignals.DamageDealt -= OnDamage;
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
-            HudSignals.LevelUp -= OnLevelUp;
         }
 
         private void OnDestroy()
         {
             Dispose(_hitSparks); Dispose(_deathSparks); Dispose(_deathDebris);
             Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke); Dispose(_dash);
-            Dispose(_levelUp);
-        }
-
-        /// <summary>Max got stronger (YT-67): a column of cyan motes surging up through him. It has
-        /// to land in the same beat as the popup, or the boost is a number rather than a moment.</summary>
-        private void OnLevelUp(int level, Vector3 pos)
-        {
-            _levelUp.Emit(pos + Vector3.up * 0.25f, 34,
-                axis: Vector3.up, spreadDegrees: 22f,
-                speedMin: 3.5f, speedMax: 7.5f,
-                sizeMin: 0.12f, sizeMax: 0.3f,
-                lifeMin: 0.5f, lifeMax: 0.95f,
-                colorA: BoostBright, colorB: BoostDeep);
         }
 
         // --- events ---
@@ -267,10 +243,6 @@ namespace MaxWorlds.VFX
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
             _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame(); _dash.EndFrame();
-            // _levelUp was missing here, which silently killed the boost VFX from level 3 on: its
-            // per-frame budget is 2 and nothing ever refilled it, so the counter reached the cap on
-            // the second level-up and every one after that was dropped. Found while adding YT-101.
-            _levelUp.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)

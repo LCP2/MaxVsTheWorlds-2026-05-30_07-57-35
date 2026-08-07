@@ -3,28 +3,30 @@ using UnityEngine;
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// Slice run-state the HUD (YT-30) reads: XP track, arena progress, the Ultimate
-    /// charge, the auto-cycling Bomb cooldown, and the boss. HP is NOT here — it binds
-    /// directly to the live <c>PlayerHealth</c>. (The primary never depletes since MV-290,
-    /// so there is no Energy readout left to bind at all.)
+    /// Slice run-state the HUD (YT-30) reads: arena progress, the Ultimate charge, the
+    /// auto-cycling Bomb cooldown, and the boss. HP is NOT here — it binds directly to the
+    /// live <c>PlayerHealth</c>. (The primary never depletes since MV-290, so there is no
+    /// Energy readout left to bind at all.)
     ///
     /// Because the real economy, destructible factories, and boss fight are later tickets,
     /// this model is driven off one signal — <see cref="RegisterKill"/> — so every HUD
-    /// element visibly animates on the WebGL build from actual play: kills grant XP, tick
+    /// element visibly animates on the WebGL build from actual play: kills tick
     /// factories/sub-zones, charge the Ultimate, and (once the arena is cleared) engage and
     /// drain the slice boss. The kill→milestone maths lives here so it is unit-testable.
+    ///
+    /// MV-287: kills no longer grant XP or an automatic per-run power level — offensive power
+    /// comes only from chosen upgrades (Parts), never from levelling.
     /// </summary>
     public sealed class HudModel
     {
         // --- Slice tuning (kept modest so milestones are reachable in a short play) ---
-        private readonly int _xpPerKill;
+        private readonly int _sparksPerKill;
         private readonly int _killsPerFactory;
         private readonly float _ultimateChargePerKill;
         private readonly float _bossDamagePerKill;
         private readonly string _bossName;
         private readonly int _bossPhases;
 
-        public XpTrack Xp { get; }
         public ArenaProgress Arena { get; }
         public BossState Boss { get; }
 
@@ -50,8 +52,9 @@ namespace MaxWorlds.UI
         /// rather than engaged/drained by the kill + arena stand-in.</summary>
         private bool _externalBoss;
 
-        /// <summary>XP granted per kill (HUD shows it on the SPARKS pickup).</summary>
-        public int XpPerKill => _xpPerKill;
+        /// <summary>SPARKS shown on the kill-reward floating text. Cosmetic only since MV-287 —
+        /// no longer feeds a level/power system, just names the number on the popup.</summary>
+        public int SparksPerKill => _sparksPerKill;
 
         public bool UltimateReady => UltimateCharge >= 1f;
 
@@ -62,7 +65,7 @@ namespace MaxWorlds.UI
         public HudModel(
             int subZonesTotal = 1,
             int factoriesTotal = 1, // the slice has one factory (Mower Hutch); real one drives it via YT-37
-            int xpPerKill = 6,
+            int sparksPerKill = 6,
             int killsPerFactory = 4,
             float ultimateChargePerKill = 0.12f,
             float bombCooldown = 5f,
@@ -70,28 +73,26 @@ namespace MaxWorlds.UI
             int bossPhases = 3,
             float bossDamagePerKill = 0.08f)
         {
-            _xpPerKill = Mathf.Max(0, xpPerKill);
+            _sparksPerKill = Mathf.Max(0, sparksPerKill);
             _killsPerFactory = Mathf.Max(1, killsPerFactory);
             _ultimateChargePerKill = Mathf.Max(0f, ultimateChargePerKill);
             _bossDamagePerKill = Mathf.Max(0f, bossDamagePerKill);
             _bossName = bossName;
             _bossPhases = Mathf.Max(1, bossPhases);
 
-            Xp = new XpTrack();
             Arena = new ArenaProgress(subZonesTotal, factoriesTotal);
             Boss = new BossState();
             Bomb = new AbilityCooldown(bombCooldown);
         }
 
         /// <summary>
-        /// Advance the whole slice progression by one kill. Grants XP, charges the Ultimate,
-        /// destroys a factory every N kills, clears a sub-zone each time all factories fall,
-        /// engages the boss once the arena is fully cleared, and drains the boss thereafter.
+        /// Advance the whole slice progression by one kill. Charges the Ultimate, destroys a
+        /// factory every N kills, clears a sub-zone each time all factories fall, engages the
+        /// boss once the arena is fully cleared, and drains the boss thereafter.
         /// </summary>
         public void RegisterKill()
         {
             Kills++;
-            Xp.Add(_xpPerKill);
             UltimateCharge = Mathf.Clamp01(UltimateCharge + _ultimateChargePerKill);
 
             if (Boss.Active)

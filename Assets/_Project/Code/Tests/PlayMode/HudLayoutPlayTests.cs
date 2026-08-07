@@ -52,13 +52,14 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ThereIsNoTopOfScreenLifeOrWaterBarForMax()
+        public IEnumerator ThereIsNoTopOfScreenLifeWaterOrXpBarForMax()
         {
             // YT-121: Max's life and water moved to a floating stack over his head, so the top HP
-            // and Energy bars are gone. The level pip stays.
+            // and Energy bars are gone. MV-287 then removed the level/XP system entirely, so the
+            // level pip that used to remain here is gone too — nothing should live at the top any more.
             Assert.That(Find("HP Bar"), Is.Null, "the redundant top-of-screen HP bar is still here");
             Assert.That(Find("Energy Bar"), Is.Null, "the redundant top-of-screen water/energy bar is still here");
-            Assert.That(Find("XP Bar"), Is.Not.Null, "the level pip should remain");
+            Assert.That(Find("XP Bar"), Is.Null, "the removed level/XP bar is still here");
             yield return null;
         }
 

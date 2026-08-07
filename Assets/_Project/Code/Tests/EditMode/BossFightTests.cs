@@ -56,14 +56,14 @@ namespace MaxWorlds.Tests.EditMode
 
         // ---------------------------------------------------------------- the length of the fight
 
-        /// <summary>~2–3 minutes, which is the YT-27 target this ticket asks to return to. Measured
-        /// against the gun the player actually brings: the power ramp more than doubles his DPS on the
-        /// way to the boss, so a boss tuned against a level-1 blaster is tuned against a gun nobody
-        /// arrives with.</summary>
+        /// <summary>~2–3 minutes, which is the YT-27 target this ticket asks to return to. MV-287
+        /// removed the per-run level/power ramp, so this is measured against the gun's permanent,
+        /// un-ramped base output (<see cref="BossTuning.Health"/> was recalibrated to hold the same
+        /// target once the ramp went away).</summary>
         [Test]
         public void TheFightLasts_AboutTwoToThreeMinutes()
         {
-            float seconds = BossFight.SecondsToKill(BossFight.LevelAtTheBoss);
+            float seconds = BossFight.SecondsToKill();
 
             Assert.GreaterOrEqual(seconds, 100f,
                 $"the boss dies in {seconds:0}s — that is not a boss, it is a big robot");
@@ -79,8 +79,11 @@ namespace MaxWorlds.Tests.EditMode
         /// The length hangs on ONE guess — how much of the fight the player spends actually pointing
         /// the gun at the boss — and I do not know that number, I estimated it. So rather than pretend
         /// the point estimate is a fact, this asserts the fight survives being wrong about it: across
-        /// every plausible player, from a cautious level 6 who fires a third of the time to a
-        /// well-levelled aggressor who fires two thirds, the boss is never a pushover and never a slog.
+        /// every plausible engagement level, from a cautious player who fires a third of the time to
+        /// an aggressor who fires two thirds, the boss is never a pushover and never a slog.
+        ///
+        /// MV-287 removed the per-run level ramp, so engagement is now the only variable left — there
+        /// is no more "well-levelled" case to also sweep.
         ///
         /// If Lee reports it as either, the number to move is <see cref="BossTuning.Health"/>, and this
         /// is the test that says what moving it costs.
@@ -88,23 +91,16 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheFightIsNeverAPushover_AndNeverASlog_WhoeverTurnsUp()
         {
-            foreach (int level in new[] { 6, 7, 9 })
             foreach (float engagement in new[] { 0.3f, 0.45f, 0.6f })
             {
-                float seconds = BossFight.SecondsToKill(level, engagement);
+                float seconds = BossFight.SecondsToKill(engagement);
 
                 Assert.Greater(seconds, 60f,
-                    $"a level-{level} player firing {engagement:P0} of the time melts the boss in " +
-                    $"{seconds:0}s");
+                    $"a player firing {engagement:P0} of the time melts the boss in {seconds:0}s");
 
-                // Ceiling nudged 220 → 240 for YT-106: Lee's faster water drain cuts effective gun
-                // uptime, so the WEAKEST turnout (level 6, timid 30% engagement) now takes ~237s
-                // instead of ~215. FLAG: that is right at the edge of "a slog" for an underlevelled
-                // player. Boss HP becomes a live Settings slider in YT-126 (default unchanged), so
-                // Lee can pull the fight length back on-device if this reads too long.
                 Assert.Less(seconds, 240f,
-                    $"a level-{level} player firing {engagement:P0} of the time is still hosing the " +
-                    $"boss {seconds:0}s later — that is a health bar, not a fight");
+                    $"a player firing {engagement:P0} of the time is still hosing the boss " +
+                    $"{seconds:0}s later — that is a health bar, not a fight");
             }
         }
 
@@ -117,7 +113,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ACompetentPlayer_WinsIt_WithoutInvincibility()
         {
-            float left = BossFight.HealthLeft(BossFight.CompetentDodge, BossFight.LevelAtTheBoss);
+            float left = BossFight.HealthLeft(BossFight.CompetentDodge);
 
             Assert.Greater(left, 0f,
                 $"a competent player ends the fight on {left:0} HP — he is dead, and he did nothing " +
@@ -133,7 +129,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ACarelessPlayer_StillDies()
         {
-            Assert.IsFalse(BossFight.Survives(BossFight.CarelessDodge, BossFight.LevelAtTheBoss),
+            Assert.IsFalse(BossFight.Survives(BossFight.CarelessDodge),
                 "standing in the blades and eating every charge gets you through the fight — there is " +
                 "nothing here to be good at");
         }

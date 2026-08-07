@@ -38,6 +38,7 @@ namespace MaxWorlds.UI
 
         // Backyard palette (Art Direction §Colour identity + HUD spec).
         private static readonly Color HpColor = new Color(0.90f, 0.22f, 0.20f);
+        // Golden — used by kill-reward floating text (SPARKS, damage crits, "FACTORY DOWN").
         private static readonly Color XpColor = new Color(0.957f, 0.788f, 0.365f); // #F4C95D golden
         private static readonly Color TechRingColor = new Color(0.31f, 0.76f, 0.97f);
         private static readonly Color PanelColor = new Color(0.05f, 0.06f, 0.09f, 0.55f);
@@ -56,9 +57,6 @@ namespace MaxWorlds.UI
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
         // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
         private static readonly Color PartColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
-        /// <summary>The power-up shout (YT-67). Hot cyan-white: it has to out-shout the golden
-        /// SPARKS numbers flying around it, or the one moment that matters gets lost in them.</summary>
-        private static readonly Color BoostColor = new Color(0.45f, 0.95f, 1f);
         // Minimap fog-of-war (MV-264): hidden stays near-invisible — an undiscovered slot, not a
         // black hole punched in the HUD — visited is a plain dim readout, and current borrows the
         // tech-ring cyan already used for "this is you" elsewhere on the HUD.
@@ -77,19 +75,13 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private FloatingTextLayer _floating;
 
-        // Status strip — just the level pip since YT-121 (life + water float over Max).
-        private Image _xpFill;
-
         // YT-54 presentation state. None of this feeds the model — it only animates what the model
         // already says.
-        private readonly BarState _xpBar = new BarState();
         private readonly DamageNumberAggregator _damageNumbers = new DamageNumberAggregator();
         private readonly System.Collections.Generic.List<DamageNumberAggregator.Entry> _damageBuffer =
             new System.Collections.Generic.List<DamageNumberAggregator.Entry>(16);
         private readonly float[] _slotReadyFlash = new float[3];
         private readonly bool[] _slotWasReady = new bool[3];
-        private int _lastLevel = 1;
-        private Text _xpLabel;
 
         // Ability slots (0 Dash, 1 Bomb, 2 Ultimate)
         private readonly Image[] _slotRadial = new Image[3];
@@ -185,7 +177,6 @@ namespace MaxWorlds.UI
 
             BuildCanvas();
             BuildBiomeTint();
-            BuildStatusStrip();
             BuildUtilityIcons();
             BuildHomeButton();
             BuildAbilitySlots();
@@ -334,7 +325,7 @@ namespace MaxWorlds.UI
         private void OnEnemyKilled(Vector3 pos)
         {
             _model.RegisterKill();
-            _floating?.Spawn(pos + Vector3.up * 1.8f, $"+{_model.XpPerKill} SPARKS", XpColor, false, 1.0f, 30f);
+            _floating?.Spawn(pos + Vector3.up * 1.8f, $"+{_model.SparksPerKill} SPARKS", XpColor, false, 1.0f, 30f);
         }
 
         private void OnBossActiveChanged(bool active)
@@ -358,7 +349,6 @@ namespace MaxWorlds.UI
             _model.Bomb.Tick(dt);
             if (_model.Bomb.Ready) _model.Bomb.Trigger();
 
-            UpdateStatusStrip(dt);
             UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
             UpdateAbilityControls();
@@ -371,7 +361,6 @@ namespace MaxWorlds.UI
             UpdateWarnings(dt);
             UpdateDrops(dt);
             FlushDamageNumbers();
-            CheckLevelUp();
         }
 
         private void UpdateDrops(float dt)
@@ -424,36 +413,6 @@ namespace MaxWorlds.UI
             Color c = PartColor * (0.5f + 0.5f * t);   // dim -> full orange
             c.a = 0.72f + 0.28f * t;
             return c;
-        }
-
-        private void UpdateStatusStrip(float dt)
-        {
-            // Life and water are drawn over Max's head now (YT-121, WorldHealthBar). All that lives
-            // up here is the level pip.
-            _xpBar.Update(_model.Xp.Normalized, dt, fillSpeed: 2.2f, hold: 0f);
-            _xpFill.fillAmount = _xpBar.Fill;
-            _xpLabel.text = $"Lv {_model.Xp.Level}";
-        }
-
-        private void CheckLevelUp()
-        {
-            int level = _model.Xp.Level;
-            if (level == _lastLevel) return;
-
-            if (level > _lastLevel)
-            {
-                Vector3 at = _player != null ? _player.transform.position : Vector3.zero;
-
-                // The level-up used to be a number and nothing else. Say what was actually won,
-                // and tell gameplay so Max genuinely gets stronger (YT-67).
-                _floating?.Spawn(at + Vector3.up * 2.6f,
-                    $"LEVEL {level}", XpColor, crit: true, life: 1.3f, fontSize: 38f);
-                _floating?.Spawn(at + Vector3.up * 3.4f,
-                    PowerRamp.BoostLabel(level), BoostColor, crit: true, life: 1.5f, fontSize: 32f);
-
-                HudSignals.EmitLevelUp(level, at);
-            }
-            _lastLevel = level;
         }
 
         private void UpdateAbilitySlots(float dt)
@@ -654,47 +613,6 @@ namespace MaxWorlds.UI
             var img = AddImage(FullRoot, HudTextures.Solid(), BiomeTint, "Biome Tint");
             Stretch(img.rectTransform);
             img.raycastTarget = false;
-        }
-
-        private void BuildStatusStrip()
-        {
-            // Just the level pip now (YT-121). Max's life and water moved to a floating stack over
-            // his head, so the top-of-screen HP and Energy bars that used to flank this are gone —
-            // they were a redundant second copy of what now sits above Max. XP is neither life nor
-            // water, so it stays, centred where it always was.
-            var strip = NewRect("Status Strip", Root);
-            Anchor(strip, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            strip.sizeDelta = new Vector2(RefW * 0.40f, 90f);
-            strip.anchoredPosition = new Vector2(0f, -28f);
-
-            _xpFill = BuildBar(strip, "XP", XpColor, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                new Vector2(0f, -2f), new Vector2(RefW * 0.06f, 14f), out _xpLabel);
-        }
-
-        private Image BuildBar(RectTransform parent, string name, Color fill, Vector2 anchorMin,
-            Vector2 anchorMax, Vector2 pos, Vector2 size, out Text number)
-        {
-            var holder = NewRect($"{name} Bar", parent);
-            Anchor(holder, anchorMin, anchorMax, new Vector2(anchorMin.x, 0.5f));
-            holder.sizeDelta = size;
-            holder.anchoredPosition = pos;
-
-            var bg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), PanelColor, "BG");
-            Stretch(bg.rectTransform);
-            bg.type = Image.Type.Sliced;
-
-            var fillImg = AddImage(holder, HudTextures.RoundedBox(24, 0.5f), fill, "Fill");
-            Stretch(fillImg.rectTransform, -3f); // inset inside the bg for a bordered look
-            fillImg.type = Image.Type.Filled;
-            fillImg.fillMethod = Image.FillMethod.Horizontal;
-            fillImg.fillOrigin = (int)Image.OriginHorizontal.Left;
-            fillImg.fillAmount = 1f;
-
-            number = AddText(holder, 20f, Color.white, TextAnchor.MiddleCenter);
-            Anchor(number.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f));
-            number.rectTransform.sizeDelta = new Vector2(size.x, 24f);
-            number.rectTransform.anchoredPosition = new Vector2(0f, 20f); // number floats above the bar
-            return fillImg;
         }
 
         private void BuildUtilityIcons()

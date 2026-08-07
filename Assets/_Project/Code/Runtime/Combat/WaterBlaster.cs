@@ -43,8 +43,8 @@ namespace MaxWorlds.Combat
         [SerializeField] private float radius = 0.6f;
         // Unchanged by MV-289 (still 4/0.1 = 40 DPS): the retuned Rusher HP (32 base, ~45 effective)
         // already lands the ~1.1-1.5s TTK AC1 asks for at the existing DPS — cutting DPS too would
-        // ripple into AreaGate.AssumedPrimaryDps, the World1 EPL/MPL band calibration and BossFight's
-        // RawDps, three separately-tuned systems this ticket does not touch.
+        // ripple into AreaGate.AssumedPrimaryDps and BossFight's RawDps, separately-tuned systems
+        // this ticket does not touch.
         [SerializeField] private float damagePerTick = 4f;
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
         [SerializeField] private LayerMask hitMask = ~0;
@@ -108,12 +108,6 @@ namespace MaxWorlds.Combat
         /// the primary never stalls or depletes.)</summary>
         public bool IsEmitting => _lastEmitting;
 
-        // --- Power ramp (YT-67) ---------------------------------------------------------------
-        // The authored numbers, captured before any level-up scales them. Multipliers are always
-        // applied to these, never compounded onto the live values, so re-applying is harmless.
-        private float _baseDamage;
-        private float _baseInterval;
-
         /// <summary>How far the stream actually reaches, in metres — the authored reach plus any reach
         /// the Power nozzle adds (YT-133) plus the RCDA Range track's own bonus (MV-263). Public so the
         /// aim reticle (YT-84) is drawn from the number the hit test uses, rather than from a shape
@@ -133,21 +127,12 @@ namespace MaxWorlds.Combat
             WeaponSystemState.TrackLevel(WeaponTrackKind.Spread),
             WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-        /// <summary>Damage one tick of the stream deals, after the power ramp.</summary>
+        /// <summary>Damage one tick of the stream deals.</summary>
         public float DamagePerTick => damagePerTick;
-        /// <summary>Seconds between ticks, after the power ramp.</summary>
+        /// <summary>Seconds between ticks.</summary>
         public float FireInterval => fireInterval;
         /// <summary>What the stream actually outputs per second — the number the player feels.</summary>
         public float DamagePerSecond => fireInterval > 0f ? damagePerTick / fireInterval : 0f;
-
-        /// <summary>
-        /// Scale the stream by the power ramp (YT-67).
-        /// </summary>
-        public void ApplyPower(float damageMultiplier, float fireRateMultiplier)
-        {
-            damagePerTick = _baseDamage * Mathf.Max(0f, damageMultiplier);
-            fireInterval = _baseInterval / Mathf.Max(0.01f, fireRateMultiplier);
-        }
 
         private void OnEnable()
         {
@@ -188,10 +173,6 @@ namespace MaxWorlds.Combat
 
         private void Awake()
         {
-            // Capture the authored numbers before anything scales them (YT-67).
-            _baseDamage = damagePerTick;
-            _baseInterval = fireInterval;
-
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();
             if (_vfx == null) _vfx = gameObject.AddComponent<WaterVfx>();
@@ -199,9 +180,6 @@ namespace MaxWorlds.Combat
             // damages, so the spray and the reticle above it are the same weapon described twice,
             // not two numbers that happened to be authored on different days.
             _vfx.Init(range, Mathf.Max(radius, streamVisualRadius), coneHalfAngle);
-
-            // The level-up ramp rides along with the gadget, same self-attaching rule as the VFX.
-            if (GetComponent<PlayerPower>() == null) gameObject.AddComponent<PlayerPower>();
 
             // The aim reticle (YT-84) is built from THIS gadget's real reach and spread, so a future
             // Beam or Lob draws its own shape without anyone authoring one.
