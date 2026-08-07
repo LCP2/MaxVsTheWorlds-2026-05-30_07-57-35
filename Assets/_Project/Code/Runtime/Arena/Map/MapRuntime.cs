@@ -265,6 +265,15 @@ namespace MaxWorlds.Arena
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter,
                 new Vector3(SealWidth(map, e), e.height, e.depth + AntiZFightMargin));
 
+            // The box is built for an N/S-wall doorway (width along local X, thickness along local Z —
+            // same axes WallSegment's alongX case uses). An E/W-wall gate's doorway runs along Z instead
+            // (MV-271: g1/g3/g5/g7 in world1_config), so the body is spun 90° to match — NOT rebuilt
+            // with x/z swapped, because AreaGate.StartHingeSwing reads localScale.x as "the width" to
+            // find its hinge pivot; swap the scale instead of rotating and the hinge would pivot on the
+            // thin edge.
+            if (!GateRunsAlongX(map, e))
+                body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
+
             MarkDiscoverable(body);
             body.AddComponent<AreaGate>();
 
@@ -359,6 +368,24 @@ namespace MaxWorlds.Arena
                 }
             }
             return gate.width;   // an unlinked gate falls back to its authored width
+        }
+
+        /// <summary>Which way the wall this gate seals actually runs — true for an N/S-wall doorway
+        /// (wall at a constant Z, spanning X), false for an E/W-wall one (constant X, spanning Z). Same
+        /// link lookup as <see cref="SealWidth"/>; an unlinked gate defaults true, matching the box
+        /// <see cref="BuildAreaGate"/> spawns before any rotation is applied.</summary>
+        private static bool GateRunsAlongX(MapData map, MapEntity gate)
+        {
+            if (map.links != null)
+            {
+                foreach (MapLink link in map.links)
+                {
+                    if (link == null || link.gate != gate.id) continue;
+                    if (MapGeometry.Doorway(map, link, out bool runsAlongX, out _, out _))
+                        return runsAlongX;
+                }
+            }
+            return true;
         }
 
         /// <summary>The slice scene still carries a hand-placed 30 m ground plane from the very first
