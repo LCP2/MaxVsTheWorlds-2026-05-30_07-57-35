@@ -45,6 +45,13 @@ namespace MaxWorlds.Pickups
 
         private const float ScatterRadius = 0.9f;
 
+        /// <summary>Radius <see cref="SeedPartsCache"/> scatters its parts on (MV-295) — deliberately
+        /// wider than <see cref="ScatterRadius"/> so adjacent parts in the same cache sit more than
+        /// <c>2 * CollectRadius</c> apart. At <see cref="ScatterRadius"/> the whole cache fit inside one
+        /// walk-over: a fresh-run playtest saw a single visit bank several parts at once from what read
+        /// as "one box". Each part in a cache must still cost its own separate walk-over.</summary>
+        private const float PartsCacheRadius = 2.0f;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -143,7 +150,7 @@ namespace MaxWorlds.Pickups
             for (int i = 0; i < count; i++)
             {
                 float ang = i * (Mathf.PI * 2f / count);
-                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * PartsCacheRadius;
                 SpawnDrop(PickupKind.Part, pos + off);
             }
         }
