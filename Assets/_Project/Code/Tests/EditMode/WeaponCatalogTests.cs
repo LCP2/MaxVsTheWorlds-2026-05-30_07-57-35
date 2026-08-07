@@ -57,10 +57,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_BaseArcIsTenDegreesTotal_MV281()
+        public void SpreadTrack_BaseArcIsFortyFiveDegreesTotal_MV289()
         {
-            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(10f).Within(0.01f),
-                "MV-281: base spray must read as a narrow ~10° total arc");
+            // MV-281's narrow ~10° base (retained here until MV-289) read as unplayably thin once
+            // paired with 0.6's recalibrated robots and an under-tough Max — MV-289 widens the opening
+            // arc to a forgiving ~45° total.
+            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(45f).Within(0.01f),
+                "MV-289: base spray must read as a forgiving ~45° total arc");
         }
 
         [Test]

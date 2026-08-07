@@ -61,29 +61,23 @@ namespace MaxWorlds.Enemies
         public const float PlayerRadius = 0.5f;
         public const float PlayerHeight = 2f;
 
-        /// <summary>The original robot (YT-36/YT-63): a small capsule at ~60% of Max's speed. Fast
-        /// enough to pressure, slow enough to kite. Dies quickly; hurts a little. Deliberately
-        /// SMALLER than Max — he's the hero, and a swarm of knee-high machines reads as a swarm
-        /// (YT-74).
+        /// <summary>The original robot (YT-36/YT-63): a small capsule, deliberately SMALLER than Max
+        /// — he's the hero, and a swarm of knee-high machines reads as a swarm (YT-74).
         ///
-        /// Was 4.2 (70% of Max) until YT-80, and that last 10% was the difference between kiting and
-        /// merely delaying: at a 1.8 m/s deficit a rusher took ~7 s to cross a 12 m arena's worth of
-        /// gap, so backing off never actually bought space, it just moved the fight. At 3.6 the gap
-        /// opens at 2.4 m/s and retreating is a real option — but standing still still ends with the
-        /// swarm on top of you, because they never stop closing.
-        ///
-        /// YT-106 baked Lee's on-device number (2.18) alongside Max's own on-device slowdown, and the
-        /// pairing quietly drifted the ratio up to ~72% of Max — noted as a FLAG in
-        /// EnemyArchetypeTests at the time. YT-169 pulls it back down to ~60%, in line with this
-        /// class's own stated design: "a steadier menace" that WALKS rather than nearly keeps pace.</summary>
+        /// MV-289 retunes speed to ~90% of Max's 3.01 (2.71, was YT-169's 1.85/~60%): 0.6's narrow/
+        /// short weapon plus this same slow rusher made Area 1 read as a shooting gallery rather than
+        /// a threat, and the retreat-gap math never made the rusher SCARY, just slow — the survivable-
+        /// but-not-trivial band this ticket targets needs the rusher to actually press, with Max's
+        /// widened HP pool (100, MV-289) and slow out-of-combat regen carrying the survivability
+        /// instead of a wide kiting gap. Retreating still opens ground (3.01-2.71 = 0.3 m/s), just not
+        /// much — standing still still ends with the swarm on top of you either way.</summary>
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 1.85f, maxHealth: 36f,   // YT-169: walk, not rush — ~60% of Max's 3.01 (was 2.18)
-            // YT-194: 24 -> 36 (1.5x, matching the Bruiser's own bump below so the health-contrast
-            // ratio the tests pin doesn't drift) — the field-wide live cap (YT-186) means late-game
-            // danger has to come from durability, not raw numbers, so the common kill needs to
-            // actually cost something even before the Invasion Level's own toughening leans in.
+            moveSpeed: 2.71f,   // MV-289: ~90% of Max's 3.01 (was YT-169's 1.85/~60%)
+            // MV-289: 36 -> 32 (with the live 1.42x health multiplier this lands ~45 effective HP at
+            // run start, a ~1.1s TTK against the base spray's unchanged 40 DPS — AC1's target band).
+            maxHealth: 32f,
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -111,10 +105,10 @@ namespace MaxWorlds.Enemies
             EnemyKind.Bruiser, EnemyShape.Box, new Vector3(1.15f, 1.15f, 1.15f),
             colliderHeight: 1.15f, colliderRadius: 0.55f,
             // Half the rusher's speed, preserved (YT-66's "fridge on legs"): the bruiser scales with
-            // whatever the rusher/panel default is to stay the slow tank (was 1.09 = half of 2.18,
-            // now 0.925 = half of the YT-169 1.85). Flag: if Lee wants ALL robots flat at the
+            // whatever the rusher/panel default is to stay the slow tank (was 0.925 = half of YT-169's
+            // 1.85, now 1.355 = half of MV-289's 2.71). Flag: if Lee wants ALL robots flat at the
             // rusher's speed, this is the one line to change.
-            moveSpeed: 0.925f, maxHealth: 150f,   // YT-194: 100 -> 150, the same 1.5x as the rusher
+            moveSpeed: 1.355f, maxHealth: 150f,   // YT-194: 100 -> 150, the same 1.5x as the rusher
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,

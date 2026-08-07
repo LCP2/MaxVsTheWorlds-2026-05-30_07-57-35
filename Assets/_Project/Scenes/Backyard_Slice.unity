@@ -777,14 +777,14 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a5b7957ca077d7e40b16f369c6143c73, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Combat.WaterBlaster
-  range: 3
+  range: 5
   radius: 0.6
   damagePerTick: 4
   fireInterval: 0.1
   hitMask:
     serializedVersion: 2
     m_Bits: 4294967295
-  coneHalfAngle: 5
+  coneHalfAngle: 22.5
   streamVisualRadius: 1.1
   debugOverlay: 1
   aimSource: {fileID: 435318708}
@@ -800,7 +800,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70347c6004f2b744a9d37cf91fcd58b8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Player.PlayerHealth
-  maxHealth: 140.34
+  maxHealth: 100
 --- !u!1 &500010018
 GameObject:
   m_ObjectHideFlags: 0

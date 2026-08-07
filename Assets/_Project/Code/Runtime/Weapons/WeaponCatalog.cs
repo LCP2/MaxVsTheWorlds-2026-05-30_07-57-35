@@ -55,16 +55,17 @@ namespace MaxWorlds.Weapons
         /// additively on the weapon's authored base reach, the same shape as the legacy nozzle bonuses
         /// (<see cref="MaxWorlds.Upgrades.UpgradeState.RangeBonus"/>) it runs alongside during the
         /// WV-230 migration. Level 1 is every track's starting level (spec §6), so it adds nothing.
-        /// Retuned (MV-280) against <c>WaterBlaster</c>'s 3m authored base reach so the 5 steps up to
-        /// the Range cap (level 6) land at ~3x base (3 + 1.2*5 = 9) — change the two together.</summary>
-        public const float DefaultRcdaRangePerLevel = 1.2f;
+        /// Retuned (MV-280, re-retuned MV-289 against the widened 5m base) so the 5 steps up to the
+        /// Range cap (level 6) still land at ~3x base (5 + 2*5 = 15) — change the two together.</summary>
+        public const float DefaultRcdaRangePerLevel = 2f;
 
         /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263, retuned
-        /// MV-281): the Spread track caps at level 4 (<see cref="MaxLevel(WeaponTrackKind)"/>), so 3
-        /// steps at this rate take the cone from its authored base to 10x — tuned against
-        /// <see cref="WaterBlaster.DefaultConeHalfAngle"/> so the base spray is a narrow ~10° total
-        /// arc and the maxed Spread track opens it to ~100° total (change the two together).</summary>
-        public const float DefaultRcdaSpreadPerLevel = 3f;
+        /// MV-281, re-retuned MV-289): the Spread track caps at level 4
+        /// (<see cref="MaxLevel(WeaponTrackKind)"/>), so 3 steps at this rate take the cone from its
+        /// authored base onward — tuned against <see cref="WaterBlaster.DefaultConeHalfAngle"/> so
+        /// MV-289's widened ~45° total base still opens to the same ~100° total ceiling at the maxed
+        /// Spread track (change the two together).</summary>
+        public const float DefaultRcdaSpreadPerLevel = 0.4074f;
 
         /// <summary>Effective spray reach at a given Range-track level, given the weapon's authored
         /// base reach. Found by Lee playtesting (MV-263): the Range track raised no number at all, so
