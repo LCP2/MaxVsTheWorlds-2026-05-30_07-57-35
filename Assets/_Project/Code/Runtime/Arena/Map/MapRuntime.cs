@@ -275,7 +275,11 @@ namespace MaxWorlds.Arena
                 body.transform.localRotation = Quaternion.Euler(0f, 90f, 0f);
 
             MarkDiscoverable(body);
-            body.AddComponent<AreaGate>();
+            var gate = body.AddComponent<AreaGate>();
+
+            // Robots must not be routed at (and grind on) a gate that is still shut (MV-272) — this is
+            // what tells EnemyNavigation which live AreaGate a link's "gate" id actually points to.
+            EnemyNavigation.RegisterGate(e.id, gate);
 
             // Shut, an area gate blocks sight exactly like the scene-adopted one (YT-107) — AreaGate
             // disables its own collider the instant it breaks, so the sight-line opens with the gate.

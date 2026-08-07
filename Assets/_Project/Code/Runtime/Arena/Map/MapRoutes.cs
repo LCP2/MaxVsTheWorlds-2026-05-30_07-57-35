@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -23,10 +24,14 @@ namespace MaxWorlds.Arena
     /// chaser already rounds it (<see cref="MaxWorlds.Enemies.ObstacleSteering"/>). Walls are the thing
     /// a beeline cannot solve, and walls are what this solves.
     ///
-    /// A note on gates: a shut gate is as impassable as a wall, and this does not model it — because it
-    /// does not have to. A robot walks toward where it last saw Max, and Max cannot be behind a gate
-    /// that is shut (it stops him too). The day a map puts a factory on the far side of a locked door,
-    /// this is the assumption that breaks, and this comment is where you will find it.
+    /// A note on gates (MV-272): a shut gate now counts as a wall, not a doorway. The comment this
+    /// replaces predicted the day this would matter — "a map puts a factory on the far side of a locked
+    /// door" — and the World & Difficulty Framework's chain of area gates (MV-270/271) is exactly that
+    /// day. A caller that cares passes <c>gateOpen</c>: a link whose gate reports closed is excluded
+    /// from the search, so a robot on the wrong side of one is never routed AT it, let alone through it
+    /// — which is what used to press a robot's collider into the gate's and read as a pile-up. Omit the
+    /// callback (the default) and every link is open, exactly the pre-MV-272 behaviour every existing
+    /// caller and test still gets.
     /// </summary>
     public static class MapRoutes
     {
@@ -45,10 +50,16 @@ namespace MaxWorlds.Arena
 
         /// <summary>
         /// The chain of rooms from one to another, inclusive of both — the fewest doorways between
-        /// them. Empty if there is no way through at all, which validation has already refused, so a
-        /// caller getting one back is looking at a map that never built.
+        /// them. Empty if there is no way through at all — which, with no <paramref name="gateOpen"/>
+        /// given, validation has already refused, so a caller getting one back is looking at a map that
+        /// never built; with one given, it also means "every way through is behind a shut gate right
+        /// now" (MV-272), which a fully-validated map can absolutely be mid-run.
         /// </summary>
-        public static List<MapZone> Rooms(MapData map, MapZone from, MapZone to)
+        /// <param name="gateOpen">Reports whether a named gate is open. Null (the default) treats
+        /// every link as open, whatever gate it names — the routing this class shipped with, before a
+        /// gate could ever be the reason a room is unreachable.</param>
+        public static List<MapZone> Rooms(MapData map, MapZone from, MapZone to,
+                                          Func<string, bool> gateOpen = null)
         {
             Searches++;
 
@@ -66,7 +77,7 @@ namespace MaxWorlds.Arena
 
                 foreach (MapLink link in map.links)
                 {
-                    if (link == null) continue;
+                    if (link == null || !Passable(link, gateOpen)) continue;
 
                     string next = link.from == here ? link.to
                                 : link.to == here ? link.from
@@ -85,22 +96,37 @@ namespace MaxWorlds.Arena
             return path;
         }
 
+        /// <summary>A link the search may cross: one with no gate at all, or one whose gate
+        /// <paramref name="gateOpen"/> reports open. No <paramref name="gateOpen"/> given means every
+        /// link is passable — the caller isn't asking the question, so the answer can't be "no".</summary>
+        private static bool Passable(MapLink link, Func<string, bool> gateOpen) =>
+            gateOpen == null || string.IsNullOrEmpty(link.gate) || gateOpen(link.gate);
+
         /// <summary>
         /// Where to walk NEXT to get from <paramref name="from"/> to <paramref name="goal"/>: the goal
         /// itself when they are in the same room (walk at it — that is what a beeline is FOR), and
         /// otherwise a point just through the doorway into the next room along the route.
         ///
-        /// Falls back to the goal whenever it cannot do better — no map, no rooms, no way through, or
-        /// either end standing outside every room. A robot that can't be routed still chases, exactly
-        /// as it did before; it does not stop dead because the level could not answer a question.
+        /// Falls back to the goal itself when there is nothing to route through at all — no map, or
+        /// either end standing outside every room. A robot in that spot still chases, exactly as it did
+        /// before; it does not stop dead because the level could not answer a question. A room graph
+        /// that HAS an answer but no way through it right now is a different case — see below.
         ///
         /// Every robot asks this every frame, so it does no work: which room leads to which is a
         /// property of the LEVEL, not of the asking, and it is solved once (<see cref="Hops"/>) and
         /// then looked up. A search per robot per frame would have been a fresh dictionary and a fresh
         /// queue sixteen times a frame — garbage, at 60 fps, on a phone, to answer a question whose
         /// answer never changes.
+        ///
+        /// With no way through RIGHT NOW — every route crosses a shut gate (MV-272) — this hands back
+        /// <paramref name="from"/>, not <paramref name="goal"/>: a robot that can't get there stands
+        /// still and holds rather than beelining at (and grinding on) whatever gate or wall is actually
+        /// in the way. That is the "hold/patrol" the pile-up bug asked for, for free — a robot that
+        /// stops advancing starts stalling <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own progress
+        /// clock, and it already knows what to do once that runs out.
         /// </summary>
-        public static Vector2 Waypoint(MapData map, Vector2 from, Vector2 goal)
+        public static Vector2 Waypoint(MapData map, Vector2 from, Vector2 goal,
+                                       Func<string, bool> gateOpen = null)
         {
             if (map == null) return goal;
 
@@ -109,11 +135,11 @@ namespace MaxWorlds.Arena
 
             if (here == null || there == null || here.id == there.id) return goal;
 
-            Solve(map);
+            Solve(map, gateOpen);
 
             return _hops.TryGetValue(HopKey(_index[here.id], _index[there.id]), out Vector2 hop)
                 ? hop
-                : goal;
+                : from;
         }
 
         /// <summary>
@@ -123,9 +149,12 @@ namespace MaxWorlds.Arena
         ///
         /// Rebuilt when it is handed a different map. It does NOT notice a map being edited underneath
         /// it — the map editor mutates a MapData in place — which is fine because nothing navigates a
-        /// map mid-edit, and <see cref="Forget"/> exists for anything that ever needs to.
+        /// map mid-edit, and <see cref="Forget"/> exists for anything that ever needs to (a gate opening
+        /// among them: <see cref="MaxWorlds.Enemies.EnemyNavigation.RegisterGate"/> calls it the instant
+        /// one does, so a room that was unreachable a moment ago is re-solved into the graph the next
+        /// time anything asks the way).
         /// </summary>
-        private static void Solve(MapData map)
+        private static void Solve(MapData map, Func<string, bool> gateOpen)
         {
             if (ReferenceEquals(_solvedFor, map) && _hops != null) return;
 
@@ -144,8 +173,8 @@ namespace MaxWorlds.Arena
                 MapZone from = map.zones[a], to = map.zones[b];
                 if (from == null || to == null || a == b) continue;
 
-                List<MapZone> route = Rooms(map, from, to);
-                if (route.Count < 2) continue;   // no way through: the caller falls back to the goal
+                List<MapZone> route = Rooms(map, from, to, gateOpen);
+                if (route.Count < 2) continue;   // no way through right now: the caller holds instead
 
                 _hops[HopKey(a, b)] = Mouth(map, route[0], route[1], to.CenterXz);
             }
