@@ -12,19 +12,24 @@ namespace MaxWorlds.Enemies
     /// step-up bump each time a factory shed is destroyed, so clearing a source raises the stakes
     /// instead of lowering them.
     ///
-    /// YT-210 made the run itself bounded: it reaches Max (and <c>BigBermudaBoss</c> erupts) at
-    /// <see cref="RunLengthSeconds"/> — ~6 minutes — with no shed kills at all. The rate is now
-    /// DERIVED from Max/RunLengthSeconds rather than hand-tuned, so the two numbers can never
-    /// silently disagree. A shed kill no longer bumps the level directly; it SKIPS THE CLOCK
-    /// FORWARD by <see cref="AuthoredPerShedBump"/> seconds instead, so aggression shortens the run
-    /// rather than just padding a score — the whole point of a bounded run is that "one more run" is
-    /// always a small, affordable decision, and a player who plays aggressively earns a faster one.
+    /// YT-210 made the run itself bounded: it reaches Max at <see cref="RunLengthSeconds"/> — ~6
+    /// minutes — with no shed kills at all. The rate is DERIVED from Max/RunLengthSeconds rather
+    /// than hand-tuned, so the two numbers can never silently disagree. A shed kill no longer bumps
+    /// the level directly; it SKIPS THE CLOCK FORWARD by <see cref="AuthoredPerShedBump"/> seconds
+    /// instead, so aggression shortens the run rather than just padding a score.
+    ///
+    /// MV-279: <c>BigBermudaBoss</c> no longer wakes off this clock. YT-210 had it erupt the moment
+    /// <see cref="Normalized"/> hit 1 "whichever happens first" — but with 3 sheds instead of the
+    /// slice's 1, that ceiling could be reached (via elapsed time plus the per-shed skip) well
+    /// before all 3 sheds were actually down, which read as the boss appearing before the gate to
+    /// its own room had opened. The boss now wakes only off <c>FactoryCensus.Cleared</c> — the last
+    /// shed falling, the same condition that unlocks the boss gate.
     ///
     /// Feeds existing systems rather than adding new ones: <see cref="EnemySpawner"/> reads
     /// <see cref="SpawnIntervalMultiplier"/> to speed up its cadence and
-    /// <see cref="ToughnessMultiplier"/> to scale a freshly-spawned robot's health/damage, and
-    /// <c>BigBermudaBoss</c> wakes when <see cref="Normalized"/> hits 1. A NEW level is just a
-    /// different tuning curve (start/run-length/per-shed skip/max) — data, not new code.
+    /// <see cref="ToughnessMultiplier"/> to scale a freshly-spawned robot's health/damage. A NEW
+    /// level is just a different tuning curve (start/run-length/per-shed skip/max) — data, not new
+    /// code.
     ///
     /// Global and static, on purpose — the same shape as <see cref="MaxWorlds.Factories.FactoryCensus"/>:
     /// there is exactly one Invasion Level for a run, shared by every factory on the map, not one

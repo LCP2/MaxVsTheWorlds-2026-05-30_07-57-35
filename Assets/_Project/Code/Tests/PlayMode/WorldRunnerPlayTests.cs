@@ -3,7 +3,9 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Arena;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 
 namespace MaxWorlds.Tests.PlayMode
@@ -18,6 +20,7 @@ namespace MaxWorlds.Tests.PlayMode
     public sealed class WorldRunnerPlayTests
     {
         private GameObject _root;
+        private GameObject _boss;
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -30,6 +33,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TearDown()
         {
             if (_root != null) Object.Destroy(_root);
+            if (_boss != null) Object.Destroy(_boss);
             DevTuning.Reset();
             yield return null;
         }
@@ -133,6 +137,42 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.IsFalse(bossGate.Locked, "the boss gate stayed locked after the only shed was destroyed");
             Assert.IsTrue(bossGate.IsOpen, "the boss gate never opened once all sheds were destroyed");
+        }
+
+        /// <summary>MV-279: a real playtest saw Big Bermuda active before its own gate had opened. The
+        /// Invasion Level clock (DifficultyDirector) used to wake the boss independently of the sheds
+        /// (YT-210) — on the real 3-shed map that ceiling could be reached before every shed actually
+        /// fell. Pin the clock at its ceiling from frame one, with the shed still standing and the gate
+        /// still built+locked exactly as the game builds it, and prove the boss stays dormant until the
+        /// shed (and gate) actually goes down.</summary>
+        [UnityTest]
+        public IEnumerator TheBoss_StaysDormant_UntilTheGateActuallyOpens_EvenIfTheInvasionLevelClockIsMaxed()
+        {
+            DevTuning.EscalationStart = 5f;
+            DevTuning.EscalationMax = 5f;
+
+            _boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _boss.name = "Big Bermuda";
+            _boss.AddComponent<BigBermudaBoss>();
+
+            yield return Build();
+            var boss = _boss.GetComponent<BigBermudaBoss>();
+            var bossGate = _built.Actors["bg"].GetComponent<AreaGate>();
+            var hutch = _built.Actors["a1_shed"].GetComponent<MowerHutch>();
+
+            yield return null;
+            yield return null;
+
+            Assert.AreEqual(1f, DifficultyDirector.Normalized, 0.01f, "sanity: the Invasion Level is pinned at its ceiling");
+            Assert.IsTrue(bossGate.Locked, "sanity: the gate should still be locked with the shed standing");
+            Assert.IsFalse(boss.Engaged,
+                "the boss erupted off the Invasion Level clock alone, while its own gate was still locked (MV-279)");
+
+            hutch.TakeDamage(Hit(hutch.AuthoredMax + 999f, DamageSource.PrimaryWeapon));
+            yield return null;
+
+            Assert.IsTrue(bossGate.IsOpen, "sanity: the gate should open once the only shed is destroyed");
+            Assert.IsTrue(boss.Engaged, "the boss never woke even after every shed — and the gate — actually went down");
         }
 
         // ---------------------------------------------------------------- gate orientation (MV-271)
