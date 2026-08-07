@@ -31,26 +31,33 @@ namespace MaxWorlds.Combat
     /// </summary>
     public sealed class WaterBlaster : MonoBehaviour
     {
-        /// <summary>Authored base spray reach in metres (YT-129, retuned MV-280): SHORT — weak but
-        /// forgiving. The RCDA Range track (MV-263) extends this base by up to 3x at its max level
+        /// <summary>Authored base spray reach in metres (YT-129, retuned MV-280, widened MV-289): the
+        /// 0.6 recut's 3m base — combined with the recalibrated robots and an under-tough Max — made
+        /// Area 1 unplayable, so MV-289 widens the opening reach to a forgiving 5m. The RCDA Range
+        /// track (MV-263) extends this base by up to 3x at its max level
         /// (<see cref="WeaponCatalog.DefaultRcdaRangePerLevel"/> is tuned against THIS value — change
         /// them together). Nozzle upgrades (YT-133) narrow/lengthen it further.</summary>
-        public const float DefaultRange = 3f;
+        public const float DefaultRange = 5f;
 
         [Header("Stream")]
         // Also baked in Backyard_Slice.unity — keep that value in sync with DefaultRange above.
         [SerializeField] private float range = DefaultRange;
         [SerializeField] private float radius = 0.6f;
+        // Unchanged by MV-289 (still 4/0.1 = 40 DPS): the retuned Rusher HP (32 base, ~45 effective)
+        // already lands the ~1.1-1.5s TTK AC1 asks for at the existing DPS — cutting DPS too would
+        // ripple into AreaGate.AssumedPrimaryDps, the World1 EPL/MPL band calibration and BossFight's
+        // RawDps, three separately-tuned systems this ticket does not touch.
         [SerializeField] private float damagePerTick = 4f;
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
         [SerializeField] private LayerMask hitMask = ~0;
 
-        /// <summary>Authored base spray half-angle in degrees (retuned MV-281): NARROW — a ~10° total
-        /// arc, weak but forgiving, matching the short base reach MV-280 gave the stream. The RCDA
-        /// Spread track widens this by up to 10x at its max level
-        /// (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is tuned against THIS value — change
-        /// them together). Nozzle upgrades (YT-133) narrow/widen it further.</summary>
-        public const float DefaultConeHalfAngle = 5f;
+        /// <summary>Authored base spray half-angle in degrees (retuned MV-281, widened MV-289): the
+        /// 0.6 recut's ~10° total arc read as unplayably narrow for Area 1's opening fight, so MV-289
+        /// widens it to a forgiving ~45° total arc. The RCDA Spread track widens this further by up to
+        /// its max level (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is retuned against THIS
+        /// value to hold the same ~100° total ceiling — change them together). Nozzle upgrades
+        /// (YT-133) narrow/widen it further.</summary>
+        public const float DefaultConeHalfAngle = 22.5f;
 
         /// <summary>Damage multiplier at the outer edge of the spray cone (MV-281). Full power (1x) on
         /// the centre-line, linearly falling to this at the cone's half-angle — see

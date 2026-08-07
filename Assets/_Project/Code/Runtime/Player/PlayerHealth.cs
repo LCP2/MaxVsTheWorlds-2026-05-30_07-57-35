@@ -21,7 +21,7 @@ namespace MaxWorlds.Player
     [RequireComponent(typeof(PlayerController))]
     public sealed class PlayerHealth : MonoBehaviour, IDamageable, IHealthReadout
     {
-        [SerializeField] private float maxHealth = 140.34f;  // YT-200: Lee's on-device number (was 69.82)
+        [SerializeField] private float maxHealth = 100f;  // MV-289: survivable band — ~8 basic-robot hits (was 140.34, YT-200)
 
         // Regen is authored in PlayerTuning, NOT as [SerializeField]s — a serialized field on a
         // component that lives in Backyard_Slice.unity gets baked into the scene, and the scene then

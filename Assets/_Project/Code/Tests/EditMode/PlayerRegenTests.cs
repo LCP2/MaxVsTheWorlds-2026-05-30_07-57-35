@@ -11,7 +11,7 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class PlayerRegenTests
     {
-        private const float Max = 140.34f;   // PlayerHealth.maxHealth (YT-200: Lee's number, was 69.82)
+        private const float Max = 100f;   // PlayerHealth.maxHealth (MV-289 survivable-band retune, was 140.34)
         private const float PerSec = PlayerTuning.RegenPerSec;
         private const float Delay = PlayerTuning.RegenDelay;
         private static readonly float RusherHit = EnemyArchetype.Rusher.ContactDamage;

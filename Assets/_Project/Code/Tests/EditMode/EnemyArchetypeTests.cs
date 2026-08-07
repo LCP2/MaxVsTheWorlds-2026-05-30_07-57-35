@@ -38,15 +38,15 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MovingAwayFromTheSwarmActuallyOpensAGap()
         {
-            // Not just "slower than Max" — slower by enough that retreating BUYS something. YT-106's
-            // on-device pairing had quietly drifted the rusher to ~72% of Max's speed (flagged here at
-            // the time); YT-169 pulled it back to ~60% (1.85 against Max's 3.01), restoring the wider
-            // ~1.16 m/s gap a retreat actually opens. It is still kiteable — Max is strictly faster —
-            // which is the invariant this pins.
+            // Not just "slower than Max" — slower BY SOME AMOUNT, so retreating still buys something.
+            // MV-289 deliberately narrows this gap (YT-169's ~60% -> ~90%, 2.71 against Max's 3.01):
+            // the Area-1 survivable band now leans on Max's widened HP pool and slow regen, not on a
+            // wide kiting gap, to keep the fight from reading as trivial. It is still kiteable — Max
+            // is strictly faster — which is the invariant this pins.
             foreach (var a in AllArchetypes)
                 Assert.Less(a.MoveSpeed, MaxSpeed,
                     $"the {a.Kind} can outrun Max — kiting stops being possible at all");
-            Assert.LessOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.8f,
+            Assert.LessOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.95f,
                 "the rusher has crept too close to Max's speed to out-position with any comfort");
         }
 

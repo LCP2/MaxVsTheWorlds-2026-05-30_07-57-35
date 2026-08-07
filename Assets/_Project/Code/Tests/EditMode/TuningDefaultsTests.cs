@@ -18,8 +18,9 @@ namespace MaxWorlds.Tests.EditMode
     /// exact trap that bit BlasterTuning and moved it to a const in the first place).
     ///
     /// Robot speed was retuned again at YT-169: YT-106 paired the rusher's number with Max's own
-    /// on-device slowdown and quietly drifted the ratio to ~72% of Max; YT-169 pulls it back to ~60%
-    /// so the swarm reads as a walk, not a rush.
+    /// on-device slowdown and quietly drifted the ratio to ~72% of Max; YT-169 pulled it back to
+    /// ~60% so the swarm read as a walk, not a rush. MV-289 retunes it forward again, to ~90%, as
+    /// part of the Area-1 survivable-band rebalance — see <see cref="EnemyArchetype.Rusher"/>.
     /// </summary>
     public sealed class TuningDefaultsTests
     {
@@ -30,7 +31,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(10.57f).Within(0.001f), "water deplete");
             Assert.That(BlasterTuning.RegenPerSec, Is.EqualTo(55f).Within(0.001f), "water replenish — unchanged");
-            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(1.85f).Within(0.001f), "robot speed");
+            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(2.71f).Within(0.001f), "robot speed (MV-289)");
             Assert.That(BossTuning.MoveSpeed, Is.EqualTo(3.6f).Within(0.001f), "boss speed — unchanged");
         }
 
@@ -54,6 +55,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(CellEconomyTuning.DefaultCellsPerLargeKill, Is.EqualTo(1f).Within(0.001f),
                 "cells per large kill (WV-226)");
             Assert.That(EnemySpawner.DefaultSpawnIntervalPin, Is.EqualTo(3.996f).Within(0.001f), "spawn interval");
+        }
+
+        [Test]
+        public void RusherEffectiveHealthAtRunStart_LandsInTheSurvivableBand_MV289()
+        {
+            // The archetype's authored base (32) isn't what a robot actually spawns with — the
+            // live 1.42x health multiplier (EnemySpawner.DefaultRobotHealthMultiplier) always
+            // applies, and the Invasion Level's own toughening is 1x at a run's very start
+            // (DifficultyDirector.ToughnessMultiplier at elapsed=0). ~45 effective HP against the
+            // base spray's unchanged 40 DPS lands the ~1.1s TTK AC1 asks for.
+            float effectiveHealthAtRunStart = EnemyArchetype.Rusher.MaxHealth * EnemySpawner.DefaultRobotHealthMultiplier;
+            Assert.That(effectiveHealthAtRunStart, Is.EqualTo(45f).Within(1f));
         }
 
         [Test]
@@ -85,7 +98,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(go.GetComponent<PlayerController>().AuthoredMoveSpeed,
                             Is.EqualTo(3.01f).Within(0.001f), "Max move speed default");
                 Assert.That(go.GetComponent<PlayerHealth>().AuthoredMax,
-                            Is.EqualTo(140.34f).Within(0.001f), "Max max-life default");
+                            Is.EqualTo(100f).Within(0.001f), "Max max-life default (MV-289)");
             }
             finally
             {
@@ -104,7 +117,7 @@ namespace MaxWorlds.Tests.EditMode
             string text = File.ReadAllText(scene);
 
             AssertField(text, "MaxWorlds.Player.PlayerController", "moveSpeed", "3.01");
-            AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "140.34");
+            AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "100");
             AssertField(text, "MaxWorlds.Factories.MowerHutch", "factoryHealth", "1501.5");
             AssertField(text, "MaxWorlds.Enemies.EnemySpawner", "spawnIntervalMin", "12");
         }
