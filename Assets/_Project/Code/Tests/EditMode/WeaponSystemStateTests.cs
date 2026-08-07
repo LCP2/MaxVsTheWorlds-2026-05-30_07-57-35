@@ -64,10 +64,11 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeCapsHigherThanSpread()
+        public void AllTracksCapAtSixLevels_MV291()
         {
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(6));
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(4));
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(6));
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(6));
         }
 
         // ---------------------------------------------------------------- abilities
@@ -220,10 +221,10 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllFiveAbilitiesAndTwoTracks()
+        public void CatalogListsAllFiveAbilitiesAndThreeTracks()
         {
             Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(5));
-            Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(2));
+            Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(3));
         }
 
         [Test]

@@ -73,17 +73,20 @@ namespace MaxWorlds.UI
         /// Inspector-wired reference.</summary>
         private const string MaxPortraitResourcePath = "Art/Max";
 
-        private const int TrackCount = 2;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start
+        private const int TrackCount = 3;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 adds Damage)
         private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
-        private const int MaxPips = 6;           // largest cap across tracks (Range=6) and abilities (WeaponCooldown=5)
+        private const int MaxPips = 6;           // largest cap across tracks (MV-291: all three now cap at 6) and abilities (WeaponCooldown=5)
 
-        // MV-262: the abilities grid is now a fixed 6-slot (3-row) grid regardless of how many are
-        // owned, so unlike the old dynamic "shown + placeholder" layout there's a single worst case
-        // to verify: primary header + primary grid (2 rows) + abilities header + abilities grid
-        // (3 rows) all fit inside the content budget below the top bar (there's no bottom spendbar
-        // any more) with room to spare for the hero-sized primary-name block above the grids — see
-        // the arithmetic in BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no
-        // runtime overflow check, so this is verified by hand rather than measured.
+        // MV-262: the abilities grid is a fixed 6-slot (3-row) grid regardless of how many are owned,
+        // so unlike the old dynamic "shown + placeholder" layout there's a single worst case to
+        // verify: primary header + primary grid (2 rows, MV-291: 3 tracks at 2 cols) + abilities
+        // header + abilities grid (3 rows) all fit inside the content budget below the top bar
+        // (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
+        // block above the grids — see the arithmetic in
+        // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no runtime overflow
+        // check, so this is verified by hand rather than measured. MV-291's third track pushes the
+        // primary grid from 1 row to 2, costing one RowHeight+RowGap (116px) of the margin that left —
+        // still fits inside RefH's 1080 budget, just with less spare room below the abilities grid.
         private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
@@ -795,6 +798,7 @@ namespace MaxWorlds.UI
             {
                 case WeaponTrackKind.Range: return "RNG";
                 case WeaponTrackKind.Spread: return "SPR";
+                case WeaponTrackKind.Damage: return "DMG";
                 default: return "?";
             }
         }
