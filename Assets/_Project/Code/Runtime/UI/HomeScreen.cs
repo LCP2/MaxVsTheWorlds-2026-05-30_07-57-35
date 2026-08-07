@@ -28,6 +28,11 @@ namespace MaxWorlds.UI
     /// choice is pending. Skips itself entirely (silently drops into slot 0) when
     /// <see cref="PressKitDirector.Armed"/> — a filming run has nothing to click the modal with, and the
     /// captured shots must not open on a frozen pick-a-slot screen (YT-97).
+    ///
+    /// Each occupied slot also carries a RESET control (MV-282) gated by a confirm/cancel dialog —
+    /// <see cref="SaveSystem.Delete"/> is the whole reset, since <see cref="SaveSlotData"/> is the only
+    /// thing that survives between runs today; Bolts/Vault/Workbench state is still session-only and
+    /// already gets wiped by <see cref="StartSlot"/> on every play.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class HomeScreen : MonoBehaviour
@@ -57,7 +62,12 @@ namespace MaxWorlds.UI
         // instead of a generic save list (YT-174).
         private static readonly Color MaxOrange = CharacterSkin.BaseColorFor(CharacterRole.Player);
 
+        // Same destructive-red convention as SettingsPanel's "Quit to menu" button.
+        private static readonly Color DestructiveRed = new Color(0.85f, 0.20f, 0.20f);
+
         private GameObject _root;
+        private RectTransform _safeRoot;
+        private GameObject _confirmRoot;   // the reset confirm/cancel dialog, non-null only while open
         private MaxPortraitStage _maxStage;   // the live low-poly Max render, same crest as UpgradeScreen (YT-189)
         private float _prevTimeScale = 1f;
         private bool _open;
@@ -111,12 +121,23 @@ namespace MaxWorlds.UI
             Time.timeScale = _prevTimeScale;
             if (_maxStage != null) _maxStage.Hide();
             if (_root != null) Destroy(_root);
+            _confirmRoot = null;   // was a child of _root; already gone
             BootTiming.Mark("controllable");   // YT-216 — a slot was just picked; Max is live and moving
         }
 
         private void Update()
         {
             if (_open && _maxStage != null) _maxStage.Tick(Time.unscaledTime);
+        }
+
+        /// <summary>Redraw the whole modal in place (MV-282, after a reset) — cheapest way to get a
+        /// slot card back to its fresh "Empty" state without hand-rolling an in-place refresh of every
+        /// row.</summary>
+        private void Rebuild()
+        {
+            if (_root != null) Destroy(_root);
+            _confirmRoot = null;
+            Build();
         }
 
         // ------------------------------------------------------------------ actions
@@ -140,6 +161,20 @@ namespace MaxWorlds.UI
         {
             StartSlot(slot, playIntro: true);
             Close();
+        }
+
+        /// <summary>RESET tapped on an occupied slot (MV-282) — asks for confirmation before wiping
+        /// anything; a bare tap must never erase progress by itself.</summary>
+        private void OnResetTapped(int slot)
+        {
+            if (_confirmRoot != null) return;   // a confirm is already up; ignore a stray extra tap
+            ShowResetConfirm(slot);
+        }
+
+        private void ConfirmReset(int slot)
+        {
+            SaveSystem.Delete(slot);
+            Rebuild();
         }
 
         // ------------------------------------------------------------------ build
@@ -166,6 +201,7 @@ namespace MaxWorlds.UI
             var safeRoot = NewRect("Safe Area", go.transform, Vector2.zero, Vector2.one);
             Stretch(safeRoot);
             safeRoot.gameObject.AddComponent<SafeArea>();
+            _safeRoot = safeRoot;
 
             var dim = AddImage(safeRoot, HudTextures.Solid(), Scrim, "Dim");
             Stretch(dim.rectTransform);
@@ -235,6 +271,51 @@ namespace MaxWorlds.UI
             Anchor(playBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             playBtn.sizeDelta = new Vector2(280f, 64f);
             playBtn.anchoredPosition = new Vector2(-110f, 0f);
+
+            // Visible on every slot (AC1) but only tappable on an occupied one — there is nothing to
+            // wipe on an already-empty slot (MV-282).
+            var resetBtn = AddButton(row.rectTransform, "RESET", data.HasData ? DestructiveRed : CardRim,
+                data.HasData, () => OnResetTapped(slot));
+            Anchor(resetBtn, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            resetBtn.sizeDelta = new Vector2(140f, 40f);
+            resetBtn.anchoredPosition = new Vector2(-18f, -14f);
+        }
+
+        /// <summary>The RESET confirm/cancel dialog (MV-282) — a full-screen raycast-blocking scrim
+        /// added as the last sibling under <see cref="_safeRoot"/> so it renders on top of the panel
+        /// and swallows every click on the slots behind it while it's up.</summary>
+        private void ShowResetConfirm(int slot)
+        {
+            SaveSlotData data = SaveSystem.Load(slot);
+            string name = data.HasData ? data.DisplayName : SaveSystem.DefaultDisplayName(slot);
+
+            var scrim = AddImage(_safeRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0.75f), "Reset Confirm Scrim");
+            Stretch(scrim.rectTransform);
+            _confirmRoot = scrim.gameObject;
+
+            var dialog = AddImage(scrim.rectTransform, HudTextures.RoundedBox(32, 0.3f), PanelColor, "Reset Confirm Dialog");
+            dialog.type = Image.Type.Sliced;
+            Center(dialog.rectTransform, 640f, 280f);
+
+            var msg = AddText(dialog.rectTransform, 26f, Bone, TextAnchor.MiddleCenter, FontStyle.Bold);
+            Top(msg.rectTransform, 0f, -30f, 580f, 150f);
+            msg.text = $"Reset {name}?\nThis erases all progress on this slot.";
+
+            var cancelBtn = AddButton(dialog.rectTransform, "CANCEL", CardRim, true, HideResetConfirm);
+            Anchor(cancelBtn, Vector2.zero, Vector2.zero, Vector2.zero);
+            cancelBtn.sizeDelta = new Vector2(270f, 64f);
+            cancelBtn.anchoredPosition = new Vector2(30f, 30f);
+
+            var confirmBtn = AddButton(dialog.rectTransform, "CONFIRM", DestructiveRed, true, () => ConfirmReset(slot));
+            Anchor(confirmBtn, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(1f, 0f));
+            confirmBtn.sizeDelta = new Vector2(270f, 64f);
+            confirmBtn.anchoredPosition = new Vector2(-30f, 30f);
+        }
+
+        private void HideResetConfirm()
+        {
+            if (_confirmRoot != null) Destroy(_confirmRoot);
+            _confirmRoot = null;
         }
 
         /// <summary>"NAME — best: NN%" (YT-218's own worked example) — nothing else survives between

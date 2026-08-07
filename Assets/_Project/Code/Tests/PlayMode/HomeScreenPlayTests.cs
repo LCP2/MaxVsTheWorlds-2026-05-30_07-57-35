@@ -88,6 +88,15 @@ namespace MaxWorlds.Tests.PlayMode
                 .Where(b => b.gameObject.name == "PLAY")
                 .ElementAt(slot);
 
+        private Button ResetButton(int slot) =>
+            _screenGo.GetComponentsInChildren<Button>(true)
+                .Where(b => b.gameObject.name == "RESET")
+                .ElementAt(slot);
+
+        private Button FindButton(string name) =>
+            _screenGo.GetComponentsInChildren<Button>(true)
+                .FirstOrDefault(b => b.gameObject.name == name);
+
         [UnityTest]
         public IEnumerator OnFreshBoot_ItOpensAndPausesWithThreeEmptySlots()
         {
@@ -193,6 +202,88 @@ namespace MaxWorlds.Tests.PlayMode
                 .FirstOrDefault(img => img.gameObject.name == "Badge Portrait");
             Assert.That(portrait, Is.Not.Null, "no live-rendered Max crest found");
             Assert.That(portrait.texture, Is.Not.Null, "the crest's render texture never got assigned");
+        }
+
+        // ------------------------------------------------------------------ MV-282: per-slot reset
+
+        [UnityTest]
+        public IEnumerator AnEmptySlotsResetButtonIsNotInteractable()
+        {
+            yield return NewScreen();
+
+            Assert.That(ResetButton(0).interactable, Is.False,
+                "there is nothing to wipe on a slot that was never played");
+        }
+
+        [UnityTest]
+        public IEnumerator TappingResetOnAnOccupiedSlotOpensAConfirmDialogWithoutWipingYet()
+        {
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
+            yield return NewScreen();
+
+            Assert.That(ResetButton(0).interactable, Is.True, "an occupied slot must offer Reset");
+            ResetButton(0).onClick.Invoke();
+            yield return null;
+
+            Assert.That(FindButton("CONFIRM"), Is.Not.Null, "tapping Reset must ask for confirmation first");
+            Assert.That(SaveSystem.Load(0).HasData, Is.True, "a bare tap on Reset must not wipe anything yet");
+        }
+
+        [UnityTest]
+        public IEnumerator CancellingTheResetConfirmLeavesTheSlotUntouched()
+        {
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
+            yield return NewScreen();
+
+            ResetButton(0).onClick.Invoke();
+            yield return null;
+            FindButton("CANCEL").onClick.Invoke();
+            yield return null;
+
+            Assert.That(FindButton("CONFIRM"), Is.Null, "Cancel must close the confirm dialog");
+            SaveSlotData data = SaveSystem.Load(0);
+            Assert.That(data.HasData, Is.True);
+            Assert.That(data.DisplayName, Is.EqualTo("DEXTER"));
+            Assert.That(data.PersonalBestNormalized, Is.EqualTo(0.5f).Within(1e-4f));
+        }
+
+        [UnityTest]
+        public IEnumerator ConfirmingTheResetWipesOnlyThatSlotAndRedrawsItAsEmpty()
+        {
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
+            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "MAX", PersonalBestNormalized = 0.7f });
+            yield return NewScreen();
+
+            ResetButton(0).onClick.Invoke();
+            yield return null;
+            FindButton("CONFIRM").onClick.Invoke();
+            yield return null;
+
+            Assert.That(SaveSystem.Load(0).HasData, Is.False, "the targeted slot must be wiped");
+            Assert.That(SaveSystem.Load(1).HasData, Is.True, "resetting one slot must never touch another");
+            Assert.That(SaveSystem.Load(1).DisplayName, Is.EqualTo("MAX"));
+
+            var texts = _screenGo.GetComponentsInChildren<Text>(true);
+            Assert.That(texts.Any(t => t.text == "Empty"), Is.True, "a reset slot must redraw as Empty like a fresh slot");
+            Assert.That(FindButton("CONFIRM"), Is.Null, "the confirm dialog must close after Confirm");
+        }
+
+        [UnityTest]
+        public IEnumerator AResetSlotStartsAGenuinelyNewGame()
+        {
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.9f });
+            yield return NewScreen();
+
+            ResetButton(0).onClick.Invoke();
+            yield return null;
+            FindButton("CONFIRM").onClick.Invoke();
+            yield return null;
+
+            PlayButton(0).onClick.Invoke();
+            yield return null;
+
+            Assert.That(SaveSystem.Load(0).PersonalBestNormalized, Is.EqualTo(0f),
+                "a reset slot must start with no carried-over personal best");
         }
     }
 }
