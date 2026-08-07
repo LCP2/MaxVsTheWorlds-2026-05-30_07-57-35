@@ -88,7 +88,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ShowsThePrimaryWeaponNameAndAllFourTracks()
+        public IEnumerator ShowsThePrimaryWeaponNameAndAllTracks()
         {
             yield return NewScreen();
 
@@ -114,9 +114,9 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(rangeTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Range)), "Range should show 6 pip segments");
             Assert.That(rangeFilled, Is.EqualTo(2), "Range's live level (2) should show as 2 filled pips");
 
-            CountPips(_screenGo, Name(WeaponTrackKind.Capacity), out int capTotal, out int capFilled);
-            Assert.That(capTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity)), "Capacity should show 4 pip segments");
-            Assert.That(capFilled, Is.EqualTo(1), "an unspent track should show a single filled pip");
+            CountPips(_screenGo, Name(WeaponTrackKind.Spread), out int spreadTotal, out int spreadFilled);
+            Assert.That(spreadTotal, Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread)), "Spread should show 4 pip segments");
+            Assert.That(spreadFilled, Is.EqualTo(1), "an unspent track should show a single filled pip");
 
             Assert.That(FindText(_screenGo, "Lv 2/6"), Is.Null, "levels must render as pips, not \"Lv x/y\" text");
         }
@@ -159,9 +159,9 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator AbilitiesGridAlwaysShowsSixSlotsGreyedUntilOwned()
+        public IEnumerator AbilitiesGridAlwaysShowsAllSlotsGreyedUntilOwned()
         {
-            // MV-262: the abilities grid is a fixed 6-slot grid from the start — locked slots are
+            // MV-262: the abilities grid is a fixed-slot grid from the start — locked slots are
             // greyed, unnamed placeholder tiles (no name, no pips, no + button), not hidden rows and
             // not a text list naming what's still locked.
             yield return NewScreen();
@@ -170,8 +170,8 @@ namespace MaxWorlds.Tests.PlayMode
 
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Null, $"{kind} shouldn't show before Max owns anything");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(6), "all six ability slots should be visible from the start");
-            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 6 unlocked"), Is.Not.Null);
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(5), "all five ability slots should be visible from the start");
+            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 5 unlocked"), Is.Not.Null);
 
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             yield return null;
@@ -181,12 +181,12 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(FindText(_screenGo, Name(AbilityKind.WaterBalloon)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Null, "still-unacquired abilities must stay unnamed");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(6), "the grid stays at six slots as more are acquired");
-            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 6 unlocked"), Is.Not.Null);
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(5), "the grid stays at five slots as more are acquired");
+            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 5 unlocked"), Is.Not.Null);
         }
 
         [UnityTest]
-        public IEnumerator AllSixAbilitiesOwnedShowsNoLockedSlots()
+        public IEnumerator AllAbilitiesOwnedShowsNoLockedSlots()
         {
             yield return NewScreen();
             foreach (var kind in WeaponCatalog.AllAbilityKinds) WeaponSystemState.Acquire(kind);
@@ -194,7 +194,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "ABILITIES — 6 of 6 unlocked"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, "ABILITIES — 5 of 5 unlocked"), Is.Not.Null);
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} should be named once owned");
         }
@@ -207,10 +207,10 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            FindRowButton(_screenGo, Name(WeaponTrackKind.Capacity)).onClick.Invoke();
+            FindRowButton(_screenGo, Name(WeaponTrackKind.Range)).onClick.Invoke();
             yield return null;
 
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(2),
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(2),
                 "tapping the row's button must raise the track by one level");
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "and spend the banked part");
         }

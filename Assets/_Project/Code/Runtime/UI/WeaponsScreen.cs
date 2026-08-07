@@ -73,9 +73,9 @@ namespace MaxWorlds.UI
         /// Inspector-wired reference.</summary>
         private const string MaxPortraitResourcePath = "Art/Max";
 
-        private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start
-        private const int MaxAbilityRows = 6;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
-        private const int MaxPips = 6;           // largest cap across tracks (Range=6) and abilities (PowerEfficiency/WeaponCooldown=5)
+        private const int TrackCount = 2;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start
+        private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
+        private const int MaxPips = 6;           // largest cap across tracks (Range=6) and abilities (WeaponCooldown=5)
 
         // MV-262: the abilities grid is now a fixed 6-slot (3-row) grid regardless of how many are
         // owned, so unlike the old dynamic "shown + placeholder" layout there's a single worst case
@@ -787,21 +787,19 @@ namespace MaxWorlds.UI
             return new GridRowRefs(row, nameText, pips, plusButton, buttonBg, iconBg, glyph, outline);
         }
 
-        /// <summary>Short glyphs for the four RCDA tracks' icon tiles (MV-251) — abbreviations, not
+        /// <summary>Short glyphs for the RCDA tracks' icon tiles (MV-251) — abbreviations, not
         /// gameplay identity, so kept local to this screen rather than added to <see cref="WeaponCatalog"/>.</summary>
         private static string TrackGlyph(WeaponTrackKind kind)
         {
             switch (kind)
             {
-                case WeaponTrackKind.Capacity: return "CAP";
-                case WeaponTrackKind.WeaponEfficiency: return "EFF";
                 case WeaponTrackKind.Range: return "RNG";
                 case WeaponTrackKind.Spread: return "SPR";
                 default: return "?";
             }
         }
 
-        /// <summary>Short glyphs for the six abilities' icon tiles (MV-251) — same rationale as
+        /// <summary>Short glyphs for the abilities' icon tiles (MV-251) — same rationale as
         /// <see cref="TrackGlyph"/>.</summary>
         private static string AbilityGlyph(AbilityKind kind)
         {
@@ -811,7 +809,6 @@ namespace MaxWorlds.UI
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Dash: return "DSH";
                 case AbilityKind.Teleport: return "TP";
-                case AbilityKind.PowerEfficiency: return "PWR";
                 case AbilityKind.WeaponCooldown: return "CD";
                 default: return "?";
             }

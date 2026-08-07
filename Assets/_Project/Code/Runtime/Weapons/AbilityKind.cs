@@ -1,9 +1,11 @@
 namespace MaxWorlds.Weapons
 {
     /// <summary>
-    /// The six abilities a shed can grant (v0.5 recut spec §4/§6, WV-230). None are owned at run
-    /// start — each is acquired by destroying a shed (WV-229) and hidden from the weapons screen
-    /// until then (no locked teasers). Declaration order is the shed drop-pool's fixed order.
+    /// The abilities a shed can grant (v0.5 recut spec §4/§6, WV-230; Power Efficiency retired by
+    /// MV-290 — abilities are gated on cooldown only now, so there is no cell drain left to reduce).
+    /// None are owned at run start — each is acquired by destroying a shed (WV-229) and hidden from
+    /// the weapons screen until then (no locked teasers). Declaration order is the shed drop-pool's
+    /// fixed order.
     /// </summary>
     public enum AbilityKind
     {
@@ -18,9 +20,6 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Blink. Levels 1-2: L1 random, L2 aimed/movement-directed.</summary>
         Teleport,
-
-        /// <summary>Passive — reduces the three cell-drain rates. Levels 1-5.</summary>
-        PowerEfficiency,
 
         /// <summary>Passive — shortens every OTHER active ability's cooldown. Levels 1-5.</summary>
         WeaponCooldown,

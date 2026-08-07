@@ -55,10 +55,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AnOverrideOfZeroIsHonoured_NotTreatedAsUnset()
         {
-            // Zero drain is a legitimate thing to try (infinite fire); a `!= 0` style guard would
-            // silently ignore it. float? exists precisely so 0 and "unset" differ.
-            DevTuning.BlasterDrainPerSecond = 0f;
-            Assert.That(DevTuning.Or(DevTuning.BlasterDrainPerSecond, 10f), Is.EqualTo(0f));
+            // Zero knockback is a legitimate thing to try; a `!= 0` style guard would silently
+            // ignore it. float? exists precisely so 0 and "unset" differ.
+            DevTuning.SprayKnockback = 0f;
+            Assert.That(DevTuning.Or(DevTuning.SprayKnockback, 10f), Is.EqualTo(0f));
         }
 
         [Test]

@@ -242,8 +242,6 @@ namespace MaxWorlds.UI
             float healthDefault = health != null ? health.AuthoredMax : 100f;
             float robotDefault = EnemyArchetype.Rusher.MoveSpeed;
             float bossDefault = BossTuning.MoveSpeed;
-            float drainDefault = BlasterTuning.EnergyPerSecond;
-            float regenDefault = BlasterTuning.RegenPerSec;
 
             // ---- FEEL tab: camera + Max's own handling + the spray's cosmetic knockback. ----
             Add("Camera zoom", "m", FixedAngleCameraRig.MinDistance, FixedAngleCameraRig.MaxDistance,
@@ -269,23 +267,11 @@ namespace MaxWorlds.UI
                     if (h != null) h.RefreshMax();
                 }, tab: TabFeel);
 
-            Add("Water deplete rate", "/s", 0f, 60f, drainDefault,
-                () => DevTuning.Or(DevTuning.BlasterDrainPerSecond, drainDefault),
-                v => { DevTuning.BlasterDrainPerSecond = v; RefreshBlaster(); }, tab: TabFeel);
-
-            Add("Water refill rate", "/s", 0f, 200f, regenDefault,
-                () => DevTuning.Or(DevTuning.BlasterRegenPerSecond, regenDefault),
-                v => { DevTuning.BlasterRegenPerSecond = v; RefreshBlaster(); }, tab: TabFeel);
-
             // Spray knockback recut (WV-225): near-zero cosmetic stagger, not the old launch. Spec §9
             // names this under Combat feel explicitly.
             Add("Spray knockback", "m/s", 0f, 5f, WaterBlaster.DefaultSprayKnockback,
                 () => DevTuning.Or(DevTuning.SprayKnockback, WaterBlaster.DefaultSprayKnockback),
                 v => DevTuning.SprayKnockback = v, tab: TabFeel);
-
-            Add("Weakened damage", "x", 1f, 3f, PlayerHealth.DefaultWeakenedDamageMultiplier,
-                () => DevTuning.Or(DevTuning.WeakenedDamageMultiplier, PlayerHealth.DefaultWeakenedDamageMultiplier),
-                v => DevTuning.WeakenedDamageMultiplier = v, tab: TabFeel);
 
             // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights
             // through, the gated-area knobs (WV-234, spec §1/§9), and the World & Difficulty
@@ -447,24 +433,9 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots),
                 v => DevTuning.MaxActiveRobots = v, tab: TabEnemies);
 
-            // ---- ECONOMY tab: the power-cell/part drops and drains (WV-227/228), plus Hydro's
-            // burst timing. ----
-            Add("Primary drain", "/m", 0f, 30f, WaterBlaster.DefaultPrimaryCellsPerMin,
-                () => DevTuning.Or(DevTuning.PrimaryCellsPerMin, WaterBlaster.DefaultPrimaryCellsPerMin),
-                v => DevTuning.PrimaryCellsPerMin = v, tab: TabEconomy);
-
-            Add("Secondary cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSecondaryCellsPerUse,
-                () => DevTuning.Or(DevTuning.SecondaryCellsPerUse, CellEconomyTuning.DefaultSecondaryCellsPerUse),
-                v => DevTuning.SecondaryCellsPerUse = v, tab: TabEconomy);
-
-            Add("Special cost", "cells", 0f, 10f, CellEconomyTuning.DefaultSpecialAbilityCellsPerUse,
-                () => DevTuning.Or(DevTuning.SpecialAbilityCellsPerUse, CellEconomyTuning.DefaultSpecialAbilityCellsPerUse),
-                v => DevTuning.SpecialAbilityCellsPerUse = v, tab: TabEconomy);
-
-            Add("Power efficiency", "x", 0f, 0.3f, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel,
-                () => DevTuning.Or(DevTuning.PowerEfficiencyReductionPerLevel, CellEconomyTuning.DefaultPowerEfficiencyReductionPerLevel),
-                v => DevTuning.PowerEfficiencyReductionPerLevel = v, tab: TabEconomy);
-
+            // ---- ECONOMY tab: cells are a vestigial display-only counter since MV-290 (nothing
+            // spends them any more) — only their drop pacing/cap remain tunable — plus parts and
+            // Hydro's burst timing. ----
             Add("Cell capacity", "cells", 5f, 60f, PickupWallet.DefaultCapacity,
                 () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.DefaultCapacity),
                 v => DevTuning.PowerCellCapacity = v, tab: TabEconomy);
@@ -606,12 +577,6 @@ namespace MaxWorlds.UI
             {
                 Name = name, Unit = unit, Min = min, Max = max, Default = def, Get = get, Set = set, Tab = tab,
             });
-        }
-
-        private static void RefreshBlaster()
-        {
-            var b = FindFirstObjectByType<WaterBlaster>();
-            if (b != null) b.RefreshDevTuning();
         }
 
         /// <summary>Re-fit the live weapon to a changed upgrade magnitude (YT-138) — so sliding the

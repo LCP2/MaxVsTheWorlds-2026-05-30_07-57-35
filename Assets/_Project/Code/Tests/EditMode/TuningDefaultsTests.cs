@@ -48,8 +48,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(DifficultyDirector.AuthoredRunLengthSeconds, Is.EqualTo(360f).Within(0.001f), "run length");
             Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(180f).Within(0.001f), "shed clock skip");
             Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.42f).Within(0.001f), "robot health");
-            Assert.That(WaterBlaster.DefaultPrimaryCellsPerMin, Is.EqualTo(6f).Within(0.001f),
-                "primary cell drain (WV-227 recut, cells/min — supersedes the old cells/sec number)");
             Assert.That(CellEconomyTuning.DefaultPartsPerLargeKills, Is.EqualTo(4f).Within(0.001f),
                 "part pacing (WV-226 recut, per large kill)");
             Assert.That(CellEconomyTuning.DefaultCellsPerLargeKill, Is.EqualTo(1f).Within(0.001f),

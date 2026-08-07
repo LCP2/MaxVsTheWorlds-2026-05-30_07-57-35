@@ -71,28 +71,13 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ThrowingSpendsCellsAndStartsTheCooldown()
+        public IEnumerator ThrowingStartsTheCooldown()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(10);
-            int before = PickupWallet.PowerCells;
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
 
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(before - AbilityCellSpend.SecondaryCost));
             Assert.That(_abilities.WaterBalloonReady, Is.False, "must be on cooldown immediately after a throw");
-            yield return null;
-        }
-
-        [UnityTest]
-        public IEnumerator UnaffordableThrowFailsAndSpendsNothing()
-        {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(0);
-
-            Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False);
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
-            Assert.That(_abilities.WaterBalloonReady, Is.True, "a failed throw must not start the cooldown");
             yield return null;
         }
 
@@ -100,7 +85,6 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator LandingSplashesHalfTheBruisersMaxHealthAndHaltsIt()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(10);
 
             float level1Distance = AbilityTuning.WaterBalloonDistance(
                 1, AbilityTuning.DefaultWaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonDistancePerLevel);

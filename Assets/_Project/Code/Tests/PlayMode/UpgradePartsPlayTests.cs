@@ -87,20 +87,6 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheHarnessGrowsTheTank()
-        {
-            var blaster = NewBlaster();
-            yield return null;
-            float baseMax = blaster.Energy.Max;
-
-            UpgradeState.Install(PartKind.AugmentationHarness);
-            yield return null;   // the blaster re-fits off UpgradeState.Changed
-
-            Assert.That(blaster.Energy.Max, Is.GreaterThan(baseMax),
-                "the augmentation harness must enlarge the water tank");
-        }
-
-        [UnityTest]
         public IEnumerator AssemblingHydroUnlocksTheBurstButton_ButDoesNotAutoTrigger()
         {
             // Since WV-233 detached the hose from taps entirely there is no leash left for the sub-
