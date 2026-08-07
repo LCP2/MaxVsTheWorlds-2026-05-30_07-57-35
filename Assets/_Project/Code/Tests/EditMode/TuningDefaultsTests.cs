@@ -37,7 +37,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheYT200AuthoredDefaultsAreLeesNumbers()
         {
-            Assert.That(FixedAngleCameraRig.PhoneDistance, Is.EqualTo(16.1f).Within(0.001f), "camera zoom");
+            Assert.That(FixedAngleCameraRig.PhoneDistance,
+                Is.EqualTo(16.1f / FixedAngleCameraRig.ZoomFactor).Within(0.001f), "camera zoom (MV-276)");
             // YT-210: the escalation rate is now DERIVED from Max/RunLengthSeconds rather than
             // hand-tuned, and the shed bump is a clock skip in seconds rather than a level bump.
             Assert.That(DifficultyDirector.AuthoredRatePerSecond,

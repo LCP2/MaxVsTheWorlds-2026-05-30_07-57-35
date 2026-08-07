@@ -237,7 +237,7 @@ namespace MaxWorlds.UI
             var player = FindFirstObjectByType<PlayerController>();
             var health = FindFirstObjectByType<PlayerHealth>();
 
-            float camDefault = rig != null ? rig.Distance : 25.1f;
+            float camDefault = rig != null ? rig.Distance : 25.1f / FixedAngleCameraRig.ZoomFactor;
             float playerDefault = player != null ? player.AuthoredMoveSpeed : 6f;
             float healthDefault = health != null ? health.AuthoredMax : 100f;
             float robotDefault = EnemyArchetype.Rusher.MoveSpeed;

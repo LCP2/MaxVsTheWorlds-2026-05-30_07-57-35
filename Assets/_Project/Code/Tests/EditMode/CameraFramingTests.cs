@@ -13,23 +13,31 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class CameraFramingTests
     {
-        /// <summary>The committed starting distance. Kept in step with the scene by
+        /// <summary>The committed starting distance (post-MV-276). Kept in step with the scene by
         /// <see cref="TheSceneAndTheCodeAgreeOnTheZoom"/>.</summary>
-        private const float Distance = 25.1f;
+        private const float Distance = 25.1f / FixedAngleCameraRig.ZoomFactor;
 
         [Test]
-        public void ThePullBackShowsHalfAgainAsMuchArena()
+        public void ThePullBackShowsHalfAgainAsMuchArena_BeforeMV276TightenedItFurther()
         {
             // The ticket asked for ~1.5x the visible AREA. Area goes as distance squared, so the
             // move is √1.5 ≈ 1.22x, not 1.5x — pulling back 1.5x would have shown 2.25x the ground
-            // and left Max an ant in a wide shot.
-            float wanted = CameraFraming.DistanceForAreaScale(
+            // and left Max an ant in a wide shot. MV-276 then dialled 10% closer/tighter from that
+            // 25.1 m YT-82 pull-back, so the CURRENT committed distance is this / ZoomFactor.
+            float yt82Distance = CameraFraming.DistanceForAreaScale(
                 CameraFraming.PreviousDistance, CameraFraming.TargetAreaScale);
 
-            Assert.AreEqual(wanted, Distance, 0.1f,
-                "the committed distance no longer delivers the 1.5x arena it claims");
-            Assert.AreEqual(CameraFraming.TargetAreaScale,
-                CameraFraming.AreaScaleForDistance(CameraFraming.PreviousDistance, Distance), 0.02f);
+            Assert.AreEqual(25.1f, yt82Distance, 0.1f,
+                "the YT-82 area-scale target no longer lands on the historical 25.1m baseline");
+            Assert.AreEqual(yt82Distance / FixedAngleCameraRig.ZoomFactor, Distance, 0.1f,
+                "the committed distance no longer sits 10% closer than the YT-82 baseline (MV-276)");
+        }
+
+        [Test]
+        public void TheMV276ZoomBumpIsExactlyOneTenthCloser()
+        {
+            Assert.AreEqual(1.1f, 25.1f / Distance, 0.01f,
+                "MV-276: the camera should render at 1.1x the pre-MV-276 zoom");
         }
 
         [Test]
