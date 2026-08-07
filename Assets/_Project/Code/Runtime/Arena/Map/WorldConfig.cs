@@ -52,15 +52,6 @@ namespace MaxWorlds.Arena
         public string produces;
     }
 
-    /// <summary>A shed-free area's guaranteed power-up source (MV-270, power-up cadence §5/§8.7) — a
-    /// world-authored parts cache, not derived at runtime.</summary>
-    [Serializable]
-    public sealed class WorldPartsCache
-    {
-        public float x;
-        public float z;
-    }
-
     /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
     [Serializable]
     public sealed class WorldBoss
@@ -96,12 +87,11 @@ namespace MaxWorlds.Arena
         public bool hasShed;
         public string garrisonDensity;
 
-        // World-content fields (MV-270): where a shed area's factory body and a shed-free area's
-        // guaranteed power-up source actually stand. Optional — most areas carry neither.
+        // World-content fields (MV-270): where a shed area's factory body actually stands. Optional —
+        // most areas carry none.
         public float targetThreatBudget;
         public string notes;
         public WorldShed shed;
-        public WorldPartsCache partsCache;
         public WorldBoss boss;
 
         public float XMin => origin?.x ?? 0f;

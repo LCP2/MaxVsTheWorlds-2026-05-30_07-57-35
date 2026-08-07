@@ -84,7 +84,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         // --- AC2: power-up cadence (<=2 areas) holds across the whole world, using the world's own ---
-        // --- authored sources (sheds + parts caches), not just the minimum PowerupCadence would force. ---
+        // --- authored sources (sheds), not just the minimum PowerupCadence would force. ---
 
         [Test]
         public void World1_PowerupCadenceNeverExceedsTwoAreas()
@@ -95,12 +95,12 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < cfg.dials.areaCount; i++)
             {
                 WorldArea area = cfg.AreaByIndex(i + 1);
-                hasSource[i] = area != null && (area.hasShed || area.partsCache != null);
+                hasSource[i] = area != null && area.hasShed;
             }
 
             int longestGap = PowerupCadence.LongestGap(hasSource);
             Assert.LessOrEqual(longestGap, cfg.dials.powerupCadence,
-                "World 1's authored sheds + parts caches leave a longer power-up gap than the powerupCadence dial allows");
+                "World 1's authored sheds leave a longer power-up gap than the powerupCadence dial allows");
         }
 
         [Test]
