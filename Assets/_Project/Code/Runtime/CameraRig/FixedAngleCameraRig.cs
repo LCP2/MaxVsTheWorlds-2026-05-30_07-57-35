@@ -15,6 +15,9 @@ namespace MaxWorlds.CameraRig
     /// than an arena you could move around and read. 25.1 is √1.5 × 20.5, i.e. exactly half again
     /// the visible ground (see <see cref="CameraFraming"/>); it is a starting value, and the whole
     /// point of the dev-mode nudge keys is that Lee sets the final one by eye.
+    ///
+    /// MV-276 then dialled it 10% closer/tighter ("110% zoom") from that 25.1 m — both the desktop
+    /// and phone defaults now sit at 1/1.1 of their previous distance; see <see cref="ZoomFactor"/>.
     /// </summary>
     public sealed class FixedAngleCameraRig : MonoBehaviour
     {
@@ -23,12 +26,22 @@ namespace MaxWorlds.CameraRig
         public const float MinDistance = 12f;
         public const float MaxDistance = 45f;
 
-        /// <summary>Phone-class default (YT-106, re-baked YT-200 — was 23): the tighter framing Lee
-        /// dialed in on-device. Only phones use it — desktop keeps the serialized wide value, because
-        /// on a monitor the wider shot read fine (if anything a touch zoomed-in). The panel reads
+        /// <summary>The committed distances before MV-276's zoom bump — kept as named baselines so
+        /// the "110% zoom" claim is checkable arithmetic instead of a remembered pair of numbers.</summary>
+        private const float PreZoomDesktopDistance = 25.1f;
+        private const float PreZoomPhoneDistance = 16.1f;
+
+        /// <summary>MV-276 tuning: "110% zoom" reads as 10% closer/tighter, i.e. both device
+        /// defaults sit at 1/1.1 of their previous distance. Holds the pitch fixed like every other
+        /// knob on this rig.</summary>
+        public const float ZoomFactor = 1.1f;
+
+        /// <summary>Phone-class default (YT-106, re-baked YT-200 — was 23, retuned MV-276): the tighter
+        /// framing Lee dialed in on-device. Only phones use it — desktop keeps the serialized wide value,
+        /// because on a monitor the wider shot read fine (if anything a touch zoomed-in). The panel reads
         /// whichever default this device ends up with, so "Reset to defaults" returns to the right
         /// one per device.</summary>
-        public const float PhoneDistance = 16.1f;
+        public const float PhoneDistance = PreZoomPhoneDistance / ZoomFactor;
 
         /// <summary>Test seam: force the device class. Null = ask the platform.</summary>
         public static bool? SimulatePhoneClass;
@@ -42,7 +55,7 @@ namespace MaxWorlds.CameraRig
         [Tooltip("Distance from the follow target to the camera, in metres. Bigger = more arena " +
                  "visible around Max. THE zoom knob (YT-82) — nudge it live in dev mode with [ and ], " +
                  "read the number off the dev overlay, then commit it here. Keep the pitch fixed.")]
-        [SerializeField] private float cameraDistance = 25.1f;
+        [SerializeField] private float cameraDistance = PreZoomDesktopDistance / ZoomFactor;
 
         /// <summary>Current pull-back, in metres. Read by the dev overlay so the number Lee dials in
         /// by eye is the number he can paste back into the field above.</summary>

@@ -7,10 +7,10 @@ using MaxWorlds.CameraRig;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The per-device-class camera default (YT-106, re-baked YT-200): phones sit at 16.1 m, desktop
-    /// keeps the wider serialized framing. This is a default, not a hard override — the dev nudge and
-    /// the tuning slider still move it — so it only decides where a fresh session starts on each
-    /// device.
+    /// The per-device-class camera default (YT-106, re-baked YT-200, retuned MV-276): phones sit at
+    /// 16.1 / 1.1 m, desktop keeps the wider serialized framing (also / 1.1 post-MV-276). This is a
+    /// default, not a hard override — the dev nudge and the tuning slider still move it — so it only
+    /// decides where a fresh session starts on each device.
     /// </summary>
     public sealed class CameraPhoneDefaultPlayTests
     {
@@ -37,8 +37,8 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return MakeRig(phone: true);
             Assert.That(_go.GetComponent<FixedAngleCameraRig>().Distance,
-                        Is.EqualTo(16.1f).Within(0.001f),
-                        "a phone should get Lee's tighter 16.1 m framing by default");
+                        Is.EqualTo(16.1f / FixedAngleCameraRig.ZoomFactor).Within(0.001f),
+                        "a phone should get Lee's tighter framing by default, 10% closer post-MV-276");
         }
 
         [UnityTest]
@@ -46,8 +46,8 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return MakeRig(phone: false);
             Assert.That(_go.GetComponent<FixedAngleCameraRig>().Distance,
-                        Is.EqualTo(25.1f).Within(0.001f),
-                        "desktop must be left as-is — the wide framing read fine on a monitor");
+                        Is.EqualTo(25.1f / FixedAngleCameraRig.ZoomFactor).Within(0.001f),
+                        "desktop keeps the same relative framing — just 10% closer post-MV-276");
         }
 
         [UnityTest]
