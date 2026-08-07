@@ -158,14 +158,18 @@ namespace MaxWorlds.Tests.PlayMode
                 "at the run's start — even a POOLED robot must pick up the new toughness on reuse");
         }
 
-        // --- YT-210: the bounded run's OTHER wake path — the boss erupts at the top of the dial ---
+        // --- MV-279: the boss must never erupt off the Invasion Level clock alone — only off
+        // FactoryCensus.Cleared (every shed down), the same condition that opens its own gate.
+        // (This used to be YT-210's SECOND wake path; a real 3-shed map could top the dial out
+        // before all 3 sheds were actually destroyed, so the boss appeared before its gate opened.)
 
         [UnityTest]
-        public IEnumerator TheBossErupts_WhenTheInvasionLevelTopsOut_WithNoFactoryEverDestroyed()
+        public IEnumerator TheBossStaysDormant_WhenTheInvasionLevelTopsOut_WithNoFactoryEverDestroyed()
         {
             // Level pinned exactly at its own ceiling from frame one — no elapsed time, no shed kill,
-            // and NO factory registered at all, so FactoryCensus.Cleared can never fire. If the boss
-            // still wakes, it can only be because the dial itself topped out.
+            // and NO factory registered at all, so FactoryCensus.Cleared can never fire either. If the
+            // boss wakes here, it can only be because the dial alone topped out — the exact bug MV-279
+            // fixed.
             DevTuning.EscalationStart = 5f;
             DevTuning.EscalationMax = 5f;
 
@@ -178,9 +182,10 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.IsFalse(boss.Engaged, "the boss should still be dormant the instant it wakes up");
             yield return null;
+            yield return null;
 
-            Assert.IsTrue(boss.Engaged,
-                "the boss never erupted even though the Invasion Level was already at its ceiling");
+            Assert.IsFalse(boss.Engaged,
+                "the boss erupted off the Invasion Level clock alone, with no shed ever destroyed");
         }
 
         [UnityTest]

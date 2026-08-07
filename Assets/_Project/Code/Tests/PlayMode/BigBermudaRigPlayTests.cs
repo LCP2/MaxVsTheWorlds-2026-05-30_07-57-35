@@ -43,12 +43,11 @@ namespace MaxWorlds.Tests.PlayMode
         {
             Time.timeScale = 1f;
 
-            // YT-210 gave the boss a SECOND wake path — TickDormant erupts it once the Invasion Level
-            // tops out, independent of FactoryCensus. Every Wake() in this fixture destroys a hutch,
-            // and that death's HudSignals.FactoryDestroyed signal reaches the real, static
-            // DifficultyDirector via the game's own wiring — so without a reset here, a few tests'
-            // worth of shed-kill clock-skips accumulate and can trip TickDormant on a LATER test's
-            // freshly-Dormant boss before its own FactoryCensus path ever fires.
+            // Every Wake() in this fixture destroys a hutch, and that death's HudSignals.FactoryDestroyed
+            // signal reaches the real, static DifficultyDirector via the game's own wiring — reset it so
+            // a few tests' worth of shed-kill clock-skips don't accumulate and leak into a later test's
+            // spawn-cadence/toughness assertions (MV-279 removed the boss's own DifficultyDirector-linked
+            // wake path, but the Invasion Level itself is still shared static state).
             DevTuning.Reset();
             DifficultyDirector.Reset();
 
