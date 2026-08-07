@@ -129,8 +129,8 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             int pipsAtL2 = CountPips(Find("Teleport Button"));
 
-            Assert.AreEqual(0, pipsAtL1, "level 1 (random blink) shouldn't show a level-2 detail pip");
-            Assert.AreEqual(1, pipsAtL2, "level 2 (aimed blink) must read as visibly more built-out");
+            Assert.AreEqual(0, pipsAtL1, "level 1 shouldn't show a level-2 detail pip");
+            Assert.AreEqual(1, pipsAtL2, "level 2 (longer aimed blink) must read as visibly more built-out");
         }
 
         // ---------------------------------------------------------------- Water Balloon joystick input
@@ -218,6 +218,69 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             Assert.That(_max.transform.position, Is.EqualTo(before));
+        }
+
+        // ---------------------------------------------------------------- repeat use (MV-292)
+
+        [UnityTest]
+        public IEnumerator DraggingAndReleasingASecondTimeAfterCooldownThrowsAgain()
+        {
+            // A short DevTuning cooldown keeps the wait real (Time.deltaTime-driven) without the test
+            // sitting through the authored 3s — this is the exact regression MV-292 exists for: prior
+            // playtest found Water Balloon "worked once" through the real on-screen control.
+            DevTuning.WaterBalloonCooldownSeconds = 0.05f;
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            PickupWallet.SetPowerCells(10);
+            yield return null;
+
+            var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
+            var abilities = _max.GetComponent<PlayerAbilities>();
+
+            var down1 = new PointerEventData(EventSystem.current) { position = Vector2.zero };
+            control.OnPointerDown(down1);
+            var drag1 = new PointerEventData(EventSystem.current) { position = new Vector2(90f, 0f) };
+            control.OnDrag(drag1);
+            control.OnPointerUp(drag1);
+            Assert.That(abilities.WaterBalloonReady, Is.False, "the first throw must start the cooldown");
+
+            yield return new WaitForSeconds(0.2f);   // outlast the shortened cooldown
+            Assert.That(abilities.WaterBalloonReady, Is.True, "the cooldown must actually expire");
+
+            var down2 = new PointerEventData(EventSystem.current) { position = Vector2.zero };
+            control.OnPointerDown(down2);
+            Assert.That(control.IsAiming, Is.True, "the SAME control instance must accept a second press once ready again");
+            var drag2 = new PointerEventData(EventSystem.current) { position = new Vector2(90f, 0f) };
+            control.OnDrag(drag2);
+            control.OnPointerUp(drag2);
+
+            Assert.That(abilities.WaterBalloonReady, Is.False,
+                "a second real drag-release through the on-screen control must throw again, not silently no-op");
+        }
+
+        [UnityTest]
+        public IEnumerator TappingBlinkASecondTimeAfterCooldownMovesMaxAgain()
+        {
+            DevTuning.TeleportCooldownSeconds = 0.05f;
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+            PickupWallet.SetPowerCells(10);
+            yield return null;
+
+            var abilities = _max.GetComponent<PlayerAbilities>();
+            var button = Find("Teleport Button").GetComponentInChildren<Button>(true);
+
+            button.onClick.Invoke();
+            yield return null;
+            Assert.That(abilities.TeleportReady, Is.False, "the first blink must start the cooldown");
+
+            yield return new WaitForSeconds(0.2f);
+            Assert.That(abilities.TeleportReady, Is.True, "the cooldown must actually expire");
+
+            Vector3 beforeSecond = _max.transform.position;
+            button.onClick.Invoke();
+            yield return null;
+
+            Assert.That(Vector3.Distance(_max.transform.position, beforeSecond), Is.GreaterThan(0.5f),
+                "a second real tap through the on-screen Teleport button must blink again, not silently no-op");
         }
 
         // ---------------------------------------------------------------- layout

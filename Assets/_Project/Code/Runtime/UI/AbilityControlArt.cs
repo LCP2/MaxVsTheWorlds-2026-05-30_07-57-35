@@ -60,8 +60,8 @@ namespace MaxWorlds.UI
         /// <summary>
         /// A button-style control: the same TechRings ring + ready glow + cooldown-radial shape as
         /// HudController's Dash button, sized and brightened by <see cref="Prominence"/>, plus a small
-        /// detail pip per level beyond the first — so a Teleport at L2 (aimed blink) visibly reads as
-        /// more built-out than its L1 (random blink), not just a re-tinted copy of the same button.
+        /// detail pip per level beyond the first — so a Teleport at L2 (longer aimed blink) visibly
+        /// reads as more built-out than its L1, not just a re-tinted copy of the same button.
         /// </summary>
         public static ButtonVisual BuildButton(RectTransform parent, string name, Vector2 anchoredPos,
             float baseSize, Color color, string label, int level, int maxLevel)

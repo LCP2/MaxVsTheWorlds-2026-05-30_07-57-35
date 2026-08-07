@@ -32,10 +32,6 @@ namespace MaxWorlds.Weapons
                  "visual; this is what times the landing.")]
         [SerializeField] private float waterBalloonFlightSpeed = 9f;
 
-        [Header("Teleport")]
-        [Tooltip("How far a blink moves Max, metres.")]
-        [SerializeField] private float teleportDistance = 5f;
-
         private CharacterController _cc;
         private WaterBalloonSplashVfx _splashVfx;
         private float _waterBalloonCooldown;
@@ -166,31 +162,27 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        /// <summary>Blink (spec §6a): L1 is a random hop, L2 blinks toward <paramref name="aimDirection"/>.
-        /// Moved via the CharacterController so a blink stops at a wall rather than clipping through
-        /// it. Returns false if unowned or on cooldown.</summary>
+        /// <summary>Blink toward <paramref name="aimDirection"/> (MV-292: an AIMED blink at every
+        /// level — a random L1 hop read as "broken"/interchangeable with Dash in playtest). Level only
+        /// changes blink DISTANCE (same shape as Water Balloon's level = distance, spec §6a), 8m at L1
+        /// up to 12m at the L2 cap. Moved via the CharacterController so a blink stops at a wall rather
+        /// than clipping through it. Returns false if unowned or on cooldown.</summary>
         public bool TryTeleport(Vector3 aimDirection)
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.Teleport)) return false;
             if (_teleportCooldown > 0f) return false;
 
+            Vector3 aimed = new Vector3(aimDirection.x, 0f, aimDirection.z);
+            Vector3 dir = aimed.sqrMagnitude > 1e-4f ? aimed.normalized : transform.forward;
+
             _teleportCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
 
             int level = WeaponSystemState.AbilityLevel(AbilityKind.Teleport);
-            Vector3 aimed = new Vector3(aimDirection.x, 0f, aimDirection.z);
-            Vector3 dir;
-            if (level >= 2 && aimed.sqrMagnitude > 1e-4f)
-            {
-                dir = aimed.normalized;
-            }
-            else
-            {
-                Vector2 rand = Random.insideUnitCircle;
-                if (rand.sqrMagnitude < 1e-4f) rand = Vector2.up;
-                dir = new Vector3(rand.x, 0f, rand.y).normalized;
-            }
+            float baseDistance = DevTuning.Or(DevTuning.TeleportBaseDistance, AbilityTuning.DefaultTeleportBaseDistance);
+            float perLevel = DevTuning.Or(DevTuning.TeleportDistancePerLevel, AbilityTuning.DefaultTeleportDistancePerLevel);
+            float distance = AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
 
-            Vector3 offset = dir * teleportDistance;
+            Vector3 offset = dir * distance;
             if (_cc != null) _cc.Move(offset);
             else transform.position += offset;
             return true;

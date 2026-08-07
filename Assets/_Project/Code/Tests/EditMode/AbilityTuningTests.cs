@@ -71,6 +71,37 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(AbilityTuning.WaterBalloonSplashRadius(-1f, -1f), Is.EqualTo(0f).Within(1e-5f));
         }
 
+        // ---------------------------------------------------------------- Teleport (MV-292)
+
+        [Test]
+        public void TeleportLevelOneBlinksTheBaseDistance()
+        {
+            Assert.That(AbilityTuning.TeleportDistance(1, 8f, 4f), Is.EqualTo(8f).Within(1e-5f),
+                "level 1 is the ability's starting point — it should blink exactly the base distance");
+        }
+
+        [Test]
+        public void TeleportLevelTwoBlinksFartherThanLevelOne()
+        {
+            float l1 = AbilityTuning.TeleportDistance(1, 8f, 4f);
+            float l2 = AbilityTuning.TeleportDistance(2, 8f, 4f);
+            Assert.Greater(l2, l1, "level 2 (the cap) must blink farther than level 1");
+        }
+
+        [Test]
+        public void TeleportsAuthoredRangeClearsDashsShortBurst()
+        {
+            // Dash covers dashSpeed * dashDuration = 18 * 0.18 = 3.24m (PlayerController). Teleport
+            // must read as a clearly longer-range tool at both its levels (MV-292 AC1), not a
+            // re-skinned Dash.
+            const float dashDistance = 18f * 0.18f;
+            float teleportL1 = AbilityTuning.TeleportDistance(1,
+                AbilityTuning.DefaultTeleportBaseDistance, AbilityTuning.DefaultTeleportDistancePerLevel);
+
+            Assert.Greater(teleportL1, dashDistance * 2f,
+                "Teleport's L1 distance must clearly exceed Dash's short reposition burst");
+        }
+
         // ---------------------------------------------------------------- Speed (WV-231)
 
         [Test]

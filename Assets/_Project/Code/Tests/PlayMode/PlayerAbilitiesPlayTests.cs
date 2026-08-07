@@ -103,6 +103,25 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(robot.IsHalted, Is.True, "a robot the splash hits must be halted");
         }
 
+        [UnityTest]
+        public IEnumerator ASecondThrowSucceedsOnceTheCooldownExpires()
+        {
+            // MV-292: playtest found Water Balloon "works once" — a real second activation, not just
+            // the first, is the regression this locks in. A short DevTuning cooldown keeps the real
+            // (Time.deltaTime-driven) wait fast.
+            DevTuning.WaterBalloonCooldownSeconds = 0.05f;
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+
+            Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
+            Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False,
+                "must not throw again while still on cooldown");
+
+            yield return new WaitForSeconds(0.2f);
+
+            Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True,
+                "a second throw must succeed once the cooldown has actually expired");
+        }
+
         // ---------------------------------------------------------------- Teleport
 
         [UnityTest]
@@ -143,6 +162,57 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(delta.normalized.x, Is.GreaterThan(0.9f),
                 "L2 Teleport must blink toward the aimed direction, not a random one");
             yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TeleportLevelOneAlsoBlinksTowardTheAimedDirection()
+        {
+            // MV-292: a random L1 hop read in playtest as broken/interchangeable with Dash — Teleport
+            // must be an AIMED blink at every level, not just its L2 cap.
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+            Vector3 before = _max.transform.position;
+
+            Assert.That(_abilities.TryTeleport(Vector3.right), Is.True);
+
+            Vector3 delta = _max.transform.position - before;
+            Assert.That(delta.normalized.x, Is.GreaterThan(0.9f),
+                "L1 Teleport must already blink toward the aimed direction, not a random one");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator TeleportLevelTwoBlinksFartherThanLevelOne()
+        {
+            // MV-292 AC3: a level-up must produce a noticeable change — here, blink distance.
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+            Vector3 before = _max.transform.position;
+            Assert.That(_abilities.TryTeleport(Vector3.forward), Is.True);
+            float l1Distance = Vector3.Distance(_max.transform.position, before);
+
+            yield return new WaitForSeconds(WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport) + 0.1f);
+
+            WeaponSystemState.LevelUpAbility(AbilityKind.Teleport);
+            before = _max.transform.position;
+            Assert.That(_abilities.TryTeleport(Vector3.forward), Is.True);
+            float l2Distance = Vector3.Distance(_max.transform.position, before);
+
+            Assert.Greater(l2Distance, l1Distance, "level 2 must blink farther than level 1");
+        }
+
+        [UnityTest]
+        public IEnumerator ASecondTeleportSucceedsOnceTheCooldownExpires()
+        {
+            DevTuning.TeleportCooldownSeconds = 0.05f;
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+
+            Assert.That(_abilities.TryTeleport(Vector3.forward), Is.True);
+            Assert.That(_abilities.TryTeleport(Vector3.forward), Is.False,
+                "must not blink again while still on cooldown");
+
+            yield return new WaitForSeconds(0.2f);
+
+            Assert.That(_abilities.TryTeleport(Vector3.forward), Is.True,
+                "a second blink must succeed once the cooldown has actually expired");
         }
     }
 }
