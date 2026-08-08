@@ -118,5 +118,22 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(cfg.enemyTypes.heavy.thv, cfg.enemyTypes.large.thv);
             Assert.Greater(cfg.enemyTypes.brute.thv, cfg.enemyTypes.heavy.thv);
         }
+
+        // --- MV-298: Area 1 is a light opening, not a swarm — 2-3 lowest-tier (Rusher) + exactly ---
+        // --- 1 tank (Bruiser), not the 9-10 robots the pre-MV-298 pacing produced. ---
+
+        [Test]
+        public void World1_Area1ComposesToALightOpening_NotASwarm()
+        {
+            WorldConfig cfg = LoadWorld1();
+
+            DifficultyEngine.Composition composition = cfg.SolveComposition(1);
+
+            Assert.AreEqual(1, composition.Bruiser, "Area 1 must hold exactly one tank (large robot)");
+            Assert.AreEqual(0, composition.Heavy, "Heavy is not unlocked this early");
+            Assert.AreEqual(0, composition.Brute, "Brute is not unlocked this early");
+            Assert.That(composition.Rusher, Is.InRange(2, 3),
+                "Area 1 must hold 2-3 lowest-tier (Rusher) robots");
+        }
     }
 }
