@@ -54,6 +54,14 @@ namespace MaxWorlds.Tests.PlayMode
             return p;
         }
 
+        private Pickup MakeDevice()
+        {
+            var p = Pickup.Create(PickupKind.Device);
+            p.gameObject.SetActive(true);
+            _pickups.Add(p.gameObject);
+            return p;
+        }
+
         /// <summary>Stand the director up by hand — its self-install is gated on a PickupDirector so it
         /// stays out of other tests, which is exactly the leak this project has been bitten by.</summary>
         private IEnumerator InstallDirector()
@@ -167,10 +175,11 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var part = MakePart(PartKind.BeamNozzle);
             var cell = MakeCell();
+            var device = MakeDevice();
 
             yield return InstallDirector();
 
-            foreach (var p in new[] { part, cell })
+            foreach (var p in new[] { part, cell, device })
             {
                 Transform glow = GlowOf(p);
                 Assert.IsNotNull(glow, $"{p.Kind} got no collectible glow.");
@@ -271,6 +280,94 @@ namespace MaxWorlds.Tests.PlayMode
             var visual = cell.transform.Find("Visual");
             Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
                 "the greybox stand-in is still drawn under the real cell prop — you'd see both.");
+        }
+
+        [UnityTest]
+        public IEnumerator DevicePickup_GetsTheSpecialProp_WithGreyboxHidden()
+        {
+            // MV-308: a shed's ability grant used to fall through the director's Update loop with no
+            // branch at all, staying a plain greybox cube forever.
+            var device = MakeDevice();
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(device);
+            Assert.IsNotNull(art, "the device pickup got no special prop — MV-308 needs it dressed.");
+            Assert.IsTrue(art.name.EndsWith(WeaponPartArt.Keys.HydroDevice),
+                $"the device wears '{art.name}', expected the shared ability-device prop.");
+            Assert.Greater(art.GetComponentsInChildren<MeshRenderer>().Length, 1, "the prop is empty.");
+
+            var visual = device.transform.Find("Visual");
+            Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
+                "the device's greybox box is still drawn under its special prop.");
+        }
+
+        [UnityTest]
+        public IEnumerator DevicePickup_GlintsShimmerOnItsProp()
+        {
+            var device = MakeDevice();
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(device);
+            Assert.IsNotNull(art, "the device pickup got no art model.");
+
+            var glint = art.Find(WeaponPartArt.GlistenPrefix + "0");
+            Assert.IsNotNull(glint, "the device's prop has no glint dot to animate.");
+            var r = glint.GetComponent<MeshRenderer>();
+            int baseColorId = Shader.PropertyToID("_BaseColor");
+
+            Color ColorAt()
+            {
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                return mpb.GetColor(baseColorId);
+            }
+
+            Color c0 = ColorAt();
+            bool changed = false;
+            for (int i = 0; i < 8; i++)
+            {
+                yield return null;
+                if (ColorAt() != c0) { changed = true; break; }
+            }
+
+            Assert.IsTrue(changed, "the device's glint never changes brightness — it isn't shimmering.");
+        }
+
+        [UnityTest]
+        public IEnumerator DevicePickup_CoreRadiatesGently_LikeThePowerCell()
+        {
+            // MV-308 AC: the device needs "the glowing radiance the power cells have" — the same MV-304
+            // Core breathe, not just the shared orange CollectibleGlow every pickup already wears.
+            var device = MakeDevice();
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(device);
+            Assert.IsNotNull(art, "the device pickup got no art model.");
+
+            var core = art.Find("Core");
+            Assert.IsNotNull(core, "the device's prop has no Core band to radiate.");
+            var r = core.GetComponent<MeshRenderer>();
+            int baseColorId = Shader.PropertyToID("_BaseColor");
+
+            Color ColorAt()
+            {
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                return mpb.GetColor(baseColorId);
+            }
+
+            Color c0 = ColorAt();
+            bool changed = false;
+            for (int i = 0; i < 8; i++)
+            {
+                yield return null;
+                if (ColorAt() != c0) { changed = true; break; }
+            }
+
+            Assert.IsTrue(changed, "the device's Core never changes brightness — it isn't radiating.");
         }
     }
 }
