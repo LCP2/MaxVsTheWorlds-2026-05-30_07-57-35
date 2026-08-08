@@ -167,5 +167,31 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(4, small);
             Assert.AreEqual(4, large, "the tough tiers still count as large slots for the interleave");
         }
+
+        // --- FillExact (MV-268's difficulty engine) — MV-310: Gunner/Bomber/Blinker must actually ---
+        // --- reach the arena population queue, not just the factory-production mix. -----------------
+
+        [Test]
+        public void FillExact_QueuesTheRangedAndTeleportKindsToo()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 100);
+            var composition = new DifficultyEngine.Composition(
+                rusher: 2, bruiser: 1, heavy: 0, brute: 0, gunner: 1, bomber: 1, blinker: 1);
+            queue.FillExact(composition);
+
+            Assert.AreEqual(6, queue.TotalRemaining);
+
+            int gunner = 0, bomber = 0, blinker = 0;
+            while (queue.TryRelease(out EnemyKind kind))
+            {
+                if (kind == EnemyKind.Gunner) gunner++;
+                else if (kind == EnemyKind.Bomber) bomber++;
+                else if (kind == EnemyKind.Blinker) blinker++;
+            }
+
+            Assert.AreEqual(1, gunner);
+            Assert.AreEqual(1, bomber);
+            Assert.AreEqual(1, blinker);
+        }
     }
 }

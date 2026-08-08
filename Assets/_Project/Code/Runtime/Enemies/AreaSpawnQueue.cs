@@ -76,6 +76,13 @@ namespace MaxWorlds.Enemies
             FillInternal(composition.Bruiser, composition.Rusher, _ => EnemyKind.Bruiser);
             for (int i = 0; i < composition.Heavy; i++) _queued.Enqueue(EnemyKind.Heavy);
             for (int i = 0; i < composition.Brute; i++) _queued.Enqueue(EnemyKind.Brute);
+
+            // MV-293's ranged/teleport kinds (MV-310) — queued last, same as heavy/brute: both are
+            // already rare enough that their order relative to the rusher/bruiser interleave (or to
+            // each other) almost never matters the way that interleave itself does.
+            for (int i = 0; i < composition.Gunner; i++) _queued.Enqueue(EnemyKind.Gunner);
+            for (int i = 0; i < composition.Bomber; i++) _queued.Enqueue(EnemyKind.Bomber);
+            for (int i = 0; i < composition.Blinker; i++) _queued.Enqueue(EnemyKind.Blinker);
         }
 
         private void FillInternal(int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

@@ -135,5 +135,27 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(composition.Rusher, Is.InRange(2, 3),
                 "Area 1 must hold 2-3 lowest-tier (Rusher) robots");
         }
+
+        // --- MV-310: the shipped world1_config.json must actually surface Gunner/Bomber/Blinker ---
+        // --- in the ambient arena population, not only via factory production. --------------------
+
+        [Test]
+        public void World1_GunnerBomberBlinker_AllAppearAcrossTheFirstFewAreas()
+        {
+            WorldConfig cfg = LoadWorld1();
+
+            bool sawGunner = false, sawBomber = false, sawBlinker = false;
+            for (int area = 1; area <= 4; area++)
+            {
+                DifficultyEngine.Composition composition = cfg.SolveComposition(area);
+                if (composition.Gunner > 0) sawGunner = true;
+                if (composition.Bomber > 0) sawBomber = true;
+                if (composition.Blinker > 0) sawBlinker = true;
+            }
+
+            Assert.IsTrue(sawGunner, "Gunner never appears in Areas 1-4");
+            Assert.IsTrue(sawBomber, "Bomber never appears in Areas 1-4");
+            Assert.IsTrue(sawBlinker, "Blinker never appears in Areas 1-4");
+        }
     }
 }

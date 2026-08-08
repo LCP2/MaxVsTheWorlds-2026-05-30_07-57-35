@@ -57,9 +57,11 @@ namespace MaxWorlds.Tests.EditMode
         public void SolveComposition_SumOfThreatValues_IsWithinASmallToleranceOfTheBudget()
         {
             // Integer robot counts inherently quantize a continuous budget — most sharply at the
-            // smallest per-type unit counts (few, expensive Heavy/Brute). 15% relative covers every
-            // World 1 area with this fixture's dials; a genuinely bad solve would blow well past it.
-            const float relativeTolerance = 0.15f;
+            // smallest per-type unit counts (few, expensive Heavy/Brute). MV-310 added three more
+            // independently-rounded kinds (Gunner/Bomber/Blinker) drawing off the same budget, each
+            // its own quantization step, so the tolerance widened from 15% to cover every World 1 area
+            // with this fixture's dials; a genuinely bad solve would still blow well past it.
+            const float relativeTolerance = 0.25f;
 
             for (int area = 1; area <= World1AreaCount; area++)
             {
@@ -160,6 +162,66 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsTrue(hasADip, "a saw-tooth rhythm must dip somewhere, not ramp straight up");
             Assert.Greater(budgets[budgets.Length - 1], budgets[0], "the overall envelope still rises area 1 -> area 8");
+        }
+
+        // --- MV-310: Gunner/Bomber/Blinker must actually be solved into the ambient arena --------
+        // --- population, each introduced at its own area, not only via factory production. -------
+
+        [Test]
+        public void SolveComposition_RangedAndTeleportKinds_AreZeroBeforeTheirIntroArea()
+        {
+            var toughness = World1Toughness();
+            toughness.gunnerFromArea = 2;
+            toughness.bomberFromArea = 3;
+            toughness.blinkerFromArea = 4;
+
+            float budget = DifficultyEngine.TargetBudget(1, World1BaseThreat, World1ThreatGrowth, World1Pacing());
+            var composition = DifficultyEngine.SolveComposition(1, budget, toughness);
+
+            Assert.AreEqual(0, composition.Gunner, "Gunner is not unlocked until area 2");
+            Assert.AreEqual(0, composition.Bomber, "Bomber is not unlocked until area 3");
+            Assert.AreEqual(0, composition.Blinker, "Blinker is not unlocked until area 4");
+        }
+
+        [Test]
+        public void SolveComposition_RangedAndTeleportKinds_AppearFromTheirOwnIntroAreaOnward()
+        {
+            var toughness = World1Toughness();
+            toughness.gunnerFromArea = 2;
+            toughness.bomberFromArea = 3;
+            toughness.blinkerFromArea = 4;
+            toughness.specialSharePct = 12f;
+
+            float budgetArea2 = DifficultyEngine.TargetBudget(2, World1BaseThreat, World1ThreatGrowth, World1Pacing());
+            var atArea2 = DifficultyEngine.SolveComposition(2, budgetArea2, toughness);
+            Assert.Greater(atArea2.Gunner, 0, "Gunner must appear from area 2 onward");
+            Assert.AreEqual(0, atArea2.Bomber);
+            Assert.AreEqual(0, atArea2.Blinker);
+
+            float budgetArea4 = DifficultyEngine.TargetBudget(4, World1BaseThreat, World1ThreatGrowth, World1Pacing());
+            var atArea4 = DifficultyEngine.SolveComposition(4, budgetArea4, toughness);
+            Assert.Greater(atArea4.Gunner, 0, "Gunner stays once unlocked");
+            Assert.Greater(atArea4.Bomber, 0, "Bomber must have joined by area 4");
+            Assert.Greater(atArea4.Blinker, 0, "Blinker must appear from area 4 onward");
+        }
+
+        [Test]
+        public void SolveComposition_RangedAndTeleportKinds_NeverInventNegativeRobots()
+        {
+            var toughness = World1Toughness();
+            toughness.gunnerFromArea = 2;
+            toughness.bomberFromArea = 3;
+            toughness.blinkerFromArea = 4;
+
+            for (int area = 1; area <= World1AreaCount; area++)
+            {
+                float target = DifficultyEngine.TargetBudget(area, World1BaseThreat, World1ThreatGrowth, World1Pacing());
+                var composition = DifficultyEngine.SolveComposition(area, target, toughness);
+
+                Assert.GreaterOrEqual(composition.Gunner, 0, $"area {area}");
+                Assert.GreaterOrEqual(composition.Bomber, 0, $"area {area}");
+                Assert.GreaterOrEqual(composition.Blinker, 0, $"area {area}");
+            }
         }
 
         // --- AC3: power-up cadence enforcement ------------------------------------------------------

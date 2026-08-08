@@ -11,7 +11,7 @@
     "threatGrowth": 0.1,
     "band": { "up": 0.4, "down": -0.15 },
     "pacingRhythm": [0.35, 1.1, 1.15, 0.9, 1.1, 1.2, 0.9, 1.25],
-    "toughnessCurve": { "heavyFromArea": 5, "bruteFromArea": 8, "toughSubstitutionPct": 0.25, "tankShareEnd": 0.7 },
+    "toughnessCurve": { "heavyFromArea": 5, "bruteFromArea": 8, "toughSubstitutionPct": 0.25, "tankShareEnd": 0.7, "gunnerFromArea": 2, "bomberFromArea": 3, "blinkerFromArea": 4, "specialSharePct": 12 },
     "powerupCadence": 2
   },
   "enemyTypes": {
