@@ -160,6 +160,7 @@ namespace MaxWorlds.UI
         private RectTransform _partAlertRoot;
         private Image _partAlertBg;
         private Image _partAlertIcon;
+        private Image _partAlertGlow;
 
         // The always-available WEAPONS access button (YT-178). The part-alert chip above used to BE
         // this button, gated on a part being pending; now it's a small badge pinned to this button's
@@ -376,19 +377,30 @@ namespace MaxWorlds.UI
             // The part chip FLASHES while it's shown — the "you have an upgrade waiting" tell that YT-132
             // turns into the upgrade screen. It now beats in the shared collectible orange (YT-147): a
             // real dim->bright + scale pulse that reads as a beacon, not the old barely-there alpha fade
-            // on a gold badge that read as static and yellow.
+            // on a gold badge that read as static and yellow. MV-300: bigger badge, a stronger scale
+            // pulse and an outer glow ring make the beat unmissable at a glance.
             if (_partAlertRoot != null && _partAlertRoot.gameObject.activeSelf)
             {
                 float t = PartAlertFlash(Time.unscaledTime);
                 if (_partAlertBg != null) _partAlertBg.color = PartAlertColor(t);
 
                 // A scale pop on the beat, so the flash reads even in a busy corner of the screen.
-                float s = 1f + 0.11f * t;
+                float s = 1f + 0.22f * t;
                 _partAlertRoot.localScale = new Vector3(s, s, 1f);
 
                 if (_partAlertIcon != null)
                 {
                     var ic = Color.white; ic.a = 0.65f + 0.35f * t; _partAlertIcon.color = ic;
+                }
+
+                // Outer glow ring: swells and brightens on the same beat, fading to nothing in the
+                // trough so it reads as a halo pulsing outward, not a static ring.
+                if (_partAlertGlow != null)
+                {
+                    var gc = PartColor; gc.a = 0.55f * t;
+                    _partAlertGlow.color = gc;
+                    float gs = 1f + 0.18f * t;
+                    _partAlertGlow.rectTransform.localScale = new Vector3(gs, gs, 1f);
                 }
             }
         }
@@ -410,8 +422,9 @@ namespace MaxWorlds.UI
         public static Color PartAlertColor(float t)
         {
             t = Mathf.Clamp01(t);
-            Color c = PartColor * (0.5f + 0.5f * t);   // dim -> full orange
-            c.a = 0.72f + 0.28f * t;
+            // MV-300: a deeper trough so the beat reads as a strong pulse, not a gentle wobble.
+            Color c = PartColor * (0.32f + 0.68f * t);   // dim -> full orange
+            c.a = 0.55f + 0.45f * t;
             return c;
         }
 
@@ -1371,7 +1384,7 @@ namespace MaxWorlds.UI
 
             var label = AddText(_weaponsButtonRoot, 18f, BoneWhite, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform, -8f);
-            label.text = "WEAPONS";
+            label.text = "ABILITIES";
             label.fontStyle = FontStyle.Bold;
             label.resizeTextForBestFit = true;
             label.resizeTextMinSize = 10;
@@ -1382,13 +1395,22 @@ namespace MaxWorlds.UI
         /// <summary>The flashing "install available" badge (YT-131, corner-pinned to the WEAPONS button
         /// since YT-178): pulses the moment a part is picked up — the tell that drives YT-132's upgrade
         /// flow. It no longer gates access to the weapons area (the button beneath it does that always);
-        /// it just signals that a part is waiting, so it stays purely visual and lets taps fall through.</summary>
+        /// it just signals that a part is waiting, so it stays purely visual and lets taps fall through.
+        /// MV-300: sized up and given a pulsing outer glow ring so a waiting upgrade is obvious at a
+        /// glance, not something you notice only if you happen to look at the corner.</summary>
         private void BuildPartAlert()
         {
             _partAlertRoot = NewRect("Part Alert", _weaponsButtonRoot);
             Anchor(_partAlertRoot, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            _partAlertRoot.sizeDelta = new Vector2(44f, 44f);
-            _partAlertRoot.anchoredPosition = new Vector2(10f, 10f); // pinned to the button's top-right corner
+            _partAlertRoot.sizeDelta = new Vector2(56f, 56f);
+            _partAlertRoot.anchoredPosition = new Vector2(12f, 12f); // pinned to the button's top-right corner
+
+            // Outer glow ring — behind the chip, expanding beyond it as a halo. Purely visual (no
+            // raycast) so it never steals taps from the WEAPONS button beneath.
+            _partAlertGlow = AddImage(_partAlertRoot, HudTextures.RoundedBox(88, 0.35f), Color.clear, "Glow Ring");
+            Stretch(_partAlertGlow.rectTransform, 10f); // expands 10px beyond the chip as a halo
+            _partAlertGlow.type = Image.Type.Sliced;
+            _partAlertGlow.raycastTarget = false;
 
             _partAlertBg = AddImage(_partAlertRoot, HudTextures.RoundedBox(72, 0.3f), PartColor, "Chip");
             Stretch(_partAlertBg.rectTransform); _partAlertBg.type = Image.Type.Sliced;

@@ -372,7 +372,7 @@ namespace MaxWorlds.UI
             title.rectTransform.offsetMin = new Vector2(28f, -30f);
             title.rectTransform.offsetMax = new Vector2(-12f, 30f);
             title.fontStyle = FontStyle.Bold;
-            title.text = "WEAPONS & ABILITIES";
+            title.text = "ABILITIES";
 
             // Right-hand cluster, laid out from the corner inward: a close affordance (the design has
             // none, but the HUD's WEAPONS button only ever opens — MV-234's OnWeaponsButtonTapped calls
