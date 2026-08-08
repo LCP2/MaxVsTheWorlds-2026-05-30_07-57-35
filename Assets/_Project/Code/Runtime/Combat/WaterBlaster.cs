@@ -57,13 +57,14 @@ namespace MaxWorlds.Combat
         [SerializeField] private float fireInterval = 0.1f;   // seconds between ticks
         [SerializeField] private LayerMask hitMask = ~0;
 
-        /// <summary>Authored base spray half-angle in degrees (retuned MV-281, widened MV-289): the
-        /// 0.6 recut's ~10° total arc read as unplayably narrow for Area 1's opening fight, so MV-289
-        /// widens it to a forgiving ~45° total arc. The RCDA Spread track widens this further by up to
-        /// its max level (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is retuned against THIS
-        /// value to hold a ~95° total ceiling, MV-291 — change them together). Nozzle upgrades
-        /// (YT-133) narrow/widen it further.</summary>
-        public const float DefaultConeHalfAngle = 22.5f;
+        /// <summary>Authored base spray half-angle in degrees (retuned MV-281, widened MV-289,
+        /// re-narrowed MV-301): MV-289's ~45° total base read as a wide fan even with 0 Spread
+        /// upgrades spent, so the Spread track had nothing left to sell — MV-301 narrows the base to a
+        /// focused ~16° total arc so widening the spray is something a player earns. The RCDA Spread
+        /// track widens this further by up to its max level (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/>
+        /// is retuned against THIS value to hold a ~66° total ceiling, MV-301 — change them together).
+        /// Nozzle upgrades (YT-133) narrow/widen it further.</summary>
+        public const float DefaultConeHalfAngle = 8f;
 
         /// <summary>Damage multiplier at the outer edge of the spray cone (MV-281). Full power (1x) on
         /// the centre-line, linearly falling to this at the cone's half-angle — see

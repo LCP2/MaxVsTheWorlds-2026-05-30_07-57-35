@@ -57,24 +57,24 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_BaseArcIsFortyFiveDegreesTotal_MV289()
+        public void SpreadTrack_BaseArcIsSixteenDegreesTotal_MV301()
         {
-            // MV-281's narrow ~10° base (retained here until MV-289) read as unplayably thin once
-            // paired with 0.6's recalibrated robots and an under-tough Max — MV-289 widens the opening
-            // arc to a forgiving ~45° total.
-            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(45f).Within(0.01f),
-                "MV-289: base spray must read as a forgiving ~45° total arc");
+            // MV-289's ~45° total base already read as a wide fan at 0 Spread upgrades, leaving the
+            // Spread track nothing to sell — MV-301 re-narrows the un-upgraded stream to a focused
+            // ~16° total arc so widening it is something a player earns.
+            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(16f).Within(0.01f),
+                "MV-301: base spray must read as a narrow, focused ~16° total arc");
         }
 
         [Test]
-        public void SpreadTrack_MaxLevelArcIsNinetyFiveDegreesTotal_MV291()
+        public void SpreadTrack_MaxLevelArcIsSixtySixDegreesTotal_MV301()
         {
             float baseHalfAngle = WaterBlaster.DefaultConeHalfAngle;
             float maxHalfAngle = WeaponCatalog.EffectiveConeHalfAngle(
                 baseHalfAngle, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-            Assert.That(maxHalfAngle * 2f, Is.EqualTo(95f).Within(0.5f),
-                "MV-291: retuning the base angle or the per-level step must keep the maxed Spread track at ~95° total");
+            Assert.That(maxHalfAngle * 2f, Is.EqualTo(66f).Within(0.5f),
+                "MV-301: retuning the base angle or the per-level step must keep the maxed Spread track at ~66° total");
         }
 
         [Test]
