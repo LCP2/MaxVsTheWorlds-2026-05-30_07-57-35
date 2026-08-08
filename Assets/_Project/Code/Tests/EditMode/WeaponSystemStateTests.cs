@@ -69,6 +69,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(6));
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(6));
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(6));
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate), Is.EqualTo(6), "MV-299");
         }
 
         // ---------------------------------------------------------------- abilities
@@ -221,10 +222,10 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllFiveAbilitiesAndThreeTracks()
+        public void CatalogListsAllFiveAbilitiesAndFourTracks()
         {
             Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(5));
-            Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(3));
+            Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4), "MV-299 reinstated Depletion Rate as the fourth track");
         }
 
         [Test]
