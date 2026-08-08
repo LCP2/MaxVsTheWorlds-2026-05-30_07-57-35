@@ -104,5 +104,46 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(maxDamage, Is.EqualTo(baseDamage * 2f).Within(0.05f),
                 "MV-291: retuning the base damage or the per-level step must keep the maxed Damage track at ~2x base");
         }
+
+        [Test]
+        public void DepletionRateLevelOneIsTheBaseDrainUnmodified()
+        {
+            Assert.That(WeaponCatalog.EffectiveDrainPerSecond(10f, 1, 0.15f), Is.EqualTo(10f).Within(1e-5f),
+                "level 1 is every track's starting level — it must not slow the drain yet (MV-299)");
+        }
+
+        [Test]
+        public void EachDepletionRateLevelSlowsTheDrainFurther()
+        {
+            float l1 = WeaponCatalog.EffectiveDrainPerSecond(10f, 1, 0.15f);
+            float l2 = WeaponCatalog.EffectiveDrainPerSecond(10f, 2, 0.15f);
+            float l6 = WeaponCatalog.EffectiveDrainPerSecond(10f, 6, 0.15f);
+            Assert.Less(l2, l1, "level 2 must drain slower than level 1");
+            Assert.Less(l6, l2, "level 6 (the cap) must drain slower still");
+        }
+
+        [Test]
+        public void DepletionRateTrack_MaxLevelDrainsAtQuarterBase_MV299()
+        {
+            float baseDrain = BlasterTuning.EnergyPerSecond;
+            float maxDrain = WeaponCatalog.EffectiveDrainPerSecond(
+                baseDrain, WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate), WeaponCatalog.DefaultRcdaDepletionRatePerLevel);
+
+            Assert.That(maxDrain, Is.EqualTo(baseDrain * 0.25f).Within(0.01f),
+                "MV-299: retuning the per-level step must keep the maxed Depletion Rate track at ~25% of base drain (4x sustained fire)");
+        }
+
+        [Test]
+        public void DepletionRateNeverDrainsFasterThanBase()
+        {
+            // Sanity: a track that's meant to slow the drain must never speed it up at any level.
+            for (int level = 1; level <= WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate); level++)
+            {
+                float drain = WeaponCatalog.EffectiveDrainPerSecond(
+                    10f, level, WeaponCatalog.DefaultRcdaDepletionRatePerLevel);
+                Assert.That(drain, Is.LessThanOrEqualTo(10f), $"level {level} drained faster than base");
+                Assert.That(drain, Is.GreaterThan(0f), $"level {level} drained to zero or negative — the tank must never stop draining outright");
+            }
+        }
     }
 }

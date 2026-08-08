@@ -31,12 +31,13 @@ namespace MaxWorlds.Weapons
         public const float DefaultTeleportCooldownSeconds = 6f;
 
         /// <summary>The tracks, in the order the weapons screen lists them (spec §6; Capacity/Weapon
-        /// Efficiency retired by MV-290; Damage added by MV-291).</summary>
+        /// Efficiency retired by MV-290; Damage added by MV-291; Depletion Rate reinstated by MV-299).</summary>
         public static readonly WeaponTrackKind[] AllTrackKinds =
         {
             WeaponTrackKind.Range,
             WeaponTrackKind.Spread,
             WeaponTrackKind.Damage,
+            WeaponTrackKind.DepletionRate,
         };
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
@@ -78,6 +79,13 @@ namespace MaxWorlds.Weapons
         /// 5 steps at 20%/level land at 2x base, matching Range/Spread's ~2-2.5x ceiling.</summary>
         public const float DefaultRcdaDamagePerLevel = 0.2f;
 
+        /// <summary>Fraction each Depletion Rate track level above 1 CUTS the tank's drain per second
+        /// (MV-299, reinstating the tank MV-290 cut) — the inverse shape of the other tracks: they
+        /// scale a number UP, this scales the drain DOWN so a spend buys longer sustained fire, not a
+        /// bigger number in a combat log. 5 steps at 15%/level land at 25% of the base drain (4x the
+        /// sustained-fire time) at the maxed track — see <see cref="EffectiveDrainPerSecond"/>.</summary>
+        public const float DefaultRcdaDepletionRatePerLevel = 0.15f;
+
         /// <summary>Effective spray reach at a given Range-track level, given the weapon's authored
         /// base reach. Found by Lee playtesting (MV-263): the Range track raised no number at all, so
         /// spending parts on it did nothing — reach, VFX and the aim-arc outline all read this.</summary>
@@ -95,6 +103,14 @@ namespace MaxWorlds.Weapons
         /// instead of the curve staying flat until a late, explosive jump.</summary>
         public static float EffectiveDamagePerTick(float baseDamage, int damageLevel, float perLevel) =>
             baseDamage * (1f + perLevel * (Mathf.Max(1, damageLevel) - 1));
+
+        /// <summary>Effective tank drain per second at a given Depletion Rate track level, given the
+        /// weapon's authored base drain (MV-299) — level 1 is the unmodified base, same as every other
+        /// track, but each level above it SUBTRACTS from the drain rather than adding to a magnitude.
+        /// Floored at 20% of base so a maxed track buys a much longer tank, never a literally free
+        /// one.</summary>
+        public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel) =>
+            baseDrainPerSecond * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
 
         /// <summary>The level cap for an ability once acquired (spec §6): Water Balloon 3, Speed 4,
         /// Dash a single unlock (1), Teleport 2, Weapon Cooldown 5.</summary>
@@ -137,6 +153,7 @@ namespace MaxWorlds.Weapons
                 case WeaponTrackKind.Range: return "RANGE";
                 case WeaponTrackKind.Spread: return "SPREAD";
                 case WeaponTrackKind.Damage: return "DAMAGE";
+                case WeaponTrackKind.DepletionRate: return "DEPLETION RATE";
                 default: return kind.ToString();
             }
         }

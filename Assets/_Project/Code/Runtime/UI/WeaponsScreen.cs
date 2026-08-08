@@ -73,14 +73,14 @@ namespace MaxWorlds.UI
         /// Inspector-wired reference.</summary>
         private const string MaxPortraitResourcePath = "Art/Max";
 
-        private const int TrackCount = 3;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 adds Damage)
+        private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
         private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
-        private const int MaxPips = 6;           // largest cap across tracks (MV-291: all three now cap at 6) and abilities (WeaponCooldown=5)
+        private const int MaxPips = 6;           // largest cap across tracks (MV-291: all now cap at 6) and abilities (WeaponCooldown=5)
 
         // MV-262: the abilities grid is a fixed 6-slot (3-row) grid regardless of how many are owned,
         // so unlike the old dynamic "shown + placeholder" layout there's a single worst case to
-        // verify: primary header + primary grid (2 rows, MV-291: 3 tracks at 2 cols) + abilities
-        // header + abilities grid (3 rows) all fit inside the content budget below the top bar
+        // verify: primary header + primary grid (2 rows, MV-299: 4 tracks at 2 cols, unchanged from
+        // MV-291's 2 rows) + abilities header + abilities grid (3 rows) all fit inside the content budget below the top bar
         // (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
         // block above the grids — see the arithmetic in
         // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no runtime overflow
@@ -799,6 +799,7 @@ namespace MaxWorlds.UI
                 case WeaponTrackKind.Range: return "RNG";
                 case WeaponTrackKind.Spread: return "SPR";
                 case WeaponTrackKind.Damage: return "DMG";
+                case WeaponTrackKind.DepletionRate: return "DEP";
                 default: return "?";
             }
         }

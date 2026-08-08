@@ -12,16 +12,19 @@ namespace MaxWorlds.Combat
     /// <summary>
     /// Slice gadget (YT-35) — Spray archetype. While <see cref="IsFiring"/> is
     /// driven true (player holds aim), auto-fires a short-range stream: ticks at
-    /// a fixed cadence, sphere-casts forward, and applies damage (+soak tag) to
-    /// every <see cref="IDamageable"/> in the stream.
+    /// a fixed cadence, draws from the water tank, sphere-casts forward, and applies damage
+    /// (+soak tag) to every <see cref="IDamageable"/> in the stream.
     ///
     /// Since the weapon epic (YT-127/YT-129) this is Max's <b>garden hose</b>: the water
     /// short-circuits the robots (the existing damage, re-themed — a spray shorts them out).
     /// Its OPENING spray is deliberately short and wide — weak but forgiving — the base state
     /// before any nozzle upgrade (YT-133) narrows or lengthens it.
     ///
-    /// MV-290: the primary never depletes — no tank, no fuel, no weakened state. Max is never left
-    /// running with a dead weapon; holding the trigger fires for as long as it's held, full stop.
+    /// MV-290 cut the tank entirely (always-on, no depletion); MV-299 reinstates it — the primary
+    /// drains under continuous fire and auto-regenerates once the trigger is released, no cells, no
+    /// pickups, no taps involved (that part of MV-290's cut, one currency/no cell-fuel, stays). See
+    /// <see cref="WaterNormalized"/> for the floating gauge and <see cref="WeaponTrackKind.DepletionRate"/>
+    /// for the upgrade that slows the drain.
     ///
     /// All firing visuals live in <see cref="WaterVfx"/> (YT-47), which this attaches
     /// to itself at Awake and drives with cosmetic-only calls. The VFX never feeds back
@@ -99,19 +102,32 @@ namespace MaxWorlds.Combat
 
         /// <summary>
         /// Pure fire-gate decision (unit-testable): the stream emits only while the trigger is
-        /// actively held. MV-290: the primary never depletes, so there is no fuel check here any
-        /// more — holding the trigger is the whole gate.
+        /// actively held AND there is water left to spend (MV-299, reinstating the tank MV-290 cut).
+        /// With no aim held (<paramref name="firingHeld"/> false) this is always false — no emission,
+        /// no damage tick, no VFX.
         /// </summary>
-        public static bool ShouldEmit(bool firingHeld) => firingHeld;
+        public static bool ShouldEmit(bool firingHeld, bool hasWater) => firingHeld && hasWater;
 
         /// <summary>Drive the trigger directly when there is no <see cref="aimSource"/>
         /// (isolated testing / scripted fire). Ignored on frames where a bound aim source
         /// overrides it in Update.</summary>
         public void SetFiring(bool firing) => IsFiring = firing;
 
-        /// <summary>Is the stream actually coming out this frame? (MV-290: mirrors <see cref="IsFiring"/> —
-        /// the primary never stalls or depletes.)</summary>
+        /// <summary>Is the stream actually coming out this frame? (Firing AND water available.)</summary>
         public bool IsEmitting => _lastEmitting;
+
+        /// <summary>The water tank, 0..1 — what the floating gauge above Max reads
+        /// (<see cref="MaxWorlds.Player.PlayerHealth"/>, MV-299). 1 before <see cref="Awake"/> has
+        /// built the tank, so an unbuilt/isolated instance never reads as empty.</summary>
+        public float WaterNormalized => _tank != null ? _tank.Normalized : 1f;
+
+        /// <summary>Water one tick costs, given the current Depletion Rate track level (MV-299) — the
+        /// authored per-second drain (<see cref="BlasterTuning.EnergyPerSecond"/>), scaled down by the
+        /// track, spread over one fire tick.</summary>
+        public float EnergyPerTick => WeaponCatalog.EffectiveDrainPerSecond(
+            BlasterTuning.EnergyPerSecond,
+            WeaponSystemState.TrackLevel(WeaponTrackKind.DepletionRate),
+            WeaponCatalog.DefaultRcdaDepletionRatePerLevel) * fireInterval;
 
         /// <summary>How far the stream actually reaches, in metres — the authored reach plus any reach
         /// the Power nozzle adds (YT-133) plus the RCDA Range track's own bonus (MV-263). Public so the
@@ -178,6 +194,8 @@ namespace MaxWorlds.Combat
 
         private float _tickTimer;
         private bool _lastEmitting;
+        private bool _depleted;
+        private EnergyPool _tank;
         private WaterVfx _vfx;
         private AimReticle _reticle;
         private readonly Collider[] _hits = new Collider[32];
@@ -188,6 +206,11 @@ namespace MaxWorlds.Combat
 
         private void Awake()
         {
+            // The water tank (MV-299, reinstating the tank MV-290 cut). Size is fixed — the
+            // Depletion Rate track (WeaponTrackKind.DepletionRate) only scales how fast it drains,
+            // never how big it is (that was the old, still-retired, Capacity track).
+            _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
+
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).
             _vfx = GetComponent<WaterVfx>();
             if (_vfx == null) _vfx = gameObject.AddComponent<WaterVfx>();
@@ -213,6 +236,12 @@ namespace MaxWorlds.Combat
             // that runs every frame for the armed Max — ticks it now.
             HydroBurst.Tick(dt);
 
+            // Auto-regen (MV-299): advances only once TrySpend has stopped resetting the tank's
+            // internal idle clock — i.e. purely from letting go of the trigger, no cells, no
+            // pickups, no taps. Ticked every frame, firing or not, so a released trigger starts
+            // recovering on its own the moment RegenDelay has passed.
+            _tank.Tick(dt);
+
             // Trigger is held only while the player is actively aiming. When bound,
             // orient along their facing too. If unbound, IsFiring stays false (no
             // auto-discharge) unless a test/other system drives it via SetFiring.
@@ -231,11 +260,18 @@ namespace MaxWorlds.Combat
             // told what the gadget is doing and never gets a say in it.
             if (_reticle != null) _reticle.SetAiming(IsFiring);
 
-            // Dev/filming only; false in a normal session (YT-60).
+            // Dev/filming only; both are false in a normal session (YT-60).
             if (DevMode.IsAutoFiring) IsFiring = true;
+            if (DevMode.IsInfiniteEnergy) _tank.Refill();
 
-            // MV-290: the primary never depletes — holding the trigger is the whole gate.
-            bool emitting = ShouldEmit(IsFiring);
+            // Hysteresis (MV-299, reinstated): once the tank runs dry, lock fire out until it
+            // recharges to RechargeFraction of max. Without this, an empty tank dribbles a single
+            // puff every RegenDelay instead of a clean stream -> deplete -> recharge -> stream cycle.
+            float costPerTick = EnergyPerTick;
+            if (_depleted && _tank.Normalized >= BlasterTuning.RechargeFraction) _depleted = false;
+            else if (!_depleted && !_tank.CanSpend(costPerTick)) _depleted = true;
+
+            bool emitting = ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(costPerTick));
             _lastEmitting = emitting;
 
             if (_vfx != null) _vfx.SetStreaming(emitting);
@@ -249,6 +285,7 @@ namespace MaxWorlds.Combat
             if (_tickTimer > 0f) return;
             _tickTimer = fireInterval;
 
+            if (!_tank.TrySpend(costPerTick)) return;
             FireTick();
         }
 
@@ -347,7 +384,7 @@ namespace MaxWorlds.Combat
             if (!debugOverlay || !DevMode.Enabled) return;
             bool aiming = aimSource != null && aimSource.IsAiming;
             string s = $"Blaster: IsFiring={IsFiring}  aimSource.IsAiming={aiming}  " +
-                       $"emitting={_lastEmitting}";
+                       $"emitting={_lastEmitting}  tank={WaterNormalized:0.00}";
             GUI.color = _lastEmitting ? Color.cyan : Color.white;
             GUI.Label(new Rect(12f, 64f, 900f, 24f), s);
         }
