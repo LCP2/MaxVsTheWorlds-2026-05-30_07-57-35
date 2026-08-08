@@ -76,6 +76,7 @@ namespace MaxWorlds.UI
         private const float ScreenClearance = 0.45f;
 
         private IHealthReadout _source;
+        private Transform _scaleAnchor;
         private Transform _pivot;
         private RectTransform _canvas;
         private Image _fill;
@@ -137,9 +138,25 @@ namespace MaxWorlds.UI
 
             _camera = Camera.main;
 
+            // Cancels the owner's scale WITHOUT taking on any of its rotation (MV-302): a child that
+            // both inherits a non-uniform scale AND is then rotated away from its parent's own axes (as
+            // the camera-facing pivot below must be) renders SHEARED, not merely stretched --
+            // Transform.lossyScale doesn't even report it, since Unity's scale/rotation composition
+            // assumes no shear exists. A gate is the one body in this game that is both anisotropically
+            // scaled (long, thin) and yaw-rotated (an E/W-wall doorway spins the box 90 degrees), so it
+            // is the one case that actually showed the bug; every other unit here is uniform enough in
+            // X/Z that the shear was never visible. Leaving this anchor's localRotation at its default
+            // identity is what makes the fix work: with zero rotation between it and its parent,
+            // cancelling scale here is a same-axis multiply (safe), so everything it parents afterward
+            // inherits a PURE rotation with UNIFORM (1,1,1) scale — a combination that can never shear
+            // no matter what independent rotation the pivot below applies to face the camera.
+            var anchorGo = new GameObject("HealthBarScaleAnchor");
+            _scaleAnchor = anchorGo.transform;
+            _scaleAnchor.SetParent(transform, false);
+
             var pivotGo = new GameObject("HealthBar");
             _pivot = pivotGo.transform;
-            _pivot.SetParent(transform, false);
+            _pivot.SetParent(_scaleAnchor, false);
 
             var canvasGo = new GameObject("Canvas", typeof(Canvas));
             var canvas = canvasGo.GetComponent<Canvas>();
@@ -198,9 +215,12 @@ namespace MaxWorlds.UI
         /// </summary>
         private void SyncToBody()
         {
-            Vector3 body = transform.lossyScale;
-            _pivot.localScale = WorldBar.Unscale(body);
-            _pivot.localPosition = new Vector3(0f, WorldBar.LocalOffsetY(_heightAboveCentre, body.y), 0f);
+            _scaleAnchor.localScale = WorldBar.Unscale(transform.lossyScale);
+            // The anchor above has already cancelled the owner's scale in a shear-free way, so the
+            // pivot's own offset is plain world metres now — no further division by the parent's
+            // Y-scale needed (and none of the anchor's local ROTATION is ever touched, which is the
+            // part that keeps this shear-free; see the comment in Build()).
+            _pivot.localPosition = new Vector3(0f, _heightAboveCentre, 0f);
             _canvas.localScale = Vector3.one * WorldBar.CanvasScaleFor(_worldWidth, BarPixelWidth);
         }
 
