@@ -218,6 +218,42 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
+        public IEnumerator PowerCell_CoreRadiatesGently()
+        {
+            // MV-304: the cell's "Core" charge band has to breathe on its own, distinct from the shared
+            // orange CollectibleGlow pulse below it — a fixed-brightness core reads as a lamp, not
+            // energy.
+            var cell = MakeCell();
+
+            yield return InstallDirector();
+
+            Transform art = ArtOf(cell);
+            Assert.IsNotNull(art, "the power cell got no art model.");
+
+            var core = art.Find("Core");
+            Assert.IsNotNull(core, "the cell's art has no Core band to radiate.");
+            var r = core.GetComponent<MeshRenderer>();
+            int baseColorId = Shader.PropertyToID("_BaseColor");
+
+            Color ColorAt()
+            {
+                var mpb = new MaterialPropertyBlock();
+                r.GetPropertyBlock(mpb);
+                return mpb.GetColor(baseColorId);
+            }
+
+            Color c0 = ColorAt();
+            bool changed = false;
+            for (int i = 0; i < 8; i++)
+            {
+                yield return null;
+                if (ColorAt() != c0) { changed = true; break; }
+            }
+
+            Assert.IsTrue(changed, "the power cell's Core never changes brightness — it isn't radiating.");
+        }
+
+        [UnityTest]
         public IEnumerator PowerCell_StillWearsItsSwappedProp_WithTheGreyboxHidden()
         {
             var cell = MakeCell();

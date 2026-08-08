@@ -96,6 +96,12 @@ namespace MaxWorlds.VFX
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "3", 4.6f);
+                        // The gentle RADIATE (MV-304): the "Core" charge band WeaponPartArt built is
+                        // otherwise a static light — breathing it slowly sells "energy source", not
+                        // "lamp". Deliberately calmer and slower than PulseGlow's orange aura below (the
+                        // ticket's own "far gentler than a radiant star") so the two don't compete —
+                        // the cell's own charge is a quiet pulse under the shared collectible glow.
+                        PulseCellCore(art);
                     }
                 }
                 else if (pickup.Kind == PickupKind.Part)
@@ -189,6 +195,29 @@ namespace MaxWorlds.VFX
                 mpb.SetColor(BaseColorId, GlowColor * (0.6f + 0.4f * t));   // additive: dimmer..full
                 r.SetPropertyBlock(mpb);
             }
+        }
+
+        // MV-304: the cell's own gentle radiance — slower and lower-amplitude than PulseGlow's shared
+        // orange aura, so it reads as a quiet inner charge rather than competing with the "grab me" tell.
+        private const string CellCoreName = "Core";
+        private const float CellPulseSpeed = 1.1f;
+        private const float CellPulseMin = 0.75f;
+        private const float CellPulseRange = 0.5f;
+
+        /// <summary>Breathes the power cell's "Core" charge band (built by <see cref="WeaponPartArt.BuildPowerCell"/>)
+        /// between a dim and a bright cyan so it reads as radiating energy rather than a fixed light.
+        /// A no-op for any prop without a "Core" child (the Hydro device's own core glow is untouched —
+        /// it isn't reached from the PowerCell branch that calls this).</summary>
+        private static void PulseCellCore(Transform art)
+        {
+            var core = art.Find(CellCoreName);
+            if (core == null || !core.TryGetComponent<MeshRenderer>(out var r)) return;
+
+            float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
+            var mpb = new MaterialPropertyBlock();
+            r.GetPropertyBlock(mpb);
+            mpb.SetColor(BaseColorId, WeaponPartArt.CellCyan * (CellPulseMin + CellPulseRange * t));
+            r.SetPropertyBlock(mpb);
         }
 
         /// <summary>Flickers one of a prop's specular glint dots (YT-167, WV-236) in a brief spike-and-fade,
