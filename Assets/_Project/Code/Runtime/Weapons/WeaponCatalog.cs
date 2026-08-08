@@ -66,12 +66,12 @@ namespace MaxWorlds.Weapons
         public const float DefaultRcdaRangePerLevel = 1.5f;
 
         /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263, MV-281,
-        /// MV-289, re-retuned MV-291 against the widened cap
-        /// — <see cref="MaxLevel(WeaponTrackKind)"/> — so the 5 steps land at ~2.1x base, evenly: each
-        /// step is a flat +10° on the total arc (22.5*0.2222 = 5° half-angle/level). Tuned against
-        /// <see cref="WaterBlaster.DefaultConeHalfAngle"/> so MV-289's ~45° total base opens to a
-        /// ~95° total ceiling at the maxed Spread track (change the two together).</summary>
-        public const float DefaultRcdaSpreadPerLevel = 0.22222f;
+        /// MV-289, re-retuned MV-291 against the widened cap, re-retuned MV-301 against the re-narrowed
+        /// base — <see cref="MaxLevel(WeaponTrackKind)"/> — so the 5 steps land at ~4.1x base, evenly:
+        /// each step is a flat +10° on the total arc (8*0.625 = 5° half-angle/level). Tuned against
+        /// <see cref="WaterBlaster.DefaultConeHalfAngle"/> so MV-301's ~16° total base opens to a
+        /// ~66° total ceiling at the maxed Spread track (change the two together).</summary>
+        public const float DefaultRcdaSpreadPerLevel = 0.625f;
 
         /// <summary>Fraction each Damage track level above 1 adds to the primary's per-tick damage
         /// (MV-291) — the curve's missing third axis: Range and Spread already had a visible per-level
