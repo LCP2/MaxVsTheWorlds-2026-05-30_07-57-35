@@ -69,11 +69,45 @@ namespace MaxWorlds.VFX
         private static void Install()
         {
             if (FindFirstObjectByType<PickupArtDirector>() != null) return;
-            // Gate on the real actor. A frame-working AfterSceneLoad director that installs into every
-            // shared PlayMode test scene flakes timing-sensitive tests (YT-129/130); only the game runs
-            // a PickupDirector, so its absence means there is nothing here for us to dress.
-            if (FindFirstObjectByType<PickupDirector>() == null) return;
-            new GameObject("PickupArt").AddComponent<PickupArtDirector>();
+            if (FindFirstObjectByType<InstallGate>() != null) return;
+            new GameObject("PickupArtInstallGate").AddComponent<InstallGate>();
+        }
+
+        /// <summary>
+        /// MV-313: this used to gate on the real actor by calling <c>FindFirstObjectByType&lt;PickupDirector&gt;()</c>
+        /// right here, inside this class's own AfterSceneLoad callback — but <c>PickupDirector</c>
+        /// installs itself through the exact same idiom, its own [RuntimeInitializeOnLoadMethod(AfterSceneLoad)],
+        /// and Unity does not guarantee which of two different classes' AfterSceneLoad callbacks runs
+        /// first. In the live/WebGL (IL2CPP) build this class's callback was losing that race, so the
+        /// PickupDirector check always saw nothing and PickupArtDirector never installed — every pickup
+        /// wore its raw greybox forever. The isolated PlayMode tests never caught it because they build
+        /// the director by hand (<c>InstallDirector</c>), skipping this gate entirely.
+        ///
+        /// <c>Start()</c> only runs once every AfterSceneLoad callback for this frame has already run —
+        /// including <c>PickupDirector</c>'s own — so checking here instead is independent of dispatch
+        /// order, native boot or <see cref="MaxWorlds.Core.SceneInstallers"/>'s own Replay re-install.
+        /// A frame-working object that installs into every shared PlayMode test scene would flake
+        /// timing-sensitive tests (YT-129/130) exactly as the old gate's comment warned, so on a miss it
+        /// removes itself rather than sticking around to check again.
+        /// </summary>
+        private sealed class InstallGate : MonoBehaviour
+        {
+            private void Start()
+            {
+                if (FindFirstObjectByType<PickupDirector>() != null)
+                {
+                    gameObject.name = "PickupArt";
+                    gameObject.AddComponent<PickupArtDirector>();
+                }
+                else if (Application.isPlaying)
+                {
+                    Destroy(gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(gameObject);
+                }
+            }
         }
 
         private void Update()
