@@ -280,6 +280,66 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ------------------------------------------------------------------ MV-312: the Gunner is not a rusher
+
+        /// <summary>
+        /// The Gunner shared the rusher's colour (and its model) before this ticket — the two are
+        /// stat-differentiated (EnemyArchetype.Gunner, MV-293) but were visually identical, so a
+        /// player had no way to tell "walk up to this" from "this drains your health from across the
+        /// yard" until they were already hit. Colour is half of the fix; the other half is
+        /// RobotRig.BuildGunner's own silhouette.
+        /// </summary>
+        [Test]
+        public void TheGunnerReadsAsSomethingOtherThanTheRusherItUsedToShareAColourWith()
+        {
+            Color rusher = CharacterSkin.BaseColorFor(CharacterRole.Robot);
+            Color gunner = CharacterSkin.BaseColorFor(CharacterRole.Gunner);
+
+            Assert.Greater(Distance(rusher, gunner), 0.25f,
+                "the Gunner is close enough to the rusher's colour to read as the same threat — " +
+                "exactly the bug this ticket exists to fix.");
+        }
+
+        [Test]
+        public void TheGunnerReadsCold_LikeEveryOtherThingTryingToKillMax()
+        {
+            Color c = CharacterSkin.BaseColorFor(CharacterRole.Gunner);
+            Assert.Greater(Mathf.Max(c.g, c.b), c.r,
+                "the Gunner has gone warm — it is competing with Max for the one cue that still works " +
+                "when the screen is full.");
+        }
+
+        /// <summary>Same guarantee as the ground tiers above, for the one ranged kind that used to
+        /// fall through to the rusher's role: a body recycled from the rusher pool into the Gunner
+        /// pool must not keep wearing the rusher's colour.</summary>
+        [Test]
+        public void APooledBody_ComesBackAsAGunner_NotStillWearingTheRushersColour()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            try
+            {
+                var enemy = go.AddComponent<RobotEnemy>();
+                enemy.Apply(EnemyArchetype.Rusher);
+
+                var skin = go.AddComponent<CharacterSkin>().Bind(CharacterRole.Robot);
+                Assert.AreEqual(CharacterRole.Robot, skin.Role, "it did not come out as a rusher.");
+                Color asRusher = skin.BodyColor;
+
+                // Back in the pool; out again as the Gunner.
+                enemy.Apply(EnemyArchetype.Gunner);
+                skin.Apply();
+
+                Assert.AreEqual(CharacterRole.Gunner, skin.Role,
+                    "a recycled body came back as a Gunner and kept the rusher's role.");
+                Assert.AreNotEqual(asRusher, skin.BodyColor,
+                    "it is a Gunner now and it is still wearing the rusher's colour.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
         // ------------------------------------------------------------------ the flash
 
         /// <summary>

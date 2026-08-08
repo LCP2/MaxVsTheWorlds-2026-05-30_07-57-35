@@ -17,6 +17,7 @@ namespace MaxWorlds.VFX
         Structure,
         Heavy,      // MV-303: the second later-area tier
         Brute,      // MV-303: the top of the composition ladder
+        Gunner,     // MV-312: the ranged turret gets its own colour, not the rusher's teal
     }
 
     /// <summary>
@@ -84,6 +85,14 @@ namespace MaxWorlds.VFX
         /// Deliberately desaturated, like the boss — it reads as the heaviest thing in the swarm by
         /// being closer to black than anything else that isn't Big Bermuda, not by being colourful.</summary>
         private static readonly Color BruteBody = new Color(0.20f, 0.22f, 0.27f);
+
+        /// <summary>The Gunner (MV-312): cold sentry green — a hue family none of the other tiers
+        /// occupy (turquoise, violet, royal blue, charcoal), so the one kind that fights from range
+        /// never gets mistaken for the rusher it shared a silhouette AND a colour with before this
+        /// ticket. Its silhouette changed too (RobotRig.BuildGunner) — same reason, same fix, two
+        /// places, because the AC is "never reads as a rusher", not "reads as a different colour of
+        /// rusher".</summary>
+        private static readonly Color GunnerBody = new Color(0.18f, 0.58f, 0.24f);
 
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
@@ -175,6 +184,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Bruiser: return BruiserBody;
                 case CharacterRole.Heavy: return HeavyBody;
                 case CharacterRole.Brute: return BruteBody;
+                case CharacterRole.Gunner: return GunnerBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -193,6 +203,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Bruiser: return CharacterRole.Bruiser;
                 case EnemyKind.Heavy: return CharacterRole.Heavy;
                 case EnemyKind.Brute: return CharacterRole.Brute;
+                case EnemyKind.Gunner: return CharacterRole.Gunner;
                 default: return CharacterRole.Robot;
             }
         }
@@ -201,7 +212,8 @@ namespace MaxWorlds.VFX
         /// these — a hit must never be able to flash the player.</summary>
         public static bool IsEnemy(CharacterRole r) =>
             r == CharacterRole.Robot || r == CharacterRole.Bruiser ||
-            r == CharacterRole.Heavy || r == CharacterRole.Brute || r == CharacterRole.Boss;
+            r == CharacterRole.Heavy || r == CharacterRole.Brute ||
+            r == CharacterRole.Gunner || r == CharacterRole.Boss;
 
         private void OnEnable()
         {

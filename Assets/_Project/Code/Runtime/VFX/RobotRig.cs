@@ -115,6 +115,10 @@ namespace MaxWorlds.VFX
         private Color _tellColor = EyeIdle;
         private float _flash;
 
+        /// <summary>The Gunner's laser (MV-312) — built lazily, and only ever for that one kind; see
+        /// <see cref="UpdateBeamVfx"/>.</summary>
+        private LineRenderer _beamLine;
+
         /// <summary>The colour the eye is currently burning — the tell, in one value. What a test looks
         /// at to prove the wind-up actually reaches the screen.</summary>
         public Color TellColor => _tellColor;
@@ -229,6 +233,7 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             if (_enemy.Kind == EnemyKind.Bruiser) BuildBruiser(feet);
+            else if (_enemy.Kind == EnemyKind.Gunner) BuildGunner(feet);
             else BuildRusher(feet);
         }
 
@@ -340,6 +345,54 @@ namespace MaxWorlds.VFX
             }
         }
 
+        /// <summary>
+        /// The Gunner (MV-312): a planted sentry turret, not a robot that runs. Where the rusher and
+        /// bruiser are both built from the same "legs carrying a torso" grammar (round pod on splayed
+        /// legs vs. wide chassis on treads), the Gunner shares neither — three short stub feet in a
+        /// tripod ring, a squat drum base, a thin vertical mast, and a flat disc "head" canted down
+        /// like a scope. Tall and narrow where the rusher is round, motionless where the rusher leans
+        /// forward mid-stride: at the fixed ~72° camera it reads as a fixed emplacement, which is what
+        /// it is (EnemyArchetype.Gunner: <see cref="EnemyArchetype.LungeSpeed"/> is 0 — it never moves
+        /// during the shot). This is the ticket's AC1 fix: before it, this method didn't exist and
+        /// every Gunner fell through to <see cref="BuildRusher"/> wearing the rusher's own silhouette.
+        /// </summary>
+        private void BuildGunner(Transform feet)
+        {
+            // Three short, straight support feet in a tripod ring — planted, not splayed for a stride.
+            // A turret does not chase, so nothing here leans forward the way the rusher's legs do.
+            for (int i = 0; i < 3; i++)
+            {
+                float rad = (90f + i * 120f) * Mathf.Deg2Rad;
+                Vector3 pos = new Vector3(Mathf.Sin(rad) * 0.24f, 0.11f, Mathf.Cos(rad) * 0.24f);
+                Part("Strut", PrimitiveType.Cylinder, feet, pos, new Vector3(0.07f, 0.11f, 0.07f), _accentMat);
+            }
+
+            // A low, wide drum the mast rises out of — squat, not the rusher's round leaning pod.
+            Part("Base", PrimitiveType.Cylinder, feet,
+                 new Vector3(0f, 0.28f, 0f), new Vector3(0.40f, 0.09f, 0.40f), _bodyMat);
+
+            // A thin vertical mast — tall for its width, the opposite proportion of the rusher's
+            // round mass. Height over bulk is the whole "sentry, not skitterer" read.
+            Part("Mast", PrimitiveType.Cylinder, feet,
+                 new Vector3(0f, 0.68f, 0f), new Vector3(0.13f, 0.32f, 0.13f), _accentMat);
+
+            // The head — a flat disc housing at the top of the mast, canted down like a scope.
+            // Nothing on the rusher or bruiser is a disc; this is the silhouette's own tell, on top
+            // of the colour tell CharacterSkin already gives the kind (MV-312).
+            Part("Head", PrimitiveType.Cylinder, feet,
+                 new Vector3(0f, 1.06f, 0.02f), new Vector3(0.30f, 0.09f, 0.30f), _bodyMat,
+                 Quaternion.Euler(82f, 0f, 0f));
+
+            // THE EYE — a single big forward lens, doubling as the beam's muzzle (see UpdateBeamVfx).
+            // Bigger than the rusher's running-light: a scope you have to watch, not a spark to notice.
+            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 1.06f, 0.30f), 0.26f) };
+
+            // A stub sensor off the head — the asymmetric fleck every rig here carries.
+            Part("Sensor", PrimitiveType.Cylinder, feet,
+                 new Vector3(0.16f, 1.20f, -0.05f), new Vector3(0.025f, 0.12f, 0.025f), _accentMat,
+                 Quaternion.Euler(0f, 0f, -20f));
+        }
+
         /// <summary>One part of a robot. Given a real material always, marked <see cref="SelfDrivenTint"/>
         /// so no director claims it, and stripped of the collider a primitive is born with — gameplay's
         /// CharacterController is the only hitbox this robot has.</summary>
@@ -407,6 +460,7 @@ namespace MaxWorlds.VFX
             if (!_built || _enemy == null) return;
 
             RideTheRamp();
+            UpdateBeamVfx();
 
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
@@ -456,6 +510,92 @@ namespace MaxWorlds.VFX
             // instead of dropping a frame's worth of height in one go.
             p.y = Mathf.MoveTowards(p.y, local, 3.5f * Mathf.Max(Time.deltaTime, 1e-4f));
             _model.localPosition = p;
+        }
+
+        /// <summary>
+        /// The Gunner's laser, drawn (MV-312) — before this, <see cref="BeamGeometry"/> and
+        /// <see cref="RobotEnemy.TickBeam"/> computed and applied the beam's damage every frame but
+        /// nothing put it on screen, so the hit was unavoidable: there was nothing to see or dodge.
+        /// Built lazily and only for <see cref="EnemyKind.Gunner"/> — every other kind never touches
+        /// this method beyond the one early-return.
+        ///
+        /// Two phases, both read off state <see cref="RobotEnemy"/> already owns, nothing written back:
+        ///
+        ///   AIMING (State.Telegraph) — a thin, dim line that grows toward the beam's real width as the
+        ///     wind-up completes. This IS the AC's dodge window, drawn: width is part of the
+        ///     information, not just an on/off line, so "how far do I need to step" is readable before
+        ///     the beam locks.
+        ///   FIRING (State.Lunge) — the locked beam at full width, hot, along the exact direction
+        ///     <see cref="RobotEnemy.TickBeam"/> is hit-testing against right now (transform.forward,
+        ///     unchanged since the telegraph ended — the enemy never re-aims after locking).
+        ///
+        /// The origin is the eye/muzzle this rig just built, not the feet — the beam has to look like
+        /// it comes out of the turret's lens, not out of the ground.
+        /// </summary>
+        private void UpdateBeamVfx()
+        {
+            if (_enemy.Kind != EnemyKind.Gunner) return;
+
+            bool aiming = _enemy.Current == RobotEnemy.State.Telegraph;
+            bool firing = _enemy.Current == RobotEnemy.State.Lunge;
+
+            if (!aiming && !firing)
+            {
+                if (_beamLine != null) _beamLine.enabled = false;
+                return;
+            }
+
+            if (_beamLine == null) _beamLine = BuildBeamLine();
+            _beamLine.enabled = true;
+
+            Vector3 origin = (_eyes != null && _eyes.Length > 0 && _eyes[0] != null)
+                ? _eyes[0].transform.position
+                : transform.position;
+            Vector3 end = origin + transform.forward * _enemy.BeamRange;
+            _beamLine.SetPosition(0, origin);
+            _beamLine.SetPosition(1, end);
+
+            float fullWidth = _enemy.BeamHalfWidth * 2f;
+            if (aiming)
+            {
+                float t = _enemy.TelegraphProgress;
+                _beamLine.widthMultiplier = Mathf.Lerp(0.03f, fullWidth * 0.9f, t);
+                Color c = EyeWarn;
+                c.a = Mathf.Lerp(0.25f, 0.85f, t);
+                _beamLine.startColor = c;
+                _beamLine.endColor = c;
+            }
+            else // firing
+            {
+                _beamLine.widthMultiplier = fullWidth;
+                Color c = Color.Lerp(EyeWarn, Color.white, 0.6f);
+                c.a = 1f;
+                _beamLine.startColor = c;
+                _beamLine.endColor = c;
+            }
+        }
+
+        /// <summary>The beam's LineRenderer, built once and reused — a Gunner is pooled by kind
+        /// (never recycled as a different archetype), so the same GameObject serves this robot's
+        /// whole life. Parented under <see cref="_model"/> rather than the robot's own root: that
+        /// container already cancels the archetype's body scale (see <see cref="BuildModel"/>), which
+        /// keeps the beam's width in plain world metres instead of shrinking with a sub-1 body scale.
+        /// World-space positions, so it draws correctly regardless of that parent's own transform.</summary>
+        private LineRenderer BuildBeamLine()
+        {
+            var go = new GameObject("Beam");
+            go.transform.SetParent(_model, worldPositionStays: false);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.numCapVertices = 4;
+            lr.numCornerVertices = 0;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.material = VfxMaterials.Additive(VfxMaterials.Glow());
+            lr.enabled = false;
+            return lr;
         }
 
         /// <summary>

@@ -93,6 +93,7 @@ namespace MaxWorlds.UI
         private float _worldWidth;
         private float _heightAboveCentre;
         private int _shownHp = int.MinValue;
+        private string _shownName;
         private bool _alwaysShow;
 
         /// <summary>Metres above the unit's origin the bar floats. Read back by the layout tests.</summary>
@@ -194,7 +195,8 @@ namespace MaxWorlds.UI
             nr.pivot = new Vector2(0.5f, 0f);
             nr.sizeDelta = new Vector2(LabelPixelWidth, LabelPixelHeight);
             nr.anchoredPosition = new Vector2(0f, nameLift);
-            _nameText.text = _source.ReadoutName;
+            // Text itself is set by Refresh() below (MV-312) — it re-reads ReadoutName every call, so
+            // there is no separate "initial" assignment to keep in step with that one.
 
             // The number sits ON the bar, Brawl-Stars style, so the figure and the length it
             // describes are one object rather than two things to look between.
@@ -237,6 +239,20 @@ namespace MaxWorlds.UI
             bool show = _source.IsAlive && (_alwaysShow || n < FullEnough);
 
             if (_pivot.gameObject.activeSelf != show) _pivot.gameObject.SetActive(show);
+
+            // Re-read every frame, diffed like the HP figure below (MV-312). A pooled robot's Kind is
+            // stamped by RobotEnemy.Apply() AFTER this bar was first Build() — Awake (which attaches
+            // the bar) runs before the spawner's Apply call — so the name baked in Build() belongs to
+            // whatever kind Awake saw, which for a freshly created robot is always the Rusher default.
+            // That is why a Gunner's nameplate shipped reading "RUSHER": it was never wrong per-kind,
+            // it was just never refreshed after the real kind arrived.
+            string name = _source.ReadoutName;
+            if (name != _shownName)
+            {
+                _shownName = name;
+                _nameText.text = name;
+            }
+
             if (!show) return;
 
             _fill.fillAmount = n;
