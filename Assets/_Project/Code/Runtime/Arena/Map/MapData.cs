@@ -139,8 +139,13 @@ namespace MaxWorlds.Arena
         /// so <see cref="WorldMapLoader"/> can fall back to the exact same number.</summary>
         public const float DefaultWallHeight = 3.5f;
 
+        /// <summary>MV-297: walls were eating too much of the playable floor — cut to 40% of the
+        /// original 1f default so the same "un-tuned map still builds a wall" fallback
+        /// <see cref="DefaultWallHeight"/> gives wallHeight also holds for thickness.</summary>
+        public const float DefaultWallThickness = 0.4f;
+
         public float wallHeight = DefaultWallHeight;
-        public float wallThickness = 1f;
+        public float wallThickness = DefaultWallThickness;
 
         public MapZone[] zones = Array.Empty<MapZone>();
         public MapLink[] links = Array.Empty<MapLink>();

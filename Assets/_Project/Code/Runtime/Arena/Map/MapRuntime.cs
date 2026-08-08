@@ -251,8 +251,8 @@ namespace MaxWorlds.Arena
         /// of the link that names it, read off the exact same <see cref="SealWidth"/> the scene-adopted
         /// gate uses, so the two kinds can never leave a doorway with a gap beside its seal.
         /// </summary>
-        /// <summary>MV-246: a gate's authored depth is exactly <c>wallThickness</c> (both 0.6 in
-        /// backyard_slice.json), and <see cref="SealWidth"/> deliberately overlaps the gate into the
+        /// <summary>MV-246: a gate's authored depth is exactly <c>wallThickness</c> (both 0.24 in
+        /// backyard_slice.json as of MV-297), and <see cref="SealWidth"/> deliberately overlaps the gate into the
         /// wall on each side of the doorway by that same thickness — so over the overlap, the gate's
         /// front/back faces sit on the EXACT SAME plane as the wall's, and the two flicker (z-fight)
         /// against each other. 2 cm proud on each face, the same margin <c>BackyardDressingSet</c>

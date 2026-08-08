@@ -23,10 +23,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ShippedWallIsAboutFortyPercentNarrowerThanItWas()
         {
-            // Was 1.0 m. ~40% off puts it at 0.6.
+            // Was 1.0 m, then 0.6 (YT-112). MV-297 scales again by 0.4: 0.6 * 0.4 = 0.24.
             MapData map = Shipped();
 
-            Assert.That(map.wallThickness, Is.EqualTo(0.6f).Within(0.05f));
+            Assert.That(map.wallThickness, Is.EqualTo(0.24f).Within(0.02f));
         }
 
         [Test]

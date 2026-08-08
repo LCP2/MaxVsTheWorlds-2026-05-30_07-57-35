@@ -256,14 +256,18 @@ namespace MaxWorlds.Tests.EditMode
         {
             MapData map = Shipped();
 
-            // area2 spans x −13..13, so its left wall stands just outside that. z = 17 is area2's own
-            // centre, well clear of either doorway at its edges.
-            Assert.IsTrue(WalledAt(map, -13.5f, 17f), "area2's left wall is not where it started");
+            // area2 spans x −13..13, so its left wall stands just outside that, centred half a wall's
+            // thickness beyond the edge. z = 17 is area2's own centre, well clear of either doorway at
+            // its edges. Derived rather than hard-coded (MV-297 thinned the wall again): a literal probe
+            // point sized for an older thickness falls outside a thinner wall and fails as if it were a
+            // bug — see AGate_IsAsWideAsTheDoorwayItFills for the same reasoning.
+            float half = map.wallThickness * 0.5f;
+            Assert.IsTrue(WalledAt(map, -13f - half, 17f), "area2's left wall is not where it started");
 
             map.Zone("area2").x += 5f;   // slide the fight room right
 
-            Assert.IsFalse(WalledAt(map, -13.5f, 17f), "the old wall is still standing where area2 used to be");
-            Assert.IsTrue(WalledAt(map, -8.5f, 17f), "no wall was built along area2's new edge");
+            Assert.IsFalse(WalledAt(map, -13f - half, 17f), "the old wall is still standing where area2 used to be");
+            Assert.IsTrue(WalledAt(map, -8f - half, 17f), "no wall was built along area2's new edge");
         }
 
         [Test]

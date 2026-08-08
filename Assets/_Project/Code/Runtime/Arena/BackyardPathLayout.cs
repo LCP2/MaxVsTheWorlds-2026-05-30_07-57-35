@@ -46,7 +46,7 @@ namespace MaxWorlds.Arena
             GateHalfWidth = 4.5f,
             ArenaHalfWidth = 15f,
             WallHeight = 3.5f,
-            WallThickness = 1f,
+            WallThickness = MapData.DefaultWallThickness,
         };
 
         /// <summary>Minimum width for a room to count as fightable — enough for Max (~1 m) to hold a

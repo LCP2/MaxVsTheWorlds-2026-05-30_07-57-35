@@ -112,7 +112,10 @@ namespace MaxWorlds.Arena
                     // Matches the wall it is set into (MV-277) — a fixed height here would leave the
                     // gate towering over (or sunk into) a wall/fence line tuned to a different height.
                     height = wallHeight,
-                    depth = 0.6f,
+                    // MV-297: matches MapData.DefaultWallThickness, the same fallback this MapData
+                    // implicitly builds with (wallThickness is never authored here) — a literal that
+                    // drifted from that default would z-fight or gap against the wall it seals.
+                    depth = MapData.DefaultWallThickness,
                 });
 
                 links[i] = new MapLink { from = zoneId[g.from.area], to = zoneId[g.to.area], doorway = g.width, gate = g.id };
