@@ -41,7 +41,9 @@ namespace MaxWorlds.VFX
         // chrome stays a bright metal at any value — it can't go brown — so the pickups read as clean
         // collectibles, not rust.
         private static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
-        private static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
+        // Public: PickupArtDirector reads this back to drive the cell's gentle radiance (MV-304), the
+        // same idiom as GlistenColor below.
+        public static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
         // The GLISTEN (YT-167): near-white, not cyan — a specular highlight is the light source's
         // colour reflecting off metal, not the cell's own charge colour. Kept off-white rather than
         // pure white so it still reads as "on the cell" instead of a stray sprite. Public: PickupArtDirector
@@ -269,11 +271,14 @@ namespace MaxWorlds.VFX
         public static GameObject BuildPowerCell(Transform parent = null)
         {
             var root = Root("PowerCell", parent);
-            // A bright cool casing, not the old near-black DarkSteel: a dark shell + brown brass caps
-            // is exactly what made the cell read as a dull brown lump on the lawn (YT-146). A mid steel
-            // body with chrome caps lets the cyan charge core do the talking, so the cell reads as a
-            // bright, lit collectible.
-            Material casing = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            // Consistently CYAN (MV-304): the neutral Steel casing this used to wear was the majority
+            // of the prop's surface area, so next to the bright cyan "Core" band it still read as a
+            // grey/drab battery — inconsistent with the equally-cyan greybox sphere (Pickup.CellColor)
+            // a just-spawned, not-yet-dressed cell shows. Casing now wears the cell's own CellCyan
+            // instead of a neutral metal tone, so the whole body reads as one charged object. The caps
+            // stay Chrome as a small trim accent, matching every other prop in this catalog's
+            // "coloured body + chrome trim" language.
+            Material casing = MaterialLibrary.Tinted(SurfaceKind.Metal, CellCyan);
             Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
             Part(root, "Casing", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f),
@@ -633,11 +638,18 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>Props are scenery — nothing on them is shot or collided with; the Pickup's own
-        /// trigger is what the player walks into. A stray collider here would fight it.</summary>
+        /// trigger is what the player walks into. A stray collider here would fight it.
+        ///
+        /// Application.isPlaying-gated (MV-304, same idiom as MaterialLibrary.Clear): Object.Destroy is
+        /// deferred to end-of-frame and is what every runtime caller already relies on, but it logs an
+        /// error and never actually runs in edit mode — a builder called from an EditMode test (as
+        /// WeaponPartArtTests now does) needs DestroyImmediate instead.</summary>
         private static void Strip(GameObject go)
         {
             var col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            if (col == null) return;
+            if (Application.isPlaying) Object.Destroy(col);
+            else Object.DestroyImmediate(col);
         }
     }
 }
