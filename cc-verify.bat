@@ -37,7 +37,7 @@ echo Log     : %LOG%
 echo.
 
 REM ----- 1. Compile check (open project headless, exit) ----------------------
-echo [1/5] compile check ...
+echo [1/4] compile check ...
 "%UNITY_PATH%" ^
   -batchmode -nographics -projectPath "%PROJECT%" -quit ^
   -logFile "%PROJECT%\Logs\compile.log"
@@ -49,7 +49,7 @@ if errorlevel 1 (
 )
 
 REM ----- 2. EditMode tests ----------------------------------------------------
-echo [2/5] EditMode tests ...
+echo [2/4] EditMode tests ...
 "%UNITY_PATH%" ^
   -batchmode -nographics -projectPath "%PROJECT%" ^
   -runTests -testPlatform EditMode ^
@@ -62,28 +62,13 @@ if errorlevel 1 (
   echo        ok
 )
 
-REM ----- 3. PlayMode boot-and-play smoke test (MV-259) ------------------------
-REM   cc-verify proves it compiles and holds 60fps; it says nothing about
-REM   whether the opening is actually playable (MV-256 slipped through here).
-REM   This runs just the boot-and-play gate test, not the full PlayMode suite
-REM   (that already runs in CI via build.yml's testMode: all) — keeps local
-REM   verify fast while still blocking on the one test that IS the play-check.
-echo [3/5] PlayMode boot-and-play check ...
-"%UNITY_PATH%" ^
-  -batchmode -nographics -projectPath "%PROJECT%" ^
-  -runTests -testPlatform PlayMode ^
-  -testFilter "MaxWorlds.Tests.PlayMode.BootAndPlaySmokeTests" ^
-  -testResults "%PROJECT%\Logs\playmode-results.xml" ^
-  -logFile "%PROJECT%\Logs\playmode.log"
-if errorlevel 1 (
-  echo        FAIL — see Logs\playmode.log ^(play-check did not pass^)
-  set "FAIL=1"
-) else (
-  echo        ok
-)
-
-REM ----- 4. Windows standalone smoke build -----------------------------------
-echo [4/5] Windows standalone build (Bootstrap.unity) ...
+REM ----- 3. Windows standalone smoke build -----------------------------------
+REM   The PlayMode boot-and-play gate (MaxWorlds.Tests.PlayMode.BootAndPlaySmokeTests,
+REM   MV-259) does NOT run here — Unity batch-mode PlayMode runs don't stream
+REM   output, so an in-session run risks backgrounding and stalling the ticket
+REM   (MV-307). PlayMode coverage belongs in CI (build.yml) instead; the browser
+REM   play-check remains the release gate — see CC_AUTONOMY.md.
+echo [3/4] Windows standalone build (Bootstrap.unity) ...
 if exist "%BUILD%" rmdir /S /Q "%BUILD%"
 mkdir "%BUILD%"
 "%UNITY_PATH%" ^
@@ -99,8 +84,8 @@ if errorlevel 1 (
   echo        ok
 )
 
-REM ----- 5. Log assertions ----------------------------------------------------
-echo [5/5] log assertions ...
+REM ----- 4. Log assertions ----------------------------------------------------
+echo [4/4] log assertions ...
 findstr /C:"targetFrameRate" "%PROJECT%\Logs\build.log" >nul
 if errorlevel 1 (
   echo        FAIL — targetFrameRate not referenced in build log
