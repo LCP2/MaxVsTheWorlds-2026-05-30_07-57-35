@@ -180,6 +180,13 @@ namespace MaxWorlds.Arena
         public float toughSubstitutionPct;
         public float tankShareEnd = 0.70f;
 
+        // MV-293's ranged/teleport kinds (MV-310) — same intro-area idiom as heavy/bruteFromArea
+        // above, carried losslessly through the JSON round-trip.
+        public int gunnerFromArea = 2;
+        public int bomberFromArea = 3;
+        public int blinkerFromArea = 4;
+        public float specialSharePct = 12f;
+
         /// <summary>Bridges to the engine's own linear-drift model (MV-268). Tank share starts at 0 at
         /// <see cref="heavyFromArea"/> (nothing tanky before then, matching the engine class's own
         /// default) and drifts to <see cref="tankShareEnd"/> by <paramref name="lastArea"/>. Reads the
@@ -192,6 +199,10 @@ namespace MaxWorlds.Arena
             tankShareAtHeavyIntro = 0f,
             tankShareAtEnd = DevTuning.Or(DevTuning.WorldTankShareEnd, tankShareEnd),
             lastArea = Mathf.Max(1, lastArea),
+            gunnerFromArea = gunnerFromArea,
+            bomberFromArea = bomberFromArea,
+            blinkerFromArea = blinkerFromArea,
+            specialSharePct = specialSharePct,
         };
     }
 
@@ -235,6 +246,13 @@ namespace MaxWorlds.Arena
         public WorldEnemyTypeEntry heavy;
         public WorldEnemyTypeEntry brute;
 
+        // MV-293's ranged/teleport kinds (MV-310) — optional in the JSON; a world authored before
+        // these existed simply omits them, and Thv() below falls back to the engine's flat
+        // ThreatValues placeholder rather than reading a missing 0.
+        public WorldEnemyTypeEntry gunner;
+        public WorldEnemyTypeEntry bomber;
+        public WorldEnemyTypeEntry blinker;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -242,9 +260,12 @@ namespace MaxWorlds.Arena
                 EnemyKind.Bruiser => large,
                 EnemyKind.Heavy => heavy,
                 EnemyKind.Brute => brute,
+                EnemyKind.Gunner => gunner,
+                EnemyKind.Bomber => bomber,
+                EnemyKind.Blinker => blinker,
                 _ => small,
             };
-            return e?.thv ?? 0f;
+            return e != null ? e.thv : ThreatValues.Of(kind);
         }
 
         /// <summary>Σ THV of a solved area composition, weighted by THIS world's own table rather than
@@ -252,7 +273,9 @@ namespace MaxWorlds.Arena
         /// it, EPL (<see cref="MaxWorlds.Enemies.PowerScoring"/>) actually spend.</summary>
         public float WeightedThv(DifficultyEngine.Composition c) =>
             c.Rusher * Thv(EnemyKind.Rusher) + c.Bruiser * Thv(EnemyKind.Bruiser) +
-            c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute);
+            c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute) +
+            c.Gunner * Thv(EnemyKind.Gunner) + c.Bomber * Thv(EnemyKind.Bomber) +
+            c.Blinker * Thv(EnemyKind.Blinker);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170
