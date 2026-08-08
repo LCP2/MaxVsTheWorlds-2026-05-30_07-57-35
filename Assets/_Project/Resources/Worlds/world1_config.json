@@ -10,7 +10,7 @@
     "baseThreat": 14.0,
     "threatGrowth": 0.1,
     "band": { "up": 0.4, "down": -0.15 },
-    "pacingRhythm": [1.0, 1.1, 1.15, 0.9, 1.1, 1.2, 0.9, 1.25],
+    "pacingRhythm": [0.35, 1.1, 1.15, 0.9, 1.1, 1.2, 0.9, 1.25],
     "toughnessCurve": { "heavyFromArea": 5, "bruteFromArea": 8, "toughSubstitutionPct": 0.25, "tankShareEnd": 0.7 },
     "powerupCadence": 2
   },
@@ -33,7 +33,7 @@
   ],
   "areas": [
     { "id": "stub", "index": 0, "name": "Entry path", "role": "entry", "origin": { "x": -3, "z": -8 }, "size": { "w": 6, "d": 8 }, "hasShed": false, "garrisonDensity": "none" },
-    { "id": "a1", "index": 1, "name": "Area 1", "role": "normal", "origin": { "x": -11, "z": 0 }, "size": { "w": 22, "d": 18 }, "hasShed": false, "garrisonDensity": "light", "targetThreatBudget": 14.0, "notes": "first fight; ease in" },
+    { "id": "a1", "index": 1, "name": "Area 1", "role": "normal", "origin": { "x": -11, "z": 0 }, "size": { "w": 22, "d": 18 }, "hasShed": false, "garrisonDensity": "light", "targetThreatBudget": 4.9, "notes": "first fight; ease in — MV-298: pacingRhythm[0] cut to 0.35 so this composes to 1 large (tank) + 2 small (Rusher), not a swarm; areas 2-8 unaffected" },
     { "id": "a2", "index": 2, "name": "Area 2", "role": "normal", "origin": { "x": 11, "z": 6 }, "size": { "w": 20, "d": 20 }, "hasShed": false, "garrisonDensity": "normal", "targetThreatBudget": 16.9 },
     { "id": "a3", "index": 3, "name": "Area 3 — The Shed", "role": "shed", "origin": { "x": 11, "z": 26 }, "size": { "w": 24, "d": 18 }, "hasShed": true, "garrisonDensity": "normal", "targetThreatBudget": 19.5, "shed": { "x": 23, "z": 35, "produces": "reinforcements + power-up on destroy" }, "notes": "defended shed; peak" },
     { "id": "a4", "index": 4, "name": "Area 4", "role": "normal", "origin": { "x": -15, "z": 30 }, "size": { "w": 26, "d": 20 }, "hasShed": false, "garrisonDensity": "light", "targetThreatBudget": 16.8, "notes": "lull after shed 3" },
