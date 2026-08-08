@@ -204,6 +204,11 @@ namespace MaxWorlds.Combat
         // Collider that produced each buffered hit, parallel to s_buffer. Cosmetic use
         // only — it gives the splash a contact point on the target's surface.
         private static readonly List<Collider> s_contacts = new List<Collider>(8);
+        // The point (per s_buffer entry) that passed the cone/line-of-sight test — a gate's is
+        // the closest point on ITS collider to the aim axis (MV-302), everyone else's is their own
+        // transform position. Reused as the damage/falloff/knockback point below so a gate hit at its
+        // edge doesn't fall back to a falloff computed from its centre.
+        private static readonly List<Vector3> s_hitPoints = new List<Vector3>(8);
 
         private void Awake()
         {
@@ -309,21 +314,35 @@ namespace MaxWorlds.Combat
 
             s_buffer.Clear();
             s_contacts.Clear();
+            s_hitPoints.Clear();
             for (int i = 0; i < count; i++)
             {
                 if (_hits[i] == null) continue;
                 if (_hits[i].TryGetComponent<IDamageable>(out var d) && d.IsAlive && d.Team != Team.Player
-                    && !s_buffer.Contains(d)
-                    && SprayHit.InCone(origin, dir, _hits[i].transform.position, reach, cone)
-                    // Water does not go through the shed (YT-83). This is not decoration — it is what
-                    // keeps cover a DECISION instead of an exploit. If the tree broke the robots'
-                    // sight of Max but not Max's spray of them, hiding would be strictly dominant:
-                    // stand behind cover, kill everything in perfect safety, never come out. Cover
-                    // has to cost you your shot too, or it isn't cover, it's a turret nest.
-                    && LineOfSight.Clear(origin, _hits[i].transform.position, _hits[i].transform))
+                    && !s_buffer.Contains(d))
                 {
-                    s_buffer.Add(d);
-                    s_contacts.Add(_hits[i]);
+                    // Gates are wide structures (MV-302): a hit test against their CENTRE point only
+                    // lets you damage them dead-on, leaving both ends of a wide gate untouchable. Test
+                    // (and later damage) the point on the gate's own collider closest to the aim axis
+                    // instead, so fire landing anywhere across its full width registers. Every other
+                    // damageable keeps testing its own transform position — normal robot targeting,
+                    // where the collider IS the body, is unchanged.
+                    Vector3 testPoint = d is AreaGate
+                        ? ContactPoint(origin, dir, _hits[i], _hits[i].transform.position)
+                        : _hits[i].transform.position;
+
+                    if (SprayHit.InCone(origin, dir, testPoint, reach, cone)
+                        // Water does not go through the shed (YT-83). This is not decoration — it is
+                        // what keeps cover a DECISION instead of an exploit. If the tree broke the
+                        // robots' sight of Max but not Max's spray of them, hiding would be strictly
+                        // dominant: stand behind cover, kill everything in perfect safety, never come
+                        // out. Cover has to cost you your shot too, or it isn't cover, it's a turret nest.
+                        && LineOfSight.Clear(origin, testPoint, _hits[i].transform))
+                    {
+                        s_buffer.Add(d);
+                        s_contacts.Add(_hits[i]);
+                        s_hitPoints.Add(testPoint);
+                    }
                 }
             }
 
@@ -332,7 +351,7 @@ namespace MaxWorlds.Combat
             {
                 var d = s_buffer[i];
                 var comp = d as Component;
-                Vector3 point = comp != null ? comp.transform.position : origin + dir * range;
+                Vector3 point = s_hitPoints[i];
                 // Falloff (MV-281): full power on the centre-line, softening toward the cone's
                 // outer edge — the same angle the cone test above already approved this hit on.
                 float falloff = SprayHit.DamageFalloff(

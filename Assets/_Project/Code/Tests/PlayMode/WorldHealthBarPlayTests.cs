@@ -20,12 +20,14 @@ namespace MaxWorlds.Tests.PlayMode
     public sealed class WorldHealthBarPlayTests
     {
         private GameObject _go;
+        private GameObject _go2;
         private GameObject _cam;
 
         [UnityTearDown]
         public IEnumerator TearDown()
         {
             if (_go != null) Object.Destroy(_go);
+            if (_go2 != null) Object.Destroy(_go2);
             if (_cam != null) Object.Destroy(_cam);
             yield return null;
         }
@@ -281,6 +283,84 @@ namespace MaxWorlds.Tests.PlayMode
             float above = Canvas.position.y - _go.transform.position.y;
             Assert.That(above, Is.GreaterThan(0.5f), "the bar is buried in the body");
             Assert.That(above, Is.LessThan(2.5f), "the bar is floating in orbit above the unit");
+        }
+
+        // ---------------------------------------------------------------- shear-free on rotated bodies (MV-302)
+
+        /// <summary>
+        /// Pins MV-302: an area gate is a long, thin box (wide local X, thin local Z) that is yaw
+        /// rotated 90 degrees for an E/W-wall doorway — SAME anisotropic local scale as a horizontal
+        /// (N/S-wall) gate, just spun (MapRuntime.BuildAreaGate). Parenting a camera-facing bar
+        /// straight to a body that is BOTH anisotropically scaled AND independently rotated renders it
+        /// SHEARED — Transform.lossyScale can't even see it, since Unity's scale/rotation composition
+        /// assumes no shear exists. This recreates that exact body shape in both orientations and
+        /// checks the rendered bar is still a clean, undistorted rectangle of the same size either way.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheBarIsNotShearedOnAWideYawRotatedBody()
+        {
+            Camera cam = SetupMainCamera();
+
+            // Same local scale MapRuntime.BuildAreaGate gives every area gate: wide along local X,
+            // thin along local Z. Only the rotation differs between a horizontal and a vertical gate.
+            Vector3 gateScale = new Vector3(6f, 3f, 0.6f);
+
+            _go = new GameObject("HorizontalGate");
+            _go.transform.localScale = gateScale;
+            var hUnit = _go.AddComponent<FakeUnit>();
+            WorldHealthBar.Attach(_go, hUnit, heightAboveCentre: 2.2f, worldWidth: 1.8f, alwaysShow: true);
+
+            _go2 = new GameObject("VerticalGate");
+            _go2.transform.localScale = gateScale;
+            _go2.transform.rotation = Quaternion.Euler(0f, 90f, 0f);
+            var vUnit = _go2.AddComponent<FakeUnit>();
+            WorldHealthBar.Attach(_go2, vUnit, heightAboveCentre: 2.2f, worldWidth: 1.8f, alwaysShow: true);
+
+            // The real fixed camera angle (AimFollowCamera), aimed at the gates — the shear only
+            // shows up once the bar's pivot has to rotate away from its parent to face a real camera.
+            AimFollowCamera(cam, Vector3.zero, leadNorth: 0f);
+            yield return null;
+            yield return null;
+
+            RectTransform hOutline = FindImageOn(_go, "Outline").rectTransform;
+            RectTransform vOutline = FindImageOn(_go2, "Outline").rectTransform;
+
+            AssertRectangular(hOutline, "horizontal gate");
+            AssertRectangular(vOutline, "vertical gate");
+
+            float hWidth = WorldWidth(hOutline);
+            float vWidth = WorldWidth(vOutline);
+            Assert.That(vWidth, Is.EqualTo(hWidth).Within(0.05f),
+                $"the vertical gate's bar rendered {vWidth:0.00} m wide vs the horizontal gate's " +
+                $"{hWidth:0.00} m — a vertical gate's bar must draw the same clean way (MV-302)");
+        }
+
+        /// <summary>Fails if <paramref name="rt"/>'s four world corners aren't a right-angled
+        /// rectangle — the signature of shear (a parallelogram with non-perpendicular, unequal
+        /// sides), as distinct from a simple rotation (which stays rectangular).</summary>
+        private static void AssertRectangular(RectTransform rt, string label)
+        {
+            var c = new Vector3[4];
+            rt.GetWorldCorners(c);
+
+            Vector3 e01 = c[1] - c[0];
+            Vector3 e12 = c[2] - c[1];
+            Vector3 e32 = c[2] - c[3];
+
+            float cosAngle = Vector3.Dot(e01.normalized, e12.normalized);
+            Assert.That(Mathf.Abs(cosAngle), Is.LessThan(0.05f),
+                $"{label}: the bar's adjacent edges aren't perpendicular (cos={cosAngle:0.000}) — it is sheared");
+
+            Assert.That(e01.magnitude, Is.EqualTo(e32.magnitude).Within(0.05f),
+                $"{label}: opposite edges of the bar have different lengths — it is sheared");
+        }
+
+        private static UnityEngine.UI.Image FindImageOn(GameObject go, string name)
+        {
+            foreach (UnityEngine.UI.Image i in go.GetComponentsInChildren<UnityEngine.UI.Image>(true))
+                if (i.name == name) return i;
+            Assert.Fail($"no '{name}' image on {go.name}'s bar");
+            return null;
         }
 
         // ---------------------------------------------------------------- what it says

@@ -3,8 +3,11 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Arena;
+using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.UI;
+using MaxWorlds.Upgrades;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -235,6 +238,53 @@ namespace MaxWorlds.Tests.PlayMode
             // what actually drives the bar's fill without reaching into its private UI internals.
             Assert.AreEqual(0.5f, gate.HealthNormalized, 1e-3,
                 "the gate's readout should track the damage its bar is meant to show");
+        }
+
+        // ---------------------------------------------------------------- full-width hit test (MV-302)
+
+        /// <summary>
+        /// Pins MV-302 part B: the old hit test fed the SPRAY cone/line-of-sight check the gate's
+        /// centre-point transform.position — so a wide gate only took damage dead-on, and either end
+        /// was untouchable. Built directly (not through MapRuntime) so the geometry is exact: a real
+        /// WaterBlaster fires straight down its default forward axis (+Z) at a gate parked well off to
+        /// one SIDE, so its CENTRE sits far outside the narrow spray cone while its NEAR edge still
+        /// straddles the axis Max is actually aiming down.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator FiringAtTheEdgeOfAWideGate_StillDamagesIt()
+        {
+            UpgradeState.Reset();
+            WeaponSystemState.Reset();
+
+            var maxGo = new GameObject("Max");
+            maxGo.tag = "Player";
+            maxGo.AddComponent<CharacterController>();
+            var blaster = maxGo.AddComponent<WaterBlaster>();
+            yield return null;   // Awake builds the weapon's sub-objects
+
+            // Same shape MapRuntime.BuildAreaGate gives every area gate (wide local X, thin local Z),
+            // parked off-axis: its centre is ~33 degrees off Max's forward (the base cone is only 8
+            // degrees either side), but its near edge crosses X=0 — the line Max is aiming straight down.
+            var gateGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            gateGo.transform.position = new Vector3(2.6f, 0f, 4f);
+            gateGo.transform.localScale = new Vector3(6f, 3f, 0.6f);
+            var gate = gateGo.AddComponent<AreaGate>();
+            yield return null;
+
+            float startHp = gate.HealthCurrent;
+
+            blaster.SetFiring(true);
+            yield return new WaitForSeconds(0.3f);   // several ticks at the default 0.1 s interval
+            blaster.SetFiring(false);
+
+            Assert.That(gate.HealthCurrent, Is.LessThan(startHp),
+                "firing at the near edge of a wide, off-axis gate did nothing — only a hit on its " +
+                "centre point ever registered (MV-302)");
+
+            Object.Destroy(gateGo);
+            Object.Destroy(maxGo);
+            UpgradeState.Reset();
+            WeaponSystemState.Reset();
         }
 
         [UnityTest]
