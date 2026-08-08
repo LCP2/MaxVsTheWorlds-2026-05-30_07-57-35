@@ -11,15 +11,15 @@ namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
     /// The pickups wear their real art (YT-134/145). WV-237 had swapped every dropped part for a random
-    /// machine-internals model; MV-180 reverses that — a part pickup stays the plain chrome box
-    /// <see cref="Pickup"/> already builds (one consistent, non-brown colour), now wearing a couple of
-    /// specular glint dots so it reads as "shiny" rather than flat. The power cell is unaffected: it
-    /// keeps its own always-the-same swapped prop.
+    /// machine-internals model; MV-180 reverted that to a plain chrome box. MV-305 reverses MV-180 again
+    /// — every part pickup wears one of <see cref="WeaponPartArt.MachineInternalsKeys"/>'s irregular
+    /// designs, rerolled at random on each fresh drop, same swap-in idiom the power cell always used.
     ///
-    /// The load-bearing assertions here are that a part pickup keeps its box visible (no PartArt: swap,
-    /// no hidden greybox), that it wears glint dots that actually shimmer, that a pooled part redropped
-    /// doesn't grow duplicate glint dots, that the cell keeps its dedicated prop, and that every pickup —
-    /// cell or part — carries the shared pulsing collectible glow.
+    /// The load-bearing assertions here are that every part pickup gets a machine-internals PartArt:
+    /// child with its own greybox hidden underneath, that a pooled part rerolls (and doesn't double up
+    /// on) its design when it's dropped again, that it wears glint dots that actually shimmer, that the
+    /// cell keeps its dedicated prop, and that every pickup — cell or part — carries the shared pulsing
+    /// collectible glow.
     /// </summary>
     public sealed class PickupArtDirectorPlayTests
     {
@@ -72,74 +72,76 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         private static Transform GlowOf(Pickup p) => p.transform.Find("CollectibleGlow");
-        private static Transform VisualOf(Pickup p) => p.transform.Find("Visual");
-
-        private static Transform[] GlintsOf(Pickup p)
-        {
-            var visual = VisualOf(p);
-            if (visual == null) return System.Array.Empty<Transform>();
-            var glints = new List<Transform>();
-            foreach (Transform c in visual)
-                if (c.name.StartsWith("PartGlisten")) glints.Add(c);
-            return glints.ToArray();
-        }
 
         [UnityTest]
-        public IEnumerator PartPickups_StayAsBoxes_InOneConsistentColour()
+        public IEnumerator PartPickups_GetAMachineInternalsProp_WithGreyboxHidden()
         {
-            // MV-180 reverses WV-237: a part pickup keeps the plain chrome box Pickup already builds —
-            // no swapped-in PartArt: prop, no hidden greybox — and every part shares that one colour.
+            // MV-305 reverses MV-180: every part now wears one of the machine-internals designs instead
+            // of staying a plain glowing box.
             var beam = MakePart(PartKind.BeamNozzle);
             var harness = MakePart(PartKind.AugmentationHarness);
 
             yield return InstallDirector();
 
-            Material firstMat = null;
             foreach (var p in new[] { beam, harness })
             {
-                Assert.IsNull(ArtOf(p), $"{p.Part} got a swapped-in PartArt: prop — MV-180 keeps it a plain box.");
+                Transform art = ArtOf(p);
+                Assert.IsNotNull(art, $"{p.Part} got no PartArt: prop — MV-305 needs every part dressed.");
+                string key = art.name.Substring("PartArt:".Length);
+                CollectionAssert.Contains(WeaponPartArt.MachineInternalsKeys, key,
+                    $"{p.Part} wears '{key}', which isn't one of the machine-internals designs.");
 
-                var visual = VisualOf(p);
-                Assert.IsNotNull(visual, $"{p.Part} has no box.");
-                var mr = visual.GetComponent<MeshRenderer>();
-                Assert.IsTrue(mr.enabled, $"{p.Part}'s box is hidden — MV-180 needs it visible.");
-
-                firstMat ??= mr.sharedMaterial;
-                Assert.AreSame(firstMat, mr.sharedMaterial,
-                    $"{p.Part}'s box wears a different material than the first part — colours aren't consistent.");
+                var visual = p.transform.Find("Visual");
+                Assert.IsTrue(visual == null || !visual.GetComponent<MeshRenderer>().enabled,
+                    $"{p.Part}'s greybox box is still drawn under its machine-internals prop.");
             }
         }
 
         [UnityTest]
-        public IEnumerator PartPickup_KeepsExactlyOnePairOfGlints_AfterBeingRedropped()
+        public IEnumerator PartPickup_RerollsItsDesign_OnEveryFreshDrop_WithNoStaleLeftover()
         {
-            // A pooled part pickup gets reused for a fresh drop (PickupDirector's deactivate/reactivate
-            // cycle); its glint dots must not double up across that cycle.
+            // A pooled part pickup has to be able to change design when PickupDirector drops it again,
+            // and not leave its old prop attached alongside the new one.
             var part = MakePart(PartKind.BeamNozzle);
             yield return InstallDirector();
 
-            Assert.AreEqual(2, GlintsOf(part).Length, "the part didn't get its two glint dots in the first place.");
+            Assert.IsNotNull(ArtOf(part), "the part never got a machine-internals prop in the first place.");
 
             part.gameObject.SetActive(false);
             yield return null;
             part.gameObject.SetActive(true);
-            yield return null;
+            yield return null;   // the reroll + stale-art Destroy() call land on this frame
+            yield return null;   // Destroy() only actually removes the child at end of frame
 
-            Assert.AreEqual(2, GlintsOf(part).Length, "a stale/duplicate glint dot appeared after redropping.");
+            Transform art = ArtOf(part);
+            Assert.IsNotNull(art, "the part lost its machine-internals prop after being redropped.");
+            string key = art.name.Substring("PartArt:".Length);
+            CollectionAssert.Contains(WeaponPartArt.MachineInternalsKeys, key,
+                $"the redropped part wears '{key}', which isn't one of the machine-internals designs.");
+
+            int partArtChildren = 0;
+            foreach (Transform c in part.transform)
+                if (c.name.StartsWith("PartArt:")) partArtChildren++;
+            Assert.AreEqual(1, partArtChildren, "a stale machine-internals prop is still attached after redropping.");
         }
 
         [UnityTest]
-        public IEnumerator PartPickup_GlintsShimmerOnItsBox()
+        public IEnumerator PartPickup_GlintsShimmerOnItsMachineInternalsProp()
         {
-            // Mirrors PowerCell_GlintsFlickerOnTheCasing: the box's glint has to actually shimmer, not
-            // just sit at its build-time colour.
+            // Mirrors PowerCell_GlintsFlickerOnTheCasing: a part's random design has to actually
+            // shimmer, not just sit at its build-time glint colour.
             var part = MakePart(PartKind.BeamNozzle);
 
             yield return InstallDirector();
 
-            Transform[] glints = GlintsOf(part);
-            Assert.IsNotEmpty(glints, "the part's box has no glint dot to animate.");
-            var r = glints[0].GetComponent<MeshRenderer>();
+            Transform art = ArtOf(part);
+            Assert.IsNotNull(art, "the part got no art model.");
+
+            Transform glint = null;
+            foreach (Transform c in art)
+                if (c.name.StartsWith(WeaponPartArt.GlistenPrefix)) { glint = c; break; }
+            Assert.IsNotNull(glint, "the part's prop has no glint dot to animate.");
+            var r = glint.GetComponent<MeshRenderer>();
             int baseColorId = Shader.PropertyToID("_BaseColor");
 
             Color ColorAt()

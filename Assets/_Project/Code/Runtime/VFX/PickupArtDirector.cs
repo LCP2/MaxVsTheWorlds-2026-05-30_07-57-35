@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
@@ -10,18 +11,21 @@ namespace MaxWorlds.VFX
     ///
     /// YT-131/133 drop the pickups as greybox stand-ins — a cyan sphere for a power cell and, for a
     /// PART, a single cube. YT-134/145 swapped each greybox for a distinct <see cref="WeaponPartArt"/>
-    /// prop; YT-180 reversed that for four of the five parts so they stayed boxes; WV-237 later retired
-    /// the box entirely in favour of ~10 randomised machine-internals designs. MV-180 reverses WV-237:
-    /// Lee's playtest call is that a PART pickup stays the plain chrome box <c>Pickup</c> already builds
-    /// (one consistent, non-brown colour) — this director just leaves that box showing and adds a
-    /// specular <see cref="PulseGlisten"/> sparkle to it, the same "shiny, not just haloed" treatment
-    /// the power cell wears (YT-167). The power cell keeps its own always-the-same swapped prop.
+    /// prop; YT-180 reversed that for four of the five parts so they stayed boxes; WV-237 retired the
+    /// box entirely in favour of ~10 randomised machine-internals designs. MV-180 then reverted WV-237
+    /// back to the plain box for a playtest call that no longer holds: MV-305 reverses MV-180 again — a
+    /// PART pickup wears one of <see cref="WeaponPartArt.MachineInternalsKeys"/>'s irregular designs
+    /// (gear, coil, circuit block, ...), rerolled at random on each fresh drop, the same swap-in idiom
+    /// the power cell always used. The power cell keeps its own always-the-same swapped prop.
     ///
     /// A director, not an edit to <c>Pickup</c>, for the same reason the boss and the robots are dressed
     /// by directors (BigBermudaRig, RobotRigDirector): the pickup's greybox is pure cosmetic — no
     /// active-tap indicator or collider to preserve — so the art stream can replace it without reaching
     /// into gameplay. The cell's pickup is POOLED and reused as-is (its kind never changes), so the
-    /// once-built check below is all that's needed to keep it from rebuilding every frame.
+    /// once-built check below is all that's needed to keep it from rebuilding every frame. A pooled PART
+    /// pickup, though, gets reused for a fresh drop with a fresh random design each time — <see
+    /// cref="_partWasActive"/>/<see cref="_partArtKey"/> track that reroll across the deactivate/
+    /// reactivate cycle <c>PickupDirector</c> pools it through.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupArtDirector : MonoBehaviour
@@ -29,11 +33,11 @@ namespace MaxWorlds.VFX
         private const string ArtPrefix = "PartArt:";   // child name carries the key it was built for
         private const float SpinDegreesPerSecond = 90f;
 
-        // MV-180: the two specular glint dots riding the part box's own "Visual" cube — children of it
-        // (not the pickup root) so they inherit its existing spin (Pickup.Update) for free, the same way
-        // the swapped props' glints ride their own spinning root.
-        private const string PartGlisten0 = "PartGlisten0";
-        private const string PartGlisten1 = "PartGlisten1";
+        // MV-305: per-pickup bookkeeping so a pooled Part pickup rerolls its machine-internals design on
+        // every fresh drop rather than wearing whatever it first got forever. Keyed by reference — pooled
+        // Pickups are reused, never destroyed, so entries live for the pickup's whole lifetime.
+        private readonly Dictionary<Pickup, bool> _partWasActive = new Dictionary<Pickup, bool>();
+        private readonly Dictionary<Pickup, string> _partArtKey = new Dictionary<Pickup, string>();
 
         // The collectible glow (YT-145): a soft additive bloom aura on every dropped pickup + power cell,
         // with a subtle pulse, so they read as "grab me" from across the yard. One shared colour for the
@@ -68,8 +72,8 @@ namespace MaxWorlds.VFX
         {
             foreach (var pickup in FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                // The power cell always wears the same swapped-in prop. A PART (MV-180) stays the plain
-                // chrome box Pickup already built — no swap-in here — and just gets a glisten below.
+                // The power cell always wears the same swapped-in prop; a PART wears one of the
+                // machine-internals designs, rerolled per drop in the branch below (MV-305).
                 if (pickup.Kind == PickupKind.PowerCell)
                 {
                     string want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
@@ -106,13 +110,25 @@ namespace MaxWorlds.VFX
                 }
                 else if (pickup.Kind == PickupKind.Part)
                 {
-                    // MV-180: the box already spins on its own (Pickup.Update); just wear a couple of
-                    // glint dots on it so it reads "shiny", same language as the cell's specular sparkle.
-                    Transform visual = EnsurePartGlisten(pickup.transform);
-                    if (visual != null)
+                    // MV-305: every dropped part wears one of the machine-internals designs — which one
+                    // is rerolled per drop below.
+                    string want = ArtPrefix + RollPartArtKey(pickup);
+                    Transform art = FindArt(pickup.transform, want);
+
+                    if (art == null)
                     {
-                        PulseGlisten(visual, PartGlisten0, 0f);
-                        PulseGlisten(visual, PartGlisten1, 2.3f);
+                        art = Build(pickup, want);
+                        HideGreybox(pickup.transform);
+                    }
+
+                    if (art != null)
+                    {
+                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                        // Each machine-internals design carries one or two glint dots (WeaponPartArt);
+                        // a missing index is a harmless no-op, so one fixed loop covers every design
+                        // without the director needing to know which one this pickup rolled.
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
                     }
                 }
 
@@ -120,39 +136,34 @@ namespace MaxWorlds.VFX
             }
         }
 
-        /// <summary>Builds the part box's two glint dots the first time this pickup is seen, as children
-        /// of its "Visual" cube so they inherit the box's own spin (Pickup.Update) for free — no separate
-        /// spin bookkeeping needed here, unlike the swapped cell prop above. Returns the Visual transform
-        /// (or null if the pickup somehow has none) so the caller can hand it straight to PulseGlisten.</summary>
-        private static Transform EnsurePartGlisten(Transform pickup)
+        /// <summary>The machine-internals key this PART pickup should wear right now (MV-305). Rerolled
+        /// only on a fresh drop — detected as an inactive→active transition, the same edge
+        /// <c>PickupDirector</c> crosses when it pops a pooled pickup and calls <c>Place</c> — so the
+        /// design a player sees stays put while it sits on the ground and only varies drop to drop.</summary>
+        private string RollPartArtKey(Pickup pickup)
         {
-            Transform visual = pickup.Find("Visual");
-            if (visual == null) return null;
-            if (visual.Find(PartGlisten0) != null) return visual;
+            bool activeNow = pickup.gameObject.activeSelf;
+            bool wasActive = _partWasActive.TryGetValue(pickup, out bool prev) && prev;
+            _partWasActive[pickup] = activeNow;
 
-            BuildGlistenDot(visual, PartGlisten0, new Vector3(0.4f, 0.35f, -0.4f));
-            BuildGlistenDot(visual, PartGlisten1, new Vector3(-0.35f, -0.3f, 0.4f));
-            return visual;
+            if (!_partArtKey.TryGetValue(pickup, out string key) || (activeNow && !wasActive))
+            {
+                key = WeaponPartArt.MachineInternalsKeys[Random.Range(0, WeaponPartArt.MachineInternalsKeys.Length)];
+                _partArtKey[pickup] = key;
+                DestroyStaleArt(pickup.transform, ArtPrefix + key);
+            }
+            return key;
         }
 
-        /// <summary>A small additive sparkle dot, positioned in the parent's unscaled local space (so a
-        /// magnitude-0.5 coordinate lands on the surface of a unit-cube "Visual" the way <see cref="Pickup"/>
-        /// builds it) — same idiom as <see cref="WeaponPartArt"/>'s own Glisten helper, just local to this
-        /// director since the part box isn't part of that catalog.</summary>
-        private static void BuildGlistenDot(Transform parent, string name, Vector3 localPos)
+        /// <summary>Removes any previously-built PartArt: child that isn't <paramref name="keep"/> — the
+        /// leftover from this pooled pickup's last drop, now that it's rerolled a different design.</summary>
+        private static void DestroyStaleArt(Transform pickup, string keep)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = name;
-            var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-            go.transform.SetParent(parent, worldPositionStays: false);
-            go.transform.localPosition = localPos;
-            go.transform.localScale = Vector3.one * 0.18f;
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
+            for (int i = pickup.childCount - 1; i >= 0; i--)
+            {
+                var c = pickup.GetChild(i);
+                if (c.name.StartsWith(ArtPrefix) && c.name != keep) Destroy(c.gameObject);
+            }
         }
 
         /// <summary>The pickup's collectible aura, built once and reused. A sibling of the art (not a
