@@ -210,6 +210,76 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ------------------------------------------------------------------ MV-303: four tiers, not two
+
+        /// <summary>
+        /// Heavy and Brute used to fall through to the rusher's own role (both mapped to
+        /// CharacterRole.Robot), so Area 5+ silently doubled up on turquoise — two more threats
+        /// wearing the same identity as the enemy the player already knows how to read. MV-303 gives
+        /// each ground tier its own colour.
+        /// </summary>
+        [Test]
+        public void TheFourGroundTiers_AreAllVisiblyDistinctColours()
+        {
+            var tiers = new[]
+            {
+                CharacterRole.Robot, CharacterRole.Bruiser, CharacterRole.Heavy, CharacterRole.Brute,
+            };
+
+            for (int i = 0; i < tiers.Length; i++)
+            {
+                for (int j = i + 1; j < tiers.Length; j++)
+                {
+                    Color a = CharacterSkin.BaseColorFor(tiers[i]);
+                    Color b = CharacterSkin.BaseColorFor(tiers[j]);
+                    Assert.Greater(Distance(a, b), 0.25f,
+                        $"{tiers[i]} and {tiers[j]} are close enough to read as the same colour — a " +
+                        "fourth tier only earns its keep by reading as a fourth thing, not a tint of a " +
+                        "third.");
+                }
+            }
+        }
+
+        [Test]
+        public void TheHeavyReadsCold_LikeEveryOtherThingTryingToKillMax()
+        {
+            Color c = CharacterSkin.BaseColorFor(CharacterRole.Heavy);
+            Assert.Greater(Mathf.Max(c.g, c.b), c.r,
+                "the heavy has gone warm — it is competing with Max for the one cue that still works " +
+                "when the screen is full.");
+        }
+
+        /// <summary>Same guarantee as <see cref="APooledBody_ComesBackWearingTheKindItActuallyIs"/>,
+        /// extended past the original two tiers: a robot recycled from the Heavy pool into the Brute
+        /// pool must not keep wearing the Heavy's colour.</summary>
+        [Test]
+        public void APooledBody_ComesBackAsWhicheverOfTheFourTiersItActuallyIs()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            try
+            {
+                var enemy = go.AddComponent<RobotEnemy>();
+                enemy.Apply(EnemyArchetype.Heavy);
+
+                var skin = go.AddComponent<CharacterSkin>().Bind(CharacterRole.Robot);
+                Assert.AreEqual(CharacterRole.Heavy, skin.Role, "it did not come out as a heavy.");
+                Color asHeavy = skin.BodyColor;
+
+                // Back in the pool; out again as the top tier.
+                enemy.Apply(EnemyArchetype.Brute);
+                skin.Apply();
+
+                Assert.AreEqual(CharacterRole.Brute, skin.Role,
+                    "a recycled body came back as a brute and kept the heavy's role.");
+                Assert.AreNotEqual(asHeavy, skin.BodyColor,
+                    "it is a brute now and it is still wearing the heavy's colour.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
         // ------------------------------------------------------------------ the flash
 
         /// <summary>
