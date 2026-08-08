@@ -79,7 +79,7 @@ namespace MaxWorlds.Tests.EditMode
                 float spin = 700f;
 
                 // Three seconds — comfortably past the ~1.8 s the fastest launch takes to stop
-                // bouncing, and past the longest life a spring is given.
+                // bouncing. (Purely the ballistic settle, independent of the spring's despawn timer.)
                 for (int i = 0; i < 180; i++) SpringGuts.Step(ref pos, ref vel, ref spin, Dt);
 
                 Assert.GreaterOrEqual(pos.y, -1e-4f, $"seed {seed}: never sank through the lawn");
