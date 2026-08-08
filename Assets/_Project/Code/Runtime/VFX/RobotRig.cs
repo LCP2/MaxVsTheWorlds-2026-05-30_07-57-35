@@ -182,7 +182,7 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void BuildMaterials()
         {
-            CharacterRole role = _enemy.Kind == EnemyKind.Bruiser ? CharacterRole.Bruiser : CharacterRole.Robot;
+            CharacterRole role = CharacterSkin.RoleFor(_enemy.Kind);
             Color body = CharacterSkin.BaseColorFor(role);
 
             // A darker step of the SAME hue (alpha kept at 1 — scaling a Color scales its alpha too, and
