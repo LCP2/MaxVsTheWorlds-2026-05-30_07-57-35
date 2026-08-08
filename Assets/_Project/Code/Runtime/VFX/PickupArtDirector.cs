@@ -26,6 +26,14 @@ namespace MaxWorlds.VFX
     /// pickup, though, gets reused for a fresh drop with a fresh random design each time — <see
     /// cref="_partWasActive"/>/<see cref="_partArtKey"/> track that reroll across the deactivate/
     /// reactivate cycle <c>PickupDirector</c> pools it through.
+    ///
+    /// MV-308: a shed's ability grant (<see cref="PickupKind.Device"/>) had no branch here at all, so it
+    /// fell through wearing its plain greybox cube forever. <see cref="WeaponPartArt.Keys.HydroDevice"/>
+    /// was already built and documented as this exact ground pickup's "shimmers like a cell" look (WV-236)
+    /// but never wired up after WV-229 generalised the shed drop from a single Hydro grant to any of the
+    /// five <see cref="MaxWorlds.Weapons.AbilityKind"/> values — it's a single shared "ability device"
+    /// look for every grant (the ticket's nice-to-have of one prop per ability needs a catalog entry per
+    /// ability that doesn't exist yet), swapped in and radiated the same swap-in-once idiom as the cell.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupArtDirector : MonoBehaviour
@@ -129,6 +137,32 @@ namespace MaxWorlds.VFX
                         // without the director needing to know which one this pickup rolled.
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                    }
+                }
+                else if (pickup.Kind == PickupKind.Device)
+                {
+                    // MV-308: the shed's ability grant wears the same always-the-same swapped prop the
+                    // power cell does (its kind, like the cell's, never changes once built).
+                    string want = ArtPrefix + WeaponPartArt.Keys.HydroDevice;
+                    Transform art = FindArt(pickup.transform, want);
+
+                    if (art == null)
+                    {
+                        art = Build(pickup, want);
+                        HideGreybox(pickup.transform);
+                    }
+
+                    if (art != null)
+                    {
+                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                        // The prop's three built-in glisten dots (WeaponPartArt.BuildHydroDevice) —
+                        // shimmer it the same "diamonds catching light" way the cell and parts get.
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
+                        // MV-308 AC: "the glowing radiance the power cells have" — the same gentle
+                        // MV-304 Core breathe, not just the shared orange aura below.
+                        PulseCellCore(art);
                     }
                 }
 
