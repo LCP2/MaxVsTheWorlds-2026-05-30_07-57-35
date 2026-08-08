@@ -1,7 +1,7 @@
 {
     "name": "Backyard Slice",
     "wallHeight": 2.25,
-    "wallThickness": 0.6,
+    "wallThickness": 0.24,
     "zones": [
         {
             "id": "area1",
@@ -221,7 +221,7 @@
             "z": 5.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -233,7 +233,7 @@
             "z": 29.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -245,7 +245,7 @@
             "z": 53.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -257,7 +257,7 @@
             "z": 77.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -269,7 +269,7 @@
             "z": 101.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -281,7 +281,7 @@
             "z": 125.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -293,7 +293,7 @@
             "z": 149.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -305,7 +305,7 @@
             "z": 173.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -317,7 +317,7 @@
             "z": 197.0,
             "width": 1.0,
             "height": 2.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": ""
@@ -329,7 +329,7 @@
             "z": 221.0,
             "width": 11.0,
             "height": 3.2,
-            "depth": 0.6,
+            "depth": 0.24,
             "shape": "box",
             "dressing": "none",
             "opensOn": "mower_hutch, greenhouse_hutch, toolshed_hutch"

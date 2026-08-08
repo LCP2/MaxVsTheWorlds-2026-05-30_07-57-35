@@ -140,7 +140,10 @@ namespace MaxWorlds.Arena
         public const float DefaultWallHeight = 3.5f;
 
         public float wallHeight = DefaultWallHeight;
-        public float wallThickness = 1f;
+
+        /// <summary>MV-297: 40% of the previous 1 m default (was already cut once, 1.0 → 0.6, at the
+        /// authored-map level by MV-246/YT-112 — this is the code-level default following suit).</summary>
+        public float wallThickness = 0.4f;
 
         public MapZone[] zones = Array.Empty<MapZone>();
         public MapLink[] links = Array.Empty<MapLink>();
