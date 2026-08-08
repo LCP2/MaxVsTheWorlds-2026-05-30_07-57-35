@@ -113,7 +113,7 @@ namespace MaxWorlds.Tests.PlayMode
             MapData map = Shipped();
 
             foreach (MapZone zone in map.zones)
-            foreach (Vector2 p in JustOutside(zone))
+            foreach (Vector2 p in JustOutside(zone, map.wallThickness))
             {
                 if (map.ZoneAt(p.x, p.y) != null) continue;   // a shared edge: you walk into the next room
 
@@ -122,12 +122,14 @@ namespace MaxWorlds.Tests.PlayMode
             }
         }
 
-        /// <summary>Points 0.6 m beyond a room's edges, a metre apart, held clear of the corners
-        /// (where two walls meet and "which wall is this" stops being a question worth asking).</summary>
-        private static IEnumerable<Vector2> JustOutside(MapZone zone)
+        /// <summary>Points half a wall thickness beyond a room's edges — solidly inside the wall
+        /// whatever that thickness is currently tuned to (MV-297 took it from 0.6 m to 0.24 m) — a
+        /// metre apart, held clear of the corners (where two walls meet and "which wall is this" stops
+        /// being a question worth asking).</summary>
+        private static IEnumerable<Vector2> JustOutside(MapZone zone, float wallThickness)
         {
             const float Step = 1f;
-            const float Out = 0.6f;
+            float Out = wallThickness * 0.5f;
             const float Corner = 0.5f;
 
             for (float x = zone.XMin + Corner; x <= zone.XMax - Corner; x += Step)
@@ -206,11 +208,13 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return BuildPath();
 
-            MapZone arena = Shipped().Zone("compost");
+            MapData map = Shipped();
+            MapZone arena = map.Zone("compost");
+            float halfWall = map.wallThickness * 0.5f;
 
-            Assert.IsTrue(BlockedAt(new Vector3(arena.x, 1f, arena.ZMax + 0.6f)), "no arena back wall");
-            Assert.IsTrue(BlockedAt(new Vector3(arena.XMin - 0.6f, 1f, arena.z)), "no left arena wall");
-            Assert.IsTrue(BlockedAt(new Vector3(arena.XMax + 0.6f, 1f, arena.z)), "no right arena wall");
+            Assert.IsTrue(BlockedAt(new Vector3(arena.x, 1f, arena.ZMax + halfWall)), "no arena back wall");
+            Assert.IsTrue(BlockedAt(new Vector3(arena.XMin - halfWall, 1f, arena.z)), "no left arena wall");
+            Assert.IsTrue(BlockedAt(new Vector3(arena.XMax + halfWall, 1f, arena.z)), "no right arena wall");
 
             // And it's clear inside — the boss needs room to charge and drop AoEs.
             Assert.IsFalse(BlockedAt(new Vector3(arena.x, 1f, arena.z)), "something is standing in the boss arena");

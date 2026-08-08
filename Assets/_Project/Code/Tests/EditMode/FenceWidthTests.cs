@@ -23,10 +23,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ShippedWallIsAboutFortyPercentNarrowerThanItWas()
         {
-            // Was 1.0 m. ~40% off puts it at 0.6.
+            // Was 1.0 m, then cut ~40% to 0.6 (YT-112). MV-297 cuts another 40% off THAT: 0.6 × 0.4 = 0.24.
             MapData map = Shipped();
 
-            Assert.That(map.wallThickness, Is.EqualTo(0.6f).Within(0.05f));
+            Assert.That(map.wallThickness, Is.EqualTo(0.24f).Within(0.02f));
         }
 
         [Test]
@@ -87,10 +87,12 @@ namespace MaxWorlds.Tests.EditMode
         public void TheWallIsStillThickEnoughToReadAsAFence()
         {
             // Readability outranks visual richness: a fence thinned to a sliver stops reading as a
-            // boundary from 30 m up, which is the opposite of the fix.
+            // boundary from 30 m up, which is the opposite of the fix. MV-297 deliberately cut the
+            // floor from 0.3 to 0.24 (an explicit, considered AC, not a drift) — keep this well clear
+            // of the paling depth (0.10) it must still stand proud of.
             MapData map = Shipped();
 
-            Assert.That(map.wallThickness, Is.GreaterThan(0.3f));
+            Assert.That(map.wallThickness, Is.GreaterThan(0.15f));
         }
     }
 }
