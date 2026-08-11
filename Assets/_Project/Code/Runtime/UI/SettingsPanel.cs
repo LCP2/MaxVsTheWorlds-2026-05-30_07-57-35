@@ -531,7 +531,7 @@ namespace MaxWorlds.UI
         private static float FactoryDefault()
         {
             foreach (MowerHutch h in FactoryCensus.All) if (h != null) return h.AuthoredMax;
-            return 1501.5f;
+            return 915.915f;
         }
 
         /// <summary>The pinned Spawn-interval override's 100% reference (YT-170, decoupled from

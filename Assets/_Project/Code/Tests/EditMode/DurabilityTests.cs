@@ -22,8 +22,8 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var hutch = go.AddComponent<MowerHutch>();   // RequireComponent brings EnemySpawner
-                Assert.That(hutch.AuthoredMax, Is.EqualTo(1501.5f).Within(0.001f),
-                    "YT-200: Lee's on-device number (was 350)");
+                Assert.That(hutch.AuthoredMax, Is.EqualTo(915.915f).Within(0.001f),
+                    "MV-315: re-baked to 61% of YT-200's 1501.5 (was 350 before that)");
             }
             finally
             {
