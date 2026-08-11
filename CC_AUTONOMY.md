@@ -84,7 +84,7 @@ If it fails on a transient/flake, retry once. If it fails structurally, stop and
 
 ## Decide
 
-- All AC pass AND no `human-judgment` AC → transition **In PDN**; drop `cc-active`; comment summary + PR link; **do not wait for or check the CI/deploy run** — loop straight to the next ticket.
+- All AC pass AND no `human-judgment` AC → transition **QA Running**; drop `cc-active`; comment summary + PR link; **do not wait for or check the CI/deploy run** — loop straight to the next ticket. **On Staging** is CI's to set (once the Pages deploy succeeds and the play-check passes) and **In PDN** is the TestFlight ship's to set — the worker never sets either.
 - `human-judgment` AC remaining → stop; drop `cc-active`; set `needs-lee`; comment exact steps for Lee in Unity (what scene, what to Play, what to look for, what to reply).
 - Self-verify failed → drop `cc-active`; `needs-cc` if flake, `needs-spec` if structural.
 - Guardrail trip → stop; set `needs-lee`; ask. Specific trips for this project: any engine version change; adding a Unity package not already in `manifest.json`; turning on AI-art generation; expanding a ticket beyond its tight-slice scope.
