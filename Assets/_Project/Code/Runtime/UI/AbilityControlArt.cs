@@ -108,10 +108,11 @@ namespace MaxWorlds.UI
             public readonly RectTransform Root;
             public readonly Image Rings;
             public readonly RectTransform Knob;
+            public readonly Text Label;
 
-            public JoystickVisual(RectTransform root, Image rings, RectTransform knob)
+            public JoystickVisual(RectTransform root, Image rings, RectTransform knob, Text label)
             {
-                Root = root; Rings = rings; Knob = knob;
+                Root = root; Rings = rings; Knob = knob; Label = label;
             }
         }
 
@@ -119,10 +120,12 @@ namespace MaxWorlds.UI
         /// The Water Balloon joystick: the same rings-plus-knob shape as the move/aim sticks, sized and
         /// brightened by <see cref="Prominence"/> — level is the ability's whole upgrade (spec §6a:
         /// "level = throw DISTANCE"), so a maxed joystick has to visibly out-shine a freshly-acquired
-        /// one. The knob itself is left centred; WV-240 drives it from the drag input.
+        /// one. The knob itself is left centred; WV-240 drives it from the drag input. Unlike the
+        /// unlabelled move/aim sticks, this one names itself (MV-337) — a caption below the rings, clear
+        /// of the knob's own travel, so it never gets covered while the player is aiming a throw.
         /// </summary>
         public static JoystickVisual BuildJoystick(RectTransform parent, string name, Vector2 anchoredPos,
-            Color color, int level, int maxLevel)
+            Color color, string label, int level, int maxLevel)
         {
             float prominence = Prominence(level, maxLevel);
             float baseSize = 200f * Mathf.Lerp(0.8f, 1f, prominence);
@@ -146,7 +149,14 @@ namespace MaxWorlds.UI
 
             AddDetailPips(root, baseSize, color, level, maxLevel);
 
-            return new JoystickVisual(root, rings, knob);
+            var lbl = AddText(root, Mathf.Lerp(14f, 18f, prominence), Fade(color, Mathf.Lerp(0.75f, 1f, prominence)));
+            Anchor(lbl.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
+            lbl.rectTransform.sizeDelta = new Vector2(baseSize, 22f);
+            lbl.rectTransform.anchoredPosition = new Vector2(0f, -6f);
+            lbl.text = label;
+            lbl.fontStyle = FontStyle.Bold;
+
+            return new JoystickVisual(root, rings, knob, lbl);
         }
 
         // ---------- shared detail ----------
