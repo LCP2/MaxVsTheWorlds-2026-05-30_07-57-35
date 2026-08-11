@@ -73,8 +73,16 @@ namespace MaxWorlds.VFX
 
         /// <summary>The bruiser: deep violet. Not a tint of the rusher — a different hue AND a much
         /// darker value, so the two separate from each other by colour alone even before you notice
-        /// that one is a capsule and the other is a box. Heavy things should look heavy.</summary>
-        private static readonly Color BruiserBody = new Color(0.38f, 0.10f, 0.62f);
+        /// that one is a capsule and the other is a box. Heavy things should look heavy.
+        ///
+        /// MV-328: the peak channel used to be 0.62 — a hair over <see cref="SunlitAlbedo.Ceiling"/>
+        /// (0.6), the ceiling every OTHER surface in the yard is authored under and for exactly this
+        /// reason (see that type's own doc): past it, a channel clips once the 1.8x key hits it, and a
+        /// clipped, bloom-smeared highlight on a body this small reads as a washed, drab colour instead
+        /// of the hue it was painted — which is what shipped a "brown" bruiser in the live build despite
+        /// this constant never having been anything but violet. Pulled proportionally (same ratios,
+        /// same hue) so it sits with headroom under the ceiling rather than sitting on top of it.</summary>
+        private static readonly Color BruiserBody = new Color(0.32f, 0.08f, 0.52f);
 
         /// <summary>The heavy (MV-303): steel / royal blue. Cold like the rest of the swarm, but a
         /// different hue AND brighter than the bruiser's violet, so a fight with both tiers in it

@@ -149,6 +149,26 @@ namespace MaxWorlds.Tests.EditMode
                 "they are the same brightness as well as being close in hue — nothing separates them.");
         }
 
+        /// <summary>
+        /// MV-328: the Bruiser shipped reading as drab brown despite <see cref="CharacterSkin"/> never
+        /// having assigned it anything but violet. Root cause — its peak channel (0.62) sat a hair over
+        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6), the ceiling every OTHER surface in the yard is
+        /// authored under for exactly this reason: past it, a channel clips once the 1.8x key hits it,
+        /// and a clipped, bloom-smeared highlight on a body this small washes toward a drab, hue-less
+        /// colour instead of the one it was painted. Pins the fix so it can't quietly creep back over.
+        /// </summary>
+        [Test]
+        public void TheBruiserColour_HasNoChannelPastTheSunlitCeiling()
+        {
+            Color c = CharacterSkin.BaseColorFor(CharacterRole.Bruiser);
+            float peak = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
+
+            Assert.LessOrEqual(peak, SunlitAlbedo.Ceiling,
+                $"the bruiser's peak channel is {peak:0.00}, past the {SunlitAlbedo.Ceiling:0.00} " +
+                "sunlit ceiling — it will clip under the yard's 1.8x key and wash toward a drab, " +
+                "hue-less colour instead of reading as the violet it was painted.");
+        }
+
         // ------------------------------------------------------------------ the edge
 
         [Test]
