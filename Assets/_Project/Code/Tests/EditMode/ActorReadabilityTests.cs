@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -134,6 +135,14 @@ namespace MaxWorlds.Tests.EditMode
         /// "Not just tinted variants" — the ticket's words. A rusher and a bruiser want completely
         /// different responses (kite one, commit three seconds of spray to the other), so telling them
         /// apart cannot depend on noticing that one is slightly darker.
+        ///
+        /// MV-348: this threshold was 0.5, set back when the Rusher's colour illegally peaked at 0.70 —
+        /// well past <see cref="SunlitAlbedo.Ceiling"/> — so it sat far brighter than the (already
+        /// ceiling-compliant) Bruiser and the two were never going to be mistaken on magnitude alone.
+        /// Now that the Rusher is pulled under the same ceiling as everything else, both colours live in
+        /// a smaller cube and their Euclidean distance shrinks accordingly — that is a side effect of
+        /// fixing the clipping bug, not a loss of real separation, since hue stays put (turquoise vs.
+        /// violet) the whole way through.
         /// </summary>
         [Test]
         public void TheTwoEnemyKinds_AreNotTintsOfEachOther()
@@ -141,7 +150,7 @@ namespace MaxWorlds.Tests.EditMode
             Color rusher = CharacterSkin.BaseColorFor(CharacterRole.Robot);
             Color bruiser = CharacterSkin.BaseColorFor(CharacterRole.Bruiser);
 
-            Assert.Greater(Distance(rusher, bruiser), 0.5f,
+            Assert.Greater(Distance(rusher, bruiser), 0.4f,
                 "the two enemy kinds are nearly the same colour. They demand opposite responses — you " +
                 "kite one and you spend three seconds of held spray on the other — so a player who " +
                 "cannot tell them apart cannot play the fight.");
@@ -158,18 +167,42 @@ namespace MaxWorlds.Tests.EditMode
         /// <see cref="SunlitAlbedo.Ceiling"/> (0.6), the ceiling every OTHER surface in the yard is
         /// authored under for exactly this reason: past it, a channel clips once the 1.8x key hits it,
         /// and a clipped, bloom-smeared highlight on a body this small washes toward a drab, hue-less
-        /// colour instead of the one it was painted. Pins the fix so it can't quietly creep back over.
+        /// colour instead of the one it was painted.
+        ///
+        /// MV-348: that fix was applied to the Bruiser only, and the Rusher — and, it turned out, the
+        /// Heavy — had the exact same defect and kept reading as brown/tan in the live build. This is
+        /// now a sweep over every archetype the game actually spawns (every <see cref="EnemyKind"/>,
+        /// mapped through the same <see cref="CharacterSkin.RoleFor"/> the game uses, plus the boss,
+        /// which isn't an EnemyKind) rather than one hard-coded role, so a future archetype cannot
+        /// reintroduce this one role at a time.
         /// </summary>
         [Test]
-        public void TheBruiserColour_HasNoChannelPastTheSunlitCeiling()
+        public void EveryArchetypeColour_HasNoChannelPastTheSunlitCeiling(
+            [ValueSource(nameof(AllArchetypeRoles))] CharacterRole role)
         {
-            Color c = CharacterSkin.BaseColorFor(CharacterRole.Bruiser);
+            Color c = CharacterSkin.BaseColorFor(role);
             float peak = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
 
             Assert.LessOrEqual(peak, SunlitAlbedo.Ceiling,
-                $"the bruiser's peak channel is {peak:0.00}, past the {SunlitAlbedo.Ceiling:0.00} " +
-                "sunlit ceiling — it will clip under the yard's 1.8x key and wash toward a drab, " +
-                "hue-less colour instead of reading as the violet it was painted.");
+                $"{role}'s peak channel is {peak:0.00}, past the {SunlitAlbedo.Ceiling:0.00} sunlit " +
+                "ceiling — it will clip under the yard's 1.8x key and wash toward a drab, hue-less " +
+                "colour instead of the one it was painted.");
+        }
+
+        /// <summary>Every role a live robot can actually wear: every <see cref="EnemyKind"/> run
+        /// through the same <see cref="CharacterSkin.RoleFor"/> mapping the game uses (so Bomber and
+        /// Blinker, which currently fall through to <see cref="CharacterRole.Robot"/>, are covered via
+        /// that fall-through rather than skipped), plus the boss, which has a role but no EnemyKind.</summary>
+        private static CharacterRole[] AllArchetypeRoles()
+        {
+            var seen = new HashSet<CharacterRole>();
+            foreach (EnemyKind kind in System.Enum.GetValues(typeof(EnemyKind)))
+                seen.Add(CharacterSkin.RoleFor(kind));
+            seen.Add(CharacterRole.Boss);
+
+            var roles = new CharacterRole[seen.Count];
+            seen.CopyTo(roles);
+            return roles;
         }
 
         // ------------------------------------------------------------------ the edge
