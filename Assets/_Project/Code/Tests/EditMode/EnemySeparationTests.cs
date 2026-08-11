@@ -53,8 +53,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MultipleCrowdingNeighbours_Accumulate()
         {
+            // Both neighbours crowding from roughly the same side (not opposite each other, which
+            // would cancel out and defeat the point of this test).
             var one = new List<Vector3> { new Vector3(1f, 0f, 0f) };
-            var two = new List<Vector3> { new Vector3(1f, 0f, 0f), new Vector3(-1f, 0.5f, 0.2f) };
+            var two = new List<Vector3> { new Vector3(1f, 0f, 0f), new Vector3(0f, 0f, 1f) };
 
             Vector3 pushOne = EnemySeparation.Push(Vector3.zero, one, 2f);
             Vector3 pushTwo = EnemySeparation.Push(Vector3.zero, two, 2f);
