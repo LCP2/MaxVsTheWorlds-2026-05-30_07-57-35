@@ -27,6 +27,7 @@ jobs:
   test:
     name: Test
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
         with:
@@ -47,10 +48,18 @@ jobs:
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
-  # 1b. MV-309: the boot-and-play check, in CI at last.
-  #     Deliberately NOT a dependency of build - a red play-check must never
-  #     stop the site updating. It gates jira-on-staging instead, so a ticket
-  #     only reaches On Staging when the build both deployed AND plays.
+  # 1b. MV-309: the boot-and-play check. Runs in parallel and gates NOTHING.
+  #     It reports only. It is deliberately not a dependency of build (a red
+  #     play-check must never stop the site updating) and, since 11 Aug, not a
+  #     dependency of jira-on-staging either.
+  #
+  #     WHY THE TIMEOUT IS LOAD-BEARING: Unity PlayMode in batch mode does not
+  #     stream output and can hang indefinitely. On 11 Aug it ran 4h20m without
+  #     finishing. A run is not "complete" until every job is, so that one hung
+  #     job held the concurrency group for four hours: runs #314-#321 all sat
+  #     pending and were superseded, nothing deployed, and every finished ticket
+  #     stranded in QA Running. Never remove timeout-minutes from this job, and
+  #     never make anything depend on it until that suite is proven to terminate.
   # ---------------------------------------------------------------------------
   playcheck:
     name: Play-check (PlayMode)
@@ -82,6 +91,7 @@ jobs:
     name: Build WebGL
     needs: test
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
         with:
