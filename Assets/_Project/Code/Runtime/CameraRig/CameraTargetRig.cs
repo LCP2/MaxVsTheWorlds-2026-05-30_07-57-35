@@ -16,7 +16,9 @@ namespace MaxWorlds.CameraRig
         [Tooltip("The thing the camera ultimately tracks (Max). Placeholder for the slice.")]
         [SerializeField] private Transform subject;
 
-        [Tooltip("How far ahead of the subject the camera biases, in metres.")]
+        [Tooltip("How far ahead of the subject the camera biases along the screen's WIDE axis " +
+                 "(world X, left/right), in metres. The narrow axis (world Z, top/bottom) is " +
+                 "scaled down from this by the screen's aspect ratio — see ComputeLead.")]
         [SerializeField] private float lookAheadDistance = 3f;
 
         [Tooltip("Higher = the lead offset snaps to the new direction faster.")]
@@ -50,14 +52,44 @@ namespace MaxWorlds.CameraRig
             Vector3 planar = new Vector3(delta.x, 0f, delta.z);
             Vector3 velocity = dt > 0f ? planar / dt : Vector3.zero;
 
-            Vector3 desiredLead = velocity.magnitude > velocityDeadzone
-                ? planar.normalized * lookAheadDistance
-                : Vector3.zero;
+            float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : 1f;
+            Vector3 desiredLead = ComputeLead(velocity, lookAheadDistance, aspect, velocityDeadzone);
 
             float t = 1f - Mathf.Exp(-lookAheadSmoothing * dt);
             _smoothedLead = Vector3.Lerp(_smoothedLead, desiredLead, t);
 
             transform.position = subject.position + _smoothedLead;
+        }
+
+        /// <summary>
+        /// The lead offset for a given planar velocity (MV-332). Biases toward whichever direction
+        /// the subject is actually moving — including retreat, away from an oncoming threat, not
+        /// only advance toward one; the direction alone decides it, so a robot chasing Max from the
+        /// north gets the same lead-away-from-it as one he's charging at.
+        ///
+        /// The landscape screen shows far less of the world along its narrow axis (vertical on
+        /// screen, world Z / "north-south") than its wide one (horizontal, world X / "east-west").
+        /// Leading by the same fixed distance on both axes therefore eats a much bigger SLICE of the
+        /// little vertical room there is, boxing Max against the frame with barely anything visible
+        /// behind him whenever he retreats from robots spawned above/below. Dividing the Z lead by
+        /// the aspect ratio keeps the lead a constant FRACTION of what is actually visible in that
+        /// direction, so retreating north/south leaves the same proportional margin behind him as
+        /// retreating east/west does.
+        /// </summary>
+        public static Vector3 ComputeLead(
+            Vector3 planarVelocity, float lookAheadDistance, float aspect, float velocityDeadzone)
+        {
+            if (planarVelocity.magnitude <= velocityDeadzone)
+            {
+                return Vector3.zero;
+            }
+
+            Vector3 direction = planarVelocity.normalized;
+            float aspectSafe = aspect > 0f ? aspect : 1f;
+            return new Vector3(
+                direction.x * lookAheadDistance,
+                0f,
+                direction.z * lookAheadDistance / aspectSafe);
         }
 
         /// <summary>Rebinds the tracked subject (used when Max spawns in YT-34).</summary>
