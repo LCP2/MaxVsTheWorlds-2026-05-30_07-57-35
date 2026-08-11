@@ -1,5 +1,6 @@
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Enemies
 {
@@ -42,15 +43,74 @@ namespace MaxWorlds.Enemies
             if (aim.sqrMagnitude < 1e-4f) aim = Vector3.forward;
             go.transform.rotation = Quaternion.LookRotation(aim.normalized, Vector3.up);
 
-            var visual = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            visual.name = "Body";
-            visual.transform.SetParent(go.transform, false);
-            visual.transform.localScale = Vector3.one * 0.35f;
-            Object.Destroy(visual.GetComponent<Collider>()); // manual proximity check below, not physics
+            BuildVisual(go.transform);
 
             var missile = go.AddComponent<HomingMissile>();
             missile.Init(target, speed, damage, splashRadius);
             return missile;
+        }
+
+        /// <summary>Gunmetal shaft — the same "painted steel" family the rest of the swarm's hardware
+        /// wears, not a saturated hue that would compete with the Bomber's own body colour.</summary>
+        private static readonly Color ShaftColor = new Color(0.30f, 0.31f, 0.34f);
+
+        /// <summary>The tail fins and warhead band — the game's one warn colour (see
+        /// <see cref="MaxWorlds.VFX.RobotRig"/>'s EyeWarn/EyeWarn-alike), so ordnance in flight reads
+        /// the same "incoming" language as every telegraph in the game.</summary>
+        private static readonly Color WarnColor = new Color(1f, 0.35f, 0.12f);
+
+        /// <summary>
+        /// A slim missile — shaft, tail fins, a warhead band — replacing the plain sphere "ball" this
+        /// used to fire (MV-329's AC2). The shaft is a Capsule rotated onto the object's own forward
+        /// axis, so it always points the way it's flying without any per-frame work: <see cref="Update"/>
+        /// already keeps <c>transform.rotation</c> aimed along the flight path, and everything built here
+        /// is a child in that same local space.
+        /// </summary>
+        private static void BuildVisual(Transform parent)
+        {
+            Material shaftMat = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
+            Material warnMat = MaterialLibrary.Tinted(SurfaceKind.Metal, WarnColor);
+
+            var shaft = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            shaft.name = "Shaft";
+            Strip(shaft);
+            shaft.transform.SetParent(parent, false);
+            // The capsule's long axis is local Y; rotating 90° about X lays it onto local Z, which is
+            // this object's forward — the same trick every beam/tube part in the game uses to point a
+            // cylinder primitive down its own travel direction.
+            shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            shaft.transform.localScale = new Vector3(0.11f, 0.30f, 0.11f);
+            if (shaftMat != null) shaft.GetComponent<MeshRenderer>().sharedMaterial = shaftMat;
+
+            // A warhead band at the nose — the AC's "reads as ordnance", not just "reads as a stick".
+            var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            band.name = "WarheadBand";
+            Strip(band);
+            band.transform.SetParent(parent, false);
+            band.transform.localPosition = new Vector3(0f, 0f, 0.34f);
+            band.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            band.transform.localScale = new Vector3(0.13f, 0.05f, 0.13f);
+            if (warnMat != null) band.GetComponent<MeshRenderer>().sharedMaterial = warnMat;
+
+            // Tail fins — two flat vanes at the back, the part of the silhouette that says "missile"
+            // rather than "dropped tool" even at gameplay zoom.
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                var fin = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                fin.name = "Fin";
+                Strip(fin);
+                fin.transform.SetParent(parent, false);
+                fin.transform.localPosition = new Vector3(side * 0.10f, 0f, -0.26f);
+                fin.transform.localScale = new Vector3(0.02f, 0.16f, 0.12f);
+                if (shaftMat != null) fin.GetComponent<MeshRenderer>().sharedMaterial = shaftMat;
+            }
+        }
+
+        private static void Strip(GameObject go)
+        {
+            var col = go.GetComponent<Collider>();
+            if (col != null) Object.Destroy(col); // manual proximity check in Update, not physics
         }
 
         private void Init(Transform target, float speed, float damage, float splashRadius)

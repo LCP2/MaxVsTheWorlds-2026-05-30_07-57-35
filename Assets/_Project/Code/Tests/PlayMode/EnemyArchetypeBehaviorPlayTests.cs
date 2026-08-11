@@ -1,4 +1,5 @@
 using System.Collections;
+using System.Linq;
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
@@ -101,6 +102,34 @@ namespace MaxWorlds.Tests.PlayMode
             Object.Destroy(max);
 
             Assert.Less(health.Current, health.Max, "the Bomber's missile never reached a stationary target");
+        }
+
+        /// <summary>MV-329 AC2: the missile HomingMissile.Fire spawns has to actually read as ordnance —
+        /// a shaft, fins and a warhead band — not the plain sphere "ball" it used to fire, and every
+        /// part of it has to carry a real material or it draws magenta in the build (YT-58).</summary>
+        [UnityTest]
+        public IEnumerator Bomber_MissileVisualIsAMissile_NotABall()
+        {
+            var target = NewMaxMarker(new Vector3(0f, 1f, 10f));
+            var missile = HomingMissile.Fire(Vector3.zero, target.transform, 4.5f, 22f, 2f);
+            yield return null;
+
+            var renderers = missile.GetComponentsInChildren<MeshRenderer>();
+            var names = renderers.Select(r => r.name).ToArray();
+
+            Assert.Contains("Shaft", names, "the missile has no Shaft — it's still a bare primitive.");
+            Assert.Contains("Fin", names, "the missile has no tail fins — it reads as a ball, not ordnance.");
+
+            foreach (var r in renderers)
+            {
+                Assert.IsNotNull(r.sharedMaterial, $"'{r.name}' has no material — it draws nothing.");
+                Assert.That(r.sharedMaterial.shader.name,
+                    Does.StartWith("Universal Render Pipeline").Or.StartWith("MaxWorlds").Or.StartWith("Sprites"),
+                    $"'{r.name}' is wearing '{r.sharedMaterial.shader.name}': magenta in the build.");
+            }
+
+            Object.Destroy(missile.gameObject);
+            Object.Destroy(target);
         }
 
         [UnityTest]
