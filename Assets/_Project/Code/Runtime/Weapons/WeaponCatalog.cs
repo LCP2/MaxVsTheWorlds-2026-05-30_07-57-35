@@ -25,8 +25,8 @@ namespace MaxWorlds.Weapons
         /// numbers; live-tune via DevTuning once the Settings tab exists, WV-234). Teleport's
         /// (MV-292) is deliberately well past Dash's: Dash is the short, frequent dodge; Teleport is
         /// the long, infrequent escape/engage tool — the cooldown gap has to read as clearly as the
-        /// distance gap does.</summary>
-        public const float DefaultWaterBalloonCooldownSeconds = 3f;
+        /// distance gap does. Water Balloon's is 3x the original 3s per MV-336 feedback (Max 0.7 doc).</summary>
+        public const float DefaultWaterBalloonCooldownSeconds = 9f;
         public const float DefaultDashCooldownSeconds = 2.5f;
         public const float DefaultTeleportCooldownSeconds = 6f;
 
