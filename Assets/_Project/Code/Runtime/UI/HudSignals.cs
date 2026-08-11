@@ -51,6 +51,12 @@ namespace MaxWorlds.UI
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
         public static event Action<Vector3, Vector3> BlinkerTeleported;
 
+        /// <summary>Max himself teleported (MV-338). (fromWorldPos, toWorldPos) — same two-point shape
+        /// as <see cref="BlinkerTeleported"/>, kept as a distinct event rather than reusing it: Max's own
+        /// blink drives both a bigger VFX beat and a brief time-slow (<c>GameFeel</c>), neither of which
+        /// should fire off an enemy's teleport.</summary>
+        public static event Action<Vector3, Vector3> MaxTeleported;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -83,5 +89,8 @@ namespace MaxWorlds.UI
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);
+
+        public static void EmitMaxTeleported(Vector3 from, Vector3 to)
+            => MaxTeleported?.Invoke(from, to);
     }
 }

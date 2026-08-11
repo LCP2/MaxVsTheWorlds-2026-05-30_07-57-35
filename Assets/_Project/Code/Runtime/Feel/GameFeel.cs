@@ -48,6 +48,13 @@ namespace MaxWorlds.Feel
         [Tooltip("Recoil per fire tick while the stream is on.")]
         [SerializeField] private float fireKick = 0.05f;
 
+        [Header("Teleport")]
+        [Tooltip("MV-338 AC3: a brief slow-mo while Max's teleport VFX plays. Noticeably softer than a " +
+                 "kill/factory hit-stop (which reads as a near-freeze) — this has to read as time " +
+                 "SLOWING for the blink, not stopping dead.")]
+        [SerializeField] private float teleportSlowSeconds = 0.22f;
+        [SerializeField] private float teleportSlowScale = 0.3f;
+
         private ScreenShake _shake;
         private HitStop _stop;
         private WaterBlaster _blaster;
@@ -64,6 +71,7 @@ namespace MaxWorlds.Feel
             HudSignals.EnemyKilled += OnKill;
             HudSignals.FactoryDestroyed += OnFactory;
             HudSignals.BossDefeated += OnBossDefeated;
+            HudSignals.MaxTeleported += OnMaxTeleported;
         }
 
         private void OnDisable()
@@ -72,6 +80,7 @@ namespace MaxWorlds.Feel
             HudSignals.EnemyKilled -= OnKill;
             HudSignals.FactoryDestroyed -= OnFactory;
             HudSignals.BossDefeated -= OnBossDefeated;
+            HudSignals.MaxTeleported -= OnMaxTeleported;
         }
 
         /// <summary>The shake lives on the camera, not here — it has to run after the Cinemachine
@@ -109,6 +118,12 @@ namespace MaxWorlds.Feel
             Shake()?.AddTrauma(bossDefeatTrauma);
             TryStop(bigStopSeconds, bigStopScale);
         }
+
+        /// <summary>MV-338 AC3. Requests directly rather than through <see cref="TryStop"/> — Teleport
+        /// is already rate-limited by its own cooldown (spec: no button spams it several times a
+        /// second the way a damage stream can), so the shared <see cref="minStopInterval"/> guard built
+        /// for that spam case doesn't need to gate this too.</summary>
+        private void OnMaxTeleported(Vector3 from, Vector3 to) => _stop.Request(teleportSlowSeconds, teleportSlowScale);
 
         private void TryStop(float seconds, float scale)
         {
