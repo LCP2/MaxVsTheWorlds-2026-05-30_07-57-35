@@ -72,20 +72,19 @@ Captures: editor compile, EditMode tests, headless Windows standalone build, log
 
 If it fails on a transient/flake, retry once. If it fails structurally, stop and report.
 
-## Play-check — the playability gate (`cc-verify` is NOT enough)
+## Play-check — the playability gate (`cc-verify` is NOT enough), and why the worker never waits for it
 
-`cc-verify` proves the build compiles, EditMode tests pass, it builds headlessly, and it holds 60fps. It does **NOT** prove the game is playable — an unplayable opening passes it clean. So a ticket is **not done**, and **no build ships**, until it ALSO passes a **play-check**:
+`cc-verify` proves the build compiles, EditMode tests pass, it builds headlessly, and it holds 60fps. It does **NOT** prove the game is playable — an unplayable opening passes it clean. So before any **TestFlight / store build**, the accumulated pile of merged tickets must ALSO pass a **play-check**:
 
-- **Boot the actual build and play the first ~60 seconds.** Confirm the core loop works: you can spawn, move, fire, deal/take damage as the ticket implies, and reach the menu — with no blocker in the opening.
-- Run it against the live **WebGL Pages build** (`build.yml` → the "play the latest" link) in a browser. **If Build & Deploy (WebGL) is red there is no playable build**, so the play-check cannot pass and the ticket is not done — getting that deploy green is the first fix.
-- A green `cc-verify` with a **failing or skipped** play-check is **NOT a pass.** Do not transition the ticket to In PDN, and do not ship.
-- Until the automated boot-and-play check exists, perform it as a browser playtest. Once built, it becomes part of the standard verify and blocks like any other gate. (`cc-verify-playmode` is a separate, non-blocking unit suite — it is **not** the play-check.)
+- **Boot the actual build and play the first ~60 seconds.** Confirm the core loop works: you can spawn, move, fire, deal/take damage as recent tickets imply, and reach the menu — with no blocker in the opening.
+- Run it against the live **WebGL Pages build** (`build.yml` → the "play the latest" link) in a browser.
+- **Never cut a TestFlight / store build without a green play-check on that exact build.** A green `cc-verify` alone is **not** authorisation to release a beta. iOS is a manual, chat-triggered release (KB → *Manual actions*); before triggering `ios-testflight`, confirm the play-check passed on the build being shipped. An unplayable build is never handed to testers.
 
-**Never cut a TestFlight / store build without a green play-check on that exact build.** A green `cc-verify` alone is **not** authorisation to release a beta. iOS is a manual, chat-triggered release (KB → *Manual actions*); before triggering `ios-testflight`, confirm the play-check passed on the build being shipped. An unplayable build is never handed to testers.
+**This is not a per-ticket gate for the worker.** The worker's own build has not deployed yet when its turn ends — it can only ever see a previous, unrelated deploy — so checking the live WebGL Pages build as a precondition for finishing *this* ticket is structurally impossible and was the root cause of a push/cancel loop (MV-346). The worker never waits for, watches, or polls a CI run, and never schedules a wakeup to check one. `cc-verify` green locally is the worker's complete gate; the play-check happens later, separately, against the accumulated pile before a TestFlight ship.
 
 ## Decide
 
-- All AC pass AND no `human-judgment` AC → transition **In PDN**; drop `cc-active`; comment summary + PR link; loop.
+- All AC pass AND no `human-judgment` AC → transition **In PDN**; drop `cc-active`; comment summary + PR link; **do not wait for or check the CI/deploy run** — loop straight to the next ticket.
 - `human-judgment` AC remaining → stop; drop `cc-active`; set `needs-lee`; comment exact steps for Lee in Unity (what scene, what to Play, what to look for, what to reply).
 - Self-verify failed → drop `cc-active`; `needs-cc` if flake, `needs-spec` if structural.
 - Guardrail trip → stop; set `needs-lee`; ask. Specific trips for this project: any engine version change; adding a Unity package not already in `manifest.json`; turning on AI-art generation; expanding a ticket beyond its tight-slice scope.
