@@ -111,8 +111,17 @@ namespace MaxWorlds.Weapons
             Vector3 landing = transform.position + dir * distance;
 
             float flightSeconds = waterBalloonFlightSpeed > 0f ? distance / waterBalloonFlightSpeed : 0f;
-            if (flightSeconds <= 0f) Land(landing);
-            else StartCoroutine(FlyThenLand(landing, flightSeconds));
+            if (flightSeconds <= 0f)
+            {
+                Land(landing);
+            }
+            else
+            {
+                // The thrown body (MV-334) — same landing point and timing the coroutine below
+                // waits on, so the picture and the splash never drift apart.
+                WaterBalloonThrowVfx.Fire(transform.position, landing, flightSeconds);
+                StartCoroutine(FlyThenLand(landing, flightSeconds));
+            }
             return true;
         }
 
