@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Weapons
@@ -192,8 +193,14 @@ namespace MaxWorlds.Weapons
             float distance = AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
 
             Vector3 offset = dir * distance;
+            Vector3 from = transform.position;
             if (_cc != null) _cc.Move(offset);
             else transform.position += offset;
+
+            // MV-338: HudSignals is the same decoupled hand-off BlinkerTeleported already uses — the
+            // VFX beat (CombatVfx) and the brief time-slow (GameFeel) both react to this without
+            // PlayerAbilities needing to know either exists.
+            HudSignals.EmitMaxTeleported(from, transform.position);
             return true;
         }
     }

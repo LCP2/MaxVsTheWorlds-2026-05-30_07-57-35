@@ -48,6 +48,13 @@ namespace MaxWorlds.VFX
         private static readonly Color SurgeDeep = new Color(0.45f, 0.15f, 0.85f, 1f);
         private static readonly Color TeleportFlash = new Color(0.92f, 0.88f, 1f, 1f);
 
+        // Max's own teleport (MV-338): a brighter cyan-violet blend, deliberately apart from the
+        // Blinker's pure violet — Max's own mobility payoff has to visibly outshine an enemy's copy
+        // of the same trick, not read as a re-skinned Blinker blink.
+        private static readonly Color MaxTeleportCore = new Color(0.65f, 0.9f, 1f, 1f);
+        private static readonly Color MaxTeleportDeep = new Color(0.5f, 0.35f, 0.98f, 1f);
+        private static readonly Color MaxTeleportFlashColor = new Color(0.95f, 0.97f, 1f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -57,6 +64,9 @@ namespace MaxWorlds.VFX
         private VfxBurst _dash;         // Max's dash trail
         private VfxBurst _teleportSurge; // Blinker: energy surge lingering at the departure point
         private VfxBurst _teleportFlash; // Blinker: the vanish/reappear pop, shared by both ends
+        private VfxBurst _maxTeleportSurge; // Max: bigger energy surge, both ends
+        private VfxBurst _maxTeleportShock; // Max: flat shockwave ring racing outward, both ends
+        private VfxBurst _maxTeleportFlash; // Max: bigger vanish/reappear pop, both ends
 
         private PlayerController _player;
         private Vector3 _lastDashPos;
@@ -79,6 +89,9 @@ namespace MaxWorlds.VFX
             _dash = new VfxBurst("DashTrail", additive, 200, 0f, perFrameCap: 90);
             _teleportSurge = new VfxBurst("TeleportSurge", additive, 120, 0f, perFrameCap: 4, stretched: true);
             _teleportFlash = new VfxBurst("TeleportFlash", additive, 40, 0f, perFrameCap: 8);
+            _maxTeleportSurge = new VfxBurst("MaxTeleportSurge", additive, 220, 0f, perFrameCap: 4, stretched: true);
+            _maxTeleportShock = new VfxBurst("MaxTeleportShockwave", additive, 160, 0f, perFrameCap: 4, stretched: true);
+            _maxTeleportFlash = new VfxBurst("MaxTeleportFlash", additive, 40, 0f, perFrameCap: 8);
         }
 
         private void OnEnable()
@@ -87,6 +100,7 @@ namespace MaxWorlds.VFX
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
             HudSignals.BlinkerTeleported += OnBlinkerTeleported;
+            HudSignals.MaxTeleported += OnMaxTeleported;
         }
 
         private void OnDisable()
@@ -97,6 +111,7 @@ namespace MaxWorlds.VFX
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
             HudSignals.BlinkerTeleported -= OnBlinkerTeleported;
+            HudSignals.MaxTeleported -= OnMaxTeleported;
         }
 
         private void OnDestroy()
@@ -104,6 +119,7 @@ namespace MaxWorlds.VFX
             Dispose(_hitSparks); Dispose(_deathSparks); Dispose(_deathDebris);
             Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke); Dispose(_dash);
             Dispose(_teleportSurge); Dispose(_teleportFlash);
+            Dispose(_maxTeleportSurge); Dispose(_maxTeleportShock); Dispose(_maxTeleportFlash);
         }
 
         // --- events ---
@@ -257,6 +273,59 @@ namespace MaxWorlds.VFX
             sizeMin: 0.9f, sizeMax: 0.9f,
             lifeMin: 0.16f, lifeMax: 0.16f,
             colorA: TeleportFlash, colorB: TeleportFlash);
+
+        // --- Max's own teleport (MV-338) ---
+
+        /// <summary>
+        /// Max's own blink (MV-338 AC2: "a really cool effect — like the Blinker robots' teleport, only
+        /// more impressive"). Same three-beat shape as <see cref="BlinkerTeleportBeat"/> — surge at the
+        /// departure point, a flash there, a staggered flash on arrival — but bigger throughout (more and
+        /// larger particles, a bigger flash) and with a shockwave ring at BOTH ends, a beat the Blinker's
+        /// own version never got. <see cref="MaxWorlds.Feel.GameFeel"/> reacts to the same
+        /// <see cref="HudSignals.MaxTeleported"/> signal with the brief time-slow (AC3), so the two land
+        /// as one moment without this needing to know the time-slow exists.
+        /// </summary>
+        private void OnMaxTeleported(Vector3 from, Vector3 to) => StartCoroutine(MaxTeleportBeat(from, to));
+
+        private IEnumerator MaxTeleportBeat(Vector3 from, Vector3 to)
+        {
+            Vector3 depart = from + Vector3.up * 0.9f;
+            Vector3 arrive = to + Vector3.up * 0.9f;
+
+            EmitMaxTeleportBurst(depart);
+            EmitMaxTeleportFlash(depart);
+
+            yield return new WaitForSeconds(TeleportFlashStagger);
+
+            EmitMaxTeleportBurst(arrive);
+            EmitMaxTeleportFlash(arrive);
+        }
+
+        private void EmitMaxTeleportBurst(Vector3 at)
+        {
+            _maxTeleportSurge.Emit(at, 36,
+                axis: Vector3.up, spreadDegrees: 100f,
+                speedMin: 2.5f, speedMax: 7f,
+                sizeMin: 0.16f, sizeMax: 0.4f,
+                lifeMin: 0.3f, lifeMax: 0.55f,
+                colorA: MaxTeleportCore, colorB: MaxTeleportDeep);
+
+            // A flat ring racing outward along the ground — high spread around the up axis reads as a
+            // shockwave rather than an upward burst, and the Blinker's own beat never had one.
+            _maxTeleportShock.Emit(at, 28,
+                axis: Vector3.up, spreadDegrees: 88f,
+                speedMin: 6f, speedMax: 11f,
+                sizeMin: 0.1f, sizeMax: 0.22f,
+                lifeMin: 0.2f, lifeMax: 0.32f,
+                colorA: MaxTeleportFlashColor, colorB: MaxTeleportCore);
+        }
+
+        private void EmitMaxTeleportFlash(Vector3 at) => _maxTeleportFlash.Emit(at, 1,
+            axis: Vector3.up, spreadDegrees: 0f,
+            speedMin: 0f, speedMax: 0f,
+            sizeMin: 1.4f, sizeMax: 1.4f,
+            lifeMin: 0.2f, lifeMax: 0.2f,
+            colorA: MaxTeleportFlashColor, colorB: MaxTeleportFlashColor);
 
         // --- dash trail ---
 
