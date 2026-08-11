@@ -107,7 +107,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator NoPartOfEitherRobotShipsMagenta()
         {
-            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Bomber })
+            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Bomber, EnemyKind.Blinker })
             {
                 var robot = NewRobot(kind);
                 robot.AddComponent<RobotRig>();
@@ -243,6 +243,38 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.Less(ModelBounds(_robot).size.y, 1.83f,
                 "the Bomber out-sizes Max. A swarm of things bigger than the player reads as a moving " +
+                "wall, not as enemies (YT-74).");
+        }
+
+        /// <summary>
+        /// The Blinker (MV-330): before this it fell through to <see cref="RobotRig.BuildRusher"/> and
+        /// wore the rusher's leaning pod and shear-arms — the one kind whose whole threat is that it
+        /// does not close by running should not be wearing a running-bot's silhouette.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheBlinkerIsAFacetedDrone_NotARusher()
+        {
+            _robot = NewRobot(EnemyKind.Blinker);
+            _robot.AddComponent<RobotRig>();
+            yield return null;
+
+            var model = Model(_robot);
+            Assert.IsNotNull(model, "the Blinker never built a model.");
+
+            var names = model.GetComponentsInChildren<Transform>().Select(t => t.name).ToList();
+
+            foreach (var required in new[] { "Core", "Shard", "Vent", "Eye" })
+                Assert.IsTrue(names.Contains(required),
+                    $"the Blinker has no '{required}'. The faceted core is what makes it read as a " +
+                    "coiled machine rather than another rusher.");
+
+            Assert.IsFalse(names.Contains("Claw"),
+                "the Blinker is still wearing the rusher's shear-arms — it fell through to BuildRusher.");
+            Assert.IsFalse(names.Contains("Pod"),
+                "the Blinker is still wearing the rusher's round pod — it fell through to BuildRusher.");
+
+            Assert.Less(ModelBounds(_robot).size.y, 1.83f,
+                "the Blinker out-sizes Max. A swarm of things bigger than the player reads as a moving " +
                 "wall, not as enemies (YT-74).");
         }
 

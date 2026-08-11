@@ -46,6 +46,11 @@ namespace MaxWorlds.UI
         /// first instead of the run cutting straight to results.</summary>
         public static event Action BossPayoffFinished;
 
+        /// <summary>A Blinker just teleported (MV-330). (fromWorldPos, toWorldPos) — the reposition in
+        /// <c>RobotEnemy.TickTeleport</c> is a same-frame snap, so this carries BOTH points rather than
+        /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
+        public static event Action<Vector3, Vector3> BlinkerTeleported;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -75,5 +80,8 @@ namespace MaxWorlds.UI
 
         public static void EmitBossPayoffFinished()
             => BossPayoffFinished?.Invoke();
+
+        public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
+            => BlinkerTeleported?.Invoke(from, to);
     }
 }

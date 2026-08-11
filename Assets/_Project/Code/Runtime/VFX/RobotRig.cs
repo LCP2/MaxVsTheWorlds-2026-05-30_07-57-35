@@ -235,6 +235,7 @@ namespace MaxWorlds.VFX
             if (_enemy.Kind == EnemyKind.Bruiser) BuildBruiser(feet);
             else if (_enemy.Kind == EnemyKind.Gunner) BuildGunner(feet);
             else if (_enemy.Kind == EnemyKind.Bomber) BuildBomber(feet);
+            else if (_enemy.Kind == EnemyKind.Blinker) BuildBlinker(feet);
             else BuildRusher(feet);
         }
 
@@ -449,6 +450,58 @@ namespace MaxWorlds.VFX
             Part("Antenna", PrimitiveType.Cylinder, feet,
                  new Vector3(-0.12f, 1.10f, -0.08f), new Vector3(0.025f, 0.16f, 0.025f), _accentMat,
                  Quaternion.Euler(0f, 0f, 14f));
+        }
+
+        /// <summary>
+        /// The Blinker (MV-330): before this it fell through to <see cref="BuildRusher"/> and wore the
+        /// rusher's leaning pod and shear-arms — exactly the wrong read for the one kind whose whole
+        /// threat is that it does not close distance by running at all. Where the rusher is round and
+        /// forward-leaning and the bomber is boxy and squat, the Blinker is faceted and upright: a
+        /// crystalline core built from cubes canted to a diamond profile instead of a sphere, crouched
+        /// on tight, crossed legs instead of the rusher's splayed running stance. It reads as a thing
+        /// coiled to spring sideways through space, not one leaning forward to sprint through the yard.
+        /// </summary>
+        private void BuildBlinker(Transform feet)
+        {
+            // Legs — thin and crossed in tight under the core, not splayed for a stride: this kind
+            // does not cover ground by running, it blinks it.
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Part("Leg", PrimitiveType.Cylinder, feet,
+                     new Vector3(side * 0.10f, 0.28f, 0f), new Vector3(0.09f, 0.28f, 0.09f),
+                     _accentMat, Quaternion.Euler(0f, 0f, side * 22f));
+                Part("Foot", PrimitiveType.Cube, feet,
+                     new Vector3(side * 0.16f, 0.05f, 0.02f), new Vector3(0.14f, 0.10f, 0.20f), _accentMat);
+            }
+
+            // THE CORE — a faceted diamond, not the rusher's round pod: a cube canted 45° on Y reads as
+            // a cut crystal at the fixed top-down angle, which is the tell that says "holding a charge",
+            // not "another rusher".
+            Part("Core", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 0.66f, 0f), new Vector3(0.40f, 0.46f, 0.40f), _bodyMat,
+                 Quaternion.Euler(0f, 45f, 0f));
+
+            // A collar where the legs meet the core, so the join is not a gap.
+            Part("Hips", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 0.44f, 0f), new Vector3(0.24f, 0.14f, 0.24f), _accentMat);
+
+            // The head — a smaller shard, same diamond grammar as the core, canted forward.
+            Part("Shard", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 1.00f, 0.06f), new Vector3(0.24f, 0.24f, 0.24f), _bodyMat,
+                 Quaternion.Euler(20f, 45f, 0f));
+
+            // THE EYE — single, forward, the tell — same idiom as every other rig.
+            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 1.00f, 0.24f), 0.18f) };
+
+            // Vents jutting off the core at an angle — where the charge bleeds off before a blink. Two,
+            // asymmetric, the same "fleck" every other rig here carries off its antenna.
+            Part("Vent", PrimitiveType.Cube, feet,
+                 new Vector3(0.20f, 0.74f, -0.10f), new Vector3(0.05f, 0.22f, 0.10f), _accentMat,
+                 Quaternion.Euler(0f, 20f, -20f));
+            Part("Vent", PrimitiveType.Cube, feet,
+                 new Vector3(-0.16f, 0.60f, -0.12f), new Vector3(0.05f, 0.16f, 0.08f), _accentMat,
+                 Quaternion.Euler(0f, -15f, 15f));
         }
 
         /// <summary>One part of a robot. Given a real material always, marked <see cref="SelfDrivenTint"/>
