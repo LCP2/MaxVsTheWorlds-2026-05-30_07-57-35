@@ -675,12 +675,19 @@ namespace MaxWorlds.Enemies
         {
             if (_stateTimer < telegraphTime) return;
 
+            Vector3 from = transform.position;
+
             // CharacterController owns its own internal position state; setting the transform directly
             // while it's enabled fights that on the next Move(). Disable around the jump so the
             // controller re-reads the new spot instead of resisting it.
             _cc.enabled = false;
             transform.position = _teleportTarget;
             _cc.enabled = true;
+
+            // The reposition above is instant with nothing to see (MV-330) — HudSignals carries both
+            // points so the VFX layer (CombatVfx) can play the surge/vanish/reappear beat without this
+            // state machine knowing or caring what that beat looks like.
+            HudSignals.EmitBlinkerTeleported(from, _teleportTarget);
 
             _teleportTimer = teleportCooldown;
             Current = State.Chase;

@@ -107,7 +107,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator NoPartOfEitherRobotShipsMagenta()
         {
-            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Bomber })
+            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Bomber, EnemyKind.Blinker })
             {
                 var robot = NewRobot(kind);
                 robot.AddComponent<RobotRig>();

@@ -41,6 +41,13 @@ namespace MaxWorlds.VFX
         private static readonly Color Smoke = new Color(0.22f, 0.20f, 0.19f, 0.75f);
         private static readonly Color DashTrail = new Color(0.62f, 0.92f, 1f, 1f);
 
+        // The Blinker's teleport (MV-330): a violet-white "phase" hue, deliberately apart from every
+        // other palette here — not the sparks' gold, not the dash's icy blue — so it reads as its own
+        // kind of event rather than borrowed damage feedback.
+        private static readonly Color SurgeCore = new Color(0.85f, 0.75f, 1f, 1f);
+        private static readonly Color SurgeDeep = new Color(0.45f, 0.15f, 0.85f, 1f);
+        private static readonly Color TeleportFlash = new Color(0.92f, 0.88f, 1f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -48,6 +55,8 @@ namespace MaxWorlds.VFX
         private VfxBurst _boomDebris;   // factory: chunks
         private VfxBurst _boomSmoke;    // factory: lingering smoke
         private VfxBurst _dash;         // Max's dash trail
+        private VfxBurst _teleportSurge; // Blinker: energy surge lingering at the departure point
+        private VfxBurst _teleportFlash; // Blinker: the vanish/reappear pop, shared by both ends
 
         private PlayerController _player;
         private Vector3 _lastDashPos;
@@ -68,6 +77,8 @@ namespace MaxWorlds.VFX
             _boomDebris = new VfxBurst("FactoryDebris", solid, 180, 2.4f, perFrameCap: 2);
             _boomSmoke = new VfxBurst("FactorySmoke", soft, 140, -0.25f, perFrameCap: 2);
             _dash = new VfxBurst("DashTrail", additive, 200, 0f, perFrameCap: 90);
+            _teleportSurge = new VfxBurst("TeleportSurge", additive, 120, 0f, perFrameCap: 4, stretched: true);
+            _teleportFlash = new VfxBurst("TeleportFlash", additive, 40, 0f, perFrameCap: 8);
         }
 
         private void OnEnable()
@@ -75,6 +86,7 @@ namespace MaxWorlds.VFX
             HudSignals.DamageDealt += OnDamage;
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
+            HudSignals.BlinkerTeleported += OnBlinkerTeleported;
         }
 
         private void OnDisable()
@@ -84,12 +96,14 @@ namespace MaxWorlds.VFX
             HudSignals.DamageDealt -= OnDamage;
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+            HudSignals.BlinkerTeleported -= OnBlinkerTeleported;
         }
 
         private void OnDestroy()
         {
             Dispose(_hitSparks); Dispose(_deathSparks); Dispose(_deathDebris);
             Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke); Dispose(_dash);
+            Dispose(_teleportSurge); Dispose(_teleportFlash);
         }
 
         // --- events ---
@@ -203,6 +217,47 @@ namespace MaxWorlds.VFX
                 colorA: FireDeep, colorB: Smoke);
         }
 
+        // --- Blinker teleport (MV-330) ---
+
+        /// <summary>
+        /// The Blinker's blink used to be a silent, single-frame snap — no VFX subscribed to it at
+        /// all, so it read as a bug rather than an ability. Three beats, matching the AC: an
+        /// energy-surge burst that lingers where it left, a flash there as it vanishes, then a second
+        /// flash where it lands. The vanish flash fires on the same frame as the surge (the reposition
+        /// itself is instant, so there's nothing to wait for at the departure end); the arrival flash
+        /// is staggered a beat later purely so "then" reads as sequence rather than two pops landing
+        /// on the same frame.
+        /// </summary>
+        private void OnBlinkerTeleported(Vector3 from, Vector3 to) => StartCoroutine(BlinkerTeleportBeat(from, to));
+
+        /// <summary>Seconds between the vanish flash and the arrival flash.</summary>
+        private const float TeleportFlashStagger = 0.08f;
+
+        private IEnumerator BlinkerTeleportBeat(Vector3 from, Vector3 to)
+        {
+            Vector3 depart = from + Vector3.up * 0.7f;
+
+            _teleportSurge.Emit(depart, 20,
+                axis: Vector3.up, spreadDegrees: 100f,
+                speedMin: 1.5f, speedMax: 4.5f,
+                sizeMin: 0.12f, sizeMax: 0.3f,
+                lifeMin: 0.25f, lifeMax: 0.45f,
+                colorA: SurgeCore, colorB: SurgeDeep);
+
+            EmitTeleportFlash(depart);
+
+            yield return new WaitForSeconds(TeleportFlashStagger);
+
+            EmitTeleportFlash(to + Vector3.up * 0.7f);
+        }
+
+        private void EmitTeleportFlash(Vector3 at) => _teleportFlash.Emit(at, 1,
+            axis: Vector3.up, spreadDegrees: 0f,
+            speedMin: 0f, speedMax: 0f,
+            sizeMin: 0.9f, sizeMax: 0.9f,
+            lifeMin: 0.16f, lifeMax: 0.16f,
+            colorA: TeleportFlash, colorB: TeleportFlash);
+
         // --- dash trail ---
 
         private void Update()
@@ -243,6 +298,7 @@ namespace MaxWorlds.VFX
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
             _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame(); _dash.EndFrame();
+            _teleportSurge.EndFrame(); _teleportFlash.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)
