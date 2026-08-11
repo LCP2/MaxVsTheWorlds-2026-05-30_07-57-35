@@ -15,6 +15,12 @@ namespace MaxWorlds.Weapons
     {
         private static readonly Dictionary<WeaponTrackKind, int> s_trackLevels = new Dictionary<WeaponTrackKind, int>();
         private static readonly Dictionary<AbilityKind, int> s_abilityLevels = new Dictionary<AbilityKind, int>();
+        // MV-333: the order abilities were actually granted in, not the catalog's fixed order — the
+        // weapons screen's slots are keyed off this so a slot, once filled, never moves when a later
+        // ability is acquired (the catalog order previously resorted "Acquired" every Refresh, which
+        // both showed the wrong ability first when a late-catalog one like Weapon Cooldown was granted
+        // alone, and reshuffled it out of slot 1 the moment an earlier-catalog ability arrived).
+        private static readonly List<AbilityKind> s_acquisitionOrder = new List<AbilityKind>();
 
         static WeaponSystemState() => ResetLevels();
 
@@ -43,17 +49,11 @@ namespace MaxWorlds.Weapons
 
         public static bool IsAcquired(AbilityKind kind) => s_abilityLevels[kind] > 0;
 
-        /// <summary>Every ability Max currently owns, in catalog order — the weapons screen's
-        /// Abilities section (WV-232) grows from this; unacquired abilities are never shown, no
-        /// locked teasers.</summary>
-        public static IEnumerable<AbilityKind> Acquired
-        {
-            get
-            {
-                foreach (var kind in WeaponCatalog.AllAbilityKinds)
-                    if (IsAcquired(kind)) yield return kind;
-            }
-        }
+        /// <summary>Every ability Max currently owns, in the order they were acquired (MV-333) — the
+        /// weapons screen's Abilities section (WV-232) grows from this; unacquired abilities are never
+        /// shown, no locked teasers. Acquisition order, not catalog order, so a slot never moves once
+        /// filled.</summary>
+        public static IEnumerable<AbilityKind> Acquired => s_acquisitionOrder;
 
         /// <summary>Abilities Max doesn't own yet — the pool a destroyed shed draws from (WV-229):
         /// "one random ability Max doesn't already own".</summary>
@@ -73,6 +73,7 @@ namespace MaxWorlds.Weapons
         {
             if (s_abilityLevels[kind] > 0) return false;
             s_abilityLevels[kind] = 1;
+            s_acquisitionOrder.Add(kind);
             Changed?.Invoke();
             return true;
         }
@@ -115,6 +116,7 @@ namespace MaxWorlds.Weapons
         {
             foreach (var kind in WeaponCatalog.AllTrackKinds) s_trackLevels[kind] = 1;
             foreach (var kind in WeaponCatalog.AllAbilityKinds) s_abilityLevels[kind] = 0;
+            s_acquisitionOrder.Clear();
         }
     }
 }
