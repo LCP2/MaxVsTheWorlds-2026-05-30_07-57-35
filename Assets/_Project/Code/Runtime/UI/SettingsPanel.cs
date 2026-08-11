@@ -481,6 +481,12 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus),
                 v => { DevTuning.HarnessCapacity = v; RefreshUpgrades(); }, tab: TabWeapons);
 
+            // Primary depletion rate (MV-319): the base drain the Depletion Rate RCDA track
+            // (WeaponTrackKind.DepletionRate) scales down from. Read live by WaterBlaster.EnergyPerTick.
+            Add("Depletion rate", "wtr/s", 2f, 30f, BlasterTuning.EnergyPerSecond,
+                () => DevTuning.Or(DevTuning.PrimaryDepletionRate, BlasterTuning.EnergyPerSecond),
+                v => DevTuning.PrimaryDepletionRate = v, tab: TabWeapons);
+
             Add("Engine boost", "x", 1f, 2.5f, UpgradeCatalog.AccelSpeedMultiplier,
                 () => DevTuning.Or(DevTuning.AccelSpeed, UpgradeCatalog.AccelSpeedMultiplier),
                 v => DevTuning.AccelSpeed = v, tab: TabWeapons);

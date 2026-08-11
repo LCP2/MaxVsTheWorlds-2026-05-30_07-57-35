@@ -126,7 +126,7 @@ namespace MaxWorlds.Combat
         /// authored per-second drain (<see cref="BlasterTuning.EnergyPerSecond"/>), scaled down by the
         /// track, spread over one fire tick.</summary>
         public float EnergyPerTick => WeaponCatalog.EffectiveDrainPerSecond(
-            BlasterTuning.EnergyPerSecond,
+            DevTuning.Or(DevTuning.PrimaryDepletionRate, BlasterTuning.EnergyPerSecond),
             WeaponSystemState.TrackLevel(WeaponTrackKind.DepletionRate),
             WeaponCatalog.DefaultRcdaDepletionRatePerLevel) * fireInterval;
 
