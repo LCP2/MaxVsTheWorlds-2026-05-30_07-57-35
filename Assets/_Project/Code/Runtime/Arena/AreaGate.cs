@@ -93,6 +93,18 @@ namespace MaxWorlds.Arena
         /// is met. Every other gate leaves this false and behaves exactly as before.</summary>
         public bool Locked { get; set; }
 
+        /// <summary>World-space direction from the room the player approaches this gate from toward
+        /// the room beyond it (MV-320) — set by <see cref="MapRuntime"/> from the link's from/to zone
+        /// centres, since a gate itself has no notion of "which side Max is standing on". Left
+        /// <see cref="Vector3.zero"/> for a gate built without map context (e.g. a bare EditMode/
+        /// PlayMode test fixture), in which case <see cref="SwingSign"/> keeps the old fixed swing.</summary>
+        public Vector3 AwayFromPlayerDirection { get; set; }
+
+        // Sign applied to the hinge angle each swing — captured once in StartHingeSwing rather than
+        // recomputed every frame in Update, since transform.forward there is mid-swing and no longer
+        // reads as "closed".
+        private float _hingeSign = 1f;
+
         private void Awake()
         {
             float breakSeconds = Mathf.Max(0.1f,
@@ -149,11 +161,11 @@ namespace MaxWorlds.Arena
             Opened?.Invoke();
         }
 
-        /// <summary>Begin swinging the gate open on its left edge (local -X), the same edge for every
-        /// gate since none of this map's links are ever authored rotated (§1: one straight chain of
-        /// rooms). Reads the CURRENT transform as "closed" rather than caching it in Awake — Update
-        /// re-derives the swing from this baseline every frame (never cumulative), so there is no
-        /// drift to accumulate no matter how long the gate sits open.</summary>
+        /// <summary>Begin swinging the gate open on its left edge (local -X) — the pivot side never
+        /// changes, only <see cref="SwingSign"/> (which room the free edge sweeps toward) does. Reads
+        /// the CURRENT transform as "closed" rather than caching it in Awake — Update re-derives the
+        /// swing from this baseline every frame (never cumulative), so there is no drift to accumulate
+        /// no matter how long the gate sits open.</summary>
         private void StartHingeSwing()
         {
             _closedPosition = transform.position;
@@ -162,8 +174,23 @@ namespace MaxWorlds.Arena
             float halfWidth = transform.localScale.x * 0.5f;
             _hingePivot = _closedPosition - transform.right * halfWidth;
 
+            _hingeSign = SwingSign(AwayFromPlayerDirection, transform.forward);
+
             _hingeT = 0f;
             _hinging = true;
+        }
+
+        /// <summary>+1 or -1 for the hinge angle in <see cref="Update"/>: a positive-angle
+        /// <c>RotateAround(pivot, Vector3.up, angle)</c> always sweeps the free edge toward
+        /// <c>-forward</c> (Unity's Y-rotation turns +right into -forward), so whenever the room beyond
+        /// the gate sits on the <c>+forward</c> side the sign must flip to -1, or the door swings back
+        /// into the room the player is standing in instead of the one ahead (MV-320). <c>awayFromPlayer
+        /// == Vector3.zero</c> means no map context was wired in, so this keeps the untouched +1 every
+        /// gate used before this ticket.</summary>
+        public static float SwingSign(Vector3 awayFromPlayer, Vector3 forward)
+        {
+            if (awayFromPlayer == Vector3.zero) return 1f;
+            return Vector3.Dot(awayFromPlayer, forward) > 0f ? -1f : 1f;
         }
 
         private void Update()
@@ -175,7 +202,7 @@ namespace MaxWorlds.Arena
             // Ease out — fast off the latch, settling into the open position, so the swing reads as
             // a snap rather than a slow architectural drift.
             float eased = 1f - (1f - k) * (1f - k);
-            float angle = eased * HingeSwingDegrees;
+            float angle = _hingeSign * eased * HingeSwingDegrees;
 
             transform.position = _closedPosition;
             transform.rotation = _closedRotation;
