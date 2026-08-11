@@ -169,7 +169,24 @@ namespace MaxWorlds.Rendering
             ShadowTint = new Color(0.30f, 0.44f, 0.72f),      // shadows lean firmly blue
             HighlightTint = new Color(1f, 0.88f, 0.68f),      // highlights lean gold
 
-            BloomThreshold = 0.92f,
+            // MV-350: this used to be 0.92, which sits BELOW the brightest an ordinary,
+            // ceiling-compliant surface reaches under the key alone (SunlitAlbedo.Ceiling(0.6) x
+            // KeyIntensity(1.8) = 1.08). That is not a highlight or a piece of VFX — it is the
+            // routine lit peak of any archetype colour painted right up to the sunlit ceiling
+            // (which is most of them; ActorReadabilityTests demands they be loud). So on the
+            // unshaded side of the yard, ordinary robot bodies were crossing the threshold on
+            // their own lighting alone and self-blooming, and Bloom's warm BloomTint blended back
+            // over them in proportion to the overage — desaturating every archetype toward the
+            // same pale tan/cream regardless of what hue it was painted, worst where nothing
+            // shades the key (e.g. beside the Mower Hutch). Three tickets (MV-303, MV-328,
+            // MV-348) chased this by repainting archetypes, and it kept coming back because
+            // nothing about a per-archetype colour was ever the defect — every one of them was
+            // already compliant with the ceiling. 1.35 clears the exact worst case (1.08) with
+            // headroom for the fill/rim adding onto the same lit facet, so bloom is reserved for
+            // genuine highlights (hit flashes, the Hutch's pulsing core, muzzle flare) instead of
+            // firing on every correctly-exposed body and surface in the yard. See
+            // SunlitAlbedo.ClipsBloomUnderKey and BackyardLightingTests for the proof.
+            BloomThreshold = 1.35f,
             BloomIntensity = 0.55f,
             BloomScatter = 0.62f,
             BloomTint = new Color(1f, 0.94f, 0.84f),

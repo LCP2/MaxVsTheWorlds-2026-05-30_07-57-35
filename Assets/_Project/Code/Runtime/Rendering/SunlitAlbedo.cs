@@ -41,5 +41,22 @@ namespace MaxWorlds.Rendering
             float k = Ceiling / peak;
             return new Color(c.r * k, c.g * k, c.b * k, c.a);
         }
+
+        /// <summary>
+        /// Whether an albedo, lit by the key alone, crosses a bloom threshold on its own — the
+        /// mechanism behind MV-350. Staying under <see cref="Ceiling"/> only keeps a surface from
+        /// hard-clipping to white; it says nothing about whether the SAME lit value also clears
+        /// whatever the post stack's bloom threshold is. If it doesn't, bloom self-triggers on an
+        /// ordinary, correctly-exposed surface — not a highlight, not VFX — and blends its tint
+        /// back over the surface in proportion to the overage, desaturating it toward that tint
+        /// regardless of the hue it was painted. Ceiling and BloomThreshold are two independent
+        /// authored constants; this is what keeps a future tuning pass on either one from
+        /// silently reopening the gap between them.
+        /// </summary>
+        public static bool ClipsBloomUnderKey(Color albedo, float keyIntensity, float bloomThreshold)
+        {
+            float peak = Mathf.Max(albedo.r, Mathf.Max(albedo.g, albedo.b));
+            return peak * keyIntensity > bloomThreshold;
+        }
     }
 }
