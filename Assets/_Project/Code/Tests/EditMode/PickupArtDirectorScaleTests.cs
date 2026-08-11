@@ -67,6 +67,11 @@ namespace MaxWorlds.Tests.EditMode
         /// cref="WeaponPartArt.PartGroundScale"/> fixes that; this asserts it applies and stays bigger
         /// than the cell's own multiplier so the AC's "and larger" holds for every part design, not just
         /// the one checked here.
+        ///
+        /// MV-347 — MV-326's fix only landed a 1.25x relative difference (1.75x vs the cell's 1.4x),
+        /// still inside the noise at the fixed 72° camera. The AC now names a number: a part must be
+        /// exactly 2x a cell's footprint. Asserting the ratio (not just "greater than") is what actually
+        /// pins that down — a ratio that drifted back toward 1x would still pass a bare "greater" check.
         /// </summary>
         [Test]
         public void Part_BuiltArt_IsScaledUpAndLargerThanThePowerCell()
@@ -78,8 +83,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(art, "the part prop failed to build");
             Assert.AreEqual(WeaponPartArt.PartGroundScale, art.localScale.x, 1e-4f,
                 "a dropped part's ground art should be scaled up by its own multiplier (MV-326).");
-            Assert.Greater(WeaponPartArt.PartGroundScale, WeaponPartArt.PowerCellGroundScale,
-                "a part must read larger than a power cell on the ground (MV-326 AC).");
+            Assert.AreEqual(2f, WeaponPartArt.PartGroundScale / WeaponPartArt.PowerCellGroundScale, 1e-4f,
+                "a part's ground footprint must be exactly 2x a power cell's, driven off the cell's own " +
+                "scale so the ratio can't drift (MV-347 AC).");
 
             Object.DestroyImmediate(pickup.gameObject);
         }
