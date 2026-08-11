@@ -110,8 +110,11 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        /// <summary>MV-331: the Heavy is now a deliberate exception to this rule — see
+        /// <see cref="TheHeavyReadsClearlyRed_AndDistinctFromMax"/> for why and how it still stays
+        /// tellable from Max — so it is left out of the cold-swarm loop below on purpose.</summary>
         [Test]
-        public void MaxIsTheOnlyWarmThingOnTheField()
+        public void MaxAndTheHeavyAreTheOnlyWarmThingsOnTheField()
         {
             Color max = CharacterSkin.BaseColorFor(CharacterRole.Player);
             Assert.Greater(max.r, max.g + 0.3f, "Max is not warm. Warm is his half of the axis.");
@@ -260,13 +263,31 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        /// <summary>
+        /// MV-331: playtesting found the Heavy's steel-blue (MV-303) too easy to lose against the
+        /// rest of the cold swarm. It now breaks the "enemies stay cold" rule on purpose and goes
+        /// red — the one hue family otherwise reserved for Max — while staying far enough from his
+        /// own hue and RGB value that the two are never mistaken for each other.
+        /// </summary>
         [Test]
-        public void TheHeavyReadsCold_LikeEveryOtherThingTryingToKillMax()
+        public void TheHeavyReadsClearlyRed_AndDistinctFromMax()
         {
-            Color c = CharacterSkin.BaseColorFor(CharacterRole.Heavy);
-            Assert.Greater(Mathf.Max(c.g, c.b), c.r,
-                "the heavy has gone warm — it is competing with Max for the one cue that still works " +
-                "when the screen is full.");
+            Color heavy = CharacterSkin.BaseColorFor(CharacterRole.Heavy);
+            Color max = CharacterSkin.BaseColorFor(CharacterRole.Player);
+
+            Assert.Greater(heavy.r, heavy.g + 0.3f, "the Heavy is not clearly reddish.");
+            Assert.Greater(heavy.r, heavy.b + 0.3f, "the Heavy is not clearly reddish.");
+
+            Color.RGBToHSV(heavy, out float heavyHue, out _, out _);
+            Color.RGBToHSV(max, out float maxHue, out _, out _);
+            float hueDiff = Mathf.Abs(heavyHue - maxHue) * 360f;
+            if (hueDiff > 180f) hueDiff = 360f - hueDiff;
+
+            Assert.Greater(hueDiff, 15f,
+                "the Heavy's red sits too close to Max's own hue — the two would blur together at a " +
+                "glance, exactly what going warm was supposed to avoid.");
+            Assert.Greater(Distance(heavy, max), 0.25f,
+                "the Heavy and Max are close enough in colour to read as the same thing.");
         }
 
         /// <summary>Same guarantee as <see cref="APooledBody_ComesBackWearingTheKindItActuallyIs"/>,
