@@ -226,6 +226,14 @@ namespace MaxWorlds.VFX
         /// the rarer device.</summary>
         public const float PowerCellGroundScale = 1.4f;
 
+        /// <summary>A dropped part's machine-internals design (<see cref="MachineInternalsKeys"/>) was
+        /// never given a ground multiplier at all — it stayed at its authored size while the power cell
+        /// above got scaled up 1.4x, so the part actually rendered SMALLER than the cell in-arena despite
+        /// their already-distinct shapes/colours (MV-326: "Max is shown approaching what look like two
+        /// identical cells, but one is actually a part"). Bigger than <see cref="PowerCellGroundScale"/>
+        /// so a part unambiguously reads as the larger, more special pickup the AC calls for.</summary>
+        public const float PartGroundScale = 1.75f;
+
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
         /// one that GLOWS brightest, because it is the endgame part that frees Max from the hose — and,
