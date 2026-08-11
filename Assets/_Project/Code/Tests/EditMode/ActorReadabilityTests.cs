@@ -189,6 +189,28 @@ namespace MaxWorlds.Tests.EditMode
                 "colour instead of the one it was painted.");
         }
 
+        /// <summary>
+        /// MV-350: staying under the sunlit ceiling (above) only keeps a colour from hard-clipping
+        /// to white — it says nothing about whether the SAME lit value also clears the post
+        /// stack's bloom threshold. Every archetype here already passed the ceiling check (MV-303,
+        /// MV-328, MV-348), and every one of them still washed toward tan/cream in Lee's build,
+        /// because the threshold that decided whether bloom fired sat below what a ceiling
+        /// -compliant colour reaches under the key alone. This is the check that would have caught
+        /// it: not the albedo, the shared post-processing knob it renders through.
+        /// </summary>
+        [Test]
+        public void EveryArchetypeColour_DoesNotSelfBloomUnderTheKeyAlone(
+            [ValueSource(nameof(AllArchetypeRoles))] CharacterRole role)
+        {
+            Color c = CharacterSkin.BaseColorFor(role);
+            var look = BackyardLook.Default;
+
+            Assert.IsFalse(SunlitAlbedo.ClipsBloomUnderKey(c, look.KeyIntensity, look.BloomThreshold),
+                $"{role}'s peak channel lit by the key alone clears {look.BloomThreshold:0.00} — it " +
+                "will self-bloom and wash toward the warm bloom tint regardless of the hue it was " +
+                "painted (MV-350).");
+        }
+
         /// <summary>Every role a live robot can actually wear: every <see cref="EnemyKind"/> run
         /// through the same <see cref="CharacterSkin.RoleFor"/> mapping the game uses (so Bomber and
         /// Blinker, which currently fall through to <see cref="CharacterRole.Robot"/>, are covered via
