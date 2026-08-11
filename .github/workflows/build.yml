@@ -2,7 +2,7 @@ name: Build & Deploy (WebGL)
 
 # Runs on every push to main. Compiles the project, runs all tests, builds a
 # WebGL player, and publishes it to GitHub Pages so Lee can play the latest
-# build by clicking a link — no editor, no local build step.
+# build by clicking a link - no editor, no local build step.
 
 on:
   push:
@@ -11,17 +11,18 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false # queue builds; two streams never cancel each other
+  cancel-in-progress: false # queue builds; a new push waits its turn (MV-343)
 
 permissions:
   contents: read
   checks: write
   pages: write
   id-token: write
+  deployments: read
 
 jobs:
   # ---------------------------------------------------------------------------
-  # 1. Compile + run EditMode and PlayMode tests. If this fails, no build ships.
+  # 1. Compile + run EditMode tests. If this fails, no build ships.
   # ---------------------------------------------------------------------------
   test:
     name: Test
@@ -43,6 +44,34 @@ jobs:
         with:
           unityVersion: auto # reads ProjectSettings/ProjectVersion.txt
           testMode: editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 1b. MV-309: the boot-and-play check, in CI at last.
+  #     Deliberately NOT a dependency of build - a red play-check must never
+  #     stop the site updating. It gates jira-on-staging instead, so a ticket
+  #     only reaches On Staging when the build both deployed AND plays.
+  # ---------------------------------------------------------------------------
+  playcheck:
+    name: Play-check (PlayMode)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          testMode: playmode
           githubToken: ${{ secrets.GITHUB_TOKEN }}
 
   # ---------------------------------------------------------------------------
@@ -70,7 +99,7 @@ jobs:
           unityVersion: auto
           targetPlatform: WebGL
       # GameCI writes the player to build/WebGL/. If the first run 404s on Pages,
-      # the index.html is one level deeper (build/WebGL/WebGL) — adjust `path` below.
+      # the index.html is one level deeper (build/WebGL/WebGL) - adjust path below.
       - uses: actions/upload-pages-artifact@v3
         with:
           path: build/WebGL/WebGL
@@ -88,3 +117,79 @@ jobs:
     steps:
       - id: deployment
         uses: actions/deploy-pages@v4
+
+  # ---------------------------------------------------------------------------
+  # 4. MV-344: tell Jira which tickets are now live on the Pages build.
+  #     On Staging means published AND playable, so it is set here - never by
+  #     the worker at push time, which cannot see its own deploy. Covers every
+  #     commit since the last successful deploy, because a queued run that is
+  #     superseded never fires its own build. Never fails the deploy.
+  # ---------------------------------------------------------------------------
+  jira-on-staging:
+    name: Mark deployed tickets On Staging
+    needs: [deploy, playcheck]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Transition deployed tickets to On Staging
+        env:
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          if [ -z "${ATLASSIAN_API_TOKEN:-}" ]; then
+            echo "::notice::ATLASSIAN_API_TOKEN not set - skipping Jira transition."
+            exit 0
+          fi
+          BASE=$(jq -r '.jiraBaseUrl' pipeline.config.json)
+          MAIL=$(jq -r '.jiraEmail' pipeline.config.json)
+          PKEY=$(jq -r '.jiraProjectKey' pipeline.config.json)
+          echo "Jira $BASE, project $PKEY"
+          PREV=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/deployments?environment=github-pages&per_page=100" \
+            | jq -r --arg cur "$CURRENT_SHA" '[.[] | select(.sha != $cur)][0].sha // empty')
+          if [ -n "$PREV" ] && git cat-file -e "$PREV^{commit}" 2>/dev/null; then
+            RANGE="$PREV..$CURRENT_SHA"
+          else
+            echo "::notice::No previous deployment resolved - falling back to this push only."
+            RANGE="$CURRENT_SHA~1..$CURRENT_SHA"
+          fi
+          echo "Commit range: $RANGE"
+          KEYS=$(git log --format=%s%n%b "$RANGE" | grep -oE "$PKEY-[0-9]+" | sort -u)
+          if [ -z "$KEYS" ]; then
+            echo "::notice::No $PKEY keys in range - nothing to transition."
+            exit 0
+          fi
+          for K in $KEYS; do
+            ST=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+              "$BASE/rest/api/3/issue/$K?fields=status" | jq -r '.fields.status.name // empty')
+            if [ "$ST" != "QA Running" ] && [ "$ST" != "Developing" ]; then
+              echo "::notice::$K is $ST - leaving it alone."
+              continue
+            fi
+            TID=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+              "$BASE/rest/api/3/issue/$K/transitions" \
+              | jq -r '[.transitions[] | select(.to.name=="On Staging")][0].id // empty')
+            if [ -z "$TID" ]; then
+              echo "::warning::$K has no On Staging transition from $ST - skipped."
+              continue
+            fi
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Content-Type: application/json" \
+              --data "{\"transition\":{\"id\":\"$TID\"}}" \
+              "$BASE/rest/api/3/issue/$K/transitions")
+            if [ "$CODE" = "204" ]; then
+              echo "$K -> On Staging"
+              curl -sS -o /dev/null -X PUT -u "$MAIL:$ATLASSIAN_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data '{"update":{"labels":[{"remove":"cc-active"}]}}' \
+                "$BASE/rest/api/3/issue/$K" || true
+            else
+              echo "::warning::$K transition failed with HTTP $CODE."
+            fi
+          done
+          exit 0
