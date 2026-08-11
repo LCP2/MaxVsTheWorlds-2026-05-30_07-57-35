@@ -963,7 +963,7 @@ namespace MaxWorlds.UI
             int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.Teleport);
             Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, TeleportJoystickRise);
             _teleportVisual = AbilityControlArt.BuildJoystick(
-                Root, "Teleport Joystick", anchoredPos, TeleportColor, "BLINK", level, maxLevel);
+                Root, "Teleport Joystick", anchoredPos, TeleportColor, "Teleport", level, maxLevel);
             _teleportRoot = _teleportVisual.Root;
 
             // Cooldown wipe, identical treatment to Water Balloon's own (spec §6a: "every control shows
