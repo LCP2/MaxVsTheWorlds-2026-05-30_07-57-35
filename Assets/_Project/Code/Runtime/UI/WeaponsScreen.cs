@@ -15,8 +15,10 @@ namespace MaxWorlds.UI
     /// intended design (MV-248) after MV-234 shipped only a bare functional panel — a centred title,
     /// "Lv x/y" text rows and an empty Abilities column, none of the intended layout/colour/copy.
     ///
-    /// Layout: a title + CELLS/PARTS/PAUSED cluster up top (MV-262: PARTS is now a spinning gear
-    /// glyph + count, not a static dot + word), a narrow hero column on the left (Max's own key art
+    /// Layout: a title + CELLS/PARTS/PAUSED cluster up top (MV-262: PARTS carries a spinning gear
+    /// glyph; MV-327: it's a wider chip with its own pulsing glow + unit suffix so it reads as a
+    /// bank at a glance rather than a bare number, and CELLS' label shrinks to fit instead of
+    /// overflowing over its icon), a narrow hero column on the left (Max's own key art
     /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
     /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid and the abilities
     /// grid. The abilities grid always shows all six slots (MV-262): owned ones by name, the rest as
@@ -110,6 +112,7 @@ namespace MaxWorlds.UI
         private Text _cellsText;
         private Text _partsText;
         private Image _partsIcon;          // MV-262: the gear glyph next to the parts count — spins while open
+        private Image _partsGlow;          // MV-327: pulses while a part is banked — the "prominent, readable at a glance" tell
         private Image _weaponGlowRing;     // MV-262: the "cooler under Max" tech-ring behind the RCDA render — spins while open
         private Text _abilitiesHeaderText;
 
@@ -182,6 +185,27 @@ namespace MaxWorlds.UI
             float dt = Time.unscaledDeltaTime;
             if (_partsIcon != null) _partsIcon.rectTransform.Rotate(0f, 0f, -dt * 90f);
             if (_weaponGlowRing != null) _weaponGlowRing.rectTransform.Rotate(0f, 0f, dt * 18f);
+
+            // MV-327: the PARTS chip's outer glow only beats while a part is actually banked and
+            // spendable — otherwise it stays fully transparent, same "only alert when actionable"
+            // rule HudController's own part-alert badge follows.
+            if (_partsGlow != null)
+            {
+                var c = PartsColor;
+                c.a = PartsGlowAlpha(Time.unscaledTime, PickupWallet.PartsBanked);
+                _partsGlow.color = c;
+            }
+        }
+
+        /// <summary>The PARTS chip's glow-ring alpha, 0..1 (MV-327) — a pure function so the beat is
+        /// pinned by an EditMode test without building a canvas. Zero whenever nothing is banked (no
+        /// upgrade to flag); otherwise the same trough/peak sine beat <see cref="HudController"/>'s own
+        /// part-alert badge uses, so every "a part is waiting" tell on screen pulses at one rate.</summary>
+        public static float PartsGlowAlpha(float unscaledTime, int partsBanked)
+        {
+            if (partsBanked <= 0) return 0f;
+            float t = 0.5f + 0.5f * Mathf.Sin(unscaledTime * 6f);
+            return 0.5f * t;
         }
 
         private void OnPartsChanged(int banked) => Refresh();
@@ -230,7 +254,7 @@ namespace MaxWorlds.UI
 
             int banked = PickupWallet.PartsBanked;
             _cellsText.text = $"{PickupWallet.PowerCells} CELLS";
-            _partsText.text = $"{banked}";   // MV-262: the spinning gear glyph carries the "parts" meaning now
+            _partsText.text = $"{banked} PARTS";   // MV-327: a bare number read as decoration, not a bank
 
             for (int i = 0; i < TrackCount; i++)
             {
@@ -392,14 +416,28 @@ namespace MaxWorlds.UI
             paused.text = "II PAUSED";
             cursor -= 160f + 16f;
 
-            // MV-262: the parts chip's dot becomes a spinning gear glyph (see Update()) — the "fun
-            // symbol" the ticket asked for, replacing the flat static dot the cells chip still uses.
-            var partsChip = BuildChip(bar, new Vector2(cursor, 0f), PartsColor,
+            // MV-262: the parts chip's dot becomes a spinning gear glyph (see Update()). MV-327: it's
+            // also wider, spells out PARTS instead of a bare number, and grows a pulsing glow ring
+            // while a part is banked — "just a number" didn't read as a bank at a glance.
+            const float partsChipWidth = 190f;
+            var partsChip = BuildChip(bar, new Vector2(cursor, 0f), partsChipWidth, PartsColor,
                 HudTextures.Gear(48, 8), 34f, out _partsText, out _partsIcon);
             partsChip.name = "Parts Chip";
-            cursor -= 150f + 16f;
 
-            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), CellsColor,
+            // Outer glow ring, same "halo behind an opaque pill" technique as HudController's own
+            // part-alert badge (BuildPartAlert): sits behind the chip's BG so only the 10px overflow
+            // beyond the pill's edge ever shows, driven by Update()'s pulse above.
+            _partsGlow = AddImage(partsChip, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
+            Stretch(_partsGlow.rectTransform, 10f);
+            _partsGlow.type = Image.Type.Sliced;
+            _partsGlow.raycastTarget = false;
+            _partsGlow.transform.SetAsFirstSibling();
+            cursor -= partsChipWidth + 16f;
+
+            // MV-327: the label now shrink-to-fits its box (see BuildChip) instead of overflowing past
+            // it, which used to draw wide strings like "224 CELLS" back over this dot icon.
+            const float cellsChipWidth = 150f;
+            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor,
                 HudTextures.Disc(32), 20f, out _cellsText, out _);
             cellsChip.name = "Cells Chip";
         }
@@ -463,13 +501,16 @@ namespace MaxWorlds.UI
         /// <summary>A rounded pill: a tinted icon + a live count/label, right-anchored at
         /// <paramref name="offset"/> from the top bar's right edge (CELLS/PARTS). MV-262: the icon
         /// sprite/size is now caller-supplied (and handed back via <paramref name="icon"/>) so the
-        /// PARTS chip can carry the spinning gear glyph while CELLS keeps the plain dot.</summary>
-        private RectTransform BuildChip(RectTransform bar, Vector2 offset, Color accent,
+        /// PARTS chip can carry the spinning gear glyph while CELLS keeps the plain dot. MV-327: width
+        /// is caller-supplied too (PARTS needs more room for its glow + unit suffix), and the label
+        /// shrinks to fit its box instead of overflowing past it — the old fixed 24pt + Overflow wrap
+        /// let a wide string ("224 CELLS") draw back over the icon at the box's left edge.</summary>
+        private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
             Sprite iconSprite, float iconSize, out Text label, out Image icon)
         {
             var chip = NewRect("Chip", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             chip.pivot = new Vector2(1f, 0.5f);
-            chip.sizeDelta = new Vector2(150f, 52f);
+            chip.sizeDelta = new Vector2(width, 52f);
             chip.anchoredPosition = offset;
 
             var bg = AddImage(chip, HudTextures.RoundedBox(32, 0.5f), RowColor, "BG");
@@ -486,6 +527,9 @@ namespace MaxWorlds.UI
             label.rectTransform.offsetMin = new Vector2(42f, -20f);
             label.rectTransform.offsetMax = new Vector2(-14f, 20f);
             label.fontStyle = FontStyle.Bold;
+            label.resizeTextForBestFit = true;
+            label.resizeTextMinSize = 14;
+            label.resizeTextMaxSize = 24;
             return chip;
         }
 
