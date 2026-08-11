@@ -176,6 +176,10 @@ namespace MaxWorlds.Core
         /// only (WV-225), not the positional launch it used to be.</summary>
         public static float? SprayKnockback { get; set; }
 
+        /// <summary>Primary weapon energy drain, per second (<see cref="MaxWorlds.Combat.BlasterTuning.EnergyPerSecond"/>).
+        /// The WEAPONS settings tab knob for MV-319 — the authored base is the number this overrides.</summary>
+        public static float? PrimaryDepletionRate { get; set; }
+
         // --- ability effects (WV-231) ---
 
         /// <summary>Water Balloon's splash damage as a percentage of the target's own max health.</summary>
@@ -306,7 +310,7 @@ namespace MaxWorlds.Core
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
             WaterBalloonCooldownSeconds.HasValue || DashCooldownSeconds.HasValue ||
             TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
-            SprayKnockback.HasValue ||
+            SprayKnockback.HasValue || PrimaryDepletionRate.HasValue ||
             WaterBalloonDamagePct.HasValue || WaterBalloonStopDurationSeconds.HasValue ||
             SpeedMultiplierPerLevel.HasValue ||
             WaterBalloonBaseDistance.HasValue || WaterBalloonDistancePerLevel.HasValue ||
@@ -360,6 +364,7 @@ namespace MaxWorlds.Core
             TeleportCooldownSeconds = null;
             WeaponCooldownReductionPerLevel = null;
             SprayKnockback = null;
+            PrimaryDepletionRate = null;
             WaterBalloonDamagePct = null;
             WaterBalloonStopDurationSeconds = null;
             SpeedMultiplierPerLevel = null;
@@ -436,6 +441,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),
             (PrefsPrefix + nameof(WeaponCooldownReductionPerLevel), () => WeaponCooldownReductionPerLevel, v => WeaponCooldownReductionPerLevel = v),
             (PrefsPrefix + nameof(SprayKnockback), () => SprayKnockback, v => SprayKnockback = v),
+            (PrefsPrefix + nameof(PrimaryDepletionRate), () => PrimaryDepletionRate, v => PrimaryDepletionRate = v),
             (PrefsPrefix + nameof(WaterBalloonDamagePct), () => WaterBalloonDamagePct, v => WaterBalloonDamagePct = v),
             (PrefsPrefix + nameof(WaterBalloonStopDurationSeconds), () => WaterBalloonStopDurationSeconds, v => WaterBalloonStopDurationSeconds = v),
             (PrefsPrefix + nameof(SpeedMultiplierPerLevel), () => SpeedMultiplierPerLevel, v => SpeedMultiplierPerLevel = v),

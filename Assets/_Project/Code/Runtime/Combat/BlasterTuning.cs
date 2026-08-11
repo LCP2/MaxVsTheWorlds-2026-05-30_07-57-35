@@ -23,8 +23,10 @@ namespace MaxWorlds.Combat
 
         /// <summary>What holding the trigger costs per second. The ramp keeps this constant, so this
         /// single number sets sustained-fire length: <see cref="SustainedFireSeconds"/>.
-        /// Lowered to Lee's on-device number (YT-200, was 19.94): the tank lasts longer.</summary>
-        public const float EnergyPerSecond = 10.57f;
+        /// Lowered to Lee's on-device number (YT-200, was 19.94), then raised 15% (MV-319, base
+        /// depletion read too forgiving) to 12.16. Tunable live via the WEAPONS settings tab
+        /// (<see cref="MaxWorlds.Core.DevTuning.PrimaryDepletionRate"/>).</summary>
+        public const float EnergyPerSecond = 12.16f;
 
         /// <summary>Refill rate once the delay has passed. Comfortably faster than the drain, so any
         /// natural pause in a fight — repositioning, a dash, picking the next target — puts real
