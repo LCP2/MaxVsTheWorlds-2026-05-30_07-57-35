@@ -58,7 +58,9 @@ Read the ticket description, the Phase B spec (12058680), and any linked Conflue
 git checkout -b feat/MV-XX-short-slug
 ```
 
-Implement to the AC — and nothing beyond. Greybox + free-kit art only (no AI art until Phase C). Add EditMode/PlayMode tests for any non-trivial logic (movement maths, damage calc, factory spawn/destroy, win/lose).
+Implement to the AC — and nothing beyond. Greybox + free-kit art only (no AI art until Phase C). Add **EditMode tests only** for any non-trivial logic (movement maths, damage calc, factory spawn/destroy, win/lose).
+
+**NEVER author a PlayMode test, and never run `cc-verify-playmode.bat`.** Unity PlayMode in batch mode does not stream output and hangs indefinitely. It has now stalled this worker three separate times (MV-299, MV-311, MV-330) and, when enabled in CI on 11 Aug, hung for 4h20m and blocked every deploy for three and a half hours. If a ticket seems to need PlayMode coverage, write the EditMode test you can, note the gap in a Jira comment, and move on. PlayMode is CI's problem, not yours.
 
 ## Self-verify
 
@@ -71,6 +73,10 @@ Captures: editor compile, EditMode tests, headless Windows standalone build, log
 **Run `cc-verify.bat` synchronously in the foreground and WAIT for it to finish within this turn (use a long bash timeout).** You run in one-shot `-p` mode — there are NO background notifications, so if the build gets backgrounded and you end your turn to "wait for it", the run ends with no commit and the ticket stalls. **This is why MAX tickets have not been completing.** Never pipe `cc-verify` through `| tail`; read its real exit code directly.
 
 If it fails on a transient/flake, retry once. If it fails structurally, stop and report.
+
+**Never wait on, poll, or watch a backgrounded task - any backgrounded task, without exception.** If a command is moved to the background (a 10-minute cap, a hung process, anything), do NOT wait for a completion notification, do NOT loop on task-output checks, and do NOT sleep-and-retry. You run in one-shot `-p` mode: there are no background notifications, so you will loop forever burning paid runs while nothing progresses. Kill it, say plainly in a Jira comment what was running and that it was abandoned, and move on to the next ticket.
+
+This covers local verifies, CI runs, builds, deploys and test suites alike. It is the most expensive recurring failure on this project - it has happened four times in different disguises, each time patched only for the specific command that caused it. The rule is general on purpose.
 
 ## Play-check — the playability gate (`cc-verify` is NOT enough), and why the worker never waits for it
 
