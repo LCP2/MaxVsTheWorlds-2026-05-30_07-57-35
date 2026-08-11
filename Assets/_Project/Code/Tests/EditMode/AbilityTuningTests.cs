@@ -85,7 +85,23 @@ namespace MaxWorlds.Tests.EditMode
         {
             float l1 = AbilityTuning.TeleportDistance(1, 8f, 4f);
             float l2 = AbilityTuning.TeleportDistance(2, 8f, 4f);
-            Assert.Greater(l2, l1, "level 2 (the cap) must blink farther than level 1");
+            Assert.Greater(l2, l1, "level 2 must blink farther than level 1");
+        }
+
+        [Test]
+        public void TeleportHasFourDistinctFartherLevels()
+        {
+            // MV-339: Teleport widened from 2 upgrade levels to 4 — each level must read as a felt
+            // difference from the one before it, all the way to the new cap.
+            float l1 = AbilityTuning.TeleportDistance(1, 8f, 4f);
+            float l2 = AbilityTuning.TeleportDistance(2, 8f, 4f);
+            float l3 = AbilityTuning.TeleportDistance(3, 8f, 4f);
+            float l4 = AbilityTuning.TeleportDistance(4, 8f, 4f);
+
+            Assert.Greater(l2, l1);
+            Assert.Greater(l3, l2);
+            Assert.Greater(l4, l3);
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4));
         }
 
         [Test]

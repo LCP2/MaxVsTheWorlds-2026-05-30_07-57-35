@@ -112,8 +112,9 @@ namespace MaxWorlds.Weapons
         public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel) =>
             baseDrainPerSecond * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
 
-        /// <summary>The level cap for an ability once acquired (spec §6): Water Balloon 3, Speed 4,
-        /// Dash a single unlock (1), Teleport 2, Weapon Cooldown 5.</summary>
+        /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
+        /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Water
+        /// Balloon 3, Speed 4, Dash a single unlock (1), Teleport 4, Weapon Cooldown 5.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
@@ -121,7 +122,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WaterBalloon: return 3;
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Dash: return 1;
-                case AbilityKind.Teleport: return 2;
+                case AbilityKind.Teleport: return 4;
                 case AbilityKind.WeaponCooldown: return 5;
                 default: return 1;
             }
