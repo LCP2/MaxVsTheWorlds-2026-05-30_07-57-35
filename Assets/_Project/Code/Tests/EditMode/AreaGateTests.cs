@@ -198,5 +198,27 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1f, AreaGate.SwingSign(Vector3.zero, Vector3.forward));
             Assert.AreEqual(1f, AreaGate.SwingSign(Vector3.zero, Vector3.right));
         }
+
+        // --- MV-323: ambient spawns should be biased away from the door a room is entered through ---
+
+        [Test]
+        public void EntryDirection_PointsFromTheNearRoomToTheFarRoom()
+        {
+            MapData map = TwoAreas(); // area1 (z=-10) -> gate1 (z=0) -> area2 (z=10)
+
+            Vector3 entry = MapRuntime.EntryDirection(map, "area2");
+
+            Assert.Greater(entry.z, 0f, "area2 sits at +Z of area1, so 'entry' should point toward +Z");
+        }
+
+        [Test]
+        public void EntryDirection_IsZeroWhenNoLinkLeadsIntoTheZone()
+        {
+            MapData map = TwoAreas();
+
+            Vector3 entry = MapRuntime.EntryDirection(map, "area1"); // nothing links INTO area1
+
+            Assert.AreEqual(Vector3.zero, entry);
+        }
     }
 }

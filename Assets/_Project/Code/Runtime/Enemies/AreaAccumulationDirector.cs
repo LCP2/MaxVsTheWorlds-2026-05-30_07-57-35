@@ -220,12 +220,17 @@ namespace MaxWorlds.Enemies
             if (zone == null || zone.width <= EdgeMargin * 2f || zone.depth <= EdgeMargin * 2f)
                 return _target != null ? _target.position : Vector3.zero;
 
+            // MV-323: bias candidates to the side of the room opposite the door robots/Max just came
+            // through, so the ambient fight tends to stay off the entrance rather than piling up on it.
+            Vector3 awayFromDoor = MapRuntime.EntryDirection(_map, zone.id);
+            Rect bounds = SpawnBias.FarSideBounds(zone, awayFromDoor, EdgeMargin);
+
             Camera cam = Camera.main;
             Vector3 candidate = default;
 
             for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
             {
-                candidate = RandomPointIn(zone, height);
+                candidate = RandomPointIn(bounds, height);
                 if (OverlapsCoverOrRobot(candidate)) continue;
                 if (cam != null && IsOnScreen(cam, candidate)) continue;
 
@@ -236,7 +241,7 @@ namespace MaxWorlds.Enemies
             {
                 for (int attempt = 0; attempt < MaxOffScreenAttempts; attempt++)
                 {
-                    candidate = RandomPointIn(zone, height);
+                    candidate = RandomPointIn(bounds, height);
                     if (!IsOnScreen(cam, candidate)) return candidate;
                 }
             }
@@ -244,10 +249,10 @@ namespace MaxWorlds.Enemies
             return candidate;
         }
 
-        private static Vector3 RandomPointIn(MapZone zone, float height)
+        private static Vector3 RandomPointIn(Rect bounds, float height)
         {
-            float x = Random.Range(zone.XMin + EdgeMargin, zone.XMax - EdgeMargin);
-            float z = Random.Range(zone.ZMin + EdgeMargin, zone.ZMax - EdgeMargin);
+            float x = Random.Range(bounds.xMin, bounds.xMax);
+            float z = Random.Range(bounds.yMin, bounds.yMax);
             return new Vector3(x, height, z);
         }
 
