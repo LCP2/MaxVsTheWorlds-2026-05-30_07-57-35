@@ -57,10 +57,9 @@ namespace MaxWorlds.UI
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
         // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
         private static readonly Color PartColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
-        // Minimap fog-of-war (MV-264): hidden stays near-invisible — an undiscovered slot, not a
-        // black hole punched in the HUD — visited is a plain dim readout, and current borrows the
-        // tech-ring cyan already used for "this is you" elsewhere on the HUD.
-        private static readonly Color MinimapHiddenColor = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.35f);
+        // Minimap fog-of-war (MV-264, spatial rework MV-341): a visited room is a plain dim readout,
+        // current borrows the tech-ring cyan already used for "this is you" elsewhere on the HUD, and
+        // a hidden room is not drawn at all — the panel behind it IS the fog.
         private static readonly Color MinimapVisitedColor = new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f);
         private static readonly Color MinimapCurrentColor = TechRingColor;
 
@@ -125,12 +124,18 @@ namespace MaxWorlds.UI
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
 
-        // Minimap (MV-264): the fog-of-war area strip. Built lazily from Update — not Awake — because
-        // BackyardPath loads its map in its own Awake, whose order relative to this one Unity does not
-        // promise; EnsureMinimapBuilt keeps retrying each frame until a map is actually there to read.
+        // Minimap (MV-264, spatial rework MV-341): a top-down room diagram scaled off the real
+        // MapZone footprints, with a marker tracking the player's live position. Built lazily from
+        // Update — not Awake — because BackyardPath loads its map in its own Awake, whose order
+        // relative to this one Unity does not promise; EnsureMinimapBuilt keeps retrying each frame
+        // until a map is actually there to read.
         private BackyardPath _backyardPath;
-        private Image[] _minimapPips;
+        private RectTransform _minimapFrame;
+        private Image[] _minimapZoneImages;
+        private RectTransform _minimapPlayerMarker;
         private Image _minimapBg;
+        private Rect _minimapAreaBounds;
+        private Vector2 _minimapFrameSize;
         private AreaVisibility[] _minimapStates = System.Array.Empty<AreaVisibility>();
         private int _minimapAreaCount;
         private int _shownMinimapArea = -1;
@@ -1133,25 +1138,26 @@ namespace MaxWorlds.UI
         /// of them. Empty until a map with area zones has actually loaded.</summary>
         public AreaVisibility[] MinimapStates => _minimapStates;
 
-        /// <summary>Test hook (MV-278): true once the strip has a visible backing panel behind its
-        /// pips, so the widget reads against any 3D background instead of the pips floating bare over
-        /// the world. False until a map with area zones has loaded and built the strip.</summary>
+        /// <summary>Test hook (MV-278): true once the minimap has a visible backing panel behind it,
+        /// so the widget reads against any 3D background instead of floating bare over the world.
+        /// False until a map with area zones has loaded and built the frame.</summary>
         public bool MinimapHasBackdrop => _minimapBg != null && _minimapBg.color.a > 0f;
 
         /// <summary>
-        /// The fog-of-war area strip (MV-264): reintroduces YT-217's minimap now that the v0.5 recut
-        /// replaced "a bounded single garden" with a 10-area gated arena — the scope YT-217 removed it
-        /// for no longer holds. One pip per "area&lt;N&gt;" zone the loaded map defines (never a
-        /// hardcoded ten), stacked under the ability slots — the one gap the top-right corner has left,
-        /// mirroring how <see cref="BuildHomeButton"/> found the top-left's.
+        /// The spatial minimap (MV-264 introduced the fog-of-war area strip; MV-341 redraws it as a
+        /// true top-down room diagram — the strip's tiny stacked pips read as decoration, not a map,
+        /// and gave no sense of the player's actual position). One rectangle per "area&lt;N&gt;" zone
+        /// the loaded map defines (never a hardcoded ten), scaled to its real footprint via
+        /// <see cref="MinimapModel.AreaBounds"/>/<see cref="MinimapModel.NormalizedZoneRect"/> and
+        /// placed under the ability slots — the same top-right gap the strip used.
         ///
         /// Deferred to <see cref="Update"/> rather than built in <see cref="Awake"/>: <see cref="BackyardPath"/>
         /// loads its map inside its own Awake, and Unity does not promise this component's Awake runs
-        /// after that one's. Idempotent — bails the instant it has built (or given up on) a strip.
+        /// after that one's. Idempotent — bails the instant it has built (or given up on) a map.
         /// </summary>
         private void EnsureMinimapBuilt()
         {
-            if (_minimapPips != null) return;
+            if (_minimapZoneImages != null) return;
 
             MapData map = _backyardPath != null ? _backyardPath.Map : null;
             if (map == null) return; // BackyardPath hasn't loaded its map yet — try again next frame
@@ -1159,65 +1165,108 @@ namespace MaxWorlds.UI
             _minimapAreaCount = MinimapModel.CountAreas(map);
             if (_minimapAreaCount <= 0)
             {
-                _minimapPips = System.Array.Empty<Image>(); // no area-gated map here — stop retrying
+                _minimapZoneImages = System.Array.Empty<Image>(); // no area-gated map here — stop retrying
                 return;
             }
 
-            const float PipSize = 16f, Spacing = 20f, BgPadding = 10f;
+            const float FrameSize = 200f, Padding = 14f;
+            _minimapAreaBounds = MinimapModel.AreaBounds(map);
+            _minimapFrameSize = new Vector2(FrameSize - Padding * 2f, FrameSize - Padding * 2f);
 
             var root = NewRect("Minimap", Root);
             Anchor(root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            root.sizeDelta = new Vector2(PipSize, _minimapAreaCount * Spacing);
-            root.anchoredPosition = new Vector2(-32f, -210f); // under the ability slots column
+            root.sizeDelta = new Vector2(FrameSize, FrameSize);
+            root.anchoredPosition = new Vector2(-24f, -210f); // under the ability slots column
 
             // A backing panel (MV-278): every other HUD readout — status bar, ability slots, utility
-            // icons — sits on a solid PanelColor backdrop. The pip strip alone was bare Image dots
-            // straight over the live 3D world, so a near-black Hidden pip (or even a Visited/Current
-            // one) could read as invisible against whatever terrain happened to be behind it. This
-            // gives the strip the same "unmistakably a HUD widget" backdrop as everything around it.
-            var bg = AddImage(root, HudTextures.RoundedBox(28, 0.3f), PanelColor, "Minimap BG");
-            Stretch(bg.rectTransform, BgPadding);
+            // icons — sits on a solid PanelColor backdrop, so a hidden (undrawn) room reads as fog
+            // rather than as a hole punched through to whatever terrain is behind the HUD.
+            var bg = AddImage(root, HudTextures.RoundedBox(28, 0.18f), PanelColor, "Minimap BG");
+            Stretch(bg.rectTransform);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = false;
             _minimapBg = bg;
 
-            _minimapPips = new Image[_minimapAreaCount];
-            for (int i = 0; i < _minimapAreaCount; i++)
+            _minimapFrame = NewRect("Frame", root);
+            Anchor(_minimapFrame, Vector2.zero, Vector2.zero, Vector2.zero);
+            _minimapFrame.sizeDelta = _minimapFrameSize;
+            _minimapFrame.anchoredPosition = new Vector2(Padding, Padding);
+
+            _minimapZoneImages = new Image[_minimapAreaCount];
+            foreach (MapZone zone in map.zones)
             {
-                var pip = AddImage(root, HudTextures.RoundedBox(16, 0.5f), MinimapHiddenColor, $"Area {i + 1}");
-                Anchor(pip.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-                pip.rectTransform.sizeDelta = new Vector2(PipSize, PipSize);
-                pip.rectTransform.anchoredPosition = new Vector2(0f, -i * Spacing);
-                pip.type = Image.Type.Sliced;
-                pip.raycastTarget = false;
-                _minimapPips[i] = pip;
+                if (zone == null) continue;
+                int areaIndex = AreaAccumulationDirector.AreaIndexOf(zone.id);
+                if (areaIndex <= 0 || areaIndex > _minimapAreaCount) continue;
+
+                Rect norm = MinimapModel.NormalizedZoneRect(_minimapAreaBounds, zone);
+                var room = AddImage(_minimapFrame, HudTextures.RoundedBox(16, 0.3f), MinimapVisitedColor, $"Area {areaIndex}");
+                Anchor(room.rectTransform, Vector2.zero, Vector2.zero, Vector2.zero);
+                room.rectTransform.anchoredPosition = new Vector2(norm.x * _minimapFrameSize.x, norm.y * _minimapFrameSize.y);
+                room.rectTransform.sizeDelta = new Vector2(
+                    Mathf.Max(8f, norm.width * _minimapFrameSize.x),
+                    Mathf.Max(8f, norm.height * _minimapFrameSize.y));
+                room.type = Image.Type.Sliced;
+                room.raycastTarget = false;
+                room.gameObject.SetActive(false); // fog-of-war: UpdateMinimap reveals it once reached
+                _minimapZoneImages[areaIndex - 1] = room;
             }
+
+            // The player marker (MV-341 AC: "showing the player's current position") — a bright dot
+            // with a soft glow, the same tech-ring cyan used for "this is you" elsewhere on the HUD.
+            _minimapPlayerMarker = NewRect("Player Marker", _minimapFrame);
+            Anchor(_minimapPlayerMarker, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+            _minimapPlayerMarker.sizeDelta = new Vector2(22f, 22f);
+
+            var glow = AddImage(_minimapPlayerMarker, HudTextures.Disc(32),
+                new Color(MinimapCurrentColor.r, MinimapCurrentColor.g, MinimapCurrentColor.b, 0.4f), "Glow");
+            Stretch(glow.rectTransform);
+            glow.raycastTarget = false;
+
+            var dot = AddImage(_minimapPlayerMarker, HudTextures.Disc(24), BoneWhite, "Dot");
+            Center(dot.rectTransform, 10f);
+            dot.raycastTarget = false;
+
+            UpdateMinimapPlayerMarker();
         }
 
-        /// <summary>Repaints the strip off the live <see cref="AreaAccumulationDirector.CurrentArea"/>
-        /// — only when it has actually changed, so a built strip costs nothing on the frames between
-        /// area entries.</summary>
+        /// <summary>Repaints the room rectangles off the live
+        /// <see cref="AreaAccumulationDirector.CurrentArea"/> — only when it has actually changed, so a
+        /// built map costs nothing on the frames between area entries — then updates the player marker
+        /// every frame so it tracks smoothly rather than snapping on area boundaries.</summary>
         private void UpdateMinimap()
         {
-            if (_minimapPips == null || _minimapPips.Length == 0) return;
+            if (_minimapZoneImages == null || _minimapZoneImages.Length == 0) return;
 
             int currentArea = 1;
             if (_backyardPath != null && _backyardPath.AreaDirector != null)
                 currentArea = _backyardPath.AreaDirector.CurrentArea;
 
-            if (currentArea == _shownMinimapArea) return;
-            _shownMinimapArea = currentArea;
-
-            _minimapStates = MinimapModel.BuildStates(_minimapAreaCount, currentArea);
-            for (int i = 0; i < _minimapPips.Length; i++)
+            if (currentArea != _shownMinimapArea)
             {
-                _minimapPips[i].color = _minimapStates[i] switch
+                _shownMinimapArea = currentArea;
+                _minimapStates = MinimapModel.BuildStates(_minimapAreaCount, currentArea);
+                for (int i = 0; i < _minimapZoneImages.Length; i++)
                 {
-                    AreaVisibility.Current => MinimapCurrentColor,
-                    AreaVisibility.Visited => MinimapVisitedColor,
-                    _ => MinimapHiddenColor,
-                };
+                    Image room = _minimapZoneImages[i];
+                    if (room == null) continue;
+
+                    AreaVisibility state = _minimapStates[i];
+                    room.gameObject.SetActive(state != AreaVisibility.Hidden); // fog-of-war
+                    room.color = state == AreaVisibility.Current ? MinimapCurrentColor : MinimapVisitedColor;
+                }
             }
+
+            UpdateMinimapPlayerMarker();
+        }
+
+        private void UpdateMinimapPlayerMarker()
+        {
+            if (_minimapPlayerMarker == null || _player == null) return;
+
+            Vector3 pos = _player.transform.position;
+            Vector2 norm = MinimapModel.NormalizedPosition(_minimapAreaBounds, pos.x, pos.z);
+            _minimapPlayerMarker.anchoredPosition = new Vector2(norm.x * _minimapFrameSize.x, norm.y * _minimapFrameSize.y);
         }
 
         /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
