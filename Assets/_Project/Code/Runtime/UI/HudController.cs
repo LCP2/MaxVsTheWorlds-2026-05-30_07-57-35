@@ -900,7 +900,7 @@ namespace MaxWorlds.UI
             int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon);
             Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, WaterBalloonJoystickRise);
             _waterBalloonVisual = AbilityControlArt.BuildJoystick(
-                Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, level, maxLevel);
+                Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, "Balloon", level, maxLevel);
             _waterBalloonRoot = _waterBalloonVisual.Root;
 
             // Cooldown wipe, identical treatment to the other controls so the three read as one

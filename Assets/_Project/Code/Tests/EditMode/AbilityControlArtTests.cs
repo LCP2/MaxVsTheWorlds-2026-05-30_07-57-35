@@ -101,8 +101,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AHigherLevelJoystickIsBiggerAndBrighter()
         {
-            var low = AbilityControlArt.BuildJoystick(_canvas, "Low", Vector2.zero, Color.blue, 1, 3);
-            var high = AbilityControlArt.BuildJoystick(_canvas, "High", Vector2.zero, Color.blue, 3, 3);
+            var low = AbilityControlArt.BuildJoystick(_canvas, "Low", Vector2.zero, Color.blue, "Balloon", 1, 3);
+            var high = AbilityControlArt.BuildJoystick(_canvas, "High", Vector2.zero, Color.blue, "Balloon", 3, 3);
 
             Assert.Greater(high.Root.sizeDelta.x, low.Root.sizeDelta.x,
                 "a maxed Water Balloon joystick must read bigger than a freshly-acquired one");
@@ -114,14 +114,22 @@ namespace MaxWorlds.Tests.EditMode
         public void TheJoystickKnobStartsCentred()
         {
             // WV-240 drives the knob from drag input; the art must not pre-bake an offset.
-            var v = AbilityControlArt.BuildJoystick(_canvas, "Joy", Vector2.zero, Color.blue, 1, 3);
+            var v = AbilityControlArt.BuildJoystick(_canvas, "Joy", Vector2.zero, Color.blue, "Balloon", 1, 3);
             Assert.AreEqual(Vector2.zero, v.Knob.anchoredPosition);
+        }
+
+        [Test]
+        public void TheJoystickShowsItsGivenLabel()
+        {
+            // MV-337: the Water Balloon joystick must name itself, unlike the unlabelled move/aim sticks.
+            var v = AbilityControlArt.BuildJoystick(_canvas, "Joy", Vector2.zero, Color.blue, "Balloon", 1, 3);
+            Assert.AreEqual("Balloon", v.Label.text);
         }
 
         [Test]
         public void DetailPipsStayInsideTheControlsOwnRadius()
         {
-            var v = AbilityControlArt.BuildJoystick(_canvas, "Joy", Vector2.zero, Color.blue, 3, 3);
+            var v = AbilityControlArt.BuildJoystick(_canvas, "Joy", Vector2.zero, Color.blue, "Balloon", 3, 3);
             float maxRadius = v.Root.sizeDelta.x * 0.5f;
 
             foreach (Transform child in v.Root)
