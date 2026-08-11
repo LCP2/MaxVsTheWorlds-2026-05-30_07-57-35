@@ -379,6 +379,11 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier),
                 v => DevTuning.RobotHealthMultiplier = v, tab: TabEnemies);
 
+            // MV-321: how far apart a chasing pack keeps itself — see EnemySeparation for the maths.
+            Add("Robot min spacing", "m", 0f, 4f, EnemySeparation.DefaultMinDistance,
+                () => DevTuning.Or(DevTuning.RobotMinSeparation, EnemySeparation.DefaultMinDistance),
+                v => DevTuning.RobotMinSeparation = v, tab: TabEnemies);
+
             // Swarm pacing (YT-194): a couple of robots at run start (not a swarm), an intuitive
             // production unit, and a real toughness knob. Both read live off the factory.
             float startingRobotsDefault = StartingRobotsDefault();
