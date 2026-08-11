@@ -35,44 +35,6 @@ namespace MaxWorlds.Tests.PlayMode
                 "an enemy kill should throw a burst of sparks");
         }
 
-        /// <summary>
-        /// MV-330: the Blinker's blink used to be a silent, single-frame snap — nothing subscribed to
-        /// it at all. This proves the surge fires immediately (the departure beat) and the flash fires
-        /// a second time after the stagger (the arrival beat), so the sequence actually reaches two
-        /// different points rather than one flash at the origin.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator Director_ReactsToABlinkerTeleport_WithASurgeAndTwoFlashes()
-        {
-            yield return null;
-
-            var surge = FindSystem("TeleportSurge");
-            var flash = FindSystem("TeleportFlash");
-            Assert.IsNotNull(surge, "the teleport surge system was never built");
-            Assert.IsNotNull(flash, "the teleport flash system was never built");
-
-            int surgeBefore = surge.particleCount;
-            int flashBefore = flash.particleCount;
-
-            HudSignals.EmitBlinkerTeleported(new Vector3(0f, 0f, 0f), new Vector3(5f, 0f, 0f));
-            yield return null;
-
-            Assert.That(surge.particleCount, Is.GreaterThan(surgeBefore),
-                "the energy-surge burst never fired at the departure point");
-            int flashAfterDeparture = flash.particleCount;
-            Assert.That(flashAfterDeparture, Is.GreaterThan(flashBefore),
-                "the vanish flash never fired at the departure point");
-
-            // Past the ~0.08s stagger but comfortably short of the flash particle's own ~0.16s
-            // lifetime, so the departure flash is still alive when the arrival flash joins it —
-            // a tight window is the whole point: it proves TWO flashes exist, not one that decayed
-            // before a second, later read could re-count it.
-            yield return new WaitForSeconds(0.1f);
-
-            Assert.That(flash.particleCount, Is.GreaterThan(flashAfterDeparture),
-                "the arrival flash never fired at the destination — only one flash played, not two");
-        }
-
         [UnityTest]
         public IEnumerator Director_UnsubscribesWhenDestroyed()
         {

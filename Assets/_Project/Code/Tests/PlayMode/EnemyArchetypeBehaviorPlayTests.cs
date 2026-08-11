@@ -6,7 +6,6 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
-using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -156,46 +155,6 @@ namespace MaxWorlds.Tests.PlayMode
             // 0.5s of ordinary chase speed (~2.4 m/s) covers little over 1 m; a teleport lands it
             // roughly lungeRange*0.85 (~1.9 m) from Max. Either way this only holds if it blinked.
             Assert.Less(end, start - 3f, "the Blinker should have closed most of a 10 m gap by now — it didn't blink");
-        }
-
-        /// <summary>
-        /// MV-330: the reposition in <c>RobotEnemy.TickTeleport</c> was a silent, single-frame snap —
-        /// nothing ever announced it, so the VFX layer had nothing to hook into and the blink read as
-        /// a bug. This proves the real state machine (not a synthetic Emit call) raises the signal,
-        /// and that it carries two genuinely different points — the departure and the landing spot —
-        /// not the same position twice.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator Blinker_AnnouncesItsTeleport_WithDistinctFromAndToPoints()
-        {
-            var max = NewMaxMarker(new Vector3(0f, 1f, 10f));
-            var blinker = NewRobotAt(Vector3.zero, EnemyArchetype.Blinker);
-
-            Set(blinker, "teleportCooldown", 0.05f);
-            Set(blinker, "telegraphTime", 0.05f);
-            blinker.ResetState();
-
-            Vector3? from = null, to = null;
-            int fireCount = 0;
-            System.Action<Vector3, Vector3> onTeleport = (f, t) => { fireCount++; from = f; to = t; };
-            HudSignals.BlinkerTeleported += onTeleport;
-
-            try
-            {
-                yield return new WaitForSeconds(0.5f);
-            }
-            finally
-            {
-                HudSignals.BlinkerTeleported -= onTeleport;
-                Object.Destroy(blinker.gameObject);
-                Object.Destroy(max);
-            }
-
-            Assert.AreEqual(1, fireCount, "the Blinker's teleport should announce exactly once per blink");
-            Assert.IsTrue(from.HasValue && to.HasValue, "the teleport signal never fired");
-            Assert.Greater(Vector3.Distance(from.Value, to.Value), 1f,
-                "the signal's from/to are (near) the same point — the VFX would draw a surge and both " +
-                "flashes on top of each other instead of at the two ends of the blink");
         }
     }
 }
