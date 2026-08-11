@@ -12,7 +12,9 @@ namespace MaxWorlds.Core
                  "— see Awake.")]
         [SerializeField] private int targetFrameRate = 60;
 
-        [Tooltip("Draw an on-screen FPS readout — smoke-build verification (YT-32).")]
+        [Tooltip("Draw an on-screen FPS readout — smoke-build verification (YT-32). Auto-hidden on " +
+                 "the iOS player build regardless of this flag (MV-342); this just lets a dev/QA " +
+                 "build turn it off too.")]
         [SerializeField] private bool showFps = true;
 
         [Tooltip("Also print the frame rate to the log every couple of seconds. This is how the " +
@@ -64,9 +66,22 @@ namespace MaxWorlds.Core
             Debug.Log($"[FPS] {_meter.Fps:0.0} fps  ({ms:0.0} ms/frame)");
         }
 
+        /// <summary>Real players only ever see the iOS TestFlight/App Store build — the WebGL Pages
+        /// link, the cc-verify Windows standalone and the Editor are all dev/QA surfaces, which is
+        /// exactly where this smoke-verification readout (YT-32/YT-62) belongs (MV-342). Hiding it on
+        /// the iOS player build, and nowhere else, needs no CI change: Unity already stamps
+        /// UNITY_IOS/Application.platform per target, so there is nothing to inject mid-build (the
+        /// last attempt at that, YT-120, dirtied the git tree and tripped the version guard).</summary>
+        public static bool ShouldShowDebugOverlay(bool showFpsFlag, RuntimePlatform platform, bool isEditor)
+        {
+            if (!showFpsFlag) return false;
+            if (isEditor) return true;
+            return platform != RuntimePlatform.IPhonePlayer;
+        }
+
         private void OnGUI()
         {
-            if (!showFps) return;
+            if (!ShouldShowDebugOverlay(showFps, Application.platform, Application.isEditor)) return;
 
             _fpsStyle ??= new GUIStyle(GUI.skin.label)
             {
