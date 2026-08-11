@@ -48,6 +48,12 @@ namespace MaxWorlds.Feel
         [Tooltip("Recoil per fire tick while the stream is on.")]
         [SerializeField] private float fireKick = 0.05f;
 
+        [Header("Missile (MV-349)")]
+        [Tooltip("Trauma per point of damage a missile actually dealt — proportionate feedback per " +
+                 "AC2, so a graze and a full hit don't feel the same, and a miss (0 damage) is silent.")]
+        [SerializeField] private float missileTraumaPerDamage = 0.008f;
+        [SerializeField] private float missileMaxTrauma = 0.35f;
+
         [Header("Teleport")]
         [Tooltip("MV-338 AC3: a brief slow-mo while Max's teleport VFX plays. Noticeably softer than a " +
                  "kill/factory hit-stop (which reads as a near-freeze) — this has to read as time " +
@@ -72,6 +78,7 @@ namespace MaxWorlds.Feel
             HudSignals.FactoryDestroyed += OnFactory;
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.MaxTeleported += OnMaxTeleported;
+            HudSignals.MissileImpact += OnMissileImpact;
         }
 
         private void OnDisable()
@@ -81,6 +88,7 @@ namespace MaxWorlds.Feel
             HudSignals.FactoryDestroyed -= OnFactory;
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.MaxTeleported -= OnMaxTeleported;
+            HudSignals.MissileImpact -= OnMissileImpact;
         }
 
         /// <summary>The shake lives on the camera, not here — it has to run after the Cinemachine
@@ -117,6 +125,15 @@ namespace MaxWorlds.Feel
         {
             Shake()?.AddTrauma(bossDefeatTrauma);
             TryStop(bigStopSeconds, bigStopScale);
+        }
+
+        /// <summary>AC2's "screen feedback proportionate to the damage": a miss (the blast landed on
+        /// empty ground, damage 0) is silent, and a real hit shakes in proportion to what it actually
+        /// dealt rather than a single flat jolt every time.</summary>
+        private void OnMissileImpact(Vector3 pos, float damage)
+        {
+            if (damage <= 0f) return;
+            Shake()?.AddTrauma(Mathf.Min(missileMaxTrauma, missileTraumaPerDamage * damage));
         }
 
         /// <summary>MV-338 AC3. Requests directly rather than through <see cref="TryStop"/> — Teleport

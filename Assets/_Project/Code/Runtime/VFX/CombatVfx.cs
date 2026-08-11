@@ -55,6 +55,15 @@ namespace MaxWorlds.VFX
         private static readonly Color MaxTeleportDeep = new Color(0.5f, 0.35f, 0.98f, 1f);
         private static readonly Color MaxTeleportFlashColor = new Color(0.95f, 0.97f, 1f, 1f);
 
+        // The Bomber's missile (MV-349): its own hot-orange palette, distinct from the factory's fire
+        // so a missile hit reads as ITS OWN kind of event rather than a re-skinned factory boom.
+        private static readonly Color MissileFlashColor = new Color(1f, 0.95f, 0.75f, 1f);
+        private static readonly Color MissileBlastHot = new Color(1f, 0.62f, 0.22f, 1f);
+        private static readonly Color MissileBlastDeep = new Color(0.85f, 0.28f, 0.08f, 1f);
+        private static readonly Color MissileScorchColor = new Color(0.14f, 0.12f, 0.10f, 0.85f);
+        private static readonly Color MissileSputterSmoke = new Color(0.25f, 0.22f, 0.20f, 0.7f);
+        private static readonly Color MissileBounceDust = new Color(0.55f, 0.50f, 0.42f, 0.6f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -67,6 +76,12 @@ namespace MaxWorlds.VFX
         private VfxBurst _maxTeleportSurge; // Max: bigger energy surge, both ends
         private VfxBurst _maxTeleportShock; // Max: flat shockwave ring racing outward, both ends
         private VfxBurst _maxTeleportFlash; // Max: bigger vanish/reappear pop, both ends
+        private VfxBurst _missileFlash;     // missile: the pop of detonation
+        private VfxBurst _missileBlast;     // missile: expanding fire
+        private VfxBurst _missileDebris;    // missile: dark chunks off the blast
+        private VfxBurst _missileScorch;    // missile: the ground tell that outlives the blast
+        private VfxBurst _missileSputter;   // missile: dying thrust, just before it drops
+        private VfxBurst _missileBounceDust; // missile: a kick of dust each time it hits the ground
 
         private PlayerController _player;
         private Vector3 _lastDashPos;
@@ -92,6 +107,12 @@ namespace MaxWorlds.VFX
             _maxTeleportSurge = new VfxBurst("MaxTeleportSurge", additive, 220, 0f, perFrameCap: 4, stretched: true);
             _maxTeleportShock = new VfxBurst("MaxTeleportShockwave", additive, 160, 0f, perFrameCap: 4, stretched: true);
             _maxTeleportFlash = new VfxBurst("MaxTeleportFlash", additive, 40, 0f, perFrameCap: 8);
+            _missileFlash = new VfxBurst("MissileFlash", additive, 24, 0f, perFrameCap: 6);
+            _missileBlast = new VfxBurst("MissileBlast", additive, 140, -0.1f, perFrameCap: 6);
+            _missileDebris = new VfxBurst("MissileDebris", solid, 90, 2.2f, perFrameCap: 6);
+            _missileScorch = new VfxBurst("MissileScorch", solid, 24, 0f, perFrameCap: 6);
+            _missileSputter = new VfxBurst("MissileSputter", soft, 60, 0.4f, perFrameCap: 6);
+            _missileBounceDust = new VfxBurst("MissileBounceDust", soft, 80, 1f, perFrameCap: 8);
         }
 
         private void OnEnable()
@@ -101,6 +122,9 @@ namespace MaxWorlds.VFX
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
             HudSignals.BlinkerTeleported += OnBlinkerTeleported;
             HudSignals.MaxTeleported += OnMaxTeleported;
+            HudSignals.MissileImpact += OnMissileImpact;
+            HudSignals.MissileSputtering += OnMissileSputtering;
+            HudSignals.MissileBounced += OnMissileBounced;
         }
 
         private void OnDisable()
@@ -112,6 +136,9 @@ namespace MaxWorlds.VFX
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
             HudSignals.BlinkerTeleported -= OnBlinkerTeleported;
             HudSignals.MaxTeleported -= OnMaxTeleported;
+            HudSignals.MissileImpact -= OnMissileImpact;
+            HudSignals.MissileSputtering -= OnMissileSputtering;
+            HudSignals.MissileBounced -= OnMissileBounced;
         }
 
         private void OnDestroy()
@@ -120,6 +147,8 @@ namespace MaxWorlds.VFX
             Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke); Dispose(_dash);
             Dispose(_teleportSurge); Dispose(_teleportFlash);
             Dispose(_maxTeleportSurge); Dispose(_maxTeleportShock); Dispose(_maxTeleportFlash);
+            Dispose(_missileFlash); Dispose(_missileBlast); Dispose(_missileDebris);
+            Dispose(_missileScorch); Dispose(_missileSputter); Dispose(_missileBounceDust);
         }
 
         // --- events ---
@@ -327,6 +356,65 @@ namespace MaxWorlds.VFX
             lifeMin: 0.2f, lifeMax: 0.2f,
             colorA: MaxTeleportFlashColor, colorB: MaxTeleportFlashColor);
 
+        // --- the Bomber's missile (MV-349) ---
+
+        /// <summary>The detonation itself — direct hit or ground impact, they use the same beat. A
+        /// flash for the pop, an expanding blast for the punch, dark debris for weight, and a scorch
+        /// mark that OUTLIVES the blast so a peripheral-vision glance still reads "hit by a missile"
+        /// after the burst itself has faded (AC2's "screen feedback proportionate to the damage" is
+        /// handled separately, by <c>GameFeel</c>, off this same signal).</summary>
+        private void OnMissileImpact(Vector3 pos, float damage)
+        {
+            Vector3 at = pos + Vector3.up * 0.15f;
+
+            _missileFlash.Emit(at, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: 1.1f, sizeMax: 1.1f,
+                lifeMin: 0.12f, lifeMax: 0.12f,
+                colorA: MissileFlashColor, colorB: MissileFlashColor);
+
+            _missileBlast.Emit(at, 24,
+                axis: Vector3.up, spreadDegrees: 100f,
+                speedMin: 3f, speedMax: 8f,
+                sizeMin: 0.28f, sizeMax: 0.7f,
+                lifeMin: 0.22f, lifeMax: 0.4f,
+                colorA: MissileBlastHot, colorB: MissileBlastDeep);
+
+            _missileDebris.Emit(at, 10,
+                axis: Vector3.up, spreadDegrees: 75f,
+                speedMin: 2f, speedMax: 6f,
+                sizeMin: 0.10f, sizeMax: 0.22f,
+                lifeMin: 0.35f, lifeMax: 0.6f,
+                colorA: Debris, colorB: MissileBlastDeep);
+
+            _missileScorch.Emit(pos, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: 1.4f, sizeMax: 1.4f,
+                lifeMin: 1.1f, lifeMax: 1.1f,
+                colorA: MissileScorchColor, colorB: MissileScorchColor);
+        }
+
+        /// <summary>Thrust cutting out (AC3): a dying puff off the tail the instant it gives up the
+        /// chase, before it starts to fall — the visual half of "sputter", the deceleration in
+        /// <c>HomingMissile.TickSputtering</c> is the other half.</summary>
+        private void OnMissileSputtering(Vector3 pos) => _missileSputter.Emit(pos, 10,
+            axis: Vector3.up, spreadDegrees: 60f,
+            speedMin: 0.4f, speedMax: 1.6f,
+            sizeMin: 0.14f, sizeMax: 0.3f,
+            lifeMin: 0.3f, lifeMax: 0.5f,
+            colorA: MissileSputterSmoke, colorB: Smoke);
+
+        /// <summary>A small kick of dust on each hop — without it the bounce sequence is silent until
+        /// the final boom, and a silent bounce reads as a glitch, not a gag.</summary>
+        private void OnMissileBounced(Vector3 pos) => _missileBounceDust.Emit(pos, 6,
+            axis: Vector3.up, spreadDegrees: 70f,
+            speedMin: 1f, speedMax: 3f,
+            sizeMin: 0.12f, sizeMax: 0.26f,
+            lifeMin: 0.2f, lifeMax: 0.35f,
+            colorA: MissileBounceDust, colorB: Debris);
+
         // --- dash trail ---
 
         private void Update()
@@ -368,6 +456,8 @@ namespace MaxWorlds.VFX
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
             _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame(); _dash.EndFrame();
             _teleportSurge.EndFrame(); _teleportFlash.EndFrame();
+            _missileFlash.EndFrame(); _missileBlast.EndFrame(); _missileDebris.EndFrame();
+            _missileScorch.EndFrame(); _missileSputter.EndFrame(); _missileBounceDust.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)
