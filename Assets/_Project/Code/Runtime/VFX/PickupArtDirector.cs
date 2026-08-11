@@ -348,6 +348,11 @@ namespace MaxWorlds.VFX
                 art.transform.localScale = Vector3.one * WeaponPartArt.HydroDeviceGroundScale;
             else if (key == WeaponPartArt.Keys.PowerCell)
                 art.transform.localScale = Vector3.one * WeaponPartArt.PowerCellGroundScale;
+            else
+                // MV-326: every other key reaching here is one of the machine-internals designs a Part
+                // pickup wears — give it its own ground scale so it reads unmistakably larger than the
+                // power cell, not just differently shaped/coloured.
+                art.transform.localScale = Vector3.one * WeaponPartArt.PartGroundScale;
             return art.transform;
         }
 

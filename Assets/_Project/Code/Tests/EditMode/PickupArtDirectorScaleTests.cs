@@ -58,5 +58,30 @@ namespace MaxWorlds.Tests.EditMode
 
             Object.DestroyImmediate(pickup.gameObject);
         }
+
+        /// <summary>
+        /// MV-326 — a dropped Part's machine-internals design had no ground multiplier at all, so it
+        /// rendered at its authored size while the power cell above was already scaled up 1.4x — the
+        /// part ended up SMALLER than the cell despite already having a distinct shape/colour, which is
+        /// exactly the "look like two identical cells" confusion the ticket reports. <see
+        /// cref="WeaponPartArt.PartGroundScale"/> fixes that; this asserts it applies and stays bigger
+        /// than the cell's own multiplier so the AC's "and larger" holds for every part design, not just
+        /// the one checked here.
+        /// </summary>
+        [Test]
+        public void Part_BuiltArt_IsScaledUpAndLargerThanThePowerCell()
+        {
+            var pickup = BarePickup();
+
+            var art = InvokeBuild(pickup, WeaponPartArt.Keys.Gear);
+
+            Assert.IsNotNull(art, "the part prop failed to build");
+            Assert.AreEqual(WeaponPartArt.PartGroundScale, art.localScale.x, 1e-4f,
+                "a dropped part's ground art should be scaled up by its own multiplier (MV-326).");
+            Assert.Greater(WeaponPartArt.PartGroundScale, WeaponPartArt.PowerCellGroundScale,
+                "a part must read larger than a power cell on the ground (MV-326 AC).");
+
+            Object.DestroyImmediate(pickup.gameObject);
+        }
     }
 }
