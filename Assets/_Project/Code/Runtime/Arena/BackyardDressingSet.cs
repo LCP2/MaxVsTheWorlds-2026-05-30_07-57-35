@@ -484,7 +484,14 @@ namespace MaxWorlds.Arena
         /// <summary>A plantable prop and the range of heights it looks right at. The heights are the
         /// AUTHORED intent; <see cref="EdgeRun"/> still shrinks anything whose footprint would
         /// otherwise reach out of the edge band, so a new entry here can't quietly put a shrub in the
-        /// middle of the lawn.</summary>
+        /// middle of the lawn.
+        ///
+        /// MV-317: <see cref="PropCatalog.PotLarge"/> is deliberately absent. It is a squat wood tub
+        /// (~2.8x wider than tall, kit-authored) painted the same dark red-brown every timber prop
+        /// wears — placed alone here, with no bush or path around it for context, it reads at the
+        /// fixed 72 camera as a plain ball on the grass, indistinguishable from a pickup. It stays in
+        /// <see cref="MaxWorlds.Arena.BackyardDressing.DressCover"/>'s Planter case, where four bushes
+        /// around it give it away as a planter.</summary>
         private readonly struct EdgeItem
         {
             public readonly string Key;
@@ -509,7 +516,6 @@ namespace MaxWorlds.Arena
             new EdgeItem(PropCatalog.RockSmallA, 0.30f, 0.50f),
             new EdgeItem(PropCatalog.RockSmallB, 0.30f, 0.50f),
             new EdgeItem(PropCatalog.RockFlat, 0.15f, 0.25f),
-            new EdgeItem(PropCatalog.PotLarge, 0.25f, 0.35f),
             new EdgeItem(PropCatalog.PotSmall, 0.40f, 0.60f),
             new EdgeItem(PropCatalog.Stump, 0.35f, 0.55f),
             new EdgeItem(PropCatalog.Log, 0.25f, 0.35f),
@@ -734,11 +740,12 @@ namespace MaxWorlds.Arena
                                       factory + new Vector2(HalfWidth, BackZ - WingLength * 0.5f),
                                       Wall(WingLength), -90f, DressingZone.Factory));
 
-            // The woodpile and pots you'd expect beside a garden shed — tucked in behind the corners,
+            // The woodpile and pot you'd expect beside a garden shed — tucked in behind the corners,
             // where they dress the silhouette without ever standing between the player and the core.
+            // MV-317: PotLarge dropped from this corner — see the note on EdgeItems above, the same
+            // squat-tub-reads-as-a-ball problem, and this spot had no bush to give it away either.
             Clutter(into, PropCatalog.LogStack, factory + new Vector2(-2.2f, 0.8f), 0.5f, 0f);
             Clutter(into, PropCatalog.Stump, factory + new Vector2(-2.05f, 1.4f), 0.35f, 0f);
-            Clutter(into, PropCatalog.PotLarge, factory + new Vector2(2.1f, 0.7f), 0.35f, 0f);
             Clutter(into, PropCatalog.PotSmall, factory + new Vector2(2f, 1.3f), 0.42f, 30f);
         }
 

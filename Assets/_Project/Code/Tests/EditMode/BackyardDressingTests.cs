@@ -131,6 +131,20 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        /// <summary>MV-317: a solid, matte, dark red-brown ball was showing up on the lawn with no
+        /// cyan core and no CollectibleGlow — mistakable for a pickup. It turned out to be
+        /// <see cref="PropCatalog.PotLarge"/>, a squat wood tub (~2.8x wider than tall) placed loose,
+        /// with nothing around it to read as "a pot". This generator must never place one in
+        /// isolation again — it stays only in <c>BackyardDressing.DressCover</c>'s Planter case, which
+        /// surrounds it with bushes.</summary>
+        [Test]
+        public void NoLoosePotBallsOnTheLawn()
+        {
+            Assert.IsFalse(Set().Any(p => p.Key == PropCatalog.PotLarge),
+                "PotLarge was re-added as loose clutter — it reads as a plain ball at the play camera " +
+                "with nothing around it for context (MV-317)");
+        }
+
         [Test]
         public void EveryPropIsAModelWeActuallyHave()
         {
