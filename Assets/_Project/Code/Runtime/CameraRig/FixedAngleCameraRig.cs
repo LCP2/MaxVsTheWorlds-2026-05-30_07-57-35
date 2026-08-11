@@ -18,6 +18,9 @@ namespace MaxWorlds.CameraRig
     ///
     /// MV-276 then dialled it 10% closer/tighter ("110% zoom") from that 25.1 m — both the desktop
     /// and phone defaults now sit at 1/1.1 of their previous distance; see <see cref="ZoomFactor"/>.
+    ///
+    /// MV-315 re-baked the desktop/WebGL default again, to 108% of the MV-276 number — Lee's
+    /// dialled-in tuning-panel value from the 0.6.2 WebGL playtest. Phone is untouched.
     /// </summary>
     public sealed class FixedAngleCameraRig : MonoBehaviour
     {
@@ -27,8 +30,10 @@ namespace MaxWorlds.CameraRig
         public const float MaxDistance = 45f;
 
         /// <summary>The committed distances before MV-276's zoom bump — kept as named baselines so
-        /// the "110% zoom" claim is checkable arithmetic instead of a remembered pair of numbers.</summary>
-        private const float PreZoomDesktopDistance = 25.1f;
+        /// the "110% zoom" claim is checkable arithmetic instead of a remembered pair of numbers.
+        /// MV-315 scaled the desktop baseline itself (25.1 -> 27.108, i.e. 108%) so the derived
+        /// desktop default stays this one line to change.</summary>
+        private const float PreZoomDesktopDistance = 27.108f;
         private const float PreZoomPhoneDistance = 16.1f;
 
         /// <summary>MV-276 tuning: "110% zoom" reads as 10% closer/tighter, i.e. both device

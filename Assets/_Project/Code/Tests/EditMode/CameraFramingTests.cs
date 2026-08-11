@@ -13,9 +13,10 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class CameraFramingTests
     {
-        /// <summary>The committed starting distance (post-MV-276). Kept in step with the scene by
-        /// <see cref="TheSceneAndTheCodeAgreeOnTheZoom"/>.</summary>
-        private const float Distance = 25.1f / FixedAngleCameraRig.ZoomFactor;
+        /// <summary>The post-MV-276 distance — a historical baseline, kept as its own named number
+        /// so the "10% closer" claim stays checkable arithmetic even after MV-315 re-baked the
+        /// actually-committed default (<see cref="CommittedDistance"/>) further.</summary>
+        private const float PostMV276Distance = 25.1f / FixedAngleCameraRig.ZoomFactor;
 
         [Test]
         public void ThePullBackShowsHalfAgainAsMuchArena_BeforeMV276TightenedItFurther()
@@ -23,27 +24,27 @@ namespace MaxWorlds.Tests.EditMode
             // The ticket asked for ~1.5x the visible AREA. Area goes as distance squared, so the
             // move is √1.5 ≈ 1.22x, not 1.5x — pulling back 1.5x would have shown 2.25x the ground
             // and left Max an ant in a wide shot. MV-276 then dialled 10% closer/tighter from that
-            // 25.1 m YT-82 pull-back, so the CURRENT committed distance is this / ZoomFactor.
+            // 25.1 m YT-82 pull-back, so the post-MV-276 distance is this / ZoomFactor.
             float yt82Distance = CameraFraming.DistanceForAreaScale(
                 CameraFraming.PreviousDistance, CameraFraming.TargetAreaScale);
 
             Assert.AreEqual(25.1f, yt82Distance, 0.1f,
                 "the YT-82 area-scale target no longer lands on the historical 25.1m baseline");
-            Assert.AreEqual(yt82Distance / FixedAngleCameraRig.ZoomFactor, Distance, 0.1f,
-                "the committed distance no longer sits 10% closer than the YT-82 baseline (MV-276)");
+            Assert.AreEqual(yt82Distance / FixedAngleCameraRig.ZoomFactor, PostMV276Distance, 0.1f,
+                "the post-MV-276 distance no longer sits 10% closer than the YT-82 baseline");
         }
 
         [Test]
         public void TheMV276ZoomBumpIsExactlyOneTenthCloser()
         {
-            Assert.AreEqual(1.1f, 25.1f / Distance, 0.01f,
+            Assert.AreEqual(1.1f, 25.1f / PostMV276Distance, 0.01f,
                 "MV-276: the camera should render at 1.1x the pre-MV-276 zoom");
         }
 
         [Test]
         public void ItIsAPullBack_NotAPushIn()
         {
-            Assert.Greater(Distance, CameraFraming.PreviousDistance,
+            Assert.Greater(PostMV276Distance, CameraFraming.PreviousDistance,
                 "YT-82 is a pull-back; this is closer than the build Lee complained about");
         }
 
@@ -65,7 +66,7 @@ namespace MaxWorlds.Tests.EditMode
             // height:back ratio IS the pitch, so if it survives the move, the angle did.
             float tan = Mathf.Tan(72f * Mathf.Deg2Rad);
             var before = FixedAngleCameraRig.ComputeOffset(CameraFraming.PreviousDistance, 72f);
-            var after = FixedAngleCameraRig.ComputeOffset(Distance, 72f);
+            var after = FixedAngleCameraRig.ComputeOffset(CommittedDistance(), 72f);
 
             Assert.AreEqual(tan, before.y / -before.z, 1e-3);
             Assert.AreEqual(tan, after.y / -after.z, 1e-3, "the pull-back tilted the camera");
@@ -88,8 +89,9 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheNudgeRangeBracketsTheCommittedFraming_SoThereIsRoomToTuneBothWays()
         {
-            Assert.Less(FixedAngleCameraRig.MinDistance, Distance, "no room to zoom back in");
-            Assert.Greater(FixedAngleCameraRig.MaxDistance, Distance, "no room to pull further out");
+            float d = CommittedDistance();
+            Assert.Less(FixedAngleCameraRig.MinDistance, d, "no room to zoom back in");
+            Assert.Greater(FixedAngleCameraRig.MaxDistance, d, "no room to pull further out");
         }
 
         // --- The live knob (dev-mode [ / ]) -------------------------------------------------------
@@ -100,24 +102,36 @@ namespace MaxWorlds.Tests.EditMode
             return go.AddComponent<FixedAngleCameraRig>();
         }
 
+        /// <summary>The actually-committed desktop default, read live off a fresh rig rather than a
+        /// literal kept in this file — the literal is exactly what drifted out of step with the code
+        /// when MV-315 re-baked the desktop distance.</summary>
+        private static float CommittedDistance()
+        {
+            var rig = NewRig(out var go);
+            try { return rig.Distance; }
+            finally { Object.DestroyImmediate(go); }
+        }
+
         [Test]
         public void TheKnobStartsWhereTheCommittedFramingIs()
         {
+            float committed = CommittedDistance();
             var rig = NewRig(out var go);
-            try { Assert.AreEqual(Distance, rig.Distance, 1e-3); }
+            try { Assert.AreEqual(committed, rig.Distance, 1e-3); }
             finally { Object.DestroyImmediate(go); }
         }
 
         [Test]
         public void NudgingMovesTheCameraInAndOut()
         {
+            float start = CommittedDistance();
             var rig = NewRig(out var go);
             try
             {
                 rig.Nudge(3f);
-                Assert.AreEqual(Distance + 3f, rig.Distance, 1e-3);
+                Assert.AreEqual(start + 3f, rig.Distance, 1e-3);
                 rig.Nudge(-5f);
-                Assert.AreEqual(Distance - 2f, rig.Distance, 1e-3);
+                Assert.AreEqual(start - 2f, rig.Distance, 1e-3);
             }
             finally { Object.DestroyImmediate(go); }
         }

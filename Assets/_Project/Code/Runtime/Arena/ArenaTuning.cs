@@ -11,8 +11,9 @@ namespace MaxWorlds.Arena
         /// <summary>Sequential outdoor rooms in a run (<c>areaCount</c>).</summary>
         public const float DefaultAreaCount = 10f;
 
-        /// <summary>Sustained primary fire, seconds, to break a gate (<c>gateBreakSeconds</c>).</summary>
-        public const float DefaultGateBreakSeconds = 4f;
+        /// <summary>Sustained primary fire, seconds, to break a gate (<c>gateBreakSeconds</c>).
+        /// MV-315: re-baked to 46% of the original 4s, from the tuning panel.</summary>
+        public const float DefaultGateBreakSeconds = 1.84f;
 
         /// <summary>Whether a gate requires its room cleared of robots before it can be attacked
         /// (<c>gateRequiresClear</c>) — off by default, stored as 0/1.</summary>

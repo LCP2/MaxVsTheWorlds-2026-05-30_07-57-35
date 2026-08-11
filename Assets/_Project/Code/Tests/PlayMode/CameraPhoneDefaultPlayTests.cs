@@ -46,8 +46,8 @@ namespace MaxWorlds.Tests.PlayMode
         {
             yield return MakeRig(phone: false);
             Assert.That(_go.GetComponent<FixedAngleCameraRig>().Distance,
-                        Is.EqualTo(25.1f / FixedAngleCameraRig.ZoomFactor).Within(0.001f),
-                        "desktop keeps the same relative framing — just 10% closer post-MV-276");
+                        Is.EqualTo(27.108f / FixedAngleCameraRig.ZoomFactor).Within(0.001f),
+                        "desktop keeps the same relative framing — 10% closer post-MV-276, then MV-315's 108% re-bake");
         }
 
         [UnityTest]
