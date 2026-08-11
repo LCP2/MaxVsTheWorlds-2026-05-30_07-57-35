@@ -195,7 +195,9 @@ namespace MaxWorlds.Enemies
             // one-rusher-shot kill (EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame
             // pins that only the Bruiser survives a full-health rusher's-worth of damage). A Bomber's
             // threat is its range, not its ability to soak fire once you close the gap on it.
-            moveSpeed: 1.8f, maxHealth: 30f,
+            // MV-325: speed must invert with power too — a Bomber has less HP than the rusher, so it
+            // has to be at least as quick, not slower (was 1.8, below the rusher's 2.04).
+            moveSpeed: 2.1f, maxHealth: 30f,
             contactDamage: 22f,   // splash damage
             contactRadius: 2.0f,  // splash radius
             lungeRange: 10f,      // max fire range
@@ -219,7 +221,10 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Blinker => new EnemyArchetype(
             EnemyKind.Blinker, EnemyShape.Capsule, new Vector3(0.75f, 0.75f, 0.75f),
             colliderHeight: 1.35f, colliderRadius: 0.4f,
-            moveSpeed: 2.4f, maxHealth: 30f,
+            // MV-325: was 2.4 — faster than the Gunner despite having more HP (26 vs 30), which
+            // inverted the "weakest is fastest" rule. Its mobility edge is the teleport, not raw
+            // speed ("Otherwise a rusher"), so it sits with the Bomber just above the rusher.
+            moveSpeed: 2.1f, maxHealth: 30f,
             contactDamage: 14f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.5f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,

@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -339,6 +340,36 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Gunner));
             Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Bomber));
             Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Blinker));
+        }
+
+        // --- MV-325: move speed must invert with power/tier -------------------------------------
+
+        [Test]
+        public void WeakerArchetypesAreNeverSlowerThanToughterOnes()
+        {
+            // Sorted weakest (lowest HP) to strongest (highest HP), speed must never increase —
+            // the weakest archetype overall is the fastest mover, the strongest is the slowest.
+            var byHealth = AllArchetypes.OrderBy(a => a.MaxHealth).ToArray();
+            for (int i = 1; i < byHealth.Length; i++)
+                Assert.LessOrEqual(byHealth[i].MoveSpeed, byHealth[i - 1].MoveSpeed + 1e-4f,
+                    $"{byHealth[i].Kind} (HP {byHealth[i].MaxHealth}) is tougher than " +
+                    $"{byHealth[i - 1].Kind} (HP {byHealth[i - 1].MaxHealth}) but moves faster");
+        }
+
+        [Test]
+        public void TheWeakestArchetypeOverall_IsTheFastestMover()
+        {
+            var weakest = AllArchetypes.OrderBy(a => a.MaxHealth).First();
+            var fastest = AllArchetypes.OrderByDescending(a => a.MoveSpeed).First();
+            Assert.AreEqual(weakest.Kind, fastest.Kind);
+        }
+
+        [Test]
+        public void TheStrongestArchetypeOverall_IsTheSlowestMover()
+        {
+            var strongest = AllArchetypes.OrderByDescending(a => a.MaxHealth).First();
+            var slowest = AllArchetypes.OrderBy(a => a.MoveSpeed).First();
+            Assert.AreEqual(strongest.Kind, slowest.Kind);
         }
 
         // --- YT-194: the "Robot health" slider scales health only ------------------------------
