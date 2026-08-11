@@ -230,9 +230,12 @@ namespace MaxWorlds.VFX
         /// never given a ground multiplier at all — it stayed at its authored size while the power cell
         /// above got scaled up 1.4x, so the part actually rendered SMALLER than the cell in-arena despite
         /// their already-distinct shapes/colours (MV-326: "Max is shown approaching what look like two
-        /// identical cells, but one is actually a part"). Bigger than <see cref="PowerCellGroundScale"/>
-        /// so a part unambiguously reads as the larger, more special pickup the AC calls for.</summary>
-        public const float PartGroundScale = 1.75f;
+        /// identical cells, but one is actually a part"). MV-326's first pass set this to a bare 1.75x —
+        /// only 1.25x relative to the cell's own 1.4x, still inside the noise at the fixed 72° camera
+        /// (MV-347). Expressed as a multiple of <see cref="PowerCellGroundScale"/>, not a second bare
+        /// constant, so "a part is exactly 2x a cell's footprint" survives any future retune of the cell's
+        /// own scale instead of the two silently drifting apart again.</summary>
+        public const float PartGroundScale = PowerCellGroundScale * 2f;
 
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
@@ -471,7 +474,10 @@ namespace MaxWorlds.VFX
             return root;
         }
 
-        /// <summary>A bank of three capacitor cans, each with a lit terminal cap.</summary>
+        /// <summary>A bank of three capacitor cans, each with a lit terminal cap. Tips glow
+        /// <see cref="PowerBlue"/>, not <see cref="CellCyan"/> (MV-347) — the exact cell colour on a part
+        /// was the "shares the cyan/glow signature" confusion the ticket called out, undercutting the
+        /// bigger footprint's own distinguishing job.</summary>
         public static GameObject BuildCapacitorBank(Transform parent = null)
         {
             var root = Root("CapacitorBank", parent);
@@ -484,7 +490,7 @@ namespace MaxWorlds.VFX
                 float x = (i - 1) * 0.12f;
                 Part(root, $"Can{i}", PrimitiveType.Cylinder, new Vector3(x, 0.2f, 0f),
                      new Vector3(0.07f, 0.18f, 0.07f), null, can);
-                Glow(root, $"Tip{i}", new Vector3(x, 0.38f, 0f), 0.04f, CellCyan);
+                Glow(root, $"Tip{i}", new Vector3(x, 0.38f, 0f), 0.04f, PowerBlue);
             }
             Glisten(root, GlistenPrefix + "0", new Vector3(0.12f, 0.14f, 0.07f), 0.035f);
             return root;
