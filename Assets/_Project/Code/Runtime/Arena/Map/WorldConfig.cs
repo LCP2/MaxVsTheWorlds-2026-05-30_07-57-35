@@ -62,6 +62,24 @@ namespace MaxWorlds.Arena
         public WorldAreaSize size;
     }
 
+    /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
+    /// the same fields as <see cref="MapEntity"/>'s cover shape so <see cref="WorldMapLoader"/> can
+    /// hand it straight to the engine that already knows how to build, validate and dress cover
+    /// (<see cref="MapRuntime.BuildCover"/>, <see cref="MapValidation"/>, <see cref="BackyardDressing"/>'s
+    /// hedge case) — an area's shrubbery is nothing new to that pipeline, only a new source feeding it.</summary>
+    [Serializable]
+    public sealed class WorldCover
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float width = 1f;
+        public float height = 1f;
+        public float depth = 1f;
+        public string shape = "box";
+        public string dressing = "none";
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -93,6 +111,12 @@ namespace MaxWorlds.Arena
         public string notes;
         public WorldShed shed;
         public WorldBoss boss;
+
+        /// <summary>Shrubbery/hedge rows authored into this area (MV-318) — obstacles a robot or Max
+        /// must go around, not through, but never enough of them to seal a path (the ordinary Cover
+        /// invariants in <see cref="MapValidation"/> enforce that, same as they always have). Optional
+        /// — most areas carry none until authored.</summary>
+        public WorldCover[] cover = Array.Empty<WorldCover>();
 
         public float XMin => origin?.x ?? 0f;
         public float XMax => XMin + (size?.w ?? 0f);

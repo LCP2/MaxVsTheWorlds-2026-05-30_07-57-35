@@ -143,6 +143,30 @@ namespace MaxWorlds.Arena
                 });
             }
 
+            // Shrubbery authored per area (MV-318) — handed straight to the same Cover entity kind
+            // backyard_slice.json's hand-placed hedges already build, validate and dress through, so an
+            // area's shrub rows are obstacles the moment they're authored, not a parallel mechanic.
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (a.cover == null) continue;
+                foreach (WorldCover c in a.cover)
+                {
+                    if (c == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = c.id,
+                        kind = "cover",
+                        x = c.x,
+                        z = c.z,
+                        width = c.width,
+                        height = c.height,
+                        depth = c.depth,
+                        shape = c.shape,
+                        dressing = c.dressing,
+                    });
+                }
+            }
+
             // The boss, adopted into place the same way the old corridor engine's compost clearing
             // did (MV-270) — without this entity MapRuntime has nowhere to move BigBermudaBoss to.
             foreach (WorldArea a in cfg.areas)
