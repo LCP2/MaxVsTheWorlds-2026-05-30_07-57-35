@@ -48,5 +48,42 @@ namespace MaxWorlds.Enemies
 
             return Rect.MinMaxRect(xMin, zMin, xMax, zMax);
         }
+
+        /// <summary>
+        /// Slices <paramref name="bounds"/> (the far-side rectangle from <see cref="FarSideBounds"/>)
+        /// into <paramref name="totalBands"/> equal strata along the door-to-interior axis, ordered
+        /// nearest-to-the-gate first, and returns the one <paramref name="spawnIndex"/> falls into
+        /// (MV-324 — feedback, Max 0.7 doc: robots landing at roughly the same distance from the gate
+        /// all closed on Max together, reading as one simultaneous mob instead of a staggered approach).
+        /// Cycling <paramref name="spawnIndex"/> through the bands guarantees a spread of distances from
+        /// the gate regardless of how the room's per-point RNG happens to land — pure per-point
+        /// randomness could still get unlucky and cluster an entire batch in one band by chance.
+        /// <paramref name="totalBands"/> &lt;= 1 returns <paramref name="bounds"/> unchanged.
+        /// </summary>
+        public static Rect StaggerBand(Rect bounds, Vector3 awayFromDoor, int spawnIndex, int totalBands)
+        {
+            if (totalBands <= 1) return bounds;
+
+            int band = ((spawnIndex % totalBands) + totalBands) % totalBands;
+            float t0 = (float)band / totalBands;
+            float t1 = (float)(band + 1) / totalBands;
+
+            if (Mathf.Abs(awayFromDoor.x) >= Mathf.Abs(awayFromDoor.z))
+            {
+                bool increasing = awayFromDoor.x >= 0f;
+                float near = increasing ? bounds.xMin : bounds.xMax;
+                float far = increasing ? bounds.xMax : bounds.xMin;
+                float a = Mathf.Lerp(near, far, t0), b = Mathf.Lerp(near, far, t1);
+                return Rect.MinMaxRect(Mathf.Min(a, b), bounds.yMin, Mathf.Max(a, b), bounds.yMax);
+            }
+            else
+            {
+                bool increasing = awayFromDoor.z >= 0f;
+                float near = increasing ? bounds.yMin : bounds.yMax;
+                float far = increasing ? bounds.yMax : bounds.yMin;
+                float a = Mathf.Lerp(near, far, t0), b = Mathf.Lerp(near, far, t1);
+                return Rect.MinMaxRect(bounds.xMin, Mathf.Min(a, b), bounds.xMax, Mathf.Max(a, b));
+            }
+        }
     }
 }

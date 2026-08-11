@@ -52,6 +52,11 @@ namespace MaxWorlds.Enemies
         /// placement fall back to whatever candidate was last tried.</summary>
         private const int MaxOffScreenAttempts = 24;
 
+        /// <summary>Distinct distance-from-gate tiers a room's spawns cycle through (MV-324) — see
+        /// <see cref="SpawnBias.StaggerBand"/>. Enough to break up a simultaneous-arrival mob without
+        /// fragmenting a small room's far-side band into slivers.</summary>
+        private const int StaggerBandCount = 5;
+
         [SerializeField] private RobotEnemy prefab;
 
         private MapData _map;
@@ -64,6 +69,13 @@ namespace MaxWorlds.Enemies
         private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _pools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
         private Collider[] _playerColliders;
         private float _timer;
+
+        /// <summary>How many robots this director has placed in <see cref="CurrentArea"/> so far — feeds
+        /// <see cref="SpawnBias.StaggerBand"/> so each one lands in a different distance-from-gate tier
+        /// (MV-324). Reset per area in <see cref="FillArea"/>; kept running across the instant fill AND
+        /// any later overflow releases in <see cref="Update"/> so the stagger keeps cycling rather than
+        /// resetting to "nearest the gate" every time a slot frees up mid-fight.</summary>
+        private int _areaSpawnIndex;
 
         /// <summary>The 1-based area the player is currently standing in (or last stood in, once past
         /// the final "area&lt;N&gt;" zone — the compost clearing does not advance it further).</summary>
@@ -157,6 +169,7 @@ namespace MaxWorlds.Enemies
         private void FillArea(int areaIndex)
         {
             if (areaIndex <= 0 || !_filledAreas.Add(areaIndex)) return;
+            _areaSpawnIndex = 0;
 
             // The lead-in/entry room (area1's "Patio & Back Door") is where Max spawns — it must stay
             // empty so a fresh run has a safe beat to orient before meeting a robot (MV-256). Marked
@@ -196,7 +209,7 @@ namespace MaxWorlds.Enemies
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
 
             RobotEnemy e = Take(kind, archetype);
-            e.transform.position = SpawnPointInArea(CurrentArea, archetype.SpawnHeight);
+            e.transform.position = SpawnPointInArea(CurrentArea, archetype.SpawnHeight, _areaSpawnIndex++);
             e.transform.rotation = Quaternion.identity;
             e.gameObject.SetActive(true);
 
@@ -214,7 +227,7 @@ namespace MaxWorlds.Enemies
         /// falling straight back to an on-screen spawn. Placement always succeeds; only if no off-screen
         /// point exists in the room at all (both passes exhausted) does the last candidate tried get
         /// used rather than refusing to place the robot.</summary>
-        private Vector3 SpawnPointInArea(int areaIndex, float height)
+        private Vector3 SpawnPointInArea(int areaIndex, float height, int spawnIndex)
         {
             MapZone zone = _map.Zone($"area{areaIndex}");
             if (zone == null || zone.width <= EdgeMargin * 2f || zone.depth <= EdgeMargin * 2f)
@@ -223,7 +236,11 @@ namespace MaxWorlds.Enemies
             // MV-323: bias candidates to the side of the room opposite the door robots/Max just came
             // through, so the ambient fight tends to stay off the entrance rather than piling up on it.
             Vector3 awayFromDoor = MapRuntime.EntryDirection(_map, zone.id);
-            Rect bounds = SpawnBias.FarSideBounds(zone, awayFromDoor, EdgeMargin);
+            Rect farSide = SpawnBias.FarSideBounds(zone, awayFromDoor, EdgeMargin);
+
+            // MV-324: within that far side, cycle each spawn through its own distance-from-gate tier so
+            // the room's robots don't all close the gap on Max at once.
+            Rect bounds = SpawnBias.StaggerBand(farSide, awayFromDoor, spawnIndex, StaggerBandCount);
 
             Camera cam = Camera.main;
             Vector3 candidate = default;
