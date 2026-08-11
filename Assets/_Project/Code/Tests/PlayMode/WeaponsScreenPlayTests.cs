@@ -272,16 +272,16 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            // MV-262: the parts chip is now just the live count (the spinning gear glyph carries the
-            // "parts" meaning) — CELLS keeps its word suffix.
-            Assert.That(FindText(_screenGo, "1"), Is.Not.Null);
+            // MV-327: the parts chip spells out its unit too now, same as CELLS, so both banks read
+            // at a glance rather than one being a bare number.
+            Assert.That(FindText(_screenGo, "1 PARTS"), Is.Not.Null);
             Assert.That(FindText(_screenGo, "1 CELLS"), Is.Not.Null);
 
             PickupWallet.AddPart();   // e.g. a kill drops one while the screen happens to be open
             PickupWallet.AddPowerCell();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "2"), Is.Not.Null, "the parts bank must reflect live state, not just what it was on open");
+            Assert.That(FindText(_screenGo, "2 PARTS"), Is.Not.Null, "the parts bank must reflect live state, not just what it was on open");
             Assert.That(FindText(_screenGo, "2 CELLS"), Is.Not.Null, "the cells bank must reflect live state too");
         }
 
