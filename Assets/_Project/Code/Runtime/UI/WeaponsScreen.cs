@@ -122,10 +122,11 @@ namespace MaxWorlds.UI
         private readonly Image[] _trackButtonBg = new Image[TrackCount];
 
         // One row slot per catalog ability, always active (MV-262): the leading slots are populated
-        // from WeaponSystemState.Acquired in catalog order, the rest greyed via SetAbilityLocked. Which
-        // AbilityKind occupies slot i changes as more get acquired, so the kind behind each slot's
-        // button is tracked live in _abilityRowKind rather than baked into the click handler at build
-        // time (locked slots' buttons are inactive, so their stale _abilityRowKind is never read).
+        // from WeaponSystemState.Acquired in acquisition order (MV-333), the rest greyed via
+        // SetAbilityLocked. A slot, once filled, keeps its AbilityKind forever — only the trailing
+        // locked slots shift as more get acquired — but the kind behind each slot's button is still
+        // tracked live in _abilityRowKind rather than baked into the click handler at build time
+        // (locked slots' buttons are inactive, so their stale _abilityRowKind is never read).
         private readonly GameObject[] _abilityRow = new GameObject[MaxAbilityRows];
         private readonly Text[] _abilityName = new Text[MaxAbilityRows];
         private readonly Image[][] _abilityPips = new Image[MaxAbilityRows][];

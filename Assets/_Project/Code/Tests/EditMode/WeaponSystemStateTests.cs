@@ -132,6 +132,33 @@ namespace MaxWorlds.Tests.EditMode
                 WeaponSystemState.Unacquired);
         }
 
+        [Test]
+        public void AcquiredListsAbilitiesInAcquisitionOrderNotCatalogOrder_MV333()
+        {
+            // WeaponCooldown is last in WeaponCatalog.AllAbilityKinds but granted first here — it must
+            // still come out first, and WaterBalloon (first in catalog order) must land second, not
+            // displace it.
+            WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+
+            CollectionAssert.AreEqual(
+                new[] { AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon }, WeaponSystemState.Acquired);
+        }
+
+        [Test]
+        public void AcquiringAFurtherAbilityDoesNotReorderAlreadyAcquiredOnes_MV333()
+        {
+            WeaponSystemState.Acquire(AbilityKind.Dash);
+            var beforeSecondAcquire = new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired);
+
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            var afterSecondAcquire = new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired);
+
+            Assert.That(afterSecondAcquire[0], Is.EqualTo(beforeSecondAcquire[0]),
+                "the first-acquired ability's slot must not move when a second is granted");
+            Assert.That(afterSecondAcquire[1], Is.EqualTo(AbilityKind.WaterBalloon));
+        }
+
         // ---------------------------------------------------------------- cooldowns
 
         [Test]
