@@ -76,10 +76,13 @@ namespace MaxWorlds.VFX
         /// that one is a capsule and the other is a box. Heavy things should look heavy.</summary>
         private static readonly Color BruiserBody = new Color(0.38f, 0.10f, 0.62f);
 
-        /// <summary>The heavy (MV-303): steel / royal blue. Cold like the rest of the swarm, but a
-        /// different hue AND brighter than the bruiser's violet, so a fight with both tiers in it
-        /// doesn't read as "two dark boxes".</summary>
-        private static readonly Color HeavyBody = new Color(0.16f, 0.36f, 0.74f);
+        /// <summary>The heavy (MV-331): deep crimson red. It shipped as a steel/royal blue
+        /// (MV-303) and was too easy to lose against the rest of the cold swarm, so it now
+        /// deliberately breaks the "enemies stay cold" rule and takes the one hue family otherwise
+        /// reserved for Max — far enough from his brighter orange-red in both hue and value that the
+        /// two never get confused (see
+        /// ActorReadabilityTests.TheHeavyReadsClearlyRed_AndDistinctFromMax).</summary>
+        private static readonly Color HeavyBody = new Color(0.68f, 0.04f, 0.14f);
 
         /// <summary>The brute (MV-303): dark gunmetal charcoal, the top of the composition ladder.
         /// Deliberately desaturated, like the boss — it reads as the heaviest thing in the swarm by
@@ -115,9 +118,9 @@ namespace MaxWorlds.VFX
         /// tint instead of underneath it, and reads as metal rather than as plastic.
         ///
         /// Being the palest thing in the yard is also what makes it findable — it is now the one
-        /// bright, cold, hard-edged object in a warm garden full of timber and leaves. Max stays the
-        /// only warm-red thing on the screen; the robots stay cold steel, which is exactly the family
-        /// their factory should belong to.
+        /// bright, cold, hard-edged object in a warm garden full of timber and leaves. Max and the
+        /// Heavy (MV-331) are the only warm-red things on the screen; every other robot, and the
+        /// factory that builds them, stays cold steel.
         /// </summary>
         private static readonly Color StructureBody = new Color(0.47f, 0.46f, 0.44f);
 
