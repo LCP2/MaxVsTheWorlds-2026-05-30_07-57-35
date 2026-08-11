@@ -421,6 +421,29 @@ namespace MaxWorlds.Arena
             return Vector3.zero;
         }
 
+        /// <summary>World-space direction from the zone entered just before <paramref name="zoneId"/>
+        /// to <paramref name="zoneId"/> itself — the same direction as <see cref="AwayFromPlayerDirection"/>,
+        /// but looked up by the zone being entered rather than by its gate entity (MV-323: a caller that
+        /// only has an area's zone id, like the ambient spawn director, still needs to know which side of
+        /// the room the door is on so it can bias placement to the far side). Falls back to
+        /// <see cref="Vector3.zero"/> when no link leads into this zone (e.g. area 1, entered from
+        /// outside the map, not through any authored gate).</summary>
+        public static Vector3 EntryDirection(MapData map, string zoneId)
+        {
+            if (map.links != null)
+            {
+                foreach (MapLink link in map.links)
+                {
+                    if (link == null || link.to != zoneId) continue;
+                    MapZone from = map.Zone(link.from);
+                    MapZone to = map.Zone(link.to);
+                    if (from == null || to == null) continue;
+                    return new Vector3(to.x - from.x, 0f, to.z - from.z);
+                }
+            }
+            return Vector3.zero;
+        }
+
         /// <summary>The slice scene still carries a hand-placed 30 m ground plane from the very first
         /// scaffold. The map owns its floor now, and two coplanar floors at y=0 z-fight into a
         /// shimmering mess — so the old one stands down.</summary>
