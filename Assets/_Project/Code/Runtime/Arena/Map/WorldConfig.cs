@@ -62,6 +62,24 @@ namespace MaxWorlds.Arena
         public WorldAreaSize size;
     }
 
+    /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
+    /// the same fields as <see cref="MapEntity"/>'s cover shape so <see cref="WorldMapLoader"/> can
+    /// hand it straight to the engine that already knows how to build, validate and dress cover
+    /// (<see cref="MapRuntime.BuildCover"/>, <see cref="MapValidation"/>, <see cref="BackyardDressing"/>'s
+    /// hedge case) — an area's shrubbery is nothing new to that pipeline, only a new source feeding it.</summary>
+    [Serializable]
+    public sealed class WorldCover
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float width = 1f;
+        public float height = 1f;
+        public float depth = 1f;
+        public string shape = "box";
+        public string dressing = "none";
+    }
+
     /// <summary>One area of a world map: a 2D rectangle at an arbitrary origin — NOT constrained to a
     /// shared centre-line the way the old corridor engine's rooms were (MV-267). <see cref="origin"/>
     /// is the rectangle's MIN corner (matches how the design board's <c>world1_config.json</c> is
@@ -93,6 +111,12 @@ namespace MaxWorlds.Arena
         public string notes;
         public WorldShed shed;
         public WorldBoss boss;
+
+        /// <summary>Shrubbery/hedge rows authored into this area (MV-318) — obstacles a robot or Max
+        /// must go around, not through, but never enough of them to seal a path (the ordinary Cover
+        /// invariants in <see cref="MapValidation"/> enforce that, same as they always have). Optional
+        /// — most areas carry none until authored.</summary>
+        public WorldCover[] cover = Array.Empty<WorldCover>();
 
         public float XMin => origin?.x ?? 0f;
         public float XMax => XMin + (size?.w ?? 0f);
@@ -180,6 +204,13 @@ namespace MaxWorlds.Arena
         public float toughSubstitutionPct;
         public float tankShareEnd = 0.70f;
 
+        // MV-293's ranged/teleport kinds (MV-310) — same intro-area idiom as heavy/bruteFromArea
+        // above, carried losslessly through the JSON round-trip.
+        public int gunnerFromArea = 2;
+        public int bomberFromArea = 3;
+        public int blinkerFromArea = 4;
+        public float specialSharePct = 12f;
+
         /// <summary>Bridges to the engine's own linear-drift model (MV-268). Tank share starts at 0 at
         /// <see cref="heavyFromArea"/> (nothing tanky before then, matching the engine class's own
         /// default) and drifts to <see cref="tankShareEnd"/> by <paramref name="lastArea"/>. Reads the
@@ -192,6 +223,10 @@ namespace MaxWorlds.Arena
             tankShareAtHeavyIntro = 0f,
             tankShareAtEnd = DevTuning.Or(DevTuning.WorldTankShareEnd, tankShareEnd),
             lastArea = Mathf.Max(1, lastArea),
+            gunnerFromArea = gunnerFromArea,
+            bomberFromArea = bomberFromArea,
+            blinkerFromArea = blinkerFromArea,
+            specialSharePct = specialSharePct,
         };
     }
 
@@ -235,6 +270,13 @@ namespace MaxWorlds.Arena
         public WorldEnemyTypeEntry heavy;
         public WorldEnemyTypeEntry brute;
 
+        // MV-293's ranged/teleport kinds (MV-310) — optional in the JSON; a world authored before
+        // these existed simply omits them, and Thv() below falls back to the engine's flat
+        // ThreatValues placeholder rather than reading a missing 0.
+        public WorldEnemyTypeEntry gunner;
+        public WorldEnemyTypeEntry bomber;
+        public WorldEnemyTypeEntry blinker;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -242,9 +284,12 @@ namespace MaxWorlds.Arena
                 EnemyKind.Bruiser => large,
                 EnemyKind.Heavy => heavy,
                 EnemyKind.Brute => brute,
+                EnemyKind.Gunner => gunner,
+                EnemyKind.Bomber => bomber,
+                EnemyKind.Blinker => blinker,
                 _ => small,
             };
-            return e?.thv ?? 0f;
+            return e != null ? e.thv : ThreatValues.Of(kind);
         }
 
         /// <summary>Σ THV of a solved area composition, weighted by THIS world's own table rather than
@@ -252,7 +297,9 @@ namespace MaxWorlds.Arena
         /// it, EPL (<see cref="MaxWorlds.Enemies.PowerScoring"/>) actually spend.</summary>
         public float WeightedThv(DifficultyEngine.Composition c) =>
             c.Rusher * Thv(EnemyKind.Rusher) + c.Bruiser * Thv(EnemyKind.Bruiser) +
-            c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute);
+            c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute) +
+            c.Gunner * Thv(EnemyKind.Gunner) + c.Bomber * Thv(EnemyKind.Bomber) +
+            c.Blinker * Thv(EnemyKind.Blinker);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170

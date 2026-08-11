@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
@@ -10,18 +11,29 @@ namespace MaxWorlds.VFX
     ///
     /// YT-131/133 drop the pickups as greybox stand-ins — a cyan sphere for a power cell and, for a
     /// PART, a single cube. YT-134/145 swapped each greybox for a distinct <see cref="WeaponPartArt"/>
-    /// prop; YT-180 reversed that for four of the five parts so they stayed boxes; WV-237 later retired
-    /// the box entirely in favour of ~10 randomised machine-internals designs. MV-180 reverses WV-237:
-    /// Lee's playtest call is that a PART pickup stays the plain chrome box <c>Pickup</c> already builds
-    /// (one consistent, non-brown colour) — this director just leaves that box showing and adds a
-    /// specular <see cref="PulseGlisten"/> sparkle to it, the same "shiny, not just haloed" treatment
-    /// the power cell wears (YT-167). The power cell keeps its own always-the-same swapped prop.
+    /// prop; YT-180 reversed that for four of the five parts so they stayed boxes; WV-237 retired the
+    /// box entirely in favour of ~10 randomised machine-internals designs. MV-180 then reverted WV-237
+    /// back to the plain box for a playtest call that no longer holds: MV-305 reverses MV-180 again — a
+    /// PART pickup wears one of <see cref="WeaponPartArt.MachineInternalsKeys"/>'s irregular designs
+    /// (gear, coil, circuit block, ...), rerolled at random on each fresh drop, the same swap-in idiom
+    /// the power cell always used. The power cell keeps its own always-the-same swapped prop.
     ///
     /// A director, not an edit to <c>Pickup</c>, for the same reason the boss and the robots are dressed
     /// by directors (BigBermudaRig, RobotRigDirector): the pickup's greybox is pure cosmetic — no
     /// active-tap indicator or collider to preserve — so the art stream can replace it without reaching
     /// into gameplay. The cell's pickup is POOLED and reused as-is (its kind never changes), so the
-    /// once-built check below is all that's needed to keep it from rebuilding every frame.
+    /// once-built check below is all that's needed to keep it from rebuilding every frame. A pooled PART
+    /// pickup, though, gets reused for a fresh drop with a fresh random design each time — <see
+    /// cref="_partWasActive"/>/<see cref="_partArtKey"/> track that reroll across the deactivate/
+    /// reactivate cycle <c>PickupDirector</c> pools it through.
+    ///
+    /// MV-308: a shed's ability grant (<see cref="PickupKind.Device"/>) had no branch here at all, so it
+    /// fell through wearing its plain greybox cube forever. <see cref="WeaponPartArt.Keys.HydroDevice"/>
+    /// was already built and documented as this exact ground pickup's "shimmers like a cell" look (WV-236)
+    /// but never wired up after WV-229 generalised the shed drop from a single Hydro grant to any of the
+    /// five <see cref="MaxWorlds.Weapons.AbilityKind"/> values — it's a single shared "ability device"
+    /// look for every grant (the ticket's nice-to-have of one prop per ability needs a catalog entry per
+    /// ability that doesn't exist yet), swapped in and radiated the same swap-in-once idiom as the cell.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupArtDirector : MonoBehaviour
@@ -29,11 +41,11 @@ namespace MaxWorlds.VFX
         private const string ArtPrefix = "PartArt:";   // child name carries the key it was built for
         private const float SpinDegreesPerSecond = 90f;
 
-        // MV-180: the two specular glint dots riding the part box's own "Visual" cube — children of it
-        // (not the pickup root) so they inherit its existing spin (Pickup.Update) for free, the same way
-        // the swapped props' glints ride their own spinning root.
-        private const string PartGlisten0 = "PartGlisten0";
-        private const string PartGlisten1 = "PartGlisten1";
+        // MV-305: per-pickup bookkeeping so a pooled Part pickup rerolls its machine-internals design on
+        // every fresh drop rather than wearing whatever it first got forever. Keyed by reference — pooled
+        // Pickups are reused, never destroyed, so entries live for the pickup's whole lifetime.
+        private readonly Dictionary<Pickup, bool> _partWasActive = new Dictionary<Pickup, bool>();
+        private readonly Dictionary<Pickup, string> _partArtKey = new Dictionary<Pickup, string>();
 
         // The collectible glow (YT-145): a soft additive bloom aura on every dropped pickup + power cell,
         // with a subtle pulse, so they read as "grab me" from across the yard. One shared colour for the
@@ -57,19 +69,53 @@ namespace MaxWorlds.VFX
         private static void Install()
         {
             if (FindFirstObjectByType<PickupArtDirector>() != null) return;
-            // Gate on the real actor. A frame-working AfterSceneLoad director that installs into every
-            // shared PlayMode test scene flakes timing-sensitive tests (YT-129/130); only the game runs
-            // a PickupDirector, so its absence means there is nothing here for us to dress.
-            if (FindFirstObjectByType<PickupDirector>() == null) return;
-            new GameObject("PickupArt").AddComponent<PickupArtDirector>();
+            if (FindFirstObjectByType<InstallGate>() != null) return;
+            new GameObject("PickupArtInstallGate").AddComponent<InstallGate>();
+        }
+
+        /// <summary>
+        /// MV-313: this used to gate on the real actor by calling <c>FindFirstObjectByType&lt;PickupDirector&gt;()</c>
+        /// right here, inside this class's own AfterSceneLoad callback — but <c>PickupDirector</c>
+        /// installs itself through the exact same idiom, its own [RuntimeInitializeOnLoadMethod(AfterSceneLoad)],
+        /// and Unity does not guarantee which of two different classes' AfterSceneLoad callbacks runs
+        /// first. In the live/WebGL (IL2CPP) build this class's callback was losing that race, so the
+        /// PickupDirector check always saw nothing and PickupArtDirector never installed — every pickup
+        /// wore its raw greybox forever. The isolated PlayMode tests never caught it because they build
+        /// the director by hand (<c>InstallDirector</c>), skipping this gate entirely.
+        ///
+        /// <c>Start()</c> only runs once every AfterSceneLoad callback for this frame has already run —
+        /// including <c>PickupDirector</c>'s own — so checking here instead is independent of dispatch
+        /// order, native boot or <see cref="MaxWorlds.Core.SceneInstallers"/>'s own Replay re-install.
+        /// A frame-working object that installs into every shared PlayMode test scene would flake
+        /// timing-sensitive tests (YT-129/130) exactly as the old gate's comment warned, so on a miss it
+        /// removes itself rather than sticking around to check again.
+        /// </summary>
+        private sealed class InstallGate : MonoBehaviour
+        {
+            private void Start()
+            {
+                if (FindFirstObjectByType<PickupDirector>() != null)
+                {
+                    gameObject.name = "PickupArt";
+                    gameObject.AddComponent<PickupArtDirector>();
+                }
+                else if (Application.isPlaying)
+                {
+                    Destroy(gameObject);
+                }
+                else
+                {
+                    DestroyImmediate(gameObject);
+                }
+            }
         }
 
         private void Update()
         {
             foreach (var pickup in FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
-                // The power cell always wears the same swapped-in prop. A PART (MV-180) stays the plain
-                // chrome box Pickup already built — no swap-in here — and just gets a glisten below.
+                // The power cell always wears the same swapped-in prop; a PART wears one of the
+                // machine-internals designs, rerolled per drop in the branch below (MV-305).
                 if (pickup.Kind == PickupKind.PowerCell)
                 {
                     string want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
@@ -96,17 +142,61 @@ namespace MaxWorlds.VFX
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "3", 4.6f);
+                        // The gentle RADIATE (MV-304): the "Core" charge band WeaponPartArt built is
+                        // otherwise a static light — breathing it slowly sells "energy source", not
+                        // "lamp". Deliberately calmer and slower than PulseGlow's orange aura below (the
+                        // ticket's own "far gentler than a radiant star") so the two don't compete —
+                        // the cell's own charge is a quiet pulse under the shared collectible glow.
+                        PulseCellCore(art);
                     }
                 }
                 else if (pickup.Kind == PickupKind.Part)
                 {
-                    // MV-180: the box already spins on its own (Pickup.Update); just wear a couple of
-                    // glint dots on it so it reads "shiny", same language as the cell's specular sparkle.
-                    Transform visual = EnsurePartGlisten(pickup.transform);
-                    if (visual != null)
+                    // MV-305: every dropped part wears one of the machine-internals designs — which one
+                    // is rerolled per drop below.
+                    string want = ArtPrefix + RollPartArtKey(pickup);
+                    Transform art = FindArt(pickup.transform, want);
+
+                    if (art == null)
                     {
-                        PulseGlisten(visual, PartGlisten0, 0f);
-                        PulseGlisten(visual, PartGlisten1, 2.3f);
+                        art = Build(pickup, want);
+                        HideGreybox(pickup.transform);
+                    }
+
+                    if (art != null)
+                    {
+                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                        // Each machine-internals design carries one or two glint dots (WeaponPartArt);
+                        // a missing index is a harmless no-op, so one fixed loop covers every design
+                        // without the director needing to know which one this pickup rolled.
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                    }
+                }
+                else if (pickup.Kind == PickupKind.Device)
+                {
+                    // MV-308: the shed's ability grant wears the same always-the-same swapped prop the
+                    // power cell does (its kind, like the cell's, never changes once built).
+                    string want = ArtPrefix + WeaponPartArt.Keys.HydroDevice;
+                    Transform art = FindArt(pickup.transform, want);
+
+                    if (art == null)
+                    {
+                        art = Build(pickup, want);
+                        HideGreybox(pickup.transform);
+                    }
+
+                    if (art != null)
+                    {
+                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+                        // The prop's three built-in glisten dots (WeaponPartArt.BuildHydroDevice) —
+                        // shimmer it the same "diamonds catching light" way the cell and parts get.
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
+                        // MV-308 AC: "the glowing radiance the power cells have" — the same gentle
+                        // MV-304 Core breathe, not just the shared orange aura below.
+                        PulseCellCore(art);
                     }
                 }
 
@@ -114,39 +204,34 @@ namespace MaxWorlds.VFX
             }
         }
 
-        /// <summary>Builds the part box's two glint dots the first time this pickup is seen, as children
-        /// of its "Visual" cube so they inherit the box's own spin (Pickup.Update) for free — no separate
-        /// spin bookkeeping needed here, unlike the swapped cell prop above. Returns the Visual transform
-        /// (or null if the pickup somehow has none) so the caller can hand it straight to PulseGlisten.</summary>
-        private static Transform EnsurePartGlisten(Transform pickup)
+        /// <summary>The machine-internals key this PART pickup should wear right now (MV-305). Rerolled
+        /// only on a fresh drop — detected as an inactive→active transition, the same edge
+        /// <c>PickupDirector</c> crosses when it pops a pooled pickup and calls <c>Place</c> — so the
+        /// design a player sees stays put while it sits on the ground and only varies drop to drop.</summary>
+        private string RollPartArtKey(Pickup pickup)
         {
-            Transform visual = pickup.Find("Visual");
-            if (visual == null) return null;
-            if (visual.Find(PartGlisten0) != null) return visual;
+            bool activeNow = pickup.gameObject.activeSelf;
+            bool wasActive = _partWasActive.TryGetValue(pickup, out bool prev) && prev;
+            _partWasActive[pickup] = activeNow;
 
-            BuildGlistenDot(visual, PartGlisten0, new Vector3(0.4f, 0.35f, -0.4f));
-            BuildGlistenDot(visual, PartGlisten1, new Vector3(-0.35f, -0.3f, 0.4f));
-            return visual;
+            if (!_partArtKey.TryGetValue(pickup, out string key) || (activeNow && !wasActive))
+            {
+                key = WeaponPartArt.MachineInternalsKeys[Random.Range(0, WeaponPartArt.MachineInternalsKeys.Length)];
+                _partArtKey[pickup] = key;
+                DestroyStaleArt(pickup.transform, ArtPrefix + key);
+            }
+            return key;
         }
 
-        /// <summary>A small additive sparkle dot, positioned in the parent's unscaled local space (so a
-        /// magnitude-0.5 coordinate lands on the surface of a unit-cube "Visual" the way <see cref="Pickup"/>
-        /// builds it) — same idiom as <see cref="WeaponPartArt"/>'s own Glisten helper, just local to this
-        /// director since the part box isn't part of that catalog.</summary>
-        private static void BuildGlistenDot(Transform parent, string name, Vector3 localPos)
+        /// <summary>Removes any previously-built PartArt: child that isn't <paramref name="keep"/> — the
+        /// leftover from this pooled pickup's last drop, now that it's rerolled a different design.</summary>
+        private static void DestroyStaleArt(Transform pickup, string keep)
         {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = name;
-            var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
-            go.transform.SetParent(parent, worldPositionStays: false);
-            go.transform.localPosition = localPos;
-            go.transform.localScale = Vector3.one * 0.18f;
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
+            for (int i = pickup.childCount - 1; i >= 0; i--)
+            {
+                var c = pickup.GetChild(i);
+                if (c.name.StartsWith(ArtPrefix) && c.name != keep) Destroy(c.gameObject);
+            }
         }
 
         /// <summary>The pickup's collectible aura, built once and reused. A sibling of the art (not a
@@ -189,6 +274,29 @@ namespace MaxWorlds.VFX
                 mpb.SetColor(BaseColorId, GlowColor * (0.6f + 0.4f * t));   // additive: dimmer..full
                 r.SetPropertyBlock(mpb);
             }
+        }
+
+        // MV-304: the cell's own gentle radiance — slower and lower-amplitude than PulseGlow's shared
+        // orange aura, so it reads as a quiet inner charge rather than competing with the "grab me" tell.
+        private const string CellCoreName = "Core";
+        private const float CellPulseSpeed = 1.1f;
+        private const float CellPulseMin = 0.75f;
+        private const float CellPulseRange = 0.5f;
+
+        /// <summary>Breathes the power cell's "Core" charge band (built by <see cref="WeaponPartArt.BuildPowerCell"/>)
+        /// between a dim and a bright cyan so it reads as radiating energy rather than a fixed light.
+        /// A no-op for any prop without a "Core" child (the Hydro device's own core glow is untouched —
+        /// it isn't reached from the PowerCell branch that calls this).</summary>
+        private static void PulseCellCore(Transform art)
+        {
+            var core = art.Find(CellCoreName);
+            if (core == null || !core.TryGetComponent<MeshRenderer>(out var r)) return;
+
+            float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
+            var mpb = new MaterialPropertyBlock();
+            r.GetPropertyBlock(mpb);
+            mpb.SetColor(BaseColorId, WeaponPartArt.CellCyan * (CellPulseMin + CellPulseRange * t));
+            r.SetPropertyBlock(mpb);
         }
 
         /// <summary>Flickers one of a prop's specular glint dots (YT-167, WV-236) in a brief spike-and-fade,
@@ -238,6 +346,8 @@ namespace MaxWorlds.VFX
             // in this catalog living as one named constant.
             if (key == WeaponPartArt.Keys.HydroDevice)
                 art.transform.localScale = Vector3.one * WeaponPartArt.HydroDeviceGroundScale;
+            else if (key == WeaponPartArt.Keys.PowerCell)
+                art.transform.localScale = Vector3.one * WeaponPartArt.PowerCellGroundScale;
             return art.transform;
         }
 

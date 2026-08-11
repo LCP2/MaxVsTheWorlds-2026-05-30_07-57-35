@@ -29,6 +29,22 @@ namespace MaxWorlds.Enemies
         /// <summary>The world's final area — where <see cref="tankShareAtEnd"/> is reached.</summary>
         public int lastArea = 8;
 
+        /// <summary>The area Gunner (ranged laser) starts appearing in the ambient arena population
+        /// (MV-310). Mirrors <see cref="heavyFromArea"/>'s intro-area idiom.</summary>
+        public int gunnerFromArea = 2;
+
+        /// <summary>The area Bomber (homing missile) joins Gunner (MV-310).</summary>
+        public int bomberFromArea = 3;
+
+        /// <summary>The area Blinker (teleport-flank) joins Gunner/Bomber (MV-310).</summary>
+        public int blinkerFromArea = 4;
+
+        /// <summary>The Σ-THV share [0,1×100] each unlocked special kind (Gunner/Bomber/Blinker) draws
+        /// off an area's total budget once its own intro area is reached — independently of the other
+        /// two, so once all three are live they stack, the same "each tier substitutes its own slice"
+        /// idiom <see cref="AreaPopulation.ToughSplitForArea"/> uses for Heavy/Brute (MV-310).</summary>
+        public float specialSharePct = 12f;
+
         /// <summary>The budget fraction [0,1] that should go to tanky types (Heavy+Brute) at
         /// <paramref name="areaIndex"/>: 0 before <see cref="heavyFromArea"/>, then a linear drift
         /// from <see cref="tankShareAtHeavyIntro"/> to <see cref="tankShareAtEnd"/> across the
@@ -44,5 +60,8 @@ namespace MaxWorlds.Enemies
 
         public bool HeavyUnlockedAt(int areaIndex) => areaIndex >= heavyFromArea;
         public bool BruteUnlockedAt(int areaIndex) => areaIndex >= bruteFromArea;
+        public bool GunnerUnlockedAt(int areaIndex) => areaIndex >= gunnerFromArea;
+        public bool BomberUnlockedAt(int areaIndex) => areaIndex >= bomberFromArea;
+        public bool BlinkerUnlockedAt(int areaIndex) => areaIndex >= blinkerFromArea;
     }
 }

@@ -33,16 +33,26 @@ namespace MaxWorlds.Enemies
             public readonly int Heavy;
             public readonly int Brute;
 
-            public Composition(int rusher, int bruiser, int heavy, int brute)
+            // MV-293's ranged/teleport kinds (MV-310) — solved as their own small budget slice
+            // alongside the tank/light split below, not substituted into it.
+            public readonly int Gunner;
+            public readonly int Bomber;
+            public readonly int Blinker;
+
+            public Composition(int rusher, int bruiser, int heavy, int brute,
+                int gunner = 0, int bomber = 0, int blinker = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
+                Gunner = gunner; Bomber = bomber; Blinker = blinker;
             }
 
-            public int TotalCount => Rusher + Bruiser + Heavy + Brute;
+            public int TotalCount => Rusher + Bruiser + Heavy + Brute + Gunner + Bomber + Blinker;
 
             public float TotalThreatValue =>
                 Rusher * ThreatValues.Rusher + Bruiser * ThreatValues.Bruiser +
-                Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute;
+                Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute +
+                Gunner * ThreatValues.Gunner + Bomber * ThreatValues.Bomber +
+                Blinker * ThreatValues.Blinker;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s
@@ -65,12 +75,33 @@ namespace MaxWorlds.Enemies
         public static Composition SolveComposition(int areaIndex, float targetBudget, ToughnessCurve toughness)
         {
             float budget = Mathf.Max(0f, targetBudget);
+
+            // Each unlocked special kind (MV-293/MV-310) draws its own fixed slice of the AREA'S FULL
+            // budget, independently of the tank/light split below and of each other — once all three
+            // are live they stack, same idiom as Heavy/Brute's toughSubstitutionPct. Carved out first
+            // so the existing tank-share maths below still reads as a share of what's left, not of the
+            // original total.
+            float specialSharePct = toughness != null ? Mathf.Clamp01(toughness.specialSharePct / 100f) : 0f;
+            bool gunnerUnlocked = toughness != null && toughness.GunnerUnlockedAt(areaIndex);
+            bool bomberUnlocked = toughness != null && toughness.BomberUnlockedAt(areaIndex);
+            bool blinkerUnlocked = toughness != null && toughness.BlinkerUnlockedAt(areaIndex);
+
+            float gunnerBudget = gunnerUnlocked ? budget * specialSharePct : 0f;
+            float bomberBudget = bomberUnlocked ? budget * specialSharePct : 0f;
+            float blinkerBudget = blinkerUnlocked ? budget * specialSharePct : 0f;
+
+            int gunner = gunnerBudget > 0f ? Mathf.RoundToInt(gunnerBudget / ThreatValues.Gunner) : 0;
+            int bomber = bomberBudget > 0f ? Mathf.RoundToInt(bomberBudget / ThreatValues.Bomber) : 0;
+            int blinker = blinkerBudget > 0f ? Mathf.RoundToInt(blinkerBudget / ThreatValues.Blinker) : 0;
+
+            float remaining = Mathf.Max(0f, budget - gunnerBudget - bomberBudget - blinkerBudget);
+
             float tankShare = toughness != null ? toughness.TankShareForArea(areaIndex) : 0f;
             bool heavyUnlocked = toughness != null && toughness.HeavyUnlockedAt(areaIndex);
             bool bruteUnlocked = toughness != null && toughness.BruteUnlockedAt(areaIndex);
 
-            float tankBudget = heavyUnlocked ? budget * tankShare : 0f;
-            float lightBudget = budget - tankBudget;
+            float tankBudget = heavyUnlocked ? remaining * tankShare : 0f;
+            float lightBudget = remaining - tankBudget;
 
             int heavy = 0, brute = 0;
             if (tankBudget > 0f)
@@ -94,7 +125,7 @@ namespace MaxWorlds.Enemies
                 rusher = Mathf.RoundToInt(rusherBudget / ThreatValues.Rusher);
             }
 
-            return new Composition(rusher, bruiser, heavy, brute);
+            return new Composition(rusher, bruiser, heavy, brute, gunner, bomber, blinker);
         }
     }
 }

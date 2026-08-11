@@ -10,10 +10,14 @@ namespace MaxWorlds.VFX
     public enum CharacterRole
     {
         Player,
-        Robot,      // the rusher: small, fast, a capsule
+        Robot,      // the rusher (and, until MV-303 gave them their own, every ranged kind too):
+                    // small, fast, a capsule
         Bruiser,    // the fridge on legs: slow, tough, a box (YT-86)
         Boss,
         Structure,
+        Heavy,      // MV-303: the second later-area tier
+        Brute,      // MV-303: the top of the composition ladder
+        Gunner,     // MV-312: the ranged turret gets its own colour, not the rusher's teal
     }
 
     /// <summary>
@@ -71,6 +75,24 @@ namespace MaxWorlds.VFX
         /// darker value, so the two separate from each other by colour alone even before you notice
         /// that one is a capsule and the other is a box. Heavy things should look heavy.</summary>
         private static readonly Color BruiserBody = new Color(0.38f, 0.10f, 0.62f);
+
+        /// <summary>The heavy (MV-303): steel / royal blue. Cold like the rest of the swarm, but a
+        /// different hue AND brighter than the bruiser's violet, so a fight with both tiers in it
+        /// doesn't read as "two dark boxes".</summary>
+        private static readonly Color HeavyBody = new Color(0.16f, 0.36f, 0.74f);
+
+        /// <summary>The brute (MV-303): dark gunmetal charcoal, the top of the composition ladder.
+        /// Deliberately desaturated, like the boss — it reads as the heaviest thing in the swarm by
+        /// being closer to black than anything else that isn't Big Bermuda, not by being colourful.</summary>
+        private static readonly Color BruteBody = new Color(0.20f, 0.22f, 0.27f);
+
+        /// <summary>The Gunner (MV-312): cold sentry green — a hue family none of the other tiers
+        /// occupy (turquoise, violet, royal blue, charcoal), so the one kind that fights from range
+        /// never gets mistaken for the rusher it shared a silhouette AND a colour with before this
+        /// ticket. Its silhouette changed too (RobotRig.BuildGunner) — same reason, same fix, two
+        /// places, because the AC is "never reads as a rusher", not "reads as a different colour of
+        /// rusher".</summary>
+        private static readonly Color GunnerBody = new Color(0.18f, 0.58f, 0.24f);
 
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
@@ -160,16 +182,38 @@ namespace MaxWorlds.VFX
             {
                 case CharacterRole.Player: return PlayerBody;
                 case CharacterRole.Bruiser: return BruiserBody;
+                case CharacterRole.Heavy: return HeavyBody;
+                case CharacterRole.Brute: return BruteBody;
+                case CharacterRole.Gunner: return GunnerBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
             }
         }
 
+        /// <summary>Which body-colour role a robot's kind wears (MV-303) — the one mapping, used
+        /// everywhere a <see cref="EnemyKind"/> becomes a skin colour (here, <see cref="RobotRig"/> and
+        /// <see cref="CharacterSkinDirector"/>). A pooled robot re-reads its kind every time it is
+        /// switched on, so three copies of this switch is three chances for one of them to miss a new
+        /// tier and leave a kind wearing a stale colour.</summary>
+        public static CharacterRole RoleFor(EnemyKind kind)
+        {
+            switch (kind)
+            {
+                case EnemyKind.Bruiser: return CharacterRole.Bruiser;
+                case EnemyKind.Heavy: return CharacterRole.Heavy;
+                case EnemyKind.Brute: return CharacterRole.Brute;
+                case EnemyKind.Gunner: return CharacterRole.Gunner;
+                default: return CharacterRole.Robot;
+            }
+        }
+
         /// <summary>Every role that is trying to kill Max. The hit flash is routed to these and only
         /// these — a hit must never be able to flash the player.</summary>
         public static bool IsEnemy(CharacterRole r) =>
-            r == CharacterRole.Robot || r == CharacterRole.Bruiser || r == CharacterRole.Boss;
+            r == CharacterRole.Robot || r == CharacterRole.Bruiser ||
+            r == CharacterRole.Heavy || r == CharacterRole.Brute ||
+            r == CharacterRole.Gunner || r == CharacterRole.Boss;
 
         private void OnEnable()
         {
@@ -197,7 +241,7 @@ namespace MaxWorlds.VFX
             // follows it (YT-86).
             if (_enemy != null)
             {
-                var kind = _enemy.Kind == EnemyKind.Bruiser ? CharacterRole.Bruiser : CharacterRole.Robot;
+                var kind = RoleFor(_enemy.Kind);
                 if (kind != role)
                 {
                     role = kind;

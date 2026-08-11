@@ -139,9 +139,9 @@ namespace MaxWorlds.Enemies
         public const float DeathSurgeEliteChanceMax = 0.5f;
 
         /// <summary>Multiplies every archetype's base health when no Settings-panel override is set —
-        /// the "Robot health" knob's 100% reference (YT-194, re-baked to Lee's on-device number
-        /// YT-200 — was 1x).</summary>
-        public const float DefaultRobotHealthMultiplier = 1.42f;
+        /// the "Robot health" knob's 100% reference (YT-194, re-baked YT-200, re-baked again MV-315
+        /// — was 1.42x).</summary>
+        public const float DefaultRobotHealthMultiplier = 1.26f;
 
         /// <summary>The pinned <see cref="DevTuning.SpawnInterval"/> override's own 100% reference
         /// (YT-200). Before this ticket it was read straight off <see cref="AuthoredSpawnIntervalMin"/>

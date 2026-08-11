@@ -147,6 +147,15 @@ namespace MaxWorlds.Enemies
             Current == State.Telegraph && telegraphTime > 0f
                 ? Mathf.Clamp01(_stateTimer / telegraphTime)
                 : 0f;
+
+        /// <summary>The Gunner's committed beam length and half-width (MV-312) — the same
+        /// <see cref="lungeRange"/>/<see cref="contactRadius"/> fields <see cref="TickBeam"/> already
+        /// hit-tests against (see <see cref="EnemyArchetype.Gunner"/>'s own doc comment for why they
+        /// double as beam geometry), exposed read-only so <see cref="MaxWorlds.VFX.RobotRig"/> can draw
+        /// the beam VFX from the same numbers gameplay uses, instead of a second copy that could drift.</summary>
+        public float BeamRange => lungeRange;
+        public float BeamHalfWidth => contactRadius;
+
         public Team Team => Team.Enemy;
 
         /// <summary>Fired on death (spawner decrements its live count). Arg = this enemy.</summary>

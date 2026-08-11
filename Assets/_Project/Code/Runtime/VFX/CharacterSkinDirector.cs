@@ -71,15 +71,13 @@ namespace MaxWorlds.VFX
             if (r.GetComponentInParent<PlayerHealth>() != null) return CharacterRole.Player;
             if (r.GetComponentInParent<BigBermudaBoss>() != null) return CharacterRole.Boss;
 
-            // A robot is not just "a robot" any more (YT-86): the rusher and the bruiser are opposites
-            // — one is small, fast and dies quickly, the other is a fridge that takes three seconds of
-            // held spray — and if they wear the same colour the player has to work out which is which
-            // from the shape of a twenty-pixel blob while being chased by both. They get their own.
+            // A robot is not just "a robot" any more (YT-86, MV-303): the four ground tiers want
+            // different responses — kite a rusher, spend three seconds of held spray on a bruiser, and
+            // so on up the ladder — and if they wear the same colour the player has to work out which
+            // is which from the shape of a twenty-pixel blob while being chased by all of them. Each
+            // gets its own; CharacterSkin.RoleFor is the one place that mapping lives.
             var robot = r.GetComponentInParent<RobotEnemy>();
-            if (robot != null)
-            {
-                return robot.Kind == EnemyKind.Bruiser ? CharacterRole.Bruiser : CharacterRole.Robot;
-            }
+            if (robot != null) return CharacterSkin.RoleFor(robot.Kind);
 
             if (r.GetComponentInParent<MowerHutch>() != null) return CharacterRole.Structure;
 

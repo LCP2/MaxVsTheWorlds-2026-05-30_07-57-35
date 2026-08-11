@@ -86,10 +86,13 @@ namespace MaxWorlds.Arena
             _layout = MapLayoutBridge.ToLayout(_map);
             _build = MapRuntime.Build(_map, transform);
 
+            // ConfigureWorld MUST run before Configure (MV-311): Configure() fills area 1 synchronously,
+            // so if the world config lands after that fill, area 1 permanently misses the budget-solver
+            // path and is stuck on the legacy AreaPopulation fallback for the rest of the run.
             _areaDirector = new GameObject("Area Accumulation").AddComponent<AreaAccumulationDirector>();
             _areaDirector.transform.SetParent(transform, false);
-            _areaDirector.Configure(_map, _build.Cover);
             _areaDirector.ConfigureWorld(cfg);
+            _areaDirector.Configure(_map, _build.Cover);
 
             _worldRunner = new GameObject("World Runner").AddComponent<WorldRunner>();
             _worldRunner.transform.SetParent(transform, false);

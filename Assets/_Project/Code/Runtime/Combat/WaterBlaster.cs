@@ -83,8 +83,8 @@ namespace MaxWorlds.Combat
         // Backyard_Slice.unity carried a baked 5 m/s that read as a real launch — the swarm visibly
         // scattering rather than giving ground. WV-225 reverses that direction: a near-zero cosmetic
         // stagger only, so sustained fire doesn't fling robots around. Same "authored in code, the
-        // scene can't shadow it" reasoning as BlasterTuning.
-        public const float DefaultSprayKnockback = 0.5f;
+        // scene can't shadow it" reasoning as BlasterTuning. MV-315 re-baked to 125% of WV-225's 0.5.
+        public const float DefaultSprayKnockback = 0.625f;
 
         [Header("Debug")]
         [Tooltip("Draw a live fire-state overlay (diagnostics) while DevMode is enabled. Never draws " +

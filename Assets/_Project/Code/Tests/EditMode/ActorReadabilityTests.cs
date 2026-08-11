@@ -210,6 +210,136 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ------------------------------------------------------------------ MV-303: four tiers, not two
+
+        /// <summary>
+        /// Heavy and Brute used to fall through to the rusher's own role (both mapped to
+        /// CharacterRole.Robot), so Area 5+ silently doubled up on turquoise — two more threats
+        /// wearing the same identity as the enemy the player already knows how to read. MV-303 gives
+        /// each ground tier its own colour.
+        /// </summary>
+        [Test]
+        public void TheFourGroundTiers_AreAllVisiblyDistinctColours()
+        {
+            var tiers = new[]
+            {
+                CharacterRole.Robot, CharacterRole.Bruiser, CharacterRole.Heavy, CharacterRole.Brute,
+            };
+
+            for (int i = 0; i < tiers.Length; i++)
+            {
+                for (int j = i + 1; j < tiers.Length; j++)
+                {
+                    Color a = CharacterSkin.BaseColorFor(tiers[i]);
+                    Color b = CharacterSkin.BaseColorFor(tiers[j]);
+                    Assert.Greater(Distance(a, b), 0.25f,
+                        $"{tiers[i]} and {tiers[j]} are close enough to read as the same colour — a " +
+                        "fourth tier only earns its keep by reading as a fourth thing, not a tint of a " +
+                        "third.");
+                }
+            }
+        }
+
+        [Test]
+        public void TheHeavyReadsCold_LikeEveryOtherThingTryingToKillMax()
+        {
+            Color c = CharacterSkin.BaseColorFor(CharacterRole.Heavy);
+            Assert.Greater(Mathf.Max(c.g, c.b), c.r,
+                "the heavy has gone warm — it is competing with Max for the one cue that still works " +
+                "when the screen is full.");
+        }
+
+        /// <summary>Same guarantee as <see cref="APooledBody_ComesBackWearingTheKindItActuallyIs"/>,
+        /// extended past the original two tiers: a robot recycled from the Heavy pool into the Brute
+        /// pool must not keep wearing the Heavy's colour.</summary>
+        [Test]
+        public void APooledBody_ComesBackAsWhicheverOfTheFourTiersItActuallyIs()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            try
+            {
+                var enemy = go.AddComponent<RobotEnemy>();
+                enemy.Apply(EnemyArchetype.Heavy);
+
+                var skin = go.AddComponent<CharacterSkin>().Bind(CharacterRole.Robot);
+                Assert.AreEqual(CharacterRole.Heavy, skin.Role, "it did not come out as a heavy.");
+                Color asHeavy = skin.BodyColor;
+
+                // Back in the pool; out again as the top tier.
+                enemy.Apply(EnemyArchetype.Brute);
+                skin.Apply();
+
+                Assert.AreEqual(CharacterRole.Brute, skin.Role,
+                    "a recycled body came back as a brute and kept the heavy's role.");
+                Assert.AreNotEqual(asHeavy, skin.BodyColor,
+                    "it is a brute now and it is still wearing the heavy's colour.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        // ------------------------------------------------------------------ MV-312: the Gunner is not a rusher
+
+        /// <summary>
+        /// The Gunner shared the rusher's colour (and its model) before this ticket — the two are
+        /// stat-differentiated (EnemyArchetype.Gunner, MV-293) but were visually identical, so a
+        /// player had no way to tell "walk up to this" from "this drains your health from across the
+        /// yard" until they were already hit. Colour is half of the fix; the other half is
+        /// RobotRig.BuildGunner's own silhouette.
+        /// </summary>
+        [Test]
+        public void TheGunnerReadsAsSomethingOtherThanTheRusherItUsedToShareAColourWith()
+        {
+            Color rusher = CharacterSkin.BaseColorFor(CharacterRole.Robot);
+            Color gunner = CharacterSkin.BaseColorFor(CharacterRole.Gunner);
+
+            Assert.Greater(Distance(rusher, gunner), 0.25f,
+                "the Gunner is close enough to the rusher's colour to read as the same threat — " +
+                "exactly the bug this ticket exists to fix.");
+        }
+
+        [Test]
+        public void TheGunnerReadsCold_LikeEveryOtherThingTryingToKillMax()
+        {
+            Color c = CharacterSkin.BaseColorFor(CharacterRole.Gunner);
+            Assert.Greater(Mathf.Max(c.g, c.b), c.r,
+                "the Gunner has gone warm — it is competing with Max for the one cue that still works " +
+                "when the screen is full.");
+        }
+
+        /// <summary>Same guarantee as the ground tiers above, for the one ranged kind that used to
+        /// fall through to the rusher's role: a body recycled from the rusher pool into the Gunner
+        /// pool must not keep wearing the rusher's colour.</summary>
+        [Test]
+        public void APooledBody_ComesBackAsAGunner_NotStillWearingTheRushersColour()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            try
+            {
+                var enemy = go.AddComponent<RobotEnemy>();
+                enemy.Apply(EnemyArchetype.Rusher);
+
+                var skin = go.AddComponent<CharacterSkin>().Bind(CharacterRole.Robot);
+                Assert.AreEqual(CharacterRole.Robot, skin.Role, "it did not come out as a rusher.");
+                Color asRusher = skin.BodyColor;
+
+                // Back in the pool; out again as the Gunner.
+                enemy.Apply(EnemyArchetype.Gunner);
+                skin.Apply();
+
+                Assert.AreEqual(CharacterRole.Gunner, skin.Role,
+                    "a recycled body came back as a Gunner and kept the rusher's role.");
+                Assert.AreNotEqual(asRusher, skin.BodyColor,
+                    "it is a Gunner now and it is still wearing the rusher's colour.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
         // ------------------------------------------------------------------ the flash
 
         /// <summary>

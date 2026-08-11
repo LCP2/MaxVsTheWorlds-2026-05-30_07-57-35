@@ -216,8 +216,11 @@ namespace MaxWorlds.Tests.EditMode
         public void GunnerAndBomber_ReadDifferently_EvenSharingTheRushersSilhouetteFamily()
         {
             // Pillar 4 usually means silhouette; here the behaviour DATA has to diverge instead, since
-            // both share the rusher's small capsule family (MV-293's AC is about distinct behaviour,
-            // not new geometry).
+            // both still share the rusher's small capsule Shape/BodyScale — that field only sizes the
+            // COLLIDER and spawn height (MV-293's AC was about distinct behaviour, not new geometry).
+            // The Gunner's actual on-screen model diverged from the rusher's own later (MV-312,
+            // RobotRig.BuildGunner) without touching this archetype data at all — the visual silhouette
+            // is authored independently of BodyScale, so that fix belongs entirely in RobotRig, not here.
             Assert.Greater(Bomber.ContactRadius, Gunner.ContactRadius,
                 "the Bomber's splash must read as an AREA, wider than the Gunner's beam");
             Assert.Greater(Bomber.TelegraphTime, Gunner.TelegraphTime,

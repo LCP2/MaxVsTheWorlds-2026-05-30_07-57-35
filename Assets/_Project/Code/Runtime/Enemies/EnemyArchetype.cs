@@ -78,19 +78,15 @@ namespace MaxWorlds.Enemies
         /// <summary>The original robot (YT-36/YT-63): a small capsule, deliberately SMALLER than Max
         /// — he's the hero, and a swarm of knee-high machines reads as a swarm (YT-74).
         ///
-        /// MV-289 retunes speed to ~90% of Max's 3.01 (2.71, was YT-169's 1.85/~60%): 0.6's narrow/
-        /// short weapon plus this same slow rusher made Area 1 read as a shooting gallery rather than
-        /// a threat, and the retreat-gap math never made the rusher SCARY, just slow — the survivable-
-        /// but-not-trivial band this ticket targets needs the rusher to actually press, with Max's
-        /// widened HP pool (100, MV-289) and slow out-of-combat regen carrying the survivability
-        /// instead of a wide kiting gap. Retreating still opens ground (3.01-2.71 = 0.3 m/s), just not
-        /// much — standing still still ends with the swarm on top of you either way.</summary>
+        /// MV-289 retuned speed to ~90% of Max's 3.01 (2.71, was YT-169's 1.85/~60%). MV-315 then
+        /// baked Lee's dialed-in playtest number, 2.04 (~68% of Max) — the tuning panel's own 70%
+        /// reading, rounded, off the MV-289 default.</summary>
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 2.71f,   // MV-289: ~90% of Max's 3.01 (was YT-169's 1.85/~60%)
-            // MV-289: 36 -> 32 (with the live 1.42x health multiplier this lands ~45 effective HP at
-            // run start, a ~1.1s TTK against the base spray's unchanged 40 DPS — AC1's target band).
+            moveSpeed: 2.04f,   // MV-315: baked from tuning panel (was MV-289's 2.71)
+            // MV-289: 36 -> 32. MV-315 also re-baked the live health multiplier to 1.26x (was
+            // 1.42x), landing ~40 effective HP at run start.
             maxHealth: 32f,
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
@@ -120,9 +116,9 @@ namespace MaxWorlds.Enemies
             colliderHeight: 1.15f, colliderRadius: 0.55f,
             // Half the rusher's speed, preserved (YT-66's "fridge on legs"): the bruiser scales with
             // whatever the rusher/panel default is to stay the slow tank (was 0.925 = half of YT-169's
-            // 1.85, now 1.355 = half of MV-289's 2.71). Flag: if Lee wants ALL robots flat at the
-            // rusher's speed, this is the one line to change.
-            moveSpeed: 1.355f, maxHealth: 150f,   // YT-194: 100 -> 150, the same 1.5x as the rusher
+            // 1.85, then 1.355 = half of MV-289's 2.71, now 1.02 = half of MV-315's 2.04). Flag: if
+            // Lee wants ALL robots flat at the rusher's speed, this is the one line to change.
+            moveSpeed: 1.02f, maxHealth: 150f,   // YT-194: 100 -> 150, the same 1.5x as the rusher
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,

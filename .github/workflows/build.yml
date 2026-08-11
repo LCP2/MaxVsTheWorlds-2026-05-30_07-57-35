@@ -11,7 +11,7 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: false # queue builds; two streams never cancel each other
+  cancel-in-progress: true # queue builds; two streams never cancel each other
 
 permissions:
   contents: read

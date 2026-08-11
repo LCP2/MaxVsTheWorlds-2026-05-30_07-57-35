@@ -142,10 +142,11 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
             Assert.Greater(_director.LiveCount, 0, "nothing was thrown to begin with");
 
-            // Past the longest life any spring is given. "They clean up" is half the AC, and a leak
-            // here would be invisible until a long run had littered the yard with hundreds of coils.
+            // Past the longest life any spring is given (YT-101 raised it to 3.4-4.6s). "They clean
+            // up" is half the AC, and a leak here would be invisible until a long run had littered
+            // the yard with hundreds of coils.
             float t = 0f;
-            while (t < 4f && _director.LiveCount > 0)
+            while (t < 6f && _director.LiveCount > 0)
             {
                 t += Time.deltaTime;
                 yield return null;
