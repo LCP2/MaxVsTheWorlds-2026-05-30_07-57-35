@@ -220,6 +220,12 @@ namespace MaxWorlds.VFX
         /// uniform scale on top of this authored geometry, same idiom as the untouched four parts.</summary>
         public const float HydroDeviceGroundScale = 1.6f;
 
+        /// <summary>The power cell reads too small in-arena at its authored size (MV-316) — bumped up
+        /// on top of its authored geometry, same idiom as <see cref="HydroDeviceGroundScale"/>. Stays
+        /// below the Hydro device's multiplier so the cell still reads as "the common collectible", not
+        /// the rarer device.</summary>
+        public const float PowerCellGroundScale = 1.4f;
+
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
         /// one that GLOWS brightest, because it is the endgame part that frees Max from the hose — and,
