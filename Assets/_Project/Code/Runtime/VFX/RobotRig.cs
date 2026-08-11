@@ -234,6 +234,7 @@ namespace MaxWorlds.VFX
 
             if (_enemy.Kind == EnemyKind.Bruiser) BuildBruiser(feet);
             else if (_enemy.Kind == EnemyKind.Gunner) BuildGunner(feet);
+            else if (_enemy.Kind == EnemyKind.Bomber) BuildBomber(feet);
             else BuildRusher(feet);
         }
 
@@ -391,6 +392,63 @@ namespace MaxWorlds.VFX
             Part("Sensor", PrimitiveType.Cylinder, feet,
                  new Vector3(0.16f, 1.20f, -0.05f), new Vector3(0.025f, 0.12f, 0.025f), _accentMat,
                  Quaternion.Euler(0f, 0f, -20f));
+        }
+
+        /// <summary>
+        /// The Bomber (MV-329): a legged skitter-bot like the rusher (it kites at a similar pace), but
+        /// everything above the hips is ordnance rather than garden shears — a squat weapons deck
+        /// carrying a canted twin-tube launcher rack, not a leaning pod with claws. Before this, Bomber
+        /// fell through to <see cref="BuildRusher"/> and wore its shear-arms and round head, which reads
+        /// as "the melee kind" — exactly backwards for the one kind whose whole threat is that it never
+        /// closes to melee at all.
+        /// </summary>
+        private void BuildBomber(Transform feet)
+        {
+            // Legs — the same running-legs grammar as the rusher (a launcher that plants roots can't
+            // hold its standoff range), planted a touch wider to carry the deck above them.
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Part("Leg", PrimitiveType.Cylinder, feet,
+                     new Vector3(side * 0.19f, 0.30f, -0.02f), new Vector3(0.11f, 0.30f, 0.13f),
+                     _accentMat, Quaternion.Euler(-6f, 0f, side * 11f));
+                Part("Foot", PrimitiveType.Cube, feet,
+                     new Vector3(side * 0.26f, 0.04f, 0.05f), new Vector3(0.16f, 0.08f, 0.30f), _accentMat);
+            }
+
+            // A squat, boxy hull instead of the rusher's round pod — a weapons deck needs a flat top to
+            // carry a rack, not a body shaped to lean forward into a run.
+            Part("Hull", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 0.56f, 0f), new Vector3(0.48f, 0.32f, 0.50f), _bodyMat);
+
+            Part("Hips", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 0.42f, 0f), new Vector3(0.34f, 0.16f, 0.32f), _accentMat);
+
+            // A low, wide visor rather than the rusher's leaning head — the same "it aims, it doesn't
+            // charge" idiom the Bruiser's Visor already uses.
+            Part("Visor", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 0.82f, 0.14f), new Vector3(0.38f, 0.16f, 0.20f), _bodyMat,
+                 Quaternion.Euler(10f, 0f, 0f));
+
+            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 0.84f, 0.26f), 0.18f) };
+
+            // THE LAUNCHER RACK — the tell that says "missile launcher", not "another rusher". Twin
+            // tubes, canted up off the back deck at a lob angle, feeding a magazine slung underneath —
+            // the AC1 fix (MV-329).
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Part("Tube", PrimitiveType.Cylinder, feet,
+                     new Vector3(side * 0.15f, 0.96f, -0.10f), new Vector3(0.09f, 0.34f, 0.09f), _accentMat,
+                     Quaternion.Euler(-28f, 0f, side * 4f));
+            }
+            Part("Magazine", PrimitiveType.Cube, feet,
+                 new Vector3(0f, 0.78f, -0.16f), new Vector3(0.38f, 0.16f, 0.22f), _bodyMat);
+
+            // An antenna, the same asymmetric fleck every other rig carries.
+            Part("Antenna", PrimitiveType.Cylinder, feet,
+                 new Vector3(-0.12f, 1.10f, -0.08f), new Vector3(0.025f, 0.16f, 0.025f), _accentMat,
+                 Quaternion.Euler(0f, 0f, 14f));
         }
 
         /// <summary>One part of a robot. Given a real material always, marked <see cref="SelfDrivenTint"/>

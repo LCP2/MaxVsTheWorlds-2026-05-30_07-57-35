@@ -107,7 +107,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator NoPartOfEitherRobotShipsMagenta()
         {
-            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser })
+            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Bomber })
             {
                 var robot = NewRobot(kind);
                 robot.AddComponent<RobotRig>();
@@ -214,6 +214,36 @@ namespace MaxWorlds.Tests.PlayMode
                 Object.Destroy(rusher);
                 Object.Destroy(bruiser);
             }
+        }
+
+        /// <summary>
+        /// The Bomber (MV-329): before this it fell through to <see cref="RobotRig.BuildRusher"/> and
+        /// wore the rusher's shear-arms and leaning pod — exactly the wrong read for a kind that never
+        /// closes to melee. It needs its own launcher-rack parts and none of the rusher's melee tells.
+        /// </summary>
+        [UnityTest]
+        public IEnumerator TheBomberIsAMissileLauncher_NotARusher()
+        {
+            _robot = NewRobot(EnemyKind.Bomber);
+            _robot.AddComponent<RobotRig>();
+            yield return null;
+
+            var model = Model(_robot);
+            Assert.IsNotNull(model, "the Bomber never built a model.");
+
+            var names = model.GetComponentsInChildren<Transform>().Select(t => t.name).ToList();
+
+            foreach (var required in new[] { "Tube", "Magazine", "Hull", "Eye" })
+                Assert.IsTrue(names.Contains(required),
+                    $"the Bomber has no '{required}'. The launcher rack is what makes it read as a " +
+                    "missile launcher rather than another rusher.");
+
+            Assert.IsFalse(names.Contains("Claw"),
+                "the Bomber is still wearing the rusher's shear-arms — it fell through to BuildRusher.");
+
+            Assert.Less(ModelBounds(_robot).size.y, 1.83f,
+                "the Bomber out-sizes Max. A swarm of things bigger than the player reads as a moving " +
+                "wall, not as enemies (YT-74).");
         }
 
         // ------------------------------------------------------------------ the eye reads
