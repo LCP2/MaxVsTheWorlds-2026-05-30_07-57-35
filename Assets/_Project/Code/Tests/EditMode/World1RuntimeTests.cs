@@ -70,6 +70,34 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- MV-318: every combat area carries at least one shrub obstacle, and none of them turn ---
+        // --- into a sealed room — MapValidation.Cover's ordinary invariants (free channel, spawn ---
+        // --- ring, doorway mouth) are what actually enforce "obstructs without fully blocking". -----
+
+        [Test]
+        public void World1_EveryCombatAreaHasAShrubberyObstacle()
+        {
+            Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
+
+            for (int n = 1; n <= 8; n++)
+            {
+                MapZone zone = map.Zone($"area{n}");
+                Assert.IsNotNull(zone, $"combat area {n} is missing");
+
+                bool hasShrub = false;
+                foreach (MapEntity cover in MapValidation.Kind(map, EntityKind.Cover))
+                {
+                    if (map.ZoneAt(cover.x, cover.z) == zone) { hasShrub = true; break; }
+                }
+                Assert.IsTrue(hasShrub, $"area {n} ('{zone.id}') has no shrubbery cover placed");
+            }
+
+            // The full-map validation already run above covers this, but the point of the ticket is
+            // specifically that shrubbery never seals a required path — assert it explicitly rather
+            // than relying on it as a side effect of the general Validate() call.
+            Assert.IsTrue(MapValidation.Validate(map, out string why), why);
+        }
+
         [Test]
         public void World1_BossEntityStandsInTheCompostClearing()
         {

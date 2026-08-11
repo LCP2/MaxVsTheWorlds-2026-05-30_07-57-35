@@ -74,6 +74,34 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1, spawns.Count, "the loader should synthesise exactly one spawn in the entry area");
         }
 
+        // ---------------------------------------------------------------- shrubbery cover (MV-318)
+
+        [Test]
+        public void AnAuthoredCoverPiece_BecomesACoverEntity()
+        {
+            WorldConfig cfg = SmallValidWorld();
+            cfg.Area("a1").cover = new[]
+            {
+                new WorldCover
+                {
+                    id = "a1_shrub", x = -6f, z = 6f,
+                    width = 4.5f, height = 1.8f, depth = 1.3f,
+                    shape = "box", dressing = "hedge",
+                },
+            };
+
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
+
+            MapEntity shrub = map.Entity("a1_shrub");
+            Assert.IsNotNull(shrub, "the authored cover piece did not round-trip into the map");
+            Assert.AreEqual(EntityKind.Cover, shrub.Kind);
+            Assert.AreEqual(CoverDressing.Hedge, shrub.Dressing);
+
+            // Still an ordinary Cover entity as far as the rest of the engine is concerned — same
+            // invariants apply (never seals a path, never crowds a spawn ring), no special case.
+            Assert.IsTrue(MapValidation.Validate(map, out string why), why);
+        }
+
         [Test]
         public void Validation_RejectsOverlappingAreas()
         {
