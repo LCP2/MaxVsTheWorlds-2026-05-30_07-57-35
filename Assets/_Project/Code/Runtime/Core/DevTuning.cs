@@ -157,6 +157,12 @@ namespace MaxWorlds.Core
         /// toughening). 1 = the authored default; the panel's "Robot health" knob.</summary>
         public static float? RobotHealthMultiplier { get; set; }
 
+        /// <summary>Minimum spacing (metres) a chasing robot keeps from its nearest neighbours
+        /// (MV-321) — the panel's "Robot min spacing" knob. See
+        /// <see cref="MaxWorlds.Enemies.EnemySeparation"/> for the authored default and the steering
+        /// maths it feeds.</summary>
+        public static float? RobotMinSeparation { get; set; }
+
         // --- weapon/ability backbone (WV-230) ---
 
         /// <summary>Water Balloon's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
@@ -308,6 +314,7 @@ namespace MaxWorlds.Core
             EscalationMax.HasValue || RunLengthSeconds.HasValue ||
             DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue ||
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
+            RobotMinSeparation.HasValue ||
             WaterBalloonCooldownSeconds.HasValue || DashCooldownSeconds.HasValue ||
             TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
             SprayKnockback.HasValue || PrimaryDepletionRate.HasValue ||
@@ -359,6 +366,7 @@ namespace MaxWorlds.Core
             StartingRobots = null;
             RobotProductionPerMinute = null;
             RobotHealthMultiplier = null;
+            RobotMinSeparation = null;
             WaterBalloonCooldownSeconds = null;
             DashCooldownSeconds = null;
             TeleportCooldownSeconds = null;
@@ -436,6 +444,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(StartingRobots), () => StartingRobots, v => StartingRobots = v),
             (PrefsPrefix + nameof(RobotProductionPerMinute), () => RobotProductionPerMinute, v => RobotProductionPerMinute = v),
             (PrefsPrefix + nameof(RobotHealthMultiplier), () => RobotHealthMultiplier, v => RobotHealthMultiplier = v),
+            (PrefsPrefix + nameof(RobotMinSeparation), () => RobotMinSeparation, v => RobotMinSeparation = v),
             (PrefsPrefix + nameof(WaterBalloonCooldownSeconds), () => WaterBalloonCooldownSeconds, v => WaterBalloonCooldownSeconds = v),
             (PrefsPrefix + nameof(DashCooldownSeconds), () => DashCooldownSeconds, v => DashCooldownSeconds = v),
             (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),

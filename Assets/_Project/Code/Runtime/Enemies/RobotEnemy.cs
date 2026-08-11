@@ -51,6 +51,11 @@ namespace MaxWorlds.Enemies
         private float EffectiveMoveSpeed => DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed);
         [SerializeField] private float gravity = 20f;
 
+        /// <summary>Minimum spacing this robot keeps from other active robots while chasing (MV-321),
+        /// after any dev override — same live-read idiom as <see cref="EffectiveMoveSpeed"/>.</summary>
+        private float EffectiveMinSeparation =>
+            DevTuning.Or(DevTuning.RobotMinSeparation, EnemySeparation.DefaultMinDistance);
+
         [Header("Lunge")]
         [SerializeField] private float lungeRange = 2.2f;     // start telegraph within this
         [SerializeField] private float telegraphTime = 0.55f; // wind-up (dodge window)
@@ -110,6 +115,11 @@ namespace MaxWorlds.Enemies
         /// <see cref="MaxWorlds.Factories.FactoryCensus.Reset"/> — belt-and-braces against a robot
         /// whose OnDisable hasn't run yet when the next level (or test) starts counting.</summary>
         public static void ResetRegistry() => _active.Clear();
+
+        /// <summary>Scratch buffer for <see cref="EnemySeparation"/>'s neighbour lookup (MV-321) — one
+        /// shared list, cleared and refilled per robot per tick, instead of a fresh allocation every
+        /// frame for every chaser in a ~20-30 robot swarm.</summary>
+        private static readonly List<Vector3> _separationScratch = new List<Vector3>(32);
 
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
@@ -458,6 +468,19 @@ namespace MaxWorlds.Enemies
                 _wallTimer -= dt;
                 dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
             }
+
+            // MV-321: lean away from anything crowding this robot right now. EnemyFormation's fan
+            // above only biases the GOAL each robot walks toward and collapses to zero on arrival —
+            // it never looks at where the pack actually is, so robots sharing a lane bias still ended
+            // up pressed shoulder-to-shoulder. This reacts to real neighbours instead.
+            _separationScratch.Clear();
+            for (int i = 0; i < _active.Count; i++)
+            {
+                RobotEnemy other = _active[i];
+                if (other != this) _separationScratch.Add(other.transform.position);
+            }
+            Vector3 separation = EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation);
+            dir = EnemySeparation.Steer(dir, separation);
 
             // Gunner/Bomber (MV-293): the answer to a ranged kind must never be "walk at it" — inside
             // its standoff band it backs off along the same line it was closing on, rather than
