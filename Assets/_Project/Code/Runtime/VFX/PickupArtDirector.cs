@@ -346,6 +346,8 @@ namespace MaxWorlds.VFX
             // in this catalog living as one named constant.
             if (key == WeaponPartArt.Keys.HydroDevice)
                 art.transform.localScale = Vector3.one * WeaponPartArt.HydroDeviceGroundScale;
+            else if (key == WeaponPartArt.Keys.PowerCell)
+                art.transform.localScale = Vector3.one * WeaponPartArt.PowerCellGroundScale;
             return art.transform;
         }
 
