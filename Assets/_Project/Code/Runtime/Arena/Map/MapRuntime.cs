@@ -277,6 +277,12 @@ namespace MaxWorlds.Arena
             MarkDiscoverable(body);
             var gate = body.AddComponent<AreaGate>();
 
+            // MV-320: tell the gate which way is "deeper into the level, away from Max" so its hinge
+            // swing opens into the room ahead rather than the one the player is standing in — a chain
+            // that doubles back (world1_config g3: area3 -> area4 runs -X, not +X like g1) needs the
+            // real from/to direction, not a fixed assumption.
+            gate.AwayFromPlayerDirection = AwayFromPlayerDirection(map, e);
+
             // Robots must not be routed at (and grind on) a gate that is still shut (MV-272) — this is
             // what tells EnemyNavigation which live AreaGate a link's "gate" id actually points to.
             EnemyNavigation.RegisterGate(e.id, gate);
@@ -390,6 +396,29 @@ namespace MaxWorlds.Arena
                 }
             }
             return true;
+        }
+
+        /// <summary>World-space direction from this gate's "from" zone centre to its "to" zone centre
+        /// (MV-320) — the room Max is standing in when he reaches the gate, to the room beyond it. Same
+        /// link lookup as <see cref="SealWidth"/> and <see cref="GateRunsAlongX"/>; an unlinked gate (or
+        /// one whose zones can't be resolved) falls back to <see cref="Vector3.zero"/>, which
+        /// <see cref="AreaGate.SwingSign"/> reads as "no map context, keep the old swing". Public, like
+        /// <see cref="SealWidth"/>, so a test can check it against a fixture map without instantiating
+        /// the GameObjects <see cref="BuildAreaGate"/> would spawn.</summary>
+        public static Vector3 AwayFromPlayerDirection(MapData map, MapEntity gate)
+        {
+            if (map.links != null)
+            {
+                foreach (MapLink link in map.links)
+                {
+                    if (link == null || link.gate != gate.id) continue;
+                    MapZone from = map.Zone(link.from);
+                    MapZone to = map.Zone(link.to);
+                    if (from == null || to == null) continue;
+                    return new Vector3(to.x - from.x, 0f, to.z - from.z);
+                }
+            }
+            return Vector3.zero;
         }
 
         /// <summary>The slice scene still carries a hand-placed 30 m ground plane from the very first

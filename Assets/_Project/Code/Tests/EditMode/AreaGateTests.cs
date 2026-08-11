@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Arena;
 
 namespace MaxWorlds.Tests.EditMode
@@ -136,6 +137,66 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsNotNull(after);
             Assert.AreEqual(EntityKind.AreaGate, after.Entity("gate1").Kind);
+        }
+
+        // --- MV-320: gates should open away from Max, not toward him ---
+
+        [Test]
+        public void AwayFromPlayerDirection_PointsFromTheNearRoomToTheFarRoom()
+        {
+            MapData map = TwoAreas(); // area1 (z=-10) -> gate1 (z=0) -> area2 (z=10)
+            MapEntity gate = map.Entity("gate1");
+
+            Vector3 away = MapRuntime.AwayFromPlayerDirection(map, gate);
+
+            Assert.Greater(away.z, 0f, "area2 sits at +Z of area1, so 'away' should point toward +Z");
+        }
+
+        [Test]
+        public void AwayFromPlayerDirection_IsZeroForAnUnlinkedGate()
+        {
+            MapData map = TwoAreas();
+            map.links[0].gate = ""; // gate1 no longer fills any doorway
+
+            Vector3 away = MapRuntime.AwayFromPlayerDirection(map, map.Entity("gate1"));
+
+            Assert.AreEqual(Vector3.zero, away);
+        }
+
+        [Test]
+        public void SwingSign_FlipsWhenTheFarRoomSitsOnTheSameSideTheDoorDefaultsToSwingingAwayFrom()
+        {
+            // A positive-angle hinge swing always sweeps toward -forward (AreaGate.SwingSign's own
+            // doc) — so when the far room is ahead on the +forward side, the default (+1) would swing
+            // the door back into the near room and the sign must flip to -1.
+            Assert.AreEqual(-1f, AreaGate.SwingSign(Vector3.forward, Vector3.forward));
+        }
+
+        [Test]
+        public void SwingSign_KeepsTheDefaultWhenTheFarRoomIsAlreadyOnTheSwingsNaturalSide()
+        {
+            Assert.AreEqual(1f, AreaGate.SwingSign(-Vector3.forward, Vector3.forward));
+        }
+
+        [Test]
+        public void SwingSign_ADoubledBackChainNeedsTheOppositeSignFromAStraightOne()
+        {
+            // world1_config: g1 (area1 -> area2) runs +X, g3 (area3 -> area4) runs -X on the SAME
+            // E/W-wall gate orientation (forward = world +X for every E/W gate, MapRuntime.BuildAreaGate)
+            // — a single hardcoded sign would get one of the two backwards.
+            Vector3 ewForward = Vector3.right;
+
+            float straight = AreaGate.SwingSign(Vector3.right, ewForward);   // g1-style: away runs +X
+            float doubledBack = AreaGate.SwingSign(-Vector3.right, ewForward); // g3-style: away runs -X
+
+            Assert.AreNotEqual(straight, doubledBack);
+        }
+
+        [Test]
+        public void SwingSign_DefaultsToPositiveWithNoMapContext()
+        {
+            Assert.AreEqual(1f, AreaGate.SwingSign(Vector3.zero, Vector3.forward));
+            Assert.AreEqual(1f, AreaGate.SwingSign(Vector3.zero, Vector3.right));
         }
     }
 }
