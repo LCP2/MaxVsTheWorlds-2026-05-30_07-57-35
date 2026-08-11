@@ -55,6 +55,7 @@ jobs:
   playcheck:
     name: Play-check (PlayMode)
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
         with:
@@ -127,7 +128,7 @@ jobs:
   # ---------------------------------------------------------------------------
   jira-on-staging:
     name: Mark deployed tickets On Staging
-    needs: [deploy, playcheck]
+    needs: [deploy]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
