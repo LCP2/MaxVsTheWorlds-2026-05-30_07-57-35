@@ -467,6 +467,10 @@ namespace MaxWorlds.Enemies
                 e = go.AddComponent<RobotEnemy>();
             }
 
+            // MV-350 diagnostic tag — see RobotSpawnSource. Stamped once, here, regardless of which
+            // branch above built the instance.
+            e.gameObject.AddComponent<RobotSpawnSource>().Mark($"EnemySpawner@{gameObject.name}");
+
             e.Apply(a);                 // stats — after Awake, which seeded the defaults
             e.Died += OnEnemyDied;
             e.gameObject.SetActive(false);
