@@ -26,10 +26,12 @@ namespace MaxWorlds.Pickups
     /// this loop). A dropped part's <see cref="MaxWorlds.Upgrades.PartKind"/> is purely cosmetic now —
     /// it only steers <c>PickupArtDirector</c>'s occasional Hydro-device swap.
     ///
-    /// Sheds are the ability-unlock mechanic (WV-229): a destroyed <c>MowerHutch</c> reports through
-    /// <see cref="HudSignals.FactoryDestroyed"/>, and this director draws a random entry from
-    /// <see cref="WeaponSystemState.Unacquired"/> and drops a device pickup carrying it — or, once all
-    /// six abilities are owned, a part plus a bigger "cell cache" instead.
+    /// Sheds are the ability-unlock mechanic (WV-229, draft-pick reversal MV-357): a destroyed
+    /// <c>MowerHutch</c> reports through <see cref="HudSignals.FactoryDestroyed"/>, and this director
+    /// draws up to <see cref="AbilityDraft.MaxCandidates"/> candidates from
+    /// <see cref="WeaponSystemState.Unacquired"/> via <see cref="AbilityDraft"/>. Two or three
+    /// candidates open <see cref="UpgradeScreen.OpenAbilityChoice"/> so the player picks; exactly one
+    /// installs directly with no screen; none left falls back to a part plus a bigger "cell cache".
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -105,27 +107,44 @@ namespace MaxWorlds.Pickups
         private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
             MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
-        /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6): destroying one drops a
-        /// device granting one random ability Max doesn't already own. Once all six are owned there is
-        /// nothing left to grant, so it falls back to a part + a cell cache instead — the reward the
-        /// shed no longer has a use for the ability pool to give.</summary>
+        /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6; draft-pick MV-357):
+        /// destroying one draws up to <see cref="AbilityDraft.MaxCandidates"/> unowned abilities. Two
+        /// or three candidates open the paused choice screen so the player picks which one to grant;
+        /// exactly one candidate installs directly — a single-card screen would be a pointless tap.
+        /// Once every ability is owned there is nothing left to grant, so it falls back to a part + a
+        /// cell cache instead — the reward the shed no longer has a use for the ability pool to give.</summary>
         private void OnFactoryDestroyed(Vector3 pos)
         {
-            var unacquired = new List<AbilityKind>(WeaponSystemState.Unacquired);
-            if (unacquired.Count > 0)
+            AbilityKind[] candidates = AbilityDraft.DrawCandidates();
+            switch (candidates.Length)
             {
-                AbilityKind kind = unacquired[Random.Range(0, unacquired.Count)];
-                SpawnDrop(PickupKind.Device, pos, ability: kind);
-                return;
+                case 0:
+                    SpawnDrop(PickupKind.Part, pos, DecorativeKind());
+                    for (int i = 0; i < ShedCellCacheAmount; i++)
+                    {
+                        float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
+                        Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                        SpawnDrop(PickupKind.PowerCell, pos + off);
+                    }
+                    return;
+                case 1:
+                    GrantAbility(candidates[0], pos);
+                    return;
+                default:
+                    var screen = FindFirstObjectByType<UpgradeScreen>();
+                    if (screen != null) screen.OpenAbilityChoice(candidates);
+                    return;
             }
+        }
 
-            SpawnDrop(PickupKind.Part, pos, DecorativeKind());
-            for (int i = 0; i < ShedCellCacheAmount; i++)
-            {
-                float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
-                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
-                SpawnDrop(PickupKind.PowerCell, pos + off);
-            }
+        /// <summary>The exactly-one-candidate-left path (MV-357 AC2): grant it outright, no screen, same
+        /// "UNLOCKED" toast the old walk-over device gave — a one-card choice screen would just be an
+        /// extra tap for a decision that was never really a decision.</summary>
+        private static void GrantAbility(AbilityKind kind, Vector3 pos)
+        {
+            WeaponSystemState.Acquire(kind);
+            HudSignals.EmitPickup(pos, WeaponCatalog.DisplayName(kind) + " UNLOCKED",
+                MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
         }
 
         private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
