@@ -1129,9 +1129,20 @@ namespace MaxWorlds.UI
 
         private void RefreshArenaText(bool prominent)
         {
-            var a = _model.Arena;
-            _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+            _arenaLabel.text = ArenaLabelText(_model.Arena);
         }
+
+        /// <summary>
+        /// MV-353: "SUB-ZONE n/1" was a leftover from the pre-MV-242 single-arena slice — it is not
+        /// the same concept as an "Area" in the 10-area gated chain (that already has its own readout,
+        /// the minimap), <see cref="ArenaProgress.SubZonesTotal"/> is hard-pinned to 1 in production, and
+        /// the flag it shows (every factory destroyed) is the exact instant <see cref="ArenaProgress.FactoriesDestroyed"/>
+        /// reaches <see cref="ArenaProgress.FactoriesTotal"/> — a permanently-redundant "0/1" or "1/1"
+        /// beside the count that already says the same thing. Dropped rather than relabelled: it has no
+        /// meaning of its own left to give a correct label to. FACTORIES stays — it counts real,
+        /// dynamically-discovered factories correctly (see <see cref="HudModel.RegisterFactory"/>).
+        /// </summary>
+        public static string ArenaLabelText(ArenaProgress a) => $"FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
 
         /// <summary>Test hook (MV-264): what the minimap is currently showing, one entry per area in
         /// order — the same states <see cref="UpdateMinimap"/> just painted, not a second computation
