@@ -1159,8 +1159,15 @@ namespace MaxWorlds.UI
         /// true top-down room diagram — the strip's tiny stacked pips read as decoration, not a map,
         /// and gave no sense of the player's actual position). One rectangle per "area&lt;N&gt;" zone
         /// the loaded map defines (never a hardcoded ten), scaled to its real footprint via
-        /// <see cref="MinimapModel.AreaBounds"/>/<see cref="MinimapModel.NormalizedZoneRect"/> and
-        /// placed under the ability slots — the same top-right gap the strip used.
+        /// <see cref="MinimapModel.AreaBounds"/>/<see cref="MinimapModel.NormalizedZoneRect"/>.
+        ///
+        /// MV-354: moved to the LEFT side — the right side is the thumb-side of the screen (ability
+        /// slots, Dash/Hydro, the aim stick), and the minimap was competing with those controls for
+        /// space. Sits under the Utility Icons/Home Button column, the same clearance gap that column
+        /// gave the old top-right minimap under the ability slots. Its x-range (24-224) sits well clear
+        /// of the Water Balloon/Teleport joysticks (centred at x=450, ±130 with touch-pad margin), and
+        /// its y-range is well above the Move joystick (bottom-left) — see <see cref="HudLayoutPlayTests"/>-
+        /// style non-overlap discipline; no widget here is under the player's left thumb.
         ///
         /// Deferred to <see cref="Update"/> rather than built in <see cref="Awake"/>: <see cref="BackyardPath"/>
         /// loads its map inside its own Awake, and Unity does not promise this component's Awake runs
@@ -1185,9 +1192,9 @@ namespace MaxWorlds.UI
             _minimapFrameSize = new Vector2(FrameSize - Padding * 2f, FrameSize - Padding * 2f);
 
             var root = NewRect("Minimap", Root);
-            Anchor(root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
+            Anchor(root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             root.sizeDelta = new Vector2(FrameSize, FrameSize);
-            root.anchoredPosition = new Vector2(-24f, -210f); // under the ability slots column
+            root.anchoredPosition = new Vector2(24f, -250f); // under the utility icon column
 
             // A backing panel (MV-278): every other HUD readout — status bar, ability slots, utility
             // icons — sits on a solid PanelColor backdrop, so a hidden (undrawn) room reads as fog
