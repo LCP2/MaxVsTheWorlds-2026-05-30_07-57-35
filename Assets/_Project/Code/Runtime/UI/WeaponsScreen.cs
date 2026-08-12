@@ -115,6 +115,10 @@ namespace MaxWorlds.UI
         private Image _partsGlow;          // MV-327: pulses while a part is banked — the "prominent, readable at a glance" tell
         private Image _weaponGlowRing;     // MV-262: the "cooler under Max" tech-ring behind the RCDA render — spins while open
         private Text _abilitiesHeaderText;
+        private RectTransform _buildAbilityRoot;   // MV-358: BUILD ABILITY — spends a banked shed credit
+        private Image _buildAbilityBg;
+        private Text _buildAbilityLabel;
+        private Button _buildAbilityButton;
 
         private readonly Text[] _trackName = new Text[TrackCount];
         private readonly Image[][] _trackPips = new Image[TrackCount][];
@@ -159,6 +163,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed += Refresh;
             PickupWallet.PartsChanged += OnPartsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
+            AbilityCreditBank.Changed += OnAbilityCreditsChanged;
         }
 
         private void OnDisable()
@@ -166,6 +171,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed -= Refresh;
             PickupWallet.PartsChanged -= OnPartsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
+            AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
         }
 
         private void OnDestroy()
@@ -211,6 +217,7 @@ namespace MaxWorlds.UI
 
         private void OnPartsChanged(int banked) => Refresh();
         private void OnCellsChanged(int cells) => Refresh();
+        private void OnAbilityCreditsChanged(int banked) => Refresh();
 
         /// <summary>Open the weapons area, pausing the game. Ignored if already open.</summary>
         public void Open()
@@ -297,6 +304,13 @@ namespace MaxWorlds.UI
                 SetAbilityLocked(i);
 
             _abilitiesHeaderText.text = $"ABILITIES — {shown} of {MaxAbilityRows} unlocked";
+
+            // MV-358: the BUILD ABILITY button only exists while a shed credit is banked — no dead
+            // button otherwise — and its label carries the count so spending several in a row is legible.
+            int credits = AbilityCreditBank.Banked;
+            if (_buildAbilityRoot != null) _buildAbilityRoot.gameObject.SetActive(credits > 0);
+            if (_buildAbilityLabel != null)
+                _buildAbilityLabel.text = $"BUILD ABILITY ({credits})";
         }
 
         /// <summary>Greys out ability slot <paramref name="i"/> into an unnamed "still to find" tile —
@@ -335,6 +349,34 @@ namespace MaxWorlds.UI
         private void OnTrackButtonTapped(int index) => PartSpend.TrySpendOnTrack(WeaponCatalog.AllTrackKinds[index]);
 
         private void OnAbilityButtonTapped(int row) => PartSpend.TrySpendOnAbility(_abilityRowKind[row]);
+
+        /// <summary>BUILD ABILITY (MV-358): draws candidates the same way the old mid-fight modal did,
+        /// but on demand from this screen instead of the instant a shed dies. Two or three candidates
+        /// open the draft-pick card screen so the player chooses (<see cref="UpgradeScreen.OpenAbilityChoice"/>,
+        /// which itself spends the credit once a card is tapped); exactly one candidate builds directly —
+        /// a one-card choice would be a pointless tap, same rationale MV-357 used. Every ability already
+        /// owned (credits outlived the pool, e.g. two credits banked with only one ability left) spends
+        /// the credit with nothing to show for it rather than leaving a dead button.</summary>
+        private void OnBuildAbilityTapped()
+        {
+            if (AbilityCreditBank.Banked <= 0) return;
+
+            AbilityKind[] candidates = AbilityDraft.DrawCandidates();
+            switch (candidates.Length)
+            {
+                case 0:
+                    AbilityCreditBank.TrySpend();
+                    return;
+                case 1:
+                    WeaponSystemState.Acquire(candidates[0]);
+                    AbilityCreditBank.TrySpend();
+                    return;
+                default:
+                    var screen = FindFirstObjectByType<UpgradeScreen>();
+                    if (screen != null) screen.OpenAbilityChoice(candidates);
+                    return;
+            }
+        }
 
         // ------------------------------------------------------------------ build
 
@@ -714,10 +756,12 @@ namespace MaxWorlds.UI
         private void BuildAbilitiesSection(RectTransform column, float y)
         {
             _abilitiesHeaderText = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
-            Anchor(_abilitiesHeaderText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
+            Anchor(_abilitiesHeaderText.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(0f, 1f));
             _abilitiesHeaderText.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
             _abilitiesHeaderText.rectTransform.anchoredPosition = new Vector2(0f, y);
             _abilitiesHeaderText.fontStyle = FontStyle.Bold;
+
+            BuildBuildAbilityButton(column, y);
 
             float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
             for (int i = 0; i < MaxAbilityRows; i++)
@@ -734,6 +778,33 @@ namespace MaxWorlds.UI
                 _abilityButton[i].onClick.AddListener(() => OnAbilityButtonTapped(row));
                 _abilityRow[i] = r.Row.gameObject;
             }
+        }
+
+        /// <summary>MV-358: a pill on the abilities header row, right of the "X of Y unlocked" text —
+        /// shown only while a shed credit is banked (see <see cref="Refresh"/>). Amber like the other
+        /// spend affordances (PARTS chip, +buttons), since it's the same "you have something to spend"
+        /// family of action.</summary>
+        private void BuildBuildAbilityButton(RectTransform column, float y)
+        {
+            _buildAbilityRoot = NewRect("Build Ability Root", column, new Vector2(0.6f, 1f), new Vector2(1f, 1f));
+            _buildAbilityRoot.pivot = new Vector2(1f, 1f);
+            _buildAbilityRoot.sizeDelta = new Vector2(0f, SectionHeaderHeight);
+            _buildAbilityRoot.anchoredPosition = new Vector2(0f, y);
+
+            _buildAbilityBg = AddImage(_buildAbilityRoot, HudTextures.RoundedBox(20, 0.5f), PartsColor, "Build Ability Button");
+            Stretch(_buildAbilityBg.rectTransform); _buildAbilityBg.type = Image.Type.Sliced;
+            _buildAbilityBg.raycastTarget = true;
+
+            _buildAbilityButton = _buildAbilityBg.gameObject.AddComponent<Button>();
+            _buildAbilityButton.transition = Selectable.Transition.None;
+            _buildAbilityButton.onClick.AddListener(OnBuildAbilityTapped);
+
+            _buildAbilityLabel = AddText(_buildAbilityRoot, 22, PanelColor, TextAnchor.MiddleCenter);
+            Stretch(_buildAbilityLabel.rectTransform);
+            _buildAbilityLabel.fontStyle = FontStyle.Bold;
+            _buildAbilityLabel.raycastTarget = false;
+
+            _buildAbilityRoot.gameObject.SetActive(false);   // Refresh() turns it on once a credit is banked
         }
 
         /// <summary>The refs a built grid row hands back — <see cref="BuildGridRow"/> grew a couple more
