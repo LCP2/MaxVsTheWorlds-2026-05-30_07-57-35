@@ -145,5 +145,17 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(drain, Is.GreaterThan(0f), $"level {level} drained to zero or negative — the tank must never stop draining outright");
             }
         }
+
+        // ---------------------------------------------------------------- MV-357: ability draft-pick cards
+
+        [Test]
+        public void EveryAbilityHasANonEmptyGlyphAndEffectLine_MV357()
+        {
+            foreach (var kind in WeaponCatalog.AllAbilityKinds)
+            {
+                Assert.That(WeaponCatalog.Glyph(kind), Is.Not.Null.And.Not.Empty, $"{kind} has no card glyph");
+                Assert.That(WeaponCatalog.EffectLine(kind), Is.Not.Null.And.Not.Empty, $"{kind} has no card effect line");
+            }
+        }
     }
 }

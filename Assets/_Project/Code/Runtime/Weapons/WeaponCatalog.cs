@@ -172,6 +172,37 @@ namespace MaxWorlds.Weapons
             }
         }
 
+        /// <summary>Short glyph for an ability's card/icon tile (MV-357) — same rationale as
+        /// <c>WeaponsScreen.AbilityGlyph</c>, which this mirrors; abilities have no sprite art yet.</summary>
+        public static string Glyph(AbilityKind kind)
+        {
+            switch (kind)
+            {
+                case AbilityKind.WaterBalloon: return "H2O";
+                case AbilityKind.Speed: return "SPD";
+                case AbilityKind.Dash: return "DSH";
+                case AbilityKind.Teleport: return "TP";
+                case AbilityKind.WeaponCooldown: return "CD";
+                default: return "?";
+            }
+        }
+
+        /// <summary>A short, plain-language line of what this ability does (MV-357) — the shed
+        /// draft-pick card's effect text, mirroring
+        /// <see cref="MaxWorlds.Upgrades.UpgradeCatalog.EffectLine"/> for parts.</summary>
+        public static string EffectLine(AbilityKind kind)
+        {
+            switch (kind)
+            {
+                case AbilityKind.WaterBalloon: return "Joystick-aimed lob that splashes enemies on impact.";
+                case AbilityKind.Speed: return "Passive move-speed boost.";
+                case AbilityKind.Dash: return "Quick directional burst out of danger.";
+                case AbilityKind.Teleport: return "Blink to a nearby spot, dodging in an instant.";
+                case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";
+                default: return string.Empty;
+            }
+        }
+
         private static readonly TextInfo s_textInfo = CultureInfo.InvariantCulture.TextInfo;
 
         /// <summary>"WEAPON EFFICIENCY" -> "Weapon Efficiency". The weapons screen's v0.5 design

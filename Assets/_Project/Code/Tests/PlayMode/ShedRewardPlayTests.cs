@@ -1,6 +1,7 @@
 using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UI;
 using UnityEngine.TestTools;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
@@ -10,13 +11,16 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// Sheds are the ability-unlock mechanic now (WV-229, spec §4/§6): destroying one grants one random
-    /// ability Max doesn't already own, drawn from the six-ability pool WV-230 backs. Once every ability
-    /// is owned, a shed has nothing left to grant and falls back to a part + a bigger power-cell cache.
+    /// Sheds are the ability-unlock mechanic (WV-229, spec §4/§6), reversed from a random grant to a
+    /// player-picked one by MV-357: destroying one with 2-3 unowned abilities left opens
+    /// <see cref="UpgradeScreen"/>'s paused draft-pick screen; with exactly 1 left it grants that ability
+    /// directly (a one-card screen would be a pointless tap); once every ability is owned it falls back
+    /// to a part + a bigger power-cell cache, unchanged from WV-229.
     /// </summary>
     public sealed class ShedRewardPlayTests
     {
         private GameObject _director;
+        private GameObject _screenGo;
         private GameObject _max;
 
         [UnitySetUp]
@@ -26,6 +30,11 @@ namespace MaxWorlds.Tests.PlayMode
             // abilities would silently shrink this test's Unacquired pool.
             WeaponSystemState.Reset();
             PickupWallet.Reset();
+            Time.timeScale = 1f;
+            // The screen self-installs and persists across the run; clear it so each test owns exactly
+            // one, same guard NewDirector() applies to PickupDirector below.
+            foreach (var s in Object.FindObjectsByType<UpgradeScreen>(FindObjectsSortMode.None))
+                Object.Destroy(s.gameObject);
             yield return null;
         }
 
@@ -35,8 +44,10 @@ namespace MaxWorlds.Tests.PlayMode
             WeaponSystemState.Reset();
             PickupWallet.Reset();
             DevTuning.Reset();
+            Time.timeScale = 1f;   // never leave the world frozen for the next test
             if (_max != null) Object.Destroy(_max);
             if (_director != null) Object.Destroy(_director);
+            if (_screenGo != null) Object.Destroy(_screenGo);
             yield return null;
             foreach (var p in Object.FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 Object.Destroy(p.gameObject);
@@ -59,6 +70,22 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;   // OnEnable subscribes to HudSignals.FactoryDestroyed
         }
 
+        private IEnumerator NewScreen()
+        {
+            _screenGo = new GameObject("UpgradeScreen");
+            _screenGo.AddComponent<UpgradeScreen>();
+            yield return null;   // Start builds the canvas
+        }
+
+        private UpgradeScreen Screen => _screenGo.GetComponent<UpgradeScreen>();
+
+        private static Button FindButtonNamed(GameObject root, string name)
+        {
+            foreach (var b in root.GetComponentsInChildren<Button>(true))
+                if (b.gameObject.name == name) return b;
+            return null;
+        }
+
         private static int LivePickups(PickupKind kind)
         {
             int n = 0;
@@ -68,78 +95,98 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator DestroyingAShedDropsExactlyOneDevice_NoPartOrCells()
+        public IEnumerator DestroyingAShedWithThreeUnownedAbilitiesOpensTheChoiceScreen_MV357()
         {
+            yield return NewScreen();
             yield return NewDirector();
 
             HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
             yield return null;
 
-            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(1),
-                "a shed with abilities left to grant must drop exactly one device");
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
-                "a shed must not drop a part while it still has an ability to grant");
-            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(0),
-                "a shed must not drop a cell cache while it still has an ability to grant");
+            Assert.That(Screen.IsOpen, Is.True, "a shed with 3+ abilities left must open the draft-pick screen");
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "the fight must pause while the player is choosing");
+            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(0), "the choice screen replaces the walk-over device");
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0));
+            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(0));
         }
 
         [UnityTest]
-        public IEnumerator TheDroppedDeviceGrantsAnAbilityMaxDidNotAlreadyOwn()
+        public IEnumerator TappingACardInTheShedChoiceGrantsExactlyThatAbilityAndResumes_MV357()
         {
+            yield return NewScreen();
             yield return NewDirector();
 
-            // Own every ability except Teleport — the device this shed drops has exactly one candidate
-            // left, so the grant is deterministic instead of a 1-in-N roll.
+            // Own everything except two, so the shed's draw is exactly this pair — deterministic instead
+            // of a 3-of-5 roll.
+            foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
+                if (kind != AbilityKind.Dash && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
+
+            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
+            yield return null;
+            Assert.That(Screen.IsOpen, Is.True);
+
+            FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();
+            yield return null;
+
+            Assert.That(Screen.IsOpen, Is.False, "choosing a card must close the screen");
+            Assert.That(Time.timeScale, Is.EqualTo(1f), "and resume the fight");
+            bool exactlyOneGranted = WeaponSystemState.IsAcquired(AbilityKind.Dash) ^ WeaponSystemState.IsAcquired(AbilityKind.Teleport);
+            Assert.That(exactlyOneGranted, Is.True, "tapping a card must grant exactly the ability that card showed, not both");
+        }
+
+        [UnityTest]
+        public IEnumerator UnpickedCandidatesStayInThePoolForALaterShed_MV357()
+        {
+            yield return NewScreen();
+            yield return NewDirector();
+
+            foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
+                if (kind != AbilityKind.Dash && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
+
+            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
+            yield return null;
+            FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();
+            yield return null;
+
+            // Exactly one of the pair got granted; the other must still be sitting in Unacquired for a
+            // later shed to offer again — nothing is ever lost, and nothing is ever granted twice.
+            int stillUnacquired = 0;
+            foreach (var kind in new[] { AbilityKind.Dash, AbilityKind.Teleport })
+                if (!WeaponSystemState.IsAcquired(kind)) stillUnacquired++;
+            Assert.That(stillUnacquired, Is.EqualTo(1));
+        }
+
+        [UnityTest]
+        public IEnumerator DestroyingAShedWithExactlyOneUnownedAbilityGrantsItDirectly_MV357()
+        {
+            yield return NewScreen();
+            yield return NewDirector();
+
+            // Own every ability except Teleport — the shed's draw has exactly one candidate left, so the
+            // grant is deterministic instead of a choice.
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
                 if (kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 
             HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
             yield return null;
 
-            Pickup device = null;
-            foreach (var p in Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None))
-                if (p.gameObject.activeInHierarchy && p.Kind == PickupKind.Device) device = p;
-            Assert.IsNotNull(device, "the shed did not drop a device");
-            Assert.AreEqual(AbilityKind.Teleport, device.Ability,
-                "the device must carry the one ability Max doesn't already own");
-        }
-
-        [UnityTest]
-        public IEnumerator WalkingOverTheDeviceGrantsTheAbilityAndRemovesIt()
-        {
-            yield return NewDirector();
-            foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
-                if (kind != AbilityKind.Dash) WeaponSystemState.Acquire(kind);
-
-            _max = new GameObject("Max");
-            _max.tag = "Player";
-            _max.transform.position = new Vector3(20f, 0f, 20f); // far from the drop for now
-
-            HudSignals.EmitFactoryDestroyed(Vector3.zero);
-            yield return null;
-            Assert.IsFalse(WeaponSystemState.IsAcquired(AbilityKind.Dash),
-                "the ability must not be granted while Max is across the yard");
-
-            _max.transform.position = Vector3.zero;   // walk onto the device
-            yield return null;   // director's Update does the walk-over check
-
-            Assert.IsTrue(WeaponSystemState.IsAcquired(AbilityKind.Dash),
-                "walking onto the device must grant the ability outright — no menu, no button");
-            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(0),
-                "a collected device must leave the ground");
+            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Teleport), Is.True,
+                "with only one ability left, the shed must grant it outright — a one-card screen is a pointless tap");
+            Assert.That(Screen.IsOpen, Is.False, "a single candidate must not open the choice screen");
+            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(0));
         }
 
         [UnityTest]
         public IEnumerator OnceEveryAbilityIsOwned_AShedDropsAPartAndACellCacheInstead()
         {
+            yield return NewScreen();
             yield return NewDirector();
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds) WeaponSystemState.Acquire(kind);
 
             HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
             yield return null;
 
-            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(0),
-                "there is no ability left to grant, so no device should drop");
+            Assert.That(Screen.IsOpen, Is.False, "there is no ability left to grant, so no choice screen should open");
             Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1),
                 "a fully-unlocked shed must fall back to dropping a part");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(PickupDirector.ShedCellCacheAmount),
