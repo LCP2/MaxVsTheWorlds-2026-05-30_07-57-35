@@ -126,6 +126,19 @@ namespace MaxWorlds.VFX
         /// <summary>True once the model has been built (once per pooled GameObject).</summary>
         public bool Built => _built;
 
+        /// <summary>MV-350 diagnostic only: how many times <see cref="BuildMaterials"/> has actually
+        /// run on this instance. Should never exceed 1 today — <see cref="EnsureBuilt"/> guards it —
+        /// but the hunt needs to see that fact confirmed on a live build, not assumed from reading the
+        /// guard. See <see cref="RobotSkinDiagnostics"/>.</summary>
+        public int BuildCount { get; private set; }
+
+        /// <summary>MV-350 diagnostic only: the body colour actually assigned to
+        /// <see cref="_bodyMat"/> right now — what the robot is really wearing, as opposed to what
+        /// <see cref="CharacterSkin.BaseColorFor"/> says it should be wearing. <see cref="Color.clear"/>
+        /// before the rig has built. See <see cref="RobotSkinDiagnostics"/>.</summary>
+        public Color CurrentBodyColor =>
+            _bodyMat != null && _bodyMat.HasProperty(BaseColorId) ? _bodyMat.GetColor(BaseColorId) : Color.clear;
+
         // ---------------------------------------------------------------- lifecycle
 
         private void Awake() => EnsureBuilt();
@@ -186,6 +199,8 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void BuildMaterials()
         {
+            BuildCount++;
+
             CharacterRole role = CharacterSkin.RoleFor(_enemy.Kind);
             Color body = CharacterSkin.BaseColorFor(role);
 

@@ -50,6 +50,12 @@ namespace MaxWorlds.VFX
             {
                 if (enemy.GetComponent<RobotRig>() == null)
                     enemy.gameObject.AddComponent<RobotRig>();
+
+                // MV-350 diagnostic — see RobotSkinDiagnostics. Same "add once, let OnEnable fire per
+                // spawn" shape as RobotRig above, so it rides the exact same sweep and never lags a
+                // robot that skips the "sits inactive, already dressed" runway.
+                if (enemy.GetComponent<RobotSkinDiagnostics>() == null)
+                    enemy.gameObject.AddComponent<RobotSkinDiagnostics>();
             }
         }
     }

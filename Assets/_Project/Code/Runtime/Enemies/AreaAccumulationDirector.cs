@@ -333,6 +333,10 @@ namespace MaxWorlds.Enemies
                 e = go.AddComponent<RobotEnemy>();
             }
 
+            // MV-350 diagnostic tag — see RobotSpawnSource. Stamped once, here, regardless of which
+            // branch above built the instance.
+            e.gameObject.AddComponent<RobotSpawnSource>().Mark("AreaAccumulationDirector");
+
             e.Apply(a);
             e.Died += OnEnemyDied;
             e.gameObject.SetActive(false);
