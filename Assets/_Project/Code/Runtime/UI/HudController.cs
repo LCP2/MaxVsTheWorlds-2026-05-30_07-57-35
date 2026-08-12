@@ -1399,15 +1399,18 @@ namespace MaxWorlds.UI
             _warning.gameObject.SetActive(false);
         }
 
-        /// <summary>The banked power-cell counter (YT-131): a small pill under the level pip with a
-        /// cyan cell icon and a running total. Display-only currency for now — it just has to be
-        /// visibly accumulating as you clear the tough robots.</summary>
+        /// <summary>The banked power-cell counter (MV-352): a first-class top-band pill with a cyan
+        /// cell icon and a running total. Cells are a resource the player spends, so this reads at a
+        /// glance the way health does — sized and placed in the top readout band, not tucked beside
+        /// another widget. Sits top-center, clear of Utility Icons/Home Button (top-left) and Ability
+        /// Slots/Minimap (top-right). Display-only currency for now — it just has to be visibly
+        /// accumulating as you clear the tough robots.</summary>
         private void BuildPowerCellCounter()
         {
             var root = NewRect("Power Cells", Root);
             Anchor(root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            root.sizeDelta = new Vector2(150f, 44f);
-            root.anchoredPosition = new Vector2(0f, -104f); // just below the centred level pip
+            root.sizeDelta = new Vector2(220f, 84f);
+            root.anchoredPosition = new Vector2(0f, -24f); // top band, level with Utility Icons/Home Button
 
             var bg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = false;
@@ -1416,15 +1419,18 @@ namespace MaxWorlds.UI
             // The sprite bakes its own cyan/dark, so tint white to render it as authored.
             _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Cell Icon");
             Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            _cellIcon.rectTransform.sizeDelta = new Vector2(30f, 30f);
-            _cellIcon.rectTransform.anchoredPosition = new Vector2(16f, 0f);
+            _cellIcon.rectTransform.sizeDelta = new Vector2(60f, 60f);
+            _cellIcon.rectTransform.anchoredPosition = new Vector2(24f, 0f);
             _cellIcon.raycastTarget = false;
 
-            _cellCount = AddText(root, 24f, BoneWhite, TextAnchor.MiddleLeft);
+            _cellCount = AddText(root, 40f, BoneWhite, TextAnchor.MiddleLeft);
             Anchor(_cellCount.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
-            _cellCount.rectTransform.offsetMin = new Vector2(42f, 0f);
-            _cellCount.rectTransform.offsetMax = new Vector2(-10f, 0f);
+            _cellCount.rectTransform.offsetMin = new Vector2(80f, 0f);
+            _cellCount.rectTransform.offsetMax = new Vector2(-14f, 0f);
             _cellCount.fontStyle = FontStyle.Bold;
+            _cellCount.resizeTextForBestFit = true;
+            _cellCount.resizeTextMinSize = 20;
+            _cellCount.resizeTextMaxSize = 40;
             _cellCount.text = MaxWorlds.Pickups.PickupWallet.PowerCells.ToString();
         }
 
