@@ -98,6 +98,33 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
         }
 
+        // --- MV-360: MV-318's shrubbery only lined the edges of each area, where it does nothing — ---
+        // --- every combat area now also carries 3-4 rows through its interior, breaking up the open ---
+        // --- middle instead of just decorating the walls. ------------------------------------------
+
+        [Test]
+        public void World1_EveryCombatAreaHasInteriorShrubRows()
+        {
+            Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
+
+            for (int n = 1; n <= 8; n++)
+            {
+                MapZone zone = map.Zone($"area{n}");
+                Assert.IsNotNull(zone, $"combat area {n} is missing");
+
+                int inZone = 0;
+                foreach (MapEntity cover in MapValidation.Kind(map, EntityKind.Cover))
+                    if (map.ZoneAt(cover.x, cover.z) == zone) inZone++;
+
+                // 1 edge row from MV-318 + the 3-4 interior rows MV-360 adds.
+                Assert.GreaterOrEqual(inZone, 4,
+                    $"area {n} ('{zone.id}') has only {inZone} cover piece(s) — MV-360 asks for 3-4 " +
+                    "rows through the interior on top of the existing edge planting");
+            }
+
+            Assert.IsTrue(MapValidation.Validate(map, out string why), why);
+        }
+
         [Test]
         public void World1_BossEntityStandsInTheCompostClearing()
         {
