@@ -221,6 +221,7 @@ namespace MaxWorlds.UI
             MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
+            AbilityCreditBank.Changed += OnAbilityCreditsChanged;
         }
 
         private void OnDisable()
@@ -238,6 +239,7 @@ namespace MaxWorlds.UI
             MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
+            AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
         }
 
         /// <summary>The Hydro burst button appears the moment the harness + condenser are both
@@ -266,12 +268,26 @@ namespace MaxWorlds.UI
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
         }
 
-        private void OnParts(int banked)
+        private void OnParts(int banked) => RefreshPartAlert();
+
+        /// <summary>MV-358: a banked shed credit flashes the exact same ABILITIES-button badge a banked
+        /// part already does — "something is waiting in the Abilities screen", regardless of which kind
+        /// — rather than a separate tell the player has to learn twice.</summary>
+        private void OnAbilityCreditsChanged(int banked) => RefreshPartAlert();
+
+        /// <summary>The chip is shown while a part is banked and unspent (YT-131) OR an ability credit
+        /// is banked and unspent (MV-358). It flashes in Update; here we just toggle its presence.</summary>
+        private void RefreshPartAlert()
         {
-            // The chip is shown while any part is banked and unspent (YT-131). It flashes in Update;
-            // here we just toggle its presence. The weapons area spends parts one at a time (WV-228).
-            if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(banked > 0);
+            if (_partAlertRoot != null)
+                _partAlertRoot.gameObject.SetActive(ShouldShowPartAlert(
+                    MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked));
         }
+
+        /// <summary>Pure predicate behind <see cref="RefreshPartAlert"/> (MV-358) — pinned by an EditMode
+        /// test without building a canvas: the badge is up if either kind of spend is waiting.</summary>
+        public static bool ShouldShowPartAlert(int partsBanked, int abilityCreditsBanked) =>
+            partsBanked > 0 || abilityCreditsBanked > 0;
 
         /// <summary>Tapping the WEAPONS button (YT-178) opens the weapons area to show Max's current
         /// loadout on demand — the button is always-available access, not gated on a part being banked.
@@ -1531,7 +1547,8 @@ namespace MaxWorlds.UI
             Stretch(_partAlertIcon.rectTransform, -8f);   // inset from the badge edge
             _partAlertIcon.raycastTarget = false;
 
-            _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsBanked > 0);
+            _partAlertRoot.gameObject.SetActive(ShouldShowPartAlert(
+                MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked));
         }
 
         private void BuildFloatingLayer()

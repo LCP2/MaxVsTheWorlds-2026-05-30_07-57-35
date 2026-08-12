@@ -279,12 +279,16 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>
-        /// The shed ability draft-pick (MV-357, reversing WV-229's single random grant): pause and show
-        /// up to <see cref="MaxCandidates"/> tappable ability cards, sampled by
-        /// <see cref="MaxWorlds.Weapons.AbilityDraft"/> from the abilities Max doesn't yet own. Tapping
-        /// a card grants exactly that ability via <see cref="MaxWorlds.Weapons.WeaponSystemState.Acquire"/>;
-        /// the others stay in the pool for a later shed. Same card rig as <see cref="OpenChoice"/> —
-        /// only the catalog and the tap's effect differ.
+        /// The BUILD ABILITY draft-pick (MV-357's card rig, moved off the mid-fight modal and onto the
+        /// Abilities screen by MV-358): opened by <see cref="WeaponsScreen"/>'s BUILD ABILITY button,
+        /// never by a pickup directly — the pickup only banks an <see cref="MaxWorlds.Weapons.AbilityCreditBank"/>
+        /// credit. Shows up to <see cref="MaxCandidates"/> tappable ability cards, sampled by
+        /// <see cref="MaxWorlds.Weapons.AbilityDraft"/> from the abilities Max doesn't yet own. Tapping a
+        /// card grants exactly that ability via <see cref="MaxWorlds.Weapons.WeaponSystemState.Acquire"/>
+        /// and spends the credit that paid for the draw; the other candidates stay in the pool for a
+        /// later build. Same card rig as <see cref="OpenChoice"/> — only the catalog and the tap's
+        /// effect differ. WeaponsScreen is already paused when this opens (it never closes underneath),
+        /// so this just layers on top and hands the same pause back on close.
         /// </summary>
         public void OpenAbilityChoice(AbilityKind[] candidates)
         {
@@ -300,7 +304,11 @@ namespace MaxWorlds.UI
             }
 
             AbilityKind[] picked = candidates;
-            OpenChoiceInternal("CHOOSE AN ABILITY", cards, index => WeaponSystemState.Acquire(picked[index]));
+            OpenChoiceInternal("CHOOSE AN ABILITY", cards, index =>
+            {
+                WeaponSystemState.Acquire(picked[index]);
+                MaxWorlds.Weapons.AbilityCreditBank.TrySpend();
+            });
         }
 
         /// <summary>Shared open plumbing for <see cref="OpenChoice"/> and <see cref="OpenAbilityChoice"/>:
@@ -468,7 +476,9 @@ namespace MaxWorlds.UI
             go.transform.SetParent(transform, false);
             _canvas = go.GetComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 210;   // above the HUD (100) and the Settings panel (200)
+            // Above the HUD (100), the Settings panel (200) and WeaponsScreen (210, MV-358): the BUILD
+            // ABILITY draft-pick now opens nested on top of an already-open Abilities screen.
+            _canvas.sortingOrder = 220;
 
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
