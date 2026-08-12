@@ -145,6 +145,7 @@ namespace MaxWorlds.UI
         // to interpret.
         private Image _dialFill;
         private Text _dialStageLabel;
+        private Text _dialCaption;
         private DifficultyDirector.Stage? _shownStage;
         private float _dialStageFlash;
 
@@ -1291,7 +1292,15 @@ namespace MaxWorlds.UI
         /// — INVASION / INFESTATION / DOMINATION — so the DifficultyDirector curve the swarm is
         /// racing is legible at a glance instead of a clock the player has to interpret. Sits
         /// centred just under the arena indicator — the other "how's the run going" readout.
-        /// Replaces the old MM:SS level clock (YT-181).</summary>
+        /// Replaces the old MM:SS level clock (YT-181).
+        ///
+        /// MV-355: the band names alone didn't say what the bar actually DOES — Lee, playing it
+        /// blind, couldn't tell what filling it meant or changed. Added a small permanent caption
+        /// under the fill (not tied to the stage-crossing flash, always on) stating the one real
+        /// consequence in plain words: it drives <see cref="DifficultyDirector.SpawnIntervalMultiplier"/>
+        /// and <see cref="DifficultyDirector.ToughnessMultiplier"/> — robots spawn faster and hit
+        /// harder as it climbs. Kept the band names: DOMINATION already appears on the Result
+        /// Screen's near-miss line, so the vocabulary is consistent, not invented here.</summary>
         private void BuildInvasionDial()
         {
             var root = NewRect("Invasion Dial", Root);
@@ -1323,6 +1332,15 @@ namespace MaxWorlds.UI
             _dialStageLabel.rectTransform.sizeDelta = new Vector2(260f, 28f);
             _dialStageLabel.rectTransform.anchoredPosition = new Vector2(0f, 126f); // label rides above the fill
             _dialStageLabel.fontStyle = FontStyle.Bold;
+
+            // Permanent — not part of the stage-crossing flash — so the consequence reads even if
+            // the player never sees a band change.
+            _dialCaption = AddText(Root, 13f, new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.6f),
+                TextAnchor.MiddleCenter);
+            Anchor(_dialCaption.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _dialCaption.rectTransform.sizeDelta = new Vector2(260f, 16f);
+            _dialCaption.rectTransform.anchoredPosition = new Vector2(0f, 84f); // rides below the fill
+            _dialCaption.text = "ROBOTS GET FASTER & TOUGHER";
         }
 
         private void UpdateInvasionDial(float dt)
