@@ -60,6 +60,23 @@ namespace MaxWorlds.UI
         /// <summary>The direction the current (or most recently released) drag would throw toward.</summary>
         public Vector3 Direction => _direction;
 
+        /// <summary>True while the landing circle is actually showing — MV-356 (it shipped WV-241
+        /// showing on the first aim of a run and never again). A test reads this without a screenshot.</summary>
+        public bool LandingCircleVisible => _circleGo != null && _circleGo.activeSelf;
+
+        /// <summary>Vertex count of the landing circle's current mesh. "Active but empty" reads as
+        /// invisible to the player exactly like "not active" does, so a test checking only
+        /// <see cref="LandingCircleVisible"/> could pass against a circle that draws nothing.</summary>
+        public int LandingCircleVertexCount
+        {
+            get
+            {
+                if (_circleGo == null) return 0;
+                var mesh = _circleGo.GetComponent<MeshFilter>().sharedMesh;
+                return mesh != null ? mesh.vertexCount : 0;
+            }
+        }
+
         public void OnPointerDown(PointerEventData eventData)
         {
             if (_abilities == null || !_abilities.WaterBalloonReady) return;
