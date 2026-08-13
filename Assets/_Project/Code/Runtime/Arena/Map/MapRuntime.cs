@@ -63,6 +63,10 @@ namespace MaxWorlds.Arena
             // over from whatever the last level (or the last test) left it at.
             DifficultyDirector.Reset();
 
+            // Same reasoning for the Blinker squad jump's cooldown (MV-366) — a fresh run starts its
+            // own clock rather than inheriting whatever the last level left mid-countdown.
+            BlinkerSquadDirector.Reset();
+
             // Belt-and-braces against a robot whose OnDisable hasn't run yet when the next level (or
             // test) starts counting toward the field-wide spawn budget (YT-186).
             RobotEnemy.ResetRegistry();
