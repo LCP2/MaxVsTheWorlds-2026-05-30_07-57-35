@@ -58,13 +58,19 @@ namespace MaxWorlds.Combat
         [SerializeField] private LayerMask hitMask = ~0;
 
         /// <summary>Authored base spray half-angle in degrees (retuned MV-281, widened MV-289,
-        /// re-narrowed MV-301): MV-289's ~45° total base read as a wide fan even with 0 Spread
-        /// upgrades spent, so the Spread track had nothing left to sell — MV-301 narrows the base to a
-        /// focused ~16° total arc so widening the spray is something a player earns. The RCDA Spread
-        /// track widens this further by up to its max level (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/>
-        /// is retuned against THIS value to hold a ~66° total ceiling, MV-301 — change them together).
-        /// Nozzle upgrades (YT-133) narrow/widen it further.</summary>
-        public const float DefaultConeHalfAngle = 8f;
+        /// re-narrowed MV-301, re-narrowed again MV-367): Lee's MV-367 direction is an un-upgraded
+        /// beam that "looks weak to begin with" without losing power — since the visible water fills
+        /// the whole cone by design (YT-110/YT-187: water, reticle and hit test must never disagree),
+        /// narrowing the cone itself is the only way to narrow the visual without decoupling it from
+        /// the hit test. This halves MV-301's ~16° total arc down to a much narrower ~8° total. Power
+        /// is unaffected: a target dead ahead (angle 0 from the aim axis) stays inside the cone at any
+        /// half-angle above 0, so level-1 TTK against a single enemy is untouched — see
+        /// <see cref="MaxWorlds.Tests.EditMode.WeaponCatalogTests.NarrowedBaseConeStillHitsADeadAheadTarget_MV367"/>.
+        /// The RCDA Spread track widens this further by up to its max level
+        /// (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is retuned against THIS value to hold
+        /// a ~20%-lower ceiling than MV-301's, MV-367 — change them together). Nozzle upgrades
+        /// (YT-133) narrow/widen it further.</summary>
+        public const float DefaultConeHalfAngle = 4f;
 
         /// <summary>Damage multiplier at the outer edge of the spray cone (MV-281). Full power (1x) on
         /// the centre-line, linearly falling to this at the cone's half-angle — see

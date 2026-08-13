@@ -48,27 +48,40 @@ namespace MaxWorlds.Weapons
             AbilityKind.WeaponCooldown,
         };
 
-        /// <summary>The level cap for an RCDA track (spec §6, MV-291): every track offers the same 5
-        /// upgrade steps (levels 1-6) — Spread and Damage were unified onto Range's cap so no track
-        /// reads as a lesser upgrade path than another.</summary>
-        public static int MaxLevel(WeaponTrackKind kind) => 6;
+        /// <summary>The level cap for an RCDA track. Damage and Depletion Rate keep MV-291's 5 steps
+        /// (levels 1-6). Range and Spread get 3 more (levels 1-9, MV-367, Lee: "introduce probably two
+        /// or three more upgrade levels" so a lower ceiling still reads as steady, frequent growth
+        /// rather than two giant jumps) — so unlike MV-291, the tracks no longer share one flat cap.</summary>
+        public static int MaxLevel(WeaponTrackKind kind)
+        {
+            switch (kind)
+            {
+                case WeaponTrackKind.Range:
+                case WeaponTrackKind.Spread:
+                    return 9;
+                default:
+                    return 6;
+            }
+        }
 
         /// <summary>Extra spray reach in metres each Range track level above 1 adds (MV-263) — layered
         /// additively on the weapon's authored base reach, the same shape as the legacy nozzle bonuses
         /// (<see cref="MaxWorlds.Upgrades.UpgradeState.RangeBonus"/>) it runs alongside during the
         /// WV-230 migration. Level 1 is every track's starting level (spec §6), so it adds nothing.
-        /// Retuned (MV-280, MV-289, re-retuned MV-291 to flatten the curve and cap it forgivingly) so
-        /// the 5 steps up to the Range cap (level 6) land at ~2.5x base (5 + 1.5*5 = 12.5) instead of
-        /// the old ~3x — change the two together.</summary>
-        public const float DefaultRcdaRangePerLevel = 1.5f;
+        /// Retuned again MV-367 (Lee: max-level reach is "ridiculous," cut the top end ~20%) against
+        /// the new 8-step cap (<see cref="MaxLevel(WeaponTrackKind)"/>): the steps up to the Range cap
+        /// (level 9) now land at exactly 2x base (5 + 0.625*8 = 10) — 20% below MV-291's 2.5x/12.5 —
+        /// change the two together.</summary>
+        public const float DefaultRcdaRangePerLevel = 0.625f;
 
         /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263, MV-281,
         /// MV-289, re-retuned MV-291 against the widened cap, re-retuned MV-301 against the re-narrowed
-        /// base — <see cref="MaxLevel(WeaponTrackKind)"/> — so the 5 steps land at ~4.1x base, evenly:
-        /// each step is a flat +10° on the total arc (8*0.625 = 5° half-angle/level). Tuned against
-        /// <see cref="WaterBlaster.DefaultConeHalfAngle"/> so MV-301's ~16° total base opens to a
-        /// ~66° total ceiling at the maxed Spread track (change the two together).</summary>
-        public const float DefaultRcdaSpreadPerLevel = 0.625f;
+        /// base, re-retuned again MV-367 against both the re-narrowed MV-367 base and the new 8-step
+        /// cap — <see cref="MaxLevel(WeaponTrackKind)"/>). Lee's MV-367 direction cuts the max-level
+        /// arc ~20% below MV-301's 66° total ceiling: 8 steps at 70%/level over the new 4° base land
+        /// exactly at 4*(1+0.7*8) = 26.4° half-angle, i.e. 52.8° total (66*0.8 = 52.8 — change the two
+        /// together).</summary>
+        public const float DefaultRcdaSpreadPerLevel = 0.7f;
 
         /// <summary>Fraction each Damage track level above 1 adds to the primary's per-tick damage
         /// (MV-291) — the curve's missing third axis: Range and Spread already had a visible per-level

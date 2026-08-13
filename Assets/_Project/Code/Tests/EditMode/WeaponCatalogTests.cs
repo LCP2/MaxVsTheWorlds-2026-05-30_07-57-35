@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.Weapons;
 
@@ -28,14 +29,16 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeTrack_MaxLevelReachIsRoughlyTwoAndAHalfTimesBase_MV291()
+        public void RangeTrack_MaxLevelReachIsTwiceBase_MV367()
         {
+            // MV-367 cuts the max-level reach ~20% below MV-291's 2.5x-base ceiling (12.5 -> 10 for a
+            // 5m base), landing at an even 2x base over the new 8-step (levels 1-9) cap.
             float baseReach = WaterBlaster.DefaultRange;
             float maxReach = WeaponCatalog.EffectiveRange(
                 baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
 
-            Assert.That(maxReach, Is.EqualTo(baseReach * 2.5f).Within(0.05f),
-                "MV-291: retuning the base reach or the per-level step must keep the max Range level at ~2.5x base");
+            Assert.That(maxReach, Is.EqualTo(baseReach * 2f).Within(0.05f),
+                "MV-367: retuning the base reach or the per-level step must keep the max Range level at ~2x base (20% below MV-291's 2.5x)");
         }
 
         [Test]
@@ -57,24 +60,51 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_BaseArcIsSixteenDegreesTotal_MV301()
+        public void SpreadTrack_BaseArcIsEightDegreesTotal_MV367()
         {
-            // MV-289's ~45° total base already read as a wide fan at 0 Spread upgrades, leaving the
-            // Spread track nothing to sell — MV-301 re-narrows the un-upgraded stream to a focused
-            // ~16° total arc so widening it is something a player earns.
-            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(16f).Within(0.01f),
-                "MV-301: base spray must read as a narrow, focused ~16° total arc");
+            // Lee, MV-367: "the initial beam ... much narrower so that it looks weak to begin with."
+            // MV-301's ~16° total base already read as narrow; MV-367 halves it again to a ~8° total
+            // arc. Power is untouched — a dead-ahead target stays inside the cone at any half-angle
+            // above 0, see NarrowedBaseConeStillHitsADeadAheadTarget_MV367 below.
+            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(8f).Within(0.01f),
+                "MV-367: base spray must read as a much narrower ~8° total arc");
         }
 
         [Test]
-        public void SpreadTrack_MaxLevelArcIsSixtySixDegreesTotal_MV301()
+        public void NarrowedBaseConeStillHitsADeadAheadTarget_MV367()
         {
+            // What actually guarantees AC2 ("un-upgraded damage output is unchanged"): a target on the
+            // aim axis (angle 0) stays inside the cone at any half-angle above 0, so narrowing the base
+            // cone for looks does not cost a single dead-ahead enemy any time-to-kill, even though the
+            // cone is mechanically narrower now too.
+            Vector3 origin = Vector3.zero;
+            Vector3 dir = Vector3.forward;
+            Vector3 deadAhead = origin + dir * 3f;
+
+            Assert.IsTrue(SprayHit.InCone(origin, dir, deadAhead, WaterBlaster.DefaultRange, WaterBlaster.DefaultConeHalfAngle),
+                "a dead-ahead target must stay inside the base cone — this is what keeps level-1 TTK unchanged");
+        }
+
+        [Test]
+        public void Level1DamagePerTickIsUnchanged_MV367()
+        {
+            // MV-367 narrows the cone for looks and cuts the max-level ceilings, but must not touch
+            // per-tick damage — AC2 explicitly calls out TTK must be pinned before/after.
+            Assert.That(WaterBlaster.DefaultDamagePerTick, Is.EqualTo(4f).Within(1e-5f),
+                "MV-367 must not touch per-tick damage — only the cone width and the Range/Spread ceilings");
+        }
+
+        [Test]
+        public void SpreadTrack_MaxLevelArcIsRoughlyFiftyThreeDegreesTotal_MV367()
+        {
+            // MV-367 cuts the max-level arc ~20% below MV-301's 66° total ceiling (66 * 0.8 = 52.8),
+            // over the new 8-step (levels 1-9) cap.
             float baseHalfAngle = WaterBlaster.DefaultConeHalfAngle;
             float maxHalfAngle = WeaponCatalog.EffectiveConeHalfAngle(
                 baseHalfAngle, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-            Assert.That(maxHalfAngle * 2f, Is.EqualTo(66f).Within(0.5f),
-                "MV-301: retuning the base angle or the per-level step must keep the maxed Spread track at ~66° total");
+            Assert.That(maxHalfAngle * 2f, Is.EqualTo(52.8f).Within(0.5f),
+                "MV-367: retuning the base angle or the per-level step must keep the maxed Spread track ~20% below MV-301's 66° total");
         }
 
         [Test]
