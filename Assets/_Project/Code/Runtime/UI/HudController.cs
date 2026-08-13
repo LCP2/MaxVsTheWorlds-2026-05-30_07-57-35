@@ -871,7 +871,8 @@ namespace MaxWorlds.UI
             padImg.raycastTarget = true;
 
             var control = pad.AddComponent<WaterBalloonJoystickControl>();
-            control.Init(_waterBalloonVisual.Knob, _player != null ? _player.transform : null, _abilities);
+            control.Init(_waterBalloonVisual.Knob, _player != null ? _player.transform : null, _abilities,
+                _waterBalloonVisual.Rings);
 
             _waterBalloonBuiltLevel = level;
             _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
@@ -930,7 +931,8 @@ namespace MaxWorlds.UI
             padImg.raycastTarget = true;
 
             var control = pad.AddComponent<TeleportJoystickControl>();
-            control.Init(_teleportVisual.Knob, _player != null ? _player.transform : null, _abilities);
+            control.Init(_teleportVisual.Knob, _player != null ? _player.transform : null, _abilities,
+                _teleportVisual.Rings);
 
             _teleportBuiltLevel = level;
             _teleportRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Teleport));
