@@ -1,19 +1,17 @@
 using System.Collections;
 using UnityEngine;
 using MaxWorlds.UI;
-using MaxWorlds.Player;
 
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Combat feedback VFX (YT-48): enemy hit sparks, the enemy death pop, Max's dash trail,
+    /// Combat feedback VFX (YT-48): enemy hit sparks, the enemy death pop,
     /// and the Mower Hutch's destruction burst.
     ///
     /// It listens to the existing <see cref="HudSignals"/> bus rather than being called from
-    /// gameplay code, and reads <see cref="PlayerController.IsDashing"/> for the dash. That
-    /// means this whole feature adds no gameplay coupling: nothing in Enemies/, Factories/ or
-    /// Player/ has to know the VFX exists, and deleting this file would change nothing but
-    /// the picture.
+    /// gameplay code. That means this whole feature adds no gameplay coupling: nothing in
+    /// Enemies/, Factories/ or Player/ has to know the VFX exists, and deleting this file
+    /// would change nothing but the picture.
     ///
     /// Note <c>HudSignals.DamageDealt</c> is only raised by enemy-side receivers (RobotEnemy,
     /// MowerHutch, BigBermudaBoss) — PlayerHealth does not raise it — so subscribing to it
@@ -39,14 +37,37 @@ namespace MaxWorlds.VFX
         private static readonly Color FireHot = new Color(1f, 0.85f, 0.45f, 1f);
         private static readonly Color FireDeep = new Color(0.92f, 0.35f, 0.10f, 1f);
         private static readonly Color Smoke = new Color(0.22f, 0.20f, 0.19f, 0.75f);
-        private static readonly Color DashTrail = new Color(0.62f, 0.92f, 1f, 1f);
 
         // The Blinker's teleport (MV-330): a violet-white "phase" hue, deliberately apart from every
-        // other palette here — not the sparks' gold, not the dash's icy blue — so it reads as its own
-        // kind of event rather than borrowed damage feedback.
+        // other palette here — not the sparks' gold — so it reads as its own kind of event rather
+        // than borrowed damage feedback.
         private static readonly Color SurgeCore = new Color(0.85f, 0.75f, 1f, 1f);
         private static readonly Color SurgeDeep = new Color(0.45f, 0.15f, 0.85f, 1f);
         private static readonly Color TeleportFlash = new Color(0.92f, 0.88f, 1f, 1f);
+
+        // Max's own teleport (MV-338): a brighter cyan-violet blend, deliberately apart from the
+        // Blinker's pure violet — Max's own mobility payoff has to visibly outshine an enemy's copy
+        // of the same trick, not read as a re-skinned Blinker blink.
+        private static readonly Color MaxTeleportCore = new Color(0.65f, 0.9f, 1f, 1f);
+        private static readonly Color MaxTeleportDeep = new Color(0.5f, 0.35f, 0.98f, 1f);
+        private static readonly Color MaxTeleportFlashColor = new Color(0.95f, 0.97f, 1f, 1f);
+
+        // The Bomber's missile (MV-349/MV-351): its own hot-orange palette, distinct from the
+        // factory's fire so a missile hit reads as ITS OWN kind of event rather than a re-skinned
+        // factory boom. MV-351: Lee reported the MV-349 version was "way too subtle" on the live
+        // build — the flash and blast core now push past the 1.35 bloom threshold (BackyardLook)
+        // deliberately, so the detonation actually blooms against the mid-value lawn instead of
+        // sitting at the same brightness as everything else on screen.
+        private static readonly Color MissileFlashColor = new Color(1.9f, 1.6f, 1.1f, 1f);
+        private static readonly Color MissileBlastHot = new Color(1.4f, 0.72f, 0.24f, 1f);
+        private static readonly Color MissileBlastDeep = new Color(0.85f, 0.28f, 0.08f, 1f);
+        private static readonly Color MissileScorchColor = new Color(0.08f, 0.07f, 0.06f, 0.9f);
+        private static readonly Color MissileSputterSmoke = new Color(0.25f, 0.22f, 0.20f, 0.7f);
+        private static readonly Color MissileBounceDust = new Color(0.55f, 0.50f, 0.42f, 0.6f);
+        // MV-351 direction 2 ("dark smoke element for contrast against the light ground") and
+        // direction 5 ("radial motion... gives the eye something to track outward").
+        private static readonly Color MissileAfterSmoke = new Color(0.12f, 0.11f, 0.10f, 0.6f);
+        private static readonly Color MissileShockColor = new Color(1f, 0.85f, 0.5f, 1f);
 
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
@@ -54,13 +75,19 @@ namespace MaxWorlds.VFX
         private VfxBurst _boom;         // factory: fire
         private VfxBurst _boomDebris;   // factory: chunks
         private VfxBurst _boomSmoke;    // factory: lingering smoke
-        private VfxBurst _dash;         // Max's dash trail
         private VfxBurst _teleportSurge; // Blinker: energy surge lingering at the departure point
         private VfxBurst _teleportFlash; // Blinker: the vanish/reappear pop, shared by both ends
-
-        private PlayerController _player;
-        private Vector3 _lastDashPos;
-        private bool _wasDashing;
+        private VfxBurst _maxTeleportSurge; // Max: bigger energy surge, both ends
+        private VfxBurst _maxTeleportShock; // Max: flat shockwave ring racing outward, both ends
+        private VfxBurst _maxTeleportFlash; // Max: bigger vanish/reappear pop, both ends
+        private VfxBurst _missileFlash;     // missile: the pop of detonation
+        private VfxBurst _missileBlast;     // missile: expanding fire
+        private VfxBurst _missileDebris;    // missile: dark chunks off the blast
+        private VfxBurst _missileScorch;    // missile: the ground tell that outlives the blast
+        private VfxBurst _missileShock;     // missile: fast ring racing outward (MV-351)
+        private VfxBurst _missileAfterSmoke; // missile: dark plume that lingers after the flash (MV-351)
+        private VfxBurst _missileSputter;   // missile: dying thrust, just before it drops
+        private VfxBurst _missileBounceDust; // missile: a kick of dust each time it hits the ground
 
         private void Awake()
         {
@@ -76,9 +103,22 @@ namespace MaxWorlds.VFX
             _boom = new VfxBurst("FactoryFire", additive, 200, -0.15f, perFrameCap: 2);
             _boomDebris = new VfxBurst("FactoryDebris", solid, 180, 2.4f, perFrameCap: 2);
             _boomSmoke = new VfxBurst("FactorySmoke", soft, 140, -0.25f, perFrameCap: 2);
-            _dash = new VfxBurst("DashTrail", additive, 200, 0f, perFrameCap: 90);
             _teleportSurge = new VfxBurst("TeleportSurge", additive, 120, 0f, perFrameCap: 4, stretched: true);
             _teleportFlash = new VfxBurst("TeleportFlash", additive, 40, 0f, perFrameCap: 8);
+            _maxTeleportSurge = new VfxBurst("MaxTeleportSurge", additive, 220, 0f, perFrameCap: 4, stretched: true);
+            _maxTeleportShock = new VfxBurst("MaxTeleportShockwave", additive, 160, 0f, perFrameCap: 4, stretched: true);
+            _maxTeleportFlash = new VfxBurst("MaxTeleportFlash", additive, 40, 0f, perFrameCap: 8);
+            // MV-351: bigger particle budgets throughout — the MV-349 blast was sized like a small
+            // hit spark (24 particles/call) and Lee couldn't see it in a busy fight. maxParticles
+            // headroom is sized for perFrameCap simultaneous detonations at the new, larger counts.
+            _missileFlash = new VfxBurst("MissileFlash", additive, 40, 0f, perFrameCap: 6);
+            _missileBlast = new VfxBurst("MissileBlast", additive, 320, -0.1f, perFrameCap: 6);
+            _missileDebris = new VfxBurst("MissileDebris", solid, 170, 2.2f, perFrameCap: 6);
+            _missileScorch = new VfxBurst("MissileScorch", solid, 30, 0f, perFrameCap: 6);
+            _missileShock = new VfxBurst("MissileShockwave", additive, 220, 0f, perFrameCap: 6, stretched: true);
+            _missileAfterSmoke = new VfxBurst("MissileAfterSmoke", soft, 90, -0.2f, perFrameCap: 6);
+            _missileSputter = new VfxBurst("MissileSputter", soft, 60, 0.4f, perFrameCap: 6);
+            _missileBounceDust = new VfxBurst("MissileBounceDust", soft, 80, 1f, perFrameCap: 8);
         }
 
         private void OnEnable()
@@ -87,6 +127,10 @@ namespace MaxWorlds.VFX
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
             HudSignals.BlinkerTeleported += OnBlinkerTeleported;
+            HudSignals.MaxTeleported += OnMaxTeleported;
+            HudSignals.MissileImpact += OnMissileImpact;
+            HudSignals.MissileSputtering += OnMissileSputtering;
+            HudSignals.MissileBounced += OnMissileBounced;
         }
 
         private void OnDisable()
@@ -97,13 +141,21 @@ namespace MaxWorlds.VFX
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
             HudSignals.BlinkerTeleported -= OnBlinkerTeleported;
+            HudSignals.MaxTeleported -= OnMaxTeleported;
+            HudSignals.MissileImpact -= OnMissileImpact;
+            HudSignals.MissileSputtering -= OnMissileSputtering;
+            HudSignals.MissileBounced -= OnMissileBounced;
         }
 
         private void OnDestroy()
         {
             Dispose(_hitSparks); Dispose(_deathSparks); Dispose(_deathDebris);
-            Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke); Dispose(_dash);
+            Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke);
             Dispose(_teleportSurge); Dispose(_teleportFlash);
+            Dispose(_maxTeleportSurge); Dispose(_maxTeleportShock); Dispose(_maxTeleportFlash);
+            Dispose(_missileFlash); Dispose(_missileBlast); Dispose(_missileDebris);
+            Dispose(_missileScorch); Dispose(_missileShock); Dispose(_missileAfterSmoke);
+            Dispose(_missileSputter); Dispose(_missileBounceDust);
         }
 
         // --- events ---
@@ -258,47 +310,147 @@ namespace MaxWorlds.VFX
             lifeMin: 0.16f, lifeMax: 0.16f,
             colorA: TeleportFlash, colorB: TeleportFlash);
 
-        // --- dash trail ---
+        // --- Max's own teleport (MV-338) ---
 
-        private void Update()
+        /// <summary>
+        /// Max's own blink (MV-338 AC2: "a really cool effect — like the Blinker robots' teleport, only
+        /// more impressive"). Same three-beat shape as <see cref="BlinkerTeleportBeat"/> — surge at the
+        /// departure point, a flash there, a staggered flash on arrival — but bigger throughout (more and
+        /// larger particles, a bigger flash) and with a shockwave ring at BOTH ends, a beat the Blinker's
+        /// own version never got. <see cref="MaxWorlds.Feel.GameFeel"/> reacts to the same
+        /// <see cref="HudSignals.MaxTeleported"/> signal with the brief time-slow (AC3), so the two land
+        /// as one moment without this needing to know the time-slow exists.
+        /// </summary>
+        private void OnMaxTeleported(Vector3 from, Vector3 to) => StartCoroutine(MaxTeleportBeat(from, to));
+
+        private IEnumerator MaxTeleportBeat(Vector3 from, Vector3 to)
         {
-            if (_player == null)
-            {
-                _player = FindFirstObjectByType<PlayerController>();
-                if (_player == null) return;
-            }
+            Vector3 depart = from + Vector3.up * 0.9f;
+            Vector3 arrive = to + Vector3.up * 0.9f;
 
-            bool dashing = _player.IsDashing;
-            Vector3 pos = _player.transform.position;
+            EmitMaxTeleportBurst(depart);
+            EmitMaxTeleportFlash(depart);
 
-            if (dashing)
-            {
-                // Lay the trail along the path actually travelled this frame, not just at the
-                // current position: a dash covers a lot of ground in a few frames, and emitting
-                // only at the sampled points leaves visible gaps in the streak.
-                Vector3 from = _wasDashing ? _lastDashPos : pos;
-                int steps = CombatVfxTuning.TrailSteps(Vector3.Distance(from, pos));
-                for (int i = 0; i < steps; i++)
-                {
-                    Vector3 p = Vector3.Lerp(from, pos, (i + 1f) / steps) + Vector3.up * 0.7f;
-                    _dash.Emit(p, 1,
-                        axis: Vector3.up, spreadDegrees: 25f,
-                        speedMin: 0.1f, speedMax: 0.7f,
-                        sizeMin: 0.35f, sizeMax: 0.62f,
-                        lifeMin: 0.16f, lifeMax: 0.3f,
-                        colorA: DashTrail, colorB: Color.white);
-                }
-            }
+            yield return new WaitForSeconds(TeleportFlashStagger);
 
-            _wasDashing = dashing;
-            _lastDashPos = pos;
+            EmitMaxTeleportBurst(arrive);
+            EmitMaxTeleportFlash(arrive);
         }
+
+        private void EmitMaxTeleportBurst(Vector3 at)
+        {
+            _maxTeleportSurge.Emit(at, 36,
+                axis: Vector3.up, spreadDegrees: 100f,
+                speedMin: 2.5f, speedMax: 7f,
+                sizeMin: 0.16f, sizeMax: 0.4f,
+                lifeMin: 0.3f, lifeMax: 0.55f,
+                colorA: MaxTeleportCore, colorB: MaxTeleportDeep);
+
+            // A flat ring racing outward along the ground — high spread around the up axis reads as a
+            // shockwave rather than an upward burst, and the Blinker's own beat never had one.
+            _maxTeleportShock.Emit(at, 28,
+                axis: Vector3.up, spreadDegrees: 88f,
+                speedMin: 6f, speedMax: 11f,
+                sizeMin: 0.1f, sizeMax: 0.22f,
+                lifeMin: 0.2f, lifeMax: 0.32f,
+                colorA: MaxTeleportFlashColor, colorB: MaxTeleportCore);
+        }
+
+        private void EmitMaxTeleportFlash(Vector3 at) => _maxTeleportFlash.Emit(at, 1,
+            axis: Vector3.up, spreadDegrees: 0f,
+            speedMin: 0f, speedMax: 0f,
+            sizeMin: 1.4f, sizeMax: 1.4f,
+            lifeMin: 0.2f, lifeMax: 0.2f,
+            colorA: MaxTeleportFlashColor, colorB: MaxTeleportFlashColor);
+
+        // --- the Bomber's missile (MV-349) ---
+
+        /// <summary>The detonation itself — direct hit or ground impact, they use the same beat. A
+        /// flash for the pop, an expanding blast for the punch, dark debris for weight, and a scorch
+        /// mark that OUTLIVES the blast so a peripheral-vision glance still reads "hit by a missile"
+        /// after the burst itself has faded (AC2's "screen feedback proportionate to the damage" is
+        /// handled separately, by <c>GameFeel</c>, off this same signal).</summary>
+        private void OnMissileImpact(Vector3 pos, float damage)
+        {
+            Vector3 at = pos + Vector3.up * 0.15f;
+
+            // MV-351: bigger, brighter, held longer — "sized like ordnance", not a hit spark.
+            _missileFlash.Emit(at, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: 2.6f, sizeMax: 2.6f,
+                lifeMin: 0.16f, lifeMax: 0.16f,
+                colorA: MissileFlashColor, colorB: MissileFlashColor);
+
+            _missileBlast.Emit(at, 42,
+                axis: Vector3.up, spreadDegrees: 100f,
+                speedMin: 4f, speedMax: 10f,
+                sizeMin: 0.55f, sizeMax: 1.4f,
+                lifeMin: 0.3f, lifeMax: 0.55f,
+                colorA: MissileBlastHot, colorB: MissileBlastDeep);
+
+            _missileDebris.Emit(at, 18,
+                axis: Vector3.up, spreadDegrees: 75f,
+                speedMin: 3f, speedMax: 8f,
+                sizeMin: 0.14f, sizeMax: 0.32f,
+                lifeMin: 0.5f, lifeMax: 0.85f,
+                colorA: Debris, colorB: MissileBlastDeep);
+
+            // A flat ring racing outward, same "shockwave" idiom as Max's teleport (MV-338) — gives
+            // the eye radial motion to track outward instead of just a static puff sitting in place.
+            _missileShock.Emit(at, 30,
+                axis: Vector3.up, spreadDegrees: 90f,
+                speedMin: 7f, speedMax: 13f,
+                sizeMin: 0.12f, sizeMax: 0.28f,
+                lifeMin: 0.22f, lifeMax: 0.34f,
+                colorA: MissileShockColor, colorB: MissileBlastHot);
+
+            // A dark plume rising after the flash — contrast against the light lawn once the bright
+            // core has faded, so the eye still has something to land on a beat later.
+            _missileAfterSmoke.Emit(at, 9,
+                axis: Vector3.up, spreadDegrees: 70f,
+                speedMin: 0.6f, speedMax: 1.8f,
+                sizeMin: 0.7f, sizeMax: 1.4f,
+                lifeMin: 0.5f, lifeMax: 0.9f,
+                colorA: MissileAfterSmoke, colorB: Smoke);
+
+            // The ground tell (AC4): bigger and held roughly 4x longer than MV-349's version, so a
+            // peripheral-vision glance still reads "hit here" well after the blast itself has faded.
+            _missileScorch.Emit(pos, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: 2.4f, sizeMax: 2.4f,
+                lifeMin: 2.0f, lifeMax: 2.0f,
+                colorA: MissileScorchColor, colorB: MissileScorchColor);
+        }
+
+        /// <summary>Thrust cutting out (AC3): a dying puff off the tail the instant it gives up the
+        /// chase, before it starts to fall — the visual half of "sputter", the deceleration in
+        /// <c>HomingMissile.TickSputtering</c> is the other half.</summary>
+        private void OnMissileSputtering(Vector3 pos) => _missileSputter.Emit(pos, 10,
+            axis: Vector3.up, spreadDegrees: 60f,
+            speedMin: 0.4f, speedMax: 1.6f,
+            sizeMin: 0.14f, sizeMax: 0.3f,
+            lifeMin: 0.3f, lifeMax: 0.5f,
+            colorA: MissileSputterSmoke, colorB: Smoke);
+
+        /// <summary>A small kick of dust on each hop — without it the bounce sequence is silent until
+        /// the final boom, and a silent bounce reads as a glitch, not a gag.</summary>
+        private void OnMissileBounced(Vector3 pos) => _missileBounceDust.Emit(pos, 6,
+            axis: Vector3.up, spreadDegrees: 70f,
+            speedMin: 1f, speedMax: 3f,
+            sizeMin: 0.12f, sizeMax: 0.26f,
+            lifeMin: 0.2f, lifeMax: 0.35f,
+            colorA: MissileBounceDust, colorB: Debris);
 
         private void LateUpdate()
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
-            _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame(); _dash.EndFrame();
+            _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame();
             _teleportSurge.EndFrame(); _teleportFlash.EndFrame();
+            _missileFlash.EndFrame(); _missileBlast.EndFrame(); _missileDebris.EndFrame();
+            _missileScorch.EndFrame(); _missileShock.EndFrame(); _missileAfterSmoke.EndFrame();
+            _missileSputter.EndFrame(); _missileBounceDust.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)

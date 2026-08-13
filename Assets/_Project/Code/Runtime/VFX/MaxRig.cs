@@ -66,8 +66,8 @@ namespace MaxWorlds.VFX
     /// So every renderer is handed a real material explicitly, from materials this rig owns and
     /// destroys. A primitive's default material has no URP subshader and ships MAGENTA (YT-58).
     ///
-    /// Reads gameplay, writes none of it: <see cref="PlayerController.MoveInput"/>, <see cref="PlayerController.IsAiming"/>,
-    /// <see cref="PlayerController.IsDashing"/> and <see cref="WaterBlaster.IsFiring"/> are all getters.
+    /// Reads gameplay, writes none of it: <see cref="PlayerController.MoveInput"/>,
+    /// <see cref="PlayerController.IsAiming"/> and <see cref="WaterBlaster.IsFiring"/> are all getters.
     /// Delete this file and the game plays identically — Max just goes back to being a capsule.
     /// </summary>
     [DisallowMultipleComponent]
@@ -254,9 +254,6 @@ namespace MaxWorlds.VFX
                  "facing — he can strafe, and a kid running sideways leans sideways.")]
         [SerializeField] private float leanAngle = 9f;
 
-        [Tooltip("Extra degrees of lean during the dash burst. He is throwing himself, not jogging.")]
-        [SerializeField] private float dashLean = 17f;
-
         [Header("Secondary motion")]
         [Tooltip("How hard the hair and the charms whip when he changes direction. The GDD asks for " +
                  "'messy brown hair (secondary motion)' by name and this is it: they lag behind him, " +
@@ -289,7 +286,7 @@ namespace MaxWorlds.VFX
         private PlayerController _max;
         private WaterBlaster _blaster;
 
-        private Transform _body;       // lean + dash pivot, at the ground
+        private Transform _body;       // lean pivot, at the ground
         private Transform _torso;      // bob + counter-rotation, at the waist
         private Transform _head;
         private Transform _hairPivot;
@@ -848,8 +845,7 @@ namespace MaxWorlds.VFX
         /// <summary>
         /// LateUpdate, not Update: <see cref="PlayerController"/> moves the CharacterController in
         /// Update, and a Max who followed it in Update would render one frame behind his own hitbox —
-        /// at an 18 m/s dash that is 30 cm of daylight between the kid and the thing the robots are
-        /// actually hitting.
+        /// visible daylight between the kid and the thing the robots are actually hitting.
         /// </summary>
         private void LateUpdate()
         {
@@ -926,10 +922,9 @@ namespace MaxWorlds.VFX
             Vector3 moveLocal = transform.InverseTransformDirection(
                 new Vector3(_max.MoveInput.x, 0f, _max.MoveInput.y));
 
-            float lean = leanAngle + (_max.IsDashing ? dashLean : 0f);
             _body.localRotation = Quaternion.Slerp(
                 _body.localRotation,
-                Quaternion.Euler(moveLocal.z * lean, 0f, -moveLocal.x * lean),
+                Quaternion.Euler(moveLocal.z * leanAngle, 0f, -moveLocal.x * leanAngle),
                 1f - Mathf.Exp(-14f * dt));
         }
 
@@ -962,9 +957,9 @@ namespace MaxWorlds.VFX
         /// The hair and the charms lag behind him, then catch up.
         ///
         /// A smoothed velocity trails the real one; the DIFFERENCE between them is how hard he just
-        /// changed direction, and that is what the hair reacts to. Start a dash and it blows back; stop
-        /// dead and it swings forward past him. It costs one Vector3 and it is most of what separates a
-        /// character from a statue being slid around a lawn.
+        /// changed direction, and that is what the hair reacts to. Take off at a sprint and it blows
+        /// back; stop dead and it swings forward past him. It costs one Vector3 and it is most of what
+        /// separates a character from a statue being slid around a lawn.
         /// </summary>
         private void TickSecondary(float dt)
         {

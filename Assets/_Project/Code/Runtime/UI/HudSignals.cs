@@ -51,6 +51,24 @@ namespace MaxWorlds.UI
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
         public static event Action<Vector3, Vector3> BlinkerTeleported;
 
+        /// <summary>Max himself teleported (MV-338). (fromWorldPos, toWorldPos) — same two-point shape
+        /// as <see cref="BlinkerTeleported"/>, kept as a distinct event rather than reusing it: Max's own
+        /// blink drives both a bigger VFX beat and a brief time-slow (<c>GameFeel</c>), neither of which
+        /// should fire off an enemy's teleport.</summary>
+        public static event Action<Vector3, Vector3> MaxTeleported;
+
+        /// <summary>A homing missile detonated — a direct hit OR an out-of-fuel ground impact
+        /// (MV-349). (worldPos, damage) — damage is 0 when the blast landed on empty ground, so
+        /// listeners can tell a real hit from a miss without a second event.</summary>
+        public static event Action<Vector3, float> MissileImpact;
+
+        /// <summary>A homing missile just ran out of fuel and is sputtering before it drops
+        /// (MV-349 AC3). (worldPos)</summary>
+        public static event Action<Vector3> MissileSputtering;
+
+        /// <summary>An out-of-fuel missile bounced off the ground (MV-349 AC3). (worldPos)</summary>
+        public static event Action<Vector3> MissileBounced;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -83,5 +101,17 @@ namespace MaxWorlds.UI
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);
+
+        public static void EmitMaxTeleported(Vector3 from, Vector3 to)
+            => MaxTeleported?.Invoke(from, to);
+
+        public static void EmitMissileImpact(Vector3 worldPos, float damage)
+            => MissileImpact?.Invoke(worldPos, damage);
+
+        public static void EmitMissileSputtering(Vector3 worldPos)
+            => MissileSputtering?.Invoke(worldPos);
+
+        public static void EmitMissileBounced(Vector3 worldPos)
+            => MissileBounced?.Invoke(worldPos);
     }
 }

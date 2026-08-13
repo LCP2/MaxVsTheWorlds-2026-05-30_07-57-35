@@ -39,7 +39,6 @@ namespace MaxWorlds.VFX
         {
             distance = Mathf.Max(0.01f, distance);
             segments = Mathf.Max(2, segments);
-            float apexHeight = distance * ApexHeightFraction;
 
             var verts = new List<Vector3>((segments + 1) * 2);
             var cols = new List<Color>((segments + 1) * 2);
@@ -48,11 +47,9 @@ namespace MaxWorlds.VFX
             for (int i = 0; i <= segments; i++)
             {
                 float t = (float)i / segments;
-                float z = t * distance;
-                float y = 4f * apexHeight * t * (1f - t);   // parabola, 0 at both ends, peak at t=0.5
                 float alpha = Mathf.Lerp(0.35f, 0.9f, t);   // brightens toward the landing point
 
-                var center = new Vector3(0f, y, z);
+                var center = LocalPositionOnArc(distance, t);
                 verts.Add(center + Vector3.left * HalfWidth);
                 verts.Add(center + Vector3.right * HalfWidth);
                 cols.Add(new Color(1f, 1f, 1f, alpha));
@@ -82,5 +79,24 @@ namespace MaxWorlds.VFX
         /// </summary>
         public static Mesh BuildLandingCircle(float radius, int segments = 40) =>
             AimReticleMesh.Build(radius, 180f, segments);
+
+        /// <summary>
+        /// The same parabola <see cref="Build"/> draws, evaluated at a single fraction <paramref name="t"/>
+        /// of the throw (0 = Max's feet, 1 = the landing point) — local space, +Z forward, flat XZ.
+        ///
+        /// Shared with <see cref="WaterBalloonThrowVfx"/>, which actually flies a body along this exact
+        /// curve once the balloon is thrown (MV-334): the preview arc and the real flight must trace the
+        /// same shape, or a player who aimed along the ribbon would watch the balloon land somewhere the
+        /// picture never promised.
+        /// </summary>
+        public static Vector3 LocalPositionOnArc(float distance, float t)
+        {
+            distance = Mathf.Max(0.01f, distance);
+            t = Mathf.Clamp01(t);
+            float apexHeight = distance * ApexHeightFraction;
+            float z = t * distance;
+            float y = 4f * apexHeight * t * (1f - t);   // parabola, 0 at both ends, peak at t=0.5
+            return new Vector3(0f, y, z);
+        }
     }
 }

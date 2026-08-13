@@ -77,10 +77,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AcquireGrantsLevel1()
         {
-            Assert.That(WeaponSystemState.Acquire(AbilityKind.Dash), Is.True);
-            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Dash), Is.True);
-            Assert.That(WeaponSystemState.AbilityLevel(AbilityKind.Dash), Is.EqualTo(1));
-            CollectionAssert.Contains(new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired), AbilityKind.Dash);
+            Assert.That(WeaponSystemState.Acquire(AbilityKind.Speed), Is.True);
+            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Speed), Is.True);
+            Assert.That(WeaponSystemState.AbilityLevel(AbilityKind.Speed), Is.EqualTo(1));
+            CollectionAssert.Contains(new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired), AbilityKind.Speed);
         }
 
         [Test]
@@ -113,23 +113,42 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DashIsASingleUnlockWithNoFurtherLevels()
+        public void AcquiredAndUnacquiredPartitionAllFourAbilities()
         {
-            WeaponSystemState.Acquire(AbilityKind.Dash);
-            Assert.That(WeaponSystemState.LevelUpAbility(AbilityKind.Dash), Is.False,
-                "Dash caps at L1 — acquiring it is the whole upgrade");
+            WeaponSystemState.Acquire(AbilityKind.Speed);
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+
+            CollectionAssert.AreEquivalent(new[] { AbilityKind.Speed, AbilityKind.Teleport }, WeaponSystemState.Acquired);
+            CollectionAssert.AreEquivalent(
+                new[] { AbilityKind.WaterBalloon, AbilityKind.WeaponCooldown },
+                WeaponSystemState.Unacquired);
         }
 
         [Test]
-        public void AcquiredAndUnacquiredPartitionAllSixAbilities()
+        public void AcquiredListsAbilitiesInAcquisitionOrderNotCatalogOrder_MV333()
+        {
+            // WeaponCooldown is last in WeaponCatalog.AllAbilityKinds but granted first here — it must
+            // still come out first, and WaterBalloon (first in catalog order) must land second, not
+            // displace it.
+            WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+
+            CollectionAssert.AreEqual(
+                new[] { AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon }, WeaponSystemState.Acquired);
+        }
+
+        [Test]
+        public void AcquiringAFurtherAbilityDoesNotReorderAlreadyAcquiredOnes_MV333()
         {
             WeaponSystemState.Acquire(AbilityKind.Speed);
-            WeaponSystemState.Acquire(AbilityKind.Dash);
+            var beforeSecondAcquire = new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired);
 
-            CollectionAssert.AreEquivalent(new[] { AbilityKind.Speed, AbilityKind.Dash }, WeaponSystemState.Acquired);
-            CollectionAssert.AreEquivalent(
-                new[] { AbilityKind.WaterBalloon, AbilityKind.Teleport, AbilityKind.WeaponCooldown },
-                WeaponSystemState.Unacquired);
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            var afterSecondAcquire = new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired);
+
+            Assert.That(afterSecondAcquire[0], Is.EqualTo(beforeSecondAcquire[0]),
+                "the first-acquired ability's slot must not move when a second is granted");
+            Assert.That(afterSecondAcquire[1], Is.EqualTo(AbilityKind.WaterBalloon));
         }
 
         // ---------------------------------------------------------------- cooldowns
@@ -145,15 +164,14 @@ namespace MaxWorlds.Tests.EditMode
         public void ActiveAbilitiesHaveAPositiveBaseCooldown()
         {
             Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.WaterBalloon), Is.GreaterThan(0f));
-            Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Dash), Is.GreaterThan(0f));
             Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Teleport), Is.GreaterThan(0f));
         }
 
         [Test]
         public void EffectiveCooldownIsTheBaseWithoutWeaponCooldownOwned()
         {
-            Assert.That(WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Dash),
-                Is.EqualTo(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Dash)).Within(1e-4f),
+            Assert.That(WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.WaterBalloon),
+                Is.EqualTo(WeaponCatalog.BaseCooldownSeconds(AbilityKind.WaterBalloon)).Within(1e-4f),
                 "Weapon Cooldown not owned (L0) must not shorten anything");
         }
 
@@ -190,12 +208,12 @@ namespace MaxWorlds.Tests.EditMode
         public void ResetClearsTracksAndAbilities()
         {
             WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
-            WeaponSystemState.Acquire(AbilityKind.Dash);
+            WeaponSystemState.Acquire(AbilityKind.Speed);
 
             WeaponSystemState.Reset();
 
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
-            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Dash), Is.False);
+            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Speed), Is.False);
         }
 
         [Test]
@@ -222,9 +240,9 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllFiveAbilitiesAndFourTracks()
+        public void CatalogListsAllFourAbilitiesAndFourTracks()
         {
-            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(5));
+            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(4), "MV-359 removed Dash");
             Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4), "MV-299 reinstated Depletion Rate as the fourth track");
         }
 
@@ -233,8 +251,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon), Is.EqualTo(3));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Speed), Is.EqualTo(4));
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Dash), Is.EqualTo(1));
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(2));
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4), "MV-339 widened Teleport from 2 levels to 4");
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown), Is.EqualTo(5));
         }
     }

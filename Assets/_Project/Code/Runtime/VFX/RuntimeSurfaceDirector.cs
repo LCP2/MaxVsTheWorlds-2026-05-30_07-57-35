@@ -52,7 +52,13 @@ namespace MaxWorlds.VFX
             {
                 if (r.GetComponent<SurfaceSkinned>() != null) continue;   // done already
                 if (r.GetComponent<CharacterSkin>() != null) continue;    // a body; CharacterSkinDirector owns it
-                if (r.GetComponentInParent<IDamageable>() != null) continue;
+                if (r.GetComponent<SelfDrivenTint>() != null) continue;   // gameplay drives this block (MV-350)
+                // includeInactive: true (MV-350) — a pooled robot is SetActive(false) between lives, and
+                // GetComponentInParent does not search inactive GameObjects unless told to. Without it, the
+                // instant a robot despawns this guard silently stops seeing its IDamageable and the sweep
+                // claims the robot's own renderers as if they were unclaimed world scenery — permanently,
+                // because SurfaceSkinned below makes it a one-way door. That was the tan-robot bug.
+                if (r.GetComponentInParent<IDamageable>(true) != null) continue;
                 if (r.GetComponent<GroundRing>() != null) continue;       // brings its own material
                 if (r.GetComponentInParent<KeepsOwnMaterial>() != null) continue;   // imported art (YT-75)
 

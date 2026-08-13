@@ -31,7 +31,7 @@ namespace MaxWorlds.Core
         /// <summary>Camera pull-back in metres. Shares the knob with the [ / ] nudge keys (YT-82).</summary>
         public static float? CameraDistance { get; set; }
 
-        /// <summary>Max's planar move speed, m/s. Dash speed is deliberately not tunable here.</summary>
+        /// <summary>Max's planar move speed, m/s.</summary>
         public static float? PlayerMoveSpeed { get; set; }
 
         /// <summary>Robot chase speed, m/s. Applies to live robots and to anything spawned after.</summary>
@@ -167,9 +167,6 @@ namespace MaxWorlds.Core
 
         /// <summary>Water Balloon's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
         public static float? WaterBalloonCooldownSeconds { get; set; }
-
-        /// <summary>Dash's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
-        public static float? DashCooldownSeconds { get; set; }
 
         /// <summary>Teleport's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
         public static float? TeleportCooldownSeconds { get; set; }
@@ -315,7 +312,7 @@ namespace MaxWorlds.Core
             DeathSurgeBurstSize.HasValue || DeathSurgeEliteChance.HasValue ||
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
             RobotMinSeparation.HasValue ||
-            WaterBalloonCooldownSeconds.HasValue || DashCooldownSeconds.HasValue ||
+            WaterBalloonCooldownSeconds.HasValue ||
             TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
             SprayKnockback.HasValue || PrimaryDepletionRate.HasValue ||
             WaterBalloonDamagePct.HasValue || WaterBalloonStopDurationSeconds.HasValue ||
@@ -368,7 +365,6 @@ namespace MaxWorlds.Core
             RobotHealthMultiplier = null;
             RobotMinSeparation = null;
             WaterBalloonCooldownSeconds = null;
-            DashCooldownSeconds = null;
             TeleportCooldownSeconds = null;
             WeaponCooldownReductionPerLevel = null;
             SprayKnockback = null;
@@ -446,7 +442,6 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(RobotHealthMultiplier), () => RobotHealthMultiplier, v => RobotHealthMultiplier = v),
             (PrefsPrefix + nameof(RobotMinSeparation), () => RobotMinSeparation, v => RobotMinSeparation = v),
             (PrefsPrefix + nameof(WaterBalloonCooldownSeconds), () => WaterBalloonCooldownSeconds, v => WaterBalloonCooldownSeconds = v),
-            (PrefsPrefix + nameof(DashCooldownSeconds), () => DashCooldownSeconds, v => DashCooldownSeconds = v),
             (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),
             (PrefsPrefix + nameof(WeaponCooldownReductionPerLevel), () => WeaponCooldownReductionPerLevel, v => WeaponCooldownReductionPerLevel = v),
             (PrefsPrefix + nameof(SprayKnockback), () => SprayKnockback, v => SprayKnockback = v),

@@ -11,7 +11,7 @@ namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
     /// The weapons area (MV-248, MV-262): entering pauses the game, the Primary section shows RCDA's
-    /// four tracks as pip bars at their live level, the Abilities section always shows all six slots —
+    /// four tracks as pip bars at their live level, the Abilities section always shows all four slots —
     /// owned ones by name, the rest as greyed unnamed placeholders — and a tap spends one banked part
     /// on any owned track/ability. Row copy is Title Case on screen
     /// (<see cref="WeaponCatalog.TitleCase"/> over <see cref="WeaponCatalog.DisplayName(WeaponTrackKind)"/>
@@ -125,12 +125,12 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator AbilitiesSectionShowsOnlyAcquiredAbilities()
         {
             yield return NewScreen();
-            WeaponSystemState.Acquire(AbilityKind.Dash);
+            WeaponSystemState.Acquire(AbilityKind.Speed);
 
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Not.Null, "the acquired ability isn't shown");
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Speed)), Is.Not.Null, "the acquired ability isn't shown");
             Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Null,
                 "an unacquired ability must not be shown as its own row — no locked teasers");
         }
@@ -142,17 +142,17 @@ namespace MaxWorlds.Tests.PlayMode
             // up the first time the player actually looks at the screen after acquiring it, then blends
             // back in with the rest on every open after that.
             yield return NewScreen();
-            WeaponSystemState.Acquire(AbilityKind.Dash);
+            WeaponSystemState.Acquire(AbilityKind.Speed);
 
             Screen.Open();
             yield return null;
-            Color firstOpenColor = FindIcon(_screenGo, Name(AbilityKind.Dash)).color;
+            Color firstOpenColor = FindIcon(_screenGo, Name(AbilityKind.Speed)).color;
 
             Screen.Close();
             yield return null;
             Screen.Open();
             yield return null;
-            Color secondOpenColor = FindIcon(_screenGo, Name(AbilityKind.Dash)).color;
+            Color secondOpenColor = FindIcon(_screenGo, Name(AbilityKind.Speed)).color;
 
             Assert.That(firstOpenColor, Is.Not.EqualTo(secondOpenColor),
                 "a newly-acquired ability should look different the first time it's shown, then not repeat");
@@ -170,8 +170,8 @@ namespace MaxWorlds.Tests.PlayMode
 
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Null, $"{kind} shouldn't show before Max owns anything");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(5), "all five ability slots should be visible from the start");
-            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 5 unlocked"), Is.Not.Null);
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(4), "all four ability slots should be visible from the start");
+            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 4 unlocked"), Is.Not.Null);
 
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             yield return null;
@@ -180,9 +180,9 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(FindText(_screenGo, Name(AbilityKind.WaterBalloon)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Not.Null);
-            Assert.That(FindText(_screenGo, Name(AbilityKind.Dash)), Is.Null, "still-unacquired abilities must stay unnamed");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(5), "the grid stays at five slots as more are acquired");
-            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 5 unlocked"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Speed)), Is.Null, "still-unacquired abilities must stay unnamed");
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(4), "the grid stays at four slots as more are acquired");
+            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 4 unlocked"), Is.Not.Null);
         }
 
         [UnityTest]
@@ -194,7 +194,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "ABILITIES — 5 of 5 unlocked"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, "ABILITIES — 4 of 4 unlocked"), Is.Not.Null);
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} should be named once owned");
         }
@@ -373,8 +373,8 @@ namespace MaxWorlds.Tests.PlayMode
             }
         }
 
-        /// <summary>Counts active "Ability Row" slots — MV-262's fixed 6-slot grid should always
-        /// report 6, whether a slot is showing real data or a greyed placeholder.</summary>
+        /// <summary>Counts active "Ability Row" slots — MV-262's fixed 4-slot grid (MV-359) should
+        /// always report 4, whether a slot is showing real data or a greyed placeholder.</summary>
         private static int CountActiveAbilityRows(GameObject root)
         {
             int count = 0;

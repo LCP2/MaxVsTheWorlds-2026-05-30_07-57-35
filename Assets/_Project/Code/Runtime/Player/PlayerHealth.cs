@@ -8,9 +8,7 @@ namespace MaxWorlds.Player
 {
     /// <summary>
     /// Minimal player damage receiver (slice). Implements <see cref="IDamageable"/>
-    /// so enemy contact damage (YT-36) has a target, and ignores hits while the
-    /// <see cref="PlayerController"/> dash i-frames are active — which is what makes
-    /// the dash actually dodge a contact hit. HP binds to the HUD (YT-30) via
+    /// so enemy contact damage (YT-36) has a target. HP binds to the HUD (YT-30) via
     /// <see cref="Normalized"/> + <see cref="Changed"/>.
     ///
     /// Since YT-80 it also trickles back up out of combat (<see cref="Regenerate"/>). Health only
@@ -27,7 +25,6 @@ namespace MaxWorlds.Player
         // component that lives in Backyard_Slice.unity gets baked into the scene, and the scene then
         // silently outranks the code (YT-80).
 
-        private PlayerController _controller;
         private float _health;
         private float _timeSinceDamage;
 
@@ -75,7 +72,6 @@ namespace MaxWorlds.Player
 
         private void Awake()
         {
-            _controller = GetComponent<PlayerController>();
             _health = Max;
 
             // Max's whole status lives over his head (YT-121): the water gauge stacked directly above
@@ -97,11 +93,8 @@ namespace MaxWorlds.Player
             if (!IsAlive) return;
             if (DevMode.IsInvincible) return;                      // dev/filming only; off by default (YT-60)
             if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
-            if (_controller != null && _controller.IsInvulnerable) return; // dash dodge
             float amount = info.Amount;
             _health = Mathf.Max(0f, _health - amount);
-            // Only a hit that LANDS stalls the regen. A hit dashed through costs Max nothing —
-            // neither health nor his recovery — which is the reward a clean dodge should carry.
             _timeSinceDamage = 0f;
             Changed?.Invoke(_health);
         }

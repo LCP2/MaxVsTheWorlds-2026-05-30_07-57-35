@@ -126,5 +126,50 @@ namespace MaxWorlds.Tests.EditMode
             foreach (Transform child in _go.transform) owned++;
             Assert.AreEqual(2, owned, "re-applying should reuse the fill and rim, not spawn new ones each time");
         }
+
+        // ------------------------------------------------------------------ MV-350: bloom vs the ceiling
+
+        /// <summary>
+        /// MV-350's root cause. BloomThreshold and SunlitAlbedo.Ceiling are two independently
+        /// authored constants, and nothing previously checked that they stayed compatible — unlike
+        /// Ceiling and KeyIntensity, which SunlitAlbedo's own doc says the tests hold together. The
+        /// old threshold (0.92) sat BELOW the exact worst case a ceiling-compliant surface reaches
+        /// under the key alone (0.6 x 1.8 = 1.08), so bloom self-triggered on ordinary, correctly
+        /// -exposed bodies and surfaces — not highlights, not VFX — and its warm tint desaturated
+        /// them toward tan/cream on the unshaded side of the yard, independent of the colour
+        /// actually painted. This is the same guarantee SunlitAlbedo.Ceiling's own doc promises for
+        /// KeyIntensity, extended to the threshold that decides whether an ordinary lit surface
+        /// stays a colour or gets bloomed toward the tint.
+        /// </summary>
+        [Test]
+        public void BloomThreshold_ClearsTheCeilingCompliantPeakUnderTheKeyAlone()
+        {
+            var look = BackyardLook.Default;
+            float worstCasePeak = SunlitAlbedo.Ceiling * look.KeyIntensity;
+
+            Assert.Greater(look.BloomThreshold, worstCasePeak,
+                $"BloomThreshold ({look.BloomThreshold:0.00}) does not clear the brightest a " +
+                $"ceiling-compliant surface reaches under the key alone ({worstCasePeak:0.00}) — " +
+                "any archetype or surface authored right up to the ceiling will self-bloom and " +
+                "wash toward the warm bloom tint (MV-350).");
+        }
+
+        /// <summary>
+        /// Pins the regression rather than just asserting the new state: proves the fix closes a
+        /// real, previously-failing case — the Bruiser, at the ceiling-compliant colour MV-328
+        /// shipped — instead of being a no-op that would pass whether or not the bug existed.
+        /// </summary>
+        [Test]
+        public void TheOldThresholdWouldHaveSelfBloomedTheBruiser_TheShippedOneDoesNot()
+        {
+            Color bruiser = MaxWorlds.VFX.CharacterSkin.BaseColorFor(MaxWorlds.VFX.CharacterRole.Bruiser);
+            float key = BackyardLook.Default.KeyIntensity;
+
+            Assert.IsTrue(SunlitAlbedo.ClipsBloomUnderKey(bruiser, key, 0.92f),
+                "the old threshold no longer reproduces MV-350's bug against the shipped Bruiser " +
+                "colour — this test's premise has drifted and needs re-checking, not just leaving green.");
+            Assert.IsFalse(SunlitAlbedo.ClipsBloomUnderKey(bruiser, key, BackyardLook.Default.BloomThreshold),
+                "the shipped threshold still lets the Bruiser self-bloom under the key alone.");
+        }
     }
 }

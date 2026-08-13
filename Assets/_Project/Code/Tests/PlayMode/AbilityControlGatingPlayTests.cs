@@ -13,7 +13,7 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The three active-ability on-screen controls (WV-240, spec §6a): each "appears only once
+    /// The active-ability on-screen controls (WV-240, spec §6a): each "appears only once
     /// acquired, and becomes more prominent as that ability's level rises", every control "shows a
     /// cooldown sweep and is disabled during cooldown", and the Water Balloon joystick's own
     /// press/drag/release must actually reach <see cref="PlayerAbilities.TryThrowWaterBalloon"/> —
@@ -80,26 +80,22 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- appear-on-acquire
 
         [UnityTest]
-        public IEnumerator AllThreeActiveAbilityControlsAreHiddenUntilAcquired()
+        public IEnumerator BothActiveAbilityControlsAreHiddenUntilAcquired()
         {
-            Assert.That(Find("Dash Button").gameObject.activeSelf, Is.False,
-                "Dash is a shed-acquired ability now (spec §6a) — its control must stay hidden unowned");
             Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.False);
-            Assert.That(Find("Teleport Button").gameObject.activeSelf, Is.False);
+            Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.False);
             yield return null;
         }
 
         [UnityTest]
         public IEnumerator EachControlAppearsTheMomentItsAbilityIsAcquired()
         {
-            WeaponSystemState.Acquire(AbilityKind.Dash);
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
 
-            Assert.That(Find("Dash Button").gameObject.activeSelf, Is.True);
             Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.True);
-            Assert.That(Find("Teleport Button").gameObject.activeSelf, Is.True);
+            Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.True);
         }
 
         // ---------------------------------------------------------------- prominence
@@ -119,15 +115,15 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheTeleportButtonGainsADetailPipAtItsAimedSecondLevel()
+        public IEnumerator TheTeleportJoystickGainsADetailPipAtItsAimedSecondLevel()
         {
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
-            int pipsAtL1 = CountPips(Find("Teleport Button"));
+            int pipsAtL1 = CountPips(Find("Teleport Joystick"));
 
             WeaponSystemState.LevelUpAbility(AbilityKind.Teleport);
             yield return null;
-            int pipsAtL2 = CountPips(Find("Teleport Button"));
+            int pipsAtL2 = CountPips(Find("Teleport Joystick"));
 
             Assert.AreEqual(0, pipsAtL1, "level 1 shouldn't show a level-2 detail pip");
             Assert.AreEqual(1, pipsAtL2, "level 2 (longer aimed blink) must read as visibly more built-out");
@@ -188,36 +184,62 @@ namespace MaxWorlds.Tests.PlayMode
                 "a tap with no drag has nothing to throw toward and must not spend the ability");
         }
 
-        // ---------------------------------------------------------------- Teleport button input
+        // ---------------------------------------------------------------- Teleport joystick input
 
         [UnityTest]
-        public IEnumerator TappingBlinkMovesMaxWhenAcquired()
+        public IEnumerator PressingTheTeleportJoystickWhenUnacquiredDoesNothing()
+        {
+            var control = _hud.GetComponentInChildren<TeleportJoystickControl>(true);
+            Assert.IsNotNull(control, "the Teleport joystick's control component is missing");
+
+            control.OnPointerDown(new PointerEventData(EventSystem.current) { position = Vector2.zero });
+            yield return null;
+
+            Assert.That(control.IsAiming, Is.False, "an unowned control must ignore the press entirely");
+        }
+
+        [UnityTest]
+        public IEnumerator DraggingAndReleasingBlinksWhenAcquiredAndReady()
         {
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
             Vector3 before = _max.transform.position;
-            var button = Find("Teleport Button").GetComponentInChildren<Button>(true);
-            Assert.IsNotNull(button, "the Teleport button has no clickable Button component");
+            var control = _hud.GetComponentInChildren<TeleportJoystickControl>(true);
+            var abilities = _max.GetComponent<PlayerAbilities>();
 
-            button.onClick.Invoke();
-            yield return null;
+            var down = new PointerEventData(EventSystem.current) { position = new Vector2(0f, 0f) };
+            control.OnPointerDown(down);
+            Assert.That(control.IsAiming, Is.True, "a press on a ready, owned control must start aiming");
 
+            var drag = new PointerEventData(EventSystem.current) { position = new Vector2(90f, 0f) };
+            control.OnDrag(drag);
+            control.OnPointerUp(drag);
+
+            Assert.That(control.IsAiming, Is.False, "releasing must close the aim");
+            Assert.That(abilities.TeleportReady, Is.False,
+                "a real drag-and-release must reach PlayerAbilities.TryTeleport and start its cooldown");
             Assert.That(Vector3.Distance(_max.transform.position, before), Is.GreaterThan(0.5f),
-                "tapping Teleport while acquired must blink Max");
+                "dragging and releasing the Teleport joystick while acquired must blink Max");
         }
 
         [UnityTest]
-        public IEnumerator TappingBlinkDoesNothingWhenUnacquired()
+        public IEnumerator ATapWithNoRealDragDoesNotBlink()
         {
-            Vector3 before = _max.transform.position;
-            var button = Find("Teleport Button").GetComponentInChildren<Button>(true);
-
-            button.onClick.Invoke();
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+            PickupWallet.SetPowerCells(10);
             yield return null;
 
-            Assert.That(_max.transform.position, Is.EqualTo(before));
+            var control = _hud.GetComponentInChildren<TeleportJoystickControl>(true);
+            var abilities = _max.GetComponent<PlayerAbilities>();
+
+            var at = new PointerEventData(EventSystem.current) { position = new Vector2(100f, 100f) };
+            control.OnPointerDown(at);
+            control.OnPointerUp(at);   // no OnDrag in between — a plain tap, no aimed direction
+
+            Assert.That(abilities.TeleportReady, Is.True,
+                "a tap with no drag has nothing to blink toward and must not spend the ability");
         }
 
         // ---------------------------------------------------------------- repeat use (MV-292)
@@ -258,29 +280,36 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TappingBlinkASecondTimeAfterCooldownMovesMaxAgain()
+        public IEnumerator DraggingAndReleasingASecondTimeAfterCooldownBlinksAgain()
         {
             DevTuning.TeleportCooldownSeconds = 0.05f;
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
+            var control = _hud.GetComponentInChildren<TeleportJoystickControl>(true);
             var abilities = _max.GetComponent<PlayerAbilities>();
-            var button = Find("Teleport Button").GetComponentInChildren<Button>(true);
 
-            button.onClick.Invoke();
-            yield return null;
+            var down1 = new PointerEventData(EventSystem.current) { position = Vector2.zero };
+            control.OnPointerDown(down1);
+            var drag1 = new PointerEventData(EventSystem.current) { position = new Vector2(90f, 0f) };
+            control.OnDrag(drag1);
+            control.OnPointerUp(drag1);
             Assert.That(abilities.TeleportReady, Is.False, "the first blink must start the cooldown");
 
-            yield return new WaitForSeconds(0.2f);
+            yield return new WaitForSeconds(0.2f);   // outlast the shortened cooldown
             Assert.That(abilities.TeleportReady, Is.True, "the cooldown must actually expire");
 
             Vector3 beforeSecond = _max.transform.position;
-            button.onClick.Invoke();
-            yield return null;
+            var down2 = new PointerEventData(EventSystem.current) { position = Vector2.zero };
+            control.OnPointerDown(down2);
+            Assert.That(control.IsAiming, Is.True, "the SAME control instance must accept a second press once ready again");
+            var drag2 = new PointerEventData(EventSystem.current) { position = new Vector2(90f, 0f) };
+            control.OnDrag(drag2);
+            control.OnPointerUp(drag2);
 
             Assert.That(Vector3.Distance(_max.transform.position, beforeSecond), Is.GreaterThan(0.5f),
-                "a second real tap through the on-screen Teleport button must blink again, not silently no-op");
+                "a second real drag-release through the on-screen Teleport joystick must blink again, not silently no-op");
         }
 
         // ---------------------------------------------------------------- layout
@@ -293,18 +322,18 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             Rect waterBalloon = ScreenRect(Find("Water Balloon Joystick"));
-            Rect teleport = ScreenRect(Find("Teleport Button"));
+            Rect teleport = ScreenRect(Find("Teleport Joystick"));
             Rect move = ScreenRect(Find("Move Touch"));
             Rect bossBar = ScreenRect(Find("Boss Bar"));
 
             Assert.IsFalse(waterBalloon.Overlaps(move),
                 "the Water Balloon joystick overlaps the move stick's touch pad");
             Assert.IsFalse(teleport.Overlaps(move),
-                "the Teleport button overlaps the move stick's touch pad");
+                "the Teleport joystick overlaps the move stick's touch pad");
             Assert.IsFalse(waterBalloon.Overlaps(bossBar), "the Water Balloon joystick overlaps the boss bar");
-            Assert.IsFalse(teleport.Overlaps(bossBar), "the Teleport button overlaps the boss bar");
+            Assert.IsFalse(teleport.Overlaps(bossBar), "the Teleport joystick overlaps the boss bar");
             Assert.IsFalse(waterBalloon.Overlaps(teleport),
-                "the Water Balloon joystick overlaps the Teleport button");
+                "the Water Balloon joystick overlaps the Teleport joystick");
         }
     }
 }

@@ -68,8 +68,14 @@ namespace MaxWorlds.VFX
         private static readonly Color PlayerBody = new Color(0.92f, 0.26f, 0.08f);   // Max: hot orange-red
 
         /// <summary>The rusher: bright, hard turquoise. Small and quick, so it is the LIGHTEST actor —
-        /// value carries as far as hue does when a thing is twenty pixels across.</summary>
-        private static readonly Color RobotBody = new Color(0.08f, 0.62f, 0.70f);
+        /// value carries as far as hue does when a thing is twenty pixels across.
+        ///
+        /// MV-348: the peak channel used to be 0.70 — a third over <see cref="SunlitAlbedo.Ceiling"/>
+        /// (0.6). MV-328 fixed the exact same defect on the Bruiser and explicitly left this one
+        /// untouched; the Rusher clipped under the 1.8x key and washed to the warm tan/khaki Lee kept
+        /// reporting, despite this constant never having been anything but turquoise. Pulled
+        /// proportionally (same ratios, same hue) to sit with headroom under the ceiling.</summary>
+        private static readonly Color RobotBody = new Color(0.06f, 0.49f, 0.55f);
 
         /// <summary>The bruiser: deep violet. Not a tint of the rusher — a different hue AND a much
         /// darker value, so the two separate from each other by colour alone even before you notice
@@ -89,8 +95,12 @@ namespace MaxWorlds.VFX
         /// deliberately breaks the "enemies stay cold" rule and takes the one hue family otherwise
         /// reserved for Max — far enough from his brighter orange-red in both hue and value that the
         /// two never get confused (see
-        /// ActorReadabilityTests.TheHeavyReadsClearlyRed_AndDistinctFromMax).</summary>
-        private static readonly Color HeavyBody = new Color(0.68f, 0.04f, 0.14f);
+        /// ActorReadabilityTests.TheHeavyReadsClearlyRed_AndDistinctFromMax).
+        ///
+        /// MV-348: the peak channel used to be 0.68, also over <see cref="SunlitAlbedo.Ceiling"/> —
+        /// the same archetype-wide audit that caught the Rusher caught this one too. Pulled
+        /// proportionally, same hue and ratios, to sit with headroom under the ceiling.</summary>
+        private static readonly Color HeavyBody = new Color(0.55f, 0.03f, 0.11f);
 
         /// <summary>The brute (MV-303): dark gunmetal charcoal, the top of the composition ladder.
         /// Deliberately desaturated, like the boss — it reads as the heaviest thing in the swarm by

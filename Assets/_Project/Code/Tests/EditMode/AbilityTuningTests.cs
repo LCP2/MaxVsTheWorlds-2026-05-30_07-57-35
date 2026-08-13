@@ -85,21 +85,23 @@ namespace MaxWorlds.Tests.EditMode
         {
             float l1 = AbilityTuning.TeleportDistance(1, 8f, 4f);
             float l2 = AbilityTuning.TeleportDistance(2, 8f, 4f);
-            Assert.Greater(l2, l1, "level 2 (the cap) must blink farther than level 1");
+            Assert.Greater(l2, l1, "level 2 must blink farther than level 1");
         }
 
         [Test]
-        public void TeleportsAuthoredRangeClearsDashsShortBurst()
+        public void TeleportHasFourDistinctFartherLevels()
         {
-            // Dash covers dashSpeed * dashDuration = 18 * 0.18 = 3.24m (PlayerController). Teleport
-            // must read as a clearly longer-range tool at both its levels (MV-292 AC1), not a
-            // re-skinned Dash.
-            const float dashDistance = 18f * 0.18f;
-            float teleportL1 = AbilityTuning.TeleportDistance(1,
-                AbilityTuning.DefaultTeleportBaseDistance, AbilityTuning.DefaultTeleportDistancePerLevel);
+            // MV-339: Teleport widened from 2 upgrade levels to 4 — each level must read as a felt
+            // difference from the one before it, all the way to the new cap.
+            float l1 = AbilityTuning.TeleportDistance(1, 8f, 4f);
+            float l2 = AbilityTuning.TeleportDistance(2, 8f, 4f);
+            float l3 = AbilityTuning.TeleportDistance(3, 8f, 4f);
+            float l4 = AbilityTuning.TeleportDistance(4, 8f, 4f);
 
-            Assert.Greater(teleportL1, dashDistance * 2f,
-                "Teleport's L1 distance must clearly exceed Dash's short reposition burst");
+            Assert.Greater(l2, l1);
+            Assert.Greater(l3, l2);
+            Assert.Greater(l4, l3);
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4));
         }
 
         // ---------------------------------------------------------------- Speed (WV-231)

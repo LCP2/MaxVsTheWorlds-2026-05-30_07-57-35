@@ -57,10 +57,9 @@ namespace MaxWorlds.UI
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
         // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
         private static readonly Color PartColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
-        // Minimap fog-of-war (MV-264): hidden stays near-invisible — an undiscovered slot, not a
-        // black hole punched in the HUD — visited is a plain dim readout, and current borrows the
-        // tech-ring cyan already used for "this is you" elsewhere on the HUD.
-        private static readonly Color MinimapHiddenColor = new Color(PanelColor.r, PanelColor.g, PanelColor.b, 0.35f);
+        // Minimap fog-of-war (MV-264, spatial rework MV-341): a visited room is a plain dim readout,
+        // current borrows the tech-ring cyan already used for "this is you" elsewhere on the HUD, and
+        // a hidden room is not drawn at all — the panel behind it IS the fog.
         private static readonly Color MinimapVisitedColor = new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f);
         private static readonly Color MinimapCurrentColor = TechRingColor;
 
@@ -80,15 +79,15 @@ namespace MaxWorlds.UI
         private readonly DamageNumberAggregator _damageNumbers = new DamageNumberAggregator();
         private readonly System.Collections.Generic.List<DamageNumberAggregator.Entry> _damageBuffer =
             new System.Collections.Generic.List<DamageNumberAggregator.Entry>(16);
-        private readonly float[] _slotReadyFlash = new float[3];
-        private readonly bool[] _slotWasReady = new bool[3];
+        private readonly float[] _slotReadyFlash = new float[2];
+        private readonly bool[] _slotWasReady = new bool[2];
 
-        // Ability slots (0 Dash, 1 Bomb, 2 Ultimate)
-        private readonly Image[] _slotRadial = new Image[3];
-        private readonly Image[] _slotGlow = new Image[3];
+        // Ability slots (0 Bomb, 1 Ultimate)
+        private readonly Image[] _slotRadial = new Image[2];
+        private readonly Image[] _slotGlow = new Image[2];
 
         // The Hydro burst button (YT-215): hidden until UpgradeState.HydroAssembled, same TechRings
-        // visual language as the Dash button it sits above.
+        // visual language the other ability controls use.
         private RectTransform _hydroButtonRoot;
         private Image _hydroGlow, _hydroRadial;
         private Text _hydroLabel;
@@ -103,13 +102,12 @@ namespace MaxWorlds.UI
         private Image _aimRings, _aimCross;
         private RectTransform _aimKnob;
 
-        // Touch controls (YT-98): the joystick/dash roots the on-screen sticks + button attach to.
-        private RectTransform _moveJoystickRoot, _aimJoystickRoot, _dashButtonRoot;
+        // Touch controls (YT-98): the joystick roots the on-screen sticks attach to.
+        private RectTransform _moveJoystickRoot, _aimJoystickRoot;
 
-        // Active-ability on-screen controls (WV-240, spec §6a): Water Balloon's joystick and a new
-        // Teleport button, plus gating the existing Dash button on acquisition. AbilityControlArt
-        // (WV-241) bakes size/brightness into construction, so a level change rebuilds the control
-        // rather than tweening a property.
+        // Active-ability on-screen controls (WV-240, spec §6a): Water Balloon's joystick and a matching
+        // Teleport joystick (MV-338). AbilityControlArt (WV-241) bakes size/brightness into
+        // construction, so a level change rebuilds the control rather than tweening a property.
         private PlayerAbilities _abilities;
         private RectTransform _waterBalloonRoot;
         private AbilityControlArt.JoystickVisual _waterBalloonVisual;
@@ -117,19 +115,26 @@ namespace MaxWorlds.UI
         private int _waterBalloonBuiltLevel = -1;
 
         private RectTransform _teleportRoot;
-        private AbilityControlArt.ButtonVisual _teleportVisual;
+        private AbilityControlArt.JoystickVisual _teleportVisual;
+        private Image _teleportRadial;
         private int _teleportBuiltLevel = -1;
 
         // Arena indicator
         private Text _arenaLabel;
         private float _arenaProminence; // 1 = full, fades toward a faint idle
 
-        // Minimap (MV-264): the fog-of-war area strip. Built lazily from Update — not Awake — because
-        // BackyardPath loads its map in its own Awake, whose order relative to this one Unity does not
-        // promise; EnsureMinimapBuilt keeps retrying each frame until a map is actually there to read.
+        // Minimap (MV-264, spatial rework MV-341): a top-down room diagram scaled off the real
+        // MapZone footprints, with a marker tracking the player's live position. Built lazily from
+        // Update — not Awake — because BackyardPath loads its map in its own Awake, whose order
+        // relative to this one Unity does not promise; EnsureMinimapBuilt keeps retrying each frame
+        // until a map is actually there to read.
         private BackyardPath _backyardPath;
-        private Image[] _minimapPips;
+        private RectTransform _minimapFrame;
+        private Image[] _minimapZoneImages;
+        private RectTransform _minimapPlayerMarker;
         private Image _minimapBg;
+        private Rect _minimapAreaBounds;
+        private Vector2 _minimapFrameSize;
         private AreaVisibility[] _minimapStates = System.Array.Empty<AreaVisibility>();
         private int _minimapAreaCount;
         private int _shownMinimapArea = -1;
@@ -139,6 +144,7 @@ namespace MaxWorlds.UI
         // to interpret.
         private Image _dialFill;
         private Text _dialStageLabel;
+        private Text _dialCaption;
         private DifficultyDirector.Stage? _shownStage;
         private float _dialStageFlash;
 
@@ -181,10 +187,9 @@ namespace MaxWorlds.UI
             BuildUtilityIcons();
             BuildHomeButton();
             BuildAbilitySlots();
-            BuildDashButton();
             BuildHydroButton();
             BuildWaterBalloonJoystick();
-            BuildTeleportButton();
+            BuildTeleportJoystick();
             BuildJoysticks();
             BuildArenaIndicator();
             BuildInvasionDial();
@@ -214,6 +219,7 @@ namespace MaxWorlds.UI
             MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
+            AbilityCreditBank.Changed += OnAbilityCreditsChanged;
         }
 
         private void OnDisable()
@@ -231,6 +237,7 @@ namespace MaxWorlds.UI
             MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
+            AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
         }
 
         /// <summary>The Hydro burst button appears the moment the harness + condenser are both
@@ -240,17 +247,13 @@ namespace MaxWorlds.UI
             if (_hydroButtonRoot != null) _hydroButtonRoot.gameObject.SetActive(UpgradeState.HydroAssembled);
         }
 
-        /// <summary>Water Balloon, Dash and Teleport each appear the moment they're acquired and grow
-        /// more prominent as they level (WV-240, spec §6a). Dash's own prominence never changes (a
-        /// single unlock, spec §6) so only its visibility toggles here; the other two rebuild through
+        /// <summary>Water Balloon and Teleport each appear the moment they're acquired and grow
+        /// more prominent as they level (WV-240, spec §6a) — rebuilt through
         /// <see cref="AbilityControlArt"/> whenever their level actually changed.</summary>
         private void OnAbilitiesChanged()
         {
-            if (_dashButtonRoot != null)
-                _dashButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Dash));
-
             RebuildWaterBalloonJoystickIfNeeded();
-            RebuildTeleportButtonIfNeeded();
+            RebuildTeleportJoystickIfNeeded();
         }
 
         private void OnPowerCells(int total)
@@ -259,12 +262,26 @@ namespace MaxWorlds.UI
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
         }
 
-        private void OnParts(int banked)
+        private void OnParts(int banked) => RefreshPartAlert();
+
+        /// <summary>MV-358: a banked shed credit flashes the exact same ABILITIES-button badge a banked
+        /// part already does — "something is waiting in the Abilities screen", regardless of which kind
+        /// — rather than a separate tell the player has to learn twice.</summary>
+        private void OnAbilityCreditsChanged(int banked) => RefreshPartAlert();
+
+        /// <summary>The chip is shown while a part is banked and unspent (YT-131) OR an ability credit
+        /// is banked and unspent (MV-358). It flashes in Update; here we just toggle its presence.</summary>
+        private void RefreshPartAlert()
         {
-            // The chip is shown while any part is banked and unspent (YT-131). It flashes in Update;
-            // here we just toggle its presence. The weapons area spends parts one at a time (WV-228).
-            if (_partAlertRoot != null) _partAlertRoot.gameObject.SetActive(banked > 0);
+            if (_partAlertRoot != null)
+                _partAlertRoot.gameObject.SetActive(ShouldShowPartAlert(
+                    MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked));
         }
+
+        /// <summary>Pure predicate behind <see cref="RefreshPartAlert"/> (MV-358) — pinned by an EditMode
+        /// test without building a canvas: the badge is up if either kind of spend is waiting.</summary>
+        public static bool ShouldShowPartAlert(int partsBanked, int abilityCreditsBanked) =>
+            partsBanked > 0 || abilityCreditsBanked > 0;
 
         /// <summary>Tapping the WEAPONS button (YT-178) opens the weapons area to show Max's current
         /// loadout on demand — the button is always-available access, not gated on a part being banked.
@@ -430,12 +447,8 @@ namespace MaxWorlds.UI
 
         private void UpdateAbilitySlots(float dt)
         {
-            // Dash (slot 0) reflects the real PlayerController cooldown.
-            float dashFill = _player != null ? _player.DashCooldownNormalized : 0f;
-            bool dashReady = _player == null || _player.DashReady;
-            SetSlot(0, dashFill, dashReady);
-            SetSlot(1, _model.Bomb.RadialFill, _model.Bomb.Ready);
-            SetSlot(2, _model.UltimateRadialFill, _model.UltimateReady);
+            SetSlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
+            SetSlot(1, _model.UltimateRadialFill, _model.UltimateReady);
         }
 
         private void SetSlot(int i, float radialFill, bool ready)
@@ -503,8 +516,7 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
-        /// control shows a cooldown sweep and is disabled during cooldown"). Dash's own radial is
-        /// already driven in <see cref="UpdateAbilitySlots"/>.</summary>
+        /// control shows a cooldown sweep and is disabled during cooldown").</summary>
         private void UpdateAbilityControls()
         {
             if (_waterBalloonRadial != null && _waterBalloonRoot != null && _waterBalloonRoot.gameObject.activeSelf)
@@ -514,11 +526,11 @@ namespace MaxWorlds.UI
                 _waterBalloonRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
             }
 
-            if (_teleportRoot != null && _teleportRoot.gameObject.activeSelf)
+            if (_teleportRadial != null && _teleportRoot != null && _teleportRoot.gameObject.activeSelf)
             {
                 float cd = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
                 float remaining = _abilities != null ? _abilities.TeleportCooldownRemaining : 0f;
-                _teleportVisual.Radial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
+                _teleportRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
             }
         }
 
@@ -682,29 +694,23 @@ namespace MaxWorlds.UI
         private void OnHomeButtonTapped() => RunFlow.QuitToMenu();
 
         /// <summary>
-        /// The top-right slots. Dash used to be the first of these (YT-116) — it now has its own
-        /// button down by the thumb, because top-right is the one corner a thumb holding a phone
-        /// cannot reach, and dash is the only one of the three that does anything.
-        ///
-        /// Bomb and Ultimate stay here, and stay honest: neither is implemented, so both are drawn
-        /// dimmed with a LOCKED caption rather than glowing as though they were a button you were
-        /// failing to find. Slot indices are unchanged (0 dash, 1 bomb, 2 ultimate) so the cooldown
-        /// driver does not have to care where a slot is drawn.
+        /// The top-right slots — Bomb and Ultimate, and they stay honest: neither is implemented, so
+        /// both are drawn dimmed with a LOCKED caption rather than glowing as though they were a
+        /// button you were failing to find.
         /// </summary>
         private void BuildAbilitySlots()
         {
-            string[] glyphs = { "B", "U" };      // Bomb, Ultimate — index 1 and 2
+            string[] glyphs = { "B", "U" };      // Bomb, Ultimate — index 0 and 1
             var col = NewRect("Ability Slots", Root);
             Anchor(col, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             col.anchoredPosition = new Vector2(-24f, -24f);
             col.sizeDelta = new Vector2(72f, 160f);
-            for (int g = 0; g < glyphs.Length; g++)
+            for (int i = 0; i < glyphs.Length; i++)
             {
-                int i = g + 1;                   // slot 0 is the dash button, built separately
-                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[g]}");
+                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[i]}");
                 Anchor(slot.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
                 slot.rectTransform.sizeDelta = new Vector2(72f, 72f);
-                slot.rectTransform.anchoredPosition = new Vector2(0f, -g * 80f);
+                slot.rectTransform.anchoredPosition = new Vector2(0f, -i * 80f);
                 slot.type = Image.Type.Sliced;
 
                 // Ready glow (behind everything else in the slot).
@@ -721,7 +727,7 @@ namespace MaxWorlds.UI
                                      new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.45f),
                                      TextAnchor.MiddleCenter);
                 Stretch(letter.rectTransform);
-                letter.text = glyphs[g];
+                letter.text = glyphs[i];
 
                 var locked = AddText(slot.rectTransform, 15f,
                                      new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f),
@@ -743,76 +749,10 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>
-        /// The dash button (YT-116) — a round action button up and to the left of the aim stick,
-        /// where the right thumb already is.
-        ///
-        /// It was in the top-right slot column, which is the far corner of a phone held in two
-        /// hands: reaching it means letting go of aim. This is the Brawl-Stars placement — the
-        /// action button sits inside the arc the aiming thumb already sweeps.
-        ///
-        /// The position is picked to clear the aim stick's TOUCH pad, not just its rings. That pad
-        /// is 30 px larger than the visible stick on every side (see AddOnScreenStick), so a button
-        /// tucked against the artwork would have stolen drags meant for aiming.
-        /// </summary>
-        private void BuildDashButton()
-        {
-            var root = NewRect("Dash Button", Root);
-            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
-            root.anchoredPosition = new Vector2(-DashButtonInset, DashButtonRise);
-            root.sizeDelta = new Vector2(DashButtonSize, DashButtonSize);
-            _dashButtonRoot = root;
-
-            // Ready glow first, behind everything. A RING, not a filled disc (YT-124): when dash is
-            // ready the pulse rides the outline as a gold rim, leaving the interior see-through like
-            // the joysticks — a filled glow was tinting the whole button gold and reading as solid.
-            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
-            Stretch(glow.rectTransform, 4f);
-            glow.raycastTarget = false;
-            _slotGlow[0] = glow;
-
-            // The button now speaks the joysticks' language (YT-124): a thin TechRings outline with a
-            // see-through interior, instead of a solid disc. That drops the opacity to match the
-            // move/aim controls and thins the outer outline in one move — the colour (dash gold) and
-            // position are unchanged, which is what Lee wanted kept. No solid face any more; the
-            // cooldown radial darkens the interior while charging and clears to transparent when ready.
-            var ring = AddImage(root, HudTextures.TechRings(160, 3), DashColor, "Ring");
-            Stretch(ring.rectTransform);
-            ring.raycastTarget = false;
-
-            var label = AddText(root, 26f, DashColor, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform);
-            label.text = "DASH";
-
-            // Cooldown wipe, identical treatment to the slots so the two read as one language.
-            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
-            Stretch(radial.rectTransform, -6f);
-            radial.type = Image.Type.Filled;
-            radial.fillMethod = Image.FillMethod.Radial360;
-            radial.fillOrigin = (int)Image.Origin360.Top;
-            radial.fillClockwise = true;
-            radial.fillAmount = 0f;
-            radial.raycastTarget = false;
-            _slotRadial[0] = radial;
-
-            // Dash is a shed-acquired ability now (WV-231/240, spec §6a): "each control appears only
-            // once acquired" applies to Dash too, not just the two controls that shipped after it.
-            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Dash));
-        }
-
-        // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
-        // (-150, 150) and its pad adds 30 on each side, so it owns out to x = -310).
-        private const float DashButtonSize = 140f;
-        private const float DashButtonInset = 400f;
-        private const float DashButtonRise = 330f;
-
-        // The dash gold — the colour Lee likes and asked to keep (YT-124). Same value the ready glow
-        // pulses in, so the ring and its pulse are one hue.
-        private static readonly Color DashColor = ReadyGlow;
-
-        /// <summary>
-        /// The Hydro burst button (YT-215) — "place near the Dash button; same visual language". Sits
-        /// directly above it, same TechRings ring/glow/radial construction, smaller (it's a situational
-        /// burst, not the core-loop dodge) and hidden until <see cref="UpgradeState.HydroAssembled"/>.
+        /// The Hydro burst button (YT-215) — a round action button up and to the left of the aim
+        /// stick, where the right thumb already is (the Brawl-Stars placement Dash occupied before
+        /// MV-359 removed it: the action button sits inside the arc the aiming thumb already sweeps).
+        /// Hidden until <see cref="UpgradeState.HydroAssembled"/>.
         /// </summary>
         private void BuildHydroButton()
         {
@@ -861,17 +801,18 @@ namespace MaxWorlds.UI
         /// existing at all.</summary>
         private void OnHydroButtonTapped() => HydroBurst.Trigger();
 
-        // Stacked directly above the Dash button (same x inset), with a gap so the two rings
-        // never touch. Smaller than Dash's 140 — a situational burst, not the core-loop dodge.
+        // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
+        // (-150, 150) and its pad adds 30 on each side, so it owns out to x = -310) — the same slot
+        // Dash occupied before MV-359 removed it.
         private const float HydroButtonSize = 110f;
-        private const float HydroButtonInset = DashButtonInset;
-        private const float HydroButtonRise = DashButtonRise + DashButtonSize * 0.5f + HydroButtonSize * 0.5f + 24f;
+        private const float HydroButtonInset = 400f;
+        private const float HydroButtonRise = 330f;
 
-        // The left-hand mirror of the Dash/Hydro column (WV-240, spec §6a): Water Balloon's joystick
-        // sits above the Move stick the same way Dash sits above the Aim stick, so aiming a throw
-        // never costs the player their movement thumb. Teleport stacks above it, same gap discipline
-        // as Hydro-above-Dash — but with extra clearance for the joystick's own oversized invisible
-        // touch pad (matches AddOnScreenStick's ±30 px fat-finger margin), not just its artwork.
+        // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits
+        // above the Move stick the same way Hydro sits above the Aim stick, so aiming a throw never
+        // costs the player their movement thumb. Teleport stacks above it, with extra clearance for
+        // the joystick's own oversized invisible touch pad (matches AddOnScreenStick's ±30 px
+        // fat-finger margin), not just its artwork.
         // Raised clear of the boss bar's y-band (rise 300, half 8) so a boss fight never crosses it.
         // Expressed as a shared Root-local X so the two controls line up visually even though
         // AbilityControlArt.BuildJoystick anchors to the parent's bottom-CENTER while BuildButton
@@ -880,9 +821,11 @@ namespace MaxWorlds.UI
         private const float WaterBalloonJoystickRise = 480f;
         private const float WaterBalloonJoystickMaxHalfSize = 100f;   // half of BuildJoystick's 200 px cap
         private const float WaterBalloonTouchPadMargin = 30f;
-        private const float TeleportButtonSize = 140f;
-        private const float TeleportButtonRise = WaterBalloonJoystickRise + WaterBalloonJoystickMaxHalfSize
-            + WaterBalloonTouchPadMargin + TeleportButtonSize * 0.5f + 24f;
+        // MV-338: Teleport is now a joystick too (same shape as Water Balloon's, including its own
+        // fat-finger touch pad), so it stacks above Water Balloon with the same half-extent-plus-margin
+        // clearance on both sides rather than a button's smaller footprint.
+        private const float TeleportJoystickRise = WaterBalloonJoystickRise
+            + (WaterBalloonJoystickMaxHalfSize + WaterBalloonTouchPadMargin) * 2f + 24f;
 
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
         private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
@@ -900,7 +843,7 @@ namespace MaxWorlds.UI
             int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon);
             Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, WaterBalloonJoystickRise);
             _waterBalloonVisual = AbilityControlArt.BuildJoystick(
-                Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, level, maxLevel);
+                Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, "Balloon", level, maxLevel);
             _waterBalloonRoot = _waterBalloonVisual.Root;
 
             // Cooldown wipe, identical treatment to the other controls so the three read as one
@@ -946,31 +889,54 @@ namespace MaxWorlds.UI
             RebuildWaterBalloonJoystick();
         }
 
-        /// <summary>The Teleport button (WV-240, spec §6a): a button like Dash, appearing once
-        /// acquired and growing a detail pip at its aimed-blink second level.</summary>
-        private void BuildTeleportButton() => RebuildTeleportButton();
+        /// <summary>The Teleport joystick (MV-338: "needs to work the same way as Water Balloon — a
+        /// direction and distance joystick"), appearing once acquired and growing a detail pip at its
+        /// aimed-blink second level. Its own <see cref="TeleportJoystickControl"/> drives the
+        /// press/drag/release aim + blink, the same hand-off shape Water Balloon's joystick uses.</summary>
+        private void BuildTeleportJoystick() => RebuildTeleportJoystick();
 
-        private void RebuildTeleportButton()
+        private void RebuildTeleportJoystick()
         {
             if (_teleportRoot != null) Destroy(_teleportRoot.gameObject);
 
             int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
             int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.Teleport);
-            Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW, TeleportButtonRise);
-            _teleportVisual = AbilityControlArt.BuildButton(
-                Root, "Teleport Button", anchoredPos, TeleportButtonSize, TeleportColor, "BLINK", level, maxLevel);
+            Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, TeleportJoystickRise);
+            _teleportVisual = AbilityControlArt.BuildJoystick(
+                Root, "Teleport Joystick", anchoredPos, TeleportColor, "Teleport", level, maxLevel);
             _teleportRoot = _teleportVisual.Root;
 
-            _teleportVisual.Ring.raycastTarget = true;   // the tappable surface — the ring is the button
-            var button = _teleportVisual.Ring.gameObject.AddComponent<Button>();
-            button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(OnTeleportButtonTapped);
+            // Cooldown wipe, identical treatment to Water Balloon's own (spec §6a: "every control shows
+            // a cooldown sweep").
+            var radial = AddImage(_teleportRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _teleportRadial = radial;
+
+            // Transparent raycastable pad over the joystick, the same fat-finger margin Water Balloon's
+            // own touch pad uses — the finger's touch surface; the rings/knob stay the visible control.
+            var pad = new GameObject("Teleport Touch", typeof(RectTransform), typeof(Image));
+            var padRect = (RectTransform)pad.transform;
+            padRect.SetParent(_teleportRoot, false);
+            padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
+            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            var padImg = pad.GetComponent<Image>();
+            padImg.color = new Color(0f, 0f, 0f, 0f);
+            padImg.raycastTarget = true;
+
+            var control = pad.AddComponent<TeleportJoystickControl>();
+            control.Init(_teleportVisual.Knob, _player != null ? _player.transform : null, _abilities);
 
             _teleportBuiltLevel = level;
             _teleportRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Teleport));
         }
 
-        private void RebuildTeleportButtonIfNeeded()
+        private void RebuildTeleportJoystickIfNeeded()
         {
             int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
             if (level == _teleportBuiltLevel)
@@ -979,17 +945,7 @@ namespace MaxWorlds.UI
                     _teleportRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Teleport));
                 return;
             }
-            RebuildTeleportButton();
-        }
-
-        /// <summary>Tapping BLINK (WV-240): blink toward wherever Max is currently facing — aim takes
-        /// priority over movement the same way <see cref="PlayerController.Facing"/> already resolves
-        /// it, so a level-2 aimed blink goes exactly where the player is looking.</summary>
-        private void OnTeleportButtonTapped()
-        {
-            if (_abilities == null) return;
-            Vector3 dir = _player != null ? _player.Facing : Vector3.forward;
-            _abilities.TryTeleport(dir);
+            RebuildTeleportJoystick();
         }
 
         private void BuildJoysticks()
@@ -1026,13 +982,12 @@ namespace MaxWorlds.UI
 
         /// <summary>
         /// Touch controls for the iOS/mobile input path (YT-98). The visible joysticks above are
-        /// only visualisers; here we lay a transparent <see cref="OnScreenStick"/> pad over each and
-        /// an <see cref="OnScreenButton"/> over the Dash slot, all driving the SAME synthetic-gamepad
-        /// controls <see cref="PlayerController"/> already binds (<c>&lt;Gamepad&gt;/leftStick</c>,
-        /// <c>/rightStick</c>, <c>/buttonSouth</c>). So a finger feeds the exact input path a real
-        /// controller would, with zero change to gameplay code, and — because each stick captures its
-        /// own pointer — move and aim work as simultaneous multi-touch. On-device feel (drag range,
-        /// tap vs drag) is tuned in Lee's device pass.
+        /// only visualisers; here we lay a transparent <see cref="OnScreenStick"/> pad over each,
+        /// driving the SAME synthetic-gamepad controls <see cref="PlayerController"/> already binds
+        /// (<c>&lt;Gamepad&gt;/leftStick</c>, <c>/rightStick</c>). So a finger feeds the exact input
+        /// path a real controller would, with zero change to gameplay code, and — because each stick
+        /// captures its own pointer — move and aim work as simultaneous multi-touch. On-device feel
+        /// (drag range, tap vs drag) is tuned in Lee's device pass.
         /// </summary>
         private void BuildTouchControls()
         {
@@ -1042,8 +997,6 @@ namespace MaxWorlds.UI
                 AddOnScreenStick(_moveJoystickRoot, "<Gamepad>/leftStick", "Move Touch");
             if (_aimJoystickRoot != null)
                 AddOnScreenStick(_aimJoystickRoot, "<Gamepad>/rightStick", "Aim Touch");
-            if (_dashButtonRoot != null)
-                AddOnScreenButton(_dashButtonRoot, "<Gamepad>/buttonSouth", "Dash Touch");
         }
 
         private static void AddOnScreenStick(RectTransform joystickRoot, string controlPath, string name)
@@ -1063,21 +1016,6 @@ namespace MaxWorlds.UI
             var stick = pad.GetComponent<OnScreenStick>();
             stick.controlPath = controlPath;
             stick.movementRange = 90f; // px drag for full deflection; tuned on device
-        }
-
-        private static void AddOnScreenButton(RectTransform slotRoot, string controlPath, string name)
-        {
-            var pad = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(OnScreenButton));
-            var rect = (RectTransform)pad.transform;
-            rect.SetParent(slotRoot, false);
-            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(-8f, -8f); rect.offsetMax = new Vector2(8f, 8f);
-
-            var img = pad.GetComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0f);
-            img.raycastTarget = true;
-
-            pad.GetComponent<OnScreenButton>().controlPath = controlPath;
         }
 
         private static void EnsureEventSystem()
@@ -1108,34 +1046,53 @@ namespace MaxWorlds.UI
 
         private void RefreshArenaText(bool prominent)
         {
-            var a = _model.Arena;
-            _arenaLabel.text = $"SUB-ZONE {a.SubZonesCleared}/{a.SubZonesTotal}     FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+            _arenaLabel.text = ArenaLabelText(_model.Arena);
         }
+
+        /// <summary>
+        /// MV-353: "SUB-ZONE n/1" was a leftover from the pre-MV-242 single-arena slice — it is not
+        /// the same concept as an "Area" in the 10-area gated chain (that already has its own readout,
+        /// the minimap), <see cref="ArenaProgress.SubZonesTotal"/> is hard-pinned to 1 in production, and
+        /// the flag it shows (every factory destroyed) is the exact instant <see cref="ArenaProgress.FactoriesDestroyed"/>
+        /// reaches <see cref="ArenaProgress.FactoriesTotal"/> — a permanently-redundant "0/1" or "1/1"
+        /// beside the count that already says the same thing. Dropped rather than relabelled: it has no
+        /// meaning of its own left to give a correct label to. FACTORIES stays — it counts real,
+        /// dynamically-discovered factories correctly (see <see cref="HudModel.RegisterFactory"/>).
+        /// </summary>
+        public static string ArenaLabelText(ArenaProgress a) => $"FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
 
         /// <summary>Test hook (MV-264): what the minimap is currently showing, one entry per area in
         /// order — the same states <see cref="UpdateMinimap"/> just painted, not a second computation
         /// of them. Empty until a map with area zones has actually loaded.</summary>
         public AreaVisibility[] MinimapStates => _minimapStates;
 
-        /// <summary>Test hook (MV-278): true once the strip has a visible backing panel behind its
-        /// pips, so the widget reads against any 3D background instead of the pips floating bare over
-        /// the world. False until a map with area zones has loaded and built the strip.</summary>
+        /// <summary>Test hook (MV-278): true once the minimap has a visible backing panel behind it,
+        /// so the widget reads against any 3D background instead of floating bare over the world.
+        /// False until a map with area zones has loaded and built the frame.</summary>
         public bool MinimapHasBackdrop => _minimapBg != null && _minimapBg.color.a > 0f;
 
         /// <summary>
-        /// The fog-of-war area strip (MV-264): reintroduces YT-217's minimap now that the v0.5 recut
-        /// replaced "a bounded single garden" with a 10-area gated arena — the scope YT-217 removed it
-        /// for no longer holds. One pip per "area&lt;N&gt;" zone the loaded map defines (never a
-        /// hardcoded ten), stacked under the ability slots — the one gap the top-right corner has left,
-        /// mirroring how <see cref="BuildHomeButton"/> found the top-left's.
+        /// The spatial minimap (MV-264 introduced the fog-of-war area strip; MV-341 redraws it as a
+        /// true top-down room diagram — the strip's tiny stacked pips read as decoration, not a map,
+        /// and gave no sense of the player's actual position). One rectangle per "area&lt;N&gt;" zone
+        /// the loaded map defines (never a hardcoded ten), scaled to its real footprint via
+        /// <see cref="MinimapModel.AreaBounds"/>/<see cref="MinimapModel.NormalizedZoneRect"/>.
+        ///
+        /// MV-354: moved to the LEFT side — the right side is the thumb-side of the screen (ability
+        /// slots, Hydro, the aim stick), and the minimap was competing with those controls for
+        /// space. Sits under the Utility Icons/Home Button column, the same clearance gap that column
+        /// gave the old top-right minimap under the ability slots. Its x-range (24-224) sits well clear
+        /// of the Water Balloon/Teleport joysticks (centred at x=450, ±130 with touch-pad margin), and
+        /// its y-range is well above the Move joystick (bottom-left) — see <see cref="HudLayoutPlayTests"/>-
+        /// style non-overlap discipline; no widget here is under the player's left thumb.
         ///
         /// Deferred to <see cref="Update"/> rather than built in <see cref="Awake"/>: <see cref="BackyardPath"/>
         /// loads its map inside its own Awake, and Unity does not promise this component's Awake runs
-        /// after that one's. Idempotent — bails the instant it has built (or given up on) a strip.
+        /// after that one's. Idempotent — bails the instant it has built (or given up on) a map.
         /// </summary>
         private void EnsureMinimapBuilt()
         {
-            if (_minimapPips != null) return;
+            if (_minimapZoneImages != null) return;
 
             MapData map = _backyardPath != null ? _backyardPath.Map : null;
             if (map == null) return; // BackyardPath hasn't loaded its map yet — try again next frame
@@ -1143,72 +1100,123 @@ namespace MaxWorlds.UI
             _minimapAreaCount = MinimapModel.CountAreas(map);
             if (_minimapAreaCount <= 0)
             {
-                _minimapPips = System.Array.Empty<Image>(); // no area-gated map here — stop retrying
+                _minimapZoneImages = System.Array.Empty<Image>(); // no area-gated map here — stop retrying
                 return;
             }
 
-            const float PipSize = 16f, Spacing = 20f, BgPadding = 10f;
+            const float FrameSize = 200f, Padding = 14f;
+            _minimapAreaBounds = MinimapModel.AreaBounds(map);
+            _minimapFrameSize = new Vector2(FrameSize - Padding * 2f, FrameSize - Padding * 2f);
 
             var root = NewRect("Minimap", Root);
-            Anchor(root, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            root.sizeDelta = new Vector2(PipSize, _minimapAreaCount * Spacing);
-            root.anchoredPosition = new Vector2(-32f, -210f); // under the ability slots column
+            Anchor(root, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            root.sizeDelta = new Vector2(FrameSize, FrameSize);
+            root.anchoredPosition = new Vector2(24f, -250f); // under the utility icon column
 
             // A backing panel (MV-278): every other HUD readout — status bar, ability slots, utility
-            // icons — sits on a solid PanelColor backdrop. The pip strip alone was bare Image dots
-            // straight over the live 3D world, so a near-black Hidden pip (or even a Visited/Current
-            // one) could read as invisible against whatever terrain happened to be behind it. This
-            // gives the strip the same "unmistakably a HUD widget" backdrop as everything around it.
-            var bg = AddImage(root, HudTextures.RoundedBox(28, 0.3f), PanelColor, "Minimap BG");
-            Stretch(bg.rectTransform, BgPadding);
+            // icons — sits on a solid PanelColor backdrop, so a hidden (undrawn) room reads as fog
+            // rather than as a hole punched through to whatever terrain is behind the HUD.
+            var bg = AddImage(root, HudTextures.RoundedBox(28, 0.18f), PanelColor, "Minimap BG");
+            Stretch(bg.rectTransform);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = false;
             _minimapBg = bg;
 
-            _minimapPips = new Image[_minimapAreaCount];
-            for (int i = 0; i < _minimapAreaCount; i++)
+            _minimapFrame = NewRect("Frame", root);
+            Anchor(_minimapFrame, Vector2.zero, Vector2.zero, Vector2.zero);
+            _minimapFrame.sizeDelta = _minimapFrameSize;
+            _minimapFrame.anchoredPosition = new Vector2(Padding, Padding);
+
+            _minimapZoneImages = new Image[_minimapAreaCount];
+            foreach (MapZone zone in map.zones)
             {
-                var pip = AddImage(root, HudTextures.RoundedBox(16, 0.5f), MinimapHiddenColor, $"Area {i + 1}");
-                Anchor(pip.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-                pip.rectTransform.sizeDelta = new Vector2(PipSize, PipSize);
-                pip.rectTransform.anchoredPosition = new Vector2(0f, -i * Spacing);
-                pip.type = Image.Type.Sliced;
-                pip.raycastTarget = false;
-                _minimapPips[i] = pip;
+                if (zone == null) continue;
+                int areaIndex = AreaAccumulationDirector.AreaIndexOf(zone.id);
+                if (areaIndex <= 0 || areaIndex > _minimapAreaCount) continue;
+
+                Rect norm = MinimapModel.NormalizedZoneRect(_minimapAreaBounds, zone);
+                var room = AddImage(_minimapFrame, HudTextures.RoundedBox(16, 0.3f), MinimapVisitedColor, $"Area {areaIndex}");
+                Anchor(room.rectTransform, Vector2.zero, Vector2.zero, Vector2.zero);
+                room.rectTransform.anchoredPosition = new Vector2(norm.x * _minimapFrameSize.x, norm.y * _minimapFrameSize.y);
+                room.rectTransform.sizeDelta = new Vector2(
+                    Mathf.Max(8f, norm.width * _minimapFrameSize.x),
+                    Mathf.Max(8f, norm.height * _minimapFrameSize.y));
+                room.type = Image.Type.Sliced;
+                room.raycastTarget = false;
+                room.gameObject.SetActive(false); // fog-of-war: UpdateMinimap reveals it once reached
+                _minimapZoneImages[areaIndex - 1] = room;
             }
+
+            // The player marker (MV-341 AC: "showing the player's current position") — a bright dot
+            // with a soft glow, the same tech-ring cyan used for "this is you" elsewhere on the HUD.
+            _minimapPlayerMarker = NewRect("Player Marker", _minimapFrame);
+            Anchor(_minimapPlayerMarker, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
+            _minimapPlayerMarker.sizeDelta = new Vector2(22f, 22f);
+
+            var glow = AddImage(_minimapPlayerMarker, HudTextures.Disc(32),
+                new Color(MinimapCurrentColor.r, MinimapCurrentColor.g, MinimapCurrentColor.b, 0.4f), "Glow");
+            Stretch(glow.rectTransform);
+            glow.raycastTarget = false;
+
+            var dot = AddImage(_minimapPlayerMarker, HudTextures.Disc(24), BoneWhite, "Dot");
+            Center(dot.rectTransform, 10f);
+            dot.raycastTarget = false;
+
+            UpdateMinimapPlayerMarker();
         }
 
-        /// <summary>Repaints the strip off the live <see cref="AreaAccumulationDirector.CurrentArea"/>
-        /// — only when it has actually changed, so a built strip costs nothing on the frames between
-        /// area entries.</summary>
+        /// <summary>Repaints the room rectangles off the live
+        /// <see cref="AreaAccumulationDirector.CurrentArea"/> — only when it has actually changed, so a
+        /// built map costs nothing on the frames between area entries — then updates the player marker
+        /// every frame so it tracks smoothly rather than snapping on area boundaries.</summary>
         private void UpdateMinimap()
         {
-            if (_minimapPips == null || _minimapPips.Length == 0) return;
+            if (_minimapZoneImages == null || _minimapZoneImages.Length == 0) return;
 
             int currentArea = 1;
             if (_backyardPath != null && _backyardPath.AreaDirector != null)
                 currentArea = _backyardPath.AreaDirector.CurrentArea;
 
-            if (currentArea == _shownMinimapArea) return;
-            _shownMinimapArea = currentArea;
-
-            _minimapStates = MinimapModel.BuildStates(_minimapAreaCount, currentArea);
-            for (int i = 0; i < _minimapPips.Length; i++)
+            if (currentArea != _shownMinimapArea)
             {
-                _minimapPips[i].color = _minimapStates[i] switch
+                _shownMinimapArea = currentArea;
+                _minimapStates = MinimapModel.BuildStates(_minimapAreaCount, currentArea);
+                for (int i = 0; i < _minimapZoneImages.Length; i++)
                 {
-                    AreaVisibility.Current => MinimapCurrentColor,
-                    AreaVisibility.Visited => MinimapVisitedColor,
-                    _ => MinimapHiddenColor,
-                };
+                    Image room = _minimapZoneImages[i];
+                    if (room == null) continue;
+
+                    AreaVisibility state = _minimapStates[i];
+                    room.gameObject.SetActive(state != AreaVisibility.Hidden); // fog-of-war
+                    room.color = state == AreaVisibility.Current ? MinimapCurrentColor : MinimapVisitedColor;
+                }
             }
+
+            UpdateMinimapPlayerMarker();
+        }
+
+        private void UpdateMinimapPlayerMarker()
+        {
+            if (_minimapPlayerMarker == null || _player == null) return;
+
+            Vector3 pos = _player.transform.position;
+            Vector2 norm = MinimapModel.NormalizedPosition(_minimapAreaBounds, pos.x, pos.z);
+            _minimapPlayerMarker.anchoredPosition = new Vector2(norm.x * _minimapFrameSize.x, norm.y * _minimapFrameSize.y);
         }
 
         /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
         /// — INVASION / INFESTATION / DOMINATION — so the DifficultyDirector curve the swarm is
         /// racing is legible at a glance instead of a clock the player has to interpret. Sits
         /// centred just under the arena indicator — the other "how's the run going" readout.
-        /// Replaces the old MM:SS level clock (YT-181).</summary>
+        /// Replaces the old MM:SS level clock (YT-181).
+        ///
+        /// MV-355: the band names alone didn't say what the bar actually DOES — Lee, playing it
+        /// blind, couldn't tell what filling it meant or changed. Added a small permanent caption
+        /// under the fill (not tied to the stage-crossing flash, always on) stating the one real
+        /// consequence in plain words: it drives <see cref="DifficultyDirector.SpawnIntervalMultiplier"/>
+        /// and <see cref="DifficultyDirector.ToughnessMultiplier"/> — robots spawn faster and hit
+        /// harder as it climbs. Kept the band names: DOMINATION already appears on the Result
+        /// Screen's near-miss line, so the vocabulary is consistent, not invented here.</summary>
         private void BuildInvasionDial()
         {
             var root = NewRect("Invasion Dial", Root);
@@ -1240,6 +1248,15 @@ namespace MaxWorlds.UI
             _dialStageLabel.rectTransform.sizeDelta = new Vector2(260f, 28f);
             _dialStageLabel.rectTransform.anchoredPosition = new Vector2(0f, 126f); // label rides above the fill
             _dialStageLabel.fontStyle = FontStyle.Bold;
+
+            // Permanent — not part of the stage-crossing flash — so the consequence reads even if
+            // the player never sees a band change.
+            _dialCaption = AddText(Root, 13f, new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.6f),
+                TextAnchor.MiddleCenter);
+            Anchor(_dialCaption.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _dialCaption.rectTransform.sizeDelta = new Vector2(260f, 16f);
+            _dialCaption.rectTransform.anchoredPosition = new Vector2(0f, 84f); // rides below the fill
+            _dialCaption.text = "ROBOTS GET FASTER & TOUGHER";
         }
 
         private void UpdateInvasionDial(float dt)
@@ -1334,15 +1351,18 @@ namespace MaxWorlds.UI
             _warning.gameObject.SetActive(false);
         }
 
-        /// <summary>The banked power-cell counter (YT-131): a small pill under the level pip with a
-        /// cyan cell icon and a running total. Display-only currency for now — it just has to be
-        /// visibly accumulating as you clear the tough robots.</summary>
+        /// <summary>The banked power-cell counter (MV-352): a first-class top-band pill with a cyan
+        /// cell icon and a running total. Cells are a resource the player spends, so this reads at a
+        /// glance the way health does — sized and placed in the top readout band, not tucked beside
+        /// another widget. Sits top-center, clear of Utility Icons/Home Button (top-left) and Ability
+        /// Slots/Minimap (top-right). Display-only currency for now — it just has to be visibly
+        /// accumulating as you clear the tough robots.</summary>
         private void BuildPowerCellCounter()
         {
             var root = NewRect("Power Cells", Root);
             Anchor(root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            root.sizeDelta = new Vector2(150f, 44f);
-            root.anchoredPosition = new Vector2(0f, -104f); // just below the centred level pip
+            root.sizeDelta = new Vector2(220f, 84f);
+            root.anchoredPosition = new Vector2(0f, -24f); // top band, level with Utility Icons/Home Button
 
             var bg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = false;
@@ -1351,15 +1371,18 @@ namespace MaxWorlds.UI
             // The sprite bakes its own cyan/dark, so tint white to render it as authored.
             _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Cell Icon");
             Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            _cellIcon.rectTransform.sizeDelta = new Vector2(30f, 30f);
-            _cellIcon.rectTransform.anchoredPosition = new Vector2(16f, 0f);
+            _cellIcon.rectTransform.sizeDelta = new Vector2(60f, 60f);
+            _cellIcon.rectTransform.anchoredPosition = new Vector2(24f, 0f);
             _cellIcon.raycastTarget = false;
 
-            _cellCount = AddText(root, 24f, BoneWhite, TextAnchor.MiddleLeft);
+            _cellCount = AddText(root, 40f, BoneWhite, TextAnchor.MiddleLeft);
             Anchor(_cellCount.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
-            _cellCount.rectTransform.offsetMin = new Vector2(42f, 0f);
-            _cellCount.rectTransform.offsetMax = new Vector2(-10f, 0f);
+            _cellCount.rectTransform.offsetMin = new Vector2(80f, 0f);
+            _cellCount.rectTransform.offsetMax = new Vector2(-14f, 0f);
             _cellCount.fontStyle = FontStyle.Bold;
+            _cellCount.resizeTextForBestFit = true;
+            _cellCount.resizeTextMinSize = 20;
+            _cellCount.resizeTextMaxSize = 40;
             _cellCount.text = MaxWorlds.Pickups.PickupWallet.PowerCells.ToString();
         }
 
@@ -1424,7 +1447,8 @@ namespace MaxWorlds.UI
             Stretch(_partAlertIcon.rectTransform, -8f);   // inset from the badge edge
             _partAlertIcon.raycastTarget = false;
 
-            _partAlertRoot.gameObject.SetActive(MaxWorlds.Pickups.PickupWallet.PartsBanked > 0);
+            _partAlertRoot.gameObject.SetActive(ShouldShowPartAlert(
+                MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked));
         }
 
         private void BuildFloatingLayer()

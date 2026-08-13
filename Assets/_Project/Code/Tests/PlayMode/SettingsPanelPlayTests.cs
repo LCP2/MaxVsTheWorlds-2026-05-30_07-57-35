@@ -92,12 +92,13 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(66),
+            Assert.That(sliders.Length, Is.EqualTo(65),
                 "WV-234 restructured the panel into five tabs — Enemies (19), Economy (10), Weapons " +
-                "(16), Arena (14), Feel (7) — 66 total. This includes the full v0.5 recut spec §9 " +
+                "(15), Arena (14), Feel (7) — 65 total (MV-359 removed the Dash cooldown slider). " +
+                "This includes the full v0.5 recut spec §9 " +
                 "list: the gated-arena/robot-composition knobs (settings only until WV-222/223/224) " +
                 "and the ability magnitudes that already had a DevTuning override but no slider to " +
-                "reach them until now (Water Balloon/Dash/Teleport cooldowns, Weapon Cooldown, " +
+                "reach them until now (Water Balloon/Teleport cooldowns, Weapon Cooldown, " +
                 "Water Balloon distance/splash/damage/stop, Speed %/level).");
             yield return null;
         }
@@ -127,7 +128,7 @@ namespace MaxWorlds.Tests.PlayMode
                 "robots and the robot-accumulation scheme (spec §1-2/§9)");
             Assert.That(economy.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(10),
                 "the power-cell/part drains and drops, plus Hydro's burst timing");
-            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(16),
+            Assert.That(weapons.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(15),
                 "the primary's upgrade-part magnitudes plus every acquired-ability magnitude");
             Assert.That(arena.GetComponentsInChildren<Slider>(true).Length, Is.EqualTo(14),
                 "the run's pacing/escalation knobs, the boss brood-volley knobs, and the gated-arena " +

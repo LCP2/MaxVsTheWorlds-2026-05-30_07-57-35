@@ -5,6 +5,7 @@ using UnityEngine.InputSystem.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.UI
 {
@@ -49,6 +50,11 @@ namespace MaxWorlds.UI
         private static readonly Color Locked = new Color(0.20f, 0.23f, 0.27f);
         private const int MaxFamilySize = 5;   // the HOSE family (Beam/Power/Range/WideBore/Harness) is the biggest
 
+        // MV-357: the shed ability draft-pick's card accent — abilities have no per-kind family colour
+        // the way parts do (UpgradeCatalog.For(kind).Accent), so every ability card shares this one,
+        // the same cyan WeaponsScreen already uses for its ability pips/icon tiles.
+        private static readonly Color AbilityCardAccent = new Color(0.35f, 0.85f, 0.95f);
+
         // Animation timing (seconds, unscaled). reveal → fit → settle, then the continue prompt.
         private const float RevealTime = 0.45f;
         private const float FitTime = 0.45f;
@@ -69,8 +75,11 @@ namespace MaxWorlds.UI
         private readonly Image[] _familyPipBg = new Image[MaxFamilySize];
         private readonly Text[] _familyPipLabel = new Text[MaxFamilySize];
 
-        // The draft-pick reveal (YT-207): up to 3 tappable candidate cards, reusing the panel/scrim
-        // chrome but standing in for the single reveal-and-fit stage while a choice is pending.
+        // The draft-pick reveal (YT-207, generalized to abilities by MV-357): up to 3 tappable
+        // candidate cards, reusing the panel/scrim chrome but standing in for the single reveal-and-fit
+        // stage while a choice is pending. OpenChoice (parts) and OpenAbilityChoice (MV-357) both funnel
+        // through the same card rig and a per-open "what happens when a card is tapped" callback, so the
+        // card plumbing itself doesn't care which kind is being chosen.
         private const int MaxCandidates = 3;
         private RectTransform _choiceRoot;
         private readonly Image[] _cardBg = new Image[MaxCandidates];
@@ -78,8 +87,28 @@ namespace MaxWorlds.UI
         private readonly Text[] _cardFamily = new Text[MaxCandidates];
         private readonly Text[] _cardName = new Text[MaxCandidates];
         private readonly Text[] _cardEffect = new Text[MaxCandidates];
-        private PartKind[] _candidates;
+        private int _candidateCount;
+        private System.Action<int> _onCandidateChosen;
         private bool _choiceMode;
+
+        /// <summary>One card's display text for the draft-pick reveal — <see cref="OpenChoice"/> and
+        /// <see cref="OpenAbilityChoice"/> each build these from their own catalog before handing off to
+        /// the shared <see cref="OpenChoiceInternal"/>/<see cref="ShowCandidates"/> plumbing.</summary>
+        private readonly struct CandidateCard
+        {
+            public readonly string Name;
+            public readonly Color Accent;
+            public readonly string Tag;
+            public readonly string Effect;
+
+            public CandidateCard(string name, Color accent, string tag, string effect)
+            {
+                Name = name;
+                Accent = accent;
+                Tag = tag;
+                Effect = effect;
+            }
+        }
 
         private bool _open;
         private bool _statusOnly;             // opened via OpenStatus (YT-178) — no part to install on Continue
@@ -230,7 +259,65 @@ namespace MaxWorlds.UI
             if (candidates == null || candidates.Length == 0) return;
             if (_canvas == null) Build();
 
-            _candidates = candidates;
+            var cards = new CandidateCard[candidates.Length];
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                var part = UpgradeCatalog.For(candidates[i]);
+                cards[i] = new CandidateCard(part.Name, part.Accent,
+                    UpgradeCatalog.FamilyLabel(UpgradeCatalog.FamilyFor(candidates[i])),
+                    UpgradeCatalog.EffectLine(candidates[i]));
+            }
+
+            PartKind[] picked = candidates;
+            OpenChoiceInternal("CHOOSE AN UPGRADE", cards, index =>
+            {
+                PartKind chosen = picked[index];
+                UpgradeState.Install(chosen);
+                CommitToLiveWeapon();
+                MaxWorlds.Pickups.PickupWallet.TrySpendPart();
+            });
+        }
+
+        /// <summary>
+        /// The BUILD ABILITY draft-pick (MV-357's card rig, moved off the mid-fight modal and onto the
+        /// Abilities screen by MV-358): opened by <see cref="WeaponsScreen"/>'s BUILD ABILITY button,
+        /// never by a pickup directly — the pickup only banks an <see cref="MaxWorlds.Weapons.AbilityCreditBank"/>
+        /// credit. Shows up to <see cref="MaxCandidates"/> tappable ability cards, sampled by
+        /// <see cref="MaxWorlds.Weapons.AbilityDraft"/> from the abilities Max doesn't yet own. Tapping a
+        /// card grants exactly that ability via <see cref="MaxWorlds.Weapons.WeaponSystemState.Acquire"/>
+        /// and spends the credit that paid for the draw; the other candidates stay in the pool for a
+        /// later build. Same card rig as <see cref="OpenChoice"/> — only the catalog and the tap's
+        /// effect differ. WeaponsScreen is already paused when this opens (it never closes underneath),
+        /// so this just layers on top and hands the same pause back on close.
+        /// </summary>
+        public void OpenAbilityChoice(AbilityKind[] candidates)
+        {
+            if (_open) return;
+            if (candidates == null || candidates.Length == 0) return;
+            if (_canvas == null) Build();
+
+            var cards = new CandidateCard[candidates.Length];
+            for (int i = 0; i < candidates.Length; i++)
+            {
+                cards[i] = new CandidateCard(WeaponCatalog.DisplayName(candidates[i]), AbilityCardAccent,
+                    WeaponCatalog.Glyph(candidates[i]), WeaponCatalog.EffectLine(candidates[i]));
+            }
+
+            AbilityKind[] picked = candidates;
+            OpenChoiceInternal("CHOOSE AN ABILITY", cards, index =>
+            {
+                WeaponSystemState.Acquire(picked[index]);
+                MaxWorlds.Weapons.AbilityCreditBank.TrySpend();
+            });
+        }
+
+        /// <summary>Shared open plumbing for <see cref="OpenChoice"/> and <see cref="OpenAbilityChoice"/>:
+        /// pause, show the title and up to <see cref="MaxCandidates"/> cards, and remember what a tap on
+        /// card <c>i</c> should do (<paramref name="onChosen"/>) — resolved by <see cref="ChooseCandidate"/>.</summary>
+        private void OpenChoiceInternal(string title, CandidateCard[] cards, System.Action<int> onChosen)
+        {
+            _candidateCount = cards.Length;
+            _onCandidateChosen = onChosen;
             _choiceMode = true;
             _statusOnly = false;
             _open = true;
@@ -238,10 +325,10 @@ namespace MaxWorlds.UI
             _prevTimeScale = Time.timeScale;
             Time.timeScale = 0f;
 
-            _title.text = "CHOOSE AN UPGRADE";
+            _title.text = title;
             _continueHint.gameObject.SetActive(false);   // no "tap anywhere" — must tap a specific card
             HideFamilyRow();
-            ShowCandidates(candidates);
+            ShowCandidates(cards);
 
             _root.SetActive(true);
             _choiceRoot.gameObject.SetActive(true);
@@ -253,42 +340,40 @@ namespace MaxWorlds.UI
             // weapon/portrait stage out of the choice screen keeps this additive and cheap for the PoC.
         }
 
-        /// <summary>Populates the up-to-<see cref="MaxCandidates"/> cards for a draft-pick reveal —
-        /// name, family tag, and effect line straight off <see cref="UpgradeCatalog"/>, with unused
-        /// card slots hidden when fewer candidates remain (YT-207: 2, then 1, near the end of the level).</summary>
-        private void ShowCandidates(PartKind[] candidates)
+        /// <summary>Populates the up-to-<see cref="MaxCandidates"/> cards for a draft-pick reveal, with
+        /// unused card slots hidden when fewer candidates remain (YT-207: 2, then 1, near the end of the
+        /// part table; MV-357: same shrink as the shed's ability pool drains).</summary>
+        private void ShowCandidates(CandidateCard[] cards)
         {
             for (int i = 0; i < MaxCandidates; i++)
             {
-                bool active = i < candidates.Length;
+                bool active = i < cards.Length;
                 _cardBg[i].gameObject.SetActive(active);
                 if (!active) continue;
 
-                var kind = candidates[i];
-                var part = UpgradeCatalog.For(kind);
-                _cardName[i].text = part.Name;
-                _cardName[i].color = part.Accent;
-                _cardFamily[i].text = UpgradeCatalog.FamilyLabel(UpgradeCatalog.FamilyFor(kind));
-                _cardEffect[i].text = UpgradeCatalog.EffectLine(kind);
+                _cardName[i].text = cards[i].Name;
+                _cardName[i].color = cards[i].Accent;
+                _cardFamily[i].text = cards[i].Tag;
+                _cardEffect[i].text = cards[i].Effect;
             }
         }
 
-        /// <summary>A card was tapped: install exactly that part and spend one banked part (WV-228 —
-        /// parts are fungible tokens now, so any confirm just spends the next one), then resume.</summary>
+        /// <summary>A card was tapped: resolve whichever candidate it stood for via the callback
+        /// <see cref="OpenChoiceInternal"/> stashed (installs+spends a part for <see cref="OpenChoice"/>,
+        /// acquires an ability for <see cref="OpenAbilityChoice"/>), then resume.</summary>
         private void ChooseCandidate(int index)
         {
             if (!_open || !_choiceMode) return;
-            if (_candidates == null || index < 0 || index >= _candidates.Length) return;
+            if (_onCandidateChosen == null || index < 0 || index >= _candidateCount) return;
 
-            PartKind chosen = _candidates[index];
+            System.Action<int> onChosen = _onCandidateChosen;
             _open = false;
             _choiceMode = false;
+            _onCandidateChosen = null;
             Time.timeScale = _prevTimeScale;
             _choiceRoot.gameObject.SetActive(false);
 
-            UpgradeState.Install(chosen);
-            CommitToLiveWeapon();
-            MaxWorlds.Pickups.PickupWallet.TrySpendPart();
+            onChosen(index);
 
             _root.SetActive(false);
         }
@@ -391,7 +476,9 @@ namespace MaxWorlds.UI
             go.transform.SetParent(transform, false);
             _canvas = go.GetComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 210;   // above the HUD (100) and the Settings panel (200)
+            // Above the HUD (100), the Settings panel (200) and WeaponsScreen (210, MV-358): the BUILD
+            // ABILITY draft-pick now opens nested on top of an already-open Abilities screen.
+            _canvas.sortingOrder = 220;
 
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;

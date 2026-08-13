@@ -3,15 +3,14 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Weapons
 {
     /// <summary>
     /// The two shed-acquired abilities that need a live component to actually DO something (WV-231):
-    /// Water Balloon's throw/landing/splash, and Teleport's blink. Dash stays inside
-    /// <see cref="PlayerController"/> — it was already the base movement tech there, gated on
-    /// ownership in place (WV-231) rather than duplicated here. Speed and Weapon Cooldown are pure
+    /// Water Balloon's throw/landing/splash, and Teleport's blink. Speed and Weapon Cooldown are pure
     /// passive multipliers with no activation and need nothing beyond the read
     /// <see cref="PlayerController.WalkSpeed"/> already does.
     ///
@@ -111,8 +110,17 @@ namespace MaxWorlds.Weapons
             Vector3 landing = transform.position + dir * distance;
 
             float flightSeconds = waterBalloonFlightSpeed > 0f ? distance / waterBalloonFlightSpeed : 0f;
-            if (flightSeconds <= 0f) Land(landing);
-            else StartCoroutine(FlyThenLand(landing, flightSeconds));
+            if (flightSeconds <= 0f)
+            {
+                Land(landing);
+            }
+            else
+            {
+                // The thrown body (MV-334) — same landing point and timing the coroutine below
+                // waits on, so the picture and the splash never drift apart.
+                WaterBalloonThrowVfx.Fire(transform.position, landing, flightSeconds);
+                StartCoroutine(FlyThenLand(landing, flightSeconds));
+            }
             return true;
         }
 
@@ -183,8 +191,14 @@ namespace MaxWorlds.Weapons
             float distance = AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
 
             Vector3 offset = dir * distance;
+            Vector3 from = transform.position;
             if (_cc != null) _cc.Move(offset);
             else transform.position += offset;
+
+            // MV-338: HudSignals is the same decoupled hand-off BlinkerTeleported already uses — the
+            // VFX beat (CombatVfx) and the brief time-slow (GameFeel) both react to this without
+            // PlayerAbilities needing to know either exists.
+            HudSignals.EmitMaxTeleported(from, transform.position);
             return true;
         }
     }

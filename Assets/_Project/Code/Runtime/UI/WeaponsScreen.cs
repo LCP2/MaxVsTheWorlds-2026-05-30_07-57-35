@@ -21,8 +21,9 @@ namespace MaxWorlds.UI
     /// overflowing over its icon), a narrow hero column on the left (Max's own key art
     /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
     /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid and the abilities
-    /// grid. The abilities grid always shows all six slots (MV-262): owned ones by name, the rest as
-    /// greyed, unnamed placeholder tiles, so the count of "more to find" reads at a glance instead of
+    /// grid. The abilities grid always shows all four slots (MV-262, pool cut from five to four by
+    /// MV-359's Dash removal): owned ones by name, the rest as greyed, unnamed placeholder tiles, so
+    /// the count of "more to find" reads at a glance instead of
     /// needing a text list. There is no bottom spendbar/instructional line any more — the parts count
     /// lives solely in the top-bar chip. Levels render as pip/segment bars, not text —
     /// <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon + glyph, name, pip
@@ -76,19 +77,21 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
+        private const int MaxAbilityRows = 4;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
         private const int MaxPips = 6;           // largest cap across tracks (MV-291: all now cap at 6) and abilities (WeaponCooldown=5)
 
-        // MV-262: the abilities grid is a fixed 6-slot (3-row) grid regardless of how many are owned,
-        // so unlike the old dynamic "shown + placeholder" layout there's a single worst case to
-        // verify: primary header + primary grid (2 rows, MV-299: 4 tracks at 2 cols, unchanged from
-        // MV-291's 2 rows) + abilities header + abilities grid (3 rows) all fit inside the content budget below the top bar
-        // (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
+        // MV-262: the abilities grid is a fixed 4-slot (2-row) grid regardless of how many are owned
+        // (MV-359 cut the pool from five/six down to four, shrinking this from 3 rows), so unlike the
+        // old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
+        // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols, unchanged from MV-291's 2 rows) +
+        // abilities header + abilities grid (2 rows) all fit inside the content budget below the top
+        // bar (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
         // block above the grids — see the arithmetic in
         // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no runtime overflow
         // check, so this is verified by hand rather than measured. MV-291's third track pushes the
         // primary grid from 1 row to 2, costing one RowHeight+RowGap (116px) of the margin that left —
-        // still fits inside RefH's 1080 budget, just with less spare room below the abilities grid.
+        // still fits inside RefH's 1080 budget, with even more spare room below the (now smaller)
+        // abilities grid since MV-359.
         private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
@@ -115,6 +118,10 @@ namespace MaxWorlds.UI
         private Image _partsGlow;          // MV-327: pulses while a part is banked — the "prominent, readable at a glance" tell
         private Image _weaponGlowRing;     // MV-262: the "cooler under Max" tech-ring behind the RCDA render — spins while open
         private Text _abilitiesHeaderText;
+        private RectTransform _buildAbilityRoot;   // MV-358: BUILD ABILITY — spends a banked shed credit
+        private Image _buildAbilityBg;
+        private Text _buildAbilityLabel;
+        private Button _buildAbilityButton;
 
         private readonly Text[] _trackName = new Text[TrackCount];
         private readonly Image[][] _trackPips = new Image[TrackCount][];
@@ -122,10 +129,11 @@ namespace MaxWorlds.UI
         private readonly Image[] _trackButtonBg = new Image[TrackCount];
 
         // One row slot per catalog ability, always active (MV-262): the leading slots are populated
-        // from WeaponSystemState.Acquired in catalog order, the rest greyed via SetAbilityLocked. Which
-        // AbilityKind occupies slot i changes as more get acquired, so the kind behind each slot's
-        // button is tracked live in _abilityRowKind rather than baked into the click handler at build
-        // time (locked slots' buttons are inactive, so their stale _abilityRowKind is never read).
+        // from WeaponSystemState.Acquired in acquisition order (MV-333), the rest greyed via
+        // SetAbilityLocked. A slot, once filled, keeps its AbilityKind forever — only the trailing
+        // locked slots shift as more get acquired — but the kind behind each slot's button is still
+        // tracked live in _abilityRowKind rather than baked into the click handler at build time
+        // (locked slots' buttons are inactive, so their stale _abilityRowKind is never read).
         private readonly GameObject[] _abilityRow = new GameObject[MaxAbilityRows];
         private readonly Text[] _abilityName = new Text[MaxAbilityRows];
         private readonly Image[][] _abilityPips = new Image[MaxAbilityRows][];
@@ -158,6 +166,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed += Refresh;
             PickupWallet.PartsChanged += OnPartsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
+            AbilityCreditBank.Changed += OnAbilityCreditsChanged;
         }
 
         private void OnDisable()
@@ -165,6 +174,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed -= Refresh;
             PickupWallet.PartsChanged -= OnPartsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
+            AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
         }
 
         private void OnDestroy()
@@ -210,6 +220,7 @@ namespace MaxWorlds.UI
 
         private void OnPartsChanged(int banked) => Refresh();
         private void OnCellsChanged(int cells) => Refresh();
+        private void OnAbilityCreditsChanged(int banked) => Refresh();
 
         /// <summary>Open the weapons area, pausing the game. Ignored if already open.</summary>
         public void Open()
@@ -296,6 +307,13 @@ namespace MaxWorlds.UI
                 SetAbilityLocked(i);
 
             _abilitiesHeaderText.text = $"ABILITIES — {shown} of {MaxAbilityRows} unlocked";
+
+            // MV-358: the BUILD ABILITY button only exists while a shed credit is banked — no dead
+            // button otherwise — and its label carries the count so spending several in a row is legible.
+            int credits = AbilityCreditBank.Banked;
+            if (_buildAbilityRoot != null) _buildAbilityRoot.gameObject.SetActive(credits > 0);
+            if (_buildAbilityLabel != null)
+                _buildAbilityLabel.text = $"BUILD ABILITY ({credits})";
         }
 
         /// <summary>Greys out ability slot <paramref name="i"/> into an unnamed "still to find" tile —
@@ -334,6 +352,34 @@ namespace MaxWorlds.UI
         private void OnTrackButtonTapped(int index) => PartSpend.TrySpendOnTrack(WeaponCatalog.AllTrackKinds[index]);
 
         private void OnAbilityButtonTapped(int row) => PartSpend.TrySpendOnAbility(_abilityRowKind[row]);
+
+        /// <summary>BUILD ABILITY (MV-358): draws candidates the same way the old mid-fight modal did,
+        /// but on demand from this screen instead of the instant a shed dies. Two or three candidates
+        /// open the draft-pick card screen so the player chooses (<see cref="UpgradeScreen.OpenAbilityChoice"/>,
+        /// which itself spends the credit once a card is tapped); exactly one candidate builds directly —
+        /// a one-card choice would be a pointless tap, same rationale MV-357 used. Every ability already
+        /// owned (credits outlived the pool, e.g. two credits banked with only one ability left) spends
+        /// the credit with nothing to show for it rather than leaving a dead button.</summary>
+        private void OnBuildAbilityTapped()
+        {
+            if (AbilityCreditBank.Banked <= 0) return;
+
+            AbilityKind[] candidates = AbilityDraft.DrawCandidates();
+            switch (candidates.Length)
+            {
+                case 0:
+                    AbilityCreditBank.TrySpend();
+                    return;
+                case 1:
+                    WeaponSystemState.Acquire(candidates[0]);
+                    AbilityCreditBank.TrySpend();
+                    return;
+                default:
+                    var screen = FindFirstObjectByType<UpgradeScreen>();
+                    if (screen != null) screen.OpenAbilityChoice(candidates);
+                    return;
+            }
+        }
 
         // ------------------------------------------------------------------ build
 
@@ -713,10 +759,12 @@ namespace MaxWorlds.UI
         private void BuildAbilitiesSection(RectTransform column, float y)
         {
             _abilitiesHeaderText = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
-            Anchor(_abilitiesHeaderText.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
+            Anchor(_abilitiesHeaderText.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(0f, 1f));
             _abilitiesHeaderText.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
             _abilitiesHeaderText.rectTransform.anchoredPosition = new Vector2(0f, y);
             _abilitiesHeaderText.fontStyle = FontStyle.Bold;
+
+            BuildBuildAbilityButton(column, y);
 
             float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
             for (int i = 0; i < MaxAbilityRows; i++)
@@ -733,6 +781,33 @@ namespace MaxWorlds.UI
                 _abilityButton[i].onClick.AddListener(() => OnAbilityButtonTapped(row));
                 _abilityRow[i] = r.Row.gameObject;
             }
+        }
+
+        /// <summary>MV-358: a pill on the abilities header row, right of the "X of Y unlocked" text —
+        /// shown only while a shed credit is banked (see <see cref="Refresh"/>). Amber like the other
+        /// spend affordances (PARTS chip, +buttons), since it's the same "you have something to spend"
+        /// family of action.</summary>
+        private void BuildBuildAbilityButton(RectTransform column, float y)
+        {
+            _buildAbilityRoot = NewRect("Build Ability Root", column, new Vector2(0.6f, 1f), new Vector2(1f, 1f));
+            _buildAbilityRoot.pivot = new Vector2(1f, 1f);
+            _buildAbilityRoot.sizeDelta = new Vector2(0f, SectionHeaderHeight);
+            _buildAbilityRoot.anchoredPosition = new Vector2(0f, y);
+
+            _buildAbilityBg = AddImage(_buildAbilityRoot, HudTextures.RoundedBox(20, 0.5f), PartsColor, "Build Ability Button");
+            Stretch(_buildAbilityBg.rectTransform); _buildAbilityBg.type = Image.Type.Sliced;
+            _buildAbilityBg.raycastTarget = true;
+
+            _buildAbilityButton = _buildAbilityBg.gameObject.AddComponent<Button>();
+            _buildAbilityButton.transition = Selectable.Transition.None;
+            _buildAbilityButton.onClick.AddListener(OnBuildAbilityTapped);
+
+            _buildAbilityLabel = AddText(_buildAbilityRoot, 22, PanelColor, TextAnchor.MiddleCenter);
+            Stretch(_buildAbilityLabel.rectTransform);
+            _buildAbilityLabel.fontStyle = FontStyle.Bold;
+            _buildAbilityLabel.raycastTarget = false;
+
+            _buildAbilityRoot.gameObject.SetActive(false);   // Refresh() turns it on once a credit is banked
         }
 
         /// <summary>The refs a built grid row hands back — <see cref="BuildGridRow"/> grew a couple more
@@ -856,7 +931,6 @@ namespace MaxWorlds.UI
             {
                 case AbilityKind.WaterBalloon: return "H2O";
                 case AbilityKind.Speed: return "SPD";
-                case AbilityKind.Dash: return "DSH";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
                 default: return "?";

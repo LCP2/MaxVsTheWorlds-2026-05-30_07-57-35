@@ -26,10 +26,13 @@ namespace MaxWorlds.Pickups
     /// this loop). A dropped part's <see cref="MaxWorlds.Upgrades.PartKind"/> is purely cosmetic now —
     /// it only steers <c>PickupArtDirector</c>'s occasional Hydro-device swap.
     ///
-    /// Sheds are the ability-unlock mechanic (WV-229): a destroyed <c>MowerHutch</c> reports through
-    /// <see cref="HudSignals.FactoryDestroyed"/>, and this director draws a random entry from
-    /// <see cref="WeaponSystemState.Unacquired"/> and drops a device pickup carrying it — or, once all
-    /// six abilities are owned, a part plus a bigger "cell cache" instead.
+    /// Sheds are the ability-unlock mechanic (WV-229; draft-pick MV-357; moved off the mid-fight modal
+    /// by MV-358): a destroyed <c>MowerHutch</c> reports through <see cref="HudSignals.FactoryDestroyed"/>.
+    /// If any ability is still unowned, this director banks one <see cref="AbilityCreditBank"/> credit —
+    /// no pause, no screen, the fight keeps going — and the player later spends it from the Abilities
+    /// screen's BUILD ABILITY button, which is what actually draws candidates via
+    /// <see cref="AbilityDraft"/>. None left falls back to a part plus a bigger "cell cache" instead,
+    /// same as before.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -105,27 +108,30 @@ namespace MaxWorlds.Pickups
         private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
             MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
-        /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6): destroying one drops a
-        /// device granting one random ability Max doesn't already own. Once all six are owned there is
-        /// nothing left to grant, so it falls back to a part + a cell cache instead — the reward the
-        /// shed no longer has a use for the ability pool to give.</summary>
+        /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6; draft-pick MV-357; the pickup
+        /// itself just banks a credit rather than granting anything, MV-358): if any ability is still
+        /// unowned, bank one <see cref="AbilityCreditBank"/> credit — no pause, no screen, the fight
+        /// isn't interrupted. Once every ability is owned there is nothing left to build, so it falls
+        /// back to a part + a cell cache instead — the reward the shed no longer has a use for the
+        /// ability pool to give.</summary>
         private void OnFactoryDestroyed(Vector3 pos)
         {
-            var unacquired = new List<AbilityKind>(WeaponSystemState.Unacquired);
-            if (unacquired.Count > 0)
+            bool anyUnacquired = false;
+            foreach (var _ in WeaponSystemState.Unacquired) { anyUnacquired = true; break; }
+
+            if (!anyUnacquired)
             {
-                AbilityKind kind = unacquired[Random.Range(0, unacquired.Count)];
-                SpawnDrop(PickupKind.Device, pos, ability: kind);
+                SpawnDrop(PickupKind.Part, pos, DecorativeKind());
+                for (int i = 0; i < ShedCellCacheAmount; i++)
+                {
+                    float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
+                    Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                    SpawnDrop(PickupKind.PowerCell, pos + off);
+                }
                 return;
             }
 
-            SpawnDrop(PickupKind.Part, pos, DecorativeKind());
-            for (int i = 0; i < ShedCellCacheAmount; i++)
-            {
-                float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
-                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
-                SpawnDrop(PickupKind.PowerCell, pos + off);
-            }
+            AbilityCreditBank.Bank();
         }
 
         private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,

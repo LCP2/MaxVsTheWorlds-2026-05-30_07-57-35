@@ -52,16 +52,6 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator DashButtonDrivesTheGamepadButtonThePlayerReads()
-        {
-            yield return null;
-
-            var buttons = _hudGo.GetComponentsInChildren<OnScreenButton>(true);
-            Assert.IsTrue(buttons.Any(b => b.controlPath.Contains("buttonSouth")),
-                "The dash button must drive <Gamepad>/buttonSouth — the control the player's Dash action binds.");
-        }
-
-        [UnityTest]
         public IEnumerator TouchControlsAreRaycastableAndHaveAnEventSystem()
         {
             yield return null;

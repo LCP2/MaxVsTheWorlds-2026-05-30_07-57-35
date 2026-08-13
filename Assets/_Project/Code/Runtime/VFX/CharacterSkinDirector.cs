@@ -66,7 +66,12 @@ namespace MaxWorlds.VFX
             // script order decide whether the "shoot here" tell glows. See SelfDrivenTint.
             if (r.GetComponent<SelfDrivenTint>() != null) return null;
 
-            if (r.GetComponentInParent<IDamageable>() == null) return null;
+            // includeInactive: true (MV-350 audit) — this sweep deliberately includes inactive renderers
+            // (pooled enemies), so the IDamageable lookup has to be able to see an inactive parent too or
+            // it silently stops classifying anything on a robot the moment it's pooled. Not the sticky
+            // one-way-door bug RuntimeSurfaceDirector had (an untagged renderer here is just retried next
+            // frame), but the same mistake in the same shape, so it gets the same fix.
+            if (r.GetComponentInParent<IDamageable>(true) == null) return null;
 
             if (r.GetComponentInParent<PlayerHealth>() != null) return CharacterRole.Player;
             if (r.GetComponentInParent<BigBermudaBoss>() != null) return CharacterRole.Boss;
