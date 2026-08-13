@@ -174,7 +174,7 @@ namespace MaxWorlds.Tests.PlayMode
             // Own everything except two, so the draw is exactly this pair — deterministic instead of a
             // 3-of-5 roll.
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
-                if (kind != AbilityKind.Dash && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
+                if (kind != AbilityKind.WeaponCooldown && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 
             HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
             yield return null;
@@ -193,7 +193,7 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(Time.timeScale, Is.EqualTo(0f), "the Abilities screen underneath is still paused");
             Assert.That(AbilityCreditBank.Banked, Is.EqualTo(0), "choosing a card must spend the credit that paid for the draw");
 
-            bool exactlyOneGranted = WeaponSystemState.IsAcquired(AbilityKind.Dash) ^ WeaponSystemState.IsAcquired(AbilityKind.Teleport);
+            bool exactlyOneGranted = WeaponSystemState.IsAcquired(AbilityKind.WeaponCooldown) ^ WeaponSystemState.IsAcquired(AbilityKind.Teleport);
             Assert.That(exactlyOneGranted, Is.True, "tapping a card must grant exactly the ability that card showed, not both");
         }
 
@@ -205,7 +205,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return NewDirector();
 
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
-                if (kind != AbilityKind.Dash && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
+                if (kind != AbilityKind.WeaponCooldown && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 
             HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
             yield return null;
@@ -219,7 +219,7 @@ namespace MaxWorlds.Tests.PlayMode
             // Exactly one of the pair got granted; the other must still be sitting in Unacquired for a
             // later build to offer again — nothing is ever lost, and nothing is ever granted twice.
             int stillUnacquired = 0;
-            foreach (var kind in new[] { AbilityKind.Dash, AbilityKind.Teleport })
+            foreach (var kind in new[] { AbilityKind.WeaponCooldown, AbilityKind.Teleport })
                 if (!WeaponSystemState.IsAcquired(kind)) stillUnacquired++;
             Assert.That(stillUnacquired, Is.EqualTo(1));
         }

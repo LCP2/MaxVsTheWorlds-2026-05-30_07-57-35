@@ -78,10 +78,16 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void SpendingOnAnOwnedAbilityAtItsCapFailsAndDoesNotSpendTheirPart()
         {
-            WeaponSystemState.Acquire(AbilityKind.Dash);   // caps at L1 — a single unlock
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            int cap = WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon);
+            for (int i = 1; i < cap; i++)
+                PickupWallet.AddPart();
+            for (int i = 1; i < cap; i++)
+                PartSpend.TrySpendOnAbility(AbilityKind.WaterBalloon);
+
             PickupWallet.AddPart();
 
-            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.Dash), Is.False);
+            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.WaterBalloon), Is.False, "must not level past the cap");
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "a failed spend must not cost a part");
         }
 

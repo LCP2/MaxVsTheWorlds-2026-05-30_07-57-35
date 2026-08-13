@@ -21,8 +21,9 @@ namespace MaxWorlds.UI
     /// overflowing over its icon), a narrow hero column on the left (Max's own key art
     /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
     /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid and the abilities
-    /// grid. The abilities grid always shows all six slots (MV-262): owned ones by name, the rest as
-    /// greyed, unnamed placeholder tiles, so the count of "more to find" reads at a glance instead of
+    /// grid. The abilities grid always shows all four slots (MV-262, pool cut from five to four by
+    /// MV-359's Dash removal): owned ones by name, the rest as greyed, unnamed placeholder tiles, so
+    /// the count of "more to find" reads at a glance instead of
     /// needing a text list. There is no bottom spendbar/instructional line any more — the parts count
     /// lives solely in the top-bar chip. Levels render as pip/segment bars, not text —
     /// <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon + glyph, name, pip
@@ -76,19 +77,21 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
+        private const int MaxAbilityRows = 4;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
         private const int MaxPips = 6;           // largest cap across tracks (MV-291: all now cap at 6) and abilities (WeaponCooldown=5)
 
-        // MV-262: the abilities grid is a fixed 6-slot (3-row) grid regardless of how many are owned,
-        // so unlike the old dynamic "shown + placeholder" layout there's a single worst case to
-        // verify: primary header + primary grid (2 rows, MV-299: 4 tracks at 2 cols, unchanged from
-        // MV-291's 2 rows) + abilities header + abilities grid (3 rows) all fit inside the content budget below the top bar
-        // (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
+        // MV-262: the abilities grid is a fixed 4-slot (2-row) grid regardless of how many are owned
+        // (MV-359 cut the pool from five/six down to four, shrinking this from 3 rows), so unlike the
+        // old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
+        // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols, unchanged from MV-291's 2 rows) +
+        // abilities header + abilities grid (2 rows) all fit inside the content budget below the top
+        // bar (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
         // block above the grids — see the arithmetic in
         // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no runtime overflow
         // check, so this is verified by hand rather than measured. MV-291's third track pushes the
         // primary grid from 1 row to 2, costing one RowHeight+RowGap (116px) of the margin that left —
-        // still fits inside RefH's 1080 budget, just with less spare room below the abilities grid.
+        // still fits inside RefH's 1080 budget, with even more spare room below the (now smaller)
+        // abilities grid since MV-359.
         private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
@@ -928,7 +931,6 @@ namespace MaxWorlds.UI
             {
                 case AbilityKind.WaterBalloon: return "H2O";
                 case AbilityKind.Speed: return "SPD";
-                case AbilityKind.Dash: return "DSH";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
                 default: return "?";

@@ -5,9 +5,10 @@ using MaxWorlds.Core;
 namespace MaxWorlds.Weapons
 {
     /// <summary>
-    /// Display data and authored magnitudes for the RCDA primary's four tracks and the six
-    /// shed-acquired abilities (v0.5 recut spec §6, WV-230). Same "authored const, front through
-    /// DevTuning where a slider makes sense" rule as <see cref="MaxWorlds.Upgrades.UpgradeCatalog"/>.
+    /// Display data and authored magnitudes for the RCDA primary's four tracks and the four
+    /// shed-acquired abilities (v0.5 recut spec §6, WV-230; Dash removed by MV-359). Same "authored
+    /// const, front through DevTuning where a slider makes sense" rule as
+    /// <see cref="MaxWorlds.Upgrades.UpgradeCatalog"/>.
     /// </summary>
     public static class WeaponCatalog
     {
@@ -21,13 +22,10 @@ namespace MaxWorlds.Weapons
         public const string PrimaryShortName = "RCDA";
 
         /// <summary>Placeholder base cooldowns (v0.5 recut spec §9 names these as settings —
-        /// <c>waterBalloonCooldown</c>/<c>dashCooldown</c>/<c>teleportCooldown</c> — without pinning
-        /// numbers; live-tune via DevTuning once the Settings tab exists, WV-234). Teleport's
-        /// (MV-292) is deliberately well past Dash's: Dash is the short, frequent dodge; Teleport is
-        /// the long, infrequent escape/engage tool — the cooldown gap has to read as clearly as the
-        /// distance gap does. Water Balloon's is 3x the original 3s per MV-336 feedback (Max 0.7 doc).</summary>
+        /// <c>waterBalloonCooldown</c>/<c>teleportCooldown</c> — without pinning numbers; live-tune
+        /// via DevTuning once the Settings tab exists, WV-234). Water Balloon's is 3x the original 3s
+        /// per MV-336 feedback (Max 0.7 doc).</summary>
         public const float DefaultWaterBalloonCooldownSeconds = 9f;
-        public const float DefaultDashCooldownSeconds = 2.5f;
         public const float DefaultTeleportCooldownSeconds = 6f;
 
         /// <summary>The tracks, in the order the weapons screen lists them (spec §6; Capacity/Weapon
@@ -46,7 +44,6 @@ namespace MaxWorlds.Weapons
         {
             AbilityKind.WaterBalloon,
             AbilityKind.Speed,
-            AbilityKind.Dash,
             AbilityKind.Teleport,
             AbilityKind.WeaponCooldown,
         };
@@ -114,22 +111,21 @@ namespace MaxWorlds.Weapons
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
         /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Water
-        /// Balloon 3, Speed 4, Dash a single unlock (1), Teleport 4, Weapon Cooldown 5.</summary>
+        /// Balloon 3, Speed 4, Teleport 4, Weapon Cooldown 5.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
             {
                 case AbilityKind.WaterBalloon: return 3;
                 case AbilityKind.Speed: return 4;
-                case AbilityKind.Dash: return 1;
                 case AbilityKind.Teleport: return 4;
                 case AbilityKind.WeaponCooldown: return 5;
                 default: return 1;
             }
         }
 
-        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Water Balloon, Dash
-        /// and Teleport are the three active abilities with an on-screen control (spec §6a) and a real
+        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Water Balloon and
+        /// Teleport are the two active abilities with an on-screen control (spec §6a) and a real
         /// cooldown; Speed and Weapon Cooldown are passive — continuous, no control to gate — so their
         /// base cooldown is 0.</summary>
         public static float BaseCooldownSeconds(AbilityKind kind)
@@ -138,8 +134,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.WaterBalloon:
                     return DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, DefaultWaterBalloonCooldownSeconds);
-                case AbilityKind.Dash:
-                    return DevTuning.Or(DevTuning.DashCooldownSeconds, DefaultDashCooldownSeconds);
                 case AbilityKind.Teleport:
                     return DevTuning.Or(DevTuning.TeleportCooldownSeconds, DefaultTeleportCooldownSeconds);
                 default:
@@ -165,7 +159,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.WaterBalloon: return "WATER BALLOON";
                 case AbilityKind.Speed: return "SPEED";
-                case AbilityKind.Dash: return "DASH";
                 case AbilityKind.Teleport: return "TELEPORT";
                 case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
                 default: return kind.ToString();
@@ -180,7 +173,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.WaterBalloon: return "H2O";
                 case AbilityKind.Speed: return "SPD";
-                case AbilityKind.Dash: return "DSH";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
                 default: return "?";
@@ -196,7 +188,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.WaterBalloon: return "Joystick-aimed lob that splashes enemies on impact.";
                 case AbilityKind.Speed: return "Passive move-speed boost.";
-                case AbilityKind.Dash: return "Quick directional burst out of danger.";
                 case AbilityKind.Teleport: return "Blink to a nearby spot, dodging in an instant.";
                 case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";
                 default: return string.Empty;
@@ -206,7 +197,7 @@ namespace MaxWorlds.Weapons
         private static readonly TextInfo s_textInfo = CultureInfo.InvariantCulture.TextInfo;
 
         /// <summary>"WEAPON EFFICIENCY" -> "Weapon Efficiency". The weapons screen's v0.5 design
-        /// (MV-248) reads track/ability names in Title Case; the HUD pickup toast ("DASH UNLOCKED")
+        /// (MV-248) reads track/ability names in Title Case; the HUD pickup toast ("TELEPORT UNLOCKED")
         /// keeps the ALL-CAPS convention it shares with "+1 CELL"/"+1 PART", so this reformats
         /// <see cref="DisplayName(WeaponTrackKind)"/>/<see cref="DisplayName(AbilityKind)"/> for
         /// screen copy rather than changing what they return.</summary>

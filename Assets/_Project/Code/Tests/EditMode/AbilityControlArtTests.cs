@@ -31,7 +31,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ASingleLevelAbilityIsAlwaysFullyProminent()
         {
-            // Dash: a single unlock, maxLevel 1 — there is no "half-built" state to read as.
+            // A single unlock, maxLevel 1 — there is no "half-built" state to read as.
             Assert.That(AbilityControlArt.Prominence(1, 1), Is.EqualTo(1f).Within(1e-5f));
         }
 
@@ -53,7 +53,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(AbilityControlArt.Prominence(0, 3), Is.EqualTo(AbilityControlArt.MinProminence).Within(1e-5f));
         }
 
-        // ---------- Button (Dash/Teleport) ----------
+        // ---------- Button ----------
 
         [Test]
         public void AHigherLevelButtonIsBiggerAndBrighter()
@@ -81,9 +81,9 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ADashSingleUnlockGetsNoDetailPips()
+        public void ASingleLevelAbilityButtonGetsNoDetailPips()
         {
-            var root = AbilityControlArt.BuildButton(_canvas, "Dash", Vector2.zero, 140f, Color.yellow, "DASH", 1, 1).Root;
+            var root = AbilityControlArt.BuildButton(_canvas, "Single", Vector2.zero, 140f, Color.yellow, "X", 1, 1).Root;
             int pips = root.Cast<Transform>().Count(t => t.name.StartsWith("Pip"));
             Assert.AreEqual(0, pips, "a single-level ability has no further level to signal with a pip");
         }

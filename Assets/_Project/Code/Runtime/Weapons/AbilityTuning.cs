@@ -59,9 +59,8 @@ namespace MaxWorlds.Weapons
         /// Efficiency/Weapon Cooldown; authored the same per-level-multiplier shape as those.</summary>
         public const float DefaultSpeedMultiplierPerLevel = 0.15f;
 
-        /// <summary>Teleport's blink distance at Level 1, metres (MV-292) — deliberately well past
-        /// Dash's short ~3.2m reposition burst (18 m/s * 0.18s) so the two read as clearly different
-        /// tools: Dash is the short, frequent dodge; Teleport is the long, infrequent escape/engage.</summary>
+        /// <summary>Teleport's blink distance at Level 1, metres (MV-292) — the long, infrequent
+        /// escape/engage tool.</summary>
         public const float DefaultTeleportBaseDistance = 8f;
 
         /// <summary>Extra blink distance per Teleport level beyond L1 (MV-292 AC3: a level-up must be

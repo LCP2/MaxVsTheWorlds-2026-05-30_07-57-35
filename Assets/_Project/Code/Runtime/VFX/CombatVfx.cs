@@ -1,19 +1,17 @@
 using System.Collections;
 using UnityEngine;
 using MaxWorlds.UI;
-using MaxWorlds.Player;
 
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Combat feedback VFX (YT-48): enemy hit sparks, the enemy death pop, Max's dash trail,
+    /// Combat feedback VFX (YT-48): enemy hit sparks, the enemy death pop,
     /// and the Mower Hutch's destruction burst.
     ///
     /// It listens to the existing <see cref="HudSignals"/> bus rather than being called from
-    /// gameplay code, and reads <see cref="PlayerController.IsDashing"/> for the dash. That
-    /// means this whole feature adds no gameplay coupling: nothing in Enemies/, Factories/ or
-    /// Player/ has to know the VFX exists, and deleting this file would change nothing but
-    /// the picture.
+    /// gameplay code. That means this whole feature adds no gameplay coupling: nothing in
+    /// Enemies/, Factories/ or Player/ has to know the VFX exists, and deleting this file
+    /// would change nothing but the picture.
     ///
     /// Note <c>HudSignals.DamageDealt</c> is only raised by enemy-side receivers (RobotEnemy,
     /// MowerHutch, BigBermudaBoss) — PlayerHealth does not raise it — so subscribing to it
@@ -39,11 +37,10 @@ namespace MaxWorlds.VFX
         private static readonly Color FireHot = new Color(1f, 0.85f, 0.45f, 1f);
         private static readonly Color FireDeep = new Color(0.92f, 0.35f, 0.10f, 1f);
         private static readonly Color Smoke = new Color(0.22f, 0.20f, 0.19f, 0.75f);
-        private static readonly Color DashTrail = new Color(0.62f, 0.92f, 1f, 1f);
 
         // The Blinker's teleport (MV-330): a violet-white "phase" hue, deliberately apart from every
-        // other palette here — not the sparks' gold, not the dash's icy blue — so it reads as its own
-        // kind of event rather than borrowed damage feedback.
+        // other palette here — not the sparks' gold — so it reads as its own kind of event rather
+        // than borrowed damage feedback.
         private static readonly Color SurgeCore = new Color(0.85f, 0.75f, 1f, 1f);
         private static readonly Color SurgeDeep = new Color(0.45f, 0.15f, 0.85f, 1f);
         private static readonly Color TeleportFlash = new Color(0.92f, 0.88f, 1f, 1f);
@@ -78,7 +75,6 @@ namespace MaxWorlds.VFX
         private VfxBurst _boom;         // factory: fire
         private VfxBurst _boomDebris;   // factory: chunks
         private VfxBurst _boomSmoke;    // factory: lingering smoke
-        private VfxBurst _dash;         // Max's dash trail
         private VfxBurst _teleportSurge; // Blinker: energy surge lingering at the departure point
         private VfxBurst _teleportFlash; // Blinker: the vanish/reappear pop, shared by both ends
         private VfxBurst _maxTeleportSurge; // Max: bigger energy surge, both ends
@@ -92,10 +88,6 @@ namespace MaxWorlds.VFX
         private VfxBurst _missileAfterSmoke; // missile: dark plume that lingers after the flash (MV-351)
         private VfxBurst _missileSputter;   // missile: dying thrust, just before it drops
         private VfxBurst _missileBounceDust; // missile: a kick of dust each time it hits the ground
-
-        private PlayerController _player;
-        private Vector3 _lastDashPos;
-        private bool _wasDashing;
 
         private void Awake()
         {
@@ -111,7 +103,6 @@ namespace MaxWorlds.VFX
             _boom = new VfxBurst("FactoryFire", additive, 200, -0.15f, perFrameCap: 2);
             _boomDebris = new VfxBurst("FactoryDebris", solid, 180, 2.4f, perFrameCap: 2);
             _boomSmoke = new VfxBurst("FactorySmoke", soft, 140, -0.25f, perFrameCap: 2);
-            _dash = new VfxBurst("DashTrail", additive, 200, 0f, perFrameCap: 90);
             _teleportSurge = new VfxBurst("TeleportSurge", additive, 120, 0f, perFrameCap: 4, stretched: true);
             _teleportFlash = new VfxBurst("TeleportFlash", additive, 40, 0f, perFrameCap: 8);
             _maxTeleportSurge = new VfxBurst("MaxTeleportSurge", additive, 220, 0f, perFrameCap: 4, stretched: true);
@@ -159,7 +150,7 @@ namespace MaxWorlds.VFX
         private void OnDestroy()
         {
             Dispose(_hitSparks); Dispose(_deathSparks); Dispose(_deathDebris);
-            Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke); Dispose(_dash);
+            Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke);
             Dispose(_teleportSurge); Dispose(_teleportFlash);
             Dispose(_maxTeleportSurge); Dispose(_maxTeleportShock); Dispose(_maxTeleportFlash);
             Dispose(_missileFlash); Dispose(_missileBlast); Dispose(_missileDebris);
@@ -452,46 +443,10 @@ namespace MaxWorlds.VFX
             lifeMin: 0.2f, lifeMax: 0.35f,
             colorA: MissileBounceDust, colorB: Debris);
 
-        // --- dash trail ---
-
-        private void Update()
-        {
-            if (_player == null)
-            {
-                _player = FindFirstObjectByType<PlayerController>();
-                if (_player == null) return;
-            }
-
-            bool dashing = _player.IsDashing;
-            Vector3 pos = _player.transform.position;
-
-            if (dashing)
-            {
-                // Lay the trail along the path actually travelled this frame, not just at the
-                // current position: a dash covers a lot of ground in a few frames, and emitting
-                // only at the sampled points leaves visible gaps in the streak.
-                Vector3 from = _wasDashing ? _lastDashPos : pos;
-                int steps = CombatVfxTuning.TrailSteps(Vector3.Distance(from, pos));
-                for (int i = 0; i < steps; i++)
-                {
-                    Vector3 p = Vector3.Lerp(from, pos, (i + 1f) / steps) + Vector3.up * 0.7f;
-                    _dash.Emit(p, 1,
-                        axis: Vector3.up, spreadDegrees: 25f,
-                        speedMin: 0.1f, speedMax: 0.7f,
-                        sizeMin: 0.35f, sizeMax: 0.62f,
-                        lifeMin: 0.16f, lifeMax: 0.3f,
-                        colorA: DashTrail, colorB: Color.white);
-                }
-            }
-
-            _wasDashing = dashing;
-            _lastDashPos = pos;
-        }
-
         private void LateUpdate()
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
-            _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame(); _dash.EndFrame();
+            _boom.EndFrame(); _boomDebris.EndFrame(); _boomSmoke.EndFrame();
             _teleportSurge.EndFrame(); _teleportFlash.EndFrame();
             _missileFlash.EndFrame(); _missileBlast.EndFrame(); _missileDebris.EndFrame();
             _missileScorch.EndFrame(); _missileShock.EndFrame(); _missileAfterSmoke.EndFrame();

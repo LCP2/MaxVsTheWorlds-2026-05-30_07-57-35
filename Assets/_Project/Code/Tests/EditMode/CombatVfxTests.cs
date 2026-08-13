@@ -26,15 +26,6 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void TrailSteps_FillsTheGapAcrossADashStep()
-        {
-            Assert.AreEqual(1, CombatVfxTuning.TrailSteps(0f), "a stationary frame still lays one puff");
-            Assert.That(CombatVfxTuning.TrailSteps(2f), Is.GreaterThan(CombatVfxTuning.TrailSteps(0.2f)),
-                "covering more ground in one frame needs more puffs, or the trail is dotted");
-            Assert.That(CombatVfxTuning.TrailSteps(999f), Is.EqualTo(8), "clamped — no unbounded emission");
-        }
-
-        [Test]
         public void Burst_EmitsUpToItsPerFrameBudgetThenStops()
         {
             var burst = new VfxBurst("test-burst", VfxMaterials.Additive(VfxMaterials.Glow()),

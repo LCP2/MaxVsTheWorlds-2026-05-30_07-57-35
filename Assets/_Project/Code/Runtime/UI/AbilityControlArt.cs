@@ -4,15 +4,14 @@ using UnityEngine.UI;
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// The three active-ability on-screen controls (v0.5 recut spec §6a, WV-241): Water Balloon's
-    /// joystick, and the Dash/Teleport buttons. Each "appears only once acquired, and becomes more
-    /// prominent as that ability's level rises (bigger / brighter / more detailed)" per spec — this is
-    /// the shared building block for that prominence curve, plus the joystick control HudController's
-    /// existing Dash button doesn't have a sibling for yet.
+    /// The active-ability on-screen controls (v0.5 recut spec §6a, WV-241): Water Balloon's and
+    /// Teleport's joysticks, plus a button-style control other button-shaped abilities can reuse.
+    /// Each "appears only once acquired, and becomes more prominent as that ability's level rises
+    /// (bigger / brighter / more detailed)" per spec — this is the shared building block for that
+    /// prominence curve.
     ///
-    /// Speaks the same TechRings visual language <c>HudController</c>'s move/aim joysticks and Dash
-    /// button already use (see <c>HudController.BuildDashButton</c>), so a new control never looks like
-    /// a different game bolted onto the HUD.
+    /// Speaks the same TechRings visual language <c>HudController</c>'s move/aim joysticks already
+    /// use, so a new control never looks like a different game bolted onto the HUD.
     ///
     /// Pure UI construction — no input, no cooldown sweep, no ability-state reads. Whoever wires the
     /// joystick drag, button taps and the live cooldown radial (WV-240 — <c>WeaponSystemState</c>'s own
@@ -30,7 +29,7 @@ namespace MaxWorlds.UI
         /// <summary>
         /// How prominent a control reads at <paramref name="level"/> of <paramref name="maxLevel"/>:
         /// <see cref="MinProminence"/> at level 1, rising to 1 at the level cap. A single-level ability
-        /// (Dash, cap 1) is always fully prominent — there is no "level 1 of 1" to grow into, so it must
+        /// (cap 1) is always fully prominent — there is no "level 1 of 1" to grow into, so it must
         /// never read as half-built.
         /// </summary>
         public static float Prominence(int level, int maxLevel)
@@ -41,7 +40,7 @@ namespace MaxWorlds.UI
             return Mathf.Lerp(MinProminence, 1f, t);
         }
 
-        // ---------- button-style controls (Dash, Teleport) ----------
+        // ---------- button-style controls ----------
 
         public readonly struct ButtonVisual
         {
@@ -59,9 +58,9 @@ namespace MaxWorlds.UI
 
         /// <summary>
         /// A button-style control: the same TechRings ring + ready glow + cooldown-radial shape as
-        /// HudController's Dash button, sized and brightened by <see cref="Prominence"/>, plus a small
-        /// detail pip per level beyond the first — so a Teleport at L2+ (longer aimed blink) visibly
-        /// reads as more built-out than its L1, not just a re-tinted copy of the same button.
+        /// HudController's move/aim joysticks, sized and brightened by <see cref="Prominence"/>, plus
+        /// a small detail pip per level beyond the first — so a Teleport at L2+ (longer aimed blink)
+        /// visibly reads as more built-out than its L1, not just a re-tinted copy of the same button.
         /// </summary>
         public static ButtonVisual BuildButton(RectTransform parent, string name, Vector2 anchoredPos,
             float baseSize, Color color, string label, int level, int maxLevel)

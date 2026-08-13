@@ -15,14 +15,5 @@ namespace MaxWorlds.VFX
             if (crit) n *= 2;
             return Mathf.Clamp(n, 3, 12);
         }
-
-        /// <summary>How many trail puffs to lay down over a dash step of <paramref name="distance"/>.
-        /// A dash moves far in one frame, so emitting a single puff per frame leaves a dotted
-        /// line; this fills the gap in proportion to the ground actually covered.</summary>
-        public static int TrailSteps(float distance)
-        {
-            int steps = Mathf.CeilToInt(distance / 0.35f);
-            return Mathf.Clamp(steps, 1, 8);
-        }
     }
 }

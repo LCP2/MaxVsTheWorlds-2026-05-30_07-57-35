@@ -7,10 +7,9 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Player
 {
     /// <summary>
-    /// Twin-stick locomotion + dash for Max (YT-34). Greybox capsule stand-in —
-    /// no art dependency. Left stick / WASD moves; right stick / arrow keys aims;
-    /// the dash button bursts in the move direction with brief i-frames and a
-    /// cooldown. Input is defined in code (Input System), so it works in-editor
+    /// Twin-stick locomotion for Max (YT-34). Greybox capsule stand-in —
+    /// no art dependency. Left stick / WASD moves; right stick / arrow keys aims.
+    /// Input is defined in code (Input System), so it works in-editor
     /// with keyboard or a gamepad; on-screen touch controls are added in the
     /// device pass.
     /// </summary>
@@ -43,28 +42,12 @@ namespace MaxWorlds.Player
         [Range(0.2f, 0.9f)]
         [SerializeField] private float aimActivateThreshold = 0.5f;
 
-        [Header("Dash")]
-        [SerializeField] private float dashSpeed = 18f;
-        [SerializeField] private float dashDuration = 0.18f;
-        [SerializeField] private float dashInvulnerable = 0.18f;
-
         private CharacterController _cc;
         private InputAction _move;
         private InputAction _aim;
-        private InputAction _dash;
 
         private Vector3 _facing = Vector3.forward;
         private float _verticalVel;
-        private float _dashTimer;       // > 0 while dashing
-        private float _iframeTimer;     // > 0 while invulnerable
-        private float _cooldownTimer;   // > 0 while dash is on cooldown
-        private Vector3 _dashDir;
-
-        /// <summary>True during the dash burst.</summary>
-        public bool IsDashing => _dashTimer > 0f;
-
-        /// <summary>True during the dash i-frame window — combat (YT-35/36) reads this to ignore contact hits.</summary>
-        public bool IsInvulnerable => _iframeTimer > 0f;
 
         /// <summary>True while the aim stick/keys are engaged — the gadget (YT-35) auto-fires while this holds.</summary>
         public bool IsAiming { get; private set; }
@@ -75,32 +58,6 @@ namespace MaxWorlds.Player
         /// <summary>Latest movement input (left stick / WASD), clamped to the unit disc.
         /// The HUD (YT-30) reads this to light the movement joystick + direction arrow.</summary>
         public Vector2 MoveInput { get; private set; }
-
-        /// <summary>Dash's base cooldown before Max even owns it (WV-231): now a shed-acquired
-        /// ability (spec §6), so this reads the same catalog cooldown Water Balloon/Teleport use
-        /// (Weapon Cooldown reduces it) rather than a fixed local number.</summary>
-        private static float EffectiveDashCooldown => WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Dash);
-
-        /// <summary>Dash cooldown as a 0..1 wipe (1 = just dashed, 0 = ready) for the HUD dash slot.</summary>
-        public float DashCooldownNormalized
-        {
-            get
-            {
-                float total = EffectiveDashCooldown + dashDuration;
-                return total > 0f ? Mathf.Clamp01(_cooldownTimer / total) : 0f;
-            }
-        }
-
-        /// <summary>True when Dash is owned AND off cooldown (HUD dash slot "ready" glow). Dash is a
-        /// single shed-acquired unlock (WV-231) — unowned, it never reads ready.</summary>
-        public bool DashReady => _cooldownTimer <= 0f && WeaponSystemState.IsAcquired(AbilityKind.Dash);
-
-        /// <summary>Pure dash-trigger gate (unit-testable), mirroring
-        /// <see cref="MaxWorlds.Combat.WaterBlaster.ShouldEmit"/>: a press only fires a dash while
-        /// idle (not mid-dash), off cooldown, AND actually owned — Dash is a shed-acquired unlock
-        /// (WV-230/231), not base movement tech everyone starts with.</summary>
-        public static bool ShouldDash(bool pressed, bool idle, bool offCooldown, bool acquired) =>
-            pressed && idle && offCooldown && acquired;
 
         private void Awake()
         {
@@ -121,10 +78,6 @@ namespace MaxWorlds.Player
             // which made the Water Blaster (driven by IsAiming) auto-discharge. (YT-36 regression fix.)
             _aim.AddBinding("<Gamepad>/rightStick", processors: "stickDeadzone(min=0.2)");
 
-            _dash = new InputAction("Dash", InputActionType.Button);
-            _dash.AddBinding("<Keyboard>/space");
-            _dash.AddBinding("<Gamepad>/buttonSouth");
-
             // Water Balloon + Teleport's live component self-attaches, same code-driven-scenes rule
             // WaterBlaster's own sub-components follow (WV-231) — no scene wiring.
             if (GetComponent<PlayerAbilities>() == null) gameObject.AddComponent<PlayerAbilities>();
@@ -134,22 +87,17 @@ namespace MaxWorlds.Player
         {
             _move.Enable();
             _aim.Enable();
-            _dash.Enable();
         }
 
         private void OnDisable()
         {
             _move.Disable();
             _aim.Disable();
-            _dash.Disable();
         }
 
         private void Update()
         {
             float dt = Time.deltaTime;
-            _dashTimer = Mathf.Max(0f, _dashTimer - dt);
-            _iframeTimer = Mathf.Max(0f, _iframeTimer - dt);
-            _cooldownTimer = Mathf.Max(0f, _cooldownTimer - dt);
 
             Vector2 moveInput = _move.ReadValue<Vector2>();
             Vector2 aimInput = _aim.ReadValue<Vector2>();
@@ -175,24 +123,11 @@ namespace MaxWorlds.Player
                 _facing = moveDir.normalized;
             }
 
-            // Dash trigger (ignored mid-dash, on cooldown, or unowned). Dash is a shed-acquired
-            // ability (WV-231, cooldown-gated only since MV-290): a press that isn't owned yet must
-            // never start a cooldown, so the acquisition check runs before anything else.
-            if (ShouldDash(_dash.WasPressedThisFrame(), _dashTimer <= 0f, _cooldownTimer <= 0f,
-                    WeaponSystemState.IsAcquired(AbilityKind.Dash)))
-            {
-                _dashDir = moveDir.sqrMagnitude > 0.04f ? moveDir.normalized : _facing;
-                _dashTimer = dashDuration;
-                _iframeTimer = dashInvulnerable;
-                _cooldownTimer = EffectiveDashCooldown + dashDuration;
-            }
-
             // Dev tuning panel may be overriding the walk speed this session (YT-105); off by
             // default and in release. Then the Acceleration engine (YT-133) scales it — read at the
             // point of use so installing the part speeds up the Max you're already controlling, not
-            // just the next one. The dash is left alone deliberately — it's an i-frame window whose
-            // distance is balanced against the lunge, not a feel knob.
-            Vector3 planarVel = _dashTimer > 0f ? _dashDir * dashSpeed : moveDir * WalkSpeed;
+            // just the next one.
+            Vector3 planarVel = moveDir * WalkSpeed;
 
             // Keep grounded on the flat arena.
             if (_cc.isGrounded && _verticalVel < 0f)

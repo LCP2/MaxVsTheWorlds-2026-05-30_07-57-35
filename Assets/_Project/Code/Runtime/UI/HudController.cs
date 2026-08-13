@@ -79,15 +79,15 @@ namespace MaxWorlds.UI
         private readonly DamageNumberAggregator _damageNumbers = new DamageNumberAggregator();
         private readonly System.Collections.Generic.List<DamageNumberAggregator.Entry> _damageBuffer =
             new System.Collections.Generic.List<DamageNumberAggregator.Entry>(16);
-        private readonly float[] _slotReadyFlash = new float[3];
-        private readonly bool[] _slotWasReady = new bool[3];
+        private readonly float[] _slotReadyFlash = new float[2];
+        private readonly bool[] _slotWasReady = new bool[2];
 
-        // Ability slots (0 Dash, 1 Bomb, 2 Ultimate)
-        private readonly Image[] _slotRadial = new Image[3];
-        private readonly Image[] _slotGlow = new Image[3];
+        // Ability slots (0 Bomb, 1 Ultimate)
+        private readonly Image[] _slotRadial = new Image[2];
+        private readonly Image[] _slotGlow = new Image[2];
 
         // The Hydro burst button (YT-215): hidden until UpgradeState.HydroAssembled, same TechRings
-        // visual language as the Dash button it sits above.
+        // visual language the other ability controls use.
         private RectTransform _hydroButtonRoot;
         private Image _hydroGlow, _hydroRadial;
         private Text _hydroLabel;
@@ -102,13 +102,12 @@ namespace MaxWorlds.UI
         private Image _aimRings, _aimCross;
         private RectTransform _aimKnob;
 
-        // Touch controls (YT-98): the joystick/dash roots the on-screen sticks + button attach to.
-        private RectTransform _moveJoystickRoot, _aimJoystickRoot, _dashButtonRoot;
+        // Touch controls (YT-98): the joystick roots the on-screen sticks attach to.
+        private RectTransform _moveJoystickRoot, _aimJoystickRoot;
 
         // Active-ability on-screen controls (WV-240, spec §6a): Water Balloon's joystick and a matching
-        // Teleport joystick (MV-338), plus gating the existing Dash button on acquisition.
-        // AbilityControlArt (WV-241) bakes size/brightness into construction, so a level change rebuilds
-        // the control rather than tweening a property.
+        // Teleport joystick (MV-338). AbilityControlArt (WV-241) bakes size/brightness into
+        // construction, so a level change rebuilds the control rather than tweening a property.
         private PlayerAbilities _abilities;
         private RectTransform _waterBalloonRoot;
         private AbilityControlArt.JoystickVisual _waterBalloonVisual;
@@ -188,7 +187,6 @@ namespace MaxWorlds.UI
             BuildUtilityIcons();
             BuildHomeButton();
             BuildAbilitySlots();
-            BuildDashButton();
             BuildHydroButton();
             BuildWaterBalloonJoystick();
             BuildTeleportJoystick();
@@ -249,15 +247,11 @@ namespace MaxWorlds.UI
             if (_hydroButtonRoot != null) _hydroButtonRoot.gameObject.SetActive(UpgradeState.HydroAssembled);
         }
 
-        /// <summary>Water Balloon, Dash and Teleport each appear the moment they're acquired and grow
-        /// more prominent as they level (WV-240, spec §6a). Dash's own prominence never changes (a
-        /// single unlock, spec §6) so only its visibility toggles here; the other two rebuild through
+        /// <summary>Water Balloon and Teleport each appear the moment they're acquired and grow
+        /// more prominent as they level (WV-240, spec §6a) — rebuilt through
         /// <see cref="AbilityControlArt"/> whenever their level actually changed.</summary>
         private void OnAbilitiesChanged()
         {
-            if (_dashButtonRoot != null)
-                _dashButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Dash));
-
             RebuildWaterBalloonJoystickIfNeeded();
             RebuildTeleportJoystickIfNeeded();
         }
@@ -453,12 +447,8 @@ namespace MaxWorlds.UI
 
         private void UpdateAbilitySlots(float dt)
         {
-            // Dash (slot 0) reflects the real PlayerController cooldown.
-            float dashFill = _player != null ? _player.DashCooldownNormalized : 0f;
-            bool dashReady = _player == null || _player.DashReady;
-            SetSlot(0, dashFill, dashReady);
-            SetSlot(1, _model.Bomb.RadialFill, _model.Bomb.Ready);
-            SetSlot(2, _model.UltimateRadialFill, _model.UltimateReady);
+            SetSlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
+            SetSlot(1, _model.UltimateRadialFill, _model.UltimateReady);
         }
 
         private void SetSlot(int i, float radialFill, bool ready)
@@ -526,8 +516,7 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
-        /// control shows a cooldown sweep and is disabled during cooldown"). Dash's own radial is
-        /// already driven in <see cref="UpdateAbilitySlots"/>.</summary>
+        /// control shows a cooldown sweep and is disabled during cooldown").</summary>
         private void UpdateAbilityControls()
         {
             if (_waterBalloonRadial != null && _waterBalloonRoot != null && _waterBalloonRoot.gameObject.activeSelf)
@@ -705,29 +694,23 @@ namespace MaxWorlds.UI
         private void OnHomeButtonTapped() => RunFlow.QuitToMenu();
 
         /// <summary>
-        /// The top-right slots. Dash used to be the first of these (YT-116) — it now has its own
-        /// button down by the thumb, because top-right is the one corner a thumb holding a phone
-        /// cannot reach, and dash is the only one of the three that does anything.
-        ///
-        /// Bomb and Ultimate stay here, and stay honest: neither is implemented, so both are drawn
-        /// dimmed with a LOCKED caption rather than glowing as though they were a button you were
-        /// failing to find. Slot indices are unchanged (0 dash, 1 bomb, 2 ultimate) so the cooldown
-        /// driver does not have to care where a slot is drawn.
+        /// The top-right slots — Bomb and Ultimate, and they stay honest: neither is implemented, so
+        /// both are drawn dimmed with a LOCKED caption rather than glowing as though they were a
+        /// button you were failing to find.
         /// </summary>
         private void BuildAbilitySlots()
         {
-            string[] glyphs = { "B", "U" };      // Bomb, Ultimate — index 1 and 2
+            string[] glyphs = { "B", "U" };      // Bomb, Ultimate — index 0 and 1
             var col = NewRect("Ability Slots", Root);
             Anchor(col, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             col.anchoredPosition = new Vector2(-24f, -24f);
             col.sizeDelta = new Vector2(72f, 160f);
-            for (int g = 0; g < glyphs.Length; g++)
+            for (int i = 0; i < glyphs.Length; i++)
             {
-                int i = g + 1;                   // slot 0 is the dash button, built separately
-                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[g]}");
+                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[i]}");
                 Anchor(slot.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
                 slot.rectTransform.sizeDelta = new Vector2(72f, 72f);
-                slot.rectTransform.anchoredPosition = new Vector2(0f, -g * 80f);
+                slot.rectTransform.anchoredPosition = new Vector2(0f, -i * 80f);
                 slot.type = Image.Type.Sliced;
 
                 // Ready glow (behind everything else in the slot).
@@ -744,7 +727,7 @@ namespace MaxWorlds.UI
                                      new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.45f),
                                      TextAnchor.MiddleCenter);
                 Stretch(letter.rectTransform);
-                letter.text = glyphs[g];
+                letter.text = glyphs[i];
 
                 var locked = AddText(slot.rectTransform, 15f,
                                      new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f),
@@ -766,76 +749,10 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>
-        /// The dash button (YT-116) — a round action button up and to the left of the aim stick,
-        /// where the right thumb already is.
-        ///
-        /// It was in the top-right slot column, which is the far corner of a phone held in two
-        /// hands: reaching it means letting go of aim. This is the Brawl-Stars placement — the
-        /// action button sits inside the arc the aiming thumb already sweeps.
-        ///
-        /// The position is picked to clear the aim stick's TOUCH pad, not just its rings. That pad
-        /// is 30 px larger than the visible stick on every side (see AddOnScreenStick), so a button
-        /// tucked against the artwork would have stolen drags meant for aiming.
-        /// </summary>
-        private void BuildDashButton()
-        {
-            var root = NewRect("Dash Button", Root);
-            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
-            root.anchoredPosition = new Vector2(-DashButtonInset, DashButtonRise);
-            root.sizeDelta = new Vector2(DashButtonSize, DashButtonSize);
-            _dashButtonRoot = root;
-
-            // Ready glow first, behind everything. A RING, not a filled disc (YT-124): when dash is
-            // ready the pulse rides the outline as a gold rim, leaving the interior see-through like
-            // the joysticks — a filled glow was tinting the whole button gold and reading as solid.
-            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
-            Stretch(glow.rectTransform, 4f);
-            glow.raycastTarget = false;
-            _slotGlow[0] = glow;
-
-            // The button now speaks the joysticks' language (YT-124): a thin TechRings outline with a
-            // see-through interior, instead of a solid disc. That drops the opacity to match the
-            // move/aim controls and thins the outer outline in one move — the colour (dash gold) and
-            // position are unchanged, which is what Lee wanted kept. No solid face any more; the
-            // cooldown radial darkens the interior while charging and clears to transparent when ready.
-            var ring = AddImage(root, HudTextures.TechRings(160, 3), DashColor, "Ring");
-            Stretch(ring.rectTransform);
-            ring.raycastTarget = false;
-
-            var label = AddText(root, 26f, DashColor, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform);
-            label.text = "DASH";
-
-            // Cooldown wipe, identical treatment to the slots so the two read as one language.
-            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
-            Stretch(radial.rectTransform, -6f);
-            radial.type = Image.Type.Filled;
-            radial.fillMethod = Image.FillMethod.Radial360;
-            radial.fillOrigin = (int)Image.Origin360.Top;
-            radial.fillClockwise = true;
-            radial.fillAmount = 0f;
-            radial.raycastTarget = false;
-            _slotRadial[0] = radial;
-
-            // Dash is a shed-acquired ability now (WV-231/240, spec §6a): "each control appears only
-            // once acquired" applies to Dash too, not just the two controls that shipped after it.
-            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Dash));
-        }
-
-        // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
-        // (-150, 150) and its pad adds 30 on each side, so it owns out to x = -310).
-        private const float DashButtonSize = 140f;
-        private const float DashButtonInset = 400f;
-        private const float DashButtonRise = 330f;
-
-        // The dash gold — the colour Lee likes and asked to keep (YT-124). Same value the ready glow
-        // pulses in, so the ring and its pulse are one hue.
-        private static readonly Color DashColor = ReadyGlow;
-
-        /// <summary>
-        /// The Hydro burst button (YT-215) — "place near the Dash button; same visual language". Sits
-        /// directly above it, same TechRings ring/glow/radial construction, smaller (it's a situational
-        /// burst, not the core-loop dodge) and hidden until <see cref="UpgradeState.HydroAssembled"/>.
+        /// The Hydro burst button (YT-215) — a round action button up and to the left of the aim
+        /// stick, where the right thumb already is (the Brawl-Stars placement Dash occupied before
+        /// MV-359 removed it: the action button sits inside the arc the aiming thumb already sweeps).
+        /// Hidden until <see cref="UpgradeState.HydroAssembled"/>.
         /// </summary>
         private void BuildHydroButton()
         {
@@ -884,17 +801,18 @@ namespace MaxWorlds.UI
         /// existing at all.</summary>
         private void OnHydroButtonTapped() => HydroBurst.Trigger();
 
-        // Stacked directly above the Dash button (same x inset), with a gap so the two rings
-        // never touch. Smaller than Dash's 140 — a situational burst, not the core-loop dodge.
+        // Far enough from the corner to clear the aim stick's touch pad (the stick is 200 wide at
+        // (-150, 150) and its pad adds 30 on each side, so it owns out to x = -310) — the same slot
+        // Dash occupied before MV-359 removed it.
         private const float HydroButtonSize = 110f;
-        private const float HydroButtonInset = DashButtonInset;
-        private const float HydroButtonRise = DashButtonRise + DashButtonSize * 0.5f + HydroButtonSize * 0.5f + 24f;
+        private const float HydroButtonInset = 400f;
+        private const float HydroButtonRise = 330f;
 
-        // The left-hand mirror of the Dash/Hydro column (WV-240, spec §6a): Water Balloon's joystick
-        // sits above the Move stick the same way Dash sits above the Aim stick, so aiming a throw
-        // never costs the player their movement thumb. Teleport stacks above it, same gap discipline
-        // as Hydro-above-Dash — but with extra clearance for the joystick's own oversized invisible
-        // touch pad (matches AddOnScreenStick's ±30 px fat-finger margin), not just its artwork.
+        // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits
+        // above the Move stick the same way Hydro sits above the Aim stick, so aiming a throw never
+        // costs the player their movement thumb. Teleport stacks above it, with extra clearance for
+        // the joystick's own oversized invisible touch pad (matches AddOnScreenStick's ±30 px
+        // fat-finger margin), not just its artwork.
         // Raised clear of the boss bar's y-band (rise 300, half 8) so a boss fight never crosses it.
         // Expressed as a shared Root-local X so the two controls line up visually even though
         // AbilityControlArt.BuildJoystick anchors to the parent's bottom-CENTER while BuildButton
@@ -1064,13 +982,12 @@ namespace MaxWorlds.UI
 
         /// <summary>
         /// Touch controls for the iOS/mobile input path (YT-98). The visible joysticks above are
-        /// only visualisers; here we lay a transparent <see cref="OnScreenStick"/> pad over each and
-        /// an <see cref="OnScreenButton"/> over the Dash slot, all driving the SAME synthetic-gamepad
-        /// controls <see cref="PlayerController"/> already binds (<c>&lt;Gamepad&gt;/leftStick</c>,
-        /// <c>/rightStick</c>, <c>/buttonSouth</c>). So a finger feeds the exact input path a real
-        /// controller would, with zero change to gameplay code, and — because each stick captures its
-        /// own pointer — move and aim work as simultaneous multi-touch. On-device feel (drag range,
-        /// tap vs drag) is tuned in Lee's device pass.
+        /// only visualisers; here we lay a transparent <see cref="OnScreenStick"/> pad over each,
+        /// driving the SAME synthetic-gamepad controls <see cref="PlayerController"/> already binds
+        /// (<c>&lt;Gamepad&gt;/leftStick</c>, <c>/rightStick</c>). So a finger feeds the exact input
+        /// path a real controller would, with zero change to gameplay code, and — because each stick
+        /// captures its own pointer — move and aim work as simultaneous multi-touch. On-device feel
+        /// (drag range, tap vs drag) is tuned in Lee's device pass.
         /// </summary>
         private void BuildTouchControls()
         {
@@ -1080,8 +997,6 @@ namespace MaxWorlds.UI
                 AddOnScreenStick(_moveJoystickRoot, "<Gamepad>/leftStick", "Move Touch");
             if (_aimJoystickRoot != null)
                 AddOnScreenStick(_aimJoystickRoot, "<Gamepad>/rightStick", "Aim Touch");
-            if (_dashButtonRoot != null)
-                AddOnScreenButton(_dashButtonRoot, "<Gamepad>/buttonSouth", "Dash Touch");
         }
 
         private static void AddOnScreenStick(RectTransform joystickRoot, string controlPath, string name)
@@ -1101,21 +1016,6 @@ namespace MaxWorlds.UI
             var stick = pad.GetComponent<OnScreenStick>();
             stick.controlPath = controlPath;
             stick.movementRange = 90f; // px drag for full deflection; tuned on device
-        }
-
-        private static void AddOnScreenButton(RectTransform slotRoot, string controlPath, string name)
-        {
-            var pad = new GameObject(name, typeof(RectTransform), typeof(Image), typeof(OnScreenButton));
-            var rect = (RectTransform)pad.transform;
-            rect.SetParent(slotRoot, false);
-            rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(-8f, -8f); rect.offsetMax = new Vector2(8f, 8f);
-
-            var img = pad.GetComponent<Image>();
-            img.color = new Color(0f, 0f, 0f, 0f);
-            img.raycastTarget = true;
-
-            pad.GetComponent<OnScreenButton>().controlPath = controlPath;
         }
 
         private static void EnsureEventSystem()
@@ -1179,7 +1079,7 @@ namespace MaxWorlds.UI
         /// <see cref="MinimapModel.AreaBounds"/>/<see cref="MinimapModel.NormalizedZoneRect"/>.
         ///
         /// MV-354: moved to the LEFT side — the right side is the thumb-side of the screen (ability
-        /// slots, Dash/Hydro, the aim stick), and the minimap was competing with those controls for
+        /// slots, Hydro, the aim stick), and the minimap was competing with those controls for
         /// space. Sits under the Utility Icons/Home Button column, the same clearance gap that column
         /// gave the old top-right minimap under the ability slots. Its x-range (24-224) sits well clear
         /// of the Water Balloon/Teleport joysticks (centred at x=450, ±130 with touch-pad margin), and
