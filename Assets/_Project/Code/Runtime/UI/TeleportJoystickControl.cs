@@ -54,11 +54,15 @@ namespace MaxWorlds.UI
         {
             EnsureVisuals();
             _circleGo.SetActive(true);
+            // MV-371: announce the ability's full blink range so the camera can zoom out to fit it,
+            // if it doesn't already. Decoupled hand-off — see HudSignals.TeleportAimStarted.
+            HudSignals.EmitTeleportAimStarted(CurrentMaxDistance());
         }
 
         protected override void HideAimVisuals()
         {
             if (_circleGo != null) _circleGo.SetActive(false);
+            HudSignals.EmitTeleportAimEnded();
         }
 
         private void EnsureVisuals()
@@ -80,6 +84,17 @@ namespace MaxWorlds.UI
             return go;
         }
 
+        /// <summary>The ability's REAL blink distance at the current level — what both the reticle
+        /// preview (scaled by drag) and the MV-371 camera-zoom signal (unscaled, the ability's full
+        /// reach) size themselves from.</summary>
+        private static float CurrentMaxDistance()
+        {
+            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
+            float baseDistance = DevTuning.Or(DevTuning.TeleportBaseDistance, AbilityTuning.DefaultTeleportBaseDistance);
+            float perLevel = DevTuning.Or(DevTuning.TeleportDistancePerLevel, AbilityTuning.DefaultTeleportDistancePerLevel);
+            return AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
+        }
+
         /// <summary>Rebuilds the landing reticle for the current drag — distance previews toward the
         /// ability's REAL blink distance at the current level, scaled by how far the drag has come, so
         /// the picture never promises a blink further than the ability actually goes. Also tints the
@@ -88,10 +103,7 @@ namespace MaxWorlds.UI
         {
             if (_origin == null || _circleGo == null) return;
 
-            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
-            float baseDistance = DevTuning.Or(DevTuning.TeleportBaseDistance, AbilityTuning.DefaultTeleportBaseDistance);
-            float perLevel = DevTuning.Or(DevTuning.TeleportDistancePerLevel, AbilityTuning.DefaultTeleportDistancePerLevel);
-            float maxDistance = AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
+            float maxDistance = CurrentMaxDistance();
             float distance = Mathf.Max(0.15f, maxDistance * DistanceFraction);
 
             Vector3 landing = _origin.position + Direction * distance;

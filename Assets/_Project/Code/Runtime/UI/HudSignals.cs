@@ -69,6 +69,16 @@ namespace MaxWorlds.UI
         /// <summary>An out-of-fuel missile bounced off the ground (MV-349 AC3). (worldPos)</summary>
         public static event Action<Vector3> MissileBounced;
 
+        /// <summary>Teleport's joystick started being aimed (MV-371) — (the ability's full blink
+        /// distance at the current level, metres). The camera-zoom controller listens rather than
+        /// taking a direct reference, so the joystick control doesn't have to know the camera zoom
+        /// exists.</summary>
+        public static event Action<float> TeleportAimStarted;
+
+        /// <summary>Teleport's joystick aim ended — release (fired or aborted) or the control was
+        /// disabled mid-aim.</summary>
+        public static event Action TeleportAimEnded;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -113,5 +123,11 @@ namespace MaxWorlds.UI
 
         public static void EmitMissileBounced(Vector3 worldPos)
             => MissileBounced?.Invoke(worldPos);
+
+        public static void EmitTeleportAimStarted(float maxRangeMetres)
+            => TeleportAimStarted?.Invoke(maxRangeMetres);
+
+        public static void EmitTeleportAimEnded()
+            => TeleportAimEnded?.Invoke();
     }
 }
