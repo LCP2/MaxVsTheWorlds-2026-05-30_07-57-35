@@ -11,23 +11,25 @@ namespace MaxWorlds.UI
 {
     /// <summary>
     /// The weapons area (MV-248, v0.5 recut spec §6): a pause-on-enter screen for the RCDA primary's
-    /// four upgrade tracks and whichever abilities Max has acquired so far, reimplemented to the
-    /// intended design (MV-248) after MV-234 shipped only a bare functional panel — a centred title,
-    /// "Lv x/y" text rows and an empty Abilities column, none of the intended layout/colour/copy.
+    /// four upgrade tracks, the Water Balloon primary add-on's own three tracks (MV-370), and
+    /// whichever abilities Max has acquired so far, reimplemented to the intended design (MV-248)
+    /// after MV-234 shipped only a bare functional panel — a centred title, "Lv x/y" text rows and an
+    /// empty Abilities column, none of the intended layout/colour/copy.
     ///
     /// Layout: a title + CELLS/PARTS/PAUSED cluster up top (MV-262: PARTS carries a spinning gear
     /// glyph; MV-327: it's a wider chip with its own pulsing glow + unit suffix so it reads as a
     /// bank at a glance rather than a bare number, and CELLS' label shrinks to fit instead of
     /// overflowing over its icon), a narrow hero column on the left (Max's own key art
     /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
-    /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid and the abilities
-    /// grid. The abilities grid always shows all four slots (MV-262, pool cut from five to four by
-    /// MV-359's Dash removal): owned ones by name, the rest as greyed, unnamed placeholder tiles, so
-    /// the count of "more to find" reads at a glance instead of
-    /// needing a text list. There is no bottom spendbar/instructional line any more — the parts count
-    /// lives solely in the top-bar chip. Levels render as pip/segment bars, not text —
+    /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid, a "PRIMARY
+    /// ADD-ONS" 1x3 row for Water Balloon's tracks (MV-370, moved here out of the ability pool), and
+    /// the abilities grid. The abilities grid always shows all its slots (MV-262; MV-370 shrank the
+    /// pool from four to three when Water Balloon left it): owned ones by name, the rest as greyed,
+    /// unnamed placeholder tiles, so the count of "more to find" reads at a glance instead of needing
+    /// a text list. There is no bottom spendbar/instructional line any more — the parts count lives
+    /// solely in the top-bar chip. Levels render as pip/segment bars, not text —
     /// <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon + glyph, name, pip
-    /// bar, + button) for both tracks and abilities so the two sections can never drift apart in style.
+    /// bar, + button) for all three sections so none of them can ever drift apart in style.
     ///
     /// Self-installing overlay, same pause idiom as UpgradeScreen/HomeScreen/ResultScreen: its own
     /// canvas above the HUD, hidden until opened, freezes with <see cref="Time.timeScale"/> = 0 and
@@ -77,7 +79,8 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 4;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
+        private const int MaxAbilityRows = 3;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool (MV-370: Water Balloon left it, 4 -> 3)
+        private const int WaterBalloonTrackCount = 3;   // WeaponCatalog.AllWaterBalloonTrackKinds.Length (MV-370)
 
         // MV-367: Range/Spread's cap grew from 6 to 9, breaking the old "every row gets the same fixed
         // pip count" assumption (a row built for 6 pips silently truncated levels 7-9 to an always-full
@@ -87,18 +90,18 @@ namespace MaxWorlds.UI
         private const float PipBudgetPx = 6f * 46f + 5f * 7f;   // the old fixed 6-pip row's width (pipW=46, gap=7)
         private const float PipGap = 7f;
 
-        // MV-262: the abilities grid is a fixed 4-slot (2-row) grid regardless of how many are owned
-        // (MV-359 cut the pool from five/six down to four, shrinking this from 3 rows), so unlike the
-        // old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
-        // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols, unchanged from MV-291's 2 rows) +
-        // abilities header + abilities grid (2 rows) all fit inside the content budget below the top
-        // bar (there's no bottom spendbar any more) with room to spare for the hero-sized primary-name
-        // block above the grids — see the arithmetic in
-        // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildAbilitiesSection; there's no runtime overflow
-        // check, so this is verified by hand rather than measured. MV-291's third track pushes the
-        // primary grid from 1 row to 2, costing one RowHeight+RowGap (116px) of the margin that left —
-        // still fits inside RefH's 1080 budget, with even more spare room below the (now smaller)
-        // abilities grid since MV-359.
+        // MV-262: the abilities grid is a fixed-slot grid regardless of how many are owned, so unlike
+        // the old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
+        // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols) + add-ons header + add-ons grid
+        // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-370:
+        // 3 abilities left in the pool, 1 row of 3 cols) all fit inside the content budget below the
+        // top bar (there's no bottom spendbar any more) with room to spare for the hero-sized
+        // primary-name block above the grids — see the arithmetic in
+        // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildWaterBalloonSection/BuildAbilitiesSection;
+        // there's no runtime overflow check, so this is verified by hand rather than measured. MV-370
+        // moved both the add-ons and the abilities grid to single 3-column rows specifically to keep
+        // the budget healthy — a 2-column 2-row abilities grid (its old shape) plus a new 2-row add-ons
+        // section would have overflowed RefH's 1080 budget.
         private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
@@ -134,6 +137,13 @@ namespace MaxWorlds.UI
         private readonly Image[][] _trackPips = new Image[TrackCount][];
         private readonly Button[] _trackButton = new Button[TrackCount];
         private readonly Image[] _trackButtonBg = new Image[TrackCount];
+
+        // MV-370: the Water Balloon primary add-on's own three tracks — same per-track shape as the
+        // RCDA's own _track* arrays above, just a separate section (BuildWaterBalloonSection).
+        private readonly Text[] _waterBalloonName = new Text[WaterBalloonTrackCount];
+        private readonly Image[][] _waterBalloonPips = new Image[WaterBalloonTrackCount][];
+        private readonly Button[] _waterBalloonButton = new Button[WaterBalloonTrackCount];
+        private readonly Image[] _waterBalloonButtonBg = new Image[WaterBalloonTrackCount];
 
         // One row slot per catalog ability, always active (MV-262): the leading slots are populated
         // from WeaponSystemState.Acquired in acquisition order (MV-333), the rest greyed via
@@ -284,6 +294,16 @@ namespace MaxWorlds.UI
                 SetSpendable(_trackButton[i], _trackButtonBg[i], banked > 0 && level < cap);
             }
 
+            for (int i = 0; i < WaterBalloonTrackCount; i++)
+            {
+                var kind = WeaponCatalog.AllWaterBalloonTrackKinds[i];
+                int level = WeaponSystemState.WaterBalloonTrackLevel(kind);
+                int cap = WeaponCatalog.MaxLevel(kind);
+                _waterBalloonName[i].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
+                SetPips(_waterBalloonPips[i], level, cap, AbilityAccent);
+                SetSpendable(_waterBalloonButton[i], _waterBalloonButtonBg[i], banked > 0 && level < cap);
+            }
+
             int shown = 0;
             foreach (var kind in WeaponSystemState.Acquired)
             {
@@ -357,6 +377,9 @@ namespace MaxWorlds.UI
         }
 
         private void OnTrackButtonTapped(int index) => PartSpend.TrySpendOnTrack(WeaponCatalog.AllTrackKinds[index]);
+
+        private void OnWaterBalloonTrackButtonTapped(int index) =>
+            PartSpend.TrySpendOnWaterBalloonTrack(WeaponCatalog.AllWaterBalloonTrackKinds[index]);
 
         private void OnAbilityButtonTapped(int row) => PartSpend.TrySpendOnAbility(_abilityRowKind[row]);
 
@@ -703,6 +726,7 @@ namespace MaxWorlds.UI
         {
             float y = BuildPrimaryNameHeader(main, 0f);
             y = BuildPrimaryGrid(main, y);
+            y = BuildWaterBalloonSection(main, y);
             BuildAbilitiesSection(main, y);
         }
 
@@ -746,7 +770,7 @@ namespace MaxWorlds.UI
             {
                 int index = i;   // capture by value, not the loop variable
                 var kind = WeaponCatalog.AllTrackKinds[i];
-                var r = BuildGridRow(column, "Track Row", i, gridTop, RowHeight, RowGap, TrackIconBg,
+                var r = BuildGridRow(column, "Track Row", i, 2, gridTop, RowHeight, RowGap, TrackIconBg,
                     WeaponCatalog.MaxLevel(kind));
                 _trackName[i] = r.Name;
                 _trackPips[i] = r.Pips;
@@ -760,10 +784,42 @@ namespace MaxWorlds.UI
             return gridTop - (primaryRows * RowHeight + (primaryRows - 1) * RowGap) - SectionGap;
         }
 
-        /// <summary>MV-262: always builds all six ability slots as active rows (never SetActive(false)
+        /// <summary>MV-370: the Water Balloon primary add-on's own three tracks (Range, Splash Area,
+        /// Repeat Fire) — a single 3-column row, same <see cref="BuildGridRow"/> row shape the primary
+        /// and abilities sections use, so it can never drift apart in style from either.</summary>
+        private float BuildWaterBalloonSection(RectTransform column, float y)
+        {
+            var header = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
+            Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
+            header.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
+            header.rectTransform.anchoredPosition = new Vector2(0f, y);
+            header.fontStyle = FontStyle.Bold;
+            header.text = "PRIMARY ADD-ONS";
+
+            float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
+            for (int i = 0; i < WaterBalloonTrackCount; i++)
+            {
+                int index = i;   // capture by value, not the loop variable
+                var kind = WeaponCatalog.AllWaterBalloonTrackKinds[i];
+                var r = BuildGridRow(column, "Water Balloon Row", i, WaterBalloonTrackCount, gridTop,
+                    RowHeight, RowGap, AbilityIconBg, WeaponCatalog.MaxLevel(kind));
+                _waterBalloonName[i] = r.Name;
+                _waterBalloonPips[i] = r.Pips;
+                _waterBalloonButton[i] = r.PlusButton;
+                _waterBalloonButtonBg[i] = r.PlusBg;
+                r.IconGlyph.text = WaterBalloonTrackGlyph(kind);   // static per track — never revisited by Refresh
+                _waterBalloonButton[i].onClick.AddListener(() => OnWaterBalloonTrackButtonTapped(index));
+            }
+
+            return gridTop - RowHeight - SectionGap;
+        }
+
+        /// <summary>MV-262: always builds all ability slots as active rows (never SetActive(false)
         /// past the acquired count) — <see cref="Refresh"/>/<see cref="SetAbilityLocked"/> then decide
         /// per-slot whether a row shows real data or a greyed, unnamed placeholder. There is no
-        /// separate placeholder row any more; the grid itself is the "more to find" tell.</summary>
+        /// separate placeholder row any more; the grid itself is the "more to find" tell. MV-370: a
+        /// single 3-column row now the pool shrank to three (Water Balloon left it for the Primary
+        /// Add-ons section above) — same shape change as that section.</summary>
         private void BuildAbilitiesSection(RectTransform column, float y)
         {
             _abilitiesHeaderText = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
@@ -782,7 +838,7 @@ namespace MaxWorlds.UI
                 // WeaponSystemState.Acquired assigns it, MV-333), so unlike the track rows above this
                 // can't size to one specific kind's cap — use the largest cap any ability actually has
                 // (WeaponCooldown, 5; see WeaponCatalog.MaxLevel(AbilityKind)).
-                var r = BuildGridRow(column, "Ability Row", i, gridTop, RowHeight, RowGap, AbilityIconBg, 5);
+                var r = BuildGridRow(column, "Ability Row", i, MaxAbilityRows, gridTop, RowHeight, RowGap, AbilityIconBg, 5);
                 _abilityName[i] = r.Name;
                 _abilityPips[i] = r.Pips;
                 _abilityButton[i] = r.PlusButton;
@@ -845,18 +901,19 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Builds one grid slot (highlight ring, icon + glyph, name, pip bar, + button) at
-        /// 2-column/N-row index <paramref name="slot"/>, anchored under <paramref name="top"/>. Shared
-        /// by the primary tracks and the abilities section so the two can never drift apart in style.
+        /// <paramref name="columns"/>-column/N-row index <paramref name="slot"/>, anchored under
+        /// <paramref name="top"/>. Shared by the primary tracks, the Water Balloon add-on tracks
+        /// (MV-370) and the abilities section so none of the three can ever drift apart in style.
         /// <paramref name="iconColor"/> is the row's baseline icon tint — its own section accent
         /// (MV-251: <c>TrackIconBg</c>/<c>AbilityIconBg</c>), not a shared neutral, so a tile reads as
         /// belonging to its section before you even read its name.</summary>
-        private GridRowRefs BuildGridRow(RectTransform column, string name, int slot, float top,
+        private GridRowRefs BuildGridRow(RectTransform column, string name, int slot, int columns, float top,
             float rowHeight, float rowGap, Color iconColor, int pipCap)
         {
             var row = NewRect(name, column, new Vector2(0f, 1f), Vector2.one);
             row.pivot = new Vector2(0.5f, 1f);
             row.sizeDelta = new Vector2(0f, rowHeight);
-            PlaceGridRow(row, slot, top, rowHeight, rowGap);
+            PlaceGridRow(row, slot, columns, top, rowHeight, rowGap);
 
             // A ring behind the card, only ever visible as a thin border once BG (inset 3px) sits over
             // it. Transparent by default; MV-251's "newly-acquired" tell lights this to NewBadgeColor
@@ -885,6 +942,13 @@ namespace MaxWorlds.UI
             nameText.rectTransform.offsetMin = new Vector2(8f, 0f);
             nameText.rectTransform.offsetMax = new Vector2(0f, -10f);
             nameText.fontStyle = FontStyle.Bold;
+            // MV-370: a 3-column row (Primary Add-ons, Abilities) is narrower than the original 2-column
+            // one this row shape was authored for — auto-shrink rather than risk a long name ("WEAPON
+            // COOLDOWN") clipping past the card's edge, same idiom BuildChip's label already uses.
+            nameText.horizontalOverflow = HorizontalWrapMode.Wrap;
+            nameText.resizeTextForBestFit = true;
+            nameText.resizeTextMinSize = 18;
+            nameText.resizeTextMaxSize = 32;
 
             var pipRow = NewRect("Pips", row, new Vector2(0.13f, 0f), new Vector2(0.82f, 0.5f));
             pipRow.offsetMin = new Vector2(8f, 12f);
@@ -944,7 +1008,6 @@ namespace MaxWorlds.UI
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "H2O";
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
@@ -952,17 +1015,33 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>Places a row at 2-column/N-row slot index <paramref name="slot"/> under
-        /// <paramref name="top"/> — the fixed track/ability grid positions, built once.</summary>
-        private static void PlaceGridRow(RectTransform row, int slot, float top, float rowHeight, float rowGap)
+        /// <summary>Short glyphs for the Water Balloon add-on tracks' icon tiles (MV-370) — same
+        /// rationale as <see cref="TrackGlyph"/>.</summary>
+        private static string WaterBalloonTrackGlyph(WaterBalloonTrackKind kind)
         {
-            int r = slot / 2;
-            int c = slot % 2;
+            switch (kind)
+            {
+                case WaterBalloonTrackKind.Range: return "RNG";
+                case WaterBalloonTrackKind.SplashArea: return "SPL";
+                case WaterBalloonTrackKind.RepeatFire: return "RPT";
+                default: return "?";
+            }
+        }
+
+        /// <summary>Places a row at <paramref name="columns"/>-column/N-row slot index
+        /// <paramref name="slot"/> under <paramref name="top"/> — the fixed track/ability grid
+        /// positions, built once. MV-370: generalized from a hardcoded 2 columns so the Water Balloon
+        /// add-on and abilities sections can lay out 3 columns in a single row instead.</summary>
+        private static void PlaceGridRow(RectTransform row, int slot, int columns, float top, float rowHeight, float rowGap)
+        {
+            int r = slot / columns;
+            int c = slot % columns;
             float y = top - r * (rowHeight + rowGap);
             row.anchoredPosition = new Vector2(0f, y);
 
-            float xMin = c == 0 ? 0f : 0.5f + ColGap * 0.5f;
-            float xMax = c == 0 ? 0.5f - ColGap * 0.5f : 1f;
+            float colWidth = (1f - (columns - 1) * ColGap) / columns;
+            float xMin = c * (colWidth + ColGap);
+            float xMax = xMin + colWidth;
             row.anchorMin = new Vector2(xMin, row.anchorMin.y);
             row.anchorMax = new Vector2(xMax, row.anchorMax.y);
         }

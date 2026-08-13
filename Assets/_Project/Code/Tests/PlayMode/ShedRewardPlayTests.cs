@@ -148,7 +148,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return NewWeaponsScreen();
             yield return NewDirector();
 
-            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));   // banks 1 credit; full 5-ability pool -> 3 candidates
+            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));   // banks 1 credit; full 3-ability pool -> 3 candidates (MV-370)
             yield return null;
 
             WeaponsScr.Open();
@@ -172,7 +172,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return NewDirector();
 
             // Own everything except two, so the draw is exactly this pair — deterministic instead of a
-            // 3-of-5 roll.
+            // 2-of-3 roll (MV-370: the pool is 3 abilities now).
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
                 if (kind != AbilityKind.WeaponCooldown && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 

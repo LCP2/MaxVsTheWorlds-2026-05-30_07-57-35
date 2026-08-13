@@ -39,13 +39,21 @@ namespace MaxWorlds.Weapons
         };
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
-        /// retired by MV-290).</summary>
+        /// retired by MV-290; Water Balloon removed by MV-370, now a primary add-on).</summary>
         public static readonly AbilityKind[] AllAbilityKinds =
         {
-            AbilityKind.WaterBalloon,
             AbilityKind.Speed,
             AbilityKind.Teleport,
             AbilityKind.WeaponCooldown,
+        };
+
+        /// <summary>The Water Balloon primary add-on's tracks (MV-370), in the order the weapons
+        /// screen lists them — same "owned from run start" shape as <see cref="AllTrackKinds"/>.</summary>
+        public static readonly WaterBalloonTrackKind[] AllWaterBalloonTrackKinds =
+        {
+            WaterBalloonTrackKind.Range,
+            WaterBalloonTrackKind.SplashArea,
+            WaterBalloonTrackKind.RepeatFire,
         };
 
         /// <summary>The level cap for an RCDA track. Damage and Depletion Rate keep MV-291's 5 steps
@@ -142,13 +150,12 @@ namespace MaxWorlds.Weapons
             ((reach / baseReach) + (coneHalfAngle / baseConeHalfAngle)) * 0.5f;
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
-        /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Water
-        /// Balloon 3, Speed 4, Teleport 4, Weapon Cooldown 5.</summary>
+        /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Speed 4,
+        /// Teleport 4, Weapon Cooldown 5.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return 3;
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Teleport: return 4;
                 case AbilityKind.WeaponCooldown: return 5;
@@ -156,22 +163,30 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Water Balloon and
-        /// Teleport are the two active abilities with an on-screen control (spec §6a) and a real
-        /// cooldown; Speed and Weapon Cooldown are passive — continuous, no control to gate — so their
-        /// base cooldown is 0.</summary>
+        /// <summary>The level cap for a Water Balloon track (MV-370) — 3, the same cap the single
+        /// ability track it replaces used to have.</summary>
+        public static int MaxLevel(WaterBalloonTrackKind kind) => 3;
+
+        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Teleport is the only
+        /// remaining AbilityKind with an on-screen control (spec §6a) and a real cooldown — Water
+        /// Balloon's own base cooldown moved to <see cref="WaterBalloonBaseCooldownSeconds"/> when
+        /// MV-370 made it a primary add-on; Speed and Weapon Cooldown are passive — continuous, no
+        /// control to gate — so their base cooldown is 0.</summary>
         public static float BaseCooldownSeconds(AbilityKind kind)
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon:
-                    return DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, DefaultWaterBalloonCooldownSeconds);
                 case AbilityKind.Teleport:
                     return DevTuning.Or(DevTuning.TeleportCooldownSeconds, DefaultTeleportCooldownSeconds);
                 default:
                     return 0f;   // Speed, Weapon Cooldown — passive, no cooldown
             }
         }
+
+        /// <summary>Water Balloon's base throw cooldown before its own Repeat Fire track (MV-370
+        /// moved this off the AbilityKind switch above when Water Balloon left the shed-drop pool).</summary>
+        public static float WaterBalloonBaseCooldownSeconds() =>
+            DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, DefaultWaterBalloonCooldownSeconds);
 
         public static string DisplayName(WeaponTrackKind kind)
         {
@@ -189,10 +204,22 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "WATER BALLOON";
                 case AbilityKind.Speed: return "SPEED";
                 case AbilityKind.Teleport: return "TELEPORT";
                 case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
+                default: return kind.ToString();
+            }
+        }
+
+        /// <summary>Display name for a Water Balloon track's row on the Primary Add-ons section
+        /// (MV-370).</summary>
+        public static string DisplayName(WaterBalloonTrackKind kind)
+        {
+            switch (kind)
+            {
+                case WaterBalloonTrackKind.Range: return "RANGE";
+                case WaterBalloonTrackKind.SplashArea: return "SPLASH AREA";
+                case WaterBalloonTrackKind.RepeatFire: return "REPEAT FIRE";
                 default: return kind.ToString();
             }
         }
@@ -203,7 +230,6 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "H2O";
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
@@ -218,7 +244,6 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "Joystick-aimed lob that splashes enemies on impact.";
                 case AbilityKind.Speed: return "Passive move-speed boost.";
                 case AbilityKind.Teleport: return "Blink to a nearby spot, dodging in an instant.";
                 case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";

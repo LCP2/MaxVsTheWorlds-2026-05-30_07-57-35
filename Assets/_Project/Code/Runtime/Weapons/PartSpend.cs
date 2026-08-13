@@ -30,5 +30,16 @@ namespace MaxWorlds.Weapons
             PickupWallet.TrySpendPart();
             return true;
         }
+
+        /// <summary>Spend one banked part to raise a Water Balloon track by a level (MV-370). Every
+        /// track is owned from run start, same as an RCDA track, so the only way this fails is an
+        /// empty bank or the track's own cap.</summary>
+        public static bool TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind kind)
+        {
+            if (PickupWallet.PartsBanked <= 0) return false;
+            if (!WeaponSystemState.LevelUpWaterBalloonTrack(kind)) return false;
+            PickupWallet.TrySpendPart();
+            return true;
+        }
     }
 }

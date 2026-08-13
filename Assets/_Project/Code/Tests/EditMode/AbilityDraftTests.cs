@@ -18,6 +18,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FreshStateDrawsTheMaxCandidateCount()
         {
+            // MV-370: the pool is exactly 3 abilities now (Water Balloon left it), same as
+            // AbilityDraft.MaxCandidates — a fresh draw offers the whole pool.
             Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(AbilityDraft.MaxCandidates));
         }
 
@@ -50,8 +52,7 @@ namespace MaxWorlds.Tests.EditMode
         public void DrawShrinksAsThePoolDrains()
         {
             WeaponSystemState.Acquire(AbilityKind.Speed);
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            // 4 abilities total, 2 owned -> 2 left, below MaxCandidates.
+            // MV-370: 3 abilities total, 1 owned -> 2 left, below MaxCandidates.
 
             Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(2));
         }

@@ -78,17 +78,50 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void SpendingOnAnOwnedAbilityAtItsCapFailsAndDoesNotSpendTheirPart()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            int cap = WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon);
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+            int cap = WeaponCatalog.MaxLevel(AbilityKind.Teleport);
             for (int i = 1; i < cap; i++)
                 PickupWallet.AddPart();
             for (int i = 1; i < cap; i++)
-                PartSpend.TrySpendOnAbility(AbilityKind.WaterBalloon);
+                PartSpend.TrySpendOnAbility(AbilityKind.Teleport);
 
             PickupWallet.AddPart();
 
-            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.WaterBalloon), Is.False, "must not level past the cap");
+            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.Teleport), Is.False, "must not level past the cap");
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "a failed spend must not cost a part");
+        }
+
+        // ---------------------------------------------------------------- MV-370: Water Balloon tracks
+
+        [Test]
+        public void SpendingOnAWaterBalloonTrackWithNoBankedPartsFails()
+        {
+            Assert.That(PartSpend.TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind.Range), Is.False);
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(1));
+        }
+
+        [Test]
+        public void SpendingOnAWaterBalloonTrackRaisesItsLevelAndConsumesOnePart()
+        {
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+
+            Assert.That(PartSpend.TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind.SplashArea), Is.True);
+
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(2));
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "exactly one part must be spent per level");
+        }
+
+        [Test]
+        public void SpendingOnAWaterBalloonTrackAtItsCapFailsAndDoesNotSpendTheirPart()
+        {
+            PickupWallet.AddPart();
+            for (int i = 1; i < WeaponCatalog.MaxLevel(WaterBalloonTrackKind.RepeatFire); i++)
+                PartSpend.TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire);
+            int banked = PickupWallet.PartsBanked;
+
+            Assert.That(PartSpend.TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire), Is.False, "must not level past the cap");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(banked), "a spend that doesn't level up must not cost a part");
         }
 
         // MV-274: power cells are exclusively primary/ability fuel — they must never buy an upgrade,

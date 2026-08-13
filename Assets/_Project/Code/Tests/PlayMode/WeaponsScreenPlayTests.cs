@@ -163,26 +163,27 @@ namespace MaxWorlds.Tests.PlayMode
         {
             // MV-262: the abilities grid is a fixed-slot grid from the start — locked slots are
             // greyed, unnamed placeholder tiles (no name, no pips, no + button), not hidden rows and
-            // not a text list naming what's still locked.
+            // not a text list naming what's still locked. MV-370: the pool shrank to 3 (Water Balloon
+            // left it for the Primary Add-ons section).
             yield return NewScreen();
             Screen.Open();
             yield return null;
 
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Null, $"{kind} shouldn't show before Max owns anything");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(4), "all four ability slots should be visible from the start");
-            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 4 unlocked"), Is.Not.Null);
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(3), "all three ability slots should be visible from the start");
+            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 3 unlocked"), Is.Not.Null);
 
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            WeaponSystemState.Acquire(AbilityKind.Speed);
             yield return null;
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
 
-            Assert.That(FindText(_screenGo, Name(AbilityKind.WaterBalloon)), Is.Not.Null);
+            Assert.That(FindText(_screenGo, Name(AbilityKind.Speed)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Not.Null);
-            Assert.That(FindText(_screenGo, Name(AbilityKind.Speed)), Is.Null, "still-unacquired abilities must stay unnamed");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(4), "the grid stays at four slots as more are acquired");
-            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 4 unlocked"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, Name(AbilityKind.WeaponCooldown)), Is.Null, "still-unacquired abilities must stay unnamed");
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(3), "the grid stays at three slots as more are acquired");
+            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 3 unlocked"), Is.Not.Null);
         }
 
         [UnityTest]
@@ -194,9 +195,42 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "ABILITIES — 4 of 4 unlocked"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, "ABILITIES — 3 of 3 unlocked"), Is.Not.Null);
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} should be named once owned");
+        }
+
+        // ---------------------------------------------------------------- MV-370: Primary Add-ons (Water Balloon)
+
+        private static string Name(WaterBalloonTrackKind kind) => WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
+
+        [UnityTest]
+        public IEnumerator ShowsThePrimaryAddOnsSectionWithAllThreeWaterBalloonTracks()
+        {
+            yield return NewScreen();
+
+            Screen.Open();
+            yield return null;
+
+            Assert.That(FindText(_screenGo, "PRIMARY ADD-ONS"), Is.Not.Null, "the Primary Add-ons section header is missing");
+            foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds)
+                Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} track isn't listed");
+        }
+
+        [UnityTest]
+        public IEnumerator SpendingAWaterBalloonTrackLevelsItUpAndConsumesABankedPart()
+        {
+            yield return NewScreen();
+            PickupWallet.AddPart();
+            Screen.Open();
+            yield return null;
+
+            FindRowButton(_screenGo, Name(WaterBalloonTrackKind.SplashArea)).onClick.Invoke();
+            yield return null;
+
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(2),
+                "tapping the row's button must raise the track by one level");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "and spend the banked part");
         }
 
         [UnityTest]

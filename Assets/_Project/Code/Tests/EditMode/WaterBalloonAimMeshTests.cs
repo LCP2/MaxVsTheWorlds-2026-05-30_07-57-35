@@ -75,7 +75,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheLandingCircleIsTheSplashsTrueRadius()
         {
-            float radius = AbilityTuning.WaterBalloonSplashRadius(0.55f, 2f);
+            float radius = AbilityTuning.WaterBalloonSplashRadius(0.55f, 1, 2f, 0.3f);
             var m = WaterBalloonAimMesh.BuildLandingCircle(radius);
             try
             {

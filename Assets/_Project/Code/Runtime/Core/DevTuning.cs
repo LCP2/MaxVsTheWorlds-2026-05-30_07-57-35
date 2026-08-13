@@ -202,8 +202,16 @@ namespace MaxWorlds.Core
         public static float? WaterBalloonDistancePerLevel { get; set; }
 
         /// <summary>Water Balloon splash radius as a multiple of the large robot's own footprint
-        /// radius (<c>waterBalloonSplashMult</c>).</summary>
+        /// radius, at Splash Area track Level 1 (<c>waterBalloonSplashMult</c>).</summary>
         public static float? WaterBalloonSplashMult { get; set; }
+
+        /// <summary>Fraction each Splash Area track level above 1 widens the Water Balloon splash
+        /// radius (MV-370).</summary>
+        public static float? WaterBalloonSplashAreaPerLevel { get; set; }
+
+        /// <summary>Fraction each Repeat Fire track level cuts the Water Balloon's throw cooldown
+        /// (MV-370).</summary>
+        public static float? WaterBalloonRepeatFirePerLevel { get; set; }
 
         /// <summary>Teleport's blink distance at Level 1, metres (MV-292).</summary>
         public static float? TeleportBaseDistance { get; set; }
@@ -318,7 +326,8 @@ namespace MaxWorlds.Core
             WaterBalloonDamagePct.HasValue || WaterBalloonStopDurationSeconds.HasValue ||
             SpeedMultiplierPerLevel.HasValue ||
             WaterBalloonBaseDistance.HasValue || WaterBalloonDistancePerLevel.HasValue ||
-            WaterBalloonSplashMult.HasValue ||
+            WaterBalloonSplashMult.HasValue || WaterBalloonSplashAreaPerLevel.HasValue ||
+            WaterBalloonRepeatFirePerLevel.HasValue ||
             TeleportBaseDistance.HasValue || TeleportDistancePerLevel.HasValue ||
             StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
@@ -375,6 +384,8 @@ namespace MaxWorlds.Core
             WaterBalloonBaseDistance = null;
             WaterBalloonDistancePerLevel = null;
             WaterBalloonSplashMult = null;
+            WaterBalloonSplashAreaPerLevel = null;
+            WaterBalloonRepeatFirePerLevel = null;
             TeleportBaseDistance = null;
             TeleportDistancePerLevel = null;
             StartLargeCount = null;
@@ -452,6 +463,8 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(WaterBalloonBaseDistance), () => WaterBalloonBaseDistance, v => WaterBalloonBaseDistance = v),
             (PrefsPrefix + nameof(WaterBalloonDistancePerLevel), () => WaterBalloonDistancePerLevel, v => WaterBalloonDistancePerLevel = v),
             (PrefsPrefix + nameof(WaterBalloonSplashMult), () => WaterBalloonSplashMult, v => WaterBalloonSplashMult = v),
+            (PrefsPrefix + nameof(WaterBalloonSplashAreaPerLevel), () => WaterBalloonSplashAreaPerLevel, v => WaterBalloonSplashAreaPerLevel = v),
+            (PrefsPrefix + nameof(WaterBalloonRepeatFirePerLevel), () => WaterBalloonRepeatFirePerLevel, v => WaterBalloonRepeatFirePerLevel = v),
             (PrefsPrefix + nameof(TeleportBaseDistance), () => TeleportBaseDistance, v => TeleportBaseDistance = v),
             (PrefsPrefix + nameof(TeleportDistancePerLevel), () => TeleportDistancePerLevel, v => TeleportDistancePerLevel = v),
             (PrefsPrefix + nameof(StartLargeCount), () => StartLargeCount, v => StartLargeCount = v),

@@ -75,8 +75,9 @@ namespace MaxWorlds.Tests.EditMode
             // Spec §6a: "an area ≈ 2× the large robot's footprint" — the VFX must actually be built at
             // that radius, not an arbitrary fixed size that happens to look OK.
             float radius = MaxWorlds.Weapons.AbilityTuning.WaterBalloonSplashRadius(
-                MaxWorlds.Enemies.EnemyArchetype.Bruiser.ColliderRadius,
-                MaxWorlds.Weapons.AbilityTuning.DefaultWaterBalloonSplashMult);
+                MaxWorlds.Enemies.EnemyArchetype.Bruiser.ColliderRadius, 1,
+                MaxWorlds.Weapons.AbilityTuning.DefaultWaterBalloonSplashMult,
+                MaxWorlds.Weapons.AbilityTuning.DefaultWaterBalloonSplashAreaPerLevel);
 
             var go = new GameObject("splash-vfx-size-test");
             try

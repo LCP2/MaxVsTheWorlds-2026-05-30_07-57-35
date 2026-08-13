@@ -107,7 +107,7 @@ namespace MaxWorlds.UI
         {
             if (_origin == null || _arcGo == null) return;
 
-            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon));
+            int level = Mathf.Max(1, WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range));
             float baseDistance = DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance);
             float perLevel = DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
             float maxDistance = AbilityTuning.WaterBalloonDistance(level, baseDistance, perLevel);
