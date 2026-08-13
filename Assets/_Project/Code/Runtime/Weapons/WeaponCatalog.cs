@@ -118,9 +118,28 @@ namespace MaxWorlds.Weapons
         /// weapon's authored base drain (MV-299) — level 1 is the unmodified base, same as every other
         /// track, but each level above it SUBTRACTS from the drain rather than adding to a magnitude.
         /// Floored at 20% of base so a maxed track buys a much longer tank, never a literally free
-        /// one.</summary>
-        public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel) =>
-            baseDrainPerSecond * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
+        /// one. <paramref name="outputScale"/> (MV-368, default 1x) layers the weapon's current output
+        /// — see <see cref="DrainOutputScale"/> — on TOP of the track's own reduction, so upgrading
+        /// Range/Spread makes the tank drain faster again even at a maxed Depletion Rate track.</summary>
+        public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel, float outputScale = 1f) =>
+            baseDrainPerSecond * outputScale * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
+
+        /// <summary>How much the tank's drain scales for the weapon's ACTUAL current output — the
+        /// effective reach and cone, not "number of upgrade levels bought" (MV-368: reading levels
+        /// would go wrong the moment a track's own per-level curve retunes, as Range/Spread's did in
+        /// MV-367). 1x at the authored base — both ratios are 1 there, so a fresh, un-upgraded weapon's
+        /// drain is untouched (AC2) — and it climbs as the Range track, the Spread track, or a nozzle
+        /// part push reach/cone past base.
+        ///
+        /// Averaged rather than multiplied: Spread's ratio alone reaches ~6.6x at its max level (a tiny
+        /// 4° base makes any absolute widening look huge as a ratio), and multiplying that against a
+        /// maxed Range ratio (2x) would empty the tank in under a second — the "unusable" failure mode
+        /// the ticket explicitly warns against. Averaging keeps a maxed weapon's drain in the same
+        /// order of magnitude as the Depletion Rate track's own 4x max buyback (see
+        /// <see cref="EffectiveDrainPerSecond"/>), so investing in both roughly cancels out instead of
+        /// one swamping the other.</summary>
+        public static float DrainOutputScale(float reach, float baseReach, float coneHalfAngle, float baseConeHalfAngle) =>
+            ((reach / baseReach) + (coneHalfAngle / baseConeHalfAngle)) * 0.5f;
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
         /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Water

@@ -128,13 +128,18 @@ namespace MaxWorlds.Combat
         /// built the tank, so an unbuilt/isolated instance never reads as empty.</summary>
         public float WaterNormalized => _tank != null ? _tank.Normalized : 1f;
 
-        /// <summary>Water one tick costs, given the current Depletion Rate track level (MV-299) — the
-        /// authored per-second drain (<see cref="BlasterTuning.EnergyPerSecond"/>), scaled down by the
-        /// track, spread over one fire tick.</summary>
+        /// <summary>Water one tick costs, given the current Depletion Rate track level (MV-299) and the
+        /// weapon's actual current output (MV-368) — the authored per-second drain
+        /// (<see cref="BlasterTuning.EnergyPerSecond"/>), scaled UP by how far Range/Spread (plus any
+        /// nozzle) have pushed reach and cone past base, then scaled DOWN by the Depletion Rate track,
+        /// spread over one fire tick. Reads <see cref="Range"/>/<see cref="ConeHalfAngle"/> — the same
+        /// effective numbers the hit test and VFX use — rather than raw track levels, so it stays
+        /// correct if those tracks' own curves retune again.</summary>
         public float EnergyPerTick => WeaponCatalog.EffectiveDrainPerSecond(
             DevTuning.Or(DevTuning.PrimaryDepletionRate, BlasterTuning.EnergyPerSecond),
             WeaponSystemState.TrackLevel(WeaponTrackKind.DepletionRate),
-            WeaponCatalog.DefaultRcdaDepletionRatePerLevel) * fireInterval;
+            WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+            WeaponCatalog.DrainOutputScale(Range, DefaultRange, ConeHalfAngle, DefaultConeHalfAngle)) * fireInterval;
 
         /// <summary>How far the stream actually reaches, in metres — the authored reach plus any reach
         /// the Power nozzle adds (YT-133) plus the RCDA Range track's own bonus (MV-263). Public so the
