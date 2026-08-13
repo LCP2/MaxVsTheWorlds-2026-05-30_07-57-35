@@ -166,6 +166,12 @@ namespace MaxWorlds.Enemies
         public float BeamRange => lungeRange;
         public float BeamHalfWidth => contactRadius;
 
+        /// <summary>Melee/attack range this robot commits from — what a Blinker squad jump (MV-366)
+        /// checks against to decide whether it's still worth blinking in, and how close a landing
+        /// point needs to be to read as "arrives and attacks" rather than "arrives and walks the rest
+        /// of the way".</summary>
+        public float LungeRange => lungeRange;
+
         public Team Team => Team.Enemy;
 
         /// <summary>Fired on death (spawner decrements its live count). Arg = this enemy.</summary>
@@ -666,11 +672,40 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>Whether <see cref="BlinkerSquadDirector"/> may draft this robot into a coordinated
+        /// group jump (MV-366) right now: a Blinker, currently chasing (not mid-attack, mid-teleport,
+        /// dead, or still walking out of its factory), that can actually see Max and is still outside
+        /// melee range — the same fairness/range gate the solo blink in <see cref="TickChase"/> uses,
+        /// so a squad jump never warps onto a player it has no business knowing the location of.</summary>
+        public bool IsEligibleForGroupTeleport(Vector3 targetPos)
+        {
+            if (Kind != EnemyKind.Blinker || Current != State.Chase || !_sight.HasSight) return false;
+            Vector3 to = targetPos - transform.position; to.y = 0f;
+            return to.magnitude > lungeRange;
+        }
+
+        /// <summary>Drafts this robot into a squad jump (MV-366): the same charge-up/teleport/land
+        /// beat as a solo blink (<see cref="TickTeleport"/> doesn't know or care which triggered it),
+        /// just aimed at a shared destination the squad's coordinator already computed instead of this
+        /// robot's own flank point. Returns false without side effects if it's no longer eligible —
+        /// the coordinator checks first, but state can change between that check and this call.</summary>
+        public bool TryBeginGroupTeleport(Vector3 destination)
+        {
+            if (Kind != EnemyKind.Blinker || Current != State.Chase) return false;
+
+            _teleportTarget = destination;
+            Current = State.Teleport;
+            _stateTimer = 0f;
+            SetTell(windupTell);
+            return true;
+        }
+
         /// <summary>The Blinker's blink (MV-293): a held charge-up (<see cref="telegraphTime"/> doing
         /// double duty as the teleport's own tell, since this kind is never mid-lunge and mid-teleport
         /// at once) then an instant reposition to the flank point <see cref="TickChase"/> already
-        /// computed. Lands back in Chase, not straight into a lunge — it's now close enough that the
-        /// very next tick reads the range and telegraphs normally, same as if it had walked there.</summary>
+        /// computed (or the shared point a squad jump drafted this robot toward — <see cref="TryBeginGroupTeleport"/>).
+        /// Lands back in Chase, not straight into a lunge — it's now close enough that the very next
+        /// tick reads the range and telegraphs normally, same as if it had walked there.</summary>
         private void TickTeleport(float dt)
         {
             if (_stateTimer < telegraphTime) return;
