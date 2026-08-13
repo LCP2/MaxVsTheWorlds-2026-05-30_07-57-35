@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace MaxWorlds.Factories
@@ -37,6 +38,12 @@ namespace MaxWorlds.Factories
         /// infers "open" from a disabled collider is a caller that breaks the day the gate opens some
         /// other way, and it cannot answer the question at all before the gate has woken up.</summary>
         public bool Unlocked => _opening || IsOpen;
+
+        /// <summary>Fired once, the instant the gate begins opening (MV-364) — the same "the
+        /// moment it's passable" timing as <see cref="Arena.AreaGate.Opened"/>, so
+        /// <see cref="Enemies.EnemyNavigation"/> can drop cached routes the instant this gate
+        /// quits blocking, not when its cosmetic sink finishes.</summary>
+        public event Action Opened;
 
         /// <summary>How many factories this gate is waiting on. 0 means it was never keyed and will
         /// open on the first <see cref="Unlock"/>.</summary>
@@ -84,6 +91,8 @@ namespace MaxWorlds.Factories
             _openPos = _closedPos + Vector3.down * sinkDepth;
 
             if (_collider != null) _collider.enabled = false; // passable immediately
+
+            Opened?.Invoke();
         }
 
         private void Update()

@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
@@ -203,7 +204,20 @@ namespace MaxWorlds.Enemies
                 }
             }
 
-            transform.position += transform.forward * (_speed * dt);
+            Vector3 from = transform.position;
+            Vector3 next = from + transform.forward * (_speed * dt);
+
+            // A fence or a shut gate stops ordnance too (MV-364) — the same Cover layer a sight-line
+            // stops at, because a fence is cover for both sides, not just Max's. Detonate harmlessly
+            // at the wall rather than carrying the splash through to whatever it was chasing beyond it.
+            if (BlockedByGeometry(from, next, out RaycastHit hit))
+            {
+                transform.position = hit.point;
+                DetonateAgainstGeometry();
+                return;
+            }
+
+            transform.position = next;
 
             // Horizontal only: FlightHeight (MV-349) puts the missile above the target's root, and a
             // hit was never meant to depend on the two sharing an exact Y — it only ever did because
@@ -213,6 +227,24 @@ namespace MaxWorlds.Enemies
 
             if (closeEnough) { Detonate(hitTarget: true); return; }
             if (HasRunDry(_age, FuelBudget)) BeginSputter();
+        }
+
+        /// <summary>Whether solid geometry stands between two points on the missile's flight path this
+        /// frame — the same Cover layer <see cref="LineOfSight"/> stops at (MV-364). Extracted as its
+        /// own static query, rather than inlined in <see cref="Update"/>, so a test can prove a fence
+        /// stops a missile without having to drive a live MonoBehaviour's per-frame Update.</summary>
+        public static bool BlockedByGeometry(Vector3 from, Vector3 to, out RaycastHit hit)
+        {
+            Vector3 delta = to - from;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f)
+            {
+                hit = default;
+                return false;
+            }
+
+            return Physics.Raycast(from, delta / dist, out hit, dist, CoverLayer.Mask,
+                                   QueryTriggerInteraction.Ignore);
         }
 
         /// <summary>Pure so the fuel-exhausted transition can be tested without a scene or a clock
@@ -298,6 +330,19 @@ namespace MaxWorlds.Enemies
             }
 
             HudSignals.EmitMissileImpact(transform.position, dealtDamage ? _damage : 0f);
+            Destroy(gameObject);
+        }
+
+        /// <summary>Detonation against solid geometry (MV-364) — never damages the target. A missile
+        /// that slammed into a fence stopped BECAUSE the fence is between it and whatever it was
+        /// chasing, so applying splash from here would let the blast leak through the wall it just
+        /// proved it can't cross. Still fires the impact signal (MV-349's "every detonation, hit or
+        /// miss" — see <see cref="Detonate"/>) so the VFX layer plays the same beat a ground impact
+        /// would, with zero damage since nothing was hit.</summary>
+        private void DetonateAgainstGeometry()
+        {
+            _state = FlightState.Detonated;
+            HudSignals.EmitMissileImpact(transform.position, 0f);
             Destroy(gameObject);
         }
     }
