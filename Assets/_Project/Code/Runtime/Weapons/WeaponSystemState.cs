@@ -15,6 +15,7 @@ namespace MaxWorlds.Weapons
     {
         private static readonly Dictionary<WeaponTrackKind, int> s_trackLevels = new Dictionary<WeaponTrackKind, int>();
         private static readonly Dictionary<AbilityKind, int> s_abilityLevels = new Dictionary<AbilityKind, int>();
+        private static readonly Dictionary<WaterBalloonTrackKind, int> s_waterBalloonTrackLevels = new Dictionary<WaterBalloonTrackKind, int>();
         // MV-333: the order abilities were actually granted in, not the catalog's fixed order — the
         // weapons screen's slots are keyed off this so a slot, once filled, never moves when a later
         // ability is acquired (the catalog order previously resorted "Acquired" every Refresh, which
@@ -46,6 +47,37 @@ namespace MaxWorlds.Weapons
 
         /// <summary>0 if not yet acquired from a shed; 1..cap once owned.</summary>
         public static int AbilityLevel(AbilityKind kind) => s_abilityLevels[kind];
+
+        /// <summary>A Water Balloon track's current level (MV-370). Every track starts at 1 and is
+        /// owned from run start, same as an RCDA track — Water Balloon is a primary add-on now, not a
+        /// shed-acquired ability.</summary>
+        public static int WaterBalloonTrackLevel(WaterBalloonTrackKind kind) => s_waterBalloonTrackLevels[kind];
+
+        /// <summary>Spend a part to raise a Water Balloon track by one level (MV-370), up to its
+        /// <see cref="WeaponCatalog.MaxLevel(WaterBalloonTrackKind)"/> cap. No-ops (returns false)
+        /// already at the cap.</summary>
+        public static bool LevelUpWaterBalloonTrack(WaterBalloonTrackKind kind)
+        {
+            int level = s_waterBalloonTrackLevels[kind];
+            if (level >= WeaponCatalog.MaxLevel(kind)) return false;
+            s_waterBalloonTrackLevels[kind] = level + 1;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>The Water Balloon's own Repeat Fire track's cooldown-cut-per-level fraction, read
+        /// through <see cref="DevTuning"/> so the panel can dial it live (MV-370, same idiom as
+        /// <see cref="WeaponCooldownReductionPerLevel"/>).</summary>
+        private static float WaterBalloonRepeatFirePerLevel => DevTuning.Or(
+            DevTuning.WaterBalloonRepeatFirePerLevel, AbilityTuning.DefaultWaterBalloonRepeatFirePerLevel);
+
+        /// <summary>Water Balloon's throw cooldown after its own Repeat Fire track (MV-370) — the
+        /// on-screen control's cooldown sweep reads this, same role <see cref="EffectiveCooldownSeconds"/>
+        /// plays for the AbilityKind-gated controls Water Balloon left behind.</summary>
+        public static float WaterBalloonEffectiveCooldownSeconds() => AbilityTuning.WaterBalloonCooldownSeconds(
+            WaterBalloonTrackLevel(WaterBalloonTrackKind.RepeatFire),
+            WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
+            WaterBalloonRepeatFirePerLevel);
 
         public static bool IsAcquired(AbilityKind kind) => s_abilityLevels[kind] > 0;
 
@@ -116,6 +148,7 @@ namespace MaxWorlds.Weapons
         {
             foreach (var kind in WeaponCatalog.AllTrackKinds) s_trackLevels[kind] = 1;
             foreach (var kind in WeaponCatalog.AllAbilityKinds) s_abilityLevels[kind] = 0;
+            foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds) s_waterBalloonTrackLevels[kind] = 1;
             s_acquisitionOrder.Clear();
         }
     }

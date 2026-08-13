@@ -2,6 +2,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -31,7 +32,8 @@ namespace MaxWorlds.Tests.EditMode
         public void SetUp()
         {
             WeaponSystemState.Reset();
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            PickupWallet.Reset();
+            PickupWallet.SetPowerCells(10);   // MV-370: Water Balloon is a primary add-on now, gated on cells not acquisition
 
             _max = new GameObject("Max", typeof(CharacterController), typeof(PlayerController));
             // PlayerController.Awake() self-attaches this (WV-231) — real gameplay and the PlayMode
@@ -56,6 +58,7 @@ namespace MaxWorlds.Tests.EditMode
             Object.DestroyImmediate(_pad);
             Object.DestroyImmediate(_max);
             WeaponSystemState.Reset();
+            PickupWallet.Reset();
         }
 
         private static PointerEventData At(Vector2 pos) => new PointerEventData(EventSystem.current) { position = pos };

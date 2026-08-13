@@ -520,6 +520,14 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.WaterBalloonSplashMult, AbilityTuning.DefaultWaterBalloonSplashMult),
                 v => DevTuning.WaterBalloonSplashMult = v, tab: TabWeapons);
 
+            Add("Balloon splash/lvl", "x", 0f, 1f, AbilityTuning.DefaultWaterBalloonSplashAreaPerLevel,
+                () => DevTuning.Or(DevTuning.WaterBalloonSplashAreaPerLevel, AbilityTuning.DefaultWaterBalloonSplashAreaPerLevel),
+                v => DevTuning.WaterBalloonSplashAreaPerLevel = v, tab: TabWeapons);
+
+            Add("Balloon repeat/lvl", "x", 0f, 0.5f, AbilityTuning.DefaultWaterBalloonRepeatFirePerLevel,
+                () => DevTuning.Or(DevTuning.WaterBalloonRepeatFirePerLevel, AbilityTuning.DefaultWaterBalloonRepeatFirePerLevel),
+                v => DevTuning.WaterBalloonRepeatFirePerLevel = v, tab: TabWeapons);
+
             Add("Balloon damage %", "%", 0f, 100f, AbilityTuning.DefaultWaterBalloonDamagePct,
                 () => DevTuning.Or(DevTuning.WaterBalloonDamagePct, AbilityTuning.DefaultWaterBalloonDamagePct),
                 v => DevTuning.WaterBalloonDamagePct = v, tab: TabWeapons);

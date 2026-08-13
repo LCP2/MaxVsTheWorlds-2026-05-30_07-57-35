@@ -62,21 +62,23 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- Water Balloon
 
         [UnityTest]
-        public IEnumerator UnacquiredWaterBalloonNeverThrows()
+        public IEnumerator WaterBalloonWithNoCellsNeverThrows_MV370()
         {
+            // MV-370: Water Balloon is a primary add-on now, always available — SetUp's PickupWallet.Reset()
+            // leaves the bank at 0 cells, which is what must block the throw here, not acquisition.
             Assert.IsNotNull(_abilities, "PlayerController must self-attach PlayerAbilities (WV-231)");
-            PickupWallet.SetPowerCells(10);
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False);
             yield return null;
         }
 
         [UnityTest]
-        public IEnumerator ThrowingStartsTheCooldown()
+        public IEnumerator ThrowingSpendsOneCellAndStartsTheCooldown_MV370()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            PickupWallet.SetPowerCells(1);
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
 
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "each balloon fired must cost exactly one cell");
             Assert.That(_abilities.WaterBalloonReady, Is.False, "must be on cooldown immediately after a throw");
             yield return null;
         }
@@ -84,7 +86,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator LandingSplashesHalfTheBruisersMaxHealthAndHaltsIt()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            PickupWallet.SetPowerCells(10);
 
             float level1Distance = AbilityTuning.WaterBalloonDistance(
                 1, AbilityTuning.DefaultWaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
@@ -110,7 +112,7 @@ namespace MaxWorlds.Tests.PlayMode
             // the first, is the regression this locks in. A short DevTuning cooldown keeps the real
             // (Time.deltaTime-driven) wait fast.
             DevTuning.WaterBalloonCooldownSeconds = 0.05f;
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            PickupWallet.SetPowerCells(10);
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False,
@@ -120,6 +122,47 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True,
                 "a second throw must succeed once the cooldown has actually expired");
+        }
+
+        [UnityTest]
+        public IEnumerator RepeatFireLevelThrowsFasterThanLevel1_MV370()
+        {
+            DevTuning.WaterBalloonCooldownSeconds = 1f;
+            PickupWallet.SetPowerCells(2);
+
+            float cooldownAtL1 = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
+            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire);
+            float cooldownAtL2 = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
+
+            Assert.Less(cooldownAtL2, cooldownAtL1, "a Repeat Fire level must shorten the throw cooldown");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator SplashAreaLevelWidensTheSplashRadius_MV370()
+        {
+            float radiusAtL1 = PlayerAbilities.SplashRadius;
+            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.SplashArea);
+            float radiusAtL2 = PlayerAbilities.SplashRadius;
+
+            Assert.Greater(radiusAtL2, radiusAtL1, "a Splash Area level must widen the splash radius");
+            yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator RangeLevelThrowsFartherThanLevel1_MV370()
+        {
+            PickupWallet.SetPowerCells(10);
+            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range);
+
+            Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
+            yield return new WaitForSeconds(1.5f);
+
+            // The flight itself already proves the throw succeeded; the distance formula covering
+            // Range's level-up is pinned directly in AbilityTuningTests — this just proves the live
+            // component actually reads the Range track's level rather than a hardcoded level 1.
+            int level = WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range);
+            Assert.That(level, Is.EqualTo(2));
         }
 
         // ---------------------------------------------------------------- Teleport

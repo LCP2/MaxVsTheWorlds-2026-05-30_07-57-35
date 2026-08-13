@@ -247,9 +247,10 @@ namespace MaxWorlds.UI
             if (_hydroButtonRoot != null) _hydroButtonRoot.gameObject.SetActive(UpgradeState.HydroAssembled);
         }
 
-        /// <summary>Water Balloon and Teleport each appear the moment they're acquired and grow
-        /// more prominent as they level (WV-240, spec §6a) — rebuilt through
-        /// <see cref="AbilityControlArt"/> whenever their level actually changed.</summary>
+        /// <summary>Teleport appears the moment it's acquired; Water Balloon is visible from run start
+        /// (MV-370: a primary add-on, not a shed find). Both grow more prominent as they level (WV-240,
+        /// spec §6a) — rebuilt through <see cref="AbilityControlArt"/> whenever their level actually
+        /// changed.</summary>
         private void OnAbilitiesChanged()
         {
             RebuildWaterBalloonJoystickIfNeeded();
@@ -516,14 +517,23 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
-        /// control shows a cooldown sweep and is disabled during cooldown").</summary>
+        /// control shows a cooldown sweep and is disabled during cooldown"). MV-370: an empty cell bank
+        /// reads the same as "on cooldown" — a full radial cover — since either way the control can't
+        /// fire right now (AC6: "communicated clearly").</summary>
         private void UpdateAbilityControls()
         {
             if (_waterBalloonRadial != null && _waterBalloonRoot != null && _waterBalloonRoot.gameObject.activeSelf)
             {
-                float cd = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.WaterBalloon);
-                float remaining = _abilities != null ? _abilities.WaterBalloonCooldownRemaining : 0f;
-                _waterBalloonRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
+                if (MaxWorlds.Pickups.PickupWallet.PowerCells <= 0)
+                {
+                    _waterBalloonRadial.fillAmount = 1f;
+                }
+                else
+                {
+                    float cd = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
+                    float remaining = _abilities != null ? _abilities.WaterBalloonCooldownRemaining : 0f;
+                    _waterBalloonRadial.fillAmount = cd > 0f ? Mathf.Clamp01(remaining / cd) : 0f;
+                }
             }
 
             if (_teleportRadial != null && _teleportRoot != null && _teleportRoot.gameObject.activeSelf)
@@ -830,17 +840,27 @@ namespace MaxWorlds.UI
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
         private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
 
-        /// <summary>The Water Balloon joystick (WV-240, spec §6a): appears once acquired, grows more
-        /// prominent with level (<see cref="AbilityControlArt"/>), and its own
-        /// <see cref="WaterBalloonJoystickControl"/> drives the press/drag/release aim + throw.</summary>
+        /// <summary>The Water Balloon joystick (WV-240, spec §6a; MV-370: a primary add-on now, visible
+        /// from run start rather than gated on acquisition), grows more prominent with level
+        /// (<see cref="AbilityControlArt"/>), and its own <see cref="WaterBalloonJoystickControl"/>
+        /// drives the press/drag/release aim + throw.</summary>
         private void BuildWaterBalloonJoystick() => RebuildWaterBalloonJoystick();
+
+        /// <summary>The joystick's visual "prominence" level (MV-370): the best-invested of the three
+        /// Water Balloon tracks, out of their shared cap — since there's no longer one single ability
+        /// level to read, this is the closest read of "how upgraded is this add-on overall".</summary>
+        private static int WaterBalloonJoystickLevel() => Mathf.Max(
+            WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range),
+            Mathf.Max(
+                WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea),
+                WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.RepeatFire)));
 
         private void RebuildWaterBalloonJoystick()
         {
             if (_waterBalloonRoot != null) Destroy(_waterBalloonRoot.gameObject);
 
-            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon));
-            int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon);
+            int level = WaterBalloonJoystickLevel();
+            int maxLevel = WeaponCatalog.MaxLevel(WaterBalloonTrackKind.Range);
             Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, WaterBalloonJoystickRise);
             _waterBalloonVisual = AbilityControlArt.BuildJoystick(
                 Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, "Balloon", level, maxLevel);
@@ -875,16 +895,15 @@ namespace MaxWorlds.UI
                 _waterBalloonVisual.Rings);
 
             _waterBalloonBuiltLevel = level;
-            _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
+            _waterBalloonRoot.gameObject.SetActive(true);
         }
 
         private void RebuildWaterBalloonJoystickIfNeeded()
         {
-            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon));
+            int level = WaterBalloonJoystickLevel();
             if (level == _waterBalloonBuiltLevel)
             {
-                if (_waterBalloonRoot != null)
-                    _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
+                if (_waterBalloonRoot != null) _waterBalloonRoot.gameObject.SetActive(true);
                 return;
             }
             RebuildWaterBalloonJoystick();

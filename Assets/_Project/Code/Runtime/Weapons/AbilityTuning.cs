@@ -23,26 +23,48 @@ namespace MaxWorlds.Weapons
         /// <c>waterBalloonBaseDistance</c>), metres.</summary>
         public const float DefaultWaterBalloonBaseDistance = 4f;
 
-        /// <summary>Extra throw distance per Water Balloon level beyond L1 (<c>waterBalloonDistancePerLevel</c>)
-        /// — spec §6a: "level = throw DISTANCE", the ability's entire upgrade is this one number, not
-        /// damage or rate.</summary>
+        /// <summary>Extra throw distance per Range track level beyond L1 (<c>waterBalloonDistancePerLevel</c>)
+        /// — MV-370: Water Balloon's Range track (formerly its only track under the old single-level
+        /// ability, spec §6a "level = throw DISTANCE").</summary>
         public const float DefaultWaterBalloonDistancePerLevel = 1.5f;
 
-        /// <summary>How far a Level <paramref name="level"/> Water Balloon throws, in metres — what the
-        /// on-screen arc/landing-circle (WV-241) sizes itself from, so the picture never promises a throw
-        /// the ability doesn't have. Callers gate on <c>WeaponSystemState.IsAcquired</c> before showing
-        /// anything; this does not treat level 0 specially.</summary>
+        /// <summary>How far a Range-track Level <paramref name="level"/> Water Balloon throws, in
+        /// metres — what the on-screen arc/landing-circle (WV-241) sizes itself from, so the picture
+        /// never promises a throw the add-on doesn't have. Every track starts at Level 1 (MV-370: owned
+        /// from run start, like the RCDA's own tracks), so this does not treat level 0 specially.</summary>
         public static float WaterBalloonDistance(int level, float baseDistance, float perLevel) =>
             baseDistance + perLevel * Mathf.Max(0, level - 1);
 
-        /// <summary>The splash's size relative to the large ("second") robot's own footprint radius
-        /// (<c>waterBalloonSplashMult</c>, spec §6a: "an area ≈ 2× the large robot's footprint") — 2.0
-        /// means the splash's radius is twice the robot's, i.e. its diameter matches the robot's own.</summary>
+        /// <summary>The splash's size relative to the large ("second") robot's own footprint radius at
+        /// Splash Area Level 1 (<c>waterBalloonSplashMult</c>, spec §6a: "an area ≈ 2× the large
+        /// robot's footprint") — 2.0 means the splash's radius is twice the robot's, i.e. its diameter
+        /// matches the robot's own.</summary>
         public const float DefaultWaterBalloonSplashMult = 2f;
 
-        /// <summary>The splash VFX's radius, metres, given the large robot's own footprint radius.</summary>
-        public static float WaterBalloonSplashRadius(float largeRobotFootprintRadius, float splashMult) =>
-            Mathf.Max(0f, largeRobotFootprintRadius) * Mathf.Max(0f, splashMult);
+        /// <summary>Fraction each Splash Area track level ABOVE 1 widens the splash radius (MV-370) —
+        /// same linear "roughly-equal step" shape as <see cref="WeaponCatalog.EffectiveDamagePerTick"/>,
+        /// so Splash Area reads as a real upgrade rather than the fixed multiple of the large robot's
+        /// footprint the splash used to be stuck at regardless of ability level.</summary>
+        public const float DefaultWaterBalloonSplashAreaPerLevel = 0.3f;
+
+        /// <summary>The splash VFX's radius, metres, at a given Splash Area track level, given the
+        /// large robot's own footprint radius — level 1 is the unmodified <paramref name="splashMult"/>
+        /// multiple spec §6a originally pinned, each level above it widens further.</summary>
+        public static float WaterBalloonSplashRadius(float largeRobotFootprintRadius, int level, float splashMult, float perLevel) =>
+            Mathf.Max(0f, largeRobotFootprintRadius) * Mathf.Max(0f, splashMult) *
+            (1f + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1));
+
+        /// <summary>Fraction each Repeat Fire track level CUTS the Water Balloon's throw cooldown
+        /// (MV-370) — same inverse shape as <see cref="WeaponCatalog.EffectiveDrainPerSecond"/>: level
+        /// 1 is the unmodified base cooldown, each level above it raises balloons-per-minute by
+        /// shortening the wait between throws rather than growing a magnitude.</summary>
+        public const float DefaultWaterBalloonRepeatFirePerLevel = 0.2f;
+
+        /// <summary>The Water Balloon's throw cooldown at a given Repeat Fire track level, seconds —
+        /// floored at 40% of the base so a maxed track buys noticeably faster fire, never a near-instant
+        /// spam (every throw still costs a cell regardless, MV-370's actual spam brake).</summary>
+        public static float WaterBalloonCooldownSeconds(int repeatFireLevel, float baseCooldown, float perLevel) =>
+            Mathf.Max(0f, baseCooldown) * Mathf.Max(0.4f, 1f - perLevel * (Mathf.Max(1, repeatFireLevel) - 1));
 
         /// <summary>Water Balloon's damage as a percentage of the ROBOT'S OWN max health (spec §9:
         /// <c>waterBalloonDamagePct</c>) — a percentage rather than a flat number, so one fixed-size
