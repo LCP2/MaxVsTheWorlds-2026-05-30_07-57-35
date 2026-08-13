@@ -78,7 +78,14 @@ namespace MaxWorlds.UI
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
         private const int MaxAbilityRows = 4;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool
-        private const int MaxPips = 6;           // largest cap across tracks (MV-291: all now cap at 6) and abilities (WeaponCooldown=5)
+
+        // MV-367: Range/Spread's cap grew from 6 to 9, breaking the old "every row gets the same fixed
+        // pip count" assumption (a row built for 6 pips silently truncated levels 7-9 to an always-full
+        // bar). BuildGridRow now sizes each row's pip array to ITS OWN track/ability cap and fits it
+        // inside the same total pixel budget the old 6-pip row used, so a 9-pip row reads as more, and
+        // thinner, segments rather than overflowing the card.
+        private const float PipBudgetPx = 6f * 46f + 5f * 7f;   // the old fixed 6-pip row's width (pipW=46, gap=7)
+        private const float PipGap = 7f;
 
         // MV-262: the abilities grid is a fixed 4-slot (2-row) grid regardless of how many are owned
         // (MV-359 cut the pool from five/six down to four, shrinking this from 3 rows), so unlike the
@@ -739,7 +746,8 @@ namespace MaxWorlds.UI
             {
                 int index = i;   // capture by value, not the loop variable
                 var kind = WeaponCatalog.AllTrackKinds[i];
-                var r = BuildGridRow(column, "Track Row", i, gridTop, RowHeight, RowGap, TrackIconBg);
+                var r = BuildGridRow(column, "Track Row", i, gridTop, RowHeight, RowGap, TrackIconBg,
+                    WeaponCatalog.MaxLevel(kind));
                 _trackName[i] = r.Name;
                 _trackPips[i] = r.Pips;
                 _trackButton[i] = r.PlusButton;
@@ -770,7 +778,11 @@ namespace MaxWorlds.UI
             for (int i = 0; i < MaxAbilityRows; i++)
             {
                 int row = i;   // capture by value, not the loop variable
-                var r = BuildGridRow(column, "Ability Row", i, gridTop, RowHeight, RowGap, AbilityIconBg);
+                // Ability slots are generic at build time (the kind behind a slot is only known once
+                // WeaponSystemState.Acquired assigns it, MV-333), so unlike the track rows above this
+                // can't size to one specific kind's cap — use the largest cap any ability actually has
+                // (WeaponCooldown, 5; see WeaponCatalog.MaxLevel(AbilityKind)).
+                var r = BuildGridRow(column, "Ability Row", i, gridTop, RowHeight, RowGap, AbilityIconBg, 5);
                 _abilityName[i] = r.Name;
                 _abilityPips[i] = r.Pips;
                 _abilityButton[i] = r.PlusButton;
@@ -839,7 +851,7 @@ namespace MaxWorlds.UI
         /// (MV-251: <c>TrackIconBg</c>/<c>AbilityIconBg</c>), not a shared neutral, so a tile reads as
         /// belonging to its section before you even read its name.</summary>
         private GridRowRefs BuildGridRow(RectTransform column, string name, int slot, float top,
-            float rowHeight, float rowGap, Color iconColor)
+            float rowHeight, float rowGap, Color iconColor, int pipCap)
         {
             var row = NewRect(name, column, new Vector2(0f, 1f), Vector2.one);
             row.pivot = new Vector2(0.5f, 1f);
@@ -878,13 +890,16 @@ namespace MaxWorlds.UI
             pipRow.offsetMin = new Vector2(8f, 12f);
             pipRow.offsetMax = new Vector2(0f, -6f);
 
-            var pips = new Image[MaxPips];
-            const float pipW = 46f, pipGap = 7f;
-            for (int i = 0; i < MaxPips; i++)
+            // MV-367: fit exactly pipCap segments inside the same budget the old fixed 6-pip row used,
+            // so a track with more levels (Range/Spread, cap 9) reads as narrower segments rather than
+            // truncating or overflowing the card.
+            var pips = new Image[pipCap];
+            float pipW = (PipBudgetPx - (pipCap - 1) * PipGap) / pipCap;
+            for (int i = 0; i < pipCap; i++)
             {
                 var pip = AddImage(pipRow, HudTextures.RoundedBox(16, 0.5f), PipEmpty, "Pip Empty");
                 Anchor(pip.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
-                pip.rectTransform.anchoredPosition = new Vector2(i * (pipW + pipGap), 0f);
+                pip.rectTransform.anchoredPosition = new Vector2(i * (pipW + PipGap), 0f);
                 pip.rectTransform.sizeDelta = new Vector2(pipW, 0f);
                 pip.type = Image.Type.Sliced;
                 pips[i] = pip;

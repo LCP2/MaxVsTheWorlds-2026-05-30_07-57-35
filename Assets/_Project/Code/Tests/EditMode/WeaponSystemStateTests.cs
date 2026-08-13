@@ -64,12 +64,19 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AllTracksCapAtSixLevels_MV291()
+        public void DamageAndDepletionRateCapAtSixLevels_MV291()
         {
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(6));
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(6));
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(6));
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate), Is.EqualTo(6), "MV-299");
+        }
+
+        [Test]
+        public void RangeAndSpreadCapAtNineLevels_MV367()
+        {
+            // MV-367: Range and Spread get 3 more steps than Damage/DepletionRate so a lower ceiling
+            // still reads as steady, frequent growth rather than two giant jumps to godhood.
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(9));
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(9));
         }
 
         // ---------------------------------------------------------------- abilities
