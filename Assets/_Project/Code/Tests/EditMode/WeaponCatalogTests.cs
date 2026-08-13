@@ -176,6 +176,96 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ---------------------------------------------------------------- MV-368: drain scales with output
+
+        [Test]
+        public void DrainOutputScale_IsOneAtTheAuthoredBase()
+        {
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+            Assert.That(WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone), Is.EqualTo(1f).Within(1e-5f),
+                "an un-upgraded weapon (reach and cone both at base) must not scale the drain at all — AC2");
+        }
+
+        [Test]
+        public void DrainOutputScale_RisesWithReach()
+        {
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+            float atBase = WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone);
+            float widerReach = WeaponCatalog.DrainOutputScale(baseReach * 2f, baseReach, baseCone, baseCone);
+            Assert.Greater(widerReach, atBase, "more reach must drain the tank faster — more water is covering more ground");
+        }
+
+        [Test]
+        public void DrainOutputScale_RisesWithCone()
+        {
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+            float atBase = WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone);
+            float widerCone = WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone * 2f, baseCone);
+            Assert.Greater(widerCone, atBase, "a wider spray must drain the tank faster — more water is coming out");
+        }
+
+        [Test]
+        public void MaxedRangeAndSpread_DrainsMarkedlyFasterThanBase_MV368()
+        {
+            // The ticket's headline AC: a fully upgraded weapon (Range + Spread both maxed, no nozzle)
+            // must empty the tank noticeably faster than an un-upgraded one, with no Depletion spend.
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+            float maxReach = WeaponCatalog.EffectiveRange(
+                baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
+            float maxCone = WeaponCatalog.EffectiveConeHalfAngle(
+                baseCone, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
+
+            float baseDrain = WeaponCatalog.EffectiveDrainPerSecond(
+                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+                WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone));
+            float maxedDrain = WeaponCatalog.EffectiveDrainPerSecond(
+                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+                WeaponCatalog.DrainOutputScale(maxReach, baseReach, maxCone, baseCone));
+
+            Assert.That(maxedDrain, Is.GreaterThan(baseDrain * 2f), "a maxed weapon must drain markedly faster than an un-upgraded one");
+        }
+
+        [Test]
+        public void LevelOneOutputWithDepletionTrackAtLevelOne_MatchesTodaysBaseDrainExactly_MV368()
+        {
+            // AC2: a completely fresh weapon (every track at its starting level 1, no nozzle) must
+            // reproduce today's drain exactly — the scaling this ticket adds must start at a no-op.
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+            float drain = WeaponCatalog.EffectiveDrainPerSecond(
+                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+                WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone));
+
+            Assert.That(drain, Is.EqualTo(BlasterTuning.EnergyPerSecond).Within(1e-4f));
+        }
+
+        [Test]
+        public void DepletionRateTrack_StillOffsetsTheIncreasedDrainAtMaxedOutput_MV368()
+        {
+            // AC3: spending on Depletion Rate must measurably cut the drain even when the weapon's
+            // output is maxed, and AC4: it must never become literally free to run.
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+            float maxReach = WeaponCatalog.EffectiveRange(
+                baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
+            float maxCone = WeaponCatalog.EffectiveConeHalfAngle(
+                baseCone, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
+            float outputScale = WeaponCatalog.DrainOutputScale(maxReach, baseReach, maxCone, baseCone);
+
+            float noDepletionSpend = WeaponCatalog.EffectiveDrainPerSecond(
+                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
+            float maxedDepletionSpend = WeaponCatalog.EffectiveDrainPerSecond(
+                BlasterTuning.EnergyPerSecond, WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate),
+                WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
+
+            Assert.Less(maxedDepletionSpend, noDepletionSpend, "Depletion Rate must still buy back sustain against a maxed-output weapon");
+            Assert.Greater(maxedDepletionSpend, 0f, "even a maxed Depletion Rate track must leave a real, positive cost to run");
+        }
+
         // ---------------------------------------------------------------- MV-357: ability draft-pick cards
 
         [Test]
