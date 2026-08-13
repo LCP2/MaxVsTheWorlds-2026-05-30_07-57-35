@@ -1,6 +1,9 @@
+using System.Collections;
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
@@ -28,6 +31,21 @@ namespace MaxWorlds.UI
 
         private GameObject _arcGo;
         private GameObject _circleGo;
+
+        /// <summary>How long the auto-aimed knob holds at its chosen point before firing (MV-373) —
+        /// quick and readable per Lee's design note, not a slow glide that misrepresents when the shot
+        /// actually goes out.</summary>
+        private const float AutoAimRevealSeconds = 0.18f;
+
+        /// <summary>How often auto-fire re-checks for a target after a check that found none — throttles
+        /// the O(n^2) scan (<see cref="WaterBalloonAutoAim"/>) to a few times a second rather than every
+        /// frame while ready-but-nothing's-in-range (MV-373: "must not be an expensive search every
+        /// frame").</summary>
+        private const float AutoRetryIntervalSeconds = 0.25f;
+
+        private bool _autoAiming;
+        private float _autoRetryCooldown;
+        private static readonly List<Vector3> s_autoAimTargets = new List<Vector3>(32);
 
         /// <summary>Wired by <c>HudController</c> right after construction — the same self-attach
         /// hand-off shape <see cref="PlayerAbilities"/> itself uses.</summary>
@@ -63,6 +81,72 @@ namespace MaxWorlds.UI
         {
             if (_arcGo != null) Destroy(_arcGo);
             if (_circleGo != null) Destroy(_circleGo);
+        }
+
+        protected override void OnDisable()
+        {
+            base.OnDisable();
+            _autoAiming = false;
+        }
+
+        /// <summary>MV-373: the balloon aims and fires itself whenever it's ready and something's in
+        /// range — the payoff for investing in Repeat Fire. Never fights a manual drag (<see cref="AbilityJoystickControlBase.IsAiming"/>)
+        /// or a reveal already in flight, and the O(n^2) target scan only ever runs once the ability is
+        /// actually off cooldown with a cell to spend — not every frame regardless of state.</summary>
+        private void Update()
+        {
+            if (_autoAiming || IsAiming) return;
+            if (!AbilityReady || _origin == null) return;
+
+            if (_autoRetryCooldown > 0f)
+            {
+                _autoRetryCooldown -= Time.deltaTime;
+                return;
+            }
+
+            s_autoAimTargets.Clear();
+            var active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
+            {
+                var robot = active[i];
+                if (robot != null && robot.IsAlive) s_autoAimTargets.Add(robot.transform.position);
+            }
+
+            if (!WaterBalloonAutoAim.TryFindBestDirection(
+                    _origin.position, PlayerAbilities.ThrowDistance, PlayerAbilities.SplashRadius,
+                    s_autoAimTargets, out Vector3 direction))
+            {
+                _autoRetryCooldown = AutoRetryIntervalSeconds;
+                return;
+            }
+
+            StartCoroutine(AutoAimAndFire(direction));
+        }
+
+        /// <summary>Snaps the knob to the auto-chosen point, holds it there long enough to read, then
+        /// throws — "the joystick will automatically move" (Lee's design direction). Bails without
+        /// firing or touching the visuals if a manual drag claimed the control mid-reveal, so the
+        /// player's own touch always wins.</summary>
+        private IEnumerator AutoAimAndFire(Vector3 direction)
+        {
+            _autoAiming = true;
+            SetArmed(true);
+            ShowAimVisuals();
+            SetAimDirection(direction, 1f);
+            RebuildAimVisual();
+
+            yield return new WaitForSeconds(AutoAimRevealSeconds);
+
+            if (IsAiming)
+            {
+                _autoAiming = false;
+                yield break;
+            }
+
+            Fire(direction);
+            HideAimVisuals();
+            SetArmed(false);
+            _autoAiming = false;
         }
 
         protected override void ShowAimVisuals()
