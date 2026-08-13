@@ -31,7 +31,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void EveryCandidateIsCurrentlyUnacquired()
         {
-            WeaponSystemState.Acquire(AbilityKind.Dash);
+            WeaponSystemState.Acquire(AbilityKind.Speed);
 
             foreach (var candidate in AbilityDraft.DrawCandidates())
                 Assert.That(WeaponSystemState.IsAcquired(candidate), Is.False,
@@ -49,10 +49,9 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void DrawShrinksAsThePoolDrains()
         {
-            WeaponSystemState.Acquire(AbilityKind.Dash);
             WeaponSystemState.Acquire(AbilityKind.Speed);
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            // 5 abilities total, 3 owned -> 2 left, below MaxCandidates.
+            // 4 abilities total, 2 owned -> 2 left, below MaxCandidates.
 
             Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(2));
         }

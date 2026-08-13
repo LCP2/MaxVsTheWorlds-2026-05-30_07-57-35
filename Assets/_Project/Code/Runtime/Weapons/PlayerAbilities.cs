@@ -10,9 +10,7 @@ namespace MaxWorlds.Weapons
 {
     /// <summary>
     /// The two shed-acquired abilities that need a live component to actually DO something (WV-231):
-    /// Water Balloon's throw/landing/splash, and Teleport's blink. Dash stays inside
-    /// <see cref="PlayerController"/> — it was already the base movement tech there, gated on
-    /// ownership in place (WV-231) rather than duplicated here. Speed and Weapon Cooldown are pure
+    /// Water Balloon's throw/landing/splash, and Teleport's blink. Speed and Weapon Cooldown are pure
     /// passive multipliers with no activation and need nothing beyond the read
     /// <see cref="PlayerController.WalkSpeed"/> already does.
     ///

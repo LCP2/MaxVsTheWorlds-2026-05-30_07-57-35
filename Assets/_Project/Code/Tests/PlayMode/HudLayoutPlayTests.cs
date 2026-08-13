@@ -90,7 +90,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator TheHomeButtonStaysClearOfWeaponsDashAndTheTwinSticks()
+        public IEnumerator TheHomeButtonStaysClearOfWeaponsAndTheTwinSticks()
         {
             yield return null;
 
@@ -98,7 +98,7 @@ namespace MaxWorlds.Tests.PlayMode
             // added after the fact, which is exactly how the minimap/icon overlap happened.
             Rect home = ScreenRect(Find("Home Button"));
 
-            foreach (var n in new[] { "Weapons Button", "Dash Button", "Move Joystick", "Aim Joystick" })
+            foreach (var n in new[] { "Weapons Button", "Move Joystick", "Aim Joystick" })
             {
                 RectTransform rt = Find(n);
                 Assert.IsNotNull(rt, $"'{n}' is missing from the HUD");

@@ -104,20 +104,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4));
         }
 
-        [Test]
-        public void TeleportsAuthoredRangeClearsDashsShortBurst()
-        {
-            // Dash covers dashSpeed * dashDuration = 18 * 0.18 = 3.24m (PlayerController). Teleport
-            // must read as a clearly longer-range tool at both its levels (MV-292 AC1), not a
-            // re-skinned Dash.
-            const float dashDistance = 18f * 0.18f;
-            float teleportL1 = AbilityTuning.TeleportDistance(1,
-                AbilityTuning.DefaultTeleportBaseDistance, AbilityTuning.DefaultTeleportDistancePerLevel);
-
-            Assert.Greater(teleportL1, dashDistance * 2f,
-                "Teleport's L1 distance must clearly exceed Dash's short reposition burst");
-        }
-
         // ---------------------------------------------------------------- Speed (WV-231)
 
         [Test]

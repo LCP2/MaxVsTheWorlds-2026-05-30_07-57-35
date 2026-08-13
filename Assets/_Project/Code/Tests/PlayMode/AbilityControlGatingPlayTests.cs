@@ -13,7 +13,7 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// The three active-ability on-screen controls (WV-240, spec §6a): each "appears only once
+    /// The active-ability on-screen controls (WV-240, spec §6a): each "appears only once
     /// acquired, and becomes more prominent as that ability's level rises", every control "shows a
     /// cooldown sweep and is disabled during cooldown", and the Water Balloon joystick's own
     /// press/drag/release must actually reach <see cref="PlayerAbilities.TryThrowWaterBalloon"/> —
@@ -80,10 +80,8 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- appear-on-acquire
 
         [UnityTest]
-        public IEnumerator AllThreeActiveAbilityControlsAreHiddenUntilAcquired()
+        public IEnumerator BothActiveAbilityControlsAreHiddenUntilAcquired()
         {
-            Assert.That(Find("Dash Button").gameObject.activeSelf, Is.False,
-                "Dash is a shed-acquired ability now (spec §6a) — its control must stay hidden unowned");
             Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.False);
             Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.False);
             yield return null;
@@ -92,12 +90,10 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator EachControlAppearsTheMomentItsAbilityIsAcquired()
         {
-            WeaponSystemState.Acquire(AbilityKind.Dash);
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
 
-            Assert.That(Find("Dash Button").gameObject.activeSelf, Is.True);
             Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.True);
             Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.True);
         }

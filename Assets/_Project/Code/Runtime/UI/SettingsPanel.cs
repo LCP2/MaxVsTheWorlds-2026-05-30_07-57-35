@@ -500,10 +500,6 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, WeaponCatalog.DefaultWaterBalloonCooldownSeconds),
                 v => DevTuning.WaterBalloonCooldownSeconds = v, tab: TabWeapons);
 
-            Add("Dash cooldown", "s", 0.5f, 15f, WeaponCatalog.DefaultDashCooldownSeconds,
-                () => DevTuning.Or(DevTuning.DashCooldownSeconds, WeaponCatalog.DefaultDashCooldownSeconds),
-                v => DevTuning.DashCooldownSeconds = v, tab: TabWeapons);
-
             Add("Teleport cooldown", "s", 0.5f, 15f, WeaponCatalog.DefaultTeleportCooldownSeconds,
                 () => DevTuning.Or(DevTuning.TeleportCooldownSeconds, WeaponCatalog.DefaultTeleportCooldownSeconds),
                 v => DevTuning.TeleportCooldownSeconds = v, tab: TabWeapons);
