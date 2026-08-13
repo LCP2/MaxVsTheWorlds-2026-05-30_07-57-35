@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 
@@ -140,11 +141,42 @@ namespace MaxWorlds.Enemies
                 }
             }
 
-            transform.position += transform.forward * (_speed * dt);
+            Vector3 from = transform.position;
+            Vector3 next = from + transform.forward * (_speed * dt);
+
+            // A fence or a shut gate stops ordnance too (MV-364) — the same Cover layer a sight-line
+            // stops at, because a fence is cover for both sides, not just Max's. Detonate harmlessly
+            // at the wall rather than carrying the splash through to whatever it was chasing beyond it.
+            if (BlockedByGeometry(from, next, out RaycastHit hit))
+            {
+                transform.position = hit.point;
+                DetonateAgainstGeometry();
+                return;
+            }
+
+            transform.position = next;
 
             bool closeEnough = _target != null &&
                 (transform.position - _target.position).sqrMagnitude <= ContactRadius * ContactRadius;
             if (closeEnough || _age >= MaxLifetime) Detonate();
+        }
+
+        /// <summary>Whether solid geometry stands between two points on the missile's flight path this
+        /// frame — the same Cover layer <see cref="LineOfSight"/> stops at (MV-364). Extracted as its
+        /// own static query, rather than inlined in <see cref="Update"/>, so a test can prove a fence
+        /// stops a missile without having to drive a live MonoBehaviour's per-frame Update.</summary>
+        public static bool BlockedByGeometry(Vector3 from, Vector3 to, out RaycastHit hit)
+        {
+            Vector3 delta = to - from;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f)
+            {
+                hit = default;
+                return false;
+            }
+
+            return Physics.Raycast(from, delta / dist, out hit, dist, CoverLayer.Mask,
+                                   QueryTriggerInteraction.Ignore);
         }
 
         private void Detonate()
@@ -158,6 +190,16 @@ namespace MaxWorlds.Enemies
                     new DamageInfo(_damage, transform.position, transform.forward, Team.Enemy));
             }
 
+            Destroy(gameObject);
+        }
+
+        /// <summary>Detonation against solid geometry (MV-364) — never damages the target. A missile
+        /// that slammed into a fence stopped BECAUSE the fence is between it and whatever it was
+        /// chasing, so applying splash from here would let the blast leak through the wall it just
+        /// proved it can't cross.</summary>
+        private void DetonateAgainstGeometry()
+        {
+            _detonated = true;
             Destroy(gameObject);
         }
     }

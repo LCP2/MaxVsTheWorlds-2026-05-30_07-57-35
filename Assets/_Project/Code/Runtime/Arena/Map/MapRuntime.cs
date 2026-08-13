@@ -185,6 +185,12 @@ namespace MaxWorlds.Arena
                             // Nothing has to close this again: SubZoneGate.Open disables its collider
                             // the instant it starts sinking, so the sight-line opens with the gate.
                             CoverLayer.Assign(gate);
+
+                            // Robots must not be routed at (and grind on) a gate that is still shut
+                            // (MV-364, same reasoning as BuildAreaGate below) — this is what tells
+                            // EnemyNavigation which live SubZoneGate a link's "gate" id actually points
+                            // to, so a shut one counts as impassable instead of reading as open.
+                            EnemyNavigation.RegisterGate(e.id, gate.GetComponent<SubZoneGate>());
                         }
                         break;
 

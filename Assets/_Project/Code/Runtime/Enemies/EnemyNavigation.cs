@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Factories;
 
 namespace MaxWorlds.Enemies
 {
@@ -23,7 +24,14 @@ namespace MaxWorlds.Enemies
     {
         private static MapData _map;
         private static bool _looked;
-        private static readonly Dictionary<string, AreaGate> _gates = new Dictionary<string, AreaGate>(8);
+        private static readonly Dictionary<string, AreaGate> _areaGates = new Dictionary<string, AreaGate>(8);
+
+        // A shut SubZoneGate is just as solid as a shut AreaGate (MV-364), and needs the exact
+        // same routing bridge — kept as its own dictionary rather than folded into _areaGates
+        // because the two gate kinds are different Component types with no shared base, and this
+        // stays a plain reference-typed lookup (Unity's null check works correctly) rather than
+        // reaching for an interface, which would lose that null check across the interface cast.
+        private static readonly Dictionary<string, SubZoneGate> _subZoneGates = new Dictionary<string, SubZoneGate>(4);
 
         /// <summary>Forget the level — the map, the routes solved through it, and which gates it built.
         /// Both the map and the routes are cached because finding the map means a scene search and
@@ -34,7 +42,8 @@ namespace MaxWorlds.Enemies
         {
             _map = null;
             _looked = false;
-            _gates.Clear();
+            _areaGates.Clear();
+            _subZoneGates.Clear();
             MapRoutes.Forget();
         }
 
@@ -51,16 +60,36 @@ namespace MaxWorlds.Enemies
         public static void RegisterGate(string gateId, AreaGate gate)
         {
             if (string.IsNullOrEmpty(gateId) || gate == null) return;
-            _gates[gateId] = gate;
+            _areaGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
         }
 
-        /// <summary>Whether the named gate — if this level built one by that id at all — currently lets
-        /// a robot through. A link naming a gate nothing registered (the scene-adopted
-        /// <see cref="EntityKind.Gate"/>, not an <see cref="EntityKind.AreaGate"/>) reads as open: this
-        /// class only knows how to distrust the kind of gate it was told about.</summary>
-        private static bool IsGateOpen(string gateId) =>
-            !_gates.TryGetValue(gateId, out AreaGate gate) || gate == null || gate.IsOpen;
+        /// <summary>Same job as the <see cref="AreaGate"/> overload, for the scene-adopted
+        /// <see cref="EntityKind.Gate"/> kind (MV-364) — <see cref="MapRuntime"/> calls this the
+        /// moment it places one. Before this overload existed, a shut <see cref="SubZoneGate"/>'s
+        /// link always read as passable to the router (see <see cref="IsGateOpen"/>'s old
+        /// unregistered-default), even though the gate was already physically solid — a robot could
+        /// be routed straight at a doorway it could never actually cross.</summary>
+        public static void RegisterGate(string gateId, SubZoneGate gate)
+        {
+            if (string.IsNullOrEmpty(gateId) || gate == null) return;
+            _subZoneGates[gateId] = gate;
+            gate.Opened += MapRoutes.Forget;
+        }
+
+        /// <summary>Whether the named gate — if this level built or adopted one by that id at all —
+        /// currently lets a robot through. A link naming a gate nothing registered reads as open:
+        /// this class only knows how to distrust a gate it was told about (exposed, like
+        /// <see cref="MapRoutes.Searches"/>, so a test can check the routing bridge directly rather
+        /// than reconstructing a whole level around it).</summary>
+        public static bool IsGateOpen(string gateId)
+        {
+            if (_areaGates.TryGetValue(gateId, out AreaGate areaGate))
+                return areaGate == null || areaGate.IsOpen;
+            if (_subZoneGates.TryGetValue(gateId, out SubZoneGate subZoneGate))
+                return subZoneGate == null || subZoneGate.Unlocked;
+            return true;
+        }
 
         /// <summary>The map the robots are navigating, or null if there is no level in the scene.</summary>
         public static MapData Map
