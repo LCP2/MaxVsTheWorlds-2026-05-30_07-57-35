@@ -66,6 +66,7 @@ namespace MaxWorlds.Enemies
         private Transform _bodies;
         private AreaSpawnQueue _queue;
         private readonly HashSet<int> _filledAreas = new HashSet<int>();
+        private readonly Dictionary<int, int> _largeCountByArea = new Dictionary<int, int>();
         private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _pools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
         private Collider[] _playerColliders;
         private float _timer;
@@ -87,6 +88,14 @@ namespace MaxWorlds.Enemies
         /// <summary>Robots still queued for the current (or a past) area, not yet released.</summary>
         public int QueuedCount => _queue?.QueuedCount ?? 0;
 
+        /// <summary>The large-robot count <see cref="FillArea"/> solved for 1-based
+        /// <paramref name="areaIndex"/> (MV-375) — 0 if that area hasn't been filled yet (or was the
+        /// empty entry room). <see cref="MaxWorlds.Pickups.PickupDirector"/> divides its authored
+        /// per-area cell/part budget by this so the drop curve is a designed line instead of an
+        /// emergent side effect of how many robots this area's population solver happened to place.</summary>
+        public int LargeCountForArea(int areaIndex) =>
+            _largeCountByArea.TryGetValue(areaIndex, out int count) ? count : 0;
+
         /// <summary>The live world config this director solves composition against, once
         /// <see cref="ConfigureWorld"/> has been called — exposed so the Settings panel can show the
         /// World &amp; Difficulty dials' authored values as their 100% reference, the same way every
@@ -103,6 +112,7 @@ namespace MaxWorlds.Enemies
             _queue = new AreaSpawnQueue(Mathf.RoundToInt(
                 DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots)));
             _filledAreas.Clear();
+            _largeCountByArea.Clear();
             CurrentArea = 1;
             FillArea(1);
         }
@@ -179,7 +189,9 @@ namespace MaxWorlds.Enemies
 
             if (_worldCfg != null)
             {
-                _queue.FillExact(_worldCfg.SolveComposition(areaIndex));
+                DifficultyEngine.Composition composition = _worldCfg.SolveComposition(areaIndex);
+                _largeCountByArea[areaIndex] = composition.LargeCount;
+                _queue.FillExact(composition);
             }
             else
             {
@@ -190,6 +202,7 @@ namespace MaxWorlds.Enemies
                     DevTuning.Or(DevTuning.LargeToSmallRatio, RobotCompositionTuning.DefaultLargeToSmallRatio),
                     DevTuning.Or(DevTuning.LargeShareDriftPerArea, RobotCompositionTuning.DefaultLargeShareDriftPerArea));
 
+                _largeCountByArea[areaIndex] = large;
                 _queue.FillForArea(areaIndex, large, small,
                     DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
                     DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
