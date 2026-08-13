@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
@@ -126,6 +127,11 @@ namespace MaxWorlds.VFX
         /// <see cref="MaxWorlds.Enemies.HomingMissile"/>'s own tail fins.</summary>
         private static Transform BuildBody(Transform parent)
         {
+            // MV-350 audit: same shape as HomingMissile — neither the Body nor the Knot below is
+            // IDamageable, so with nothing marking them RuntimeSurfaceDirector would claim them the
+            // frame after a throw and overwrite this tint with the generic white world-prop material.
+            parent.gameObject.AddComponent<KeepsOwnMaterial>();
+
             var body = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             body.name = "Body";
             StripCollider(body);

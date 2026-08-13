@@ -115,6 +115,13 @@ namespace MaxWorlds.Enemies
         /// </summary>
         private static void BuildVisual(Transform parent)
         {
+            // MV-350: none of Shaft/WarheadBand/Fin below is IDamageable, so with nothing else marking
+            // them, RuntimeSurfaceDirector's sweep claimed them one frame after spawn and overwrote this
+            // deliberate gunmetal/warn paint with the generic white world-prop material — the same tan
+            // that hit the robots, but on every missile fired rather than only recycled ones. This marks
+            // the whole missile as arriving with its materials attached, exactly like imported art.
+            parent.gameObject.AddComponent<KeepsOwnMaterial>();
+
             Material shaftMat = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
             Material warnMat = MaterialLibrary.Tinted(SurfaceKind.Metal, WarnColor);
 
