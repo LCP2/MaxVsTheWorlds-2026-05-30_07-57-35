@@ -86,6 +86,47 @@ namespace MaxWorlds.Tests.EditMode
                 "projectile.");
         }
 
+        // ---------------------------------------------------------------- MV-377: body vs. grass
+
+        /// <summary>The shaft (plus the two fins, which share its colour) is most of the missile's
+        /// silhouette, so this is "the body" the ticket means. Same separation method as
+        /// <c>ActorReadabilityTests.NoEnemyIsTheColourOfTheScenery</c>: hue distance for a coloured
+        /// background, and it must also sit well clear in luminance, because the AC calls out VALUE
+        /// contrast specifically, not just hue.</summary>
+        [Test]
+        public void TheMissileBody_ReadsAgainstTheGrassItFliesOver()
+        {
+            Color body = HomingMissile.ShaftColorForTests;
+            var palette = BiomePalette.Backyard;
+
+            Assert.LessOrEqual(Mathf.Max(body.r, Mathf.Max(body.g, body.b)), SunlitAlbedo.Ceiling,
+                "the missile body clips under the yard's 1.8x key before it even gets to read as a " +
+                "colour.");
+
+            foreach (var (name, grass) in new[]
+            {
+                ("shaded turf", palette.GroundBase),
+                ("sunlit turf", palette.GroundAccent),
+            })
+            {
+                Color.RGBToHSV(body, out float bodyHue, out _, out _);
+                Color.RGBToHSV(grass, out float grassHue, out _, out _);
+                float hue = Mathf.Abs(bodyHue - grassHue) * 360f;
+                if (hue > 180f) hue = 360f - hue;
+
+                Assert.Greater(hue, 50f,
+                    $"the missile body is the same colour family as the {name} ({hue:0}° apart) — " +
+                    "it will colour-match the grass it's flying over instead of standing out against it.");
+
+                float bodyLum = 0.2126f * body.r + 0.7152f * body.g + 0.0722f * body.b;
+                float grassLum = 0.2126f * grass.r + 0.7152f * grass.g + 0.0722f * grass.b;
+                Assert.Greater(grassLum - bodyLum, 0.08f,
+                    $"the missile body ({bodyLum:0.00}) isn't clearly darker than the {name} " +
+                    $"({grassLum:0.00}) — a hue difference alone isn't the strong VALUE contrast the AC " +
+                    "asks for.");
+            }
+        }
+
         /// <summary>Pins the boundary at the fuel budget itself, and that it is an ordinary, reachable
         /// number rather than 0/negative/absurd (AC3: "reachable in normal play").</summary>
         [TestCase(0f, false)]
