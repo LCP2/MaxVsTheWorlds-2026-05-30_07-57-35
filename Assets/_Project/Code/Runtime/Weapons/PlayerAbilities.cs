@@ -68,6 +68,14 @@ namespace MaxWorlds.Weapons
             DevTuning.Or(DevTuning.WaterBalloonSplashMult, AbilityTuning.DefaultWaterBalloonSplashMult),
             DevTuning.Or(DevTuning.WaterBalloonSplashAreaPerLevel, AbilityTuning.DefaultWaterBalloonSplashAreaPerLevel));
 
+        /// <summary>The lob distance the current Range level actually throws — the same value
+        /// <see cref="TryThrowWaterBalloon"/> lands at, so MV-373's auto-aim scan never picks a
+        /// candidate landing point the real throw wouldn't reach.</summary>
+        public static float ThrowDistance => AbilityTuning.WaterBalloonDistance(
+            WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range),
+            DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance),
+            DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel));
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();

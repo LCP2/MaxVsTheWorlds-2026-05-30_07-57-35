@@ -142,14 +142,31 @@ namespace MaxWorlds.UI
             SetArmed(false);
         }
 
-        private void OnDisable()
+        protected virtual void OnDisable()
         {
             _dragging = false;
             HideAimVisuals();
             SetArmed(false);
         }
 
-        private void SetArmed(bool armed)
+        /// <summary>Aims the joystick at <paramref name="direction"/> without a drag gesture — MV-373's
+        /// auto-fire "moves the joystick" itself before it throws. Moves the visible knob the same way
+        /// <see cref="OnDrag"/> does, at the given <paramref name="distanceFraction"/>, so an auto-aimed
+        /// throw reads on screen exactly like a manually dragged one.</summary>
+        protected void SetAimDirection(Vector3 direction, float distanceFraction)
+        {
+            Vector3 flat = new Vector3(direction.x, 0f, direction.z);
+            if (flat.sqrMagnitude > 1e-6f) _direction = flat.normalized;
+            _distanceFraction = Mathf.Clamp01(distanceFraction);
+
+            if (_knob != null)
+            {
+                Vector2 dir2 = new Vector2(_direction.x, _direction.z);
+                _knob.anchoredPosition = dir2 * (_distanceFraction * KnobRadiusPixels);
+            }
+        }
+
+        protected void SetArmed(bool armed)
         {
             if (_armed == armed) return;
             _armed = armed;
