@@ -39,12 +39,15 @@ namespace MaxWorlds.Weapons
         };
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
-        /// retired by MV-290; Water Balloon removed by MV-370, now a primary add-on).</summary>
+        /// retired by MV-290; Water Balloon and its Auto-fire sub-ability returned to the pool by
+        /// MV-380 after briefly leaving it under MV-370).</summary>
         public static readonly AbilityKind[] AllAbilityKinds =
         {
             AbilityKind.Speed,
             AbilityKind.Teleport,
             AbilityKind.WeaponCooldown,
+            AbilityKind.WaterBalloon,
+            AbilityKind.WaterBalloonAutoFire,
         };
 
         /// <summary>The Water Balloon primary add-on's tracks (MV-370), in the order the weapons
@@ -158,7 +161,9 @@ namespace MaxWorlds.Weapons
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
         /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Speed 4,
-        /// Teleport 4, Weapon Cooldown 5.</summary>
+        /// Teleport 4, Weapon Cooldown 5. Water Balloon and Auto-fire (MV-380) are boolean unlocks —
+        /// cap 1, the default — since their own magnitudes live on <see cref="WaterBalloonTrackKind"/>
+        /// or a plain on/off toggle, not a leveled ability.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
@@ -214,6 +219,8 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Speed: return "SPEED";
                 case AbilityKind.Teleport: return "TELEPORT";
                 case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
+                case AbilityKind.WaterBalloon: return "WATER BALLOON";
+                case AbilityKind.WaterBalloonAutoFire: return "AUTO-FIRE";
                 default: return kind.ToString();
             }
         }
@@ -240,6 +247,8 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
+                case AbilityKind.WaterBalloon: return "WB";
+                case AbilityKind.WaterBalloonAutoFire: return "AF";
                 default: return "?";
             }
         }
@@ -254,6 +263,8 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Speed: return "Passive move-speed boost.";
                 case AbilityKind.Teleport: return "Blink to a nearby spot, dodging in an instant.";
                 case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";
+                case AbilityKind.WaterBalloon: return "Unlocks the Water Balloon throw — splash damage that halts robots.";
+                case AbilityKind.WaterBalloonAutoFire: return "Water Balloon aims and fires itself at the best cluster in range.";
                 default: return string.Empty;
             }
         }

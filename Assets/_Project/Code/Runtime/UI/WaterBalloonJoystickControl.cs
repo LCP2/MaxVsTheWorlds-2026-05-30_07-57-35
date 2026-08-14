@@ -92,11 +92,16 @@ namespace MaxWorlds.UI
         /// <summary>MV-373: the balloon aims and fires itself whenever it's ready and something's in
         /// range — the payoff for investing in Repeat Fire. Never fights a manual drag (<see cref="AbilityJoystickControlBase.IsAiming"/>)
         /// or a reveal already in flight, and the O(n^2) target scan only ever runs once the ability is
-        /// actually off cooldown with a cell to spend — not every frame regardless of state.</summary>
+        /// actually off cooldown with a cell to spend — not every frame regardless of state. MV-380:
+        /// gated on its OWN acquisition (a prerequisite chain on top of the base Water Balloon ability
+        /// — see <see cref="WeaponSystemState.Unacquired"/>) plus the player's own on/off toggle
+        /// (<see cref="WeaponSystemState.WaterBalloonAutoFireEnabled"/>), so auto-fire never runs
+        /// before it's unlocked or while the player has switched it off.</summary>
         private void Update()
         {
             if (_autoAiming || IsAiming) return;
             if (!AbilityReady || _origin == null) return;
+            if (!WeaponSystemState.IsAcquired(AbilityKind.WaterBalloonAutoFire) || !WeaponSystemState.WaterBalloonAutoFireEnabled) return;
 
             if (_autoRetryCooldown > 0f)
             {

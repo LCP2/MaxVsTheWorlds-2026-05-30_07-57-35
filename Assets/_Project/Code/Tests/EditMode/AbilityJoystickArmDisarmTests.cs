@@ -39,7 +39,8 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Reset();
             PickupWallet.Reset();
-            PickupWallet.SetPowerCells(10);   // MV-370: Water Balloon is a primary add-on now, gated on cells not acquisition
+            PickupWallet.SetPowerCells(10);
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);   // MV-380: restored acquisition gate, same as Teleport
             WeaponSystemState.Acquire(AbilityKind.Teleport);
 
             _max = new GameObject("Max", typeof(CharacterController), typeof(PlayerController));

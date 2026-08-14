@@ -18,8 +18,9 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FreshStateDrawsTheMaxCandidateCount()
         {
-            // MV-370: the pool is exactly 3 abilities now (Water Balloon left it), same as
-            // AbilityDraft.MaxCandidates — a fresh draw offers the whole pool.
+            // MV-380: the pool is 5 abilities (WaterBalloonAutoFire excluded pre-WaterBalloon, so 4
+            // actually offered) — still comfortably above AbilityDraft.MaxCandidates, so a fresh draw
+            // is capped at the max rather than the whole pool.
             Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(AbilityDraft.MaxCandidates));
         }
 
@@ -51,10 +52,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void DrawShrinksAsThePoolDrains()
         {
+            // MV-380: 5 abilities total, but WaterBalloonAutoFire stays excluded until WaterBalloon is
+            // owned. Acquiring the other 3 leaves exactly WaterBalloon itself — 1 candidate, below
+            // MaxCandidates.
             WeaponSystemState.Acquire(AbilityKind.Speed);
-            // MV-370: 3 abilities total, 1 owned -> 2 left, below MaxCandidates.
+            WeaponSystemState.Acquire(AbilityKind.Teleport);
+            WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
 
-            Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(2));
+            Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(1));
         }
 
         [Test]

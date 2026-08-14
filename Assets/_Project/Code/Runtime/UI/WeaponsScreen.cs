@@ -22,11 +22,12 @@ namespace MaxWorlds.UI
     /// overflowing over its icon), a narrow hero column on the left (Max's own key art
     /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
     /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid, a "PRIMARY
-    /// ADD-ONS" 1x3 row for Water Balloon's tracks (MV-370, moved here out of the ability pool), and
-    /// the abilities grid. The abilities grid always shows all its slots (MV-262; MV-370 shrank the
-    /// pool from four to three when Water Balloon left it): owned ones by name, the rest as greyed,
-    /// unnamed placeholder tiles, so the count of "more to find" reads at a glance instead of needing
-    /// a text list. There is no bottom spendbar/instructional line any more — the parts count lives
+    /// ADD-ONS" 1x3 row for Water Balloon's own three upgrade tracks (MV-370's magnitudes, unchanged),
+    /// and the abilities grid. The abilities grid always shows all its slots (MV-262; MV-380 grew the
+    /// pool back to five — Water Balloon and its Auto-fire sub-ability returned to it — after MV-370
+    /// had shrunk it to three): owned ones by name, the rest as greyed, unnamed placeholder tiles, so
+    /// the count of "more to find" reads at a glance instead of needing a text list. There is no
+    /// bottom spendbar/instructional line any more — the parts count lives
     /// solely in the top-bar chip. Levels render as pip/segment bars, not text —
     /// <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon + glyph, name, pip
     /// bar, + button) for all three sections so none of them can ever drift apart in style.
@@ -79,7 +80,8 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 3;    // WeaponCatalog.AllAbilityKinds.Length — the catalog's fixed pool (MV-370: Water Balloon left it, 4 -> 3)
+        private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length (MV-380: Water Balloon + its Auto-fire sub-ability returned to the shed pool, 3 -> 5)
+        private const int AbilityColumns = 3;    // fixed column count (matches the Primary Add-ons row below) — MaxAbilityRows now wraps past it into a 2nd row instead of growing the row width
         private const int WaterBalloonTrackCount = 3;   // WeaponCatalog.AllWaterBalloonTrackKinds.Length (MV-370)
 
         // MV-367: Range/Spread's cap grew from 6 to 9, breaking the old "every row gets the same fixed
@@ -93,15 +95,14 @@ namespace MaxWorlds.UI
         // MV-262: the abilities grid is a fixed-slot grid regardless of how many are owned, so unlike
         // the old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
         // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols) + add-ons header + add-ons grid
-        // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-370:
-        // 3 abilities left in the pool, 1 row of 3 cols) all fit inside the content budget below the
-        // top bar (there's no bottom spendbar any more) with room to spare for the hero-sized
-        // primary-name block above the grids — see the arithmetic in
+        // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-380:
+        // 5 abilities in the pool again at a fixed 3 columns, so 2 rows not 1) all fit inside the
+        // content budget below the top bar (there's no bottom spendbar any more) with room to spare for
+        // the hero-sized primary-name block above the grids — see the arithmetic in
         // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildWaterBalloonSection/BuildAbilitiesSection;
-        // there's no runtime overflow check, so this is verified by hand rather than measured. MV-370
-        // moved both the add-ons and the abilities grid to single 3-column rows specifically to keep
-        // the budget healthy — a 2-column 2-row abilities grid (its old shape) plus a new 2-row add-ons
-        // section would have overflowed RefH's 1080 budget.
+        // there's no runtime overflow check, so this is verified by hand rather than measured. Column
+        // count stays fixed at 3 (not widened to 5) specifically so the pip budget per row — sized once
+        // for a 3-column card in BuildGridRow — never has to squeeze into a narrower card.
         private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
@@ -817,9 +818,10 @@ namespace MaxWorlds.UI
         /// <summary>MV-262: always builds all ability slots as active rows (never SetActive(false)
         /// past the acquired count) — <see cref="Refresh"/>/<see cref="SetAbilityLocked"/> then decide
         /// per-slot whether a row shows real data or a greyed, unnamed placeholder. There is no
-        /// separate placeholder row any more; the grid itself is the "more to find" tell. MV-370: a
-        /// single 3-column row now the pool shrank to three (Water Balloon left it for the Primary
-        /// Add-ons section above) — same shape change as that section.</summary>
+        /// separate placeholder row any more; the grid itself is the "more to find" tell. MV-380: the
+        /// pool is back up to five (Water Balloon + Auto-fire returned to it), so at a fixed
+        /// <see cref="AbilityColumns"/> of 3 this now wraps into 2 rows rather than the single row
+        /// MV-370's smaller 3-ability pool fit.</summary>
         private void BuildAbilitiesSection(RectTransform column, float y)
         {
             _abilitiesHeaderText = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
@@ -838,7 +840,7 @@ namespace MaxWorlds.UI
                 // WeaponSystemState.Acquired assigns it, MV-333), so unlike the track rows above this
                 // can't size to one specific kind's cap — use the largest cap any ability actually has
                 // (WeaponCooldown, 5; see WeaponCatalog.MaxLevel(AbilityKind)).
-                var r = BuildGridRow(column, "Ability Row", i, MaxAbilityRows, gridTop, RowHeight, RowGap, AbilityIconBg, 5);
+                var r = BuildGridRow(column, "Ability Row", i, AbilityColumns, gridTop, RowHeight, RowGap, AbilityIconBg, 5);
                 _abilityName[i] = r.Name;
                 _abilityPips[i] = r.Pips;
                 _abilityButton[i] = r.PlusButton;
@@ -1011,6 +1013,8 @@ namespace MaxWorlds.UI
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
+                case AbilityKind.WaterBalloon: return "WB";
+                case AbilityKind.WaterBalloonAutoFire: return "AF";
                 default: return "?";
             }
         }

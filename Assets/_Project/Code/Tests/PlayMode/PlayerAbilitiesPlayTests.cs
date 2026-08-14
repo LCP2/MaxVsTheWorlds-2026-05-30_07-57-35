@@ -62,11 +62,22 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- Water Balloon
 
         [UnityTest]
+        public IEnumerator UnacquiredWaterBalloonNeverThrowsEvenWithCellsBanked_MV380()
+        {
+            // MV-380: restores the acquisition gate MV-370 had dropped — a full cell bank must not be
+            // enough on its own.
+            PickupWallet.SetPowerCells(10);
+            Assert.IsNotNull(_abilities, "PlayerController must self-attach PlayerAbilities (WV-231)");
+            Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False);
+            yield return null;
+        }
+
+        [UnityTest]
         public IEnumerator WaterBalloonWithNoCellsNeverThrows_MV370()
         {
-            // MV-370: Water Balloon is a primary add-on now, always available — SetUp's PickupWallet.Reset()
-            // leaves the bank at 0 cells, which is what must block the throw here, not acquisition.
-            Assert.IsNotNull(_abilities, "PlayerController must self-attach PlayerAbilities (WV-231)");
+            // Acquired but the bank is empty (SetUp's PickupWallet.Reset() leaves it at 0) — cells are
+            // what must block the throw here, not acquisition.
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False);
             yield return null;
         }
@@ -74,6 +85,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator ThrowingSpendsOneCellAndStartsTheCooldown_MV370()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(1);
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
@@ -86,6 +98,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator LandingSplashesHalfTheBruisersMaxHealthAndHaltsIt()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
 
             float level1Distance = AbilityTuning.WaterBalloonDistance(
@@ -111,6 +124,7 @@ namespace MaxWorlds.Tests.PlayMode
             // MV-292: playtest found Water Balloon "works once" — a real second activation, not just
             // the first, is the regression this locks in. A short DevTuning cooldown keeps the real
             // (Time.deltaTime-driven) wait fast.
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             DevTuning.WaterBalloonCooldownSeconds = 0.05f;
             PickupWallet.SetPowerCells(10);
 
@@ -152,6 +166,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator RangeLevelThrowsFartherThanLevel1_MV370()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
             WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range);
 

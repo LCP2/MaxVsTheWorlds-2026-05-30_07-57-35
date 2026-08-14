@@ -80,13 +80,22 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- appear-on-acquire
 
         [UnityTest]
-        public IEnumerator WaterBalloonIsVisibleFromRunStartTeleportIsHiddenUntilAcquired_MV370()
+        public IEnumerator BothWaterBalloonAndTeleportAreHiddenUntilAcquired_MV380()
         {
-            // MV-370: Water Balloon is a primary add-on now, visible from run start like the RCDA
-            // itself — unlike Teleport, which is still a shed-acquired AbilityKind.
-            Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.True);
+            // MV-380: restored Water Balloon's acquisition gate after MV-370 briefly dropped it — both
+            // controls now behave the same way, hidden until their own AbilityKind is owned.
+            Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.False);
             Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.False);
             yield return null;
+        }
+
+        [UnityTest]
+        public IEnumerator WaterBalloonControlAppearsTheMomentItsAbilityIsAcquired_MV380()
+        {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            yield return null;
+
+            Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.True);
         }
 
         [UnityTest]
@@ -132,8 +141,9 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator PressingTheJoystickWithNoCellsBankedDoesNothing_MV370()
         {
-            // MV-370: Water Balloon is always owned now — SetUp's PickupWallet.Reset() leaves the bank
-            // at 0 cells, which is what must gate the press, not acquisition.
+            // Acquired but SetUp's PickupWallet.Reset() leaves the bank at 0 cells, which is what must
+            // gate the press here, not acquisition.
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
             Assert.IsNotNull(control, "the Water Balloon joystick's control component is missing");
 
@@ -146,6 +156,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator DraggingAndReleasingThrowsWhenReady()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
@@ -168,6 +179,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator ATapWithNoRealDragDoesNotThrow()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
@@ -248,6 +260,7 @@ namespace MaxWorlds.Tests.PlayMode
             // A short DevTuning cooldown keeps the wait real (Time.deltaTime-driven) without the test
             // sitting through the authored 3s — this is the exact regression MV-292 exists for: prior
             // playtest found Water Balloon "worked once" through the real on-screen control.
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             DevTuning.WaterBalloonCooldownSeconds = 0.05f;
             PickupWallet.SetPowerCells(10);
             yield return null;

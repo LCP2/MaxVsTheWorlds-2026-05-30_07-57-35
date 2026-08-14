@@ -88,13 +88,37 @@ namespace MaxWorlds.Weapons
         public static IEnumerable<AbilityKind> Acquired => s_acquisitionOrder;
 
         /// <summary>Abilities Max doesn't own yet — the pool a destroyed shed draws from (WV-229):
-        /// "one random ability Max doesn't already own".</summary>
+        /// "one random ability Max doesn't already own". MV-380: Auto-fire is a prerequisite chain —
+        /// it's never offered/drawn until <see cref="AbilityKind.WaterBalloon"/> itself is already
+        /// owned, so a shed can't hand out the auto-aim upgrade before the ability it augments.</summary>
         public static IEnumerable<AbilityKind> Unacquired
         {
             get
             {
                 foreach (var kind in WeaponCatalog.AllAbilityKinds)
-                    if (!IsAcquired(kind)) yield return kind;
+                {
+                    if (IsAcquired(kind)) continue;
+                    if (kind == AbilityKind.WaterBalloonAutoFire && !IsAcquired(AbilityKind.WaterBalloon)) continue;
+                    yield return kind;
+                }
+            }
+        }
+
+        private static bool s_waterBalloonAutoFireEnabled = true;
+
+        /// <summary>Player-facing on/off toggle for Water Balloon's auto-fire (MV-380 AC3) — separate
+        /// from <see cref="AbilityKind.WaterBalloonAutoFire"/> being OWNED at all: acquiring the
+        /// upgrade turns auto-fire on by default (the MV-373 payoff for investing in it), but the
+        /// player can switch it off without losing the unlock. Has no effect while the ability itself
+        /// isn't acquired — <see cref="MaxWorlds.UI.WaterBalloonJoystickControl"/> checks both.</summary>
+        public static bool WaterBalloonAutoFireEnabled
+        {
+            get => s_waterBalloonAutoFireEnabled;
+            set
+            {
+                if (s_waterBalloonAutoFireEnabled == value) return;
+                s_waterBalloonAutoFireEnabled = value;
+                Changed?.Invoke();
             }
         }
 
@@ -150,6 +174,7 @@ namespace MaxWorlds.Weapons
             foreach (var kind in WeaponCatalog.AllAbilityKinds) s_abilityLevels[kind] = 0;
             foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds) s_waterBalloonTrackLevels[kind] = 1;
             s_acquisitionOrder.Clear();
+            s_waterBalloonAutoFireEnabled = true;
         }
     }
 }
