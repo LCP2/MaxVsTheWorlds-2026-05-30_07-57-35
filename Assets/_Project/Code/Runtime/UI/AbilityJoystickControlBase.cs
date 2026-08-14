@@ -78,8 +78,18 @@ namespace MaxWorlds.UI
             if (_rings != null) _restingRingAlpha = _rings.color.a;
         }
 
-        /// <summary>False while the ability is unowned or on cooldown — a press is simply ignored, the
-        /// same gating language both concrete controls already used before this was factored out.</summary>
+        /// <summary>True once the ability itself is owned. Gates whether a press does anything at all —
+        /// the control isn't even on screen while unowned (WV-240's own acquisition gate hides the whole
+        /// joystick), so a press reaching here is a defensive no-op, not a readability concern.</summary>
+        protected abstract bool IsOwned { get; }
+
+        /// <summary>Owned AND currently spendable — off cooldown and (for Water Balloon) a cell banked.
+        /// MV-381: no longer gates whether a press shows the aim preview — a press on cooldown or out of
+        /// cells still previews the arc/circle (dimmed red by <see cref="ApplyArmedTint"/>) because the
+        /// control IS visible and being touched in that state, and answering a press with total silence
+        /// was exactly the bug ("no visible target circle/aim indicator") a player out of cells or on
+        /// cooldown would hit on every single press. Only <see cref="Fire"/> at release is still gated on
+        /// this.</summary>
         protected abstract bool AbilityReady { get; }
 
         /// <summary>Show whatever aim preview this ability draws (arc, landing circle, reticle...).</summary>
@@ -99,7 +109,7 @@ namespace MaxWorlds.UI
 
         public void OnPointerDown(PointerEventData eventData)
         {
-            if (!AbilityReady) return;
+            if (!IsOwned) return;
 
             _dragging = true;
             _pressScreenPos = eventData.position;
@@ -137,8 +147,10 @@ namespace MaxWorlds.UI
             HideAimVisuals();
 
             // MV-372: released while disarmed (thumb back at/near centre) — abort. No fire, no
-            // cooldown, no cost of any kind.
-            if (_armed) Fire(_direction);
+            // cooldown, no cost of any kind. MV-381: also abort (no fire) if the ability itself
+            // isn't actually spendable right now — the preview was allowed to show, but the throw
+            // still can't happen on cooldown or with no cell banked.
+            if (_armed && AbilityReady) Fire(_direction);
             SetArmed(false);
         }
 
@@ -185,22 +197,27 @@ namespace MaxWorlds.UI
 
         private static MaterialPropertyBlock s_tintBlock;
 
-        /// <summary>Tints a world-space aim-mesh renderer to match the armed state (MV-372 AC5) — full
-        /// bright when armed, dimmed when not, on top of whatever per-vertex gradient the mesh itself
-        /// already bakes in (e.g. <see cref="MaxWorlds.VFX.WaterBalloonAimMesh"/>'s near/far fade). Both
-        /// concrete controls' arc/circle renderers share the same cached white/alpha-blend material
+        /// <summary>Tints a world-space aim-mesh renderer to match the armed/ready state (MV-372 AC5,
+        /// MV-381) — full bright white when armed, dimmed white when merely owned-and-ready, and a dim
+        /// red wash when <paramref name="ready"/> is false (on cooldown or no cell banked) so a press in
+        /// that state still answers with a preview rather than silence, while visibly reading as "won't
+        /// fire yet" rather than as fully armed. Layered on top of whatever per-vertex gradient the mesh
+        /// itself already bakes in (e.g. <see cref="MaxWorlds.VFX.WaterBalloonAimMesh"/>'s near/far fade).
+        /// Both concrete controls' arc/circle renderers share the same cached white/alpha-blend material
         /// instance (<see cref="MaxWorlds.VFX.VfxMaterials.AlphaBlend"/>) — going through a
         /// <see cref="MaterialPropertyBlock"/> tints only this renderer's draw call rather than every
         /// renderer sharing that material (which <c>renderer.material</c> would also do, on top of
         /// instantiating and leaking a new material every edit-mode call).</summary>
-        protected static void ApplyArmedTint(GameObject meshGo, bool armed)
+        protected static void ApplyArmedTint(GameObject meshGo, bool armed, bool ready = true)
         {
             if (meshGo == null) return;
             var renderer = meshGo.GetComponent<MeshRenderer>();
             if (renderer == null) return;
 
             s_tintBlock ??= new MaterialPropertyBlock();
-            Color tint = new Color(1f, 1f, 1f, armed ? 1f : 0.4f);
+            Color tint = ready
+                ? new Color(1f, 1f, 1f, armed ? 1f : 0.4f)
+                : new Color(1f, 0.3f, 0.25f, 0.35f);
             renderer.GetPropertyBlock(s_tintBlock);
             s_tintBlock.SetColor("_BaseColor", tint);
             s_tintBlock.SetColor("_Color", tint);

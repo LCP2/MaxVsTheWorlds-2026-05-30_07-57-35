@@ -73,6 +73,8 @@ namespace MaxWorlds.UI
             }
         }
 
+        protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon);
+
         protected override bool AbilityReady => _abilities != null && _abilities.WaterBalloonReady;
 
         protected override void Fire(Vector3 direction) => _abilities?.TryThrowWaterBalloon(direction);
@@ -211,8 +213,8 @@ namespace MaxWorlds.UI
             _circleGo.GetComponent<MeshFilter>().sharedMesh =
                 WaterBalloonAimMesh.BuildLandingCircle(PlayerAbilities.SplashRadius);
 
-            ApplyArmedTint(_arcGo, IsArmed);
-            ApplyArmedTint(_circleGo, IsArmed);
+            ApplyArmedTint(_arcGo, IsArmed, AbilityReady);
+            ApplyArmedTint(_circleGo, IsArmed, AbilityReady);
         }
     }
 }

@@ -167,6 +167,37 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void WaterBalloon_PressWithNoCellsBankedStillShowsThePreview()
+        {
+            // MV-381: MV-370 used to make a press on an owned-but-unspendable control a total no-op,
+            // which read as "there's no aim indicator at all" to a player pressing a control that's
+            // visibly on screen. The preview must still show; only the throw stays gated.
+            PickupWallet.SetPowerCells(0);
+            var control = NewWaterBalloonControl();
+
+            control.OnPointerDown(At(Vector2.zero));
+
+            Assert.That(control.IsAiming, Is.True, "an owned control with no cell to spend must still preview the aim");
+            Assert.That(control.LandingCircleVisible, Is.True, "the landing circle itself must show, not just the aiming flag");
+        }
+
+        [Test]
+        public void WaterBalloon_ReleasingArmedWithNoCellsBankedNeverThrows()
+        {
+            PickupWallet.SetPowerCells(0);
+            var control = NewWaterBalloonControl();
+
+            control.OnPointerDown(At(Vector2.zero));
+            control.OnDrag(At(new Vector2(OverThresholdPx, 0f)));
+            Assert.That(control.IsArmed, Is.True, "precondition: the drag armed the control");
+
+            control.OnPointerUp(At(new Vector2(OverThresholdPx, 0f)));
+
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0),
+                "releasing armed with no cell banked must never spend a cell it doesn't have");
+        }
+
+        [Test]
         public void WaterBalloon_RingsBrightenWhenArmedAndRestoreExactRestingAlphaWhenDisarmed()
         {
             var control = NewWaterBalloonControl();
@@ -221,6 +252,23 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(Abilities.TeleportReady, Is.False,
                 "releasing while armed must blink and start the cooldown, same as before MV-372");
+        }
+
+        [Test]
+        public void Teleport_PressWhileOnCooldownStillShowsThePreview()
+        {
+            // MV-381: same fix as Water Balloon, through the shared base — an owned control that's
+            // merely unspendable right now (on cooldown) must still preview on press, not go silent.
+            var control = NewTeleportControl();
+            control.OnPointerDown(At(Vector2.zero));
+            control.OnDrag(At(new Vector2(OverThresholdPx, 0f)));
+            control.OnPointerUp(At(new Vector2(OverThresholdPx, 0f)));   // first blink starts the cooldown
+            Assert.That(Abilities.TeleportReady, Is.False, "precondition: the first blink started the cooldown");
+
+            control.OnPointerDown(At(Vector2.zero));
+
+            Assert.That(control.IsAiming, Is.True,
+                "a press while on cooldown must still preview the aim, not answer with silence");
         }
     }
 }
