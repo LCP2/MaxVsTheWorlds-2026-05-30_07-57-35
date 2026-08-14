@@ -137,7 +137,9 @@ namespace MaxWorlds.Player
             _verticalVel -= gravity * dt;
 
             Vector3 velocity = planarVel + Vector3.up * _verticalVel;
-            _cc.Move(velocity * dt);
+            // MV-386: SafeMove, not cc.Move directly -- a stall-inflated dt can otherwise tunnel
+            // Max straight through a gate/fence in one oversized Move() call.
+            CharacterControllerMotion.SafeMove(_cc, velocity * dt);
 
             if (_facing.sqrMagnitude > 0.001f)
             {
