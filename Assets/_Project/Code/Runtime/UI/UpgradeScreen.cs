@@ -35,10 +35,11 @@ namespace MaxWorlds.UI
 
         private const float RefW = 1920f, RefH = 1080f;
 
-        // Near-opaque, same fix as the Home screen's save-slots redesign (YT-174): this has to read as
-        // its own dedicated screen, not a thin overlay you can see the live arena moving behind (Lee's
-        // 0.3.26 feedback, repeated on this exact screen as YT-176).
-        private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
+        // Fully opaque (MV-383): 0.97 alpha let bright HUD/WeaponsScreen elements (the "MAX" hero label,
+        // red HUD glow) show through the ability draft-pick, which layers on top of an already-open
+        // WeaponsScreen. This screen has to read as its own dedicated screen, not a thin overlay you can
+        // see anything move behind (Lee's 0.3.26 feedback, repeated as YT-176, then again as MV-383).
+        private static readonly Color Scrim = new Color(0f, 0f, 0f, 1f);
         private static readonly Color PanelColor = new Color(0.06f, 0.08f, 0.10f, 0.98f);
         private static readonly Color CardColor = new Color(0.12f, 0.14f, 0.17f, 1f);
         private static readonly Color TextColor = Color.white;
@@ -87,6 +88,8 @@ namespace MaxWorlds.UI
         private readonly Text[] _cardFamily = new Text[MaxCandidates];
         private readonly Text[] _cardName = new Text[MaxCandidates];
         private readonly Text[] _cardEffect = new Text[MaxCandidates];
+        private readonly Image[] _cardIcon = new Image[MaxCandidates];       // MV-383: ability icon tile
+        private readonly Text[] _cardIconGlyph = new Text[MaxCandidates];
         private int _candidateCount;
         private System.Action<int> _onCandidateChosen;
         private bool _choiceMode;
@@ -100,13 +103,15 @@ namespace MaxWorlds.UI
             public readonly Color Accent;
             public readonly string Tag;
             public readonly string Effect;
+            public readonly string IconGlyph;   // MV-383: short glyph for the card's icon tile; null hides the tile (parts have no icon art yet)
 
-            public CandidateCard(string name, Color accent, string tag, string effect)
+            public CandidateCard(string name, Color accent, string tag, string effect, string iconGlyph = null)
             {
                 Name = name;
                 Accent = accent;
                 Tag = tag;
                 Effect = effect;
+                IconGlyph = iconGlyph;
             }
         }
 
@@ -299,8 +304,10 @@ namespace MaxWorlds.UI
             var cards = new CandidateCard[candidates.Length];
             for (int i = 0; i < candidates.Length; i++)
             {
+                // MV-383: the glyph now lives in the icon tile, so the top tag reads as a category
+                // (matching the parts cards' family tag) instead of repeating the same glyph as text.
                 cards[i] = new CandidateCard(WeaponCatalog.DisplayName(candidates[i]), AbilityCardAccent,
-                    WeaponCatalog.Glyph(candidates[i]), WeaponCatalog.EffectLine(candidates[i]));
+                    "ABILITY", WeaponCatalog.EffectLine(candidates[i]), WeaponCatalog.Glyph(candidates[i]));
             }
 
             AbilityKind[] picked = candidates;
@@ -355,6 +362,18 @@ namespace MaxWorlds.UI
                 _cardName[i].color = cards[i].Accent;
                 _cardFamily[i].text = cards[i].Tag;
                 _cardEffect[i].text = cards[i].Effect;
+
+                // MV-383: the icon tile only lights up for cards that supply a glyph (abilities); parts
+                // cards leave it hidden and keep their existing text-only layout.
+                bool hasIcon = !string.IsNullOrEmpty(cards[i].IconGlyph);
+                _cardIcon[i].gameObject.SetActive(hasIcon);
+                if (hasIcon)
+                {
+                    var tint = cards[i].Accent; tint.a = 0.22f;
+                    _cardIcon[i].color = tint;
+                    _cardIconGlyph[i].text = cards[i].IconGlyph;
+                    _cardIconGlyph[i].color = cards[i].Accent;
+                }
             }
         }
 
@@ -639,30 +658,46 @@ namespace MaxWorlds.UI
                 int index = i;   // capture by value, not the loop variable
                 button.onClick.AddListener(() => ChooseCandidate(index));
 
+                // MV-383: icon tile, hidden by ShowCandidates for cards with no glyph (parts). Sized/
+                // positioned first so family/name/effect below it can shift down to make room.
+                var icon = AddImage(bg.rectTransform, HudTextures.RoundedBox(24, 0.4f), Color.clear, "Icon");
+                Anchor(icon.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+                icon.rectTransform.sizeDelta = new Vector2(84f, 84f);
+                icon.rectTransform.anchoredPosition = new Vector2(0f, -16f);
+                icon.type = Image.Type.Sliced;
+                icon.raycastTarget = false;
+
+                var iconGlyph = AddText(icon.rectTransform, 26, TextColor, TextAnchor.MiddleCenter);
+                Stretch(iconGlyph.rectTransform);
+                iconGlyph.fontStyle = FontStyle.Bold;
+                iconGlyph.raycastTarget = false;
+
                 var family = AddText(bg.rectTransform, 24, Dim, TextAnchor.UpperCenter);
                 family.fontStyle = FontStyle.Bold;
                 Anchor(family.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
                 family.rectTransform.sizeDelta = new Vector2(cardW - 24f, 34f);
-                family.rectTransform.anchoredPosition = new Vector2(0f, -22f);
+                family.rectTransform.anchoredPosition = new Vector2(0f, -108f);
 
                 var name = AddText(bg.rectTransform, 28, TextColor, TextAnchor.UpperCenter);
                 name.fontStyle = FontStyle.Bold;
                 name.horizontalOverflow = HorizontalWrapMode.Wrap;
                 Anchor(name.rectTransform, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-                name.rectTransform.sizeDelta = new Vector2(cardW - 24f, 100f);
-                name.rectTransform.anchoredPosition = new Vector2(0f, -64f);
+                name.rectTransform.sizeDelta = new Vector2(cardW - 24f, 80f);
+                name.rectTransform.anchoredPosition = new Vector2(0f, -148f);
 
                 var effect = AddText(bg.rectTransform, 22, Dim, TextAnchor.MiddleCenter);
                 effect.horizontalOverflow = HorizontalWrapMode.Wrap;
                 Anchor(effect.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-                effect.rectTransform.sizeDelta = new Vector2(cardW - 32f, 220f);
-                effect.rectTransform.anchoredPosition = new Vector2(0f, 6f);
+                effect.rectTransform.sizeDelta = new Vector2(cardW - 32f, 190f);
+                effect.rectTransform.anchoredPosition = new Vector2(0f, -109f);
 
                 _cardBg[i] = bg;
                 _cardButton[i] = button;
                 _cardFamily[i] = family;
                 _cardName[i] = name;
                 _cardEffect[i] = effect;
+                _cardIcon[i] = icon;
+                _cardIconGlyph[i] = iconGlyph;
             }
 
             _choiceRoot.gameObject.SetActive(false);
