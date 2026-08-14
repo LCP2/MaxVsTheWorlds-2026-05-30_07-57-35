@@ -379,7 +379,7 @@ namespace MaxWorlds.Enemies
         private void ApplyKnockback(float dt)
         {
             if (_knockback.sqrMagnitude < 0.0004f) { _knockback = Vector3.zero; return; }
-            _cc.Move(_knockback * dt);
+            CharacterControllerMotion.SafeMove(_cc, _knockback * dt); // MV-386: no oversized single Move()
             _knockback = Vector3.MoveTowards(_knockback, Vector3.zero, knockbackDecay * dt);
         }
 
@@ -606,7 +606,7 @@ namespace MaxWorlds.Enemies
 
         private void TickMeleeLunge(float dt)
         {
-            _cc.Move(_lungeDir * lungeSpeed * dt);
+            CharacterControllerMotion.SafeMove(_cc, _lungeDir * lungeSpeed * dt); // MV-386
             if (!_dealtThisLunge) TryContactDamage();
             if (_stateTimer >= lungeTime)
             {
@@ -751,7 +751,7 @@ namespace MaxWorlds.Enemies
             if (dir.sqrMagnitude > 0.001f)
             {
                 transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
-                _cc.Move(dir * speed * dt);
+                CharacterControllerMotion.SafeMove(_cc, dir * speed * dt); // MV-386
             }
         }
 
@@ -771,7 +771,7 @@ namespace MaxWorlds.Enemies
         {
             if (_cc.isGrounded && _verticalVel < 0f) _verticalVel = -2f;
             _verticalVel -= gravity * dt;
-            _cc.Move(Vector3.up * _verticalVel * dt);
+            CharacterControllerMotion.SafeMove(_cc, Vector3.up * _verticalVel * dt); // MV-386
         }
 
         // --- IDamageable ---

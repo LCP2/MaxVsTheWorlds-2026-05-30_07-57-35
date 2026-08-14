@@ -397,13 +397,14 @@ namespace MaxWorlds.Bosses
             // a telegraphed attack whose dodge window is timed against it (YT-105).
             float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
             // Approach until at desiredRange, then hold — keeps the boss circling, not hugging.
-            if (dist > BossTuning.DesiredRange + 0.5f) _cc.Move(dir * move * speedScale * dt);
-            else if (dist < BossTuning.DesiredRange - 0.5f) _cc.Move(-dir * move * speedScale * dt);
+            // MV-386: SafeMove, not cc.Move directly -- same stall-tunneling fix as PlayerController/RobotEnemy.
+            if (dist > BossTuning.DesiredRange + 0.5f) CharacterControllerMotion.SafeMove(_cc, dir * move * speedScale * dt);
+            else if (dist < BossTuning.DesiredRange - 0.5f) CharacterControllerMotion.SafeMove(_cc, -dir * move * speedScale * dt);
         }
 
         private void DoCharge(float dt, float speedScale)
         {
-            _cc.Move(_chargeDir * BossTuning.ChargeSpeed * speedScale * dt);
+            CharacterControllerMotion.SafeMove(_cc, _chargeDir * BossTuning.ChargeSpeed * speedScale * dt); // MV-386
 
             _grassTimer -= dt;
             if (_grassTimer <= 0f)
