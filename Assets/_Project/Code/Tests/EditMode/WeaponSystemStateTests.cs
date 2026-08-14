@@ -39,7 +39,12 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(WeaponSystemState.AbilityLevel(kind), Is.EqualTo(0));
             }
 
-            CollectionAssert.AreEquivalent(WeaponCatalog.AllAbilityKinds, WeaponSystemState.Unacquired);
+            // MV-380: WaterBalloonAutoFire is a prerequisite chain — Unacquired never offers it until
+            // WaterBalloon itself is owned, so at a fresh run it's excluded from the pool even though
+            // nothing is acquired yet.
+            var expectedUnacquired = new System.Collections.Generic.List<AbilityKind>(WeaponCatalog.AllAbilityKinds);
+            expectedUnacquired.Remove(AbilityKind.WaterBalloonAutoFire);
+            CollectionAssert.AreEquivalent(expectedUnacquired, WeaponSystemState.Unacquired);
             Assert.That(WeaponSystemState.Acquired, Is.Empty);
         }
 
@@ -172,14 +177,60 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AcquiredAndUnacquiredPartitionAllThreeAbilities_MV370()
+        public void AcquiredAndUnacquiredPartitionAllFiveAbilities_MV380()
         {
             WeaponSystemState.Acquire(AbilityKind.Speed);
 
             CollectionAssert.AreEquivalent(new[] { AbilityKind.Speed }, WeaponSystemState.Acquired);
+            // WaterBalloonAutoFire stays out of Unacquired too — its prerequisite (WaterBalloon) isn't
+            // owned yet.
             CollectionAssert.AreEquivalent(
-                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown },
+                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon },
                 WeaponSystemState.Unacquired);
+        }
+
+        [Test]
+        public void WaterBalloonAutoFireIsNotOfferedUntilWaterBalloonIsAcquired_MV380()
+        {
+            CollectionAssert.DoesNotContain(
+                new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Unacquired), AbilityKind.WaterBalloonAutoFire);
+
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+
+            CollectionAssert.Contains(
+                new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Unacquired), AbilityKind.WaterBalloonAutoFire);
+        }
+
+        [Test]
+        public void WaterBalloonAutoFireEnabledDefaultsTrueAndTogglesWithAnEvent()
+        {
+            Assert.That(WeaponSystemState.WaterBalloonAutoFireEnabled, Is.True, "MV-373's payoff is on by default once unlocked");
+
+            int fired = 0;
+            System.Action handler = () => fired++;
+            WeaponSystemState.Changed += handler;
+            try
+            {
+                WeaponSystemState.WaterBalloonAutoFireEnabled = false;
+                Assert.That(WeaponSystemState.WaterBalloonAutoFireEnabled, Is.False);
+                Assert.That(fired, Is.EqualTo(1), "a real change must fire Changed so the HUD toggle updates");
+
+                WeaponSystemState.WaterBalloonAutoFireEnabled = false;
+                Assert.That(fired, Is.EqualTo(1), "setting the same value again must not re-fire Changed");
+            }
+            finally
+            {
+                WeaponSystemState.Changed -= handler;
+            }
+        }
+
+        [Test]
+        public void ResetRestoresWaterBalloonAutoFireEnabledToItsDefault()
+        {
+            WeaponSystemState.WaterBalloonAutoFireEnabled = false;
+            WeaponSystemState.Reset();
+
+            Assert.That(WeaponSystemState.WaterBalloonAutoFireEnabled, Is.True);
         }
 
         [Test]
@@ -313,11 +364,11 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllThreeAbilitiesFourTracksAndThreeWaterBalloonTracks_MV370()
+        public void CatalogListsAllFiveAbilitiesFourTracksAndThreeWaterBalloonTracks_MV380()
         {
-            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(3), "MV-370 removed Water Balloon");
+            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(5), "MV-380 restored Water Balloon + its Auto-fire sub-ability");
             Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4), "MV-299 reinstated Depletion Rate as the fourth track");
-            Assert.That(WeaponCatalog.AllWaterBalloonTrackKinds.Length, Is.EqualTo(3), "MV-370: Range, Splash Area, Repeat Fire");
+            Assert.That(WeaponCatalog.AllWaterBalloonTrackKinds.Length, Is.EqualTo(3), "MV-370: Range, Splash Area, Repeat Fire — unchanged by MV-380");
         }
 
         [Test]
@@ -326,6 +377,14 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Speed), Is.EqualTo(4));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4), "MV-339 widened Teleport from 2 levels to 4");
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown), Is.EqualTo(5));
+        }
+
+        [Test]
+        public void WaterBalloonAndAutoFireAreBooleanUnlocksCappedAtOne_MV380()
+        {
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WaterBalloon), Is.EqualTo(1),
+                "the throw's own magnitudes live on WaterBalloonTrackKind, not a leveled ability");
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WaterBalloonAutoFire), Is.EqualTo(1));
         }
 
         [Test]

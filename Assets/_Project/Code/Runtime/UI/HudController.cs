@@ -114,6 +114,13 @@ namespace MaxWorlds.UI
         private Image _waterBalloonRadial;
         private int _waterBalloonBuiltLevel = -1;
 
+        // The Auto-fire on/off toggle (MV-380 AC3): a small pill above the Water Balloon joystick,
+        // shown only once AbilityKind.WaterBalloonAutoFire is acquired — the same "only alert when
+        // actionable" idiom the rest of the HUD's conditional chrome follows.
+        private RectTransform _waterBalloonAutoFireToggleRoot;
+        private Image _waterBalloonAutoFireToggleBg;
+        private Text _waterBalloonAutoFireToggleLabel;
+
         private RectTransform _teleportRoot;
         private AbilityControlArt.JoystickVisual _teleportVisual;
         private Image _teleportRadial;
@@ -189,6 +196,7 @@ namespace MaxWorlds.UI
             BuildAbilitySlots();
             BuildHydroButton();
             BuildWaterBalloonJoystick();
+            BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
             BuildJoysticks();
             BuildArenaIndicator();
@@ -247,14 +255,16 @@ namespace MaxWorlds.UI
             if (_hydroButtonRoot != null) _hydroButtonRoot.gameObject.SetActive(UpgradeState.HydroAssembled);
         }
 
-        /// <summary>Teleport appears the moment it's acquired; Water Balloon is visible from run start
-        /// (MV-370: a primary add-on, not a shed find). Both grow more prominent as they level (WV-240,
-        /// spec §6a) — rebuilt through <see cref="AbilityControlArt"/> whenever their level actually
-        /// changed.</summary>
+        /// <summary>Water Balloon and Teleport each appear the moment their own ability is acquired
+        /// (MV-380 restored Water Balloon's gate after MV-370 briefly dropped it). Both grow more
+        /// prominent as they level (WV-240, spec §6a) — rebuilt through <see cref="AbilityControlArt"/>
+        /// whenever their level actually changed. Also refreshes the Auto-fire toggle (MV-380 AC3),
+        /// which appears/disappears on the same acquisition signal.</summary>
         private void OnAbilitiesChanged()
         {
             RebuildWaterBalloonJoystickIfNeeded();
             RebuildTeleportJoystickIfNeeded();
+            RefreshWaterBalloonAutoFireToggle();
         }
 
         private void OnPowerCells(int total)
@@ -895,7 +905,7 @@ namespace MaxWorlds.UI
                 _waterBalloonVisual.Rings);
 
             _waterBalloonBuiltLevel = level;
-            _waterBalloonRoot.gameObject.SetActive(true);
+            _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
         }
 
         private void RebuildWaterBalloonJoystickIfNeeded()
@@ -903,10 +913,69 @@ namespace MaxWorlds.UI
             int level = WaterBalloonJoystickLevel();
             if (level == _waterBalloonBuiltLevel)
             {
-                if (_waterBalloonRoot != null) _waterBalloonRoot.gameObject.SetActive(true);
+                if (_waterBalloonRoot != null)
+                    _waterBalloonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon));
                 return;
             }
             RebuildWaterBalloonJoystick();
+        }
+
+        /// <summary>MV-380 AC3: a small pill sitting just above the Water Balloon joystick, reading
+        /// "AUTO ON"/"AUTO OFF" — the player's own switch for auto-fire once it's unlocked, so someone
+        /// who'd rather aim by hand some of the time isn't stuck with it. Built once and left inactive;
+        /// <see cref="RefreshWaterBalloonAutoFireToggle"/> (driven off <see cref="WeaponSystemState.Changed"/>)
+        /// shows/hides and relabels it live.</summary>
+        private void BuildWaterBalloonAutoFireToggle()
+        {
+            var root = NewRect("Water Balloon Auto-fire Toggle", Root);
+            Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
+            root.sizeDelta = new Vector2(140f, 44f);
+            // Sits just above the joystick's own rings, clear of the Teleport joystick's touch pad
+            // stacked above it (TeleportJoystickRise's own margin math starts higher still).
+            root.anchoredPosition = new Vector2(
+                AbilityControlColumnX - RefW * 0.5f,
+                WaterBalloonJoystickRise + WaterBalloonJoystickMaxHalfSize + 20f);
+            _waterBalloonAutoFireToggleRoot = root;
+
+            var bg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), WaterBalloonColor, "BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+            _waterBalloonAutoFireToggleBg = bg;
+
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnWaterBalloonAutoFireToggleTapped);
+
+            _waterBalloonAutoFireToggleLabel = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(_waterBalloonAutoFireToggleLabel.rectTransform);
+            _waterBalloonAutoFireToggleLabel.fontStyle = FontStyle.Bold;
+            _waterBalloonAutoFireToggleLabel.raycastTarget = false;
+
+            root.gameObject.SetActive(false);   // RefreshWaterBalloonAutoFireToggle turns it on once acquired
+        }
+
+        private void OnWaterBalloonAutoFireToggleTapped()
+        {
+            WeaponSystemState.WaterBalloonAutoFireEnabled = !WeaponSystemState.WaterBalloonAutoFireEnabled;
+            RefreshWaterBalloonAutoFireToggle();
+        }
+
+        private void RefreshWaterBalloonAutoFireToggle()
+        {
+            if (_waterBalloonAutoFireToggleRoot == null) return;
+
+            bool unlocked = WeaponSystemState.IsAcquired(AbilityKind.WaterBalloonAutoFire);
+            _waterBalloonAutoFireToggleRoot.gameObject.SetActive(unlocked);
+            if (!unlocked) return;
+
+            bool on = WeaponSystemState.WaterBalloonAutoFireEnabled;
+            if (_waterBalloonAutoFireToggleLabel != null) _waterBalloonAutoFireToggleLabel.text = on ? "AUTO ON" : "AUTO OFF";
+            if (_waterBalloonAutoFireToggleBg != null)
+            {
+                var c = WaterBalloonColor;
+                c.a = on ? 1f : 0.4f;
+                _waterBalloonAutoFireToggleBg.color = c;
+            }
         }
 
         /// <summary>The Teleport joystick (MV-338: "needs to work the same way as Water Balloon — a

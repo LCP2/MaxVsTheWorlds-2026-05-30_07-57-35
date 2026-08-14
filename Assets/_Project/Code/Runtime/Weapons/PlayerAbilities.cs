@@ -13,10 +13,12 @@ namespace MaxWorlds.Weapons
     /// The two active abilities that need a live component to actually DO something (WV-231): Water
     /// Balloon's throw/landing/splash, and Teleport's blink. Speed and Weapon Cooldown are pure
     /// passive multipliers with no activation and need nothing beyond the read
-    /// <see cref="PlayerController.WalkSpeed"/> already does. Water Balloon left the shed-acquired
-    /// <see cref="AbilityKind"/> pool by MV-370 — it's a primary add-on now, owned from run start and
-    /// gated on cooldown + a per-throw cell cost rather than acquisition; Teleport is still a
-    /// shed-acquired <see cref="AbilityKind"/>.
+    /// <see cref="PlayerController.WalkSpeed"/> already does. Water Balloon briefly left the
+    /// shed-acquired <see cref="AbilityKind"/> pool under MV-370 (a primary add-on gated only on
+    /// cooldown + a per-throw cell cost) and was restored to it by MV-380 after Lee's playtest found
+    /// it usable from the very first second with no sense of having earned it — it's acquisition-gated
+    /// again now, same as Teleport, with the cell cost and its own three upgrade tracks
+    /// (<see cref="WaterBalloonTrackKind"/>) unchanged on top.
     ///
     /// Self-attaches to Max from <see cref="PlayerController.Awake"/> — no scene wiring, the same
     /// code-driven-scenes rule <see cref="MaxWorlds.Combat.WaterBlaster"/> follows for its own
@@ -47,11 +49,13 @@ namespace MaxWorlds.Weapons
         /// <summary>Seconds left before Water Balloon can be thrown again, 0 when ready.</summary>
         public float WaterBalloonCooldownRemaining => Mathf.Max(0f, _waterBalloonCooldown);
 
-        /// <summary>Off cooldown AND a cell banked to spend — what an on-screen control (WV-240) gates
-        /// its press on. MV-370: Water Balloon is a primary add-on now, always available from run
-        /// start, so unlike before there's no "owned" gate here — only cooldown and the per-throw cell
-        /// cost.</summary>
-        public bool WaterBalloonReady => _waterBalloonCooldown <= 0f && PickupWallet.PowerCells > 0;
+        /// <summary>Owned, off cooldown, AND a cell banked to spend — what an on-screen control
+        /// (WV-240) gates its press on. MV-380: restores the acquisition gate MV-370 had silently
+        /// dropped — Water Balloon is a shed-acquired <see cref="AbilityKind"/> again, same as
+        /// Teleport, on top of the per-throw cell cost MV-370 introduced.</summary>
+        public bool WaterBalloonReady =>
+            WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon) &&
+            _waterBalloonCooldown <= 0f && PickupWallet.PowerCells > 0;
 
         /// <summary>Seconds left before Teleport can be used again, 0 when ready.</summary>
         public float TeleportCooldownRemaining => Mathf.Max(0f, _teleportCooldown);
@@ -112,6 +116,7 @@ namespace MaxWorlds.Weapons
         /// started, no cell spent) if on cooldown, aimless, or the bank has no cell to spend.</summary>
         public bool TryThrowWaterBalloon(Vector3 aimDirection)
         {
+            if (!WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon)) return false;
             if (_waterBalloonCooldown > 0f) return false;
 
             Vector3 dir = new Vector3(aimDirection.x, 0f, aimDirection.z);
