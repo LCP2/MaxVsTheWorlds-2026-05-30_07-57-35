@@ -117,6 +117,11 @@ namespace MaxWorlds.Arena
 
             _collider = GetComponent<Collider>();
 
+            // MV-378: an area gate exists to physically block Max and robots until it breaks -- a
+            // trigger collider would let a CharacterController pass straight through it, so this
+            // makes the solid contract explicit rather than relying on CreatePrimitive's default.
+            if (_collider != null) _collider.isTrigger = false;
+
             // Always shown, not earned by a hit (unlike a robot's) — the player needs to discover
             // the gate is a breakable target in the first place, not just watch it deplete once they
             // already found it (MV-265: Lee couldn't tell the gate was damageable at all).

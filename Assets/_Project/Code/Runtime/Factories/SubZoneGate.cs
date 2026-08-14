@@ -72,7 +72,14 @@ namespace MaxWorlds.Factories
             Open();
         }
 
-        private void Awake() => _collider = GetComponent<Collider>();
+        private void Awake()
+        {
+            _collider = GetComponent<Collider>();
+
+            // MV-378: same solid-by-default guarantee AreaGate makes -- a shut gate has to physically
+            // block, and a trigger collider would let a CharacterController walk straight through it.
+            if (_collider != null) _collider.isTrigger = false;
+        }
 
         /// <summary>Begin opening the gate (idempotent). Forces it open regardless of any keys still
         /// standing — <see cref="Unlock"/> is the one that counts.</summary>

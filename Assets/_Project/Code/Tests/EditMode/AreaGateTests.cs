@@ -220,5 +220,41 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(Vector3.zero, entry);
         }
+
+        // --- MV-378: a fresh gate has to be a REAL physical obstruction, not just a damageable prop ---
+
+        [Test]
+        public void TheBuiltGate_HasASolidNonTriggerColliderExactlyWhereMaxWouldWalk()
+        {
+            MapData map = TwoAreas(doorway: 4f);
+            var root = new GameObject("Physical Gate Probe Root");
+            try
+            {
+                MapBuild built = MapRuntime.Build(map, root.transform);
+                GameObject gate = built.Actors["gate1"];
+                Assert.IsNotNull(gate, "the map built no gate1 actor at all");
+
+                var col = gate.GetComponent<Collider>();
+                Assert.IsNotNull(col, "the built gate carries no Collider -- nothing can ever stop Max at it");
+                Assert.IsTrue(col.enabled, "the built gate's collider starts disabled");
+                Assert.IsFalse(col.isTrigger,
+                    "the built gate's collider is trigger-only -- a CharacterController passes straight " +
+                    "through a trigger, it does not stop at one");
+
+                // autoSyncTransforms is off project-wide (DynamicsManager.asset), so a transform moved
+                // by script (exactly what Spawn() just did) is not guaranteed visible to a physics query
+                // in the same frame without an explicit sync.
+                Physics.SyncTransforms();
+                Collider[] hits = Physics.OverlapBox(gate.transform.position, Vector3.one * 0.05f,
+                                                      gate.transform.rotation);
+                Assert.Contains(col, hits,
+                    "a physics query at the gate's own centre does not find its collider -- the doorway " +
+                    "reads as empty space to anything that queries physics there, e.g. a CharacterController");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
     }
 }
