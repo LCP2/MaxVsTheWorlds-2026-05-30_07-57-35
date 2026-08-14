@@ -139,18 +139,29 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- Water Balloon joystick input
 
         [UnityTest]
-        public IEnumerator PressingTheJoystickWithNoCellsBankedDoesNothing_MV370()
+        public IEnumerator PressingTheJoystickWithNoCellsBankedStillPreviewsButCannotThrow_MV381()
         {
-            // Acquired but SetUp's PickupWallet.Reset() leaves the bank at 0 cells, which is what must
-            // gate the press here, not acquisition.
+            // Acquired but SetUp's PickupWallet.Reset() leaves the bank at 0 cells. MV-370 used to make
+            // the press a total no-op here — MV-381 found that read as "there's no aim indicator at
+            // all" to a player pressing a control that's visibly on screen, so the preview must still
+            // show; only the actual throw stays gated on having a cell to spend.
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
             Assert.IsNotNull(control, "the Water Balloon joystick's control component is missing");
 
-            control.OnPointerDown(new PointerEventData(EventSystem.current) { position = Vector2.zero });
+            var down = new PointerEventData(EventSystem.current) { position = Vector2.zero };
+            control.OnPointerDown(down);
             yield return null;
 
-            Assert.That(control.IsAiming, Is.False, "a control with no cell to spend must ignore the press entirely");
+            Assert.That(control.IsAiming, Is.True,
+                "MV-381: an owned control with no cell to spend must still preview the aim, not answer with silence");
+
+            var drag = new PointerEventData(EventSystem.current) { position = new Vector2(90f, 0f) };
+            control.OnDrag(drag);
+            control.OnPointerUp(drag);
+
+            Assert.That(control.IsAiming, Is.False, "releasing must close the preview");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "a release with no cell banked must never spend one");
         }
 
         [UnityTest]

@@ -41,6 +41,8 @@ namespace MaxWorlds.UI
             InitBase(knob, origin, rings);
         }
 
+        protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.Teleport);
+
         protected override bool AbilityReady => _abilities != null && _abilities.TeleportReady;
 
         protected override void Fire(Vector3 direction) => _abilities?.TryTeleport(direction);
@@ -111,7 +113,7 @@ namespace MaxWorlds.UI
                 new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
             _circleGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.BuildLandingCircle(LandingRadius);
 
-            ApplyArmedTint(_circleGo, IsArmed);
+            ApplyArmedTint(_circleGo, IsArmed, AbilityReady);
         }
     }
 }
