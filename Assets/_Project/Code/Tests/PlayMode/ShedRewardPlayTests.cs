@@ -13,17 +13,21 @@ namespace MaxWorlds.Tests.PlayMode
     /// <summary>
     /// Sheds are the ability-unlock mechanic (WV-229, spec §4/§6; draft-pick MV-357). MV-358 moved the
     /// draft-pick off the mid-fight modal it used to open the instant a shed died: destroying a shed
-    /// with any ability still unowned now only banks an <see cref="AbilityCreditBank"/> credit — no
-    /// pause, no screen, the fight is never interrupted — and the player later spends it from the
-    /// Abilities screen's BUILD ABILITY button, which is what actually draws candidates and opens the
-    /// paused choice screen (2-3 left) or grants directly (exactly 1 left). Once every ability is owned,
-    /// a shed still falls back to a part + a bigger power-cell cache, unchanged from WV-229.
+    /// with any ability still unowned dropped an <see cref="AbilityCreditBank"/> credit — no pause, no
+    /// screen, the fight is never interrupted. MV-382 reinstated the visible walk-over collectible
+    /// MV-357/358 had reduced to an instant invisible grant: the shed now drops a real
+    /// <see cref="PickupKind.Device"/> pickup, and the credit only banks once Max walks over it — same
+    /// walk-over idiom as every other drop. The player later spends the banked credit from the Abilities
+    /// screen's BUILD ABILITY button, which is what actually draws candidates and opens the paused
+    /// choice screen (2-3 left) or grants directly (exactly 1 left). Once every ability is owned, a shed
+    /// still falls back to a part + a bigger power-cell cache, unchanged from WV-229.
     /// </summary>
     public sealed class ShedRewardPlayTests
     {
         private GameObject _director;
         private GameObject _upgradeScreenGo;
         private GameObject _weaponsScreenGo;
+        private GameObject _max;
 
         [UnitySetUp]
         public IEnumerator SetUp()
@@ -54,6 +58,7 @@ namespace MaxWorlds.Tests.PlayMode
             if (_director != null) Object.Destroy(_director);
             if (_upgradeScreenGo != null) Object.Destroy(_upgradeScreenGo);
             if (_weaponsScreenGo != null) Object.Destroy(_weaponsScreenGo);
+            if (_max != null) Object.Destroy(_max);
             yield return null;
             foreach (var p in Object.FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
                 Object.Destroy(p.gameObject);
@@ -108,8 +113,23 @@ namespace MaxWorlds.Tests.PlayMode
             return n;
         }
 
+        /// <summary>MV-382: the shed's device only banks a credit once Max walks onto it — same
+        /// walk-over idiom as <c>RobotDropPlayTests.WalkingOverACellBanksItAndRemovesIt</c>. Starts Max
+        /// far away so the drop itself is never collected as a side effect, then walks him onto
+        /// <paramref name="pos"/> and lets the director's Update tick the collection.</summary>
+        private IEnumerator WalkMaxOntoTheDevice(Vector3 pos)
+        {
+            _max = new GameObject("Max");
+            _max.tag = "Player";
+            _max.transform.position = pos + new Vector3(50f, 0f, 50f);
+            yield return null;
+
+            _max.transform.position = pos;
+            yield return null;
+        }
+
         [UnityTest]
-        public IEnumerator DestroyingAShedWithAnyUnownedAbilityBanksACreditAndNeverPausesOrOpensAScreen_MV358()
+        public IEnumerator DestroyingAShedWithAnyUnownedAbilityDropsAVisibleDeviceAndNeverPausesOrOpensAScreen_MV382()
         {
             yield return NewUpgradeScreen();
             yield return NewWeaponsScreen();
@@ -118,13 +138,35 @@ namespace MaxWorlds.Tests.PlayMode
             HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
             yield return null;
 
-            Assert.That(AbilityCreditBank.Banked, Is.EqualTo(1), "a shed with abilities left must bank exactly one credit");
-            Assert.That(Time.timeScale, Is.EqualTo(1f), "picking up a shed's device must never pause the game");
-            Assert.That(UpgradeScr.IsOpen, Is.False, "picking up a shed's device must never open a screen");
-            Assert.That(WeaponsScr.IsOpen, Is.False, "picking up a shed's device must never open a screen");
-            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(0));
+            // MV-382: the credit no longer banks the instant the shed dies — a real, visible device
+            // pickup drops instead, and the credit only banks once Max walks over it (see the next test).
+            Assert.That(AbilityCreditBank.Banked, Is.EqualTo(0), "the credit must not bank until the device is collected");
+            Assert.That(Time.timeScale, Is.EqualTo(1f), "dropping a shed's device must never pause the game");
+            Assert.That(UpgradeScr.IsOpen, Is.False, "dropping a shed's device must never open a screen");
+            Assert.That(WeaponsScr.IsOpen, Is.False, "dropping a shed's device must never open a screen");
+            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(1), "a shed with abilities left must drop a visible device pickup");
             Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0));
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(0));
+        }
+
+        [UnityTest]
+        public IEnumerator WalkingOverTheShedsDeviceBanksACreditAndNeverPausesOrOpensAScreen_MV382()
+        {
+            yield return NewUpgradeScreen();
+            yield return NewWeaponsScreen();
+            yield return NewDirector();
+
+            var dropPos = new Vector3(5f, 0f, 5f);
+            HudSignals.EmitFactoryDestroyed(dropPos);
+            yield return null;
+
+            yield return WalkMaxOntoTheDevice(dropPos);
+
+            Assert.That(AbilityCreditBank.Banked, Is.EqualTo(1), "walking onto the device must bank exactly one credit");
+            Assert.That(LivePickups(PickupKind.Device), Is.EqualTo(0), "the collected device must leave the ground");
+            Assert.That(Time.timeScale, Is.EqualTo(1f), "collecting a shed's device must never pause the game");
+            Assert.That(UpgradeScr.IsOpen, Is.False, "collecting a shed's device must never open a screen");
+            Assert.That(WeaponsScr.IsOpen, Is.False, "collecting a shed's device must never open a screen");
         }
 
         [UnityTest]
@@ -134,8 +176,10 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked), Is.False);
 
-            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
+            var dropPos = new Vector3(5f, 0f, 5f);
+            HudSignals.EmitFactoryDestroyed(dropPos);
             yield return null;
+            yield return WalkMaxOntoTheDevice(dropPos);
 
             Assert.That(HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked), Is.True,
                 "a banked ability credit must flash the same badge a banked part does");
@@ -148,8 +192,10 @@ namespace MaxWorlds.Tests.PlayMode
             yield return NewWeaponsScreen();
             yield return NewDirector();
 
-            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));   // banks 1 credit; a full pool draws AbilityDraft.MaxCandidates (3)
+            var dropPos = new Vector3(5f, 0f, 5f);
+            HudSignals.EmitFactoryDestroyed(dropPos);   // drops a device; a full pool draws AbilityDraft.MaxCandidates (3) once banked
             yield return null;
+            yield return WalkMaxOntoTheDevice(dropPos);   // banks the 1 credit
 
             WeaponsScr.Open();
             yield return null;
@@ -176,8 +222,10 @@ namespace MaxWorlds.Tests.PlayMode
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
                 if (kind != AbilityKind.WeaponCooldown && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 
-            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
+            var dropPos = new Vector3(5f, 0f, 5f);
+            HudSignals.EmitFactoryDestroyed(dropPos);
             yield return null;
+            yield return WalkMaxOntoTheDevice(dropPos);
 
             WeaponsScr.Open();
             yield return null;
@@ -207,8 +255,10 @@ namespace MaxWorlds.Tests.PlayMode
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
                 if (kind != AbilityKind.WeaponCooldown && kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 
-            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
+            var dropPos = new Vector3(5f, 0f, 5f);
+            HudSignals.EmitFactoryDestroyed(dropPos);
             yield return null;
+            yield return WalkMaxOntoTheDevice(dropPos);
             WeaponsScr.Open();
             yield return null;
             FindButtonNamed(_weaponsScreenGo, "Build Ability Button").onClick.Invoke();
@@ -236,8 +286,10 @@ namespace MaxWorlds.Tests.PlayMode
             foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
                 if (kind != AbilityKind.Teleport) WeaponSystemState.Acquire(kind);
 
-            HudSignals.EmitFactoryDestroyed(new Vector3(5f, 0f, 5f));
+            var dropPos = new Vector3(5f, 0f, 5f);
+            HudSignals.EmitFactoryDestroyed(dropPos);
             yield return null;
+            yield return WalkMaxOntoTheDevice(dropPos);
             Assert.That(AbilityCreditBank.Banked, Is.EqualTo(1));
 
             WeaponsScr.Open();

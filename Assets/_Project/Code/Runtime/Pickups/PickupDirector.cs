@@ -31,11 +31,13 @@ namespace MaxWorlds.Pickups
     ///
     /// Sheds are the ability-unlock mechanic (WV-229; draft-pick MV-357; moved off the mid-fight modal
     /// by MV-358): a destroyed <c>MowerHutch</c> reports through <see cref="HudSignals.FactoryDestroyed"/>.
-    /// If any ability is still unowned, this director banks one <see cref="AbilityCreditBank"/> credit —
-    /// no pause, no screen, the fight keeps going — and the player later spends it from the Abilities
-    /// screen's BUILD ABILITY button, which is what actually draws candidates via
-    /// <see cref="AbilityDraft"/>. None left falls back to a part plus a bigger "cell cache" instead,
-    /// same as before.
+    /// If any ability is still unowned, this director drops a visible <see cref="PickupKind.Device"/>
+    /// pickup at the shed's spot (MV-382, reinstating the walk-over collectible MV-357/358 had reduced to
+    /// an instant invisible grant) — no pause, no screen, the fight keeps going. Walking over it banks one
+    /// <see cref="AbilityCreditBank"/> credit exactly like every other walk-over pickup, and the player
+    /// later spends it from the Abilities screen's BUILD ABILITY button, which is what actually draws
+    /// candidates via <see cref="AbilityDraft"/>. None left falls back to a part plus a bigger "cell
+    /// cache" instead, same as before.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -170,12 +172,12 @@ namespace MaxWorlds.Pickups
         private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
             MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
-        /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6; draft-pick MV-357; the pickup
-        /// itself just banks a credit rather than granting anything, MV-358): if any ability is still
-        /// unowned, bank one <see cref="AbilityCreditBank"/> credit — no pause, no screen, the fight
-        /// isn't interrupted. Once every ability is owned there is nothing left to build, so it falls
-        /// back to a part + a cell cache instead — the reward the shed no longer has a use for the
-        /// ability pool to give.</summary>
+        /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6; draft-pick MV-357; a visible
+        /// walk-over pickup again as of MV-382): if any ability is still unowned, drop one
+        /// <see cref="PickupKind.Device"/> pickup — no pause, no screen, the fight isn't interrupted; the
+        /// credit itself only banks once Max walks over it (<see cref="Collect"/>), same as any other
+        /// drop. Once every ability is owned there is nothing left to build, so it falls back to a part +
+        /// a cell cache instead — the reward the shed no longer has a use for the ability pool to give.</summary>
         private void OnFactoryDestroyed(Vector3 pos)
         {
             bool anyUnacquired = false;
@@ -193,7 +195,7 @@ namespace MaxWorlds.Pickups
                 return;
             }
 
-            AbilityCreditBank.Bank();
+            SpawnDrop(PickupKind.Device, pos);
         }
 
         private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
@@ -242,10 +244,11 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "+1 CELL", new Color(0.31f, 0.86f, 0.98f));
                     break;
                 case PickupKind.Device:
-                    // Idempotent (WeaponSystemState.Acquire no-ops if somehow already owned), but
-                    // OnFactoryDestroyed only ever draws from Unacquired so this shouldn't happen.
-                    WeaponSystemState.Acquire(p.Ability);
-                    HudSignals.EmitPickup(p.transform.position, WeaponCatalog.DisplayName(p.Ability) + " UNLOCKED",
+                    // MV-382: walking over the shed's device banks a buildable credit — same
+                    // AbilityCreditBank the BUILD ABILITY button spends later, not a direct grant. Which
+                    // ability it becomes isn't decided until that later draw (AbilityDraft).
+                    AbilityCreditBank.Bank();
+                    HudSignals.EmitPickup(p.transform.position, "ABILITY DEVICE +1",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
                 default:
