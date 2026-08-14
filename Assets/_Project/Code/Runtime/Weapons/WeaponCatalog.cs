@@ -115,6 +115,13 @@ namespace MaxWorlds.Weapons
         public static float EffectiveConeHalfAngle(float baseHalfAngle, int spreadLevel, float perLevel) =>
             baseHalfAngle * (1f + perLevel * (Mathf.Max(1, spreadLevel) - 1));
 
+        /// <summary>0 at a track's starting level 1, 1 once it's maxed — a general "how far into this
+        /// track's levels am I" fraction (MV-379). First use: <see cref="MaxWorlds.Combat.WaterBlaster.VisualStrength"/>
+        /// reads this against the Spread track to fade the primary's visual-only stream/muzzle
+        /// presentation in independently of the (now decoupled) functional cone width.</summary>
+        public static float VisualStrengthFraction(int level, int maxLevel) =>
+            maxLevel <= 1 ? 1f : Mathf.Clamp01((level - 1f) / (maxLevel - 1f));
+
         /// <summary>Effective per-tick damage at a given Damage-track level, given the weapon's
         /// authored base damage (MV-291) — same linear "roughly-equal step" shape as
         /// <see cref="EffectiveConeHalfAngle"/>, so the primary hits harder from the very first level

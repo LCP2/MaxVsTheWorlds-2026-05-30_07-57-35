@@ -58,19 +58,20 @@ namespace MaxWorlds.Combat
         [SerializeField] private LayerMask hitMask = ~0;
 
         /// <summary>Authored base spray half-angle in degrees (retuned MV-281, widened MV-289,
-        /// re-narrowed MV-301, re-narrowed again MV-367): Lee's MV-367 direction is an un-upgraded
-        /// beam that "looks weak to begin with" without losing power — since the visible water fills
-        /// the whole cone by design (YT-110/YT-187: water, reticle and hit test must never disagree),
-        /// narrowing the cone itself is the only way to narrow the visual without decoupling it from
-        /// the hit test. This halves MV-301's ~16° total arc down to a much narrower ~8° total. Power
-        /// is unaffected: a target dead ahead (angle 0 from the aim axis) stays inside the cone at any
-        /// half-angle above 0, so level-1 TTK against a single enemy is untouched — see
+        /// re-narrowed MV-301, re-narrowed again MV-367, restored to its pre-MV-367 value by MV-379).
+        /// MV-367 tried to make an un-upgraded beam "look weak to begin with" by narrowing THIS value —
+        /// but since the hit test and the reticle both read it too, that also narrowed the actual
+        /// functional spread, making robots harder to hit (Lee's playtest, MV-379). MV-379 restores it
+        /// to 8° and moves the "looks weaker" job onto <see cref="WaterVfx"/>'s visual-only dials
+        /// instead (YT-110/YT-187's old "water, reticle and hit test must never disagree" invariant is
+        /// deliberately broken here — see WaterVfx's Init doc). Power is unaffected either way: a
+        /// target dead ahead (angle 0 from the aim axis) stays inside the cone at any half-angle above
+        /// 0, so level-1 TTK against a single enemy is untouched — see
         /// <see cref="MaxWorlds.Tests.EditMode.WeaponCatalogTests.NarrowedBaseConeStillHitsADeadAheadTarget_MV367"/>.
         /// The RCDA Spread track widens this further by up to its max level
-        /// (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/> is retuned against THIS value to hold
-        /// a ~20%-lower ceiling than MV-301's, MV-367 — change them together). Nozzle upgrades
-        /// (YT-133) narrow/widen it further.</summary>
-        public const float DefaultConeHalfAngle = 4f;
+        /// (<see cref="WeaponCatalog.DefaultRcdaSpreadPerLevel"/>). Nozzle upgrades (YT-133) narrow/widen
+        /// it further.</summary>
+        public const float DefaultConeHalfAngle = 8f;
 
         /// <summary>Damage multiplier at the outer edge of the spray cone (MV-281). Full power (1x) on
         /// the centre-line, linearly falling to this at the cone's half-angle — see
@@ -160,6 +161,16 @@ namespace MaxWorlds.Combat
             WeaponSystemState.TrackLevel(WeaponTrackKind.Spread),
             WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
+        /// <summary>How close the un-upgraded weapon's visual-only presentation (MV-379) sits to the
+        /// old, fuller look — 0 at the Spread track's starting level, 1 once Spread is maxed.
+        /// Deliberately independent of <see cref="ConeHalfAngle"/>: MV-379 intentionally decouples the
+        /// rendered stream's THICKNESS from the functional cone's WIDTH (see <see cref="WaterVfx.Init"/>).
+        /// Reads the Spread track specifically because it's the track that used to drive the
+        /// (now-decoupled) visual 1:1 before this ticket — spending on Spread is still what makes the
+        /// beam look fuller, even though the hit-cone no longer needs it to.</summary>
+        public float VisualStrength => WeaponCatalog.VisualStrengthFraction(
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), WeaponCatalog.MaxLevel(WeaponTrackKind.Spread));
+
         /// <summary>Damage one tick of the stream deals, before the RCDA Damage track's bonus.</summary>
         public float DamagePerTick => damagePerTick;
 
@@ -201,7 +212,7 @@ namespace MaxWorlds.Combat
         public void RefreshUpgrades()
         {
             if (_reticle != null) _reticle.Init(transform, Range, ConeHalfAngle);
-            if (_vfx != null) _vfx.Init(Range, Mathf.Max(radius, streamVisualRadius), ConeHalfAngle);
+            if (_vfx != null) _vfx.Init(Range, Mathf.Max(radius, streamVisualRadius), ConeHalfAngle, VisualStrength);
         }
 
         private float _tickTimer;
@@ -234,7 +245,7 @@ namespace MaxWorlds.Combat
             // The cone goes in too (YT-110/YT-187): the water is drawn across the same arc it
             // damages, so the spray and the reticle above it are the same weapon described twice,
             // not two numbers that happened to be authored on different days.
-            _vfx.Init(range, Mathf.Max(radius, streamVisualRadius), coneHalfAngle);
+            _vfx.Init(range, Mathf.Max(radius, streamVisualRadius), coneHalfAngle, VisualStrength);
 
             // The aim reticle (YT-84) is built from THIS gadget's real reach and spread, so a future
             // Beam or Lob draws its own shape without anyone authoring one.
