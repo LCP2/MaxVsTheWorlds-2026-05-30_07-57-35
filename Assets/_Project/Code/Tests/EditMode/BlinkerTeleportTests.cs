@@ -46,5 +46,32 @@ namespace MaxWorlds.Tests.EditMode
             Vector3 p = BlinkerTeleport.FlankPoint(Vector3.zero, Vector3.zero, 3f, 1f);
             Assert.AreEqual(3f, Vector3.Distance(Vector3.zero, p), 1e-3f);
         }
+
+        private static float AngleFromNorthSouthAxis(Vector3 targetPos, Vector3 landing)
+        {
+            Vector3 dir = landing - targetPos;
+            dir.y = 0f;
+            float fromNorth = Mathf.Abs(Vector3.SignedAngle(Vector3.forward, dir.normalized, Vector3.up));
+            return Mathf.Min(fromNorth, 180f - fromNorth); // distance to the NEAREST of north/south
+        }
+
+        [Test]
+        public void FlankPoint_NeverLandsInsideTheNorthSouthDeadZone()
+        {
+            // MV-384: the solo blink (unlike the group jump) skipped the north/south exclusion
+            // entirely, so a lone Blinker could — and per Lee's playtest, always did — land directly
+            // above or below Max. Sweep every approach angle to make sure that can't happen anymore.
+            for (int deg = 0; deg < 360; deg += 15)
+            {
+                Vector3 attacker = Quaternion.AngleAxis(deg, Vector3.up) * Vector3.forward * 5f;
+                foreach (float sign in new[] { -1f, 1f })
+                {
+                    Vector3 p = BlinkerTeleport.FlankPoint(Vector3.zero, attacker, 3f, sign);
+                    float clearance = AngleFromNorthSouthAxis(Vector3.zero, p);
+                    Assert.GreaterOrEqual(clearance, BlinkerTeleport.NorthSouthExclusionDeg - 0.01f,
+                        $"deg={deg} sign={sign} landed too close to due north/south");
+                }
+            }
+        }
     }
 }
