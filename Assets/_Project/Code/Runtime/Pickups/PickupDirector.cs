@@ -13,11 +13,14 @@ namespace MaxWorlds.Pickups
     ///
     /// The drop policy is a strict small/large split (WV-226): the small tier —
     /// <see cref="EnemyKind.Rusher"/> — drops nothing at all, no roll, no trickle. Only the large
-    /// tier — bruiser, heavy and brute (<see cref="EnemyArchetype.IsLarge"/>, MV-224) — drops loot:
-    /// a guaranteed <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
-    /// power cells every kill, plus one part every
-    /// <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-th large kill, so parts stay an
-    /// occasional event rather than a carpet. Each frame it does the walk-over collection itself: one
+    /// tier — bruiser, heavy and brute (<see cref="EnemyArchetype.IsLarge"/>, MV-224) — drops loot.
+    /// How much is an authored per-area total (<see cref="CellEconomyTuning.CellsForArea"/> /
+    /// <see cref="CellEconomyTuning.PartsForArea"/>, MV-375), spread across that area's actual solved
+    /// large-kill count so the run's cell/part curve rises on a designed straight line instead of
+    /// riding the enemy population's exponential growth — see <see cref="ResolveDrop"/>. Falls back to
+    /// the flat <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/> / one-part-every-
+    /// <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-kills rate outside a live area context
+    /// (tests) or under a dev-tuning override. Each frame it does the walk-over collection itself: one
     /// Max lookup, one pool, a planar distance test per live pickup. Banking goes through
     /// <see cref="PickupWallet"/>; the HUD reacts to that.
     ///
@@ -62,6 +65,19 @@ namespace MaxWorlds.Pickups
         private Transform _max;
         private int _largeKills;
 
+        /// <summary>Resolved lazily, same idiom as <see cref="_max"/> — re-searched each time it's null
+        /// rather than cached-as-missing, so a director created after this one installs (map build order)
+        /// is still picked up on the first kill that follows it. A headless test scene with no area
+        /// director simply never finds one, and every kill falls back to the flat legacy rate.</summary>
+        private AreaAccumulationDirector _areaDirector;
+
+        /// <summary>The area <see cref="_cellAccum"/>/<see cref="_partAccum"/> are currently tracking
+        /// (MV-375) — reset whenever a kill lands in a different area so a fresh area starts its budget
+        /// from zero instead of carrying over the previous area's leftover fraction.</summary>
+        private int _budgetArea = -1;
+        private float _cellAccum;
+        private float _partAccum;
+
         private void OnEnable()
         {
             DropSignals.RobotDied += OnRobotDied;
@@ -82,8 +98,8 @@ namespace MaxWorlds.Pickups
 
             _largeKills++;
 
-            int cells = Mathf.Max(0, Mathf.RoundToInt(
-                DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill)));
+            (int cells, bool dropPart) = ResolveDrop();
+
             for (int i = 0; i < cells; i++)
             {
                 float ang = i * (Mathf.PI * 2f / cells);
@@ -91,15 +107,61 @@ namespace MaxWorlds.Pickups
                 SpawnDrop(PickupKind.PowerCell, pos + off);
             }
 
-            // Pace the parts (WV-226): one every Nth large kill, so they spread across the level
-            // instead of arriving all at once. Cells (above) still drop every kill. Parts are
-            // universal tokens (WV-228) — there is no cap on how many can drop across a run, unlike the
-            // old five-and-done unique table.
-            int interval = Mathf.Max(1, Mathf.RoundToInt(
-                DevTuning.Or(DevTuning.PartsPerLargeKills, CellEconomyTuning.DefaultPartsPerLargeKills)));
-            if (_largeKills % interval == 0)
+            if (dropPart)
                 SpawnDrop(PickupKind.Part, pos, DecorativeKind());
         }
+
+        /// <summary>How many cells and whether a part drops for the large kill just reported (MV-375).
+        /// Prefers the authored per-area budget (<see cref="CellEconomyTuning.CellsForArea"/> /
+        /// <see cref="CellEconomyTuning.PartsForArea"/>), spread evenly across the area's actual solved
+        /// large-kill count via a fractional accumulator so the run's total for that area lands on
+        /// exactly the authored line rather than a compounding per-kill rate. Falls back to the flat
+        /// legacy rate — every kill drops <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/> cells,
+        /// one part every <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-th kill — when no
+        /// area context is available (a headless test scene) or a dev-tuning override is active, since
+        /// neither carries an actual solved kill count to normalise against.</summary>
+        private (int cells, bool dropPart) ResolveDrop()
+        {
+            bool devOverride = DevTuning.CellsPerLargeKill.HasValue || DevTuning.PartsPerLargeKills.HasValue;
+            int areaIndex = devOverride ? 0 : ResolveCurrentArea();
+            int largeCountForArea = areaIndex > 0 ? ResolveLargeCountForArea(areaIndex) : 0;
+
+            if (largeCountForArea <= 0)
+            {
+                int flatCells = Mathf.Max(0, Mathf.RoundToInt(
+                    DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill)));
+                int interval = Mathf.Max(1, Mathf.RoundToInt(
+                    DevTuning.Or(DevTuning.PartsPerLargeKills, CellEconomyTuning.DefaultPartsPerLargeKills)));
+                return (flatCells, _largeKills % interval == 0);
+            }
+
+            if (areaIndex != _budgetArea)
+            {
+                _budgetArea = areaIndex;
+                _cellAccum = 0f;
+                _partAccum = 0f;
+            }
+
+            _cellAccum += CellEconomyTuning.CellsForArea(areaIndex) / largeCountForArea;
+            int cells = Mathf.FloorToInt(_cellAccum);
+            _cellAccum -= cells;
+
+            _partAccum += CellEconomyTuning.PartsForArea(areaIndex) / largeCountForArea;
+            bool dropPart = _partAccum >= 1f;
+            if (dropPart) _partAccum -= 1f;
+
+            return (cells, dropPart);
+        }
+
+        private int ResolveCurrentArea()
+        {
+            if (_areaDirector == null)
+                _areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            return _areaDirector != null ? _areaDirector.CurrentArea : 0;
+        }
+
+        private int ResolveLargeCountForArea(int areaIndex) =>
+            _areaDirector != null ? _areaDirector.LargeCountForArea(areaIndex) : 0;
 
         /// <summary>A cosmetic-only flavour for a dropped part (WV-228) — parts carry no gameplay
         /// identity anymore, but <c>PickupArtDirector</c> still swaps in the Hydro device's art for

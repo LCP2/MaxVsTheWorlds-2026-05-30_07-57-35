@@ -39,36 +39,57 @@ namespace MaxWorlds.Weapons
         };
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
-        /// retired by MV-290).</summary>
+        /// retired by MV-290; Water Balloon removed by MV-370, now a primary add-on).</summary>
         public static readonly AbilityKind[] AllAbilityKinds =
         {
-            AbilityKind.WaterBalloon,
             AbilityKind.Speed,
             AbilityKind.Teleport,
             AbilityKind.WeaponCooldown,
         };
 
-        /// <summary>The level cap for an RCDA track (spec §6, MV-291): every track offers the same 5
-        /// upgrade steps (levels 1-6) — Spread and Damage were unified onto Range's cap so no track
-        /// reads as a lesser upgrade path than another.</summary>
-        public static int MaxLevel(WeaponTrackKind kind) => 6;
+        /// <summary>The Water Balloon primary add-on's tracks (MV-370), in the order the weapons
+        /// screen lists them — same "owned from run start" shape as <see cref="AllTrackKinds"/>.</summary>
+        public static readonly WaterBalloonTrackKind[] AllWaterBalloonTrackKinds =
+        {
+            WaterBalloonTrackKind.Range,
+            WaterBalloonTrackKind.SplashArea,
+            WaterBalloonTrackKind.RepeatFire,
+        };
+
+        /// <summary>The level cap for an RCDA track. Damage and Depletion Rate keep MV-291's 5 steps
+        /// (levels 1-6). Range and Spread get 3 more (levels 1-9, MV-367, Lee: "introduce probably two
+        /// or three more upgrade levels" so a lower ceiling still reads as steady, frequent growth
+        /// rather than two giant jumps) — so unlike MV-291, the tracks no longer share one flat cap.</summary>
+        public static int MaxLevel(WeaponTrackKind kind)
+        {
+            switch (kind)
+            {
+                case WeaponTrackKind.Range:
+                case WeaponTrackKind.Spread:
+                    return 9;
+                default:
+                    return 6;
+            }
+        }
 
         /// <summary>Extra spray reach in metres each Range track level above 1 adds (MV-263) — layered
         /// additively on the weapon's authored base reach, the same shape as the legacy nozzle bonuses
         /// (<see cref="MaxWorlds.Upgrades.UpgradeState.RangeBonus"/>) it runs alongside during the
         /// WV-230 migration. Level 1 is every track's starting level (spec §6), so it adds nothing.
-        /// Retuned (MV-280, MV-289, re-retuned MV-291 to flatten the curve and cap it forgivingly) so
-        /// the 5 steps up to the Range cap (level 6) land at ~2.5x base (5 + 1.5*5 = 12.5) instead of
-        /// the old ~3x — change the two together.</summary>
-        public const float DefaultRcdaRangePerLevel = 1.5f;
+        /// Retuned again MV-367 (Lee: max-level reach is "ridiculous," cut the top end ~20%) against
+        /// the new 8-step cap (<see cref="MaxLevel(WeaponTrackKind)"/>): the steps up to the Range cap
+        /// (level 9) now land at exactly 2x base (5 + 0.625*8 = 10) — 20% below MV-291's 2.5x/12.5 —
+        /// change the two together.</summary>
+        public const float DefaultRcdaRangePerLevel = 0.625f;
 
         /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263, MV-281,
         /// MV-289, re-retuned MV-291 against the widened cap, re-retuned MV-301 against the re-narrowed
-        /// base — <see cref="MaxLevel(WeaponTrackKind)"/> — so the 5 steps land at ~4.1x base, evenly:
-        /// each step is a flat +10° on the total arc (8*0.625 = 5° half-angle/level). Tuned against
-        /// <see cref="WaterBlaster.DefaultConeHalfAngle"/> so MV-301's ~16° total base opens to a
-        /// ~66° total ceiling at the maxed Spread track (change the two together).</summary>
-        public const float DefaultRcdaSpreadPerLevel = 0.625f;
+        /// base, re-retuned again MV-367 against both the re-narrowed MV-367 base and the new 8-step
+        /// cap — <see cref="MaxLevel(WeaponTrackKind)"/>). Lee's MV-367 direction cuts the max-level
+        /// arc ~20% below MV-301's 66° total ceiling: 8 steps at 70%/level over the new 4° base land
+        /// exactly at 4*(1+0.7*8) = 26.4° half-angle, i.e. 52.8° total (66*0.8 = 52.8 — change the two
+        /// together).</summary>
+        public const float DefaultRcdaSpreadPerLevel = 0.7f;
 
         /// <summary>Fraction each Damage track level above 1 adds to the primary's per-tick damage
         /// (MV-291) — the curve's missing third axis: Range and Spread already had a visible per-level
@@ -105,18 +126,36 @@ namespace MaxWorlds.Weapons
         /// weapon's authored base drain (MV-299) — level 1 is the unmodified base, same as every other
         /// track, but each level above it SUBTRACTS from the drain rather than adding to a magnitude.
         /// Floored at 20% of base so a maxed track buys a much longer tank, never a literally free
-        /// one.</summary>
-        public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel) =>
-            baseDrainPerSecond * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
+        /// one. <paramref name="outputScale"/> (MV-368, default 1x) layers the weapon's current output
+        /// — see <see cref="DrainOutputScale"/> — on TOP of the track's own reduction, so upgrading
+        /// Range/Spread makes the tank drain faster again even at a maxed Depletion Rate track.</summary>
+        public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel, float outputScale = 1f) =>
+            baseDrainPerSecond * outputScale * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
+
+        /// <summary>How much the tank's drain scales for the weapon's ACTUAL current output — the
+        /// effective reach and cone, not "number of upgrade levels bought" (MV-368: reading levels
+        /// would go wrong the moment a track's own per-level curve retunes, as Range/Spread's did in
+        /// MV-367). 1x at the authored base — both ratios are 1 there, so a fresh, un-upgraded weapon's
+        /// drain is untouched (AC2) — and it climbs as the Range track, the Spread track, or a nozzle
+        /// part push reach/cone past base.
+        ///
+        /// Averaged rather than multiplied: Spread's ratio alone reaches ~6.6x at its max level (a tiny
+        /// 4° base makes any absolute widening look huge as a ratio), and multiplying that against a
+        /// maxed Range ratio (2x) would empty the tank in under a second — the "unusable" failure mode
+        /// the ticket explicitly warns against. Averaging keeps a maxed weapon's drain in the same
+        /// order of magnitude as the Depletion Rate track's own 4x max buyback (see
+        /// <see cref="EffectiveDrainPerSecond"/>), so investing in both roughly cancels out instead of
+        /// one swamping the other.</summary>
+        public static float DrainOutputScale(float reach, float baseReach, float coneHalfAngle, float baseConeHalfAngle) =>
+            ((reach / baseReach) + (coneHalfAngle / baseConeHalfAngle)) * 0.5f;
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
-        /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Water
-        /// Balloon 3, Speed 4, Teleport 4, Weapon Cooldown 5.</summary>
+        /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Speed 4,
+        /// Teleport 4, Weapon Cooldown 5.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return 3;
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Teleport: return 4;
                 case AbilityKind.WeaponCooldown: return 5;
@@ -124,22 +163,30 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Water Balloon and
-        /// Teleport are the two active abilities with an on-screen control (spec §6a) and a real
-        /// cooldown; Speed and Weapon Cooldown are passive — continuous, no control to gate — so their
-        /// base cooldown is 0.</summary>
+        /// <summary>The level cap for a Water Balloon track (MV-370) — 3, the same cap the single
+        /// ability track it replaces used to have.</summary>
+        public static int MaxLevel(WaterBalloonTrackKind kind) => 3;
+
+        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Teleport is the only
+        /// remaining AbilityKind with an on-screen control (spec §6a) and a real cooldown — Water
+        /// Balloon's own base cooldown moved to <see cref="WaterBalloonBaseCooldownSeconds"/> when
+        /// MV-370 made it a primary add-on; Speed and Weapon Cooldown are passive — continuous, no
+        /// control to gate — so their base cooldown is 0.</summary>
         public static float BaseCooldownSeconds(AbilityKind kind)
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon:
-                    return DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, DefaultWaterBalloonCooldownSeconds);
                 case AbilityKind.Teleport:
                     return DevTuning.Or(DevTuning.TeleportCooldownSeconds, DefaultTeleportCooldownSeconds);
                 default:
                     return 0f;   // Speed, Weapon Cooldown — passive, no cooldown
             }
         }
+
+        /// <summary>Water Balloon's base throw cooldown before its own Repeat Fire track (MV-370
+        /// moved this off the AbilityKind switch above when Water Balloon left the shed-drop pool).</summary>
+        public static float WaterBalloonBaseCooldownSeconds() =>
+            DevTuning.Or(DevTuning.WaterBalloonCooldownSeconds, DefaultWaterBalloonCooldownSeconds);
 
         public static string DisplayName(WeaponTrackKind kind)
         {
@@ -157,10 +204,22 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "WATER BALLOON";
                 case AbilityKind.Speed: return "SPEED";
                 case AbilityKind.Teleport: return "TELEPORT";
                 case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
+                default: return kind.ToString();
+            }
+        }
+
+        /// <summary>Display name for a Water Balloon track's row on the Primary Add-ons section
+        /// (MV-370).</summary>
+        public static string DisplayName(WaterBalloonTrackKind kind)
+        {
+            switch (kind)
+            {
+                case WaterBalloonTrackKind.Range: return "RANGE";
+                case WaterBalloonTrackKind.SplashArea: return "SPLASH AREA";
+                case WaterBalloonTrackKind.RepeatFire: return "REPEAT FIRE";
                 default: return kind.ToString();
             }
         }
@@ -171,7 +230,6 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "H2O";
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Teleport: return "TP";
                 case AbilityKind.WeaponCooldown: return "CD";
@@ -186,7 +244,6 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case AbilityKind.WaterBalloon: return "Joystick-aimed lob that splashes enemies on impact.";
                 case AbilityKind.Speed: return "Passive move-speed boost.";
                 case AbilityKind.Teleport: return "Blink to a nearby spot, dodging in an instant.";
                 case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";

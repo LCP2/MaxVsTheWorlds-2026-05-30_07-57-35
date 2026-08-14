@@ -80,21 +80,21 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- appear-on-acquire
 
         [UnityTest]
-        public IEnumerator BothActiveAbilityControlsAreHiddenUntilAcquired()
+        public IEnumerator WaterBalloonIsVisibleFromRunStartTeleportIsHiddenUntilAcquired_MV370()
         {
-            Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.False);
+            // MV-370: Water Balloon is a primary add-on now, visible from run start like the RCDA
+            // itself — unlike Teleport, which is still a shed-acquired AbilityKind.
+            Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.True);
             Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.False);
             yield return null;
         }
 
         [UnityTest]
-        public IEnumerator EachControlAppearsTheMomentItsAbilityIsAcquired()
+        public IEnumerator TeleportControlAppearsTheMomentItsAbilityIsAcquired()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
 
-            Assert.That(Find("Water Balloon Joystick").gameObject.activeSelf, Is.True);
             Assert.That(Find("Teleport Joystick").gameObject.activeSelf, Is.True);
         }
 
@@ -103,15 +103,13 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheWaterBalloonJoystickGrowsWhenItLevelsUp()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            yield return null;
             float sizeAtL1 = Find("Water Balloon Joystick").sizeDelta.x;
 
-            WeaponSystemState.LevelUpAbility(AbilityKind.WaterBalloon);
+            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range);
             yield return null;
             float sizeAtL2 = Find("Water Balloon Joystick").sizeDelta.x;
 
-            Assert.Greater(sizeAtL2, sizeAtL1, "a leveled-up Water Balloon must read bigger (spec §6a)");
+            Assert.Greater(sizeAtL2, sizeAtL1, "a leveled-up Water Balloon track must read bigger (spec §6a)");
         }
 
         [UnityTest]
@@ -132,21 +130,22 @@ namespace MaxWorlds.Tests.PlayMode
         // ---------------------------------------------------------------- Water Balloon joystick input
 
         [UnityTest]
-        public IEnumerator PressingTheJoystickWhenUnacquiredDoesNothing()
+        public IEnumerator PressingTheJoystickWithNoCellsBankedDoesNothing_MV370()
         {
+            // MV-370: Water Balloon is always owned now — SetUp's PickupWallet.Reset() leaves the bank
+            // at 0 cells, which is what must gate the press, not acquisition.
             var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
             Assert.IsNotNull(control, "the Water Balloon joystick's control component is missing");
 
             control.OnPointerDown(new PointerEventData(EventSystem.current) { position = Vector2.zero });
             yield return null;
 
-            Assert.That(control.IsAiming, Is.False, "an unowned control must ignore the press entirely");
+            Assert.That(control.IsAiming, Is.False, "a control with no cell to spend must ignore the press entirely");
         }
 
         [UnityTest]
-        public IEnumerator DraggingAndReleasingThrowsWhenAcquiredAndReady()
+        public IEnumerator DraggingAndReleasingThrowsWhenReady()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
@@ -169,7 +168,6 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator ATapWithNoRealDragDoesNotThrow()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
@@ -251,7 +249,6 @@ namespace MaxWorlds.Tests.PlayMode
             // sitting through the authored 3s — this is the exact regression MV-292 exists for: prior
             // playtest found Water Balloon "worked once" through the real on-screen control.
             DevTuning.WaterBalloonCooldownSeconds = 0.05f;
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);
             yield return null;
 
@@ -317,7 +314,6 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheNewControlsDoNotOverlapTheMoveStickOrTheBossBar()
         {
-            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             yield return null;
 

@@ -48,6 +48,11 @@ namespace MaxWorlds.Enemies
 
             public int TotalCount => Rusher + Bruiser + Heavy + Brute + Gunner + Bomber + Blinker;
 
+            /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
+            /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
+            /// rusher tier drops loot, so this is every solved count but <see cref="Rusher"/>.</summary>
+            public int LargeCount => TotalCount - Rusher;
+
             public float TotalThreatValue =>
                 Rusher * ThreatValues.Rusher + Bruiser * ThreatValues.Bruiser +
                 Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute +

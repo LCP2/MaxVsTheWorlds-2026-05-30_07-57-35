@@ -2,6 +2,7 @@ using System.Collections;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -9,18 +10,22 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Weapons
 {
     /// <summary>
-    /// The two shed-acquired abilities that need a live component to actually DO something (WV-231):
-    /// Water Balloon's throw/landing/splash, and Teleport's blink. Speed and Weapon Cooldown are pure
+    /// The two active abilities that need a live component to actually DO something (WV-231): Water
+    /// Balloon's throw/landing/splash, and Teleport's blink. Speed and Weapon Cooldown are pure
     /// passive multipliers with no activation and need nothing beyond the read
-    /// <see cref="PlayerController.WalkSpeed"/> already does.
+    /// <see cref="PlayerController.WalkSpeed"/> already does. Water Balloon left the shed-acquired
+    /// <see cref="AbilityKind"/> pool by MV-370 — it's a primary add-on now, owned from run start and
+    /// gated on cooldown + a per-throw cell cost rather than acquisition; Teleport is still a
+    /// shed-acquired <see cref="AbilityKind"/>.
     ///
     /// Self-attaches to Max from <see cref="PlayerController.Awake"/> — no scene wiring, the same
     /// code-driven-scenes rule <see cref="MaxWorlds.Combat.WaterBlaster"/> follows for its own
     /// sub-components.
     ///
-    /// MV-290: every activation is gated on cooldown only now (spec §6a's cell cost is retired) —
-    /// must be acquired, then must be off cooldown. The on-screen controls that call these (WV-240)
-    /// are out of this ticket's scope; the public Try* methods are the hand-off point.
+    /// MV-290: Teleport's activation is gated on cooldown only (spec §6a's cell cost is retired) —
+    /// must be acquired, then must be off cooldown. Water Balloon (MV-370) is gated on cooldown plus
+    /// one cell per throw. The on-screen controls that call these (WV-240) are out of this ticket's
+    /// scope; the public Try* methods are the hand-off point.
     /// </summary>
     [RequireComponent(typeof(PlayerController))]
     [RequireComponent(typeof(CharacterController))]
@@ -42,9 +47,11 @@ namespace MaxWorlds.Weapons
         /// <summary>Seconds left before Water Balloon can be thrown again, 0 when ready.</summary>
         public float WaterBalloonCooldownRemaining => Mathf.Max(0f, _waterBalloonCooldown);
 
-        /// <summary>Owned AND off cooldown — what an on-screen control (WV-240) gates its press on.</summary>
-        public bool WaterBalloonReady =>
-            WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon) && _waterBalloonCooldown <= 0f;
+        /// <summary>Off cooldown AND a cell banked to spend — what an on-screen control (WV-240) gates
+        /// its press on. MV-370: Water Balloon is a primary add-on now, always available from run
+        /// start, so unlike before there's no "owned" gate here — only cooldown and the per-throw cell
+        /// cost.</summary>
+        public bool WaterBalloonReady => _waterBalloonCooldown <= 0f && PickupWallet.PowerCells > 0;
 
         /// <summary>Seconds left before Teleport can be used again, 0 when ready.</summary>
         public float TeleportCooldownRemaining => Mathf.Max(0f, _teleportCooldown);
@@ -53,10 +60,21 @@ namespace MaxWorlds.Weapons
             WeaponSystemState.IsAcquired(AbilityKind.Teleport) && _teleportCooldown <= 0f;
 
         /// <summary>The splash radius the current settings would produce — what WV-241's landing
-        /// circle and this component's own damage query both size themselves from.</summary>
+        /// circle and this component's own damage query both size themselves from. MV-370: scales with
+        /// the Splash Area track's level, not just a fixed multiple of the large robot's footprint.</summary>
         public static float SplashRadius => AbilityTuning.WaterBalloonSplashRadius(
             EnemyArchetype.Bruiser.ColliderRadius,
-            DevTuning.Or(DevTuning.WaterBalloonSplashMult, AbilityTuning.DefaultWaterBalloonSplashMult));
+            WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea),
+            DevTuning.Or(DevTuning.WaterBalloonSplashMult, AbilityTuning.DefaultWaterBalloonSplashMult),
+            DevTuning.Or(DevTuning.WaterBalloonSplashAreaPerLevel, AbilityTuning.DefaultWaterBalloonSplashAreaPerLevel));
+
+        /// <summary>The lob distance the current Range level actually throws — the same value
+        /// <see cref="TryThrowWaterBalloon"/> lands at, so MV-373's auto-aim scan never picks a
+        /// candidate landing point the real throw wouldn't reach.</summary>
+        public static float ThrowDistance => AbilityTuning.WaterBalloonDistance(
+            WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range),
+            DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance),
+            DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel));
 
         private void Awake()
         {
@@ -89,20 +107,24 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>Throw a Water Balloon toward <paramref name="aimDirection"/> (WV-240 drives this
-        /// from the joystick release). Level only changes throw DISTANCE (spec §6a) — never damage or
-        /// splash size. Returns false (no cooldown started) if unowned or on cooldown.</summary>
+        /// from the joystick release). Range track raises throw DISTANCE; Splash Area and Repeat Fire
+        /// (MV-370) raise splash radius and fire rate independently. Returns false (no cooldown
+        /// started, no cell spent) if on cooldown, aimless, or the bank has no cell to spend.</summary>
         public bool TryThrowWaterBalloon(Vector3 aimDirection)
         {
-            if (!WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon)) return false;
             if (_waterBalloonCooldown > 0f) return false;
 
             Vector3 dir = new Vector3(aimDirection.x, 0f, aimDirection.z);
             if (dir.sqrMagnitude < 1e-4f) return false;
             dir.Normalize();
 
-            _waterBalloonCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.WaterBalloon);
+            // MV-370: each balloon fired costs one cell — spent only once the throw is actually
+            // committing (direction validated), never on a degenerate press.
+            if (!PickupWallet.TrySpendPowerCell()) return false;
 
-            int level = WeaponSystemState.AbilityLevel(AbilityKind.WaterBalloon);
+            _waterBalloonCooldown = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
+
+            int level = WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range);
             float baseDistance = DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance);
             float perLevel = DevTuning.Or(DevTuning.WaterBalloonDistancePerLevel, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
             float distance = AbilityTuning.WaterBalloonDistance(level, baseDistance, perLevel);

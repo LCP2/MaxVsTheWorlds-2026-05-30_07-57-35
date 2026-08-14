@@ -87,9 +87,20 @@ namespace MaxWorlds.Enemies
             return missile;
         }
 
-        /// <summary>Gunmetal shaft — the same "painted steel" family the rest of the swarm's hardware
-        /// wears, not a saturated hue that would compete with the Bomber's own body colour.</summary>
-        private static readonly Color ShaftColor = new Color(0.30f, 0.31f, 0.34f);
+        /// <summary>MV-377: the shaft used to be a "painted steel" gunmetal (0.30, 0.31, 0.34) — nearly
+        /// identical to <see cref="MaxWorlds.Rendering.BiomePalette.Backyard"/>'s Stone (0.36, 0.35,
+        /// 0.33) and Metal (0.40, 0.41, 0.43), and close enough in luminance to both shades of the
+        /// yard's grass to disappear against it too. Since the shaft (plus the two fins, which share
+        /// this colour) is most of the missile's silhouette, that made the whole airframe read as a
+        /// grey smear over a busy green/grey yard. Now a dark, saturated rust-copper: warm (opposite
+        /// hue from the grass it flies over) and darker than any grass/stone/metal tone in the
+        /// biome, so contrast survives regardless of what's behind it. See
+        /// <c>HomingMissileTests.TheMissileBody_ReadsAgainstTheGrassItFliesOver</c>.</summary>
+        private static readonly Color ShaftColor = new Color(0.32f, 0.08f, 0.03f);
+
+        /// <summary>Exposes <see cref="ShaftColor"/> for <c>HomingMissileTests</c> (MV-377), same shape
+        /// as <see cref="WarnColorForTests"/>.</summary>
+        public static Color ShaftColorForTests => ShaftColor;
 
         /// <summary>The tail fins and warhead band — the game's one warn colour (see
         /// <see cref="MaxWorlds.VFX.RobotRig"/>'s EyeWarn/EyeWarn-alike), so ordnance in flight reads

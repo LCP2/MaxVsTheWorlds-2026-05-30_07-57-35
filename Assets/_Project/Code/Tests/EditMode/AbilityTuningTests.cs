@@ -59,16 +59,52 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void TheSplashRadiusIsTheSpecMultipleOfTheLargeRobotsFootprint()
+        public void TheSplashRadiusIsTheSpecMultipleOfTheLargeRobotsFootprintAtLevel1()
         {
-            // Spec §6a: "an area ≈ 2× the large robot's footprint" — waterBalloonSplashMult defaults to 2.
-            Assert.That(AbilityTuning.WaterBalloonSplashRadius(0.55f, 2f), Is.EqualTo(1.1f).Within(1e-5f));
+            // Spec §6a: "an area ≈ 2× the large robot's footprint" — waterBalloonSplashMult defaults to
+            // 2. Level 1 is the Splash Area track's starting level (MV-370) — it must not widen anything yet.
+            Assert.That(AbilityTuning.WaterBalloonSplashRadius(0.55f, 1, 2f, 0.3f), Is.EqualTo(1.1f).Within(1e-5f));
+        }
+
+        [Test]
+        public void EachSplashAreaLevelWidensTheSplashFurther_MV370()
+        {
+            float l1 = AbilityTuning.WaterBalloonSplashRadius(0.55f, 1, 2f, 0.3f);
+            float l2 = AbilityTuning.WaterBalloonSplashRadius(0.55f, 2, 2f, 0.3f);
+            float l3 = AbilityTuning.WaterBalloonSplashRadius(0.55f, 3, 2f, 0.3f);
+            Assert.Greater(l2, l1, "level 2 must splash wider than level 1");
+            Assert.Greater(l3, l2, "level 3 must splash wider than level 2");
         }
 
         [Test]
         public void TheSplashRadiusNeverGoesNegative()
         {
-            Assert.That(AbilityTuning.WaterBalloonSplashRadius(-1f, -1f), Is.EqualTo(0f).Within(1e-5f));
+            Assert.That(AbilityTuning.WaterBalloonSplashRadius(-1f, 1, -1f, 0.3f), Is.EqualTo(0f).Within(1e-5f));
+        }
+
+        [Test]
+        public void RepeatFireLevelOneIsTheBaseCooldownUnmodified_MV370()
+        {
+            Assert.That(AbilityTuning.WaterBalloonCooldownSeconds(1, 9f, 0.2f), Is.EqualTo(9f).Within(1e-5f),
+                "level 1 is the track's starting point — it should not shorten the cooldown yet");
+        }
+
+        [Test]
+        public void EachRepeatFireLevelShortensTheCooldownFurther_MV370()
+        {
+            float l1 = AbilityTuning.WaterBalloonCooldownSeconds(1, 9f, 0.2f);
+            float l2 = AbilityTuning.WaterBalloonCooldownSeconds(2, 9f, 0.2f);
+            float l3 = AbilityTuning.WaterBalloonCooldownSeconds(3, 9f, 0.2f);
+            Assert.Less(l2, l1, "level 2 must throw more often than level 1");
+            Assert.Less(l3, l2, "level 3 must throw more often than level 2");
+        }
+
+        [Test]
+        public void RepeatFireCooldownNeverDropsBelowTheFortyPercentFloor_MV370()
+        {
+            float cooldown = AbilityTuning.WaterBalloonCooldownSeconds(99, 9f, 0.2f);
+            Assert.That(cooldown, Is.EqualTo(9f * 0.4f).Within(1e-4f),
+                "an oversized level must clamp at the 40% floor, not swing the cooldown to zero");
         }
 
         // ---------------------------------------------------------------- Teleport (MV-292)
