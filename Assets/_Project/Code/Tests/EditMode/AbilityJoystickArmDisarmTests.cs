@@ -259,6 +259,9 @@ namespace MaxWorlds.Tests.EditMode
         {
             // MV-381: same fix as Water Balloon, through the shared base — an owned control that's
             // merely unspendable right now (on cooldown) must still preview on press, not go silent.
+            // MV-385: Lee's playtest found no landing-target indicator during Teleport aim at all — this
+            // now checks the circle itself (LandingCircleVisible/VertexCount), not just IsAiming, the
+            // same MV-356-style gap Water Balloon's own preview test already closed.
             var control = NewTeleportControl();
             control.OnPointerDown(At(Vector2.zero));
             control.OnDrag(At(new Vector2(OverThresholdPx, 0f)));
@@ -269,6 +272,35 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(control.IsAiming, Is.True,
                 "a press while on cooldown must still preview the aim, not answer with silence");
+            Assert.That(control.LandingCircleVisible, Is.True,
+                "the landing circle itself must show, not just the aiming flag");
+            Assert.That(control.LandingCircleVertexCount, Is.GreaterThan(0),
+                "an active but empty mesh reads as invisible to the player exactly like not active does");
+        }
+
+        [Test]
+        public void Teleport_PressAloneShowsAVisibleNonEmptyLandingCircle()
+        {
+            // MV-385 AC(a): "a visible landing-target indicator appears during Teleport aim, before
+            // commit" — the ordinary ready-and-owned case, not just the on-cooldown preview above.
+            var control = NewTeleportControl();
+
+            control.OnPointerDown(At(Vector2.zero));
+
+            Assert.That(control.LandingCircleVisible, Is.True, "pressing an owned, ready Teleport control must show a landing circle");
+            Assert.That(control.LandingCircleVertexCount, Is.GreaterThan(0), "the landing circle mesh must not be empty");
+        }
+
+        [Test]
+        public void Teleport_ReleasingHidesTheLandingCircle()
+        {
+            var control = NewTeleportControl();
+            control.OnPointerDown(At(Vector2.zero));
+            Assert.That(control.LandingCircleVisible, Is.True, "precondition: the circle is showing mid-aim");
+
+            control.OnPointerUp(At(Vector2.zero));
+
+            Assert.That(control.LandingCircleVisible, Is.False, "releasing must hide the landing circle again");
         }
     }
 }

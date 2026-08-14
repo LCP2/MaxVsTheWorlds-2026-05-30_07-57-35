@@ -41,6 +41,28 @@ namespace MaxWorlds.UI
             InitBase(knob, origin, rings);
         }
 
+        /// <summary>True while the landing circle is actually showing — the same test hook
+        /// <see cref="WaterBalloonJoystickControl.LandingCircleVisible"/> exposes (MV-356: a control can
+        /// read as "aiming" via <see cref="AbilityJoystickControlBase.IsAiming"/> while the mesh it's
+        /// supposed to show never actually went active, and only checking the flag would miss that).
+        /// MV-385: Lee's playtest found no landing-target indicator during Teleport aim — this lets a
+        /// test assert the circle itself, not just the aiming flag, closing the same gap for Teleport
+        /// that Water Balloon already had covered.</summary>
+        public bool LandingCircleVisible => _circleGo != null && _circleGo.activeSelf;
+
+        /// <summary>Vertex count of the landing circle's current mesh — "active but empty" reads as
+        /// invisible to the player exactly like "not active" does, same reasoning as
+        /// <see cref="WaterBalloonJoystickControl.LandingCircleVertexCount"/>.</summary>
+        public int LandingCircleVertexCount
+        {
+            get
+            {
+                if (_circleGo == null) return 0;
+                var mesh = _circleGo.GetComponent<MeshFilter>().sharedMesh;
+                return mesh != null ? mesh.vertexCount : 0;
+            }
+        }
+
         protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.Teleport);
 
         protected override bool AbilityReady => _abilities != null && _abilities.TeleportReady;
