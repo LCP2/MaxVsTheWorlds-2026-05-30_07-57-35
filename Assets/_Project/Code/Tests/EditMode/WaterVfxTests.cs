@@ -203,6 +203,92 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- MV-379: visual-only strength scaling, decoupled from the cone ---
+
+        [Test]
+        public void VisualStrength_ScalesStreamAndMuzzleSizeAndRate()
+        {
+            var weakGo = new GameObject("blaster-vfx-weak");
+            var fullGo = new GameObject("blaster-vfx-full");
+            try
+            {
+                var weak = weakGo.AddComponent<WaterVfx>();
+                weak.Init(range: 6f, radius: 1.1f, coneHalfAngle: 8f, visualStrength: 0f);
+
+                var full = fullGo.AddComponent<WaterVfx>();
+                full.Init(range: 6f, radius: 1.1f, coneHalfAngle: 8f, visualStrength: 1f);
+
+                var weakStream = weakGo.transform.Find("WaterStream").GetComponent<ParticleSystem>();
+                var fullStream = fullGo.transform.Find("WaterStream").GetComponent<ParticleSystem>();
+
+                Assert.That(weakStream.main.startSize.constantMax, Is.LessThan(fullStream.main.startSize.constantMax),
+                    "an un-upgraded (visualStrength 0) stream must read thinner near the muzzle than the fully-invested one");
+                Assert.That(weakStream.emission.rateOverTime.constant, Is.LessThan(fullStream.emission.rateOverTime.constant),
+                    "an un-upgraded stream must also be sparser (lower particle rate), not just thinner");
+
+                var weakMuzzle = weakGo.transform.Find("WaterMuzzle").GetComponent<ParticleSystem>();
+                var fullMuzzle = fullGo.transform.Find("WaterMuzzle").GetComponent<ParticleSystem>();
+
+                Assert.That(weakMuzzle.main.startSize.constant, Is.LessThan(fullMuzzle.main.startSize.constant),
+                    "an un-upgraded weapon's muzzle burst must be visibly smaller");
+                Assert.That(weakMuzzle.emission.rateOverTime.constant, Is.LessThan(fullMuzzle.emission.rateOverTime.constant),
+                    "an un-upgraded weapon's muzzle burst must be sparser too");
+            }
+            finally
+            {
+                Object.DestroyImmediate(weakGo);
+                Object.DestroyImmediate(fullGo);
+            }
+        }
+
+        [Test]
+        public void VisualStrength_NeverMovesTheStreamAngleAwayFromTheRealCone()
+        {
+            // AC3: the visual size/density dials are decoupled from the cone, but the stream's ANGLE
+            // must still describe the same weapon the hit test and reticle use, at any visual strength.
+            var go = new GameObject("blaster-vfx-angle");
+            try
+            {
+                var vfx = go.AddComponent<WaterVfx>();
+                vfx.Init(range: 6f, radius: 1.1f, coneHalfAngle: 8f, visualStrength: 0f);
+
+                Assert.That(vfx.StreamHalfAngle, Is.EqualTo(WaterVfx.SprayHalfAngleFor(8f)).Within(0.01f),
+                    "the stream's angle must still match the real cone even at the weakest visual strength");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void VisualStrength_DefaultsToFullForCallersThatDoNotPassIt()
+        {
+            // Backward compatibility: every pre-MV-379 call site (and test) that doesn't pass
+            // visualStrength must keep behaving exactly as before.
+            var withDefault = new GameObject("blaster-vfx-default");
+            var explicitFull = new GameObject("blaster-vfx-explicit-full");
+            try
+            {
+                var a = withDefault.AddComponent<WaterVfx>();
+                a.Init(range: 6f, radius: 1.1f, coneHalfAngle: 8f);
+
+                var b = explicitFull.AddComponent<WaterVfx>();
+                b.Init(range: 6f, radius: 1.1f, coneHalfAngle: 8f, visualStrength: 1f);
+
+                var streamA = withDefault.transform.Find("WaterStream").GetComponent<ParticleSystem>();
+                var streamB = explicitFull.transform.Find("WaterStream").GetComponent<ParticleSystem>();
+
+                Assert.That(streamA.main.startSize.constantMax, Is.EqualTo(streamB.main.startSize.constantMax).Within(1e-4f));
+                Assert.That(streamA.emission.rateOverTime.constant, Is.EqualTo(streamB.emission.rateOverTime.constant).Within(1e-4f));
+            }
+            finally
+            {
+                Object.DestroyImmediate(withDefault);
+                Object.DestroyImmediate(explicitFull);
+            }
+        }
+
         [Test]
         public void WaterVfx_SplashIsCappedPerFrame()
         {

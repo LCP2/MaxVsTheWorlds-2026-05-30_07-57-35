@@ -86,6 +86,15 @@ namespace MaxWorlds.VFX
         [Tooltip("Cone half-angle the splash droplets scatter through, degrees.")]
         [SerializeField] private float splashSpread = 42f;
 
+        [Header("Visual-only level scaling (MV-379)")]
+        [Tooltip("Stream/core/muzzle-burst size at the weapon's weakest visual strength (0), as a " +
+                 "fraction of their full size at strength 1. Deliberately independent of the cone " +
+                 "angle — see Init's doc.")]
+        [SerializeField] private float minVisualSizeScale = 0.5f;
+        [Tooltip("Stream rate and muzzle-burst rate at the weapon's weakest visual strength (0), as a " +
+                 "fraction of their full rate at strength 1 — this is what reads as 'thin/sparse'.")]
+        [SerializeField] private float minVisualRateScale = 0.35f;
+
         private ParticleSystem _stream;     // the water body — alpha-blended droplets
         private ParticleSystem _core;       // bright additive centre of the jet
         private ParticleSystem _muzzle;     // spray + bloom at the nozzle
@@ -94,22 +103,41 @@ namespace MaxWorlds.VFX
 
         private float _range = 6f;
         private float _radius = 0.6f;
+        private float _visualStrength = 1f;
         private bool _built;
         private bool _streaming;
         private int _splashesThisFrame;
+
+        /// <summary>0..1 how far this weapon's visual-only size dials (stream/core/muzzle-burst size,
+        /// the emission disc, particle size range) sit between <see cref="minVisualSizeScale"/> and
+        /// their full authored size. Folded straight into <see cref="_radius"/> at every Init/Refit, so
+        /// every size formula below that already reads <c>_radius</c> scales for free.</summary>
+        private float SizeScale => Mathf.Lerp(minVisualSizeScale, 1f, Mathf.Clamp01(_visualStrength));
+
+        /// <summary>0..1 how far the stream's and muzzle-burst's particle RATE (density) sits between
+        /// <see cref="minVisualRateScale"/> and full — this is what reads as "sparse" vs "thick"
+        /// independently of size.</summary>
+        private float RateScale => Mathf.Lerp(minVisualRateScale, 1f, Mathf.Clamp01(_visualStrength));
 
         /// <summary>Build the systems to match the blaster's actual reach. Safe to call twice.</summary>
         /// <summary>
         /// Build the water for a weapon of this reach and spread.
         ///
         /// <paramref name="coneHalfAngle"/> is the blaster's REAL cone — the same number the hit
-        /// test and the aim reticle use — so the stream is sized from the weapon rather than
-        /// authored next to it and left to rot (YT-110).
+        /// test and the aim reticle use — so the stream's ANGLE is sized from the weapon rather than
+        /// authored next to it and left to rot (YT-110). <paramref name="visualStrength"/> is
+        /// deliberately NOT derived from the cone (MV-379): it scales only the cosmetic size/density
+        /// dials (<see cref="SizeScale"/>/<see cref="RateScale"/>), so an un-upgraded weapon can read
+        /// as thinner/sparser near the muzzle without narrowing the cone the hit test and reticle both
+        /// still use. This intentionally breaks YT-110/YT-187's old "water and hit-cone must always
+        /// agree" rule for THICKNESS — width/reach agreement (<see cref="SprayHalfAngleFor"/>) is
+        /// unchanged and still enforced.
         /// </summary>
-        public void Init(float range, float radius, float coneHalfAngle)
+        public void Init(float range, float radius, float coneHalfAngle, float visualStrength = 1f)
         {
             _range = Mathf.Max(0.1f, range);
-            _radius = Mathf.Max(0.05f, radius);
+            _visualStrength = visualStrength;
+            _radius = Mathf.Max(0.05f, radius) * SizeScale;
             streamAngle = SprayHalfAngleFor(coneHalfAngle);
             if (_built) { Refit(); return; }   // a nozzle upgrade re-shapes the live stream (YT-141)
             _built = true;
@@ -124,10 +152,10 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Re-apply reach and spread to the already-built stream (YT-141), so a nozzle upgrade
-        /// re-shapes the visible water to match the reticle and the hit test — the three must agree
-        /// (YT-110). Cheaper than rebuilding the particle systems: the shape angle and the droplet
-        /// lifetime (which is what makes the water die at the weapon's real reach) are just re-set.
+        /// Re-apply reach, spread and visual strength to the already-built stream (YT-141, MV-379), so
+        /// a nozzle/track upgrade re-shapes the visible water to match the reticle and the hit test
+        /// (angle) and the weapon's current level (size/density) — cheaper than rebuilding the particle
+        /// systems.
         /// </summary>
         private void Refit()
         {
@@ -137,7 +165,9 @@ namespace MaxWorlds.VFX
                 var m = _stream.main;
                 m.startSpeed = new ParticleSystem.MinMaxCurve(speed * 0.82f, speed * 1.15f);
                 m.startLifetime = Reach / speed;
-                var s = _stream.shape; s.angle = streamAngle;
+                m.startSize = new ParticleSystem.MinMaxCurve(_radius * 0.22f, _radius * 0.55f);
+                var s = _stream.shape; s.angle = streamAngle; s.radius = _radius * 0.18f;
+                var e = _stream.emission; e.rateOverTime = streamRate * RateScale;
             }
             if (_core != null)
             {
@@ -145,7 +175,15 @@ namespace MaxWorlds.VFX
                 var m = _core.main;
                 m.startSpeed = speed;
                 m.startLifetime = (Reach * 0.8f) / speed;
-                var s = _core.shape; s.angle = streamAngle * 0.4f;
+                m.startSize = new ParticleSystem.MinMaxCurve(_radius * 0.75f, _radius * 1.15f);
+                var s = _core.shape; s.angle = streamAngle * 0.4f; s.radius = _radius * 0.1f;
+            }
+            if (_muzzle != null)
+            {
+                var m = _muzzle.main;
+                m.startSize = _radius * 1.1f;
+                var s = _muzzle.shape; s.radius = _radius * 0.16f;
+                var e = _muzzle.emission; e.rateOverTime = 40f * RateScale;
             }
         }
 
@@ -246,7 +284,7 @@ namespace MaxWorlds.VFX
             main.gravityModifier = 0.4f;           // a touch of droop — water, not a laser
 
             var emission = ps.emission;
-            emission.rateOverTime = streamRate;
+            emission.rateOverTime = streamRate * RateScale;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
@@ -318,7 +356,7 @@ namespace MaxWorlds.VFX
             main.maxParticles = 60;
 
             var emission = ps.emission;
-            emission.rateOverTime = 40f;
+            emission.rateOverTime = 40f * RateScale;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Sphere;

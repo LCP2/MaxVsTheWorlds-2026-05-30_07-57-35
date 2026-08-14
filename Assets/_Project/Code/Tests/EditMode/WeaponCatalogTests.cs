@@ -60,14 +60,16 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_BaseArcIsEightDegreesTotal_MV367()
+        public void SpreadTrack_BaseArcIsSixteenDegreesTotal_MV379()
         {
-            // Lee, MV-367: "the initial beam ... much narrower so that it looks weak to begin with."
-            // MV-301's ~16° total base already read as narrow; MV-367 halves it again to a ~8° total
-            // arc. Power is untouched — a dead-ahead target stays inside the cone at any half-angle
-            // above 0, see NarrowedBaseConeStillHitsADeadAheadTarget_MV367 below.
-            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(8f).Within(0.01f),
-                "MV-367: base spray must read as a much narrower ~8° total arc");
+            // MV-367 narrowed the base cone to make the beam "look weak to begin with," but the cone
+            // feeds the hit test too, so that also made robots harder to hit (Lee's playtest, MV-379).
+            // MV-379 restores the pre-MV-367 8°-half-angle/16°-total base and moves the "looks weaker"
+            // job onto WaterVfx's visual-only dials instead — see WaterVfx.Init's doc. Power is
+            // untouched either way: a dead-ahead target stays inside the cone at any half-angle above
+            // 0, see NarrowedBaseConeStillHitsADeadAheadTarget_MV367 below.
+            Assert.That(WaterBlaster.DefaultConeHalfAngle * 2f, Is.EqualTo(16f).Within(0.01f),
+                "MV-379: base spray must be restored to its pre-MV-367 ~16° total arc");
         }
 
         [Test]
@@ -95,16 +97,19 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_MaxLevelArcIsRoughlyFiftyThreeDegreesTotal_MV367()
+        public void SpreadTrack_MaxLevelArcDoublesWithTheRestoredBase_MV379()
         {
-            // MV-367 cuts the max-level arc ~20% below MV-301's 66° total ceiling (66 * 0.8 = 52.8),
-            // over the new 8-step (levels 1-9) cap.
+            // MV-379 restores the base half-angle from MV-367's 4° to the pre-MV-367 8°, without
+            // retuning the per-level step (DefaultRcdaSpreadPerLevel is untouched) — so the maxed
+            // Spread track's arc doubles right along with the base: 8 * (1 + 0.7*8) = 52.8, doubled
+            // to a 105.6° total (MV-367's old 52.8° total ceiling doubles too, the same multiplicative
+            // relationship it always had to the base).
             float baseHalfAngle = WaterBlaster.DefaultConeHalfAngle;
             float maxHalfAngle = WeaponCatalog.EffectiveConeHalfAngle(
                 baseHalfAngle, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-            Assert.That(maxHalfAngle * 2f, Is.EqualTo(52.8f).Within(0.5f),
-                "MV-367: retuning the base angle or the per-level step must keep the maxed Spread track ~20% below MV-301's 66° total");
+            Assert.That(maxHalfAngle * 2f, Is.EqualTo(105.6f).Within(0.5f),
+                "MV-379: restoring the base angle (without retuning the per-level step) must scale the maxed Spread arc by the same factor");
         }
 
         [Test]
@@ -264,6 +269,41 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.Less(maxedDepletionSpend, noDepletionSpend, "Depletion Rate must still buy back sustain against a maxed-output weapon");
             Assert.Greater(maxedDepletionSpend, 0f, "even a maxed Depletion Rate track must leave a real, positive cost to run");
+        }
+
+        // ---------------------------------------------------------------- MV-379: visual-only strength fraction
+
+        [Test]
+        public void VisualStrengthFraction_IsZeroAtTheStartingLevel()
+        {
+            Assert.That(WeaponCatalog.VisualStrengthFraction(1, 9), Is.EqualTo(0f).Within(1e-5f),
+                "level 1 is every track's starting level — the visual must read at its weakest here");
+        }
+
+        [Test]
+        public void VisualStrengthFraction_IsOneAtTheMaxLevel()
+        {
+            Assert.That(WeaponCatalog.VisualStrengthFraction(9, 9), Is.EqualTo(1f).Within(1e-5f),
+                "a maxed track must read the full, un-scaled-down visual");
+        }
+
+        [Test]
+        public void VisualStrengthFraction_RisesMonotonicallyBetweenTheEndpoints()
+        {
+            float mid = WeaponCatalog.VisualStrengthFraction(5, 9);
+            Assert.That(mid, Is.GreaterThan(0f));
+            Assert.That(mid, Is.LessThan(1f));
+
+            float lower = WeaponCatalog.VisualStrengthFraction(3, 9);
+            float higher = WeaponCatalog.VisualStrengthFraction(7, 9);
+            Assert.That(higher, Is.GreaterThan(lower), "a higher track level must never read a weaker visual than a lower one");
+        }
+
+        [Test]
+        public void VisualStrengthFraction_NeverDividesByZeroForASingleLevelTrack()
+        {
+            Assert.That(WeaponCatalog.VisualStrengthFraction(1, 1), Is.EqualTo(1f),
+                "a track with no levels above 1 must not throw or read NaN — it just reads full strength");
         }
 
         // ---------------------------------------------------------------- MV-357: ability draft-pick cards
