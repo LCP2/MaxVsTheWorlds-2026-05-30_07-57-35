@@ -122,6 +122,7 @@ namespace MaxWorlds.UI
         private RectTransform _safeRoot;
         private GameObject _root;
         private UpgradeWeaponStage _weaponStage;   // MV-251: the RCDA's own live render — the hero panel used to mislabel Max's bust as this
+        private AbilityDeviceStage _buildAbilityStage;   // MV-382: BUILD ABILITY's own live spinning-device render
 
         private Text _cellsText;
         private Text _partsText;
@@ -206,6 +207,7 @@ namespace MaxWorlds.UI
         {
             if (!_open) return;
             if (_weaponStage != null) _weaponStage.Tick(Time.unscaledTime, 0f, 0f);
+            if (_buildAbilityStage != null) _buildAbilityStage.Tick();
 
             // MV-262: "playful/animated, not a sentence" — the parts gear and the RCDA's glow ring
             // spin while the screen is up. Time is frozen (Time.timeScale = 0 for the pause), so this
@@ -257,6 +259,7 @@ namespace MaxWorlds.UI
             Refresh();
             _root.SetActive(true);
             if (_weaponStage != null) _weaponStage.ShowInstalled();
+            if (_buildAbilityStage != null) _buildAbilityStage.Show();
         }
 
         /// <summary>Close the weapons area and resume at whatever speed it paused from.</summary>
@@ -269,6 +272,7 @@ namespace MaxWorlds.UI
             Time.timeScale = _prevTimeScale;
             _root.SetActive(false);
             if (_weaponStage != null) _weaponStage.Hide();
+            if (_buildAbilityStage != null) _buildAbilityStage.Hide();
         }
 
         // ------------------------------------------------------------------ live state
@@ -445,6 +449,7 @@ namespace MaxWorlds.UI
             scrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
             _weaponStage = UpgradeWeaponStage.Create(transform);
+            _buildAbilityStage = AbilityDeviceStage.Create(transform);
 
             BuildTopBar(rootRt);
             var content = BuildContentRect(rootRt);
@@ -856,7 +861,10 @@ namespace MaxWorlds.UI
         /// <summary>MV-358: a pill on the abilities header row, right of the "X of Y unlocked" text —
         /// shown only while a shed credit is banked (see <see cref="Refresh"/>). Amber like the other
         /// spend affordances (PARTS chip, +buttons), since it's the same "you have something to spend"
-        /// family of action.</summary>
+        /// family of action. MV-382: carries a square icon of the same spinning HydroDevice prop the
+        /// shed's own ability pickup wears (<see cref="AbilityDeviceStage"/>) at its left edge — a real
+        /// render, not squashed to the pill's own wide aspect — so the button reads as "the ability
+        /// device" rather than the plain flat-colour-and-text pill it used to be.</summary>
         private void BuildBuildAbilityButton(RectTransform column, float y)
         {
             _buildAbilityRoot = NewRect("Build Ability Root", column, new Vector2(0.6f, 1f), new Vector2(1f, 1f));
@@ -872,8 +880,17 @@ namespace MaxWorlds.UI
             _buildAbilityButton.transition = Selectable.Transition.None;
             _buildAbilityButton.onClick.AddListener(OnBuildAbilityTapped);
 
+            var deviceIcon = AddRawImage(_buildAbilityRoot,
+                _buildAbilityStage != null ? _buildAbilityStage.Texture : null, "Build Ability Device");
+            Anchor(deviceIcon.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
+            deviceIcon.rectTransform.sizeDelta = new Vector2(SectionHeaderHeight, 0f);
+            deviceIcon.rectTransform.anchoredPosition = Vector2.zero;
+            deviceIcon.raycastTarget = false;
+
             _buildAbilityLabel = AddText(_buildAbilityRoot, 22, PanelColor, TextAnchor.MiddleCenter);
-            Stretch(_buildAbilityLabel.rectTransform);
+            Anchor(_buildAbilityLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f));
+            _buildAbilityLabel.rectTransform.offsetMin = new Vector2(SectionHeaderHeight, 0f);
+            _buildAbilityLabel.rectTransform.offsetMax = Vector2.zero;
             _buildAbilityLabel.fontStyle = FontStyle.Bold;
             _buildAbilityLabel.raycastTarget = false;
 
