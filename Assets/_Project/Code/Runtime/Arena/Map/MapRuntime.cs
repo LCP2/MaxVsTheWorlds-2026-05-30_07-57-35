@@ -297,9 +297,14 @@ namespace MaxWorlds.Arena
             // what tells EnemyNavigation which live AreaGate a link's "gate" id actually points to.
             EnemyNavigation.RegisterGate(e.id, gate);
 
-            // Shut, an area gate blocks sight exactly like the scene-adopted one (YT-107) — AreaGate
-            // disables its own collider the instant it breaks, so the sight-line opens with the gate.
-            CoverLayer.Assign(body);
+            // Shut, an area gate blocks sight exactly like the scene-adopted one (YT-107). Cover goes on
+            // the gate's THRESHOLD object, not the visible leaf (MV-386): the leaf's own collider no
+            // longer disables when the gate opens (it stays solid and keeps following the hinge swing),
+            // so putting Cover on it here would risk the sight-line staying blocked, or re-blocking
+            // partway through the swing, depending on where the leaf ends up. The threshold still drops
+            // the instant the gate breaks exactly like the old single collider did, so the sight-line
+            // opens with the gate exactly as before.
+            CoverLayer.Assign(gate.ThresholdObject);
 
             built.Actors[e.id] = body;
             return body;

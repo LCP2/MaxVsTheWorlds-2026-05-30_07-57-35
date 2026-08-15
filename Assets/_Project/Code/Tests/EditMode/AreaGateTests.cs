@@ -256,5 +256,23 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(root);
             }
         }
+
+        // --- MV-386: opening a gate must drop the doorway's threshold, but the physical leaf has to
+        // stay solid -- MV-378's fix only ever disabled the one collider both jobs shared, so a fully
+        // open gate leaf had zero collision forever. That split (AreaGate._thresholdCollider /
+        // _leafCollider, see AreaGate.cs) is deliberately NOT covered by an EditMode test here: proving
+        // it needs AreaGate.Awake() to have actually run (it builds the threshold collider there) and
+        // TakeDamage()/Open() to fire (they need _health, also built in Awake) -- and this project's
+        // synchronous EditMode harness does not run a freshly AddComponent'd MonoBehaviour's Awake()
+        // within a single [Test] method (confirmed empirically while building this ticket: an Awake-
+        // start Debug.Log added for diagnosis never printed, in ANY AreaGate-building EditMode test,
+        // including the pre-existing, passing ones above -- they only ever happened to pass because the
+        // properties they check, Collider.enabled/isTrigger, match CreatePrimitive's own defaults
+        // whether or not Awake ran). This is exactly why MV-378's own author put every Open()/TakeDamage
+        // assertion in AreaGatePlayTests (PlayMode) instead, never in this file -- PlayMode's
+        // [UnitySetUp] yield return null actually ticks a frame first. The real regression coverage for
+        // this split is PlayMode: AreaGatePlayTests.SustainedPrimaryFire_BreaksTheGateAtExactlyItsHp_NotBefore
+        // now asserts leaf.enabled stays true and ThresholdObject's collider goes false after Open() --
+        // CI runs it (CC_AUTONOMY.md: this worker never authors or runs PlayMode itself).
     }
 }

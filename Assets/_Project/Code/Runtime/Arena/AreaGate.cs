@@ -40,14 +40,25 @@ namespace MaxWorlds.Arena
         private const float BarHeightClearance = 0.7f;
 
         // --- Hinge-open animation (MV-265): a destroyed gate swings on one vertical edge like a
-        // door, the visual half of "the gate is passable" (the collider drops the instant it dies —
-        // see Open() — same split as SubZoneGate's sink). Past 90 degrees so the slab reads as
-        // deliberately flung open rather than merely ajar.
+        // door, the visual half of "the gate is passable" (the threshold collider drops the instant
+        // it dies — see Open() — same split as SubZoneGate's sink; MV-386 gave the leaf itself a
+        // second, always-solid collider that rides along with this swing). Past 90 degrees so the
+        // slab reads as deliberately flung open rather than merely ajar.
         private const float HingeSwingDegrees = 100f;
         private const float HingeDuration = 0.5f;
 
         private DestructibleHealth _health;
-        private Collider _collider;
+
+        // --- MV-386: the closed slab used to be ONE collider that Open() disabled outright, so the
+        // instant a gate broke, the visibly still-swinging (then fully open) door leaf had zero
+        // collision forever — you could walk straight through the panel itself, not just the gap it
+        // used to block. Split in two: _thresholdCollider stands in for "the doorway while shut" and
+        // is what actually drops on Open() (so the gap reads passable the instant the gate breaks,
+        // same UX as before); _leafCollider is the gate's own collider and is now never disabled — it
+        // sits on the same transform the hinge swing animates, so it just keeps being solid wherever
+        // that swing leaves the panel.
+        private Collider _leafCollider;
+        private Collider _thresholdCollider;
 
         private bool _hinging;
         private float _hingeT;
@@ -71,6 +82,13 @@ namespace MaxWorlds.Arena
 
         /// <summary>The way is open — Max can walk (and shoot) through. True the instant HP hits zero.</summary>
         public bool IsOpen { get; private set; }
+
+        /// <summary>The world-fixed stand-in for the doorway while this gate is shut (MV-386) — the
+        /// object <see cref="CoverLayer.Assign"/> should be pointed at instead of the gate itself, since
+        /// this is the collider that actually drops on <see cref="Open"/> (the gate's own collider does
+        /// not any more; it stays solid and keeps following the hinge swing). Null only if Awake has not
+        /// run yet.</summary>
+        public GameObject ThresholdObject => _thresholdCollider != null ? _thresholdCollider.gameObject : null;
 
         /// <summary>Whether this gate refuses primary damage until its room reads clear of robots
         /// (<c>gateRequiresClear</c>). Robot/room integration is WV-223's, not this ticket's — until
@@ -115,12 +133,14 @@ namespace MaxWorlds.Arena
             RequiresClear =
                 DevTuning.Or(DevTuning.GateRequiresClear, ArenaTuning.DefaultGateRequiresClear) >= 0.5f;
 
-            _collider = GetComponent<Collider>();
+            _leafCollider = GetComponent<Collider>();
 
             // MV-378: an area gate exists to physically block Max and robots until it breaks -- a
             // trigger collider would let a CharacterController pass straight through it, so this
             // makes the solid contract explicit rather than relying on CreatePrimitive's default.
-            if (_collider != null) _collider.isTrigger = false;
+            if (_leafCollider != null) _leafCollider.isTrigger = false;
+
+            _thresholdCollider = BuildThresholdCollider();
 
             // Always shown, not earned by a hit (unlike a robot's) — the player needs to discover
             // the gate is a breakable target in the first place, not just watch it deplete once they
@@ -128,6 +148,31 @@ namespace MaxWorlds.Arena
             float halfHeight = transform.localScale.y * 0.5f;
             WorldHealthBar.Attach(gameObject, this, halfHeight + BarHeightClearance, BarWorldWidth,
                                   alwaysShow: true);
+        }
+
+        /// <summary>Builds the world-fixed threshold collider (MV-386) on its own GameObject, sized and
+        /// posed to match the gate's CLOSED footprint exactly — read from <c>transform</c> here in
+        /// Awake, before any hinge swing has touched it. Parented as a sibling under this gate's own
+        /// parent (not under the gate itself), so <see cref="StartHingeSwing"/> rotating THIS transform
+        /// later never drags the threshold along with it.</summary>
+        private Collider BuildThresholdCollider()
+        {
+            var threshold = new GameObject(gameObject.name + " (Threshold)");
+            threshold.transform.SetParent(transform.parent, worldPositionStays: false);
+            threshold.transform.SetPositionAndRotation(transform.position, transform.rotation);
+            threshold.transform.localScale = transform.localScale;
+
+            var box = threshold.AddComponent<BoxCollider>();
+            box.isTrigger = false;
+            return box;
+        }
+
+        private void OnDestroy()
+        {
+            if (_thresholdCollider == null) return;
+            GameObject thresholdObject = _thresholdCollider.gameObject;
+            if (Application.isPlaying) Destroy(thresholdObject);
+            else DestroyImmediate(thresholdObject);
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -156,10 +201,14 @@ namespace MaxWorlds.Arena
             if (IsOpen) return;
             IsOpen = true;
 
-            // Passable immediately — the hinge swing that follows is theatre, same split as
-            // SubZoneGate.Open vs. its Update-driven sink. Collision drops on this exact frame so
-            // "destroyed" and "walkable" are never out of sync, whatever the swing is doing visually.
-            if (_collider != null) _collider.enabled = false;
+            // The doorway is passable immediately — same UX as before MV-386, just narrowed to the
+            // THRESHOLD alone now: "destroyed" and "the vacated gap is walkable" are never out of sync,
+            // whatever the swing is doing visually. _leafCollider is deliberately left alone here: MV-386
+            // found that disabling the gate's own collider here made the swinging (then fully open) door
+            // panel itself walk-through-able forever, not just the gap it used to seal. It stays enabled
+            // and rides the same transform StartHingeSwing animates, so the physical leaf keeps blocking
+            // wherever the swing leaves it.
+            if (_thresholdCollider != null) _thresholdCollider.enabled = false;
 
             StartHingeSwing();
 

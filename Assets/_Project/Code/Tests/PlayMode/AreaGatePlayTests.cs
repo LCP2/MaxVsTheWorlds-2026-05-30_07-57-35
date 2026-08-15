@@ -127,7 +127,15 @@ namespace MaxWorlds.Tests.PlayMode
             gate.TakeDamage(Hit(1f, DamageSource.PrimaryWeapon));
             Assert.IsFalse(gate.IsAlive);
             Assert.IsTrue(gate.IsOpen, "the gate has zero HP but never opened");
-            Assert.IsFalse(gate.GetComponent<Collider>().enabled, "an open gate still blocks the doorway");
+
+            // MV-386: opening a gate now drops the THRESHOLD (below), not the gate's own collider. The
+            // gate's own collider is the physical leaf -- it must stay solid so the swung-open door panel
+            // itself remains an obstruction, not just the doorway gap it used to seal.
+            Assert.IsTrue(gate.GetComponent<Collider>().enabled,
+                "an open gate's own (leaf) collider must stay solid, or the swung-open door panel itself " +
+                "would be walk-through-able (MV-386)");
+            Assert.IsFalse(gate.ThresholdObject.GetComponent<Collider>().enabled,
+                "an open gate's threshold should drop so the vacated doorway gap reads passable");
             Assert.AreEqual(0f, gate.HealthNormalized, 1e-4, "a destroyed gate should report zero health");
             Assert.AreEqual(0f, gate.HealthCurrent, 1e-4, "a destroyed gate should report zero health");
         }
