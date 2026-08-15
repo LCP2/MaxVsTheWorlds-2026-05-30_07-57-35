@@ -16,6 +16,7 @@ namespace MaxWorlds.Weapons
         private static readonly Dictionary<WeaponTrackKind, int> s_trackLevels = new Dictionary<WeaponTrackKind, int>();
         private static readonly Dictionary<AbilityKind, int> s_abilityLevels = new Dictionary<AbilityKind, int>();
         private static readonly Dictionary<WaterBalloonTrackKind, int> s_waterBalloonTrackLevels = new Dictionary<WaterBalloonTrackKind, int>();
+        private static readonly Dictionary<SentinelTrackKind, int> s_sentinelTrackLevels = new Dictionary<SentinelTrackKind, int>();
         // MV-333: the order abilities were actually granted in, not the catalog's fixed order — the
         // weapons screen's slots are keyed off this so a slot, once filled, never moves when a later
         // ability is acquired (the catalog order previously resorted "Acquired" every Refresh, which
@@ -78,6 +79,28 @@ namespace MaxWorlds.Weapons
             WaterBalloonTrackLevel(WaterBalloonTrackKind.RepeatFire),
             WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
             WaterBalloonRepeatFirePerLevel);
+
+        /// <summary>A Sentinel track's current level (MV-362). Every track starts at 1, same
+        /// "owned/leveled from run start" shape as <see cref="WaterBalloonTrackLevel"/> — but unlike
+        /// Water Balloon's tracks, actually SPENDING a part on one requires
+        /// <see cref="AbilityKind.Sentinels"/> to be acquired first (<see cref="LevelUpSentinelTrack"/>),
+        /// since these tracks do nothing until the system they belong to is owned.</summary>
+        public static int SentinelTrackLevel(SentinelTrackKind kind) => s_sentinelTrackLevels[kind];
+
+        /// <summary>Spend a part to raise a Sentinel track by one level (MV-362), up to its
+        /// <see cref="WeaponCatalog.MaxLevel(SentinelTrackKind)"/> cap. Fails (returns false, spends
+        /// nothing) if <see cref="AbilityKind.Sentinels"/> isn't owned yet — "unowned/locked items
+        /// can't be upgraded" (spec §5), the same rule <see cref="LevelUpAbility"/> enforces — or the
+        /// track is already at its cap.</summary>
+        public static bool LevelUpSentinelTrack(SentinelTrackKind kind)
+        {
+            if (!IsAcquired(AbilityKind.Sentinels)) return false;
+            int level = s_sentinelTrackLevels[kind];
+            if (level >= WeaponCatalog.MaxLevel(kind)) return false;
+            s_sentinelTrackLevels[kind] = level + 1;
+            Changed?.Invoke();
+            return true;
+        }
 
         public static bool IsAcquired(AbilityKind kind) => s_abilityLevels[kind] > 0;
 
@@ -173,6 +196,7 @@ namespace MaxWorlds.Weapons
             foreach (var kind in WeaponCatalog.AllTrackKinds) s_trackLevels[kind] = 1;
             foreach (var kind in WeaponCatalog.AllAbilityKinds) s_abilityLevels[kind] = 0;
             foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds) s_waterBalloonTrackLevels[kind] = 1;
+            foreach (var kind in WeaponCatalog.AllSentinelTrackKinds) s_sentinelTrackLevels[kind] = 1;
             s_acquisitionOrder.Clear();
             s_waterBalloonAutoFireEnabled = true;
         }

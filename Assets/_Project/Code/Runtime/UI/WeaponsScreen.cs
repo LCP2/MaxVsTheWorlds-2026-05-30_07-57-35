@@ -1056,6 +1056,7 @@ namespace MaxWorlds.UI
                 case AbilityKind.WaterBalloon: return "WB";
                 case AbilityKind.WaterBalloonAutoFire: return "AF";
                 case AbilityKind.ForceField: return "FF";
+                case AbilityKind.Sentinels: return "SEN";
                 default: return "?";
             }
         }

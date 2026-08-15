@@ -185,6 +185,14 @@ namespace MaxWorlds.Enemies
 
         private CharacterController _cc;
         private IDamageable _targetDamageable;
+
+        /// <summary>Max's own transform — fixed the moment it's acquired, and what every distance
+        /// comparison in <see cref="RetargetIfNeeded"/> measures against even while <see cref="target"/>
+        /// is pointed at a Sentinel (MV-362).</summary>
+        private Transform _playerTarget;
+
+        /// <summary>The Sentinel currently being engaged, or null while targeting Max (MV-362).</summary>
+        private Sentinel _engagedSentinel;
         private float _health;
         private float _stateTimer;
         private float _verticalVel;
@@ -329,11 +337,63 @@ namespace MaxWorlds.Enemies
                 var p = GameObject.FindGameObjectWithTag("Player");
                 if (p != null) target = p.transform;
             }
+            _playerTarget = target;
+            _engagedSentinel = null;
             _targetDamageable = target != null ? target.GetComponent<IDamageable>() : null;
 
             // A robot is dispatched toward the fight, not born knowing where it is. Without a seed
             // it has never seen anything, has nowhere to go, and stands in the factory mouth — which
             // is precisely what happens now that the hutch it just walked out of blocks its view.
+            if (target != null) _sight.Spawn(target.position);
+        }
+
+        /// <summary>Re-decide whether to chase Max or the nearest Sentinel (MV-362) — proximity-based
+        /// only ("must NOT always prefer sentinels over Max"), checked once per Chase tick, never
+        /// mid-Telegraph/Lunge (same "no info through the wind-up" rule the state machine already
+        /// locks everything else against). Blinker is excluded outright: its answer to an obstacle is
+        /// to blink past it, not to fight it (spec: "Blinkers can teleport past a wall entirely") —
+        /// every other kind treats a close, blocking sentinel as a real target, ranged kinds shooting
+        /// it from their existing standoff band exactly as they would Max.</summary>
+        private void RetargetIfNeeded()
+        {
+            if (Kind == EnemyKind.Blinker || _playerTarget == null) return;
+
+            // The sentinel we were fighting died since the last tick — fall back to Max before
+            // re-evaluating, so a dead Sentinel's Transform is never read below.
+            if (_engagedSentinel != null && !_engagedSentinel.IsAlive)
+            {
+                _engagedSentinel = null;
+                RetargetTo(_playerTarget, _playerTarget.GetComponent<IDamageable>());
+            }
+
+            float distToPlayer = Vector3.Distance(transform.position, _playerTarget.position);
+            Sentinel nearest = SentinelTargeting.Nearest(transform.position);
+            float distToSentinel = nearest != null
+                ? Vector3.Distance(transform.position, nearest.transform.position)
+                : float.MaxValue;
+
+            bool engageSentinel = nearest != null &&
+                SentinelTargeting.ShouldEngageSentinel(distToPlayer, distToSentinel, SentinelTargeting.AggroRadius);
+
+            if (engageSentinel && nearest != _engagedSentinel)
+            {
+                _engagedSentinel = nearest;
+                RetargetTo(nearest.transform, nearest);
+            }
+            else if (!engageSentinel && _engagedSentinel != null)
+            {
+                _engagedSentinel = null;
+                RetargetTo(_playerTarget, _playerTarget.GetComponent<IDamageable>());
+            }
+        }
+
+        /// <summary>Point <see cref="target"/>/<see cref="_targetDamageable"/> at a new goal and give
+        /// it fresh sight memory (MV-362) — every state below reads only these two fields, so
+        /// switching them is the whole retarget.</summary>
+        private void RetargetTo(Transform newTarget, IDamageable newDamageable)
+        {
+            target = newTarget;
+            _targetDamageable = newDamageable;
             if (target != null) _sight.Spawn(target.position);
         }
 
@@ -430,6 +490,8 @@ namespace MaxWorlds.Enemies
         private void TickChase(float dt)
         {
             if (target == null) { AcquireTarget(); return; }
+
+            RetargetIfNeeded();
 
             // The destination is MEMORY, not Max. While it can see him the two are the same thing;
             // the moment it can't, this is where cover starts paying — it commits to a stale spot.

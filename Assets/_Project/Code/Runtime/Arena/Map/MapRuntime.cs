@@ -71,6 +71,10 @@ namespace MaxWorlds.Arena
             // test) starts counting toward the field-wide spawn budget (YT-186).
             RobotEnemy.ResetRegistry();
 
+            // Sentinels aren't pooled — a fresh level must tear any leftover ones down outright, not
+            // just forget them (MV-362).
+            Sentinel.DestroyAllActive();
+
             // A new level is a new set of directions. The robots cache the map they navigate (YT-93),
             // and a cache that outlives its level would route this yard's robots around the last one's
             // walls.

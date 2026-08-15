@@ -122,6 +122,11 @@ namespace MaxWorlds.Arena
                 if (gate == null) continue;   // e.g. boss_gate is the adopted SubZoneGate, not an AreaGate
 
                 gate.Opened += () => _areaDirector.EnterArea(nextArea);
+
+                // MV-362: sentinels "do not travel between areas... passing a gate clears them and
+                // refunds the slots" — destroying them here is the whole refund, since the deployment
+                // cap is always checked live against Sentinel.Active.Count, never a tracked balance.
+                gate.Opened += Sentinel.DestroyAllActive;
             }
         }
     }
