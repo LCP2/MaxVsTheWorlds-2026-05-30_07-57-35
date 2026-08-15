@@ -56,5 +56,15 @@ namespace MaxWorlds.Factories
             }
             return false;
         }
+
+        /// <summary>Restore HP toward the ceiling (MV-398: sentinel passive regen). Never revives —
+        /// once destroyed, <see cref="IsAlive"/> is false for good, same one-shot semantics as
+        /// <see cref="TakeDamage"/> — and never overfills past <see cref="Max"/>.</summary>
+        public void Heal(float amount)
+        {
+            if (!IsAlive || amount <= 0f) return;
+            Current = Mathf.Min(Max, Current + amount);
+            Changed?.Invoke(Current);
+        }
     }
 }

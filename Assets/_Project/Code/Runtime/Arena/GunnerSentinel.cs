@@ -83,8 +83,10 @@ namespace MaxWorlds.Arena
             if (col != null) col.isTrigger = false; // solid — robots route around it like the wall
         }
 
-        private void Update()
+        protected override void Update()
         {
+            base.Update(); // MV-398: passive HP regen, shared with WallSentinel
+
             if (!IsAlive) return;
 
             if (_beamTimer > 0f)

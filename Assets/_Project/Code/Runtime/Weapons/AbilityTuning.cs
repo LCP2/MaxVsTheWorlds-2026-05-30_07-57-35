@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Player;
 
 namespace MaxWorlds.Weapons
 {
@@ -221,5 +222,18 @@ namespace MaxWorlds.Weapons
         /// given Deployment Count level — the DECISION's "starts at 1, upgradeable to 2, 3, 4" maps
         /// directly: the level IS the slot count.</summary>
         public static int SentinelDeploymentSlots(int level) => Mathf.Max(1, level);
+
+        /// <summary>Seconds a sentinel must go without taking a hit before its passive regen starts
+        /// (MV-398, same-day reversal of MV-362's "no repair" DECISION — passive only, still no
+        /// player-triggered repair). The ticket asked for a rate "consistent with the game's existing
+        /// pacing" rather than a fresh number, so this aliases <see cref="PlayerTuning.RegenDelay"/>
+        /// outright — Max's own out-of-combat regen (YT-80) IS that pacing.</summary>
+        public const float DefaultSentinelRegenDelaySeconds = PlayerTuning.RegenDelay;
+
+        /// <summary>HP/sec a sentinel heals once the delay has elapsed (MV-398) — same reuse as
+        /// <see cref="DefaultSentinelRegenDelaySeconds"/>, aliasing <see cref="PlayerTuning.RegenPerSec"/>.
+        /// A flat rate rather than a percentage means a beefier upgraded Wall takes longer to top up
+        /// than a fresh one — more HP costs more time to heal, same as it costs more to whittle down.</summary>
+        public const float DefaultSentinelRegenPerSec = PlayerTuning.RegenPerSec;
     }
 }
