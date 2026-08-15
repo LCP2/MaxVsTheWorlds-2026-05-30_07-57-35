@@ -81,15 +81,21 @@ namespace MaxWorlds.Enemies
                  "to the spot it is hunting — not from the last time it saw him (YT-93).")]
         [SerializeField] private float searchTime = 2.5f;
 
-        /// <summary>How much closer it has to get to count as having got closer. Slack enough that a
-        /// robot rounding a corner — briefly moving away from the spot to get to it — is still making
-        /// progress, tight enough that one grinding on a fence is not.</summary>
-        private const float Progress = 0.15f;
         [Tooltip("How close it has to get to the last place it saw Max before it starts casting about.")]
         [SerializeField] private float arriveRadius = 1.2f;
         [Tooltip("Speed while hunting a spot it can't see Max at. Slower than a chase — it has lost " +
                  "him, and a robot that searches at full sprint reads as one that hasn't.")]
         [SerializeField] private float searchSpeedScale = 0.55f;
+
+        /// <summary>Floor on how long a lost-sight hunt must run before it is allowed to end (MV-387).
+        /// Without this, a robot that is already within <see cref="arriveRadius"/> of Max's last-seen
+        /// spot the instant sight breaks — the common case, since that spot is exactly where the
+        /// chase was standing a frame ago — reads "arrived" immediately and spins into Search with no
+        /// visible pursuit at all. See <see cref="PursuitStall"/>.</summary>
+        [Tooltip("Minimum time a lost-sight hunt must run before it's allowed to end, even if it's " +
+                 "already within arriveRadius of the last-seen spot. Keeps close-range cover breaks " +
+                 "(MV-387) from reading as an instant give-up.")]
+        [SerializeField] private float minHuntTime = 0.6f;
 
         [Header("Tells (gold-ring / lens)")]
         [SerializeField] private Renderer tellRenderer; // optional; the gold-ring/eye
@@ -211,11 +217,11 @@ namespace MaxWorlds.Enemies
 
         private Vector3 _emergeTarget;
 
-        /// <summary>The closest it has got to the spot it is hunting, and how long since it last got
-        /// closer. This is what "it has lost him" means now (YT-93) — not "it hasn't seen him lately",
-        /// which is true of every robot the moment it is born.</summary>
-        private float _closest = float.MaxValue;
-        private float _stallTimer;
+        /// <summary>Tracks whether the current lost-sight hunt has run its course — reached the spot
+        /// it is hunting, or stopped getting any closer to it. This is what "it has lost him" means
+        /// now (YT-93) — not "it hasn't seen him lately", which is true of every robot the moment it
+        /// is born.</summary>
+        private readonly PursuitStall _pursuitStall = new PursuitStall();
 
         /// <summary>Seconds until a Blinker may next flank-teleport (MV-293); irrelevant, and never
         /// counted down, for every other kind.</summary>
@@ -306,8 +312,7 @@ namespace MaxWorlds.Enemies
             Current = State.Chase;
             _stateTimer = 0f;
             _wallTimer = 0f;          // a pooled robot doesn't inherit the last one's wall
-            _closest = float.MaxValue; // ...nor its idea of how well the last one was doing
-            _stallTimer = 0f;
+            _pursuitStall.NoteSightHeld(); // ...nor its idea of how well the last one was doing
             _knockback = Vector3.zero;
             _haltTimer = 0f;
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
@@ -500,11 +505,7 @@ namespace MaxWorlds.Enemies
             FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
 
             // Is it getting anywhere? Seeing Max is a new spot to walk to, so the clock starts again.
-            if (_sight.HasSight) { _closest = float.MaxValue; _stallTimer = 0f; }
-
-            if (dist < _closest - Progress) { _closest = dist; _stallTimer = 0f; }
-            else _stallTimer += dt;
-
+            //
             // It reached the spot, or it has stopped getting closer to it. Either way it is now
             // standing somewhere Max isn't, and it has to admit that.
             //
@@ -514,7 +515,11 @@ namespace MaxWorlds.Enemies
             // a half seconds into a thirty-second walk, every time, and stood there spinning in the
             // shed. That is the pile-up the playtest found. A robot that is still closing has not lost
             // anything and does not stop; one grinding on a fence gets nowhere and does.
-            if (hunting && (dist <= arriveRadius || _stallTimer >= searchTime))
+            if (_sight.HasSight)
+            {
+                _pursuitStall.NoteSightHeld();
+            }
+            else if (_pursuitStall.TickHunting(dist, dt, arriveRadius, searchTime, minHuntTime))
             {
                 Current = State.Search;
                 _stateTimer = 0f;
