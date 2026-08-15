@@ -45,6 +45,20 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void ForceFieldShieldShader_CompilesAndIsSupported()
+        {
+            // MV-391: not registered on MaterialLibrary (it's a one-off VFX prop, not a stylised
+            // world surface), so it's named directly rather than through a shared constant.
+            const string name = "MaxWorlds/ForceFieldShield";
+            var shader = Shader.Find(name);
+
+            Assert.IsNotNull(shader, $"'{name}' not found — a shader with a compile error can " +
+                                     "disappear from Shader.Find entirely");
+            Assert.IsTrue(shader.isSupported, "the shader failed to compile on this platform");
+            Assert.That(shader.name, Does.Not.Contain("InternalErrorShader"));
+        }
+
+        [Test]
         public void SurfaceMaterial_ExposesTheGrainControls()
         {
             var mat = MaterialLibrary.Surface(SurfaceKind.Wood);

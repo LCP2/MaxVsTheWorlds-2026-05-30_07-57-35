@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Weapons
@@ -18,15 +19,35 @@ namespace MaxWorlds.Weapons
     /// <see cref="MaxWorlds.Player.PlayerHealth"/>; this component is the "robots can't walk through
     /// it" half only.
     ///
-    /// Colour-shifts from ready-cyan toward a warning red as the absorb budget runs out (MV-361:
-    /// "obvious from peripheral vision... a colour shift as it decays"), driven every frame by
-    /// <see cref="SetFraction"/> from <see cref="PlayerAbilities"/>.
+    /// MV-391: the visual is a subtle, mostly-transparent WHITE bubble with a glowing white rim (a
+    /// <c>MaxWorlds/ForceFieldShield</c>-shaded sphere — see that shader for the Fresnel rim) — not
+    /// the opaque orange sphere that shipped. That bug was never the colour values below;
+    /// it was that this renderer carried no <see cref="SelfDrivenTint"/> marker, so
+    /// <c>RuntimeSurfaceDirector</c>'s sweep (MV-350's fix, now catching a VFX prop MV-350 itself
+    /// flagged as still outstanding) claimed it a frame after spawn and stamped it with a generic
+    /// opaque world-prop material, hiding Max completely. The marker is what actually fixes it; the
+    /// colours only fix what it looks like once the sweep leaves it alone.
+    ///
+    /// Colour-shifts from ready-white toward a warning amber as the absorb budget runs out (MV-361:
+    /// "obvious from peripheral vision... a colour shift as it decays"; MV-391's DECISION allows the
+    /// decay cue to depart from white as it nears popping, while the steady-state stays white), driven
+    /// every frame by <see cref="SetFraction"/> from <see cref="PlayerAbilities"/>.
     /// </summary>
     public sealed class ForceFieldBubble : MonoBehaviour
     {
-        private static readonly Color FullColor = new Color(0.31f, 0.76f, 0.97f, 0.30f);   // ready cyan
-        private static readonly Color EmptyColor = new Color(0.90f, 0.22f, 0.20f, 0.55f);  // warning red
+        // Fill: subtle and mostly transparent at all times — Max must read through the centre of the
+        // bubble for its whole active duration, not just when fresh.
+        private static readonly Color FullFillColor = new Color(1f, 1f, 1f, 0.14f);          // ready: subtle white
+        private static readonly Color EmptyFillColor = new Color(0.95f, 0.40f, 0.16f, 0.30f); // about to pop: warm
+
+        // Rim: the glowing edge. Bright white when fresh, warming toward the same amber as the fill
+        // as the field nears popping — the DECISION's "colour-shift-on-decay can still depart from
+        // white" cue, expressed on the edge that actually reads at a glance.
+        private static readonly Color FullRimColor = Color.white;
+        private static readonly Color EmptyRimColor = new Color(1f, 0.45f, 0.18f, 1f);
+
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+        private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
 
         private MeshRenderer _visual;
         private MaterialPropertyBlock _mpb;
@@ -63,8 +84,14 @@ namespace MaxWorlds.Weapons
             vis.transform.localPosition = Vector3.zero;
             vis.transform.localScale = Vector3.one * radius * 2f;
 
+            // MV-350's own precedent for exactly this situation: anything that drives its own
+            // renderer colour through a MaterialPropertyBlock must carry SelfDrivenTint, or
+            // RuntimeSurfaceDirector's sweep claims it within a frame and overwrites it with a
+            // generic opaque world-prop material — the "opaque orange sphere" bug (MV-391).
+            vis.AddComponent<SelfDrivenTint>();
+
             _visual = vis.GetComponent<MeshRenderer>();
-            _visual.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            _visual.sharedMaterial = ShieldMaterial();
             _visual.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             _visual.receiveShadows = false;
             _mpb = new MaterialPropertyBlock();
@@ -75,13 +102,36 @@ namespace MaxWorlds.Weapons
             Physics.SyncTransforms();
         }
 
-        /// <summary>0 (about to pop) .. 1 (fresh) — drives the ready-cyan-to-warning-red shift.</summary>
+        /// <summary>0 (about to pop) .. 1 (fresh) — drives the ready-white-to-warning-amber shift.</summary>
         public void SetFraction(float fraction)
         {
             if (_visual == null) return;
-            Color c = Color.Lerp(EmptyColor, FullColor, Mathf.Clamp01(fraction));
-            _mpb.SetColor(BaseColorId, c);
+            float t = Mathf.Clamp01(fraction);
+            _mpb.SetColor(BaseColorId, Color.Lerp(EmptyFillColor, FullFillColor, t));
+            _mpb.SetColor(RimColorId, Color.Lerp(EmptyRimColor, FullRimColor, t));
             _visual.SetPropertyBlock(_mpb);
+        }
+
+        /// <summary>The shield's material — a real, view-dependent Fresnel rim
+        /// (<c>MaxWorlds/ForceFieldShield</c>-shaded) so the bubble glows at its edge from any angle
+        /// rather than reading as a flat coloured disc. Falls back to a plain alpha-blended fill if
+        /// the hand-written shader is unavailable — a lost rim is a cosmetic regression, a magenta or
+        /// opaque sphere is the bug this ticket exists to kill.</summary>
+        private static Material ShieldMaterial()
+        {
+            var shader = Shader.Find("MaxWorlds/ForceFieldShield");
+            if (shader == null || !shader.isSupported)
+            {
+                Debug.LogWarning("[ForceFieldBubble] 'MaxWorlds/ForceFieldShield' unavailable; " +
+                                 "the shield falls back to a flat translucent fill (no rim).");
+                return VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            }
+
+            return new Material(shader)
+            {
+                name = "ForceFieldShield",
+                hideFlags = HideFlags.HideAndDontSave,
+            };
         }
     }
 }
