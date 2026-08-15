@@ -31,7 +31,9 @@ namespace MaxWorlds.Enemies
         // existing members would silently re-label every one of them.
         // Teleport (MV-293) follows the same rule — it's the Blinker's flank-blink, appended after
         // Emerging rather than inserted anywhere earlier.
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport }
+        // Dormant/Alert (MV-363) follow it too — a concealed robot that hasn't yet seen Max, and
+        // the short "waking up" beat between spotting him and actually joining the chase.
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -130,6 +132,17 @@ namespace MaxWorlds.Enemies
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
 
+        /// <summary>Concealed and unaware (MV-363) — placed behind cover, world-present from area
+        /// load, but not yet chasing, firing or telegraphing. Ends the moment it (or a groupmate,
+        /// via <see cref="DormantGroup"/>) sees Max.</summary>
+        public bool IsDormant => Current == State.Dormant;
+
+        /// <summary>Fired the instant a dormant robot wakes (MV-363) — what <see cref="DormantGroup"/>
+        /// listens to so the rest of a concealed knot wakes with it, reading as an ambush rather than
+        /// a trickle. Cleared on every <see cref="ResetState"/> so a pooled robot never carries a
+        /// stale group's subscription into its next life.</summary>
+        public event Action<RobotEnemy> WokeFromDormant;
+
         /// <summary>Which robot this is (YT-66). Set by <see cref="Apply"/>; the spawner pools by it,
         /// so a dead bruiser is never recycled as a rusher wearing the wrong body.</summary>
         public EnemyKind Kind { get; private set; } = EnemyKind.Rusher;
@@ -218,6 +231,12 @@ namespace MaxWorlds.Enemies
         /// <summary>How close to the spot outside the door counts as "out". Loose — the point is to
         /// be clear of the building, not to hit a coordinate.</summary>
         private const float EmergeArriveRadius = 0.35f;
+
+        [Header("Dormant / concealed (MV-363)")]
+        [Tooltip("How long the 'waking up' beat lasts between spotting Max and actually joining " +
+                 "the chase — Lee, 12 Aug: give the player a beat to react, so being spotted reads " +
+                 "as legible rather than instant.")]
+        [SerializeField] private float alertTime = 0.45f;
 
         /// <summary>Longest a robot may spend getting out of the door before it gives up and fights
         /// anyway. The walk is well under a second; this only ever catches a blocked doorway.</summary>
@@ -323,6 +342,9 @@ namespace MaxWorlds.Enemies
             _pursuitStall.NoteSightHeld(); // ...nor its idea of how well the last one was doing
             _knockback = Vector3.zero;
             _haltTimer = 0f;
+            // A pooled robot must never wake a group it no longer belongs to (MV-363) — the
+            // DormantGroup that subscribed here is for the LAST life this body had.
+            WokeFromDormant = null;
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
             _teleportTimer = teleportCooldown;
@@ -426,6 +448,8 @@ namespace MaxWorlds.Enemies
                     case State.Lunge:    TickLunge(dt);    break;
                     case State.Recover:  TickRecover(dt);  break;
                     case State.Teleport: TickTeleport(dt); break;
+                    case State.Dormant:  TickDormant();    break;
+                    case State.Alert:    TickAlert(dt);    break;
                 }
             }
 
@@ -485,6 +509,56 @@ namespace MaxWorlds.Enemies
             // Deliberately slower than a chase. It is heaving itself out of a shed, not sprinting;
             // the step up to full speed as it clears the door is what sells the hand-off.
             FaceAndMove(to.normalized, EffectiveMoveSpeed * emergeSpeedScale, dt);
+        }
+
+        /// <summary>Puts this robot to sleep behind cover (MV-363): world-present and rendered from
+        /// the moment it's placed — never spawned later at the moment a gate opens — but not yet
+        /// chasing, firing or telegraphing. Called by the spawner right after placement, in place of
+        /// the ordinary fresh-Chase state <see cref="ResetState"/> leaves it in.</summary>
+        public void BeginDormant()
+        {
+            if (Current == State.Dead) return;
+            Current = State.Dormant;
+            _stateTimer = 0f;
+            SetTell(idleTell);
+        }
+
+        /// <summary>Nothing: the whole point (AC2) is that a dormant robot does not path toward Max,
+        /// does not fire, and does not telegraph its position. The only way out is <see cref="Activate"/>
+        /// — called here the instant this robot's own sight-line opens (ticked unconditionally above,
+        /// same as every other state), or by a groupmate's via <see cref="DormantGroup"/>.</summary>
+        private void TickDormant()
+        {
+            if (_sight.HasSight) Activate();
+        }
+
+        /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
+        /// before it joins the chase for real. Idempotent — a robot no longer Dormant ignores a
+        /// second call, which is what lets <see cref="DormantGroup"/> call this on every member of a
+        /// concealed knot without first checking which one actually saw Max.</summary>
+        public void Activate()
+        {
+            if (Current != State.Dormant) return;
+            Current = State.Alert;
+            _stateTimer = 0f;
+            SetTell(windupTell);
+            WokeFromDormant?.Invoke(this);
+        }
+
+        /// <summary>The beat itself: a pulsing tell (same idiom as <see cref="TickTelegraph"/>'s
+        /// wind-up) so being spotted reads as legible rather than an instant switch, then straight
+        /// into Chase — which reads <see cref="_sight"/> fresh on its very next tick, exactly as if
+        /// it had walked into view instead of waking up already looking at him.</summary>
+        private void TickAlert(float dt)
+        {
+            float t = Mathf.PingPong(_stateTimer * 6f, 1f);
+            SetTell(Color.Lerp(idleTell, windupTell, t));
+
+            if (_stateTimer >= alertTime)
+            {
+                Current = State.Chase;
+                _stateTimer = 0f;
+            }
         }
 
         private void TickChase(float dt)
