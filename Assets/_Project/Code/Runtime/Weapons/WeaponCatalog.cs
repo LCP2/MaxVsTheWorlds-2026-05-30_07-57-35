@@ -28,6 +28,11 @@ namespace MaxWorlds.Weapons
         public const float DefaultWaterBalloonCooldownSeconds = 9f;
         public const float DefaultTeleportCooldownSeconds = 6f;
 
+        /// <summary>Force Field's base cooldown, seconds, before any Weapon Cooldown reduction
+        /// (MV-361: "~12s cooldown"). Starts counting down only once the bubble POPS, not on
+        /// activation — same shape as the legacy <see cref="MaxWorlds.Upgrades.HydroBurst"/> window.</summary>
+        public const float DefaultForceFieldCooldownSeconds = 12f;
+
         /// <summary>The tracks, in the order the weapons screen lists them (spec §6; Capacity/Weapon
         /// Efficiency retired by MV-290; Damage added by MV-291; Depletion Rate reinstated by MV-299).</summary>
         public static readonly WeaponTrackKind[] AllTrackKinds =
@@ -48,6 +53,7 @@ namespace MaxWorlds.Weapons
             AbilityKind.WeaponCooldown,
             AbilityKind.WaterBalloon,
             AbilityKind.WaterBalloonAutoFire,
+            AbilityKind.ForceField,
         };
 
         /// <summary>The Water Balloon primary add-on's tracks (MV-370), in the order the weapons
@@ -171,6 +177,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Teleport: return 4;
                 case AbilityKind.WeaponCooldown: return 5;
+                case AbilityKind.ForceField: return 3;
                 default: return 1;
             }
         }
@@ -190,6 +197,8 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.Teleport:
                     return DevTuning.Or(DevTuning.TeleportCooldownSeconds, DefaultTeleportCooldownSeconds);
+                case AbilityKind.ForceField:
+                    return DevTuning.Or(DevTuning.ForceFieldCooldownSeconds, DefaultForceFieldCooldownSeconds);
                 default:
                     return 0f;   // Speed, Weapon Cooldown — passive, no cooldown
             }
@@ -221,6 +230,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
                 case AbilityKind.WaterBalloon: return "WATER BALLOON";
                 case AbilityKind.WaterBalloonAutoFire: return "AUTO-FIRE";
+                case AbilityKind.ForceField: return "FORCE FIELD";
                 default: return kind.ToString();
             }
         }
@@ -249,6 +259,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WeaponCooldown: return "CD";
                 case AbilityKind.WaterBalloon: return "WB";
                 case AbilityKind.WaterBalloonAutoFire: return "AF";
+                case AbilityKind.ForceField: return "FF";
                 default: return "?";
             }
         }
@@ -265,6 +276,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";
                 case AbilityKind.WaterBalloon: return "Unlocks the Water Balloon throw — splash damage that halts robots.";
                 case AbilityKind.WaterBalloonAutoFire: return "Water Balloon aims and fires itself at the best cluster in range.";
+                case AbilityKind.ForceField: return "A bubble that absorbs incoming damage and blocks robots — Max can still move and fire out of it.";
                 default: return string.Empty;
             }
         }

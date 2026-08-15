@@ -165,14 +165,15 @@ namespace MaxWorlds.Tests.PlayMode
             // greyed, unnamed placeholder tiles (no name, no pips, no + button), not hidden rows and
             // not a text list naming what's still locked. MV-380: the pool is back up to 5 (Water
             // Balloon and its Auto-fire sub-ability returned to it after MV-370 had shrunk it to 3).
+            // MV-361 added Force Field, taking the pool to 6.
             yield return NewScreen();
             Screen.Open();
             yield return null;
 
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Null, $"{kind} shouldn't show before Max owns anything");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(5), "all five ability slots should be visible from the start");
-            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 5 unlocked"), Is.Not.Null);
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(6), "all six ability slots should be visible from the start");
+            Assert.That(FindText(_screenGo, "ABILITIES — 0 of 6 unlocked"), Is.Not.Null);
 
             WeaponSystemState.Acquire(AbilityKind.Speed);
             yield return null;
@@ -182,8 +183,8 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(FindText(_screenGo, Name(AbilityKind.Speed)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.Teleport)), Is.Not.Null);
             Assert.That(FindText(_screenGo, Name(AbilityKind.WeaponCooldown)), Is.Null, "still-unacquired abilities must stay unnamed");
-            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(5), "the grid stays at five slots as more are acquired");
-            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 5 unlocked"), Is.Not.Null);
+            Assert.That(CountActiveAbilityRows(_screenGo), Is.EqualTo(6), "the grid stays at six slots as more are acquired");
+            Assert.That(FindText(_screenGo, "ABILITIES — 2 of 6 unlocked"), Is.Not.Null);
         }
 
         [UnityTest]
@@ -199,7 +200,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "ABILITIES — 5 of 5 unlocked"), Is.Not.Null);
+            Assert.That(FindText(_screenGo, "ABILITIES — 6 of 6 unlocked"), Is.Not.Null);
             foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} should be named once owned");
         }

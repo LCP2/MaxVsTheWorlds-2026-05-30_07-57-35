@@ -98,5 +98,62 @@ namespace MaxWorlds.Weapons
         /// <summary>Max's walk-speed multiplier at a given Speed level — 1x at level 0 (not owned).</summary>
         public static float SpeedMultiplier(int level, float perLevel) =>
             1f + Mathf.Max(0, level) * Mathf.Max(0f, perLevel);
+
+        // --- Force Field (MV-361) ---
+
+        /// <summary>Damage the bubble absorbs before popping at Level 1, the "60-damage cap" DECISION
+        /// #5 pins — roughly 30% of Max's 200 HP, enough runway to reposition against a two-Rusher
+        /// swarm without being a stalemate-proof wall (see the ticket's own DPS math).</summary>
+        public const float DefaultForceFieldAbsorbCap = 60f;
+
+        /// <summary>Extra absorb cap each Force Field level beyond L1 adds — same additive "level =
+        /// bigger number" shape as <see cref="TeleportDistance"/>, so a level-up is a felt difference.</summary>
+        public const float DefaultForceFieldAbsorbCapPerLevel = 30f;
+
+        /// <summary>Radius of the bubble, metres (DECISION #3, MV-361) — pinned to the live world's
+        /// normal gate width (3 m diameter), NOT leveled: a chokepoint-sized bubble that grew with
+        /// upgrades would eventually swallow rooms whole.</summary>
+        public const float DefaultForceFieldRadius = 1.5f;
+
+        /// <summary>Power cells Force Field spends on activation (DECISION #2, MV-361) — fixed, not
+        /// leveled, same reasoning as <see cref="DefaultForceFieldRadius"/>.</summary>
+        public const int DefaultForceFieldActivationCost = 10;
+
+        /// <summary>Damage the level-3 pop deals to everything touching the bubble when it bursts
+        /// (DECISION #4: "confirmed in scope", no number pinned) — an authored placeholder until Lee
+        /// tunes it, same status <see cref="DefaultWaterBalloonStopDurationSeconds"/> had before its
+        /// own number was dialled in.</summary>
+        public const float DefaultForceFieldPopDamage = 40f;
+
+        /// <summary>Outward knockback speed, m/s, the level-3 pop shoves every robot touching the
+        /// bubble with (DECISION #4) — a real launch, not <see cref="MaxWorlds.Core.DevTuning.SprayKnockback"/>'s
+        /// near-zero cosmetic stagger, since this is meant to read as a counter-attack. Authored
+        /// placeholder, same status as <see cref="DefaultForceFieldPopDamage"/>.</summary>
+        public const float DefaultForceFieldPopKnockbackSpeed = 8f;
+
+        /// <summary>The bubble's absorb cap at a given Force Field level — level 1 is the DECISION's
+        /// pinned 60, each level above it adds <paramref name="perLevel"/> more headroom.</summary>
+        public static float ForceFieldAbsorbCap(int level, float baseCap, float perLevel) =>
+            Mathf.Max(0f, baseCap) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
+
+        /// <summary>True once Force Field is leveled enough for its pop to deal damage and knock back
+        /// everything touching the bubble (DECISION #4: "stays exactly where the Upgrade track already
+        /// scoped it, level 3").</summary>
+        public static bool ForceFieldPopDealsDamage(int level) => level >= 3;
+
+        /// <summary>
+        /// Applies <paramref name="incoming"/> damage against the bubble's remaining absorb budget.
+        /// Pure and side-effect free so the cap-then-leak maths is unit-testable without a live
+        /// <see cref="PlayerAbilities"/>: everything up to <paramref name="remainingCap"/> is eaten,
+        /// anything past it leaks through to <see cref="MaxWorlds.Player.PlayerHealth"/> unabsorbed —
+        /// the field never goes negative and never blocks more than it has left.
+        /// </summary>
+        public static (float Absorbed, float Leaked) ForceFieldAbsorb(float incoming, float remainingCap)
+        {
+            float safeIncoming = Mathf.Max(0f, incoming);
+            float safeCap = Mathf.Max(0f, remainingCap);
+            float absorbed = Mathf.Min(safeIncoming, safeCap);
+            return (absorbed, safeIncoming - absorbed);
+        }
     }
 }

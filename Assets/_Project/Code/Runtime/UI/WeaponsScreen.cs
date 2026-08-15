@@ -80,7 +80,7 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 5;    // WeaponCatalog.AllAbilityKinds.Length (MV-380: Water Balloon + its Auto-fire sub-ability returned to the shed pool, 3 -> 5)
+        private const int MaxAbilityRows = 6;    // WeaponCatalog.AllAbilityKinds.Length (MV-361 added Force Field, 5 -> 6)
         private const int AbilityColumns = 3;    // fixed column count (matches the Primary Add-ons row below) — MaxAbilityRows now wraps past it into a 2nd row instead of growing the row width
         private const int WaterBalloonTrackCount = 3;   // WeaponCatalog.AllWaterBalloonTrackKinds.Length (MV-370)
 
@@ -95,8 +95,8 @@ namespace MaxWorlds.UI
         // MV-262: the abilities grid is a fixed-slot grid regardless of how many are owned, so unlike
         // the old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
         // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols) + add-ons header + add-ons grid
-        // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-380:
-        // 5 abilities in the pool again at a fixed 3 columns, so 2 rows not 1) all fit inside the
+        // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-361:
+        // 6 abilities in the pool at a fixed 3 columns, so 2 rows not 1) all fit inside the
         // content budget below the top bar (there's no bottom spendbar any more) with room to spare for
         // the hero-sized primary-name block above the grids — see the arithmetic in
         // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildWaterBalloonSection/BuildAbilitiesSection;
@@ -1032,6 +1032,7 @@ namespace MaxWorlds.UI
                 case AbilityKind.WeaponCooldown: return "CD";
                 case AbilityKind.WaterBalloon: return "WB";
                 case AbilityKind.WaterBalloonAutoFire: return "AF";
+                case AbilityKind.ForceField: return "FF";
                 default: return "?";
             }
         }

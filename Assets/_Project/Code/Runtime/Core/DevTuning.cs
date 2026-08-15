@@ -219,6 +219,27 @@ namespace MaxWorlds.Core
         /// <summary>Extra Teleport blink distance at its Level 2 cap (MV-292).</summary>
         public static float? TeleportDistancePerLevel { get; set; }
 
+        /// <summary>Force Field's absorb cap at Level 1, damage (MV-361).</summary>
+        public static float? ForceFieldAbsorbCap { get; set; }
+
+        /// <summary>Extra Force Field absorb cap each level beyond L1 adds (MV-361).</summary>
+        public static float? ForceFieldAbsorbCapPerLevel { get; set; }
+
+        /// <summary>Force Field's base cooldown, seconds, before any Weapon Cooldown reduction (MV-361).</summary>
+        public static float? ForceFieldCooldownSeconds { get; set; }
+
+        /// <summary>Force Field's bubble radius, metres (MV-361).</summary>
+        public static float? ForceFieldRadius { get; set; }
+
+        /// <summary>Power cells Force Field spends on activation (MV-361).</summary>
+        public static float? ForceFieldActivationCost { get; set; }
+
+        /// <summary>Damage the level-3 Force Field pop deals to everything touching the bubble (MV-361).</summary>
+        public static float? ForceFieldPopDamage { get; set; }
+
+        /// <summary>Outward knockback speed, m/s, the level-3 Force Field pop applies (MV-361).</summary>
+        public static float? ForceFieldPopKnockbackSpeed { get; set; }
+
         // --- robot composition/accumulation (WV-234, spec §1-2/§9) — settings only for now, ready
         // for WV-222/223/224 (the gated-arena + robot-accumulation tickets) to spend. ---
 
@@ -329,6 +350,10 @@ namespace MaxWorlds.Core
             WaterBalloonSplashMult.HasValue || WaterBalloonSplashAreaPerLevel.HasValue ||
             WaterBalloonRepeatFirePerLevel.HasValue ||
             TeleportBaseDistance.HasValue || TeleportDistancePerLevel.HasValue ||
+            ForceFieldAbsorbCap.HasValue || ForceFieldAbsorbCapPerLevel.HasValue ||
+            ForceFieldCooldownSeconds.HasValue || ForceFieldRadius.HasValue ||
+            ForceFieldActivationCost.HasValue || ForceFieldPopDamage.HasValue ||
+            ForceFieldPopKnockbackSpeed.HasValue ||
             StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
@@ -388,6 +413,13 @@ namespace MaxWorlds.Core
             WaterBalloonRepeatFirePerLevel = null;
             TeleportBaseDistance = null;
             TeleportDistancePerLevel = null;
+            ForceFieldAbsorbCap = null;
+            ForceFieldAbsorbCapPerLevel = null;
+            ForceFieldCooldownSeconds = null;
+            ForceFieldRadius = null;
+            ForceFieldActivationCost = null;
+            ForceFieldPopDamage = null;
+            ForceFieldPopKnockbackSpeed = null;
             StartLargeCount = null;
             StartSmallCount = null;
             AreaGrowthPct = null;
@@ -467,6 +499,13 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(WaterBalloonRepeatFirePerLevel), () => WaterBalloonRepeatFirePerLevel, v => WaterBalloonRepeatFirePerLevel = v),
             (PrefsPrefix + nameof(TeleportBaseDistance), () => TeleportBaseDistance, v => TeleportBaseDistance = v),
             (PrefsPrefix + nameof(TeleportDistancePerLevel), () => TeleportDistancePerLevel, v => TeleportDistancePerLevel = v),
+            (PrefsPrefix + nameof(ForceFieldAbsorbCap), () => ForceFieldAbsorbCap, v => ForceFieldAbsorbCap = v),
+            (PrefsPrefix + nameof(ForceFieldAbsorbCapPerLevel), () => ForceFieldAbsorbCapPerLevel, v => ForceFieldAbsorbCapPerLevel = v),
+            (PrefsPrefix + nameof(ForceFieldCooldownSeconds), () => ForceFieldCooldownSeconds, v => ForceFieldCooldownSeconds = v),
+            (PrefsPrefix + nameof(ForceFieldRadius), () => ForceFieldRadius, v => ForceFieldRadius = v),
+            (PrefsPrefix + nameof(ForceFieldActivationCost), () => ForceFieldActivationCost, v => ForceFieldActivationCost = v),
+            (PrefsPrefix + nameof(ForceFieldPopDamage), () => ForceFieldPopDamage, v => ForceFieldPopDamage = v),
+            (PrefsPrefix + nameof(ForceFieldPopKnockbackSpeed), () => ForceFieldPopKnockbackSpeed, v => ForceFieldPopKnockbackSpeed = v),
             (PrefsPrefix + nameof(StartLargeCount), () => StartLargeCount, v => StartLargeCount = v),
             (PrefsPrefix + nameof(StartSmallCount), () => StartSmallCount, v => StartSmallCount = v),
             (PrefsPrefix + nameof(AreaGrowthPct), () => AreaGrowthPct, v => AreaGrowthPct = v),

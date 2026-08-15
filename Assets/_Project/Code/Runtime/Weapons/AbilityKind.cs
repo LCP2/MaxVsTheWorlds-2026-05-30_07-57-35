@@ -37,5 +37,11 @@ namespace MaxWorlds.Weapons
         /// Also a boolean unlock, cap 1 — once owned, <see cref="WeaponSystemState.WaterBalloonAutoFireEnabled"/>
         /// is the player-facing on/off toggle on top of it.</summary>
         WaterBalloonAutoFire,
+
+        /// <summary>A personal, damage-absorbing bubble centred on Max (MV-361) — Dash's old
+        /// "escape danger" role, but survive-in-place rather than flee. Levels 1-3: level raises the
+        /// absorb cap; level 3 additionally makes the pop deal damage and knock back everything
+        /// touching the bubble. See <see cref="PlayerAbilities.TryActivateForceField"/>.</summary>
+        ForceField,
     }
 }

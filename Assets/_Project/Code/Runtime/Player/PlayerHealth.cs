@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.UI;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Player
 {
@@ -69,6 +70,18 @@ namespace MaxWorlds.Player
         private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f); // #33A0EB
 
         private WaterBlaster _blaster;
+        private PlayerAbilities _abilities;
+
+        /// <summary>Max's abilities component, for the Force Field absorb hook below — resolved lazily
+        /// and cached, same reason/shape as <see cref="WaterNormalized"/>'s <see cref="_blaster"/> read.</summary>
+        private PlayerAbilities Abilities
+        {
+            get
+            {
+                if (_abilities == null) _abilities = GetComponent<PlayerAbilities>();
+                return _abilities;
+            }
+        }
 
         private void Awake()
         {
@@ -93,7 +106,13 @@ namespace MaxWorlds.Player
             if (!IsAlive) return;
             if (DevMode.IsInvincible) return;                      // dev/filming only; off by default (YT-60)
             if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
-            float amount = info.Amount;
+
+            // MV-361: Force Field eats as much of the hit as its remaining budget allows, before HP
+            // ever sees it — every damage source funnels through here, so the bubble needs no special
+            // case per attacker (contact lunge, beam tick, missile splash all arrive as one DamageInfo).
+            float amount = Abilities != null ? Abilities.AbsorbForceFieldDamage(info.Amount) : info.Amount;
+            if (amount <= 0f) return;
+
             _health = Mathf.Max(0f, _health - amount);
             _timeSinceDamage = 0f;
             Changed?.Invoke(_health);
