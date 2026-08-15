@@ -302,5 +302,32 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(control.LandingCircleVisible, Is.False, "releasing must hide the landing circle again");
         }
+
+        [Test]
+        public void Teleport_LandingCircleReappearsAcrossFourConsecutiveActivations()
+        {
+            // MV-392: Lee's playtest found the landing circle drew correctly on the FIRST activation
+            // in a session but not the second. MV-385's own coverage only ever re-armed once (fire,
+            // then one more press); this drives the full press/drag/release cycle four times in a
+            // row — matching this ticket's own "verify across at least 3-4 consecutive uses, not
+            // just twice" requirement — asserting the circle (not just IsAiming) reappears every time.
+            var control = NewTeleportControl();
+
+            for (int i = 0; i < 4; i++)
+            {
+                control.OnPointerDown(At(Vector2.zero));
+                Assert.That(control.LandingCircleVisible, Is.True,
+                    $"activation {i}: the landing circle must reappear on every press, not just the first");
+                Assert.That(control.LandingCircleVertexCount, Is.GreaterThan(0),
+                    $"activation {i}: the landing circle mesh must not be empty");
+
+                control.OnDrag(At(new Vector2(OverThresholdPx, 0f)));
+                Assert.That(control.IsArmed, Is.True, $"activation {i}: the drag must still arm");
+
+                control.OnPointerUp(At(new Vector2(OverThresholdPx, 0f)));
+                Assert.That(control.LandingCircleVisible, Is.False,
+                    $"activation {i}: releasing must hide the circle again");
+            }
+        }
     }
 }
