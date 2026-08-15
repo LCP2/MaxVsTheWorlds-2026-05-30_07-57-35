@@ -71,6 +71,11 @@ namespace MaxWorlds.Enemies
         private Collider[] _playerColliders;
         private float _timer;
 
+        /// <summary>Total Rushers this director has queued so far this run — enforces
+        /// <see cref="RusherCap.PerLevel"/> (<see cref="RusherCap.Apply"/>). Reset in
+        /// <see cref="Configure"/>, a fresh run.</summary>
+        private int _rushersQueuedThisLevel;
+
         /// <summary>How many robots this director has placed in <see cref="CurrentArea"/> so far — feeds
         /// <see cref="SpawnBias.StaggerBand"/> so each one lands in a different distance-from-gate tier
         /// (MV-324). Reset per area in <see cref="FillArea"/>; kept running across the instant fill AND
@@ -113,6 +118,7 @@ namespace MaxWorlds.Enemies
                 DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots)));
             _filledAreas.Clear();
             _largeCountByArea.Clear();
+            _rushersQueuedThisLevel = 0;
             CurrentArea = 1;
             FillArea(1);
         }
@@ -189,7 +195,7 @@ namespace MaxWorlds.Enemies
 
             if (_worldCfg != null)
             {
-                DifficultyEngine.Composition composition = _worldCfg.SolveComposition(areaIndex);
+                DifficultyEngine.Composition composition = ClampRusherCap(_worldCfg.SolveComposition(areaIndex));
                 _largeCountByArea[areaIndex] = composition.LargeCount;
                 _queue.FillExact(composition);
             }
@@ -215,6 +221,21 @@ namespace MaxWorlds.Enemies
                 Spawn(kind);
         }
 
+        /// <summary>Applies <see cref="RusherCap.Apply"/> against this director's running total, then
+        /// advances that total by however many Rushers actually made it through.</summary>
+        private DifficultyEngine.Composition ClampRusherCap(DifficultyEngine.Composition composition)
+        {
+            DifficultyEngine.Composition clamped = RusherCap.Apply(composition, _rushersQueuedThisLevel);
+            _rushersQueuedThisLevel += clamped.Rusher;
+            return clamped;
+        }
+
+        /// <summary>True if <paramref name="areaIndex"/>'s authored scenario tag (MV-365,
+        /// <see cref="WorldArea.scenario"/>) is <c>"centerDenial"</c> — false (ordinary placement) if
+        /// there is no live world config, no matching area, or no scenario authored.</summary>
+        private bool IsCenterDenialScenario(int areaIndex) =>
+            _worldCfg?.AreaByIndex(areaIndex)?.scenario == "centerDenial";
+
         private void Spawn(EnemyKind kind)
         {
             EnemyArchetype archetype = EnemyArchetype.Of(kind)
@@ -222,7 +243,7 @@ namespace MaxWorlds.Enemies
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
 
             RobotEnemy e = Take(kind, archetype);
-            e.transform.position = SpawnPointInArea(CurrentArea, archetype.SpawnHeight, _areaSpawnIndex++);
+            e.transform.position = SpawnPointInArea(CurrentArea, kind, archetype.SpawnHeight, _areaSpawnIndex++);
             e.transform.rotation = Quaternion.identity;
             e.gameObject.SetActive(true);
 
@@ -240,11 +261,17 @@ namespace MaxWorlds.Enemies
         /// falling straight back to an on-screen spawn. Placement always succeeds; only if no off-screen
         /// point exists in the room at all (both passes exhausted) does the last candidate tried get
         /// used rather than refusing to place the robot.</summary>
-        private Vector3 SpawnPointInArea(int areaIndex, float height, int spawnIndex)
+        private Vector3 SpawnPointInArea(int areaIndex, EnemyKind kind, float height, int spawnIndex)
         {
             MapZone zone = _map.Zone($"area{areaIndex}");
             if (zone == null || zone.width <= EdgeMargin * 2f || zone.depth <= EdgeMargin * 2f)
                 return _target != null ? _target.position : Vector3.zero;
+
+            // MV-365: a centreDenial scenario's Bomber-kind spawns bias toward the room's middle
+            // instead of the usual far-side-from-door band — "a barrage of missiles in the middle,
+            // surrounded by robots" is a placement fact, not just a count.
+            if (kind == EnemyKind.Bomber && IsCenterDenialScenario(areaIndex))
+                return RandomPointIn(SpawnBias.CenterBand(zone, EdgeMargin), height);
 
             // MV-323: bias candidates to the side of the room opposite the door robots/Max just came
             // through, so the ambient fight tends to stay off the entrance rather than piling up on it.

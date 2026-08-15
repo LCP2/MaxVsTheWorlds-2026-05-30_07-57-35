@@ -192,15 +192,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         // --- MV-310: the shipped world1_config.json must actually surface Gunner/Bomber/Blinker ---
-        // --- in the ambient arena population, not only via factory production. --------------------
+        // --- in the ambient arena population, not only via factory production. Range widened from ---
+        // --- Areas 1-4 to the full 1-8 by MV-365: composition is now authored per area as designed ---
+        // --- scenarios (a Gunner-pressure room, a Bomber centreDenial room, a Blinker set-piece) ---
+        // --- deliberately spread across the whole world rather than clustered early. --------------
 
         [Test]
-        public void World1_GunnerBomberBlinker_AllAppearAcrossTheFirstFewAreas()
+        public void World1_GunnerBomberBlinker_AllAppearAcrossTheWorld()
         {
             WorldConfig cfg = LoadWorld1();
 
             bool sawGunner = false, sawBomber = false, sawBlinker = false;
-            for (int area = 1; area <= 4; area++)
+            for (int area = 1; area <= 8; area++)
             {
                 DifficultyEngine.Composition composition = cfg.SolveComposition(area);
                 if (composition.Gunner > 0) sawGunner = true;
@@ -208,9 +211,9 @@ namespace MaxWorlds.Tests.EditMode
                 if (composition.Blinker > 0) sawBlinker = true;
             }
 
-            Assert.IsTrue(sawGunner, "Gunner never appears in Areas 1-4");
-            Assert.IsTrue(sawBomber, "Bomber never appears in Areas 1-4");
-            Assert.IsTrue(sawBlinker, "Blinker never appears in Areas 1-4");
+            Assert.IsTrue(sawGunner, "Gunner never appears in Areas 1-8");
+            Assert.IsTrue(sawBomber, "Bomber never appears in Areas 1-8");
+            Assert.IsTrue(sawBlinker, "Blinker never appears in Areas 1-8");
         }
     }
 }

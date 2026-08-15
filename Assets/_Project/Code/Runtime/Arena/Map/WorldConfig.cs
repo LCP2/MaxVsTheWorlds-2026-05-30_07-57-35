@@ -62,6 +62,36 @@ namespace MaxWorlds.Arena
         public WorldAreaSize size;
     }
 
+    /// <summary>An area's authored, exact enemy composition (MV-365) — when present on a
+    /// <see cref="WorldArea"/>, this replaces <see cref="WorldConfig.SolveComposition"/>'s
+    /// dial-derived budget solve for that area entirely: the designer's own counts are the answer,
+    /// not a target the solver approximates. This is what makes per-area composition "authored and
+    /// tunable without a code change" (MV-365 AC5) — retuning an arena's enemy mix is a JSON edit to
+    /// this block, same as retuning its cover.</summary>
+    [Serializable]
+    public sealed class WorldComposition
+    {
+        public int rusher;
+        public int bruiser;
+        public int heavy;
+        public int brute;
+        public int gunner;
+        public int bomber;
+        public int blinker;
+
+        /// <summary>True if any kind actually has a count — the real "was this authored" signal.
+        /// <c>JsonUtility</c> materialises a non-null <see cref="WorldComposition"/> for every area
+        /// once ANY area in the array carries the field, even ones whose JSON omits it entirely (a
+        /// documented JsonUtility quirk: nested <c>[Serializable]</c> class fields round-trip through
+        /// their own default constructor rather than staying null when absent) — so a plain
+        /// null-check would wrongly treat an un-authored area as "authored: 0 robots everywhere".</summary>
+        public bool IsAuthored =>
+            rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || bomber > 0 || blinker > 0;
+
+        public DifficultyEngine.Composition ToEngineComposition() =>
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, bomber, blinker);
+    }
+
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
     /// the same fields as <see cref="MapEntity"/>'s cover shape so <see cref="WorldMapLoader"/> can
     /// hand it straight to the engine that already knows how to build, validate and dress cover
@@ -117,6 +147,20 @@ namespace MaxWorlds.Arena
         /// invariants in <see cref="MapValidation"/> enforce that, same as they always have). Optional
         /// — most areas carry none until authored.</summary>
         public WorldCover[] cover = Array.Empty<WorldCover>();
+
+        /// <summary>This area's authored enemy composition (MV-365) — null means "not authored yet,
+        /// fall back to the dial-derived budget solve" (<see cref="WorldConfig.SolveComposition"/>).
+        /// Most Phase B areas carry one; nothing requires every area to.</summary>
+        public WorldComposition composition;
+
+        /// <summary>A named encounter shape for this area (MV-365) — data only, read by
+        /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> to bias WHERE within the room a
+        /// particular kind spawns (composition alone only says how many; some scenarios need
+        /// placement too). Currently understood: <c>"centerDenial"</c> — Bomber-kind spawns bias
+        /// toward the room's centre instead of the usual far-side-from-door band, so its missile
+        /// barrage reads as "denied ground in the middle" rather than another far-wall cluster.
+        /// Empty/unrecognised values fall back to ordinary placement.</summary>
+        public string scenario = "";
 
         public float XMin => origin?.x ?? 0f;
         public float XMax => XMin + (size?.w ?? 0f);
@@ -353,6 +397,12 @@ namespace MaxWorlds.Arena
         public DifficultyEngine.Composition SolveComposition(int areaIndex)
         {
             if (dials == null || areaIndex < 1 || areaIndex > dials.areaCount) return default;
+
+            // MV-365: an authored composition IS the answer for this area — it replaces the
+            // dial-derived budget solve below entirely rather than being blended with it, so an
+            // authored arena reads exactly as designed instead of as an approximation of a budget.
+            WorldComposition authored = AreaByIndex(areaIndex)?.composition;
+            if (authored != null && authored.IsAuthored) return authored.ToEngineComposition();
 
             float baseThreat = DevTuning.Or(DevTuning.WorldBaseThreat, dials.baseThreat);
             float threatGrowth = DevTuning.Or(DevTuning.WorldThreatGrowth, dials.threatGrowth);
