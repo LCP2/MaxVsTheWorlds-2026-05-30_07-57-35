@@ -51,6 +51,20 @@ namespace MaxWorlds.Arena
         /// <summary>Largest circle that fits in the room — the circle-strafe loop the player gets to
         /// use. A fight room with a small number here is a corridor wearing a room's name.</summary>
         public float InscribedRadius => Mathf.Min(width, depth) * 0.5f;
+
+        /// <summary>Pulls a point back inside this room by <paramref name="edgeMargin"/> from every
+        /// wall (MV-399: an aimed sentinel placement reticle must stay "constrained to the current
+        /// arena's walkable space" rather than showing a target beyond a wall that then silently fails
+        /// — the exact bug MV-393 flagged in Teleport). Degrades to the room's own centre if the margin
+        /// alone exceeds the room's width/depth, rather than producing an inverted (min &gt; max) range.</summary>
+        public Vector3 Clamp(Vector3 point, float edgeMargin)
+        {
+            float minX = XMin + edgeMargin, maxX = XMax - edgeMargin;
+            float minZ = ZMin + edgeMargin, maxZ = ZMax - edgeMargin;
+            if (minX > maxX) minX = maxX = x;
+            if (minZ > maxZ) minZ = maxZ = z;
+            return new Vector3(Mathf.Clamp(point.x, minX, maxX), point.y, Mathf.Clamp(point.z, minZ, maxZ));
+        }
     }
 
     /// <summary>A way through between two rooms. The engine cuts the doorway out of the shared wall:
