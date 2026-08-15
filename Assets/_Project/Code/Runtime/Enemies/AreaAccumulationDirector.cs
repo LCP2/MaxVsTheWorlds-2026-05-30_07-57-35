@@ -77,6 +77,7 @@ namespace MaxWorlds.Enemies
         private AreaSpawnQueue _queue;
         private readonly HashSet<int> _filledAreas = new HashSet<int>();
         private readonly Dictionary<int, int> _largeCountByArea = new Dictionary<int, int>();
+        private readonly Dictionary<int, int> _bruiserCountByArea = new Dictionary<int, int>();
         private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _pools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
         private Collider[] _playerColliders;
         private float _timer;
@@ -134,6 +135,15 @@ namespace MaxWorlds.Enemies
         /// emergent side effect of how many robots this area's population solver happened to place.</summary>
         public int LargeCountForArea(int areaIndex) =>
             _largeCountByArea.TryGetValue(areaIndex, out int count) ? count : 0;
+
+        /// <summary>The Bruiser count <see cref="FillArea"/> solved for 1-based
+        /// <paramref name="areaIndex"/> (MV-401) — 0 if that area hasn't been filled yet, or if it was
+        /// solved/authored with no Bruisers at all (e.g. world1_config's Area 4 ranged-pressure room,
+        /// which is Rusher+Gunner only). <see cref="MaxWorlds.Pickups.PickupDirector"/> counts this
+        /// down as Bruisers in the current area die so it can drop the arena's one guaranteed part on
+        /// the last one, instead of the old periodic every-N-kills trigger.</summary>
+        public int BruiserCountForArea(int areaIndex) =>
+            _bruiserCountByArea.TryGetValue(areaIndex, out int count) ? count : 0;
 
         /// <summary>The live world config this director solves composition against, once
         /// <see cref="ConfigureWorld"/> has been called — exposed so the Settings panel can show the
@@ -243,6 +253,7 @@ namespace MaxWorlds.Enemies
             {
                 DifficultyEngine.Composition composition = ClampRusherCap(_worldCfg.SolveComposition(areaIndex));
                 _largeCountByArea[areaIndex] = composition.LargeCount;
+                _bruiserCountByArea[areaIndex] = composition.Bruiser;
                 _queue.FillExact(composition);
                 totalForArea = composition.TotalCount;
             }
@@ -255,11 +266,15 @@ namespace MaxWorlds.Enemies
                     DevTuning.Or(DevTuning.LargeToSmallRatio, RobotCompositionTuning.DefaultLargeToSmallRatio),
                     DevTuning.Or(DevTuning.LargeShareDriftPerArea, RobotCompositionTuning.DefaultLargeShareDriftPerArea));
 
+                float heavyIntroArea = DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea);
+                float bruteIntroArea = DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea);
+                float toughSubstitutionPct = DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct);
+
                 _largeCountByArea[areaIndex] = large;
-                _queue.FillForArea(areaIndex, large, small,
-                    DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
-                    DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
-                    DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct));
+                var (bruiserCount, _, _) = AreaPopulation.ToughSplitForArea(
+                    areaIndex, large, heavyIntroArea, bruteIntroArea, toughSubstitutionPct);
+                _bruiserCountByArea[areaIndex] = bruiserCount;
+                _queue.FillForArea(areaIndex, large, small, heavyIntroArea, bruteIntroArea, toughSubstitutionPct);
                 totalForArea = large + small;
             }
 

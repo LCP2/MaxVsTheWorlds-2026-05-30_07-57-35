@@ -87,5 +87,36 @@ namespace MaxWorlds.Tests.EditMode
                 "Gunner share) once entered — proves the world-config path, not the legacy fallback " +
                 "(which never produces Gunner), composed area 2 too");
         }
+
+        /// <summary>MV-401: <see cref="AreaAccumulationDirector.BruiserCountForArea"/> must expose the
+        /// area's actually-solved Bruiser count so <c>PickupDirector</c> can count it down to the last
+        /// one — including the real zero case, world1_config's Area 4 ranged-pressure room (Rusher +
+        /// Gunner only, no Bruiser authored at all).</summary>
+        [Test]
+        public void BruiserCountForArea_MatchesSolvedComposition_IncludingAZeroBruiserArea()
+        {
+            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
+
+            DifficultyEngine.Composition area1 = cfg.SolveComposition(1);
+            DifficultyEngine.Composition area4 = cfg.SolveComposition(4);
+            Assert.AreEqual(1, area1.Bruiser, "area 1's authored composition holds exactly one Bruiser");
+            Assert.AreEqual(0, area4.Bruiser, "area 4's authored composition is Rusher+Gunner only");
+
+            _directorGo = new GameObject("Area Accumulation");
+            var director = _directorGo.AddComponent<AreaAccumulationDirector>();
+            director.ConfigureWorld(cfg);
+            director.Configure(map, System.Array.Empty<CoverPiece>());
+            director.EnterArea(2);
+            director.EnterArea(3);
+            director.EnterArea(4);
+
+            Assert.AreEqual(1, director.BruiserCountForArea(1),
+                "area 1's Bruiser count must match its solved composition");
+            Assert.AreEqual(0, director.BruiserCountForArea(4),
+                "a Bruiser-less area must report exactly zero, not fall back to some other count");
+            Assert.AreEqual(0, director.BruiserCountForArea(9),
+                "an area never filled must report zero rather than throwing");
+        }
     }
 }
