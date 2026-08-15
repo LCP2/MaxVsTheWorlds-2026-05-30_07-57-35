@@ -43,6 +43,12 @@ namespace MaxWorlds.Weapons
         private float _waterBalloonCooldown;
         private float _teleportCooldown;
 
+        // --- Force Field (MV-361) ---
+        private float _forceFieldCooldown;     // > 0 while cooling down, only starts once the bubble pops
+        private float _forceFieldAbsorbRemaining; // > 0 while the bubble is up
+        private float _forceFieldAbsorbCap;    // this activation's full cap, for the HUD/visual fraction
+        private ForceFieldBubble _forceFieldBubble;
+
         private static readonly Collider[] s_hits = new Collider[32];
         private static readonly System.Collections.Generic.HashSet<int> s_hitGameObjectIds = new System.Collections.Generic.HashSet<int>();
 
@@ -62,6 +68,33 @@ namespace MaxWorlds.Weapons
 
         public bool TeleportReady =>
             WeaponSystemState.IsAcquired(AbilityKind.Teleport) && _teleportCooldown <= 0f;
+
+        /// <summary>Seconds left before Force Field can be activated again, 0 when ready. Only starts
+        /// counting down once the bubble pops (MV-361) — same "cooldown starts at the END of the
+        /// window" shape as the legacy <see cref="MaxWorlds.Upgrades.HydroBurst"/>.</summary>
+        public float ForceFieldCooldownRemaining => Mathf.Max(0f, _forceFieldCooldown);
+
+        /// <summary>True while the bubble is up.</summary>
+        public bool ForceFieldActive => _forceFieldAbsorbRemaining > 0f;
+
+        /// <summary>Owned, off cooldown, not already active, AND enough cells banked to spend — what
+        /// an on-screen control gates its press on (same shape as <see cref="WaterBalloonReady"/>).</summary>
+        public bool ForceFieldReady =>
+            WeaponSystemState.IsAcquired(AbilityKind.ForceField) && !ForceFieldActive &&
+            _forceFieldCooldown <= 0f && PickupWallet.PowerCells >= ForceFieldActivationCost;
+
+        /// <summary>1 (just activated) .. 0 (about to pop) — the bubble's own colour-shift/HUD countdown.</summary>
+        public float ForceFieldAbsorbFraction =>
+            _forceFieldAbsorbCap > 0f ? Mathf.Clamp01(_forceFieldAbsorbRemaining / _forceFieldAbsorbCap) : 0f;
+
+        /// <summary>Power cells one Force Field activation costs (DECISION #2, MV-361) — fixed, not
+        /// leveled.</summary>
+        public static int ForceFieldActivationCost => Mathf.Max(0, Mathf.RoundToInt(
+            DevTuning.Or(DevTuning.ForceFieldActivationCost, AbilityTuning.DefaultForceFieldActivationCost)));
+
+        /// <summary>The bubble's radius this run, metres (DECISION #3, MV-361) — fixed, not leveled.</summary>
+        public static float ForceFieldRadius =>
+            DevTuning.Or(DevTuning.ForceFieldRadius, AbilityTuning.DefaultForceFieldRadius);
 
         /// <summary>The splash radius the current settings would produce — what WV-241's landing
         /// circle and this component's own damage query both size themselves from. MV-370: scales with
@@ -108,6 +141,9 @@ namespace MaxWorlds.Weapons
             float dt = Time.deltaTime;
             _waterBalloonCooldown = Mathf.Max(0f, _waterBalloonCooldown - dt);
             _teleportCooldown = Mathf.Max(0f, _teleportCooldown - dt);
+            _forceFieldCooldown = Mathf.Max(0f, _forceFieldCooldown - dt);
+
+            if (_forceFieldBubble != null) _forceFieldBubble.SetFraction(ForceFieldAbsorbFraction);
         }
 
         /// <summary>Throw a Water Balloon toward <paramref name="aimDirection"/> (WV-240 drives this
@@ -227,6 +263,97 @@ namespace MaxWorlds.Weapons
             // PlayerAbilities needing to know either exists.
             HudSignals.EmitMaxTeleported(from, transform.position);
             return true;
+        }
+
+        /// <summary>Raise the bubble (MV-361): spends <see cref="ForceFieldActivationCost"/> cells
+        /// (DECISION #2 — the one AbilityKind activation that still costs cells after MV-290 retired
+        /// the rest), fills the absorb budget for this run's Force Field level, and spawns the physical
+        /// <see cref="ForceFieldBubble"/> that blocks robot bodies. Returns false (nothing spent, no
+        /// bubble) if unowned, already up, still cooling down from the last pop, or the bank can't
+        /// cover the cost.</summary>
+        public bool TryActivateForceField()
+        {
+            if (!WeaponSystemState.IsAcquired(AbilityKind.ForceField)) return false;
+            if (ForceFieldActive) return false;
+            if (_forceFieldCooldown > 0f) return false;
+            if (!PickupWallet.TrySpendPowerCells(ForceFieldActivationCost)) return false;
+
+            int level = WeaponSystemState.AbilityLevel(AbilityKind.ForceField);
+            float baseCap = DevTuning.Or(DevTuning.ForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCap);
+            float perLevel = DevTuning.Or(DevTuning.ForceFieldAbsorbCapPerLevel, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel);
+            _forceFieldAbsorbCap = AbilityTuning.ForceFieldAbsorbCap(level, baseCap, perLevel);
+            _forceFieldAbsorbRemaining = _forceFieldAbsorbCap;
+
+            if (_forceFieldBubble != null) Destroy(_forceFieldBubble.gameObject);
+            var go = new GameObject("Force Field Bubble");
+            _forceFieldBubble = go.AddComponent<ForceFieldBubble>();
+            _forceFieldBubble.Init(transform, _cc, ForceFieldRadius);
+
+            return true;
+        }
+
+        /// <summary>Eat as much of an incoming hit as the bubble's remaining budget allows — the single
+        /// hook <see cref="MaxWorlds.Player.PlayerHealth.TakeDamage"/> calls before touching HP, so
+        /// EVERY damage source (contact lunge, beam tick, missile splash) is absorbed the same way
+        /// without each needing to know the field exists (DECISION #1: "blocks ALL incoming threats").
+        /// Pops the bubble the instant the budget is exhausted. Returns the damage that leaked through
+        /// unabsorbed (the full amount if the field isn't up at all).</summary>
+        public float AbsorbForceFieldDamage(float incoming)
+        {
+            if (!ForceFieldActive) return incoming;
+
+            var (absorbed, leaked) = AbilityTuning.ForceFieldAbsorb(incoming, _forceFieldAbsorbRemaining);
+            _forceFieldAbsorbRemaining -= absorbed;
+            if (_forceFieldAbsorbRemaining <= 0f) PopForceField();
+            return leaked;
+        }
+
+        /// <summary>The bubble bursts: cooldown starts NOW (not on activation, MV-361), the physical
+        /// collider is torn down, and — only once Force Field is leveled to 3 (DECISION #4) — the pop
+        /// deals damage and knocks back everything still touching it, turning the panic button into a
+        /// counter-attack.</summary>
+        private void PopForceField()
+        {
+            _forceFieldAbsorbRemaining = 0f;
+            _forceFieldCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.ForceField);
+
+            if (_forceFieldBubble != null)
+            {
+                Destroy(_forceFieldBubble.gameObject);
+                _forceFieldBubble = null;
+            }
+
+            int level = WeaponSystemState.AbilityLevel(AbilityKind.ForceField);
+            if (AbilityTuning.ForceFieldPopDealsDamage(level)) ApplyForceFieldPop();
+        }
+
+        /// <summary>Level-3 pop (DECISION #4): every robot still touching the bubble's radius takes
+        /// <see cref="AbilityTuning.DefaultForceFieldPopDamage"/> and is knocked outward — same
+        /// <c>OverlapSphere</c> + dedupe idiom <see cref="Land"/> uses for the Water Balloon splash.</summary>
+        private void ApplyForceFieldPop()
+        {
+            float damage = DevTuning.Or(DevTuning.ForceFieldPopDamage, AbilityTuning.DefaultForceFieldPopDamage);
+            float knockbackSpeed = DevTuning.Or(DevTuning.ForceFieldPopKnockbackSpeed, AbilityTuning.DefaultForceFieldPopKnockbackSpeed);
+            Vector3 center = transform.position;
+            float radius = ForceFieldRadius;
+
+            s_hitGameObjectIds.Clear();
+            int count = Physics.OverlapSphereNonAlloc(center, radius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                if (s_hits[i] == null) continue;
+                if (!s_hitGameObjectIds.Add(s_hits[i].gameObject.GetInstanceID())) continue;
+                if (!s_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive || d.Team == Team.Player) continue;
+
+                Vector3 outward = s_hits[i].transform.position - center; outward.y = 0f;
+                Vector3 dir = outward.sqrMagnitude > 1e-4f ? outward.normalized : transform.forward;
+
+                if (damage > 0f)
+                    d.TakeDamage(new DamageInfo(damage, center, dir, Team.Player, source: DamageSource.Ability));
+
+                if (s_hits[i].TryGetComponent<IKnockbackable>(out var kb))
+                    kb.ApplyKnockback(dir * knockbackSpeed);
+            }
         }
     }
 }

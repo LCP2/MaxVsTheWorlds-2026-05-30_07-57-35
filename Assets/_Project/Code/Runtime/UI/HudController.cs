@@ -52,6 +52,9 @@ namespace MaxWorlds.UI
         /// counter/pickup — the burst spends the exact same resource, so button and meter read as
         /// one system rather than two unrelated cyans.</summary>
         private static readonly Color HydroColor = CellColor;
+        /// <summary>The Force Field button's colour (MV-361) — the same ready-cyan the bubble itself
+        /// glows, so the button and the shield read as one thing.</summary>
+        private static readonly Color ForceFieldColor = new Color(0.31f, 0.76f, 0.97f);
         // The part-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell and
         // the pickup it points at read as ONE language. Sourced from the constant the aura uses, not a
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
@@ -95,6 +98,16 @@ namespace MaxWorlds.UI
         private bool _hydroWasActive;
         private float _hydroReadyFlash;
         private float _hydroSnapFlash;
+
+        // The Force Field button (MV-361): hidden until AbilityKind.ForceField is acquired, same
+        // round-button/radial-cooldown shape as the Hydro burst button above.
+        private RectTransform _forceFieldButtonRoot;
+        private Image _forceFieldGlow, _forceFieldRadial;
+        private Text _forceFieldLabel;
+        private bool _forceFieldWasReady;
+        private bool _forceFieldWasActive;
+        private float _forceFieldReadyFlash;
+        private float _forceFieldSnapFlash;
 
         // Joysticks
         private Image _moveRings, _moveArrow;
@@ -195,6 +208,7 @@ namespace MaxWorlds.UI
             BuildHomeButton();
             BuildAbilitySlots();
             BuildHydroButton();
+            BuildForceFieldButton();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
@@ -265,6 +279,8 @@ namespace MaxWorlds.UI
             RebuildWaterBalloonJoystickIfNeeded();
             RebuildTeleportJoystickIfNeeded();
             RefreshWaterBalloonAutoFireToggle();
+            if (_forceFieldButtonRoot != null)
+                _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
         }
 
         private void OnPowerCells(int total)
@@ -380,6 +396,7 @@ namespace MaxWorlds.UI
 
             UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
+            UpdateForceFieldButton(dt);
             UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
@@ -523,6 +540,51 @@ namespace MaxWorlds.UI
                 glow = Color.Lerp(glow, Color.white, _hydroSnapFlash);
                 glow.a = ready ? Mathf.Clamp01(readyPulse + _hydroReadyFlash) : Mathf.Max(0f, _hydroSnapFlash * 0.8f);
                 _hydroGlow.color = glow;
+            }
+        }
+
+        /// <summary>
+        /// Drives the Force Field button (MV-361) — a no-op while it's hidden (not yet acquired). While
+        /// the bubble is up, the glow runs hot and the label counts the absorb budget down as a percent
+        /// (MV-361: "obvious from peripheral vision... obvious when it drops"); once it pops, the radial
+        /// darkens through the cooldown and a bright one-shot flash sells the burst before settling into
+        /// the ready-glow pulse the ability slots already use — same shape as <see cref="UpdateHydroButton"/>.
+        /// </summary>
+        private void UpdateForceFieldButton(float dt)
+        {
+            if (_forceFieldButtonRoot == null || !_forceFieldButtonRoot.gameObject.activeSelf) return;
+            if (_abilities == null) return;
+
+            bool active = _abilities.ForceFieldActive;
+            bool ready = _abilities.ForceFieldReady;
+
+            if (ready && !_forceFieldWasReady) _forceFieldReadyFlash = 1f;
+            _forceFieldWasReady = ready;
+            _forceFieldReadyFlash = Mathf.Max(0f, _forceFieldReadyFlash - dt * 3.2f);
+
+            if (_forceFieldWasActive && !active) _forceFieldSnapFlash = 1f;
+            _forceFieldWasActive = active;
+            _forceFieldSnapFlash = Mathf.Max(0f, _forceFieldSnapFlash - dt * 2f);
+
+            if (active)
+            {
+                float pulse = 0.7f + 0.3f * Mathf.Abs(Mathf.Sin(Time.time * 8f));
+                _forceFieldGlow.color = new Color(ForceFieldColor.r, ForceFieldColor.g, ForceFieldColor.b, pulse);
+                _forceFieldRadial.fillAmount = 0f;
+                _forceFieldLabel.text = Mathf.CeilToInt(_abilities.ForceFieldAbsorbFraction * 100f) + "%";
+            }
+            else
+            {
+                _forceFieldLabel.text = "FIELD";
+                _forceFieldRadial.fillAmount = _abilities.ForceFieldCooldownRemaining > 0f
+                    ? Mathf.Clamp01(_abilities.ForceFieldCooldownRemaining / WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.ForceField))
+                    : 0f;
+
+                float readyPulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
+                Color glow = Color.Lerp(ReadyGlow, ForceFieldColor, 0.5f);
+                glow = Color.Lerp(glow, Color.white, _forceFieldSnapFlash);
+                glow.a = ready ? Mathf.Clamp01(readyPulse + _forceFieldReadyFlash) : Mathf.Max(0f, _forceFieldSnapFlash * 0.8f);
+                _forceFieldGlow.color = glow;
             }
         }
 
@@ -827,6 +889,59 @@ namespace MaxWorlds.UI
         private const float HydroButtonSize = 110f;
         private const float HydroButtonInset = 400f;
         private const float HydroButtonRise = 330f;
+
+        /// <summary>
+        /// The Force Field button (MV-361) — stacked above Hydro in the same right-hand column, same
+        /// round action-button shape. Hidden until <see cref="AbilityKind.ForceField"/> is acquired.
+        /// </summary>
+        private void BuildForceFieldButton()
+        {
+            var root = NewRect("Force Field Button", Root);
+            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(-HydroButtonInset, HydroButtonRise + HydroButtonSize + ForceFieldButtonGap);
+            root.sizeDelta = new Vector2(HydroButtonSize, HydroButtonSize);
+            _forceFieldButtonRoot = root;
+
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 4f);
+            glow.raycastTarget = false;
+            _forceFieldGlow = glow;
+
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), ForceFieldColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = true;
+            var button = ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnForceFieldButtonTapped);
+
+            _forceFieldLabel = AddText(root, 20f, ForceFieldColor, TextAnchor.MiddleCenter);
+            Stretch(_forceFieldLabel.rectTransform);
+            _forceFieldLabel.text = "FIELD";
+            _forceFieldLabel.fontStyle = FontStyle.Bold;
+            _forceFieldLabel.raycastTarget = false;
+            _forceFieldLabel.resizeTextForBestFit = true;
+            _forceFieldLabel.resizeTextMinSize = 10;
+            _forceFieldLabel.resizeTextMaxSize = 22;
+
+            var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _forceFieldRadial = radial;
+
+            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
+        }
+
+        /// <summary>Tapping FIELD (MV-361): raise the bubble. <see cref="PlayerAbilities.TryActivateForceField"/>
+        /// is itself a no-op when not ready (unowned, on cooldown, already up, or too few cells), so
+        /// there is nothing to gate here beyond the button existing at all.</summary>
+        private void OnForceFieldButtonTapped() => _abilities?.TryActivateForceField();
+
+        private const float ForceFieldButtonGap = 16f;   // clearance above the Hydro button below it
 
         // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits
         // above the Move stick the same way Hydro sits above the Aim stick, so aiming a throw never

@@ -177,7 +177,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AcquiredAndUnacquiredPartitionAllFiveAbilities_MV380()
+        public void AcquiredAndUnacquiredPartitionAllSixAbilities_MV361()
         {
             WeaponSystemState.Acquire(AbilityKind.Speed);
 
@@ -185,7 +185,7 @@ namespace MaxWorlds.Tests.EditMode
             // WaterBalloonAutoFire stays out of Unacquired too — its prerequisite (WaterBalloon) isn't
             // owned yet.
             CollectionAssert.AreEquivalent(
-                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon },
+                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon, AbilityKind.ForceField },
                 WeaponSystemState.Unacquired);
         }
 
@@ -364,9 +364,9 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllFiveAbilitiesFourTracksAndThreeWaterBalloonTracks_MV380()
+        public void CatalogListsAllSixAbilitiesFourTracksAndThreeWaterBalloonTracks_MV361()
         {
-            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(5), "MV-380 restored Water Balloon + its Auto-fire sub-ability");
+            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(6), "MV-361 added Force Field, on top of MV-380 restoring Water Balloon + its Auto-fire sub-ability");
             Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4), "MV-299 reinstated Depletion Rate as the fourth track");
             Assert.That(WeaponCatalog.AllWaterBalloonTrackKinds.Length, Is.EqualTo(3), "MV-370: Range, Splash Area, Repeat Fire — unchanged by MV-380");
         }
@@ -377,6 +377,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Speed), Is.EqualTo(4));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4), "MV-339 widened Teleport from 2 levels to 4");
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown), Is.EqualTo(5));
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(3), "MV-361: a 3-level track, matching the other abilities");
         }
 
         [Test]

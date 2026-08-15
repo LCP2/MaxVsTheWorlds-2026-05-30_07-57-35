@@ -156,5 +156,68 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(AbilityTuning.SpeedMultiplier(4, 0.15f), Is.EqualTo(1.60f).Within(1e-5f),
                 "a maxed L4 Speed at the authored 15%/level should be +60%");
         }
+
+        // ---------------------------------------------------------------- Force Field (MV-361)
+
+        [Test]
+        public void ForceFieldLevelOneIsThePinnedSixtyDamageCap()
+        {
+            // DECISION #5: "the field absorbs incoming damage up to a 60-damage cap" — level 1 is
+            // the ability's starting point, so this must land exactly on the DECISION's own number.
+            Assert.That(AbilityTuning.ForceFieldAbsorbCap(1, 60f, 30f), Is.EqualTo(60f).Within(1e-5f));
+        }
+
+        [Test]
+        public void EachForceFieldLevelRaisesTheAbsorbCapFurther()
+        {
+            float l1 = AbilityTuning.ForceFieldAbsorbCap(1, 60f, 30f);
+            float l2 = AbilityTuning.ForceFieldAbsorbCap(2, 60f, 30f);
+            float l3 = AbilityTuning.ForceFieldAbsorbCap(3, 60f, 30f);
+            Assert.Greater(l2, l1, "level 2 must absorb more than level 1");
+            Assert.Greater(l3, l2, "level 3 must absorb more than level 2");
+            Assert.That(l3 - l2, Is.EqualTo(l2 - l1).Within(1e-5f), "the per-level step should be constant");
+        }
+
+        [Test]
+        public void OnlyLevelThreeForceFieldPopsDealDamage()
+        {
+            // DECISION #4: pop damage "stays exactly where the Upgrade track already scoped it,
+            // level 3" — levels 1-2 must pop as a visual burst only, no damage/knockback.
+            Assert.IsFalse(AbilityTuning.ForceFieldPopDealsDamage(1));
+            Assert.IsFalse(AbilityTuning.ForceFieldPopDealsDamage(2));
+            Assert.IsTrue(AbilityTuning.ForceFieldPopDealsDamage(3));
+        }
+
+        [Test]
+        public void ForceFieldAbsorbsUpToTheRemainingCapAndLeaksNothingWhenUnderIt()
+        {
+            var (absorbed, leaked) = AbilityTuning.ForceFieldAbsorb(20f, 60f);
+            Assert.That(absorbed, Is.EqualTo(20f).Within(1e-5f));
+            Assert.That(leaked, Is.EqualTo(0f).Within(1e-5f));
+        }
+
+        [Test]
+        public void ForceFieldLeaksTheOverflowOnceAHitExceedsTheRemainingCap()
+        {
+            // A hit bigger than what's left must eat exactly the remainder and leak the rest through
+            // to PlayerHealth — the field never blocks more than it actually has left.
+            var (absorbed, leaked) = AbilityTuning.ForceFieldAbsorb(50f, 30f);
+            Assert.That(absorbed, Is.EqualTo(30f).Within(1e-5f));
+            Assert.That(leaked, Is.EqualTo(20f).Within(1e-5f));
+        }
+
+        [Test]
+        public void ForceFieldAbsorbsNothingOnceTheCapIsAlreadyExhausted()
+        {
+            var (absorbed, leaked) = AbilityTuning.ForceFieldAbsorb(15f, 0f);
+            Assert.That(absorbed, Is.EqualTo(0f).Within(1e-5f));
+            Assert.That(leaked, Is.EqualTo(15f).Within(1e-5f));
+        }
+
+        [Test]
+        public void ForceFieldIsAThreeLevelTrackMatchingTheOtherAbilities()
+        {
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(3));
+        }
     }
 }
