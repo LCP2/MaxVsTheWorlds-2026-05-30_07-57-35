@@ -16,8 +16,11 @@ namespace MaxWorlds.Arena
     /// single new collider.
     ///
     /// What does NOT go on it: the ground (every ray would graze it), the actors (a robot must not
-    /// be cover for another robot — a crowd would blind itself), and the dressing, which is scenery
-    /// by an explicit rule that predates this ticket.
+    /// be cover for another robot — a crowd would blind itself), the dressing, which is scenery by
+    /// an explicit rule that predates this ticket, and — since MV-400 — a hedge row. A hedge keeps
+    /// its collider (see <see cref="MaxWorlds.Arena.Map.MapRuntime.BuildCover"/>), so it still stops
+    /// a footstep, but it is deliberately left off THIS layer so it stops nothing a raycast asks
+    /// about: Lee wants robots to see and shoot through a plant row, not just walk into it.
     /// </summary>
     public static class CoverLayer
     {

@@ -148,8 +148,14 @@ namespace MaxWorlds.Arena
                 cover.Shape == CoverShape.Cylinder ? PrimitiveType.Cylinder : PrimitiveType.Cube,
                 cover.Center, scale);
 
-            // This is the line that turns a prop from scenery into a mechanic (YT-83).
-            CoverLayer.Assign(body);
+            // This is the line that turns a prop from scenery into a mechanic (YT-83) — except for a
+            // hedge row (MV-400): Lee wants plants to keep blocking a footstep (the collider Spawn()
+            // just built is untouched) while stopping blocking a sight-line or a shot, so it is the
+            // one dressing that is deliberately left off the Cover layer. LineOfSight, WaterBlaster's
+            // spray and HomingMissile all cast against CoverLayer.Mask, so skipping the assign here is
+            // the single point that makes robots see, and shoot, straight through a plant row.
+            if (cover.Dressing != CoverDressing.Hedge)
+                CoverLayer.Assign(body);
 
             return new CoverPiece(cover, body);
         }
