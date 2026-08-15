@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
@@ -354,6 +355,66 @@ namespace MaxWorlds.Weapons
                 if (s_hits[i].TryGetComponent<IKnockbackable>(out var kb))
                     kb.ApplyKnockback(dir * knockbackSpeed);
             }
+        }
+
+        // --- Deployable Sentinels (MV-362) ---
+
+        /// <summary>How many sentinels — any mix of Wall/Gunner — Max may have deployed at once right
+        /// now, from the Deployment Count track's current level (shared across both kinds, DECISION).</summary>
+        public static int SentinelDeploymentCap => AbilityTuning.SentinelDeploymentSlots(
+            WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.DeploymentCount));
+
+        /// <summary>How many sentinels are deployed right now — read live off <see cref="Sentinel.Active"/>,
+        /// never a separately-tracked balance, so any sentinel dying (to a robot, a gate crossing, or a
+        /// level reset) frees its slot automatically.</summary>
+        public static int SentinelDeployedCount => Sentinel.Active.Count;
+
+        /// <summary>Power cells deploying a Wall costs (DECISION, fixed, not leveled).</summary>
+        public static int SentinelWallCost => AbilityTuning.DefaultSentinelWallCost;
+
+        /// <summary>Power cells deploying a Gunner costs (DECISION, fixed, not leveled).</summary>
+        public static int SentinelGunnerCost => AbilityTuning.DefaultSentinelGunnerCost;
+
+        /// <summary>Owned, a deployment slot free, AND enough cells banked — what an on-screen deploy
+        /// control gates its press on (same shape as <see cref="ForceFieldReady"/>).</summary>
+        public bool WallSentinelReady =>
+            WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
+            SentinelDeployedCount < SentinelDeploymentCap &&
+            PickupWallet.PowerCells >= SentinelWallCost;
+
+        public bool GunnerSentinelReady =>
+            WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
+            SentinelDeployedCount < SentinelDeploymentCap &&
+            PickupWallet.PowerCells >= SentinelGunnerCost;
+
+        /// <summary>Deploy a Wall sentinel at Max's current position, facing his current heading (MV-362:
+        /// "deployed at Max's position, not aimed at range"). Returns false (nothing spent, nothing
+        /// deployed) if unowned, the deployment cap is full, or the bank can't cover the cost.</summary>
+        public bool TryDeployWallSentinel()
+        {
+            if (!WallSentinelReady) return false;
+            if (!PickupWallet.TrySpendPowerCells(SentinelWallCost)) return false;
+
+            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength);
+            float maxHp = AbilityTuning.SentinelWallMaxHp(
+                level, AbilityTuning.DefaultSentinelWallBaseHp, AbilityTuning.DefaultSentinelWallHpPerLevel);
+
+            var wall = new GameObject("Wall Sentinel").AddComponent<WallSentinel>();
+            wall.Init(transform.position, transform.rotation, maxHp);
+            return true;
+        }
+
+        /// <summary>Deploy a Gunner sentinel at Max's current position. Same gating shape as
+        /// <see cref="TryDeployWallSentinel"/>.</summary>
+        public bool TryDeployGunnerSentinel()
+        {
+            if (!GunnerSentinelReady) return false;
+            if (!PickupWallet.TrySpendPowerCells(SentinelGunnerCost)) return false;
+
+            var gunner = new GameObject("Gunner Sentinel").AddComponent<GunnerSentinel>();
+            gunner.Init(transform.position, AbilityTuning.DefaultSentinelGunnerHp,
+                AbilityTuning.DefaultSentinelGunnerRange, AbilityTuning.DefaultSentinelGunnerFireInterval);
+            return true;
         }
     }
 }

@@ -18,9 +18,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FreshStateDrawsTheMaxCandidateCount()
         {
-            // MV-361 added Force Field, taking the pool to 6 abilities (WaterBalloonAutoFire excluded
-            // pre-WaterBalloon, so 5 actually offered) — still comfortably above
-            // AbilityDraft.MaxCandidates, so a fresh draw is capped at the max rather than the whole pool.
+            // MV-362 added Sentinels on top of MV-361's Force Field, taking the pool to 7 abilities
+            // (WaterBalloonAutoFire excluded pre-WaterBalloon, so 6 actually offered) — still
+            // comfortably above AbilityDraft.MaxCandidates, so a fresh draw is capped at the max
+            // rather than the whole pool.
             Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(AbilityDraft.MaxCandidates));
         }
 
@@ -52,13 +53,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void DrawShrinksAsThePoolDrains()
         {
-            // MV-361 added Force Field: 6 abilities total, but WaterBalloonAutoFire stays excluded
-            // until WaterBalloon is owned. Acquiring the other 4 leaves exactly WaterBalloon itself —
-            // 1 candidate, below MaxCandidates.
+            // MV-362 added Sentinels on top of MV-361's Force Field: 7 abilities total, but
+            // WaterBalloonAutoFire stays excluded until WaterBalloon is owned. Acquiring the other 5
+            // leaves exactly WaterBalloon itself — 1 candidate, below MaxCandidates.
             WeaponSystemState.Acquire(AbilityKind.Speed);
             WeaponSystemState.Acquire(AbilityKind.Teleport);
             WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
             WeaponSystemState.Acquire(AbilityKind.ForceField);
+            WeaponSystemState.Acquire(AbilityKind.Sentinels);
 
             Assert.That(AbilityDraft.DrawCandidates().Length, Is.EqualTo(1));
         }

@@ -55,6 +55,12 @@ namespace MaxWorlds.UI
         /// <summary>The Force Field button's colour (MV-361) — the same ready-cyan the bubble itself
         /// glows, so the button and the shield read as one thing.</summary>
         private static readonly Color ForceFieldColor = new Color(0.31f, 0.76f, 0.97f);
+        /// <summary>The Wall sentinel button's colour (MV-362) — the same greybox timber
+        /// <see cref="MaxWorlds.Arena.WallSentinel"/> itself is tinted.</summary>
+        private static readonly Color WallSentinelColor = new Color(0.72f, 0.58f, 0.42f);
+        /// <summary>The Gunner sentinel button's colour (MV-362) — the primary's own blue, since the
+        /// turret is meant to read as Max's own tech ("a hose pipe on a stick").</summary>
+        private static readonly Color GunnerSentinelColor = new Color(0.45f, 0.65f, 0.85f);
         // The part-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell and
         // the pickup it points at read as ONE language. Sourced from the constant the aura uses, not a
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
@@ -107,6 +113,15 @@ namespace MaxWorlds.UI
         private bool _forceFieldWasReady;
         private bool _forceFieldWasActive;
         private float _forceFieldReadyFlash;
+
+        // The Sentinel deploy buttons (MV-362): hidden until AbilityKind.Sentinels is acquired, same
+        // round-button visual language as Force Field/Hydro above — no cooldown radial, since a
+        // sentinel isn't cooldown-gated, only by cell cost and the shared deployment-slot cap.
+        private RectTransform _wallSentinelButtonRoot, _gunnerSentinelButtonRoot;
+        private Image _wallSentinelGlow, _gunnerSentinelGlow;
+        private Text _wallSentinelLabel, _gunnerSentinelLabel;
+        private bool _wallSentinelWasReady, _gunnerSentinelWasReady;
+        private float _wallSentinelReadyFlash, _gunnerSentinelReadyFlash;
         private float _forceFieldSnapFlash;
 
         // Joysticks
@@ -209,6 +224,8 @@ namespace MaxWorlds.UI
             BuildAbilitySlots();
             BuildHydroButton();
             BuildForceFieldButton();
+            BuildWallSentinelButton();
+            BuildGunnerSentinelButton();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
@@ -283,6 +300,9 @@ namespace MaxWorlds.UI
             RefreshWaterBalloonAutoFireToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
+            bool sentinelsOwned = WeaponSystemState.IsAcquired(AbilityKind.Sentinels);
+            if (_wallSentinelButtonRoot != null) _wallSentinelButtonRoot.gameObject.SetActive(sentinelsOwned);
+            if (_gunnerSentinelButtonRoot != null) _gunnerSentinelButtonRoot.gameObject.SetActive(sentinelsOwned);
         }
 
         private void OnPowerCells(int total)
@@ -406,6 +426,7 @@ namespace MaxWorlds.UI
             UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
             UpdateForceFieldButton(dt);
+            UpdateSentinelButtons(dt);
             UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
@@ -594,6 +615,45 @@ namespace MaxWorlds.UI
                 glow = Color.Lerp(glow, Color.white, _forceFieldSnapFlash);
                 glow.a = ready ? Mathf.Clamp01(readyPulse + _forceFieldReadyFlash) : Mathf.Max(0f, _forceFieldSnapFlash * 0.8f);
                 _forceFieldGlow.color = glow;
+            }
+        }
+
+        /// <summary>Drives the two Sentinel deploy buttons (MV-362) — no-op while hidden (not yet
+        /// acquired). No cooldown radial: a sentinel is gated purely on cell cost and the shared
+        /// deployment-slot cap, so "ready" just means the button's own pulse glow, same idle-glow
+        /// idiom the other action buttons use while off cooldown.</summary>
+        private void UpdateSentinelButtons(float dt)
+        {
+            if (_abilities == null) return;
+
+            if (_wallSentinelButtonRoot != null && _wallSentinelButtonRoot.gameObject.activeSelf)
+            {
+                bool ready = _abilities.WallSentinelReady;
+                if (ready && !_wallSentinelWasReady) _wallSentinelReadyFlash = 1f;
+                _wallSentinelWasReady = ready;
+                _wallSentinelReadyFlash = Mathf.Max(0f, _wallSentinelReadyFlash - dt * 3.2f);
+
+                float pulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
+                Color glow = Color.Lerp(ReadyGlow, WallSentinelColor, 0.5f);
+                glow.a = ready ? Mathf.Clamp01(pulse + _wallSentinelReadyFlash) : 0f;
+                _wallSentinelGlow.color = glow;
+
+                _wallSentinelLabel.text = $"WALL\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
+            }
+
+            if (_gunnerSentinelButtonRoot != null && _gunnerSentinelButtonRoot.gameObject.activeSelf)
+            {
+                bool ready = _abilities.GunnerSentinelReady;
+                if (ready && !_gunnerSentinelWasReady) _gunnerSentinelReadyFlash = 1f;
+                _gunnerSentinelWasReady = ready;
+                _gunnerSentinelReadyFlash = Mathf.Max(0f, _gunnerSentinelReadyFlash - dt * 3.2f);
+
+                float pulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
+                Color glow = Color.Lerp(ReadyGlow, GunnerSentinelColor, 0.5f);
+                glow.a = ready ? Mathf.Clamp01(pulse + _gunnerSentinelReadyFlash) : 0f;
+                _gunnerSentinelGlow.color = glow;
+
+                _gunnerSentinelLabel.text = $"GUN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
             }
         }
 
@@ -951,6 +1011,78 @@ namespace MaxWorlds.UI
         private void OnForceFieldButtonTapped() => _abilities?.TryActivateForceField();
 
         private const float ForceFieldButtonGap = 16f;   // clearance above the Hydro button below it
+
+        // Sentinel deploy buttons (MV-362): a third and fourth stop in the same right-hand column,
+        // stacked above Force Field. Slightly smaller than the ability buttons below them — they're a
+        // placement decision, not a combat trigger pressed every few seconds.
+        private const float SentinelButtonSize = 90f;
+        private const float SentinelButtonGap = 14f;
+
+        private void BuildWallSentinelButton()
+        {
+            var root = NewRect("Wall Sentinel Button", Root);
+            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(-HydroButtonInset,
+                HydroButtonRise + HydroButtonSize + ForceFieldButtonGap + HydroButtonSize + SentinelButtonGap);
+            root.sizeDelta = new Vector2(SentinelButtonSize, SentinelButtonSize);
+            _wallSentinelButtonRoot = root;
+
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 4f);
+            glow.raycastTarget = false;
+            _wallSentinelGlow = glow;
+
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), WallSentinelColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = true;
+            var button = ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(() => _abilities?.TryDeployWallSentinel());
+
+            _wallSentinelLabel = AddText(root, 16f, WallSentinelColor, TextAnchor.MiddleCenter);
+            Stretch(_wallSentinelLabel.rectTransform);
+            _wallSentinelLabel.text = "WALL";
+            _wallSentinelLabel.fontStyle = FontStyle.Bold;
+            _wallSentinelLabel.raycastTarget = false;
+            _wallSentinelLabel.resizeTextForBestFit = true;
+            _wallSentinelLabel.resizeTextMinSize = 8;
+            _wallSentinelLabel.resizeTextMaxSize = 18;
+
+            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+        }
+
+        private void BuildGunnerSentinelButton()
+        {
+            var root = NewRect("Gunner Sentinel Button", Root);
+            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(-HydroButtonInset - SentinelButtonSize - SentinelButtonGap,
+                HydroButtonRise + HydroButtonSize + ForceFieldButtonGap + HydroButtonSize + SentinelButtonGap);
+            root.sizeDelta = new Vector2(SentinelButtonSize, SentinelButtonSize);
+            _gunnerSentinelButtonRoot = root;
+
+            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
+            Stretch(glow.rectTransform, 4f);
+            glow.raycastTarget = false;
+            _gunnerSentinelGlow = glow;
+
+            var ring = AddImage(root, HudTextures.TechRings(160, 3), GunnerSentinelColor, "Ring");
+            Stretch(ring.rectTransform);
+            ring.raycastTarget = true;
+            var button = ring.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(() => _abilities?.TryDeployGunnerSentinel());
+
+            _gunnerSentinelLabel = AddText(root, 16f, GunnerSentinelColor, TextAnchor.MiddleCenter);
+            Stretch(_gunnerSentinelLabel.rectTransform);
+            _gunnerSentinelLabel.text = "GUN";
+            _gunnerSentinelLabel.fontStyle = FontStyle.Bold;
+            _gunnerSentinelLabel.raycastTarget = false;
+            _gunnerSentinelLabel.resizeTextForBestFit = true;
+            _gunnerSentinelLabel.resizeTextMinSize = 8;
+            _gunnerSentinelLabel.resizeTextMaxSize = 18;
+
+            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+        }
 
         // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits
         // above the Move stick the same way Hydro sits above the Aim stick, so aiming a throw never

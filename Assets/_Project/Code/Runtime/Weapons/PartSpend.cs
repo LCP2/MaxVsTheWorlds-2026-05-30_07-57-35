@@ -42,6 +42,18 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
+        /// <summary>Spend one banked part to raise a Sentinel track by a level (MV-362). Fails without
+        /// spending if <see cref="AbilityKind.Sentinels"/> hasn't been acquired yet (WV-229's
+        /// "unowned/locked items can't be upgraded" rule, same gate <see cref="TrySpendOnAbility"/>
+        /// enforces) or the track is already at its cap.</summary>
+        public static bool TrySpendOnSentinelTrack(SentinelTrackKind kind)
+        {
+            if (PickupWallet.PartsBanked <= 0) return false;
+            if (!WeaponSystemState.LevelUpSentinelTrack(kind)) return false;
+            PickupWallet.TrySpendPart();
+            return true;
+        }
+
         /// <summary>Spend one banked part to raise Cell Capacity by a level (MV-374). A general
         /// player-stat track rather than a weapon one, so it levels up directly on
         /// <see cref="PickupWallet"/> instead of through <see cref="WeaponSystemState"/>. Every level

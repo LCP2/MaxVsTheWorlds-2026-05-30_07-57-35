@@ -155,5 +155,71 @@ namespace MaxWorlds.Weapons
             float absorbed = Mathf.Min(safeIncoming, safeCap);
             return (absorbed, safeIncoming - absorbed);
         }
+
+        // --- Deployable Sentinels (MV-362) ---
+
+        /// <summary>Power cells the Wall sentinel costs to deploy (DECISION, 13 Aug 2026) — fixed,
+        /// not leveled, same "authored, not a track" shape as <see cref="DefaultForceFieldActivationCost"/>.</summary>
+        public const int DefaultSentinelWallCost = 10;
+
+        /// <summary>Power cells the Gunner sentinel costs to deploy (DECISION, 13 Aug 2026).</summary>
+        public const int DefaultSentinelGunnerCost = 15;
+
+        /// <summary>The Wall's HP at Wall Strength Level 1 — sized against Max's own 200 max HP
+        /// (<see cref="MaxWorlds.Player.PlayerHealth"/>, MV-315-baked) so a fresh wall reads as
+        /// roughly "as tough as Max himself", a legible baseline before any upgrade.</summary>
+        public const float DefaultSentinelWallBaseHp = 200f;
+
+        /// <summary>Extra Wall HP each Wall Strength level beyond L1 adds — same additive "level =
+        /// bigger number" shape as <see cref="DefaultForceFieldAbsorbCapPerLevel"/>.</summary>
+        public const float DefaultSentinelWallHpPerLevel = 40f;
+
+        /// <summary>The Wall's HP at a given Wall Strength level.</summary>
+        public static float SentinelWallMaxHp(int level, float baseHp, float perLevel) =>
+            Mathf.Max(1f, baseHp) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
+
+        /// <summary>The Gunner's HP — fixed, not leveled ("one upgrade track only: the power of the
+        /// hose"; its survivability never changes). Deliberately BELOW the Wall's base 200: "trades
+        /// durability for damage" (spec) — a couple of Bruiser hits (28 dmg each,
+        /// <see cref="MaxWorlds.Enemies.EnemyArchetype.Bruiser"/>) or a single Bomber splash
+        /// (<see cref="MaxWorlds.Enemies.EnemyArchetype.Bomber"/>) puts a real dent in it.</summary>
+        public const float DefaultSentinelGunnerHp = 60f;
+
+        /// <summary>Fraction of Max's CURRENT primary per-tick damage the Gunner sentinel's shot deals
+        /// at Gunner Power Level 1 — always below 1.0 by construction (see
+        /// <see cref="SentinelGunnerDamagePerShot"/>), which is what DECISION's "always weaker than
+        /// Max's CURRENT primary... it must stay below Max's current power as he upgrades" actually
+        /// means in code: the sentinel's damage is computed as a fraction of whatever the RCDA Damage
+        /// track currently is, not a fixed number that could eventually catch up to it.</summary>
+        public const float DefaultSentinelGunnerPowerFraction = 0.4f;
+
+        /// <summary>Extra fraction each Gunner Power level beyond L1 adds — capped so even a maxed
+        /// track (<see cref="SentinelGunnerPowerFraction"/> clamps to 1.0) can never reach, let alone
+        /// exceed, Max's own current output.</summary>
+        public const float DefaultSentinelGunnerPowerFractionPerLevel = 0.1f;
+
+        /// <summary>How far the Gunner sentinel's auto-fire reaches, metres — a little past the
+        /// primary's own authored base reach (<see cref="MaxWorlds.Combat.WaterBlaster.DefaultRange"/>,
+        /// 5 m) so a placed turret threatens the space around it, not just an adjacent robot.</summary>
+        public const float DefaultSentinelGunnerRange = 7f;
+
+        /// <summary>Seconds between Gunner sentinel shots.</summary>
+        public const float DefaultSentinelGunnerFireInterval = 0.6f;
+
+        /// <summary>Fraction of Max's current primary damage-per-tick the Gunner sentinel deals per
+        /// shot at a given Gunner Power level — clamped below 1.0, so whatever <paramref
+        /// name="currentPrimaryDamagePerTick"/> is (it already reflects Max's live RCDA Damage track,
+        /// see the Gunner sentinel's own call site), this can never equal or exceed it.</summary>
+        public static float SentinelGunnerPowerFraction(int level, float baseFraction, float perLevel) =>
+            Mathf.Clamp01(Mathf.Max(0f, baseFraction) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1));
+
+        /// <summary>The Gunner sentinel's actual per-shot damage right now.</summary>
+        public static float SentinelGunnerDamagePerShot(float currentPrimaryDamagePerTick, int level, float baseFraction, float perLevel) =>
+            Mathf.Max(0f, currentPrimaryDamagePerTick) * SentinelGunnerPowerFraction(level, baseFraction, perLevel);
+
+        /// <summary>How many sentinels (any mix of Wall/Gunner) Max may have deployed at once, at a
+        /// given Deployment Count level — the DECISION's "starts at 1, upgradeable to 2, 3, 4" maps
+        /// directly: the level IS the slot count.</summary>
+        public static int SentinelDeploymentSlots(int level) => Mathf.Max(1, level);
     }
 }

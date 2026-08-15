@@ -54,6 +54,16 @@ namespace MaxWorlds.Weapons
             AbilityKind.WaterBalloon,
             AbilityKind.WaterBalloonAutoFire,
             AbilityKind.ForceField,
+            AbilityKind.Sentinels,
+        };
+
+        /// <summary>Deployable Sentinels' three tracks (MV-362), in the order the weapons screen
+        /// would list them — same "owned from run start" shape as <see cref="AllWaterBalloonTrackKinds"/>.</summary>
+        public static readonly SentinelTrackKind[] AllSentinelTrackKinds =
+        {
+            SentinelTrackKind.WallStrength,
+            SentinelTrackKind.GunnerPower,
+            SentinelTrackKind.DeploymentCount,
         };
 
         /// <summary>The Water Balloon primary add-on's tracks (MV-370), in the order the weapons
@@ -167,9 +177,10 @@ namespace MaxWorlds.Weapons
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
         /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Speed 4,
-        /// Teleport 4, Weapon Cooldown 5. Water Balloon and Auto-fire (MV-380) are boolean unlocks —
-        /// cap 1, the default — since their own magnitudes live on <see cref="WaterBalloonTrackKind"/>
-        /// or a plain on/off toggle, not a leveled ability.</summary>
+        /// Teleport 4, Weapon Cooldown 5. Water Balloon, Auto-fire (MV-380) and Sentinels (MV-362)
+        /// are boolean unlocks — cap 1, the default — since their own magnitudes live on
+        /// <see cref="WaterBalloonTrackKind"/>/<see cref="SentinelTrackKind"/> or a plain on/off
+        /// toggle, not a leveled ability.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
@@ -185,6 +196,13 @@ namespace MaxWorlds.Weapons
         /// <summary>The level cap for a Water Balloon track (MV-370) — 3, the same cap the single
         /// ability track it replaces used to have.</summary>
         public static int MaxLevel(WaterBalloonTrackKind kind) => 3;
+
+        /// <summary>The level cap for a Sentinel track (MV-362) — 4 for every track. Deployment
+        /// Count's cap is the ticket's own DECISION ("starts at 1, upgradeable to 2, 3, 4"). Wall
+        /// Strength/Gunner Power have no ticket-pinned cap; 4 matches Speed/Teleport's own
+        /// single-magnitude ability caps, keeping every "one plain track" progression in this game at
+        /// the same step count.</summary>
+        public static int MaxLevel(SentinelTrackKind kind) => 4;
 
         /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Teleport is the only
         /// remaining AbilityKind with an on-screen control (spec §6a) and a real cooldown — Water
@@ -231,6 +249,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WaterBalloon: return "WATER BALLOON";
                 case AbilityKind.WaterBalloonAutoFire: return "AUTO-FIRE";
                 case AbilityKind.ForceField: return "FORCE FIELD";
+                case AbilityKind.Sentinels: return "SENTINELS";
                 default: return kind.ToString();
             }
         }
@@ -248,6 +267,18 @@ namespace MaxWorlds.Weapons
             }
         }
 
+        /// <summary>Display name for a Sentinel track's row (MV-362).</summary>
+        public static string DisplayName(SentinelTrackKind kind)
+        {
+            switch (kind)
+            {
+                case SentinelTrackKind.WallStrength: return "WALL STRENGTH";
+                case SentinelTrackKind.GunnerPower: return "GUNNER POWER";
+                case SentinelTrackKind.DeploymentCount: return "DEPLOYMENT COUNT";
+                default: return kind.ToString();
+            }
+        }
+
         /// <summary>Short glyph for an ability's card/icon tile (MV-357) — same rationale as
         /// <c>WeaponsScreen.AbilityGlyph</c>, which this mirrors; abilities have no sprite art yet.</summary>
         public static string Glyph(AbilityKind kind)
@@ -260,6 +291,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WaterBalloon: return "WB";
                 case AbilityKind.WaterBalloonAutoFire: return "AF";
                 case AbilityKind.ForceField: return "FF";
+                case AbilityKind.Sentinels: return "SEN";
                 default: return "?";
             }
         }
@@ -277,6 +309,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.WaterBalloon: return "Unlocks the Water Balloon throw — splash damage that halts robots.";
                 case AbilityKind.WaterBalloonAutoFire: return "Water Balloon aims and fires itself at the best cluster in range.";
                 case AbilityKind.ForceField: return "A bubble that absorbs incoming damage and blocks robots — Max can still move and fire out of it.";
+                case AbilityKind.Sentinels: return "Deploy a Wall or Gunner sentinel at your position — robots attack them instead of you.";
                 default: return string.Empty;
             }
         }

@@ -177,7 +177,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AcquiredAndUnacquiredPartitionAllSixAbilities_MV361()
+        public void AcquiredAndUnacquiredPartitionAllSevenAbilities_MV362()
         {
             WeaponSystemState.Acquire(AbilityKind.Speed);
 
@@ -185,7 +185,8 @@ namespace MaxWorlds.Tests.EditMode
             // WaterBalloonAutoFire stays out of Unacquired too — its prerequisite (WaterBalloon) isn't
             // owned yet.
             CollectionAssert.AreEquivalent(
-                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon, AbilityKind.ForceField },
+                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon,
+                        AbilityKind.ForceField, AbilityKind.Sentinels },
                 WeaponSystemState.Unacquired);
         }
 
@@ -364,11 +365,12 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllSixAbilitiesFourTracksAndThreeWaterBalloonTracks_MV361()
+        public void CatalogListsAllSevenAbilitiesFourTracksAndThreeWaterBalloonTracks_MV362()
         {
-            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(6), "MV-361 added Force Field, on top of MV-380 restoring Water Balloon + its Auto-fire sub-ability");
+            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(7), "MV-362 added Sentinels, on top of MV-361's Force Field and MV-380's restored Water Balloon + Auto-fire");
             Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4), "MV-299 reinstated Depletion Rate as the fourth track");
             Assert.That(WeaponCatalog.AllWaterBalloonTrackKinds.Length, Is.EqualTo(3), "MV-370: Range, Splash Area, Repeat Fire — unchanged by MV-380");
+            Assert.That(WeaponCatalog.AllSentinelTrackKinds.Length, Is.EqualTo(3), "MV-362: Wall Strength, Gunner Power, Deployment Count");
         }
 
         [Test]

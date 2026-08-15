@@ -43,5 +43,15 @@ namespace MaxWorlds.Weapons
         /// absorb cap; level 3 additionally makes the pop deal damage and knock back everything
         /// touching the bubble. See <see cref="PlayerAbilities.TryActivateForceField"/>.</summary>
         ForceField,
+
+        /// <summary>Unlocks deployable Sentinels (MV-362) — a Wall (Blocker) and a Gunner (Attack
+        /// turret), both placed at Max's own position; robots attack them instead of, or as well as,
+        /// Max. A boolean unlock, cap 1 — both sentinel kinds are usable the instant this is owned,
+        /// and their own magnitudes live on <see cref="SentinelTrackKind"/>'s three independent
+        /// tracks (Wall Strength, Gunner Power, and a Deployment Count shared by both kinds), not on
+        /// this ability's own level, the same "unlock here, tracks elsewhere" split
+        /// <see cref="WaterBalloon"/> uses for <see cref="WaterBalloonTrackKind"/>. See
+        /// <see cref="PlayerAbilities.TryDeployWallSentinel"/>/<see cref="PlayerAbilities.TryDeployGunnerSentinel"/>.</summary>
+        Sentinels,
     }
 }
