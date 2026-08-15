@@ -34,16 +34,17 @@ namespace MaxWorlds.Arena
 
         /// <summary>Empties the registry ONLY — mirrors <see cref="MaxWorlds.Enemies.RobotEnemy.ResetRegistry"/>'s
         /// list-only contract for test isolation. Does not destroy any GameObject; see
-        /// <see cref="DestroyAllActive"/> for the real teardown a fresh level or a gate crossing needs.</summary>
+        /// <see cref="DestroyAllActive"/> for the real teardown a fresh level or an area crossing needs.</summary>
         public static void ResetRegistry() => _active.Clear();
 
         /// <summary>Destroys every deployed sentinel and empties the registry. Sentinels aren't
         /// pooled (unlike robots), so a full reset has to tear the GameObjects down too, not just
         /// forget them. Two call sites: <see cref="MaxWorlds.Arena.Map.MapRuntime"/> on a fresh level
-        /// build, and every <see cref="AreaGate.Opened"/> (MV-362 spec: "they do not travel between
-        /// areas... passing a gate clears them and refunds the slots") — the "refund" is automatic
-        /// here, since the Deployment Count cap is always checked live against
-        /// <see cref="Active"/>.Count, never a separately-tracked balance.</summary>
+        /// build, and <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.PlayerCrossedIntoArea"/>
+        /// (MV-362 spec: "they do not travel between areas... passing a gate clears them and refunds
+        /// the slots" — MV-396 fixed "passing" to mean Max has actually walked through, not merely that
+        /// the gate broke) — the "refund" is automatic here, since the Deployment Count cap is always
+        /// checked live against <see cref="Active"/>.Count, never a separately-tracked balance.</summary>
         public static void DestroyAllActive()
         {
             if (_active.Count == 0) return;
