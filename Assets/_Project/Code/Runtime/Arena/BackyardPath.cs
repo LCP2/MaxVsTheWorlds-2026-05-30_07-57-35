@@ -94,6 +94,12 @@ namespace MaxWorlds.Arena
             _areaDirector.ConfigureWorld(cfg);
             _areaDirector.Configure(_map, _build.Cover);
 
+            // MV-362/MV-396: sentinels "do not travel between areas... passing a gate clears them and
+            // refunds the slots" — "passing" means Max has actually walked through, not merely that the
+            // gate broke, so this hangs off the position-driven PlayerCrossedIntoArea, not any AreaGate's
+            // Opened (which fires early, for population, well before Max is through the doorway).
+            _areaDirector.PlayerCrossedIntoArea += _ => Sentinel.DestroyAllActive();
+
             _worldRunner = new GameObject("World Runner").AddComponent<WorldRunner>();
             _worldRunner.transform.SetParent(transform, false);
             _worldRunner.Configure(cfg, _build);
@@ -122,11 +128,6 @@ namespace MaxWorlds.Arena
                 if (gate == null) continue;   // e.g. boss_gate is the adopted SubZoneGate, not an AreaGate
 
                 gate.Opened += () => _areaDirector.EnterArea(nextArea);
-
-                // MV-362: sentinels "do not travel between areas... passing a gate clears them and
-                // refunds the slots" — destroying them here is the whole refund, since the deployment
-                // cap is always checked live against Sentinel.Active.Count, never a tracked balance.
-                gate.Opened += Sentinel.DestroyAllActive;
             }
         }
     }

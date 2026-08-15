@@ -107,6 +107,20 @@ namespace MaxWorlds.Enemies
         /// the final "area&lt;N&gt;" zone — the compost clearing does not advance it further).</summary>
         public int CurrentArea { get; private set; } = 1;
 
+        /// <summary>Position-only tracking of the area Max is physically standing in, independent of
+        /// <see cref="CurrentArea"/> — which <see cref="EnterArea"/> advances early, off the gate
+        /// breaking, purely to give a room's population a head start (MV-245). <see cref="PlayerCrossedIntoArea"/>
+        /// must NOT fire off that same early signal (MV-396: a sentinel cleared the instant a gate broke,
+        /// before Max had actually walked through it), so this is tracked separately and only ever
+        /// advances from the live <see cref="MapZone"/> under Max's feet in <see cref="Update"/>.</summary>
+        private int _physicalArea = 1;
+
+        /// <summary>Fired the instant Max's actual position crosses into a new area — unlike
+        /// <see cref="EnterArea"/> (gate-open-driven, ahead of the player for population purposes), this
+        /// reflects where Max physically is right now. What <see cref="MaxWorlds.Arena.Sentinel.DestroyAllActive"/>
+        /// subscribes to instead of <see cref="AreaGate.Opened"/> (MV-396).</summary>
+        public event System.Action<int> PlayerCrossedIntoArea;
+
         /// <summary>Robots this director currently considers live on the field.</summary>
         public int ActiveCount => _queue?.ActiveCount ?? 0;
 
@@ -140,6 +154,7 @@ namespace MaxWorlds.Enemies
             _largeCountByArea.Clear();
             _rushersQueuedThisLevel = 0;
             CurrentArea = 1;
+            _physicalArea = 1;
             FillArea(1);
         }
 
@@ -181,10 +196,20 @@ namespace MaxWorlds.Enemies
                 if (_target == null) return;
             }
 
-            // Fallback only — the real trigger is EnterArea, fired off the gate that guards this zone.
-            // Kept for area 1 (nothing gates it) and as a safety net should a gate event ever be missed.
             MapZone zone = _map.ZoneAt(_target.position.x, _target.position.z);
             int area = zone == null ? 0 : AreaIndexOf(zone.id);
+
+            // The real, physical area-crossing signal (MV-396) — advances only off Max's own position,
+            // never off a gate merely breaking. Sentinel.DestroyAllActive hangs off this, not EnterArea
+            // below, so a deployed sentinel survives an open-but-uncrossed gate.
+            if (area > _physicalArea)
+            {
+                _physicalArea = area;
+                PlayerCrossedIntoArea?.Invoke(area);
+            }
+
+            // Fallback only — the real trigger is EnterArea, fired off the gate that guards this zone.
+            // Kept for area 1 (nothing gates it) and as a safety net should a gate event ever be missed.
             if (area > CurrentArea)
             {
                 CurrentArea = area;
