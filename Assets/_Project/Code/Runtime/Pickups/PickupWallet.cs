@@ -30,13 +30,53 @@ namespace MaxWorlds.Pickups
         /// flashing edge icon off this (YT-131); the weapons area spends them (WV-228).</summary>
         public static event Action<int> PartsChanged;
 
-        /// <summary>Max power cells the reserve holds (YT-137) — the meter's full mark. Collecting past
-        /// it is wasted; the Hydro device drains against it. Tunable via <see cref="MaxWorlds.Core.DevTuning.PowerCellCapacity"/>.</summary>
-        public const int DefaultCapacity = 30;
+        /// <summary>Max power cells the reserve holds at Cell Capacity level 0 (MV-374: dropped from
+        /// the old flat 30 — that number now sits at level 1 of 3, see <see cref="PowerCellCapacityPerLevel"/>).
+        /// Collecting past the reserve's current <see cref="Capacity"/> is wasted; the Hydro device
+        /// drains against it. Tunable via <see cref="MaxWorlds.Core.DevTuning.PowerCellCapacity"/>,
+        /// which overrides the whole level-based formula outright.</summary>
+        public const int DefaultCapacity = 20;
+
+        /// <summary>Extra capacity each Cell Capacity level adds (MV-374): 3 levels at +10 each carry
+        /// the reserve from 20 up to 50 (20, 30, 40, 50).</summary>
+        public const int PowerCellCapacityPerLevel = 10;
+
+        /// <summary>The Cell Capacity track's level cap (MV-374) — 3 purchasable levels, same
+        /// "spend a part" idiom as <see cref="MaxWorlds.Weapons.WeaponSystemState"/>'s tracks, but
+        /// this one is a general player stat rather than a weapon/ability track, so it lives here
+        /// rather than under <c>MaxWorlds.Weapons</c>.</summary>
+        public const int PowerCellCapacityMaxLevel = 3;
+
+        /// <summary>Levels bought via <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnCellCapacity"/>,
+        /// 0 (fresh run) to <see cref="PowerCellCapacityMaxLevel"/>.</summary>
+        public static int PowerCellCapacityLevel { get; private set; }
+
+        /// <summary>The reserve's current full mark before any <see cref="MaxWorlds.Core.DevTuning"/>
+        /// override — <see cref="DefaultCapacity"/> plus whatever <see cref="PowerCellCapacityLevel"/>
+        /// has bought. What the Settings panel's "no override" baseline reads (MV-374).</summary>
+        public static int BaseCapacity => DefaultCapacity + PowerCellCapacityLevel * PowerCellCapacityPerLevel;
 
         public static int Capacity =>
             Mathf.Max(1, Mathf.RoundToInt(MaxWorlds.Core.DevTuning.Or(
-                MaxWorlds.Core.DevTuning.PowerCellCapacity, DefaultCapacity)));
+                MaxWorlds.Core.DevTuning.PowerCellCapacity, BaseCapacity)));
+
+        /// <summary>Fired when the reserve's capacity itself changes — a level-up (MV-374) — separate
+        /// from <see cref="PowerCellsChanged"/>, which fires when the banked COUNT moves. The HUD's
+        /// "current/max" text and the weapons screen's CELLS chip both need to redraw even though the
+        /// current count didn't change.</summary>
+        public static event Action<int> CapacityChanged;
+
+        /// <summary>Raise Cell Capacity by one level (MV-374), up to <see cref="PowerCellCapacityMaxLevel"/>.
+        /// No-ops (returns false) already at the cap. Call through
+        /// <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnCellCapacity"/> so a part is only actually
+        /// spent when this succeeds.</summary>
+        public static bool LevelUpCellCapacity()
+        {
+            if (PowerCellCapacityLevel >= PowerCellCapacityMaxLevel) return false;
+            PowerCellCapacityLevel++;
+            CapacityChanged?.Invoke(Capacity);
+            return true;
+        }
 
         public static void AddPowerCell()
         {
@@ -97,13 +137,16 @@ namespace MaxWorlds.Pickups
         }
 
         /// <summary>Wipe the bank (new run / test isolation). Fires the change events so any live HUD
-        /// re-reads zero rather than keeping a stale count on screen.</summary>
+        /// re-reads zero rather than keeping a stale count on screen. MV-374: Cell Capacity resets to
+        /// level 0 too, same as every other run-scoped upgrade track.</summary>
         public static void Reset()
         {
             PowerCells = 0;
             PartsBanked = 0;
+            PowerCellCapacityLevel = 0;
             PowerCellsChanged?.Invoke(0);
             PartsChanged?.Invoke(0);
+            CapacityChanged?.Invoke(Capacity);
         }
     }
 }

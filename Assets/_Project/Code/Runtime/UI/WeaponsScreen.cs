@@ -125,6 +125,8 @@ namespace MaxWorlds.UI
         private AbilityDeviceStage _buildAbilityStage;   // MV-382: BUILD ABILITY's own live spinning-device render
 
         private Text _cellsText;
+        private Image _cellsChipBg;    // MV-374: tints/becomes tappable when a Cell Capacity level-up is affordable
+        private Button _cellsChipButton;
         private Text _partsText;
         private Image _partsIcon;          // MV-262: the gear glyph next to the parts count — spins while open
         private Image _partsGlow;          // MV-327: pulses while a part is banked — the "prominent, readable at a glance" tell
@@ -185,6 +187,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed += Refresh;
             PickupWallet.PartsChanged += OnPartsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
+            PickupWallet.CapacityChanged += OnCellsChanged;
             AbilityCreditBank.Changed += OnAbilityCreditsChanged;
         }
 
@@ -193,6 +196,7 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed -= Refresh;
             PickupWallet.PartsChanged -= OnPartsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
+            PickupWallet.CapacityChanged -= OnCellsChanged;
             AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
         }
 
@@ -286,8 +290,14 @@ namespace MaxWorlds.UI
             if (_root == null) return;
 
             int banked = PickupWallet.PartsBanked;
-            _cellsText.text = $"{PickupWallet.PowerCells} CELLS";
+            _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";   // MV-374: current/max
             _partsText.text = $"{banked} PARTS";   // MV-327: a bare number read as decoration, not a bank
+
+            // MV-374: the CELLS chip doubles as Cell Capacity's spend button — tinted amber and
+            // tappable exactly when a part is banked and the track isn't already maxed.
+            bool capacitySpendable = banked > 0 && PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel;
+            _cellsChipButton.interactable = capacitySpendable;
+            _cellsChipBg.color = capacitySpendable ? SpendReady : RowColor;
 
             for (int i = 0; i < TrackCount; i++)
             {
@@ -387,6 +397,8 @@ namespace MaxWorlds.UI
             PartSpend.TrySpendOnWaterBalloonTrack(WeaponCatalog.AllWaterBalloonTrackKinds[index]);
 
         private void OnAbilityButtonTapped(int row) => PartSpend.TrySpendOnAbility(_abilityRowKind[row]);
+
+        private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
 
         /// <summary>BUILD ABILITY (MV-358): draws candidates the same way the old mid-fight modal did,
         /// but on demand from this screen instead of the instant a shed dies. Two or three candidates
@@ -518,10 +530,21 @@ namespace MaxWorlds.UI
 
             // MV-327: the label now shrink-to-fits its box (see BuildChip) instead of overflowing past
             // it, which used to draw wide strings like "224 CELLS" back over this dot icon.
-            const float cellsChipWidth = 150f;
+            const float cellsChipWidth = 170f;
             var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor,
                 HudTextures.Disc(32), 20f, out _cellsText, out _);
             cellsChip.name = "Cells Chip";
+
+            // MV-374: Cell Capacity is a general player-stat upgrade track (spend a part to raise the
+            // reserve's cap), but this screen's grid sections are already tight on vertical room — see
+            // the height-budget note above BuildAbilitiesSection — so rather than adding a whole new
+            // section/row, the CELLS chip itself doubles as the spend affordance: Refresh() tints it
+            // and makes it tappable exactly when a level-up is affordable, same "you have something to
+            // spend" idiom the PARTS glow uses.
+            _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
+            _cellsChipButton = _cellsChipBg.gameObject.AddComponent<Button>();
+            _cellsChipButton.transition = Selectable.Transition.None;
+            _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
         }
 
         /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.
