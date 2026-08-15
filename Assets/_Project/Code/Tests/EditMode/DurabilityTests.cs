@@ -56,6 +56,24 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void HealRestoresHpWithoutOverfillingOrRevivingACorpse()
+        {
+            var h = new DestructibleHealth(100f);
+            h.TakeDamage(40f);   // Current 60 of 100
+
+            h.Heal(15f);
+            Assert.That(h.Current, Is.EqualTo(75f).Within(0.001f));
+
+            h.Heal(1000f);
+            Assert.That(h.Current, Is.EqualTo(100f).Within(0.001f), "heal must not overfill past Max");
+
+            h.TakeDamage(100f);   // destroyed
+            Assert.That(h.IsAlive, Is.False);
+            h.Heal(50f);
+            Assert.That(h.Current, Is.EqualTo(0f).Within(0.001f), "a destroyed structure must not be healed back to life");
+        }
+
+        [Test]
         public void TheBossDefaultIsItsAuthoredMax()
         {
             // The Boss-health slider's 100% reference is BossTuning.Health, not the stale scene field.

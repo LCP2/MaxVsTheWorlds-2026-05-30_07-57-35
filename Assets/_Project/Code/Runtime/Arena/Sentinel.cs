@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
+using MaxWorlds.Player;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -12,10 +14,12 @@ namespace MaxWorlds.Arena
     /// <summary>
     /// Base for Max's deployable Sentinels (MV-362): a Wall (Blocker) or a Gunner (Attack turret),
     /// placed at Max's own position, with their own HP. Deployed sentinels are permanent until
-    /// destroyed — no repair, no recall (DECISION, Lee 15 Aug 2026) — so unlike
+    /// destroyed — no recall, no player-triggered repair (DECISION, Lee 15 Aug 2026) — so unlike
     /// <see cref="MaxWorlds.Enemies.RobotEnemy"/> they are never pooled; <see cref="Die"/> destroys
     /// the GameObject outright, the same one-shot lifecycle <see cref="MaxWorlds.Factories.MowerHutch"/>
-    /// uses for its own death.
+    /// uses for its own death. MV-398 (same day) reversed only the "no repair" half: a damaged-but-alive
+    /// sentinel now passively regens HP once left unhit for a while — see <see cref="Update"/> — but a
+    /// destroyed one still never comes back, and there is still no manual repair action.
     ///
     /// <see cref="Team"/> is <see cref="Team.Player"/> — Max's own device. <see cref="DamageRules"/>'s
     /// same-team rejection means a robot (Team.Enemy) CAN hit it, and Max's own primary (Team.Player)
@@ -61,6 +65,7 @@ namespace MaxWorlds.Arena
         public abstract SentinelKind Kind { get; }
 
         private DestructibleHealth _health;
+        private float _timeSinceDamage;
 
         public bool IsAlive => _health != null && _health.IsAlive;
 
@@ -97,7 +102,31 @@ namespace MaxWorlds.Arena
         {
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return;
+            if (info.Amount > 0f) _timeSinceDamage = 0f; // MV-398: (re)starts the regen delay below
             _health.TakeDamage(info.Amount);
+        }
+
+        /// <summary>HP after <paramref name="dt"/> seconds of passive regen (MV-398) — same
+        /// delay-gated linear trickle as <see cref="PlayerHealth.Regenerate"/> (never revives a
+        /// destroyed sentinel, never overfills past <paramref name="max"/>), reused rather than
+        /// reinvented since the ticket's tuning is deliberately aliased to Max's own. Pure, so the
+        /// trickle is unit-testable without a live sentinel.</summary>
+        public static float Regenerate(float current, float max, float timeSinceDamage, float delay, float perSec, float dt) =>
+            PlayerHealth.Regenerate(current, max, timeSinceDamage, delay, perSec, dt);
+
+        /// <summary>Ticks the passive regen (MV-398). Not sealed: <see cref="GunnerSentinel"/>
+        /// overrides to also drive its own fire-control loop, calling this via <c>base.Update()</c>
+        /// so both sentinel kinds regen identically.</summary>
+        protected virtual void Update()
+        {
+            if (!IsAlive) return;
+            float dt = Time.deltaTime;
+            _timeSinceDamage += dt;
+
+            float next = Regenerate(_health.Current, _health.Max, _timeSinceDamage,
+                AbilityTuning.DefaultSentinelRegenDelaySeconds, AbilityTuning.DefaultSentinelRegenPerSec, dt);
+            float healAmount = next - _health.Current;
+            if (healAmount > 0f) _health.Heal(healAmount);
         }
 
         private void Die()
