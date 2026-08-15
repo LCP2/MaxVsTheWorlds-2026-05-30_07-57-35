@@ -116,5 +116,67 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0));
         }
+
+        // ---------------------------------------------------------------- MV-374: Cell Capacity track
+
+        [Test]
+        public void CapacityStartsAtTheBase20()
+        {
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(20), "a fresh run starts at the base, not the old flat 30");
+        }
+
+        [Test]
+        public void LevelingUpCellCapacityAdds10PerLevelUpTo3Levels()
+        {
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(30));
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(40));
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(50), "3 levels at +10 each cap out at 50");
+        }
+
+        [Test]
+        public void LevelingUpCellCapacityPastTheCapFails()
+        {
+            for (int i = 0; i < PickupWallet.PowerCellCapacityMaxLevel; i++) PickupWallet.LevelUpCellCapacity();
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.False, "only 3 levels exist");
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(50));
+        }
+
+        [Test]
+        public void LevelingUpCellCapacityFiresCapacityChangedWithTheNewCapacity()
+        {
+            int seen = -1;
+            void Handler(int n) => seen = n;
+            PickupWallet.CapacityChanged += Handler;
+            try
+            {
+                PickupWallet.LevelUpCellCapacity();
+                Assert.That(seen, Is.EqualTo(30), "the HUD/weapons screen redraw off this event even though the count didn't move");
+            }
+            finally { PickupWallet.CapacityChanged -= Handler; }
+        }
+
+        [Test]
+        public void RaisingCapacityDoesNotWasteAlreadyBankedCellsHeadroom()
+        {
+            for (int i = 0; i < 20; i++) PickupWallet.AddPowerCell();
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(20), "full at the base cap");
+
+            PickupWallet.LevelUpCellCapacity();
+            PickupWallet.AddPowerCell();
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(21), "the new headroom must be collectible immediately");
+        }
+
+        [Test]
+        public void ResetClearsCellCapacityLevelBackToTheBase()
+        {
+            PickupWallet.LevelUpCellCapacity();
+            PickupWallet.Reset();
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(20));
+        }
     }
 }

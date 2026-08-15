@@ -163,5 +163,50 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "the track upgrade must consume the part");
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a part spend must never also spend cells");
         }
+
+        // ---------------------------------------------------------------- MV-374: Cell Capacity
+
+        [Test]
+        public void SpendingOnCellCapacityWithNoBankedPartsFails()
+        {
+            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False);
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void SpendingOnCellCapacityRaisesItsLevelAndConsumesOnePart()
+        {
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+
+            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.True);
+
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(1));
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(30));
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "exactly one part must be spent per level");
+        }
+
+        [Test]
+        public void SpendingOnCellCapacityAtItsCapFailsAndDoesNotSpendTheirPart()
+        {
+            PickupWallet.AddPart();
+            for (int i = 0; i < PickupWallet.PowerCellCapacityMaxLevel; i++)
+                PartSpend.TrySpendOnCellCapacity();
+            int banked = PickupWallet.PartsBanked;
+
+            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False, "only 3 levels exist");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(banked), "a spend that doesn't level up must not cost a part");
+        }
+
+        [Test]
+        public void BankedPowerCellsCannotSubstituteForPartsOnCellCapacity()
+        {
+            PickupWallet.AddPowerCell();
+            PickupWallet.AddPowerCell();
+
+            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False, "power cells must never buy a capacity upgrade");
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a rejected upgrade spend must not touch cells");
+        }
     }
 }

@@ -238,6 +238,7 @@ namespace MaxWorlds.UI
             HudSignals.BossHealthChanged += OnBossHealth;
             HudSignals.BossDefeated += OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
+            MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
             MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
@@ -256,6 +257,7 @@ namespace MaxWorlds.UI
             HudSignals.BossHealthChanged -= OnBossHealth;
             HudSignals.BossDefeated -= OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
+            MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
             MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
@@ -285,8 +287,15 @@ namespace MaxWorlds.UI
 
         private void OnPowerCells(int total)
         {
-            if (_cellCount != null) _cellCount.text = total.ToString();
+            if (_cellCount != null) _cellCount.text = $"{total}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
+        }
+
+        /// <summary>MV-374: the reserve's cap itself moved (a Cell Capacity level-up) — the count
+        /// didn't change, but the "current/max" text still needs to redraw for the new max.</summary>
+        private void OnCellCapacity(int capacity)
+        {
+            if (_cellCount != null) _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{capacity}";
         }
 
         private void OnParts(int banked) => RefreshPartAlert();
@@ -1588,7 +1597,7 @@ namespace MaxWorlds.UI
             _cellCount.resizeTextForBestFit = true;
             _cellCount.resizeTextMinSize = 20;
             _cellCount.resizeTextMaxSize = 40;
-            _cellCount.text = MaxWorlds.Pickups.PickupWallet.PowerCells.ToString();
+            _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
         }
 
         /// <summary>The always-available WEAPONS button (YT-178): a persistent chip pinned to the right

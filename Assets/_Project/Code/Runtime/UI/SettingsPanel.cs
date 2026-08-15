@@ -442,7 +442,7 @@ namespace MaxWorlds.UI
             // spends them any more) — only their drop pacing/cap remain tunable — plus parts and
             // Hydro's burst timing. ----
             Add("Cell capacity", "cells", 5f, 60f, PickupWallet.DefaultCapacity,
-                () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.DefaultCapacity),
+                () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.BaseCapacity),
                 v => DevTuning.PowerCellCapacity = v, tab: TabEconomy);
 
             // Small robots drop nothing at all (WV-226) — only large kills carry loot, paced by

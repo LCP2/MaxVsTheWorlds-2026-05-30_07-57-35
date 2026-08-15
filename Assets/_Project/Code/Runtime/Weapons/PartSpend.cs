@@ -41,5 +41,18 @@ namespace MaxWorlds.Weapons
             PickupWallet.TrySpendPart();
             return true;
         }
+
+        /// <summary>Spend one banked part to raise Cell Capacity by a level (MV-374). A general
+        /// player-stat track rather than a weapon one, so it levels up directly on
+        /// <see cref="PickupWallet"/> instead of through <see cref="WeaponSystemState"/>. Every level
+        /// is owned from run start (0 of 3 bought, not "unowned"), so the only way this fails is an
+        /// empty bank or the level cap.</summary>
+        public static bool TrySpendOnCellCapacity()
+        {
+            if (PickupWallet.PartsBanked <= 0) return false;
+            if (!PickupWallet.LevelUpCellCapacity()) return false;
+            PickupWallet.TrySpendPart();
+            return true;
+        }
     }
 }
