@@ -114,14 +114,15 @@ namespace MaxWorlds.UI
         private bool _forceFieldWasActive;
         private float _forceFieldReadyFlash;
 
-        // The Sentinel deploy buttons (MV-362): hidden until AbilityKind.Sentinels is acquired, same
-        // round-button visual language as Force Field/Hydro above — no cooldown radial, since a
-        // sentinel isn't cooldown-gated, only by cell cost and the shared deployment-slot cap.
-        private RectTransform _wallSentinelButtonRoot, _gunnerSentinelButtonRoot;
-        private Image _wallSentinelGlow, _gunnerSentinelGlow;
-        private Text _wallSentinelLabel, _gunnerSentinelLabel;
-        private bool _wallSentinelWasReady, _gunnerSentinelWasReady;
-        private float _wallSentinelReadyFlash, _gunnerSentinelReadyFlash;
+        // The Sentinel deploy joysticks (MV-362, aimed-placement MV-399): hidden until
+        // AbilityKind.Sentinels is acquired, same tech-ring joystick shape Water Balloon/Teleport use
+        // below — a sentinel isn't cooldown-gated, so the radial covers/uncovers on cell cost + the
+        // shared deployment-slot cap instead of a cooldown sweep (same "empty bank reads as covered"
+        // idiom Water Balloon's own radial already uses for its cell gate).
+        private RectTransform _wallSentinelRoot, _gunnerSentinelRoot;
+        private AbilityControlArt.JoystickVisual _wallSentinelVisual, _gunnerSentinelVisual;
+        private Image _wallSentinelRadial, _gunnerSentinelRadial;
+        private int _wallSentinelBuiltLevel = -1, _gunnerSentinelBuiltLevel = -1;
         private float _forceFieldSnapFlash;
 
         // Joysticks
@@ -224,8 +225,8 @@ namespace MaxWorlds.UI
             BuildAbilitySlots();
             BuildHydroButton();
             BuildForceFieldButton();
-            BuildWallSentinelButton();
-            BuildGunnerSentinelButton();
+            BuildWallSentinelJoystick();
+            BuildGunnerSentinelJoystick();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
@@ -297,12 +298,11 @@ namespace MaxWorlds.UI
         {
             RebuildWaterBalloonJoystickIfNeeded();
             RebuildTeleportJoystickIfNeeded();
+            RebuildWallSentinelJoystickIfNeeded();
+            RebuildGunnerSentinelJoystickIfNeeded();
             RefreshWaterBalloonAutoFireToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
-            bool sentinelsOwned = WeaponSystemState.IsAcquired(AbilityKind.Sentinels);
-            if (_wallSentinelButtonRoot != null) _wallSentinelButtonRoot.gameObject.SetActive(sentinelsOwned);
-            if (_gunnerSentinelButtonRoot != null) _gunnerSentinelButtonRoot.gameObject.SetActive(sentinelsOwned);
         }
 
         private void OnPowerCells(int total)
@@ -426,7 +426,7 @@ namespace MaxWorlds.UI
             UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
             UpdateForceFieldButton(dt);
-            UpdateSentinelButtons(dt);
+            UpdateSentinelJoysticks();
             UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
@@ -618,42 +618,28 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>Drives the two Sentinel deploy buttons (MV-362) — no-op while hidden (not yet
-        /// acquired). No cooldown radial: a sentinel is gated purely on cell cost and the shared
-        /// deployment-slot cap, so "ready" just means the button's own pulse glow, same idle-glow
-        /// idiom the other action buttons use while off cooldown.</summary>
-        private void UpdateSentinelButtons(float dt)
+        /// <summary>Drives the two Sentinel deploy joysticks (MV-362, aimed MV-399) — no-op while
+        /// hidden (not yet acquired). No cooldown: a sentinel is gated purely on cell cost and the
+        /// shared deployment-slot cap, so the radial simply covers/uncovers on that gate — the same
+        /// "empty bank reads as covered" idiom <see cref="UpdateAbilityControls"/> already uses for
+        /// Water Balloon's own cell gate — and the label keeps the live slot-count readout the old
+        /// buttons showed.</summary>
+        private void UpdateSentinelJoysticks()
         {
             if (_abilities == null) return;
 
-            if (_wallSentinelButtonRoot != null && _wallSentinelButtonRoot.gameObject.activeSelf)
+            if (_wallSentinelRadial != null && _wallSentinelRoot != null && _wallSentinelRoot.gameObject.activeSelf)
             {
-                bool ready = _abilities.WallSentinelReady;
-                if (ready && !_wallSentinelWasReady) _wallSentinelReadyFlash = 1f;
-                _wallSentinelWasReady = ready;
-                _wallSentinelReadyFlash = Mathf.Max(0f, _wallSentinelReadyFlash - dt * 3.2f);
-
-                float pulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
-                Color glow = Color.Lerp(ReadyGlow, WallSentinelColor, 0.5f);
-                glow.a = ready ? Mathf.Clamp01(pulse + _wallSentinelReadyFlash) : 0f;
-                _wallSentinelGlow.color = glow;
-
-                _wallSentinelLabel.text = $"WALL\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
+                _wallSentinelRadial.fillAmount = _abilities.WallSentinelReady ? 0f : 1f;
+                if (_wallSentinelVisual.Label != null)
+                    _wallSentinelVisual.Label.text = $"WALL\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
             }
 
-            if (_gunnerSentinelButtonRoot != null && _gunnerSentinelButtonRoot.gameObject.activeSelf)
+            if (_gunnerSentinelRadial != null && _gunnerSentinelRoot != null && _gunnerSentinelRoot.gameObject.activeSelf)
             {
-                bool ready = _abilities.GunnerSentinelReady;
-                if (ready && !_gunnerSentinelWasReady) _gunnerSentinelReadyFlash = 1f;
-                _gunnerSentinelWasReady = ready;
-                _gunnerSentinelReadyFlash = Mathf.Max(0f, _gunnerSentinelReadyFlash - dt * 3.2f);
-
-                float pulse = ready ? 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f)) : 0f;
-                Color glow = Color.Lerp(ReadyGlow, GunnerSentinelColor, 0.5f);
-                glow.a = ready ? Mathf.Clamp01(pulse + _gunnerSentinelReadyFlash) : 0f;
-                _gunnerSentinelGlow.color = glow;
-
-                _gunnerSentinelLabel.text = $"GUN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
+                _gunnerSentinelRadial.fillAmount = _abilities.GunnerSentinelReady ? 0f : 1f;
+                if (_gunnerSentinelVisual.Label != null)
+                    _gunnerSentinelVisual.Label.text = $"GUN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
             }
         }
 
@@ -1012,76 +998,120 @@ namespace MaxWorlds.UI
 
         private const float ForceFieldButtonGap = 16f;   // clearance above the Hydro button below it
 
-        // Sentinel deploy buttons (MV-362): a third and fourth stop in the same right-hand column,
-        // stacked above Force Field. Slightly smaller than the ability buttons below them — they're a
-        // placement decision, not a combat trigger pressed every few seconds.
-        private const float SentinelButtonSize = 90f;
-        private const float SentinelButtonGap = 14f;
+        // Sentinel deploy joysticks (MV-362, aimed placement MV-399): their own column, well clear of
+        // the Hydro/Force Field column's own stack below (top edge ~620) and the boss bar's y-band
+        // (rise 300, half 8) beneath that — same "half-extent-plus-margin clearance" reasoning the
+        // Water Balloon/Teleport column below uses for itself. Side by side rather than stacked (like
+        // Teleport-above-Water-Balloon) because two full-height joysticks stacked here would run off
+        // the top of the 1080-tall reference canvas.
+        private const float SentinelJoystickRise = 820f;
+        private const float WallSentinelJoystickX = 360f;
+        private const float GunnerSentinelJoystickX = 660f;
 
-        private void BuildWallSentinelButton()
+        private void BuildWallSentinelJoystick() => RebuildWallSentinelJoystick();
+
+        private void RebuildWallSentinelJoystick()
         {
-            var root = NewRect("Wall Sentinel Button", Root);
-            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
-            root.anchoredPosition = new Vector2(-HydroButtonInset,
-                HydroButtonRise + HydroButtonSize + ForceFieldButtonGap + HydroButtonSize + SentinelButtonGap);
-            root.sizeDelta = new Vector2(SentinelButtonSize, SentinelButtonSize);
-            _wallSentinelButtonRoot = root;
+            if (_wallSentinelRoot != null) Destroy(_wallSentinelRoot.gameObject);
 
-            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
-            Stretch(glow.rectTransform, 4f);
-            glow.raycastTarget = false;
-            _wallSentinelGlow = glow;
+            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength);
+            int maxLevel = WeaponCatalog.MaxLevel(SentinelTrackKind.WallStrength);
+            var anchoredPos = new Vector2(WallSentinelJoystickX, SentinelJoystickRise);
+            _wallSentinelVisual = AbilityControlArt.BuildJoystick(
+                Root, "Wall Sentinel Joystick", anchoredPos, WallSentinelColor, "WALL", level, maxLevel);
+            _wallSentinelRoot = _wallSentinelVisual.Root;
 
-            var ring = AddImage(root, HudTextures.TechRings(160, 3), WallSentinelColor, "Ring");
-            Stretch(ring.rectTransform);
-            ring.raycastTarget = true;
-            var button = ring.gameObject.AddComponent<Button>();
-            button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(() => _abilities?.TryDeployWallSentinel());
+            // No cooldown — covers/uncovers on the cell-cost + deployment-cap gate instead, same
+            // "empty bank reads as covered" idiom Water Balloon's own radial uses (UpdateAbilityControls).
+            var radial = AddImage(_wallSentinelRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _wallSentinelRadial = radial;
 
-            _wallSentinelLabel = AddText(root, 16f, WallSentinelColor, TextAnchor.MiddleCenter);
-            Stretch(_wallSentinelLabel.rectTransform);
-            _wallSentinelLabel.text = "WALL";
-            _wallSentinelLabel.fontStyle = FontStyle.Bold;
-            _wallSentinelLabel.raycastTarget = false;
-            _wallSentinelLabel.resizeTextForBestFit = true;
-            _wallSentinelLabel.resizeTextMinSize = 8;
-            _wallSentinelLabel.resizeTextMaxSize = 18;
+            var pad = new GameObject("Wall Sentinel Touch", typeof(RectTransform), typeof(Image));
+            var padRect = (RectTransform)pad.transform;
+            padRect.SetParent(_wallSentinelRoot, false);
+            padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
+            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            var padImg = pad.GetComponent<Image>();
+            padImg.color = new Color(0f, 0f, 0f, 0f);
+            padImg.raycastTarget = true;
 
-            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+            var control = pad.AddComponent<SentinelJoystickControl>();
+            control.Init(_wallSentinelVisual.Knob, _player != null ? _player.transform : null, _abilities,
+                SentinelKind.Wall, _wallSentinelVisual.Rings);
+
+            _wallSentinelBuiltLevel = level;
+            _wallSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
         }
 
-        private void BuildGunnerSentinelButton()
+        private void RebuildWallSentinelJoystickIfNeeded()
         {
-            var root = NewRect("Gunner Sentinel Button", Root);
-            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
-            root.anchoredPosition = new Vector2(-HydroButtonInset - SentinelButtonSize - SentinelButtonGap,
-                HydroButtonRise + HydroButtonSize + ForceFieldButtonGap + HydroButtonSize + SentinelButtonGap);
-            root.sizeDelta = new Vector2(SentinelButtonSize, SentinelButtonSize);
-            _gunnerSentinelButtonRoot = root;
+            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength);
+            if (level == _wallSentinelBuiltLevel)
+            {
+                if (_wallSentinelRoot != null)
+                    _wallSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+                return;
+            }
+            RebuildWallSentinelJoystick();
+        }
 
-            var glow = AddImage(root, HudTextures.TechRings(160, 3), Color.clear, "Glow");
-            Stretch(glow.rectTransform, 4f);
-            glow.raycastTarget = false;
-            _gunnerSentinelGlow = glow;
+        private void BuildGunnerSentinelJoystick() => RebuildGunnerSentinelJoystick();
 
-            var ring = AddImage(root, HudTextures.TechRings(160, 3), GunnerSentinelColor, "Ring");
-            Stretch(ring.rectTransform);
-            ring.raycastTarget = true;
-            var button = ring.gameObject.AddComponent<Button>();
-            button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(() => _abilities?.TryDeployGunnerSentinel());
+        private void RebuildGunnerSentinelJoystick()
+        {
+            if (_gunnerSentinelRoot != null) Destroy(_gunnerSentinelRoot.gameObject);
 
-            _gunnerSentinelLabel = AddText(root, 16f, GunnerSentinelColor, TextAnchor.MiddleCenter);
-            Stretch(_gunnerSentinelLabel.rectTransform);
-            _gunnerSentinelLabel.text = "GUN";
-            _gunnerSentinelLabel.fontStyle = FontStyle.Bold;
-            _gunnerSentinelLabel.raycastTarget = false;
-            _gunnerSentinelLabel.resizeTextForBestFit = true;
-            _gunnerSentinelLabel.resizeTextMinSize = 8;
-            _gunnerSentinelLabel.resizeTextMaxSize = 18;
+            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.GunnerPower);
+            int maxLevel = WeaponCatalog.MaxLevel(SentinelTrackKind.GunnerPower);
+            var anchoredPos = new Vector2(GunnerSentinelJoystickX, SentinelJoystickRise);
+            _gunnerSentinelVisual = AbilityControlArt.BuildJoystick(
+                Root, "Gunner Sentinel Joystick", anchoredPos, GunnerSentinelColor, "GUN", level, maxLevel);
+            _gunnerSentinelRoot = _gunnerSentinelVisual.Root;
 
-            root.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+            var radial = AddImage(_gunnerSentinelRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            Stretch(radial.rectTransform, -6f);
+            radial.type = Image.Type.Filled;
+            radial.fillMethod = Image.FillMethod.Radial360;
+            radial.fillOrigin = (int)Image.Origin360.Top;
+            radial.fillClockwise = true;
+            radial.fillAmount = 0f;
+            radial.raycastTarget = false;
+            _gunnerSentinelRadial = radial;
+
+            var pad = new GameObject("Gunner Sentinel Touch", typeof(RectTransform), typeof(Image));
+            var padRect = (RectTransform)pad.transform;
+            padRect.SetParent(_gunnerSentinelRoot, false);
+            padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
+            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
+            var padImg = pad.GetComponent<Image>();
+            padImg.color = new Color(0f, 0f, 0f, 0f);
+            padImg.raycastTarget = true;
+
+            var control = pad.AddComponent<SentinelJoystickControl>();
+            control.Init(_gunnerSentinelVisual.Knob, _player != null ? _player.transform : null, _abilities,
+                SentinelKind.Gunner, _gunnerSentinelVisual.Rings);
+
+            _gunnerSentinelBuiltLevel = level;
+            _gunnerSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+        }
+
+        private void RebuildGunnerSentinelJoystickIfNeeded()
+        {
+            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.GunnerPower);
+            if (level == _gunnerSentinelBuiltLevel)
+            {
+                if (_gunnerSentinelRoot != null)
+                    _gunnerSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+                return;
+            }
+            RebuildGunnerSentinelJoystick();
         }
 
         // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits

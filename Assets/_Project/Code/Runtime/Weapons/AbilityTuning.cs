@@ -207,6 +207,13 @@ namespace MaxWorlds.Weapons
         /// <summary>Seconds between Gunner sentinel shots.</summary>
         public const float DefaultSentinelGunnerFireInterval = 0.6f;
 
+        /// <summary>How far the aimed placement joystick's reticle reaches, metres (MV-399, reversing
+        /// MV-362's "deployed at Max's position" DECISION per Lee's 15 Aug 2026 request). Fixed, not
+        /// leveled — same "authored, not a track" shape as <see cref="DefaultSentinelWallCost"/>.
+        /// Matches <see cref="DefaultTeleportBaseDistance"/> rather than a fresh number: both need a
+        /// single drag to cover "anywhere in the current arena" from one spot in the room.</summary>
+        public const float DefaultSentinelPlacementRange = DefaultTeleportBaseDistance;
+
         /// <summary>Fraction of Max's current primary damage-per-tick the Gunner sentinel deals per
         /// shot at a given Gunner Power level — clamped below 1.0, so whatever <paramref
         /// name="currentPrimaryDamagePerTick"/> is (it already reflects Max's live RCDA Damage track,
