@@ -51,6 +51,88 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- MV-400: hedges stay solid but stop breaking a sight-line -----------------------------
+
+        /// <summary>A single room with one hedge and one tree, spaced far enough apart (and from the
+        /// room's own walls) that a ray drawn straight through one of them cannot also graze the
+        /// other or a wall — the only thing this map exists to isolate is "does THIS piece of cover
+        /// block the ray", nothing else standing in for it by accident.</summary>
+        private static MapData HedgeVsTreeProbe()
+        {
+            return new MapData
+            {
+                name = "Hedge vs Tree Probe",
+                zones = new[]
+                {
+                    new MapZone { id = "room", type = "open", x = 0f, z = 0f, width = 40f, depth = 20f },
+                },
+                entities = new[]
+                {
+                    new MapEntity
+                    {
+                        id = "hedge", kind = "cover", x = -10f, z = 0f,
+                        width = 4.5f, height = 1.8f, depth = 1.3f, shape = "box", dressing = "hedge",
+                    },
+                    new MapEntity
+                    {
+                        id = "tree", kind = "cover", x = 10f, z = 0f,
+                        width = 2.4f, height = 4.4f, depth = 2.4f, shape = "cylinder", dressing = "tree",
+                    },
+                },
+            };
+        }
+
+        /// <summary>The whole ticket in one test: a hedge row keeps blocking a footstep (still a
+        /// solid, non-trigger collider — nothing about MV-400 asks for that to change) but stops
+        /// blocking a sight-line, while a tree — not asked to change — still blocks exactly as
+        /// before. Sampled at 1.0 m, the same "below the shortest cover" eye height
+        /// <see cref="EveryPieceOfCoverIsTallerThanTheSightLineItHasToBreak"/> already relies on, so
+        /// both pieces are tall enough to matter if they were still on the Cover layer.</summary>
+        [Test]
+        public void AHedgeRow_StaysSolid_ButStopsBreakingTheSightLine()
+        {
+            if (!CoverLayer.Exists) Assert.Ignore("no Cover layer in this project");
+
+            const float eyeHeight = 1.0f;
+            MapData map = HedgeVsTreeProbe();
+            var root = new GameObject("Hedge vs Tree Probe Root");
+            try
+            {
+                MapBuild built = MapRuntime.Build(map, root.transform);
+                Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (DynamicsManager.asset)
+
+                CoverPiece hedge = built.Cover.Find(p => p.Cover.Name == "hedge");
+                CoverPiece tree = built.Cover.Find(p => p.Cover.Name == "tree");
+                Assert.IsNotNull(hedge.Body, "the probe map's hedge was never built");
+                Assert.IsNotNull(tree.Body, "the probe map's tree was never built");
+
+                var hedgeCollider = hedge.Body.GetComponent<Collider>();
+                Assert.IsNotNull(hedgeCollider, "a hedge carries no collider — nothing would block a footstep");
+                Assert.IsFalse(hedgeCollider.isTrigger, "a hedge is a trigger, not a solid obstruction");
+
+                Assert.AreNotEqual(CoverLayer.Index, hedge.Body.layer,
+                    "a hedge is still on the Cover layer — robots would still be blind through it and " +
+                    "a shot would still stop dead at a plant row");
+                Assert.AreEqual(CoverLayer.Index, tree.Body.layer,
+                    "a tree came off the Cover layer too — only a hedge is meant to stop blocking " +
+                    "sight (MV-400); this would silently widen the change to all cover");
+
+                Vector3 fromHedge = new Vector3(-14f, eyeHeight, 0f);
+                Vector3 toHedge = new Vector3(-6f, eyeHeight, 0f);
+                Assert.IsTrue(LineOfSight.Clear(fromHedge, toHedge),
+                    "a hedge row still blocks the sight-line straight through it");
+
+                Vector3 fromTree = new Vector3(6f, eyeHeight, 0f);
+                Vector3 toTree = new Vector3(14f, eyeHeight, 0f);
+                Assert.IsFalse(LineOfSight.Clear(fromTree, toTree),
+                    "a tree stopped blocking the sight-line — only the hedge was meant to change");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root);
+            }
+        }
+
         // --- Perception: what a robot knows, vs where Max is --------------------------------------
 
         [Test]
