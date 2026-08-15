@@ -14,15 +14,22 @@ namespace MaxWorlds.Pickups
     /// The drop policy is a strict small/large split (WV-226): the small tier —
     /// <see cref="EnemyKind.Rusher"/> — drops nothing at all, no roll, no trickle. Only the large
     /// tier — bruiser, heavy and brute (<see cref="EnemyArchetype.IsLarge"/>, MV-224) — drops loot.
-    /// How much is an authored per-area total (<see cref="CellEconomyTuning.CellsForArea"/> /
-    /// <see cref="CellEconomyTuning.PartsForArea"/>, MV-375), spread across that area's actual solved
-    /// large-kill count so the run's cell/part curve rises on a designed straight line instead of
-    /// riding the enemy population's exponential growth — see <see cref="ResolveDrop"/>. Falls back to
-    /// the flat <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/> / one-part-every-
-    /// <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-kills rate outside a live area context
-    /// (tests) or under a dev-tuning override. Each frame it does the walk-over collection itself: one
-    /// Max lookup, one pool, a planar distance test per live pickup. Banking goes through
-    /// <see cref="PickupWallet"/>; the HUD reacts to that.
+    /// Cells are an authored per-area total (<see cref="CellEconomyTuning.CellsForArea"/>, MV-375),
+    /// spread across that area's actual solved large-kill count so the run's cell curve rises on a
+    /// designed straight line instead of riding the enemy population's exponential growth — see
+    /// <see cref="ResolveCellDrop"/>. Falls back to the flat <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
+    /// rate outside a live area context (tests) or under a dev-tuning override.
+    ///
+    /// Parts drop exactly once per arena, from the last Bruiser destroyed in it (MV-401) — see
+    /// <see cref="IsLastBruiserInArea"/>. This replaces MV-183/MV-226/MV-375's periodic
+    /// every-<see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-large-kills trigger, which
+    /// could fire more than once inside a populous arena; that mechanic (and its
+    /// <see cref="CellEconomyTuning.PartsForArea"/> curve / <see cref="MaxWorlds.Core.DevTuning.PartsPerLargeKills"/>
+    /// dial) is dead for the part decision now — left in place only because the Settings panel's
+    /// "Parts/large kill" dev slider still reads/writes it (out of this ticket's scope to remove).
+    ///
+    /// Each frame it does the walk-over collection itself: one Max lookup, one pool, a planar distance
+    /// test per live pickup. Banking goes through <see cref="PickupWallet"/>; the HUD reacts to that.
     ///
     /// Parts are now universal upgrade tokens (WV-228): every paced drop banks, there is no longer a
     /// guaranteed-unique table to run dry against (YT-133's old <c>PartDropTable</c> is retired from
@@ -73,12 +80,17 @@ namespace MaxWorlds.Pickups
         /// director simply never finds one, and every kill falls back to the flat legacy rate.</summary>
         private AreaAccumulationDirector _areaDirector;
 
-        /// <summary>The area <see cref="_cellAccum"/>/<see cref="_partAccum"/> are currently tracking
-        /// (MV-375) — reset whenever a kill lands in a different area so a fresh area starts its budget
-        /// from zero instead of carrying over the previous area's leftover fraction.</summary>
-        private int _budgetArea = -1;
+        /// <summary>The area <see cref="_cellAccum"/> is currently tracking (MV-375) — reset whenever a
+        /// kill lands in a different area so a fresh area starts its cell budget from zero instead of
+        /// carrying over the previous area's leftover fraction.</summary>
+        private int _cellBudgetArea = -1;
         private float _cellAccum;
-        private float _partAccum;
+
+        /// <summary>The area <see cref="_bruiserRemaining"/> is currently counting down (MV-401) —
+        /// reset whenever a Bruiser dies in a different area so a fresh area starts from that area's
+        /// own solved Bruiser count instead of carrying over a stale one.</summary>
+        private int _bruiserBudgetArea = -1;
+        private int _bruiserRemaining;
 
         private void OnEnable()
         {
@@ -100,8 +112,7 @@ namespace MaxWorlds.Pickups
 
             _largeKills++;
 
-            (int cells, bool dropPart) = ResolveDrop();
-
+            int cells = ResolveCellDrop();
             for (int i = 0; i < cells; i++)
             {
                 float ang = i * (Mathf.PI * 2f / cells);
@@ -109,50 +120,70 @@ namespace MaxWorlds.Pickups
                 SpawnDrop(PickupKind.PowerCell, pos + off);
             }
 
-            if (dropPart)
+            // MV-401: exactly one part per arena, from the last Bruiser destroyed in it — not every
+            // large kind, and not a periodic count (see IsLastBruiserInArea).
+            if (kind == EnemyKind.Bruiser && IsLastBruiserInArea())
                 SpawnDrop(PickupKind.Part, pos, DecorativeKind());
         }
 
-        /// <summary>How many cells and whether a part drops for the large kill just reported (MV-375).
-        /// Prefers the authored per-area budget (<see cref="CellEconomyTuning.CellsForArea"/> /
-        /// <see cref="CellEconomyTuning.PartsForArea"/>), spread evenly across the area's actual solved
-        /// large-kill count via a fractional accumulator so the run's total for that area lands on
-        /// exactly the authored line rather than a compounding per-kill rate. Falls back to the flat
-        /// legacy rate — every kill drops <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/> cells,
-        /// one part every <see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-th kill — when no
-        /// area context is available (a headless test scene) or a dev-tuning override is active, since
-        /// neither carries an actual solved kill count to normalise against.</summary>
-        private (int cells, bool dropPart) ResolveDrop()
+        /// <summary>How many cells drop for the large kill just reported (MV-375). Prefers the
+        /// authored per-area budget (<see cref="CellEconomyTuning.CellsForArea"/>), spread evenly
+        /// across the area's actual solved large-kill count via a fractional accumulator so the run's
+        /// cell total for that area lands on exactly the authored line rather than a compounding
+        /// per-kill rate. Falls back to the flat <see cref="CellEconomyTuning.DefaultCellsPerLargeKill"/>
+        /// rate when no area context is available (a headless test scene) or a dev-tuning override is
+        /// active, since neither carries an actual solved kill count to normalise against.</summary>
+        private int ResolveCellDrop()
         {
-            bool devOverride = DevTuning.CellsPerLargeKill.HasValue || DevTuning.PartsPerLargeKills.HasValue;
+            bool devOverride = DevTuning.CellsPerLargeKill.HasValue;
             int areaIndex = devOverride ? 0 : ResolveCurrentArea();
             int largeCountForArea = areaIndex > 0 ? ResolveLargeCountForArea(areaIndex) : 0;
 
             if (largeCountForArea <= 0)
             {
-                int flatCells = Mathf.Max(0, Mathf.RoundToInt(
+                return Mathf.Max(0, Mathf.RoundToInt(
                     DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill)));
-                int interval = Mathf.Max(1, Mathf.RoundToInt(
-                    DevTuning.Or(DevTuning.PartsPerLargeKills, CellEconomyTuning.DefaultPartsPerLargeKills)));
-                return (flatCells, _largeKills % interval == 0);
             }
 
-            if (areaIndex != _budgetArea)
+            if (areaIndex != _cellBudgetArea)
             {
-                _budgetArea = areaIndex;
+                _cellBudgetArea = areaIndex;
                 _cellAccum = 0f;
-                _partAccum = 0f;
             }
 
             _cellAccum += CellEconomyTuning.CellsForArea(areaIndex) / largeCountForArea;
             int cells = Mathf.FloorToInt(_cellAccum);
             _cellAccum -= cells;
+            return cells;
+        }
 
-            _partAccum += CellEconomyTuning.PartsForArea(areaIndex) / largeCountForArea;
-            bool dropPart = _partAccum >= 1f;
-            if (dropPart) _partAccum -= 1f;
+        /// <summary>True exactly once per arena: the moment the area's last Bruiser (per its solved
+        /// composition, <see cref="AreaAccumulationDirector.BruiserCountForArea"/>) is destroyed
+        /// (MV-401) — the sole trigger for that arena's one guaranteed part, replacing the old periodic
+        /// per-kill-count mechanic that could fire more than once in a populous arena. An arena solved
+        /// with zero Bruisers (e.g. world1_config's Area 4, a Rusher+Gunner ranged-pressure room) drops
+        /// no part at all: the ticket's ask is literally "from the last Bruiser destroyed", and
+        /// inventing a substitute trigger for a Bruiser-less arena is a design call this ticket doesn't
+        /// make. No live area context (a headless test scene) is a different case, not the zero-Bruiser
+        /// one — see the early-out below.</summary>
+        private bool IsLastBruiserInArea()
+        {
+            int areaIndex = ResolveCurrentArea();
 
-            return (cells, dropPart);
+            // No live area context (a headless test scene) — there's no solved Bruiser count to count
+            // down from, so the only sane flat-rate approximation (same idiom as ResolveCellDrop's flat
+            // fallback) is "every Bruiser kill drops a part".
+            if (areaIndex <= 0) return true;
+
+            if (areaIndex != _bruiserBudgetArea)
+            {
+                _bruiserBudgetArea = areaIndex;
+                _bruiserRemaining = ResolveBruiserCountForArea(areaIndex);
+            }
+
+            if (_bruiserRemaining <= 0) return false;
+            _bruiserRemaining--;
+            return _bruiserRemaining == 0;
         }
 
         private int ResolveCurrentArea()
@@ -164,6 +195,9 @@ namespace MaxWorlds.Pickups
 
         private int ResolveLargeCountForArea(int areaIndex) =>
             _areaDirector != null ? _areaDirector.LargeCountForArea(areaIndex) : 0;
+
+        private int ResolveBruiserCountForArea(int areaIndex) =>
+            _areaDirector != null ? _areaDirector.BruiserCountForArea(areaIndex) : 0;
 
         /// <summary>A cosmetic-only flavour for a dropped part (WV-228) — parts carry no gameplay
         /// identity anymore, but <c>PickupArtDirector</c> still swaps in the Hydro device's art for

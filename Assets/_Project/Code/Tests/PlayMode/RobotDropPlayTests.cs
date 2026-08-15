@@ -10,9 +10,13 @@ using MaxWorlds.Upgrades;
 namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
-    /// Robot drops wired up for real (YT-131, recut WV-226): the large tier drops a guaranteed number
-    /// of power cells every kill plus a part every Nth large kill; the small tier drops nothing at
-    /// all; and Max collects by walking over them — all with no scene wiring.
+    /// Robot drops wired up for real (YT-131, recut WV-226, MV-401): the large tier drops a guaranteed
+    /// number of power cells every kill; the small tier drops nothing at all; and Max collects by
+    /// walking over them — all with no scene wiring. Parts drop specifically from a Bruiser kill
+    /// (MV-401) — in these tests there is no live <c>AreaAccumulationDirector</c>, so
+    /// <c>PickupDirector.IsLastBruiserInArea</c> falls back to "every Bruiser kill drops a part" (the
+    /// same flat-fallback idiom cells use outside a live area context) rather than waiting for a
+    /// specific last-Bruiser-in-the-arena signal these tests have no area composition to provide.
     /// </summary>
     public sealed class RobotDropPlayTests
     {
@@ -37,7 +41,6 @@ namespace MaxWorlds.Tests.PlayMode
         private IEnumerator NewDirector()
         {
             PickupWallet.Reset();
-            DevTuning.PartsPerLargeKills = 1f;   // these tests exercise the drop itself: one part per kill
             // A PickupDirector self-installs at PlayMode bootstrap and persists across the run, so it
             // would receive the same DropSignals as our test's director and double every drop. Clear
             // any existing one first so this test owns exactly one director.
@@ -73,9 +76,11 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator HeavyAndBruteKillsDropLootTooTheyCountAsLarge()
+        public IEnumerator HeavyAndBruteKillsDropCellsButNeverAPart()
         {
-            // v0.5 recut spec §5, MV-224: "for economy purposes they count as 'large'".
+            // v0.5 recut spec §5, MV-224: heavy/brute count as "large" for cell purposes. MV-401
+            // narrows the part trigger specifically to a Bruiser kill, though — heavy and brute pace
+            // cells the same as a bruiser kill, but must never drop a part themselves.
             yield return NewDirector();
 
             DropSignals.EmitRobotDied(new Vector3(5f, 0f, 5f), EnemyKind.Heavy);
@@ -83,8 +88,8 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             int expectedCells = Mathf.RoundToInt(CellEconomyTuning.DefaultCellsPerLargeKill) * 2;
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(2),
-                "heavy and brute kills must pace parts the same as a bruiser kill");
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
+                "only a Bruiser kill triggers a part (MV-401) — heavy and brute kills must never drop one");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(expectedCells),
                 "heavy and brute kills must drop power cells the same as a bruiser kill");
         }
@@ -152,38 +157,28 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator PartsDropOnlyEveryNthLargeKill_CellsEveryKill()
+        public IEnumerator SuccessiveBruiserKillsEachDropAPart_NotGatedToEveryNth()
         {
+            // MV-401 replaces the old every-Nth-large-kill pacing: three Bruiser kills in a row must
+            // drop three parts, not just the last (or every 4th, per the old default interval).
             yield return NewDirector();
-            // Exercise the authored default pacing (WV-226, partsPerLargeKills) rather than a
-            // hardcoded interval, so this test tracks the default automatically.
-            int interval = Mathf.RoundToInt(CellEconomyTuning.DefaultPartsPerLargeKills);
-            DevTuning.PartsPerLargeKills = interval;
-            int cellsPerKill = Mathf.RoundToInt(CellEconomyTuning.DefaultCellsPerLargeKill);
 
-            // All kills before the interval: cells, but no part yet.
-            for (int i = 0; i < interval - 1; i++)
-                DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
+            for (int i = 0; i < 3; i++)
+                DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
             yield return null;
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
-                "a part shouldn't drop before the pacing interval");
-            Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(cellsPerKill * (interval - 1)),
-                "power cells keep dropping every kill regardless of the part pacing");
 
-            // The Nth kill hits the interval — the first part drops.
-            DropSignals.EmitRobotDied(Vector3.zero, EnemyKind.Bruiser);
-            yield return null;
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1),
-                $"the first part should drop on the {interval}th large kill");
+            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(3),
+                "every Bruiser kill drops its own part — no pacing interval gates it anymore");
         }
 
         [UnityTest]
         public IEnumerator PartsKeepDroppingPastTheOldSevenPartCap()
         {
             // WV-228: parts are universal upgrade tokens now, not a five/seven-and-done unique table
-            // (YT-133) — a long run must be able to earn far more than the old catalog's size.
+            // (YT-133) — a long run must be able to earn far more than the old catalog's size. Every
+            // kill here is a Bruiser, so MV-401's fallback ("no live area context → every Bruiser kill
+            // drops a part") fires on all of them.
             yield return NewDirector();
-            DevTuning.PartsPerLargeKills = 1f;   // one part per kill
 
             int total = UpgradeCatalog.AllKinds.Length;
             for (int i = 0; i < total + 5; i++)
