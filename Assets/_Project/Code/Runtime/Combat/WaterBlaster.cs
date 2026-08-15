@@ -353,13 +353,27 @@ namespace MaxWorlds.Combat
                         ? ContactPoint(origin, dir, _hits[i], _hits[i].transform.position)
                         : _hits[i].transform.position;
 
+                    // MV-386 regression: an AreaGate's leaf collider (where IDamageable actually
+                    // lives) is deliberately left OFF the Cover layer — only its ThresholdObject is on
+                    // Cover (see MapRuntime.BuildAreaGate), so an opened gate's swinging leaf can't
+                    // re-block the sight-line it just gave up. But that means a Cover-masked cast
+                    // toward the LEAF's own testPoint still hits the threshold collider sitting across
+                    // the same closed doorway first — and since the threshold is a different Transform
+                    // from the leaf we asked permission for, LineOfSight.Clear read that as "blocked",
+                    // so a closed gate could stop a shot (correctly solid) while never registering the
+                    // damage that shot carried. Ask permission for the threshold itself when the target
+                    // is a gate — that's the Transform actually sitting on the Cover layer.
+                    Transform sightTarget = d is AreaGate gateHit && gateHit.ThresholdObject != null
+                        ? gateHit.ThresholdObject.transform
+                        : _hits[i].transform;
+
                     if (SprayHit.InCone(origin, dir, testPoint, reach, cone)
                         // Water does not go through the shed (YT-83). This is not decoration — it is
                         // what keeps cover a DECISION instead of an exploit. If the tree broke the
                         // robots' sight of Max but not Max's spray of them, hiding would be strictly
                         // dominant: stand behind cover, kill everything in perfect safety, never come
                         // out. Cover has to cost you your shot too, or it isn't cover, it's a turret nest.
-                        && LineOfSight.Clear(origin, testPoint, _hits[i].transform))
+                        && LineOfSight.Clear(origin, testPoint, sightTarget))
                     {
                         s_buffer.Add(d);
                         s_contacts.Add(_hits[i]);
