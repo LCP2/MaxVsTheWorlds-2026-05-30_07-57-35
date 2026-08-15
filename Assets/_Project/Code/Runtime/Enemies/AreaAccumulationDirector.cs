@@ -57,6 +57,16 @@ namespace MaxWorlds.Enemies
         /// fragmenting a small room's far-side band into slivers.</summary>
         private const int StaggerBandCount = 5;
 
+        /// <summary>How many of a fresh area's ambient spawns start concealed behind cover instead
+        /// of joining the fight immediately (MV-363) — one small knot per qualifying room, not a
+        /// blanket policy: "not every robot in an area should be hidden".</summary>
+        private const int ConcealedGroupSize = 2;
+
+        /// <summary>A room's total ambient population must be at least this before it spares a knot
+        /// of robots the player never has to actively find — a 2-3 robot room reads as empty rather
+        /// than staged if a third of it is hiding.</summary>
+        private const int MinCompositionForConcealment = 4;
+
         [SerializeField] private RobotEnemy prefab;
 
         private MapData _map;
@@ -82,6 +92,16 @@ namespace MaxWorlds.Enemies
         /// any later overflow releases in <see cref="Update"/> so the stagger keeps cycling rather than
         /// resetting to "nearest the gate" every time a slot frees up mid-fight.</summary>
         private int _areaSpawnIndex;
+
+        /// <summary>Robots left to place concealed for the area currently being filled (MV-363) —
+        /// decremented by <see cref="Spawn"/> as each one lands. Set fresh per area in
+        /// <see cref="FillArea"/>; 0 for a room too small to spare a hidden knot.</summary>
+        private int _concealedRemainingThisArea;
+
+        /// <summary>The concealed knot currently being filled — every member wakes together the
+        /// instant any one of them sees Max (see <see cref="DormantGroup"/>). Rebuilt fresh per area
+        /// in <see cref="FillArea"/>; null while <see cref="_concealedRemainingThisArea"/> is 0.</summary>
+        private DormantGroup _currentConcealedGroup;
 
         /// <summary>The 1-based area the player is currently standing in (or last stood in, once past
         /// the final "area&lt;N&gt;" zone — the compost clearing does not advance it further).</summary>
@@ -193,11 +213,13 @@ namespace MaxWorlds.Enemies
             MapZone zone = _map.Zone($"area{areaIndex}");
             if (zone != null && zone.Kind == ZoneKind.Entry) return;
 
+            int totalForArea;
             if (_worldCfg != null)
             {
                 DifficultyEngine.Composition composition = ClampRusherCap(_worldCfg.SolveComposition(areaIndex));
                 _largeCountByArea[areaIndex] = composition.LargeCount;
                 _queue.FillExact(composition);
+                totalForArea = composition.TotalCount;
             }
             else
             {
@@ -213,7 +235,14 @@ namespace MaxWorlds.Enemies
                     DevTuning.Or(DevTuning.HeavyIntroArea, RobotCompositionTuning.DefaultHeavyIntroArea),
                     DevTuning.Or(DevTuning.BruteIntroArea, RobotCompositionTuning.DefaultBruteIntroArea),
                     DevTuning.Or(DevTuning.ToughSubstitutionPct, RobotCompositionTuning.DefaultToughSubstitutionPct));
+                totalForArea = large + small;
             }
+
+            // MV-363: a big enough room spares a small knot of robots to start concealed behind
+            // cover instead of joining the fight the instant it fills — see Spawn() and
+            // ConcealedSpawnPointInArea(). One knot per room, not a blanket policy.
+            _concealedRemainingThisArea = totalForArea >= MinCompositionForConcealment ? ConcealedGroupSize : 0;
+            _currentConcealedGroup = _concealedRemainingThisArea > 0 ? new DormantGroup() : null;
 
             // Instantly, not paced — this room's population must already be standing by the time the
             // player can see it (MV-245). Only what does not fit under the concurrent cap stays queued.
@@ -243,9 +272,24 @@ namespace MaxWorlds.Enemies
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
 
             RobotEnemy e = Take(kind, archetype);
-            e.transform.position = SpawnPointInArea(CurrentArea, kind, archetype.SpawnHeight, _areaSpawnIndex++);
+
+            // MV-363: never the centreDenial Bomber barrage — that cluster is meant to read as
+            // visible, denied ground, not a hidden knot.
+            bool concealed = _concealedRemainingThisArea > 0 && kind != EnemyKind.Bomber;
+            e.transform.position = concealed
+                ? ConcealedSpawnPointInArea(CurrentArea, archetype.SpawnHeight)
+                : SpawnPointInArea(CurrentArea, kind, archetype.SpawnHeight, _areaSpawnIndex++);
             e.transform.rotation = Quaternion.identity;
             e.gameObject.SetActive(true);
+
+            // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
+            // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.
+            if (concealed)
+            {
+                _concealedRemainingThisArea--;
+                e.BeginDormant();
+                _currentConcealedGroup.Add(e);
+            }
 
             // Re-applied on every spawn, not just on creation — Unity drops an ignored collider pair
             // when the collider is disabled, and pooling disables it on every death.
@@ -304,6 +348,51 @@ namespace MaxWorlds.Enemies
             }
 
             return candidate;
+        }
+
+        /// <summary>Where a concealed robot lands (MV-363): behind the room's own deepest authored
+        /// cover piece — the one farthest from the door — so a dormant knot is genuinely hidden, not
+        /// merely placed on the ordinary far-side band everything else uses. Falls back to that far
+        /// band's own deepest stagger tier when the room carries no cover of its own, so "real
+        /// distance from the gate" still holds even without a prop to hide behind.</summary>
+        private Vector3 ConcealedSpawnPointInArea(int areaIndex, float height)
+        {
+            MapZone zone = _map.Zone($"area{areaIndex}");
+            if (zone == null || zone.width <= EdgeMargin * 2f || zone.depth <= EdgeMargin * 2f)
+                return _target != null ? _target.position : Vector3.zero;
+
+            Vector3 awayFromDoor = MapRuntime.EntryDirection(_map, zone.id);
+            Camera cam = Camera.main;
+
+            var coverInZone = new List<ArenaCover>();
+            foreach (CoverPiece piece in _cover)
+                if (ConcealmentBias.InsideZone(zone, piece.Cover.CenterXz))
+                    coverInZone.Add(piece.Cover);
+
+            if (ConcealmentBias.TryBehindDeepestCover(coverInZone, zone, awayFromDoor, EdgeMargin, out Vector2 anchor))
+            {
+                for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
+                {
+                    Vector2 jitter = anchor + Random.insideUnitCircle * ConcealmentBias.JitterRadius;
+                    var candidate = new Vector3(jitter.x, height, jitter.y);
+                    if (OverlapsCoverOrRobot(candidate)) continue;
+                    if (cam != null && IsOnScreen(cam, candidate)) continue;
+                    return candidate;
+                }
+            }
+
+            Rect farSide = SpawnBias.FarSideBounds(zone, awayFromDoor, EdgeMargin);
+            Rect deepest = SpawnBias.StaggerBand(farSide, awayFromDoor, StaggerBandCount - 1, StaggerBandCount);
+
+            for (int attempt = 0; attempt < MaxPlacementAttempts; attempt++)
+            {
+                Vector3 candidate = RandomPointIn(deepest, height);
+                if (OverlapsCoverOrRobot(candidate)) continue;
+                if (cam != null && IsOnScreen(cam, candidate)) continue;
+                return candidate;
+            }
+
+            return RandomPointIn(deepest, height);
         }
 
         private static Vector3 RandomPointIn(Rect bounds, float height)
