@@ -49,6 +49,26 @@ namespace MaxWorlds.Enemies
             return Rect.MinMaxRect(xMin, zMin, xMax, zMax);
         }
 
+        /// <summary>Fraction of the room's shorter span kept as the centre band's half-width in
+        /// <see cref="CenterBand"/> — small enough that a robot placed there still reads as "in the
+        /// middle" rather than merely "somewhere in a big room".</summary>
+        public const float CenterBandFraction = 0.22f;
+
+        /// <summary>A small rectangle around <paramref name="zone"/>'s centre (MV-365's centreDenial
+        /// scenario, e.g. Bomber-kind spawns) — deliberately NOT the far-side-from-door bias every
+        /// other kind uses, so a scripted missile-barrage cluster reads as "denied ground in the
+        /// middle of the room" rather than another far-wall cluster. Sized off the room's shorter
+        /// span so it never overflows a small room, and always inset by <paramref name="edgeMargin"/>
+        /// the same as every other candidate rectangle in this class.</summary>
+        public static Rect CenterBand(MapZone zone, float edgeMargin)
+        {
+            float xMin = zone.XMin + edgeMargin, xMax = zone.XMax - edgeMargin;
+            float zMin = zone.ZMin + edgeMargin, zMax = zone.ZMax - edgeMargin;
+            float cx = (xMin + xMax) * 0.5f, cz = (zMin + zMax) * 0.5f;
+            float halfSpan = Mathf.Max(0f, Mathf.Min(xMax - xMin, zMax - zMin) * 0.5f * CenterBandFraction);
+            return Rect.MinMaxRect(cx - halfSpan, cz - halfSpan, cx + halfSpan, cz + halfSpan);
+        }
+
         /// <summary>
         /// Slices <paramref name="bounds"/> (the far-side rectangle from <see cref="FarSideBounds"/>)
         /// into <paramref name="totalBands"/> equal strata along the door-to-interior axis, ordered
