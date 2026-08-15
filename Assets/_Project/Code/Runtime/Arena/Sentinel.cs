@@ -102,6 +102,13 @@ namespace MaxWorlds.Arena
 
         private void Die()
         {
+            // Remove from the registry BEFORE Destroy/DestroyImmediate, not after — OnDisable below
+            // would eventually do this too, but Destroy() defers OnDisable to the end of the current
+            // frame in play mode (MV-397: a dead sentinel still counted against the shared Deployment
+            // Count cap for the rest of that frame, so an immediate redeploy attempt read the slot as
+            // still full). Removing here makes the slot free the instant the sentinel dies, matching
+            // "read live off Active, never a separately-tracked balance" above.
+            _active.Remove(this);
             Died?.Invoke(this);
             if (Application.isPlaying) Destroy(gameObject);
             else DestroyImmediate(gameObject);

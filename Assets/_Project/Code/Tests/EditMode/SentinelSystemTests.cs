@@ -1,4 +1,6 @@
 using NUnit.Framework;
+using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
@@ -21,6 +23,7 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.Reset();
             PickupWallet.Reset();
             DevTuning.Reset();
+            Sentinel.DestroyAllActive();
         }
 
         // ---------------------------------------------------------------- WeaponSystemState
@@ -151,6 +154,39 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(AbilityTuning.SentinelDeploymentSlots(1), Is.EqualTo(1));
             Assert.That(AbilityTuning.SentinelDeploymentSlots(4), Is.EqualTo(4));
+        }
+
+        [Test]
+        public void DestroyingASentinelFreesItsDeploymentSlotForAnImmediateRedeploy()
+        {
+            // MV-397, the exact repro Lee hit: base case, Deployment Count = 1 (no upgrades) —
+            // deploy, let it die, deploy again.
+            WeaponSystemState.Acquire(AbilityKind.Sentinels);
+            PickupWallet.SetPowerCells(100);
+
+            var maxGo = new GameObject("Max");
+            var abilities = maxGo.AddComponent<PlayerAbilities>();
+            try
+            {
+                Assert.That(abilities.TryDeployWallSentinel(), Is.True, "first deploy should succeed");
+                Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(1));
+                Assert.That(abilities.WallSentinelReady, Is.False, "the single slot is now full");
+
+                Sentinel deployed = Sentinel.Active[0];
+                deployed.TakeDamage(new DamageInfo(
+                    deployed.HealthCurrent, Vector3.zero, Vector3.forward, Team.Enemy));
+
+                Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(0),
+                    "the slot must be free immediately after the sentinel dies");
+                Assert.That(abilities.TryDeployWallSentinel(), Is.True,
+                    "a fresh Wall should be deployable again once the old one is destroyed");
+                Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                Sentinel.DestroyAllActive();
+                Object.DestroyImmediate(maxGo);
+            }
         }
     }
 }
