@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -114,6 +115,27 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(died, Is.True);
             Assert.That(gunner.IsAlive, Is.False);
             // Die() calls DestroyImmediate outside play mode — no manual cleanup needed/possible here.
+        }
+
+        [Test]
+        public void DyingSentinelIsRemovedFromActiveBeforeTheDiedEventFires()
+        {
+            // MV-397: a destroyed sentinel's slot must free immediately, not only once OnDisable
+            // eventually runs (which, unlike this test's edit-mode DestroyImmediate, is deferred to
+            // end-of-frame for the real game's Destroy() call). Asserting the removal has already
+            // happened by the time Died fires — rather than merely after TakeDamage returns — is what
+            // actually distinguishes "removed synchronously in Die()" from "removed via OnDisable".
+            var go = new GameObject("Wall Sentinel");
+            var wall = go.AddComponent<WallSentinel>();
+            wall.Init(Vector3.zero, Quaternion.identity, 10f);
+
+            bool alreadyRemovedWhenDiedFired = false;
+            wall.Died += _ => alreadyRemovedWhenDiedFired = !Sentinel.Active.Contains(wall);
+
+            wall.TakeDamage(new DamageInfo(10f, Vector3.zero, Vector3.forward, Team.Enemy));
+
+            Assert.That(alreadyRemovedWhenDiedFired, Is.True,
+                "the deployment slot must free the instant the sentinel dies, not wait for OnDisable/Destroy");
         }
 
         [Test]
