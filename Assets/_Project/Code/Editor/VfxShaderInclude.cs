@@ -29,6 +29,7 @@ namespace MaxWorlds.Editor
             "MaxWorlds/StylizedGround",                    // MaterialLibrary ground (YT-69)
             "MaxWorlds/StylizedSky",                       // BackyardLighting sky (YT-76)
             "MaxWorlds/StylizedSurface",                   // MaterialLibrary wood/stone/dirt/metal (YT-77)
+            "MaxWorlds/ForceFieldShield",                  // ForceFieldBubble shield rim (MV-391)
 
             // YT-59. URP builds its post-processing material library EAGERLY — it creates the FSR
             // upscaling material whether or not FSR is ever selected. If that shader is stripped

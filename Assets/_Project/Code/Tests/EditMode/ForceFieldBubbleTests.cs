@@ -1,5 +1,8 @@
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Core;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -89,6 +92,91 @@ namespace MaxWorlds.Tests.EditMode
                 Object.DestroyImmediate(bubbleGo);
                 Object.DestroyImmediate(owner);
             }
+        }
+
+        /// <summary>
+        /// MV-391 — the actual bug, not the symptom. The bubble's visual never called
+        /// <c>Destroy</c>/turned orange because of a colour choice; <c>RuntimeSurfaceDirector</c>'s
+        /// sweep claimed the renderer a frame after it spawned and stamped it with an opaque
+        /// world-prop material, because nothing marked it as gameplay-driven. This is the regression
+        /// test for the marker, mirroring <c>RuntimeSurfaceDirectorTests</c>' own checklist.
+        /// </summary>
+        [Test]
+        public void TheVisualCarriesSelfDrivenTint_SoTheSurfaceSweepNeverClaimsIt()
+        {
+            var owner = new GameObject("Owner");
+            var ownerCc = owner.AddComponent<CharacterController>();
+            var bubbleGo = new GameObject("Force Field Bubble");
+            var bubble = bubbleGo.AddComponent<ForceFieldBubble>();
+            try
+            {
+                bubble.Init(owner.transform, ownerCc, 1.5f);
+
+                var visual = bubbleGo.transform.Find("Visual");
+                Assert.IsNotNull(visual, "Init() must build a child 'Visual' renderer");
+                Assert.IsNotNull(visual.GetComponent<SelfDrivenTint>(),
+                    "the shield's own MaterialPropertyBlock colour will be overwritten by " +
+                    "RuntimeSurfaceDirector's sweep without this marker (MV-391)");
+
+                var renderer = visual.GetComponent<MeshRenderer>();
+                var before = renderer.sharedMaterial;
+                RunSurfaceSweep();
+
+                Assert.AreSame(before, renderer.sharedMaterial,
+                    "RuntimeSurfaceDirector must never reassign the shield's material — a change " +
+                    "here is the opaque-orange-sphere bug (MV-391) coming back");
+            }
+            finally
+            {
+                Object.DestroyImmediate(bubbleGo);
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        [Test]
+        public void FreshAndDepletedColours_AreSubtleAndNeverOpaqueOrOrange()
+        {
+            var owner = new GameObject("Owner");
+            var ownerCc = owner.AddComponent<CharacterController>();
+            var bubbleGo = new GameObject("Force Field Bubble");
+            var bubble = bubbleGo.AddComponent<ForceFieldBubble>();
+            try
+            {
+                bubble.Init(owner.transform, ownerCc, 1.5f);
+                var renderer = bubbleGo.transform.Find("Visual").GetComponent<MeshRenderer>();
+                var mpb = new MaterialPropertyBlock();
+
+                bubble.SetFraction(1f);
+                renderer.GetPropertyBlock(mpb);
+                Color fresh = mpb.GetColor(Shader.PropertyToID("_BaseColor"));
+                Assert.Less(fresh.a, 0.2f,
+                    "the DECISION (MV-391) is 'mostly-transparent' — a fresh field must stay subtle");
+                Assert.That(fresh.r, Is.EqualTo(fresh.g).Within(0.02f).And.EqualTo(fresh.b).Within(0.02f),
+                    "a fresh field must read as white, not orange/red (MV-391)");
+
+                bubble.SetFraction(0f);
+                renderer.GetPropertyBlock(mpb);
+                Color empty = mpb.GetColor(Shader.PropertyToID("_BaseColor"));
+                Assert.Less(empty.a, 0.6f,
+                    "even about to pop, the field must never read as fully opaque (AC3, MV-391)");
+            }
+            finally
+            {
+                Object.DestroyImmediate(bubbleGo);
+                Object.DestroyImmediate(owner);
+            }
+        }
+
+        private static void RunSurfaceSweep()
+        {
+            var go = new GameObject("sweep-test-director");
+            try
+            {
+                var director = go.AddComponent<RuntimeSurfaceDirector>();
+                typeof(RuntimeSurfaceDirector).GetMethod("Sweep", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(director, null);
+            }
+            finally { Object.DestroyImmediate(go); }
         }
     }
 }
