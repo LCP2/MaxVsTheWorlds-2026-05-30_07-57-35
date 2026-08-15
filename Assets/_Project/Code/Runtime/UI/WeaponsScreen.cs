@@ -148,6 +148,11 @@ namespace MaxWorlds.UI
         private readonly Image[][] _waterBalloonPips = new Image[WaterBalloonTrackCount][];
         private readonly Button[] _waterBalloonButton = new Button[WaterBalloonTrackCount];
         private readonly Image[] _waterBalloonButtonBg = new Image[WaterBalloonTrackCount];
+        // MV-380 AC5: the whole section (header + rows) is hidden until Water Balloon itself is
+        // acquired — same "nothing to spend on until you own the base ability" rule the joystick
+        // control already enforces (HudController), now applied to its upgrade-track section too.
+        private readonly GameObject[] _waterBalloonRow = new GameObject[WaterBalloonTrackCount];
+        private Text _waterBalloonHeaderText;
 
         // One row slot per catalog ability, always active (MV-262): the leading slots are populated
         // from WeaponSystemState.Acquired in acquisition order (MV-333), the rest greyed via
@@ -309,8 +314,16 @@ namespace MaxWorlds.UI
                 SetSpendable(_trackButton[i], _trackButtonBg[i], banked > 0 && level < cap);
             }
 
+            // MV-380 AC5: the Primary Add-ons section tracks Water Balloon's own acquisition — hidden
+            // until acquired, shown (and immediately spendable) the moment it is, since Refresh() is
+            // already wired to WeaponSystemState.Changed.
+            bool waterBalloonAcquired = WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon);
+            _waterBalloonHeaderText.gameObject.SetActive(waterBalloonAcquired);
             for (int i = 0; i < WaterBalloonTrackCount; i++)
             {
+                _waterBalloonRow[i].SetActive(waterBalloonAcquired);
+                if (!waterBalloonAcquired) continue;
+
                 var kind = WeaponCatalog.AllWaterBalloonTrackKinds[i];
                 int level = WeaponSystemState.WaterBalloonTrackLevel(kind);
                 int cap = WeaponCatalog.MaxLevel(kind);
@@ -824,6 +837,7 @@ namespace MaxWorlds.UI
             header.rectTransform.anchoredPosition = new Vector2(0f, y);
             header.fontStyle = FontStyle.Bold;
             header.text = "PRIMARY ADD-ONS";
+            _waterBalloonHeaderText = header;
 
             float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
             for (int i = 0; i < WaterBalloonTrackCount; i++)
@@ -836,6 +850,7 @@ namespace MaxWorlds.UI
                 _waterBalloonPips[i] = r.Pips;
                 _waterBalloonButton[i] = r.PlusButton;
                 _waterBalloonButtonBg[i] = r.PlusBg;
+                _waterBalloonRow[i] = r.Row.gameObject;
                 r.IconGlyph.text = WaterBalloonTrackGlyph(kind);   // static per track — never revisited by Refresh
                 _waterBalloonButton[i].onClick.AddListener(() => OnWaterBalloonTrackButtonTapped(index));
             }
