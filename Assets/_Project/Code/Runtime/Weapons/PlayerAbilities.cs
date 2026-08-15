@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -237,8 +238,17 @@ namespace MaxWorlds.Weapons
         /// <summary>Blink toward <paramref name="aimDirection"/> (MV-292: an AIMED blink at every
         /// level — a random L1 hop read as "broken"/interchangeable with Dash in playtest). Level only
         /// changes blink DISTANCE (same shape as Water Balloon's level = distance, spec §6a), 8m at L1
-        /// up to 12m at the L2 cap. Moved via the CharacterController so a blink stops at a wall rather
-        /// than clipping through it. Returns false if unowned or on cooldown.</summary>
+        /// up to 12m at the L2 cap. Returns false if unowned or on cooldown.
+        ///
+        /// MV-393 (DECISION, 15 Aug 2026): a blink that lands in a DIFFERENT area than the one Max is
+        /// currently standing in — crossing a wall/area boundary — WARPS there directly (ignores
+        /// collision) whenever <see cref="CanWarpAcrossAreas"/> says the destination area is reachable
+        /// through gates that are already open, exactly as Lee asked ("teleport over walls... any arena
+        /// in range where there's an open gate"). A blink that stays within Max's own current room, or
+        /// whose destination area is NOT reachable that way (a still-shut/locked gate in between), keeps
+        /// the old <see cref="CharacterController.Move"/> behaviour — a physics sweep that stops at
+        /// whatever solid geometry is actually in the way, so an ineligible destination clamps at the
+        /// boundary rather than clipping through a gate that hasn't been earned yet.</summary>
         public bool TryTeleport(Vector3 aimDirection)
         {
             if (!WeaponSystemState.IsAcquired(AbilityKind.Teleport)) return false;
@@ -256,7 +266,17 @@ namespace MaxWorlds.Weapons
 
             Vector3 offset = dir * distance;
             Vector3 from = transform.position;
-            if (_cc != null) _cc.Move(offset);
+            Vector3 target = from + offset;
+
+            if (CanWarpAcrossAreas(EnemyNavigation.Map, from, target, EnemyNavigation.IsGateOpen))
+            {
+                // Bypasses the CharacterController's own collision sweep for this one move — the whole
+                // point of a warp into an already-open area is that Max does not have to physically fit
+                // through the doorway's exact gap.
+                if (_cc != null) { _cc.enabled = false; transform.position = target; _cc.enabled = true; }
+                else transform.position = target;
+            }
+            else if (_cc != null) _cc.Move(offset);
             else transform.position += offset;
 
             // MV-338: HudSignals is the same decoupled hand-off BlinkerTeleported already uses — the
@@ -264,6 +284,29 @@ namespace MaxWorlds.Weapons
             // PlayerAbilities needing to know either exists.
             HudSignals.EmitMaxTeleported(from, transform.position);
             return true;
+        }
+
+        /// <summary>True if <paramref name="to"/> lands in a DIFFERENT area than <paramref name="from"/>
+        /// AND the level's own room graph — the same BFS <see cref="MapRoutes.Rooms"/> already solves
+        /// robot pathing with, fed the same live gate state a real blink asks
+        /// <see cref="EnemyNavigation.IsGateOpen"/> for — finds a way through from one to the other right
+        /// now. A shut gate (or a locked one, e.g. the boss gate before every shed falls) breaks the
+        /// chain, so this returns false and the caller falls back to a normal collision-respecting move —
+        /// a genuinely closed-off area can never be blinked into, only an already-open one.
+        /// <paramref name="gateOpen"/> is threaded through rather than reading <see cref="EnemyNavigation"/>
+        /// directly so a test can assert both outcomes (open and shut) against a bare <see cref="MapData"/>
+        /// fixture without building a single live gate GameObject — the same shape
+        /// <see cref="MapRoutes.Rooms"/> itself already takes. False with no map loaded (a bare EditMode/
+        /// PlayMode fixture) — nothing to warp across.</summary>
+        public static bool CanWarpAcrossAreas(MapData map, Vector3 from, Vector3 to, Func<string, bool> gateOpen)
+        {
+            if (map == null) return false;
+
+            MapZone here = map.ZoneAt(from.x, from.z);
+            MapZone there = map.ZoneAt(to.x, to.z);
+            if (here == null || there == null || here.id == there.id) return false;
+
+            return MapRoutes.Rooms(map, here, there, gateOpen).Count > 0;
         }
 
         /// <summary>Raise the bubble (MV-361): spends <see cref="ForceFieldActivationCost"/> cells
