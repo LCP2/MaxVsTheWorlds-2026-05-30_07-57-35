@@ -159,12 +159,14 @@ namespace MaxWorlds.Weapons
 
         // --- Deployable Sentinels (MV-362) ---
 
-        /// <summary>Power cells the Wall sentinel costs to deploy (DECISION, 13 Aug 2026) — fixed,
-        /// not leveled, same "authored, not a track" shape as <see cref="DefaultForceFieldActivationCost"/>.</summary>
-        public const int DefaultSentinelWallCost = 10;
+        /// <summary>Power cells the Wall sentinel costs to deploy (DECISION, 16 Aug 2026, MV-408 — was
+        /// 10; Lee flattened Wall and Gunner to the same 5-cell cost) — fixed, not leveled, same
+        /// "authored, not a track" shape as <see cref="DefaultForceFieldActivationCost"/>.</summary>
+        public const int DefaultSentinelWallCost = 5;
 
-        /// <summary>Power cells the Gunner sentinel costs to deploy (DECISION, 13 Aug 2026).</summary>
-        public const int DefaultSentinelGunnerCost = 15;
+        /// <summary>Power cells the Gunner sentinel costs to deploy (DECISION, 16 Aug 2026, MV-408 —
+        /// was 15).</summary>
+        public const int DefaultSentinelGunnerCost = 5;
 
         /// <summary>The Wall's HP at Wall Strength Level 1 — sized against Max's own 200 max HP
         /// (<see cref="MaxWorlds.Player.PlayerHealth"/>, MV-315-baked) so a fresh wall reads as
