@@ -274,7 +274,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(area7.Blinker, 4, "the Blinker set-piece needs enough Blinkers to read as built around them");
         }
 
-        // --- DECISION: Rushers hard-capped at 10 across the whole (8-area) world --------------------
+        // --- DECISION: Rushers hard-capped at 10 across the whole (18-area, MV-411) world -----------
 
         [Test]
         public void World1_TotalRushersAcrossTheWholeWorld_NeverExceedsTheCap()

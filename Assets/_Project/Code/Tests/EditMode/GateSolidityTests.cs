@@ -51,7 +51,7 @@ namespace MaxWorlds.Tests.EditMode
                         $"a physics query at gate '{e.id}' does not find its own collider there");
                 }
 
-                // The live config currently authors 8 gates (g0..g7) plus the boss gate (bg) -- if this
+                // The live config currently authors 18 gates (g0..g17) plus the boss gate (bg) -- if this
                 // ever reads 0, the loop above passed by finding nothing to check, which would hide a
                 // real regression (e.g. a kind string WorldMapLoader stops emitting correctly).
                 Assert.Greater(gatesChecked, 0, "no area gates were found in the live world config at all");

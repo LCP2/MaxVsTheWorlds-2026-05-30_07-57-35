@@ -28,8 +28,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
 
-            Assert.AreEqual(10, map.zones.Length, "8 combat areas + entry stub + compost clearing");
-            Assert.AreEqual(9, map.links.Length, "g0..g7 plus the boss gate bg");
+            Assert.AreEqual(20, map.zones.Length, "MV-411: 18 combat areas + entry stub + compost clearing");
+            Assert.AreEqual(19, map.links.Length, "MV-411: g0..g17 plus the boss gate bg");
         }
 
         // --- AreaAccumulationDirector compatibility (MV-270): combat areas must round-trip to the ---
@@ -40,7 +40,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
-            for (int n = 1; n <= 8; n++)
+            for (int n = 1; n <= 18; n++)
             {
                 MapZone zone = map.Zone($"area{n}");
                 Assert.IsNotNull(zone, $"combat area {n} did not translate to the 'area{n}' id");
@@ -62,7 +62,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
-            foreach (string shedAreaId in new[] { "a3", "a6", "a8" })
+            foreach (string shedAreaId in new[] { "a3", "a6", "a8", "a11", "a14", "a17" })
             {
                 MapEntity factory = map.Entity($"{shedAreaId}_shed");
                 Assert.IsNotNull(factory, $"shed area '{shedAreaId}' has no factory entity");
@@ -79,7 +79,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
-            for (int n = 1; n <= 8; n++)
+            for (int n = 1; n <= 18; n++)
             {
                 MapZone zone = map.Zone($"area{n}");
                 Assert.IsNotNull(zone, $"combat area {n} is missing");
@@ -107,7 +107,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
-            for (int n = 1; n <= 8; n++)
+            for (int n = 1; n <= 18; n++)
             {
                 MapZone zone = map.Zone($"area{n}");
                 Assert.IsNotNull(zone, $"combat area {n} is missing");
@@ -203,7 +203,7 @@ namespace MaxWorlds.Tests.EditMode
             WorldConfig cfg = LoadWorld1();
 
             bool sawGunner = false, sawBomber = false, sawBlinker = false;
-            for (int area = 1; area <= 8; area++)
+            for (int area = 1; area <= 18; area++)
             {
                 DifficultyEngine.Composition composition = cfg.SolveComposition(area);
                 if (composition.Gunner > 0) sawGunner = true;
@@ -211,9 +211,9 @@ namespace MaxWorlds.Tests.EditMode
                 if (composition.Blinker > 0) sawBlinker = true;
             }
 
-            Assert.IsTrue(sawGunner, "Gunner never appears in Areas 1-8");
-            Assert.IsTrue(sawBomber, "Bomber never appears in Areas 1-8");
-            Assert.IsTrue(sawBlinker, "Blinker never appears in Areas 1-8");
+            Assert.IsTrue(sawGunner, "Gunner never appears in Areas 1-18");
+            Assert.IsTrue(sawBomber, "Bomber never appears in Areas 1-18");
+            Assert.IsTrue(sawBlinker, "Blinker never appears in Areas 1-18");
         }
     }
 }
