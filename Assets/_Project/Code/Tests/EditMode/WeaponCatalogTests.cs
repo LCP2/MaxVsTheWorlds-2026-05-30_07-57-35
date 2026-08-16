@@ -317,5 +317,14 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(WeaponCatalog.EffectLine(kind), Is.Not.Null.And.Not.Empty, $"{kind} has no card effect line");
             }
         }
+
+        // ---------------------------------------------------------------- MV-394: Repeat Fire relabel
+
+        [Test]
+        public void RepeatFireTrackDisplaysAsAutoFireRate_MV394()
+        {
+            Assert.That(WeaponCatalog.DisplayName(WaterBalloonTrackKind.RepeatFire), Is.EqualTo("AUTO FIRE RATE"),
+                "MV-394: the track's mechanics/enum are unchanged, only its on-screen label");
+        }
     }
 }
