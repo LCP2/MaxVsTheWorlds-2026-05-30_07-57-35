@@ -326,5 +326,24 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponCatalog.DisplayName(WaterBalloonTrackKind.RepeatFire), Is.EqualTo("AUTO FIRE RATE"),
                 "MV-394: the track's mechanics/enum are unchanged, only its on-screen label");
         }
+
+        // ---------------------------------------------------------------- MV-409: Water Balloon grid card removed
+
+        [Test]
+        public void WaterBalloonNeverShowsInTheAbilitiesGrid_MV409()
+        {
+            Assert.IsFalse(WeaponCatalog.ShowsInAbilitiesGrid(AbilityKind.WaterBalloon),
+                "MV-409: Water Balloon's own WATER BALLOON section is the sole UI for it — no duplicate grid card");
+        }
+
+        [Test]
+        public void EveryOtherAbilityStillShowsInTheGrid_MV409()
+        {
+            foreach (var kind in WeaponCatalog.AllAbilityKinds)
+            {
+                if (kind == AbilityKind.WaterBalloon) continue;
+                Assert.IsTrue(WeaponCatalog.ShowsInAbilitiesGrid(kind), $"{kind} must still get a grid card");
+            }
+        }
     }
 }
