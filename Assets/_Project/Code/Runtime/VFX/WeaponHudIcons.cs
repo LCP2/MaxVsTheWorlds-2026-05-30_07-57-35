@@ -85,6 +85,96 @@ namespace MaxWorlds.VFX
             return sprite;
         }
 
+        private static readonly Color DeniedRed = new Color(0.95f, 0.18f, 0.15f, 1f);
+
+        /// <summary>The <see cref="PowerCell"/> battery, dimmed, with a red prohibition ring and
+        /// diagonal slash struck through it (MV-407) — the "can't afford this" read for a deploy
+        /// control gated on cell cost, built as its own cached sprite so callers just swap the icon
+        /// rather than tint/overlay two sprites at runtime.</summary>
+        public static Sprite PowerCellDenied(int size = 64)
+        {
+            const string key = "powercelldenied";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];   // starts fully transparent
+
+            float w = size * 0.5f, h = size * 0.66f;
+            float cx = size * 0.5f, cy = size * 0.46f;
+            float left = cx - w * 0.5f, right = cx + w * 0.5f;
+            float bottom = cy - h * 0.5f, top = cy + h * 0.5f;
+            float radius = size * 0.08f;
+            float border = size * 0.09f;
+
+            float nubW = w * 0.4f, nubH = size * 0.08f;
+            float nubL = cx - nubW * 0.5f, nubR = cx + nubW * 0.5f;
+            float nubB = top, nubT = top + nubH;
+
+            Color dimCyan = Fade(CellCyan, 0.55f);
+            Color dimDark = Fade(CellDark, 0.55f);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+                    Color c = new Color(0, 0, 0, 0);
+
+                    if (fx >= nubL && fx <= nubR && fy >= nubB && fy <= nubT)
+                    {
+                        c = dimCyan;   // the nub
+                    }
+                    else if (RoundedInside(fx, fy, left, right, bottom, top, radius))
+                    {
+                        bool onBorder = !RoundedInside(fx, fy, left + border, right - border,
+                                                       bottom + border, top - border, radius * 0.5f);
+                        c = onBorder ? dimCyan : dimDark;
+                        if (!onBorder)
+                        {
+                            float rel = (fy - (bottom + border)) / (top - bottom - 2f * border);
+                            float band = rel * 3f;
+                            if (band - Mathf.Floor(band) < 0.66f) c = dimCyan;
+                        }
+                    }
+
+                    if (c.a > 0f) px[y * size + x] = c;
+                }
+            }
+
+            // The prohibition ring + a diagonal slash through it, on top of the dimmed cell — the
+            // same "can't do this" shape used everywhere outside the game too.
+            float ringR = size * 0.46f;
+            float ringThick = size * 0.07f;
+            float slashHalfThick = size * 0.045f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f - cx, fy = y + 0.5f - cy;
+                    float dist = Mathf.Sqrt(fx * fx + fy * fy);
+
+                    bool onRing = dist <= ringR && dist >= ringR - ringThick;
+
+                    // Diagonal from bottom-left to top-right, thickness measured perpendicular to it.
+                    float perpDist = Mathf.Abs(fx + fy) * 0.70710678f;
+                    bool onSlash = perpDist <= slashHalfThick && dist <= ringR;
+
+                    if (onRing || onSlash) px[y * size + x] = DeniedRed;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
+        private static Color Fade(Color c, float alpha) => new Color(c.r, c.g, c.b, alpha);
+
         private static readonly Color PartBlack = new Color(0.05f, 0.05f, 0.06f, 1f);
 
         /// <summary>A salvage-part nut/bolt: a black hex-nut silhouette with a punched-out circular

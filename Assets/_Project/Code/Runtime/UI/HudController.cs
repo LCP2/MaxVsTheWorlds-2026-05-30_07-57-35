@@ -122,6 +122,7 @@ namespace MaxWorlds.UI
         private RectTransform _wallSentinelRoot, _gunnerSentinelRoot;
         private AbilityControlArt.JoystickVisual _wallSentinelVisual, _gunnerSentinelVisual;
         private Image _wallSentinelRadial, _gunnerSentinelRadial;
+        private Image _wallSentinelDeniedIcon, _gunnerSentinelDeniedIcon;
         private int _wallSentinelBuiltLevel = -1, _gunnerSentinelBuiltLevel = -1;
         private float _forceFieldSnapFlash;
 
@@ -631,6 +632,9 @@ namespace MaxWorlds.UI
             if (_wallSentinelRadial != null && _wallSentinelRoot != null && _wallSentinelRoot.gameObject.activeSelf)
             {
                 _wallSentinelRadial.fillAmount = _abilities.WallSentinelReady ? 0f : 1f;
+                if (_wallSentinelDeniedIcon != null)
+                    _wallSentinelDeniedIcon.gameObject.SetActive(
+                        MaxWorlds.Pickups.PickupWallet.PowerCells < PlayerAbilities.SentinelWallCost);
                 if (_wallSentinelVisual.Label != null)
                     _wallSentinelVisual.Label.text = $"WALL\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
             }
@@ -638,6 +642,9 @@ namespace MaxWorlds.UI
             if (_gunnerSentinelRadial != null && _gunnerSentinelRoot != null && _gunnerSentinelRoot.gameObject.activeSelf)
             {
                 _gunnerSentinelRadial.fillAmount = _abilities.GunnerSentinelReady ? 0f : 1f;
+                if (_gunnerSentinelDeniedIcon != null)
+                    _gunnerSentinelDeniedIcon.gameObject.SetActive(
+                        MaxWorlds.Pickups.PickupWallet.PowerCells < PlayerAbilities.SentinelGunnerCost);
                 if (_gunnerSentinelVisual.Label != null)
                     _gunnerSentinelVisual.Label.text = $"GUN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
             }
@@ -1033,6 +1040,17 @@ namespace MaxWorlds.UI
             radial.raycastTarget = false;
             _wallSentinelRadial = radial;
 
+            // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
+            // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
+            var denied = AddImage(_wallSentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Cells");
+            denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            denied.rectTransform.sizeDelta = new Vector2(72f, 72f);
+            denied.rectTransform.anchoredPosition = Vector2.zero;
+            denied.raycastTarget = false;
+            denied.gameObject.SetActive(false);
+            _wallSentinelDeniedIcon = denied;
+
             var pad = new GameObject("Wall Sentinel Touch", typeof(RectTransform), typeof(Image));
             var padRect = (RectTransform)pad.transform;
             padRect.SetParent(_wallSentinelRoot, false);
@@ -1084,6 +1102,17 @@ namespace MaxWorlds.UI
             radial.fillAmount = 0f;
             radial.raycastTarget = false;
             _gunnerSentinelRadial = radial;
+
+            // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
+            // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
+            var denied = AddImage(_gunnerSentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Cells");
+            denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
+            denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
+            denied.rectTransform.sizeDelta = new Vector2(72f, 72f);
+            denied.rectTransform.anchoredPosition = Vector2.zero;
+            denied.raycastTarget = false;
+            denied.gameObject.SetActive(false);
+            _gunnerSentinelDeniedIcon = denied;
 
             var pad = new GameObject("Gunner Sentinel Touch", typeof(RectTransform), typeof(Image));
             var padRect = (RectTransform)pad.transform;
