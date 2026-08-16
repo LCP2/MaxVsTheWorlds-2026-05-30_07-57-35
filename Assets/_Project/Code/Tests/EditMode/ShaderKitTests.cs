@@ -59,6 +59,22 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void ForceFieldShieldMaterial_ExposesTheHexPanelControls()
+        {
+            // 16 Aug DECISION (MV-391): the shield must read as a faceted hex-panel dome, not a
+            // flat coloured disc — this is the tripwire for that pattern silently regressing back
+            // to a plain Fresnel-only fill.
+            var shader = Shader.Find("MaxWorlds/ForceFieldShield");
+            Assert.IsNotNull(shader, "'MaxWorlds/ForceFieldShield' not found");
+            var mat = new Material(shader);
+
+            Assert.IsTrue(mat.HasProperty("_PanelScale"), "no hex panel scale control");
+            Assert.IsTrue(mat.HasProperty("_PanelSeamWidth"), "no hex seam width control");
+            Assert.IsTrue(mat.HasProperty("_PanelSeamBoost"), "no hex seam glow control");
+            Object.DestroyImmediate(mat);
+        }
+
+        [Test]
         public void SurfaceMaterial_ExposesTheGrainControls()
         {
             var mat = MaterialLibrary.Surface(SurfaceKind.Wood);

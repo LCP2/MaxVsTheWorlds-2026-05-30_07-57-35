@@ -19,31 +19,37 @@ namespace MaxWorlds.Weapons
     /// <see cref="MaxWorlds.Player.PlayerHealth"/>; this component is the "robots can't walk through
     /// it" half only.
     ///
-    /// MV-391: the visual is a subtle, mostly-transparent WHITE bubble with a glowing white rim (a
-    /// <c>MaxWorlds/ForceFieldShield</c>-shaded sphere — see that shader for the Fresnel rim) — not
-    /// the opaque orange sphere that shipped. That bug was never the colour values below;
-    /// it was that this renderer carried no <see cref="SelfDrivenTint"/> marker, so
+    /// MV-391 (16 Aug DECISION): the visual is a subtle, mostly-transparent BLUE/CYAN energy-shield
+    /// dome with a hexagonal/faceted panel pattern and a glowing rim (a
+    /// <c>MaxWorlds/ForceFieldShield</c>-shaded sphere — see that shader for the Fresnel rim and hex
+    /// panelling), matching the SG2/SG3 reference look — not the opaque orange sphere that originally
+    /// shipped, and not the plain white ring the first fix landed as (which still read as "a circle
+    /// around Max" from the fixed top-down camera; the hex-panel seams are what break that read into
+    /// a faceted 3D shell). The opaque-orange bug itself was never the colour values below; it was
+    /// that this renderer carried no <see cref="SelfDrivenTint"/> marker, so
     /// <c>RuntimeSurfaceDirector</c>'s sweep (MV-350's fix, now catching a VFX prop MV-350 itself
     /// flagged as still outstanding) claimed it a frame after spawn and stamped it with a generic
-    /// opaque world-prop material, hiding Max completely. The marker is what actually fixes it; the
+    /// opaque world-prop material, hiding Max completely. The marker is what actually fixes that; the
     /// colours only fix what it looks like once the sweep leaves it alone.
     ///
-    /// Colour-shifts from ready-white toward a warning amber as the absorb budget runs out (MV-361:
-    /// "obvious from peripheral vision... a colour shift as it decays"; MV-391's DECISION allows the
-    /// decay cue to depart from white as it nears popping, while the steady-state stays white), driven
-    /// every frame by <see cref="SetFraction"/> from <see cref="PlayerAbilities"/>.
+    /// Colour-shifts from ready-blue toward a warning amber as the absorb budget runs out (MV-361:
+    /// "obvious from peripheral vision... a colour shift as it decays"; the 16 Aug DECISION replaces
+    /// the steady-state colour with blue/cyan but keeps the amber decay cue, since only the "subtle
+    /// white" call — not the warning shift — was superseded), driven every frame by
+    /// <see cref="SetFraction"/> from <see cref="PlayerAbilities"/>.
     /// </summary>
     public sealed class ForceFieldBubble : MonoBehaviour
     {
         // Fill: subtle and mostly transparent at all times — Max must read through the centre of the
         // bubble for its whole active duration, not just when fresh.
-        private static readonly Color FullFillColor = new Color(1f, 1f, 1f, 0.14f);          // ready: subtle white
+        private static readonly Color FullFillColor = new Color(0.22f, 0.5f, 1f, 0.14f);     // ready: subtle blue
         private static readonly Color EmptyFillColor = new Color(0.95f, 0.40f, 0.16f, 0.30f); // about to pop: warm
 
-        // Rim: the glowing edge. Bright white when fresh, warming toward the same amber as the fill
-        // as the field nears popping — the DECISION's "colour-shift-on-decay can still depart from
-        // white" cue, expressed on the edge that actually reads at a glance.
-        private static readonly Color FullRimColor = Color.white;
+        // Rim: the glowing edge. Bright cyan when fresh, warming toward the same amber as the fill
+        // as the field nears popping — the DECISION's "colour-shift-on-decay" cue, expressed on the
+        // edge (and hex seams, driven by the same _RimColor in the shader) that actually reads at a
+        // glance.
+        private static readonly Color FullRimColor = new Color(0.55f, 0.9f, 1f, 1f);
         private static readonly Color EmptyRimColor = new Color(1f, 0.45f, 0.18f, 1f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");

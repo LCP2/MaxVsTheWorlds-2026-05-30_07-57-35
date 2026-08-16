@@ -151,8 +151,8 @@ namespace MaxWorlds.Tests.EditMode
                 Color fresh = mpb.GetColor(Shader.PropertyToID("_BaseColor"));
                 Assert.Less(fresh.a, 0.2f,
                     "the DECISION (MV-391) is 'mostly-transparent' — a fresh field must stay subtle");
-                Assert.That(fresh.r, Is.EqualTo(fresh.g).Within(0.02f).And.EqualTo(fresh.b).Within(0.02f),
-                    "a fresh field must read as white, not orange/red (MV-391)");
+                Assert.Greater(fresh.b, fresh.r,
+                    "the 16 Aug DECISION (MV-391) is blue/cyan, not white or orange/red — blue must be the dominant channel");
 
                 bubble.SetFraction(0f);
                 renderer.GetPropertyBlock(mpb);
