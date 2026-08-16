@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Bosses;
+using MaxWorlds.Core;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.EditMode
@@ -9,6 +10,10 @@ namespace MaxWorlds.Tests.EditMode
     /// and the HUD boss bar being driven by a real boss instead of the kill stand-in.</summary>
     public sealed class BossTests
     {
+        [SetUp]
+        [TearDown]
+        public void ClearOverrides() => DevTuning.Reset();
+
         // ---- MV-410: wall clipping / scale / speed / spawn-rate fix ----
 
         /// <summary>The likely cause of "boss goes through walls": <c>GameObject.CreatePrimitive</c>
@@ -53,6 +58,22 @@ namespace MaxWorlds.Tests.EditMode
         {
             const float oldInterval = 7f;
             Assert.AreEqual(oldInterval * 0.5f, BossTuning.VolleyInterval, 1e-4f);
+        }
+
+        /// <summary>MV-413: the Settings panel's "Boss move speed" knob (ENEMIES tab) writes
+        /// <see cref="DevTuning.BossMoveSpeed"/>, and <see cref="BigBermudaBoss"/>.Reposition reads
+        /// it back through this exact <see cref="DevTuning.Or"/> expression every frame — this is
+        /// the regression guard that the wiring between the two stays live.</summary>
+        [Test]
+        public void BossMoveSpeed_IsLiveTunable()
+        {
+            Assert.AreEqual(BossTuning.MoveSpeed, DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed), 1e-4f,
+                "precondition: an untouched knob must play at the authored speed");
+
+            DevTuning.BossMoveSpeed = BossTuning.MoveSpeed * 4f;
+
+            Assert.AreEqual(BossTuning.MoveSpeed * 4f, DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed), 1e-4f,
+                "a moved Boss move speed slider must reach the same expression the boss's Reposition reads live");
         }
 
         // ---- BigBermudaBrain ----
