@@ -57,6 +57,12 @@ namespace MaxWorlds.Weapons
             AbilityKind.Sentinels,
         };
 
+        /// <summary>Whether <paramref name="kind"/> gets its own card in the Abilities screen's fixed
+        /// grid. Water Balloon is excluded (MV-409, Lee: redundant with the dedicated WATER BALLOON
+        /// upgrade section) — showing it both as a grid card and as that section duplicated its
+        /// ownership/upgrade state on screen at once.</summary>
+        public static bool ShowsInAbilitiesGrid(AbilityKind kind) => kind != AbilityKind.WaterBalloon;
+
         /// <summary>Deployable Sentinels' three tracks (MV-362), in the order the weapons screen
         /// would list them — same "owned from run start" shape as <see cref="AllWaterBalloonTrackKinds"/>.</summary>
         public static readonly SentinelTrackKind[] AllSentinelTrackKinds =

@@ -80,7 +80,7 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 6;    // WeaponCatalog.AllAbilityKinds.Length (MV-361 added Force Field, 5 -> 6)
+        private const int MaxAbilityRows = 6;    // count of AllAbilityKinds where WeaponCatalog.ShowsInAbilitiesGrid is true (MV-409 excluded WaterBalloon, leaving 6 of 7)
         private const int AbilityColumns = 3;    // fixed column count (matches the Primary Add-ons row below) — MaxAbilityRows now wraps past it into a 2nd row instead of growing the row width
         private const int WaterBalloonTrackCount = 3;   // WeaponCatalog.AllWaterBalloonTrackKinds.Length (MV-370)
 
@@ -340,6 +340,9 @@ namespace MaxWorlds.UI
             int shown = 0;
             foreach (var kind in WeaponSystemState.Acquired)
             {
+                // MV-409: Water Balloon's ownership/upgrades already show in the dedicated WATER
+                // BALLOON section above — a grid card would just duplicate it, so it never gets one.
+                if (!WeaponCatalog.ShowsInAbilitiesGrid(kind)) continue;
                 if (shown >= MaxAbilityRows) break;
                 int level = WeaponSystemState.AbilityLevel(kind);
                 int cap = WeaponCatalog.MaxLevel(kind);
