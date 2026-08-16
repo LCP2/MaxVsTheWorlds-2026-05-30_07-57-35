@@ -3,6 +3,7 @@ using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Enemies
 {
@@ -87,36 +88,30 @@ namespace MaxWorlds.Enemies
             return missile;
         }
 
-        /// <summary>MV-377: the shaft used to be a "painted steel" gunmetal (0.30, 0.31, 0.34) — nearly
-        /// identical to <see cref="MaxWorlds.Rendering.BiomePalette.Backyard"/>'s Stone (0.36, 0.35,
-        /// 0.33) and Metal (0.40, 0.41, 0.43), and close enough in luminance to both shades of the
-        /// yard's grass to disappear against it too. Since the shaft (plus the two fins, which share
-        /// this colour) is most of the missile's silhouette, that made the whole airframe read as a
-        /// grey smear over a busy green/grey yard. Now a dark, saturated rust-copper: warm (opposite
-        /// hue from the grass it flies over) and darker than any grass/stone/metal tone in the
-        /// biome, so contrast survives regardless of what's behind it. See
-        /// <c>HomingMissileTests.TheMissileBody_ReadsAgainstTheGrassItFliesOver</c>.</summary>
-        private static readonly Color ShaftColor = new Color(0.32f, 0.08f, 0.03f);
+        /// <summary>MV-405: Lee's explicit colour call — the missile body matches the Launcher's own
+        /// body colour exactly. Read live off <see cref="CharacterSkin.BaseColorFor"/> rather than a
+        /// copied literal, which is what the ticket's "don't introduce a second, slightly-different
+        /// blue" actually requires: a literal drifts the moment the archetype's colour is retuned, a
+        /// live read cannot. (Supersedes the MV-377 dark rust-copper this used to be — that colour
+        /// existed only because the missile had no archetype identity of its own yet.)</summary>
+        private static Color ShaftColor => CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Bomber));
 
-        /// <summary>Exposes <see cref="ShaftColor"/> for <c>HomingMissileTests</c> (MV-377), same shape
-        /// as <see cref="WarnColorForTests"/>.</summary>
+        /// <summary>Exposes <see cref="ShaftColor"/> for <c>HomingMissileTests</c> (MV-405), same shape
+        /// as <see cref="TipColorForTests"/>.</summary>
         public static Color ShaftColorForTests => ShaftColor;
 
-        /// <summary>The tail fins and warhead band — the game's one warn colour (see
-        /// <see cref="MaxWorlds.VFX.RobotRig"/>'s EyeWarn/EyeWarn-alike), so ordnance in flight reads
-        /// the same "incoming" language as every telegraph in the game.
-        ///
-        /// MV-349: the peak channel used to be 1.0 — a full two-thirds over
-        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6), the same defect MV-328/MV-348 found on the
-        /// robot archetypes. It clipped hard under the yard's 1.8x key and washed to the drab
-        /// brown/tan Lee reported instead of reading as a hot, hostile projectile. Pulled
-        /// proportionally (same ratios, same hue) to sit with headroom under the ceiling.</summary>
-        private static readonly Color WarnColor = new Color(0.55f, 0.19f, 0.07f);
+        /// <summary>MV-405: the warhead band at the nose, recoloured from the general warm "incoming"
+        /// tell (rust/orange, shared with every other telegraph in the game) to a distinct, saturated
+        /// red — Lee's explicit ask, and the one accent colour that still reads as ordnance rather than
+        /// as "another instance of the game's universal wind-up glow". Peak channel held at the same
+        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6) headroom every other pulled palette entry in this
+        /// project uses, so it doesn't self-bloom and wash out under the yard's key light.</summary>
+        private static readonly Color TipColor = new Color(0.58f, 0.05f, 0.05f);
 
-        /// <summary>Exposes <see cref="WarnColor"/> for <c>HomingMissileTests</c> (MV-349 AC6) — the
+        /// <summary>Exposes <see cref="TipColor"/> for <c>HomingMissileTests</c> (MV-405 AC3) — the
         /// same "public static accessor onto a private palette constant" shape as
         /// <see cref="MaxWorlds.VFX.CharacterSkin.BaseColorFor"/>.</summary>
-        public static Color WarnColorForTests => WarnColor;
+        public static Color TipColorForTests => TipColor;
 
         /// <summary>
         /// A slim missile — shaft, tail fins, a warhead band — replacing the plain sphere "ball" this
@@ -135,7 +130,7 @@ namespace MaxWorlds.Enemies
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
             Material shaftMat = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
-            Material warnMat = MaterialLibrary.Tinted(SurfaceKind.Metal, WarnColor);
+            Material tipMat = MaterialLibrary.Tinted(SurfaceKind.Metal, TipColor);
 
             var shaft = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             shaft.name = "Shaft";
@@ -148,7 +143,9 @@ namespace MaxWorlds.Enemies
             shaft.transform.localScale = new Vector3(0.11f, 0.30f, 0.11f);
             if (shaftMat != null) shaft.GetComponent<MeshRenderer>().sharedMaterial = shaftMat;
 
-            // A warhead band at the nose — the AC's "reads as ordnance", not just "reads as a stick".
+            // A red tip band at the nose (MV-405) — the AC's "reads as ordnance", not just "reads as a
+            // stick", and now also the ticket's explicit red-tip call: a distinct coloured section at
+            // the front end only, not a full recolour of the airframe.
             var band = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             band.name = "WarheadBand";
             Strip(band);
@@ -156,7 +153,7 @@ namespace MaxWorlds.Enemies
             band.transform.localPosition = new Vector3(0f, 0f, 0.34f);
             band.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             band.transform.localScale = new Vector3(0.13f, 0.05f, 0.13f);
-            if (warnMat != null) band.GetComponent<MeshRenderer>().sharedMaterial = warnMat;
+            if (tipMat != null) band.GetComponent<MeshRenderer>().sharedMaterial = tipMat;
 
             // Tail fins — two flat vanes at the back, the part of the silhouette that says "missile"
             // rather than "dropped tool" even at gameplay zoom.

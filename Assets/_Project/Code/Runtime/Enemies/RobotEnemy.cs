@@ -273,7 +273,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Heavy => "HEAVY",
             EnemyKind.Brute => "BRUTE",
             EnemyKind.Gunner => "LASER",   // MV-404: display-only rename, EnemyKind.Gunner unchanged
-            EnemyKind.Bomber => "BOMBER",
+            EnemyKind.Bomber => "LAUNCHER",   // MV-405: display-only rename, EnemyKind.Bomber unchanged
             EnemyKind.Blinker => "BLINKER",
             _ => "RUSHER",
         };
