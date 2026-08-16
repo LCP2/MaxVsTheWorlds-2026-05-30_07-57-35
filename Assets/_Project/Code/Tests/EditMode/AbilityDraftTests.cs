@@ -85,5 +85,37 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(AbilityDraft.DrawCandidates(), Is.Empty,
                 "nothing is left to grant once every ability is owned");
         }
+
+        [Test]
+        public void FirstDrawOfARunAlwaysOffersForceField_MV412()
+        {
+            for (int i = 0; i < 20; i++)
+                Assert.That(AbilityDraft.DrawCandidates(), Does.Contain(AbilityKind.ForceField),
+                    "Force Field must be a candidate in a fresh run's very first draw, not left to chance");
+        }
+
+        [Test]
+        public void FirstDrawStillFillsRemainingSlotsWithDistinctUnacquiredAbilities_MV412()
+        {
+            var candidates = AbilityDraft.DrawCandidates();
+
+            Assert.That(candidates.Length, Is.EqualTo(AbilityDraft.MaxCandidates));
+            var seen = new HashSet<AbilityKind>(candidates);
+            Assert.That(seen.Count, Is.EqualTo(candidates.Length), "the forced Force Field slot duplicated another candidate");
+            foreach (var candidate in candidates)
+                Assert.That(WeaponSystemState.IsAcquired(candidate), Is.False);
+        }
+
+        [Test]
+        public void LaterDrawsInARunAreNotForcedToOfferForceField_MV412()
+        {
+            // Once something has been acquired this is no longer the run's first draw, so Force
+            // Field competes on the same uniform odds as everything else again.
+            WeaponSystemState.Acquire(AbilityKind.ForceField);
+
+            foreach (var candidate in AbilityDraft.DrawCandidates())
+                Assert.That(candidate, Is.Not.EqualTo(AbilityKind.ForceField),
+                    "Force Field is already owned so it can never legitimately be redrawn");
+        }
     }
 }

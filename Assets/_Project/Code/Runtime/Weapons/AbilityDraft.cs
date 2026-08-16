@@ -19,19 +19,37 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Up to <see cref="MaxCandidates"/> distinct unacquired abilities. Empty once every
         /// ability is owned; returns fewer than <see cref="MaxCandidates"/> as the pool runs low, and
-        /// never repeats an entry within one draw.</summary>
+        /// never repeats an entry within one draw.
+        ///
+        /// MV-412: the very first draw of a run (nothing acquired yet) always seats
+        /// <see cref="AbilityKind.ForceField"/> in one of its candidate slots instead of leaving it to
+        /// the uniform roll below — Lee found it tended to land arbitrarily late. Every other slot,
+        /// on this draw and every later one, is still filled by the same unweighted sample-without-
+        /// replacement so no other ability's relative offer odds change.</summary>
         public static AbilityKind[] DrawCandidates()
         {
             var pool = new List<AbilityKind>(WeaponSystemState.Unacquired);
             int count = Mathf.Min(MaxCandidates, pool.Count);
             var picked = new AbilityKind[count];
-            for (int i = 0; i < count; i++)
+
+            int next = 0;
+            bool isFirstDraw = IsAcquiredCountZero();
+            if (isFirstDraw && count > 0 && pool.Remove(AbilityKind.ForceField))
+                picked[next++] = AbilityKind.ForceField;
+
+            for (int i = next; i < count; i++)
             {
                 int roll = Random.Range(0, pool.Count);
                 picked[i] = pool[roll];
                 pool.RemoveAt(roll);
             }
             return picked;
+        }
+
+        private static bool IsAcquiredCountZero()
+        {
+            foreach (var _ in WeaponSystemState.Acquired) return false;
+            return true;
         }
     }
 }
