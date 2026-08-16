@@ -97,12 +97,18 @@ namespace MaxWorlds.UI
         // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols) + add-ons header + add-ons grid
         // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-361:
         // 6 abilities in the pool at a fixed 3 columns, so 2 rows not 1) all fit inside the
-        // content budget below the top bar (there's no bottom spendbar any more) with room to spare for
-        // the hero-sized primary-name block above the grids — see the arithmetic in
+        // content budget below the top bar (there's no bottom spendbar any more) — see the arithmetic in
         // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildWaterBalloonSection/BuildAbilitiesSection;
         // there's no runtime overflow check, so this is verified by hand rather than measured. Column
         // count stays fixed at 3 (not widened to 5) specifically so the pip budget per row — sized once
         // for a 3-column card in BuildGridRow — never has to squeeze into a narrower card.
+        //
+        // MV-388: hand-verifying the worst case above (content height 906 vs. 936 needed) found the
+        // grids actually overflowed the content budget by ~30px, pushing the abilities grid's 2nd row
+        // past the safe-area bottom inset — the fixed HeroNameH box below was sized for up to ~2 lines
+        // of hero text but the primary name always renders on one, so most of that box was unused dead
+        // space rather than real content. Shrinking HeroNameH reclaims that dead space and closes the
+        // overflow with room to spare; see BuildPrimaryNameHeader.
         private const float RowHeight = 108f;
         private const float RowGap = 8f;
         private const float SectionHeaderHeight = 38f;
@@ -115,8 +121,13 @@ namespace MaxWorlds.UI
         private const float HeroColumnFraction = 0.27f;   // MV-262: narrowed from ~0.335 to give the weapons UI more room
         private const float HeroNameTagH = 28f;
         private const int HeroNameFontSize = 42;           // MV-262: the hero label — much bigger than the old 26pt name
-        private const float HeroNameH = 150f;
-        private const float HeroNameGap = 20f;
+        // MV-388: was 150f — the primary name always renders on one 42pt line, so ~90px of the old box
+        // was unused dead space between the hero name and the PRIMARY grid below it, and was also the
+        // cause of the grids overflowing the content budget by ~30px (see the comment above
+        // BuildAbilitiesSection). 96 keeps generous headroom for a single line (and light wrap
+        // tolerance) without the dead space.
+        private const float HeroNameH = 96f;
+        private const float HeroNameGap = 24f;
 
         private Canvas _canvas;
         private RectTransform _safeRoot;
@@ -1002,9 +1013,14 @@ namespace MaxWorlds.UI
 
             // Name sits in the row's upper half, pips in the lower half, both spanning the same
             // horizontal band between the icon and the + button (the [0.13, 0.82] fraction of the row).
+            // MV-388: the 0.13 anchor lines up with the icon's own right edge (66px wide icon at 18px
+            // inset, in a ~645px-wide 2-col card ≈ 0.13), so the old 8px offsetMin left barely any air
+            // between icon and label ("crowd against each other with little breathing room" per the
+            // ticket) — widened to 18px. offsetMin.y likewise pulls the name's bottom edge up off the
+            // row's exact half-line so it doesn't sit flush against the pip row below.
             var nameText = AddText(row, 32, TextColor, TextAnchor.UpperLeft);
             Anchor(nameText.rectTransform, new Vector2(0.13f, 0.5f), new Vector2(0.82f, 1f), new Vector2(0f, 1f));
-            nameText.rectTransform.offsetMin = new Vector2(8f, 0f);
+            nameText.rectTransform.offsetMin = new Vector2(18f, 8f);
             nameText.rectTransform.offsetMax = new Vector2(0f, -10f);
             nameText.fontStyle = FontStyle.Bold;
             // MV-370: a 3-column row (Primary Add-ons, Abilities) is narrower than the original 2-column
@@ -1016,7 +1032,7 @@ namespace MaxWorlds.UI
             nameText.resizeTextMaxSize = 32;
 
             var pipRow = NewRect("Pips", row, new Vector2(0.13f, 0f), new Vector2(0.82f, 0.5f));
-            pipRow.offsetMin = new Vector2(8f, 12f);
+            pipRow.offsetMin = new Vector2(18f, 12f);   // MV-388: matches the widened icon-to-label gap above
             pipRow.offsetMax = new Vector2(0f, -6f);
 
             // MV-367: fit exactly pipCap segments inside the same budget the old fixed 6-pip row used,
