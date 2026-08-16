@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -71,28 +72,53 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsFalse(blocked);
         }
 
-        // ---------------------------------------------------------------- MV-349: colour + fuel
+        // ---------------------------------------------------------------- MV-405: tip colour
 
         [Test]
-        public void TheMissileColour_HasNoChannelPastTheSunlitCeiling()
+        public void TheMissileTipColour_HasNoChannelPastTheSunlitCeiling()
         {
-            Color c = HomingMissile.WarnColorForTests;
+            Color c = HomingMissile.TipColorForTests;
             float peak = Mathf.Max(c.r, Mathf.Max(c.g, c.b));
 
             Assert.LessOrEqual(peak, SunlitAlbedo.Ceiling,
-                $"the missile's warhead/fin colour peaks at {peak:0.00}, past the " +
+                $"the missile's nose-tip colour peaks at {peak:0.00}, past the " +
                 $"{SunlitAlbedo.Ceiling:0.00} sunlit ceiling — it will clip under the yard's 1.8x key " +
-                "and wash toward the drab brown/tan Lee reported instead of reading as a hot, hostile " +
-                "projectile.");
+                "and wash out instead of reading as a clean red tip.");
         }
 
-        // ---------------------------------------------------------------- MV-377: body vs. grass
+        /// <summary>AC3: "a clearly visible red tip". Red, not just warm — R must clearly dominate
+        /// both other channels, or this reads as the same orange every other wind-up tell in the game
+        /// already uses instead of a distinct ordnance marking.</summary>
+        [Test]
+        public void TheMissileTipColour_ReadsAsRedNotOrange()
+        {
+            Color c = HomingMissile.TipColorForTests;
 
-        /// <summary>The shaft (plus the two fins, which share its colour) is most of the missile's
-        /// silhouette, so this is "the body" the ticket means. Same separation method as
-        /// <c>ActorReadabilityTests.NoEnemyIsTheColourOfTheScenery</c>: hue distance for a coloured
-        /// background, and it must also sit well clear in luminance, because the AC calls out VALUE
-        /// contrast specifically, not just hue.</summary>
+            Assert.Greater(c.r, c.g + 0.2f, "the tip's red channel doesn't clearly dominate green — it will read as orange/brown, not red.");
+            Assert.Greater(c.r, c.b + 0.2f, "the tip's red channel doesn't clearly dominate blue — it will read as orange/brown, not red.");
+        }
+
+        // ---------------------------------------------------------------- MV-405: body == Launcher's body
+
+        /// <summary>AC2: "the missile body is the same blue as the Launcher robot's own body colour".
+        /// Reading both sides through the same live accessors (rather than pinning a literal) is what
+        /// actually proves they can never drift apart — see <see cref="HomingMissile.ShaftColorForTests"/>'s
+        /// doc comment.</summary>
+        [Test]
+        public void TheMissileBody_MatchesTheLaunchersOwnBodyColourExactly()
+        {
+            Color missileBody = HomingMissile.ShaftColorForTests;
+            Color launcherBody = CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Bomber));
+
+            Assert.AreEqual(launcherBody, missileBody,
+                "the missile body no longer matches the Launcher's own body colour exactly.");
+        }
+
+        /// <summary>Same separation method as <c>ActorReadabilityTests.NoEnemyIsTheColourOfTheScenery</c>
+        /// uses for every other archetype's body colour — hue distance against the yard's grass. The
+        /// missile body is now read straight off the Launcher's own archetype colour (MV-405), so it is
+        /// held to the same bar the rest of the cast is, not a bespoke "must also be darker" rule that
+        /// only ever applied to the old, one-off rust-copper paint job this missile used to wear.</summary>
         [Test]
         public void TheMissileBody_ReadsAgainstTheGrassItFliesOver()
         {
@@ -117,13 +143,6 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.Greater(hue, 50f,
                     $"the missile body is the same colour family as the {name} ({hue:0}° apart) — " +
                     "it will colour-match the grass it's flying over instead of standing out against it.");
-
-                float bodyLum = 0.2126f * body.r + 0.7152f * body.g + 0.0722f * body.b;
-                float grassLum = 0.2126f * grass.r + 0.7152f * grass.g + 0.0722f * grass.b;
-                Assert.Greater(grassLum - bodyLum, 0.08f,
-                    $"the missile body ({bodyLum:0.00}) isn't clearly darker than the {name} " +
-                    $"({grassLum:0.00}) — a hue difference alone isn't the strong VALUE contrast the AC " +
-                    "asks for.");
             }
         }
 
