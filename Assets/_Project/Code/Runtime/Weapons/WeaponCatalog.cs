@@ -255,14 +255,16 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>Display name for a Water Balloon track's row on the Primary Add-ons section
-        /// (MV-370).</summary>
+        /// (MV-370). RepeatFire reads "AUTO FIRE RATE" (MV-394) — the track itself is unchanged, only
+        /// its label, to match the separate Auto-Fire ability (<see cref="AbilityKind.WaterBalloonAutoFire"/>)
+        /// it's now gated behind (see <see cref="WeaponsScreen.Refresh"/>).</summary>
         public static string DisplayName(WaterBalloonTrackKind kind)
         {
             switch (kind)
             {
                 case WaterBalloonTrackKind.Range: return "RANGE";
                 case WaterBalloonTrackKind.SplashArea: return "SPLASH AREA";
-                case WaterBalloonTrackKind.RepeatFire: return "REPEAT FIRE";
+                case WaterBalloonTrackKind.RepeatFire: return "AUTO FIRE RATE";
                 default: return kind.ToString();
             }
         }

@@ -316,15 +316,20 @@ namespace MaxWorlds.UI
 
             // MV-380 AC5: the Primary Add-ons section tracks Water Balloon's own acquisition — hidden
             // until acquired, shown (and immediately spendable) the moment it is, since Refresh() is
-            // already wired to WeaponSystemState.Changed.
+            // already wired to WeaponSystemState.Changed. MV-394: the RepeatFire column (relabelled
+            // "Auto Fire Rate") gates on the separate Auto-Fire ability too — Range/Splash Area stay
+            // gated on Water Balloon alone.
             bool waterBalloonAcquired = WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon);
+            bool autoFireAcquired = WeaponSystemState.IsAcquired(AbilityKind.WaterBalloonAutoFire);
             _waterBalloonHeaderText.gameObject.SetActive(waterBalloonAcquired);
             for (int i = 0; i < WaterBalloonTrackCount; i++)
             {
-                _waterBalloonRow[i].SetActive(waterBalloonAcquired);
-                if (!waterBalloonAcquired) continue;
-
                 var kind = WeaponCatalog.AllWaterBalloonTrackKinds[i];
+                bool rowVisible = waterBalloonAcquired &&
+                    (kind != WaterBalloonTrackKind.RepeatFire || autoFireAcquired);
+                _waterBalloonRow[i].SetActive(rowVisible);
+                if (!rowVisible) continue;
+
                 int level = WeaponSystemState.WaterBalloonTrackLevel(kind);
                 int cap = WeaponCatalog.MaxLevel(kind);
                 _waterBalloonName[i].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
