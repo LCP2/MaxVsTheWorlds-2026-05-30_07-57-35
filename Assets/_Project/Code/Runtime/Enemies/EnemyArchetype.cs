@@ -155,20 +155,25 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 120f);
 
         /// <summary>
-        /// Ranged laser (MV-293): keeps its distance in the 4.5–9 m band — inside that it backs off
-        /// rather than closing, so the answer to a Gunner is never just "walk at it" the way it is for
-        /// every melee kind. Aims live while telegraphing, then commits to a LOCKED beam (the same
-        /// "no info through the wind-up" rule as a lunge, see <see cref="RobotEnemy"/>'s Telegraph):
-        /// stand still after the tell fires and it hits, side-step out of the beam's width or break
-        /// line of sight and it doesn't. <see cref="ContactDamage"/> here means damage/second while the
-        /// beam holds, not a single hit; <see cref="ContactRadius"/> means the beam's half-width.
-        /// Same small-tier silhouette and health band as the rusher — its threat is the ranged pressure,
-        /// not a bigger body.
+        /// Ranged laser (MV-293), displayed to the player as "LASER" (MV-404: display-only rename,
+        /// this <c>EnemyKind.Gunner</c> identifier is unchanged). Keeps its distance in the 4.5–9 m
+        /// band — inside that it backs off rather than closing, so the answer to a Gunner is never
+        /// just "walk at it" the way it is for every melee kind. Aims live while telegraphing, then
+        /// commits to a LOCKED beam (the same "no info through the wind-up" rule as a lunge, see
+        /// <see cref="RobotEnemy"/>'s Telegraph): stand still after the tell fires and it hits,
+        /// side-step out of the beam's width or break line of sight and it doesn't.
+        /// <see cref="ContactDamage"/> here means damage/second while the beam holds, not a single
+        /// hit; <see cref="ContactRadius"/> means the beam's half-width.
+        /// Small-tier silhouette, but MV-404 (16 Aug 2026, Lee) deliberately lifted its health ABOVE
+        /// the rusher's band — was 26 (same small-tier health as the rusher's 32), now ~1.5x that
+        /// original baseline. This reverses MV-293's "no small/ranged kind may out-tank the rusher"
+        /// invariant for the Gunner specifically; see the loosened assertion in
+        /// EnemyArchetypeTests.GunnerAndBomber_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish.
         /// </summary>
         public static EnemyArchetype Gunner => new EnemyArchetype(
             EnemyKind.Gunner, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 2.2f, maxHealth: 26f,
+            moveSpeed: 2.2f, maxHealth: 39f,   // MV-404: 26 -> 39, ~50% harder to kill per Lee's ask
             contactDamage: 18f,   // DPS while the beam holds
             contactRadius: 0.6f,  // beam half-width — wider than Max's 0.5 m radius, still side-steppable
             lungeRange: 9f,       // max fire range

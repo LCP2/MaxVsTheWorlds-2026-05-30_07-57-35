@@ -202,15 +202,29 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void GunnerAndBomber_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
+        public void BomberAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
         {
             // EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame pins that only the
-            // Bruiser survives a full-health rusher's-worth of damage — every small-tier kind,
-            // including the two new ranged ones, must stay a one-shot-with-a-rusher's-DPS kill so
-            // that closing the distance on them is always a real answer, not a losing trade.
-            Assert.LessOrEqual(Gunner.MaxHealth, Rusher.MaxHealth);
+            // Bruiser survives a full-health rusher's-worth of damage — every small-tier kind must
+            // stay a one-shot-with-a-rusher's-DPS kill so that closing the distance on them is
+            // always a real answer, not a losing trade.
+            //
+            // MV-404 (16 Aug 2026, Lee) deliberately exempted the Gunner from this invariant: its
+            // health was raised ~50% above the rusher's on purpose, so it no longer belongs in this
+            // assertion — see EnemyArchetype.Gunner's doc comment for the reversal.
             Assert.LessOrEqual(Bomber.MaxHealth, Rusher.MaxHealth);
             Assert.LessOrEqual(Blinker.MaxHealth, Rusher.MaxHealth);
+        }
+
+        [Test]
+        public void Gunner_IsToughenedAboveTheRusherBand_ButKeepsItsRangedIdentity()
+        {
+            // MV-404: ~50% more HP than the original 26 baseline (39), so it can now out-tank a
+            // rusher — the trade-off is meant to be answered by the ranged pressure it applies while
+            // kiting, not by staying a one-shot kill like the other small-tier kinds.
+            Assert.Greater(Gunner.MaxHealth, Rusher.MaxHealth,
+                "MV-404 deliberately lifted the Gunner above the rusher's health band");
+            Assert.Greater(Gunner.StandoffRange, 0f, "still ranged — the buff must not turn it into a brawler");
         }
 
         [Test]
@@ -344,12 +358,21 @@ namespace MaxWorlds.Tests.EditMode
 
         // --- MV-325: move speed must invert with power/tier -------------------------------------
 
+        // MV-404 (16 Aug 2026, Lee) lifted the Gunner's HP above the rusher's without touching its
+        // speed — its ranged pressure is meant to be the trade-off for its new health now, not a
+        // slower body — which breaks the MV-325 health/speed inversion for the Gunner specifically.
+        // Speed is deliberately left alone (see EnemyArchetype.Toughened's own doc comment on the
+        // same point), so the two invariant tests below exempt the Gunner rather than pin a speed
+        // nerf nobody asked for.
+        private static readonly EnemyArchetype[] ArchetypesRankedBySpeedVsHealth =
+            { Rusher, Bruiser, Heavy, Brute, Bomber, Blinker };
+
         [Test]
         public void WeakerArchetypesAreNeverSlowerThanToughterOnes()
         {
             // Sorted weakest (lowest HP) to strongest (highest HP), speed must never increase —
             // the weakest archetype overall is the fastest mover, the strongest is the slowest.
-            var byHealth = AllArchetypes.OrderBy(a => a.MaxHealth).ToArray();
+            var byHealth = ArchetypesRankedBySpeedVsHealth.OrderBy(a => a.MaxHealth).ToArray();
             for (int i = 1; i < byHealth.Length; i++)
                 Assert.LessOrEqual(byHealth[i].MoveSpeed, byHealth[i - 1].MoveSpeed + 1e-4f,
                     $"{byHealth[i].Kind} (HP {byHealth[i].MaxHealth}) is tougher than " +
@@ -359,8 +382,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheWeakestArchetypeOverall_IsTheFastestMover()
         {
-            var weakest = AllArchetypes.OrderBy(a => a.MaxHealth).First();
-            var fastest = AllArchetypes.OrderByDescending(a => a.MoveSpeed).First();
+            var weakest = ArchetypesRankedBySpeedVsHealth.OrderBy(a => a.MaxHealth).First();
+            var fastest = ArchetypesRankedBySpeedVsHealth.OrderByDescending(a => a.MoveSpeed).First();
             Assert.AreEqual(weakest.Kind, fastest.Kind);
         }
 
