@@ -607,19 +607,19 @@ namespace MaxWorlds.Enemies
             Vector3 step = waypoint - transform.position;
             step.y = 0f;
 
-            // The lawn has cover in it (YT-68). Beelining into a prop just presses against it, so
-            // while a wall is remembered, walk along it and round the corner instead.
             Vector3 dir = step.normalized;
-            if (_wallTimer > 0f)
-            {
-                _wallTimer -= dt;
-                dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
-            }
 
             // MV-321: lean away from anything crowding this robot right now. EnemyFormation's fan
             // above only biases the GOAL each robot walks toward and collapses to zero on arrival —
             // it never looks at where the pack actually is, so robots sharing a lane bias still ended
             // up pressed shoulder-to-shoulder. This reacts to real neighbours instead.
+            //
+            // Computed and blended BEFORE the wall-slide below (MV-402), not after: a neighbour push
+            // knows nothing about the wall, so blending it in last could hand back a direction with a
+            // component into the wall the robot is currently rounding — and at a barrier several
+            // robots converge on together, that is exactly what queued neighbours pushing back along
+            // the wall face produced: every robot's along-wall progress cancelled by the one behind
+            // it, the whole line reading as stuck against the barrier instead of routing around it.
             _separationScratch.Clear();
             for (int i = 0; i < _active.Count; i++)
             {
@@ -628,6 +628,16 @@ namespace MaxWorlds.Enemies
             }
             Vector3 separation = EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation);
             dir = EnemySeparation.Steer(dir, separation);
+
+            // The lawn has cover in it (YT-68). Beelining (or being shoved by a crowded neighbour)
+            // into a prop just presses against it, so while a wall is remembered, walk along it and
+            // round the corner instead — the last word on direction, so nothing steered in above it
+            // can ever send this robot back into the wall it's already rounding.
+            if (_wallTimer > 0f)
+            {
+                _wallTimer -= dt;
+                dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
+            }
 
             // Gunner/Bomber (MV-293): the answer to a ranged kind must never be "walk at it" — inside
             // its standoff band it backs off along the same line it was closing on, rather than
