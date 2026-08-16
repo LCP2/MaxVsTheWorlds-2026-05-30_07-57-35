@@ -217,7 +217,7 @@ namespace MaxWorlds.Tests.PlayMode
             Screen.Open();
             yield return null;
 
-            Assert.That(FindText(_screenGo, "PRIMARY ADD-ONS"), Is.Not.Null, "the Primary Add-ons section header is missing");
+            Assert.That(FindText(_screenGo, "WATER BALLOON"), Is.Not.Null, "the Water Balloon section header is missing");   // MV-390
             foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds)
                 Assert.That(FindText(_screenGo, Name(kind)), Is.Not.Null, $"{kind} track isn't listed");
         }
