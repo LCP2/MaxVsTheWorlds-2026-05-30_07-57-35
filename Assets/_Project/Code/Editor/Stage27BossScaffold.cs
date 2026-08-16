@@ -25,8 +25,19 @@ namespace MaxWorlds.Editor
                 var boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 boss.name = "Big Bermuda";
                 boss.transform.position = new Vector3(0f, 2f, 26f); // past the gate (z=18)
-                boss.transform.localScale = new Vector3(3.5f, 3f, 3.5f);
+                // MV-410: halved from (3.5, 3, 3.5) — full size couldn't fit through a gate opening
+                // sized for Max/robots even once wall collision was fixed.
+                boss.transform.localScale = new Vector3(1.75f, 1.5f, 1.75f);
                 Tint(boss, new Color(0.35f, 0.45f, 0.30f));
+
+                // MV-410: CreatePrimitive adds a BoxCollider, and RequireComponent below adds a
+                // CharacterController -- Unity does not support both on the same GameObject (the
+                // CharacterController is documented to own collision alone). The stray BoxCollider is
+                // the likely cause of "boss goes through walls": strip it so the CharacterController's
+                // capsule is the boss's sole physical shape.
+                var stray = boss.GetComponent<BoxCollider>();
+                if (stray != null) Object.DestroyImmediate(stray);
+
                 boss.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
             }
 

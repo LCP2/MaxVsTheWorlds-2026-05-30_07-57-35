@@ -50,7 +50,10 @@ namespace MaxWorlds.Bosses
 
         // ---------------------------------------------------------------- movement
 
-        public const float MoveSpeed = 3.6f;
+        /// <summary>MV-410: quartered from 3.6 — Lee's live-build report was "let's make it 1/4 the
+        /// speed". Reposition/approach speed only; <see cref="ChargeSpeed"/> is untouched on purpose,
+        /// it is an attack parameter with its own dodge-window balance, not locomotion.</summary>
+        public const float MoveSpeed = 0.9f;
         public const float DesiredRange = 6f;
         public const float EnrageMoveScale = 1.2f;   // was 1.4
 
@@ -97,8 +100,11 @@ namespace MaxWorlds.Bosses
         // in one place, exposed on the Settings panel's BOSS tab (YT-138) so it can be swept live.
 
         /// <summary>Seconds between volleys before it enrages. The breather between waves — long enough
-        /// that a volley is an event you brace for, not a constant drizzle.</summary>
-        public const float VolleyInterval = 7f;
+        /// that a volley is an event you brace for, not a constant drizzle.
+        ///
+        /// MV-410: halved from 7 to 3.5 — Lee's live-build report was "let's make it spawn robots much
+        /// fast[er]". Enraged interval is this times <see cref="VolleyEnrageScale"/>, so 4.2s -> 2.1s.</summary>
+        public const float VolleyInterval = 3.5f;
 
         /// <summary>Interval multiplier once enraged: the waves come ~40% faster as it reddens, so phase
         /// two is the boss leaning on the swarm harder. Same &lt;1 "faster when angry" shape as

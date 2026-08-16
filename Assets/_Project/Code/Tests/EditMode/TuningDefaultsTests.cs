@@ -32,7 +32,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(12.16f).Within(0.001f), "water deplete (MV-319: +15%)");
             Assert.That(BlasterTuning.RegenPerSec, Is.EqualTo(55f).Within(0.001f), "water replenish — unchanged");
             Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(2.04f).Within(0.001f), "robot speed (MV-315)");
-            Assert.That(BossTuning.MoveSpeed, Is.EqualTo(3.6f).Within(0.001f), "boss speed — unchanged");
+            Assert.That(BossTuning.MoveSpeed, Is.EqualTo(0.9f).Within(0.001f), "boss speed — quartered (MV-410)");
         }
 
         [Test]
