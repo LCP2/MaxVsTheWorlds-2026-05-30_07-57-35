@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Bosses;
 using MaxWorlds.UI;
 
@@ -8,6 +9,52 @@ namespace MaxWorlds.Tests.EditMode
     /// and the HUD boss bar being driven by a real boss instead of the kill stand-in.</summary>
     public sealed class BossTests
     {
+        // ---- MV-410: wall clipping / scale / speed / spawn-rate fix ----
+
+        /// <summary>The likely cause of "boss goes through walls": <c>GameObject.CreatePrimitive</c>
+        /// leaves a BoxCollider that <see cref="BigBermudaBoss"/>'s required CharacterController then
+        /// sits alongside. Unity does not support a Collider and a CharacterController co-located on
+        /// one GameObject — the CharacterController must be the sole physical shape.</summary>
+        [Test]
+        public void BossPrimitive_HasNoColliderBesidesTheCharacterController()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var stray = go.GetComponent<BoxCollider>();
+                if (stray != null) Object.DestroyImmediate(stray);
+                go.AddComponent<BigBermudaBoss>();
+
+                var colliders = go.GetComponents<Collider>();
+                Assert.AreEqual(1, colliders.Length,
+                    "the boss must carry exactly one Collider — its CharacterController");
+                Assert.IsInstanceOf<CharacterController>(colliders[0]);
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        /// <summary>MV-410: "let's make it 1/4 the speed" — reposition speed only, not the charge
+        /// (an attack parameter, not locomotion).</summary>
+        [Test]
+        public void MoveSpeed_IsAQuarterOfTheOldValue()
+        {
+            const float oldMoveSpeed = 3.6f;
+            Assert.AreEqual(oldMoveSpeed * 0.25f, BossTuning.MoveSpeed, 1e-4f);
+            Assert.Less(BossTuning.MoveSpeed, BossTuning.ChargeSpeed,
+                "the charge must stay dramatically faster than the approach speed");
+        }
+
+        /// <summary>MV-410: "make it spawn robots much fast[er]" — halved from 7s to 3.5s.</summary>
+        [Test]
+        public void VolleyInterval_IsHalvedFromTheOldValue()
+        {
+            const float oldInterval = 7f;
+            Assert.AreEqual(oldInterval * 0.5f, BossTuning.VolleyInterval, 1e-4f);
+        }
+
         // ---- BigBermudaBrain ----
 
         [Test]
