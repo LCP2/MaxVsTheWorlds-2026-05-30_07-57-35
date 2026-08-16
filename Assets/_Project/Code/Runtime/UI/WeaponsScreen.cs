@@ -855,7 +855,7 @@ namespace MaxWorlds.UI
             header.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
             header.rectTransform.anchoredPosition = new Vector2(0f, y);
             header.fontStyle = FontStyle.Bold;
-            header.text = "PRIMARY ADD-ONS";
+            header.text = "WATER BALLOON";   // MV-390: was "PRIMARY ADD-ONS"
             _waterBalloonHeaderText = header;
 
             float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
