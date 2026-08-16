@@ -77,5 +77,21 @@ namespace MaxWorlds.VFX
             float reach = Mathf.Sqrt(underRoot) - muzzleOffset * cos;
             return Mathf.Max(0.1f, reach);
         }
+
+        /// <summary>
+        /// How far the stream's droplet emission rate must scale to hold its per-metre density
+        /// steady as reach grows (MV-403). The RCDA Range track (and any nozzle) stretches
+        /// <c>reach</c> well past the weapon's authored base while the stream's particle rate and
+        /// per-droplet lifetime stay fixed — so the SAME droplet budget was being spread across a
+        /// beam volume that grows roughly with reach cubed, thinning into a sparse, gappy
+        /// "multi-strand fan" at high Range levels. That is what read as the spray widening in
+        /// Lee's report: the cone's ANGLE never moved (<see cref="MaxWorlds.Weapons.WeaponCatalog.EffectiveConeHalfAngle"/>
+        /// is keyed to the Spread track alone), only its density thinned out. 1x at
+        /// <paramref name="baseReach"/> — an un-upgraded weapon's stream is untouched — climbing
+        /// linearly as reach grows past it, so a maxed-Range beam stays as visually solid as the
+        /// base one instead of dissolving into separate strands.
+        /// </summary>
+        public static float DensityScaleForReach(float reach, float baseReach) =>
+            Mathf.Max(0.1f, reach) / Mathf.Max(0.1f, baseReach);
     }
 }

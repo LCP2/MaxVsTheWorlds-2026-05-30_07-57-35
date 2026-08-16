@@ -105,6 +105,32 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(reach, Is.GreaterThanOrEqualTo(0.1f));
         }
 
+        // --- MV-403: density must scale with reach, so a longer beam doesn't thin into a "fan" ---
+
+        [Test]
+        public void DensityScaleForReach_IsOneAtTheBaseReach()
+        {
+            Assert.That(WaterVfxTuning.DensityScaleForReach(5f, 5f), Is.EqualTo(1f).Within(1e-5f),
+                "an un-upgraded weapon's stream density must be untouched");
+        }
+
+        [Test]
+        public void DensityScaleForReach_GrowsLinearlyPastTheBaseReach()
+        {
+            float atBase = WaterVfxTuning.DensityScaleForReach(5f, 5f);
+            float atDouble = WaterVfxTuning.DensityScaleForReach(10f, 5f);
+
+            Assert.That(atDouble, Is.EqualTo(atBase * 2f).Within(1e-4f),
+                "doubling reach must double the emission rate, holding droplets-per-metre constant");
+        }
+
+        [Test]
+        public void DensityScaleForReach_NeverGoesNonPositiveForAnExtremeReach()
+        {
+            Assert.That(WaterVfxTuning.DensityScaleForReach(0f, 5f), Is.GreaterThan(0f));
+            Assert.That(WaterVfxTuning.DensityScaleForReach(-3f, 5f), Is.GreaterThan(0f));
+        }
+
         [Test]
         public void SplashAxis_SpraysBackTowardTheShooterAndUpward()
         {
@@ -286,6 +312,40 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Object.DestroyImmediate(withDefault);
                 Object.DestroyImmediate(explicitFull);
+            }
+        }
+
+        [Test]
+        public void WaterVfx_ALongerReachRaisesStreamDensity_WithoutMovingTheAngle_MV403()
+        {
+            // Reproduces Lee's MV-403 report end-to-end: Range maxed, Spread untouched. The stream's
+            // ANGLE must stay exactly the base cone's — Range never touches ConeHalfAngle — but its
+            // emission rate must climb so the same beam doesn't thin into a sparse, gappy "fan" once
+            // it's stretched to the Range track's extended reach.
+            var shortGo = new GameObject("blaster-vfx-short-reach");
+            var longGo = new GameObject("blaster-vfx-long-reach");
+            try
+            {
+                var atBase = shortGo.AddComponent<WaterVfx>();
+                atBase.Init(range: 5f, radius: 0.6f, coneHalfAngle: 8f);   // WaterBlaster.DefaultRange
+
+                var atMaxedRange = longGo.AddComponent<WaterVfx>();
+                atMaxedRange.Init(range: 10f, radius: 0.6f, coneHalfAngle: 8f);   // Range track maxed, Spread untouched
+
+                Assert.That(atMaxedRange.StreamHalfAngle, Is.EqualTo(atBase.StreamHalfAngle).Within(0.01f),
+                    "Range must never move the stream's angle — only Spread does");
+
+                var baseStream = shortGo.transform.Find("WaterStream").GetComponent<ParticleSystem>();
+                var longStream = longGo.transform.Find("WaterStream").GetComponent<ParticleSystem>();
+
+                Assert.That(longStream.emission.rateOverTime.constant,
+                    Is.GreaterThan(baseStream.emission.rateOverTime.constant),
+                    "a beam stretched by the Range track must emit more droplets, or it reads as widening/fanning out");
+            }
+            finally
+            {
+                Object.DestroyImmediate(shortGo);
+                Object.DestroyImmediate(longGo);
             }
         }
 
