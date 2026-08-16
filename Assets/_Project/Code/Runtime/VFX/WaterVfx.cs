@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Combat;
 
 namespace MaxWorlds.VFX
 {
@@ -119,6 +120,12 @@ namespace MaxWorlds.VFX
         /// independently of size.</summary>
         private float RateScale => Mathf.Lerp(minVisualRateScale, 1f, Mathf.Clamp01(_visualStrength));
 
+        /// <summary>How far the stream's own emission rate must scale to keep its droplet density
+        /// steady at the weapon's current reach (MV-403) — see
+        /// <see cref="WaterVfxTuning.DensityScaleForReach"/>. Applied only to the water body, not the
+        /// muzzle burst, which never travels far enough for reach to thin it out.</summary>
+        private float DensityScale => WaterVfxTuning.DensityScaleForReach(_range, WaterBlaster.DefaultRange);
+
         /// <summary>Build the systems to match the blaster's actual reach. Safe to call twice.</summary>
         /// <summary>
         /// Build the water for a weapon of this reach and spread.
@@ -167,7 +174,7 @@ namespace MaxWorlds.VFX
                 m.startLifetime = Reach / speed;
                 m.startSize = new ParticleSystem.MinMaxCurve(_radius * 0.22f, _radius * 0.55f);
                 var s = _stream.shape; s.angle = streamAngle; s.radius = _radius * 0.18f;
-                var e = _stream.emission; e.rateOverTime = streamRate * RateScale;
+                var e = _stream.emission; e.rateOverTime = streamRate * RateScale * DensityScale;
             }
             if (_core != null)
             {
@@ -284,7 +291,7 @@ namespace MaxWorlds.VFX
             main.gravityModifier = 0.4f;           // a touch of droop — water, not a laser
 
             var emission = ps.emission;
-            emission.rateOverTime = streamRate * RateScale;
+            emission.rateOverTime = streamRate * RateScale * DensityScale;
 
             var shape = ps.shape;
             shape.shapeType = ParticleSystemShapeType.Cone;
