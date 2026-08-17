@@ -25,11 +25,26 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class BackyardDressingTests
     {
-        private static MapData Map => MapLibrary.Load(MapLibrary.BackyardSlice);
+        // MV-416: was MapLibrary.Load(MapLibrary.BackyardSlice) — a retired 11-zone map the game no
+        // longer loads. WorldLibrary.World1 is the config that actually ships in Resources/Worlds, so
+        // this is the only fixture that can catch a regression like MV-416 (three new sheds tripping
+        // the fence's Keepout check) before it reaches a build.
+        private static MapData Map
+        {
+            get
+            {
+                WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
+                Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
+                return map;
+            }
+        }
 
         private static List<DressingProp> Set() => BackyardDressingSet.Build(Map);
 
-        private static ArenaCover[] Cover => BackyardCover.Default;
+        // Matches how BackyardDressing.Awake actually sources cover at runtime (path.CoverPieces, off
+        // the loaded map) — BackyardCover.Default is itself pinned to the retired BackyardSlice map.
+        private static ArenaCover[] Cover =>
+            MapValidation.Kind(Map, EntityKind.Cover).Select(e => e.ToCover()).ToArray();
 
         // --- the art follows the map ------------------------------------------------------------
 
@@ -59,15 +74,15 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>Named rather than counted: it is the factory rooms and the boss clearing — rooms
-        /// spread across the 10-area chain (MV-242) — that this has to cover.</summary>
+        /// <summary>Named rather than counted: it is the six shed rooms and the boss clearing — rooms
+        /// spread across World1's 18-area chain (MV-411) — that this has to cover.</summary>
         [Test]
         public void TheFactoryRoomsAndTheBossClearingAreBothFenced()
         {
             MapData map = Map;
             var set = Set();
 
-            foreach (string id in new[] { "area3", "area6", "area9", "compost" })
+            foreach (string id in new[] { "area3", "area6", "area8", "area11", "area14", "area17", "boss" })
             {
                 MapZone zone = map.Zone(id);
                 Assert.IsTrue(
@@ -238,7 +253,7 @@ namespace MaxWorlds.Tests.EditMode
             List<Vector2> rings = MapValidation.Kind(Map, EntityKind.Factory)
                                                .Select(f => f.CenterXz).ToList();
 
-            Assert.GreaterOrEqual(rings.Count, 2, "the yard has lost its second factory");
+            Assert.AreEqual(6, rings.Count, "World1 ships six sheds (a3/a6/a8/a11/a14/a17)");
 
             var shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
             Assert.IsNotEmpty(shedProps, "no shed was dressed at all");
@@ -284,7 +299,7 @@ namespace MaxWorlds.Tests.EditMode
         public void ABushInTheBossGateIsRejected()
         {
             var bad = Set();
-            MapEntity gate = Map.First(EntityKind.Gate);
+            MapEntity gate = Map.Entity("bg");   // World1's boss gate (WorldMapLoader emits kind "areagate")
 
             bad.Add(new DressingProp(PropCatalog.BushDetailed, gate.CenterXz,
                                      PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 1f)));
