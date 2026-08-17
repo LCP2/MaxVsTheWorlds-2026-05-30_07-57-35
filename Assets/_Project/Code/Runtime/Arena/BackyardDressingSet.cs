@@ -156,7 +156,7 @@ namespace MaxWorlds.Arena
             var keepout = new Keepout(map, cover);
             List<WallFace> faces = MapGeometry.Faces(map);
 
-            Fence(props, map, faces);
+            Fence(props, map, faces, keepout);
             OutsideFoliage(props, map, faces, rng);
             SteppingStones(props, map, cover, rng);
             EdgePlanting(props, map, faces, keepout, rng);
@@ -175,14 +175,14 @@ namespace MaxWorlds.Arena
         /// wall. The greybox slab stays — it is what stops the player — but what you see is a paling
         /// fence, which is what a back garden is bounded by. Every room gets one, including the ones
         /// that did not exist when this was written.</summary>
-        private static void Fence(List<DressingProp> into, MapData map, List<WallFace> faces)
+        private static void Fence(List<DressingProp> into, MapData map, List<WallFace> faces, Keepout keepout)
         {
             int gate = GardenGate(map, faces);
 
             for (int i = 0; i < faces.Count; i++)
             {
                 if (!faces[i].FacesRoom) continue;
-                FenceRun(into, map, faces[i], gateAtCentre: i == gate);
+                FenceRun(into, map, faces[i], keepout, gateAtCentre: i == gate);
             }
 
             CornerPosts(into, map, faces);
@@ -274,7 +274,7 @@ namespace MaxWorlds.Arena
         /// <see cref="WallFace.B"/>. The panel is sunk into the wall behind it — it shows its face and
         /// nothing else, so the fence is never something the player clips into on the way past.</summary>
         private static void FenceRun(List<DressingProp> into, MapData map, in WallFace face,
-                                     bool gateAtCentre)
+                                     Keepout keepout, bool gateAtCentre)
         {
             float length = face.Length;
             if (length < 0.5f) return;
@@ -299,7 +299,11 @@ namespace MaxWorlds.Arena
                 Vector3 kit = PropCatalog.Size(key);
                 var scale = new Vector3(step / kit.x, map.wallHeight / kit.y, PanelDepth / kit.z);
 
-                into.Add(new DressingProp(key, face.A + dir * (step * (i + 0.5f)) - sink, scale, yaw));
+                var prop = new DressingProp(key, face.A + dir * (step * (i + 0.5f)) - sink, scale, yaw);
+
+                // A panel that crowds a shed's spawn ring cannot stand there — but that costs the
+                // yard one panel, never its entire dressing (MV-416), same as EdgeRun and Bed.
+                if (keepout.Objection(prop) == null) into.Add(prop);
             }
         }
 
