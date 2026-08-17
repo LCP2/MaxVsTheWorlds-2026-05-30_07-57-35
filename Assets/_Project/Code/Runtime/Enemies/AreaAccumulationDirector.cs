@@ -87,12 +87,14 @@ namespace MaxWorlds.Enemies
         /// <see cref="Configure"/>, a fresh run.</summary>
         private int _rushersQueuedThisLevel;
 
-        /// <summary>How many robots this director has placed in <see cref="CurrentArea"/> so far — feeds
-        /// <see cref="SpawnBias.StaggerBand"/> so each one lands in a different distance-from-gate tier
-        /// (MV-324). Reset per area in <see cref="FillArea"/>; kept running across the instant fill AND
-        /// any later overflow releases in <see cref="Update"/> so the stagger keeps cycling rather than
-        /// resetting to "nearest the gate" every time a slot frees up mid-fight.</summary>
-        private int _areaSpawnIndex;
+        /// <summary>How many robots this director has placed in each area so far, keyed by area
+        /// index. Feeds <see cref="SpawnBias.StaggerBand"/> so each one lands in a different
+        /// distance-from-gate tier (MV-324). Per-area (MV-417), not a single running counter — an
+        /// overflow robot released long after its own area was last filled must still continue that
+        /// area's own stagger sequence, not whichever area happens to be filling right now. Seeded to
+        /// 0 for an area in <see cref="FillArea"/> and advanced by <see cref="NextSpawnIndex"/> on
+        /// every placement into it, instant-fill or later overflow alike.</summary>
+        private readonly Dictionary<int, int> _spawnIndexByArea = new Dictionary<int, int>();
 
         /// <summary>Robots left to place concealed for the area currently being filled (MV-363) —
         /// decremented by <see cref="Spawn"/> as each one lands. Set fresh per area in
@@ -233,14 +235,14 @@ namespace MaxWorlds.Enemies
             if (_timer < ReleaseInterval) return;
             _timer = 0f;
 
-            if (RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies && _queue.TryRelease(out EnemyKind kind))
-                Spawn(kind);
+            if (RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies && _queue.TryRelease(out int releaseArea, out EnemyKind kind))
+                Spawn(releaseArea, kind);
         }
 
         private void FillArea(int areaIndex)
         {
             if (areaIndex <= 0 || !_filledAreas.Add(areaIndex)) return;
-            _areaSpawnIndex = 0;
+            _spawnIndexByArea[areaIndex] = 0;
 
             // The lead-in/entry room (area1's "Patio & Back Door") is where Max spawns — it must stay
             // empty so a fresh run has a safe beat to orient before meeting a robot (MV-256). Marked
@@ -254,7 +256,7 @@ namespace MaxWorlds.Enemies
                 DifficultyEngine.Composition composition = ClampRusherCap(_worldCfg.SolveComposition(areaIndex));
                 _largeCountByArea[areaIndex] = composition.LargeCount;
                 _bruiserCountByArea[areaIndex] = composition.Bruiser;
-                _queue.FillExact(composition);
+                _queue.FillExact(composition, areaIndex);
                 totalForArea = composition.TotalCount;
             }
             else
@@ -286,8 +288,8 @@ namespace MaxWorlds.Enemies
 
             // Instantly, not paced — this room's population must already be standing by the time the
             // player can see it (MV-245). Only what does not fit under the concurrent cap stays queued.
-            while (RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies && _queue.TryRelease(out EnemyKind kind))
-                Spawn(kind);
+            while (RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies && _queue.TryRelease(out int fillArea, out EnemyKind kind))
+                Spawn(fillArea, kind);
         }
 
         /// <summary>Applies <see cref="RusherCap.Apply"/> against this director's running total, then
@@ -305,7 +307,12 @@ namespace MaxWorlds.Enemies
         private bool IsCenterDenialScenario(int areaIndex) =>
             _worldCfg?.AreaByIndex(areaIndex)?.scenario == "centerDenial";
 
-        private void Spawn(EnemyKind kind)
+        /// <summary>Spawns one robot into <paramref name="areaIndex"/> — the area it was actually
+        /// queued for (MV-417), which the caller must pass through from <see cref="AreaSpawnQueue.TryRelease(out int, out EnemyKind)"/>
+        /// rather than assuming <see cref="CurrentArea"/>. An overflow robot released after the player
+        /// has moved on to a later area no longer materialises wherever the field happens to be right
+        /// now — it lands back in the room it was meant for, even if that is behind the player.</summary>
+        private void Spawn(int areaIndex, EnemyKind kind)
         {
             EnemyArchetype archetype = EnemyArchetype.Of(kind)
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
@@ -317,8 +324,8 @@ namespace MaxWorlds.Enemies
             // visible, denied ground, not a hidden knot.
             bool concealed = _concealedRemainingThisArea > 0 && kind != EnemyKind.Bomber;
             e.transform.position = concealed
-                ? ConcealedSpawnPointInArea(CurrentArea, archetype.SpawnHeight)
-                : SpawnPointInArea(CurrentArea, kind, archetype.SpawnHeight, _areaSpawnIndex++);
+                ? ConcealedSpawnPointInArea(areaIndex, archetype.SpawnHeight)
+                : SpawnPointInArea(areaIndex, kind, archetype.SpawnHeight, NextSpawnIndex(areaIndex));
             e.transform.rotation = Quaternion.identity;
             e.gameObject.SetActive(true);
 
@@ -334,6 +341,17 @@ namespace MaxWorlds.Enemies
             // Re-applied on every spawn, not just on creation — Unity drops an ignored collider pair
             // when the collider is disabled, and pooling disables it on every death.
             LetThePlayerThrough(e.gameObject);
+        }
+
+        /// <summary>The next stagger-band ordinal for a placement into <paramref name="areaIndex"/>
+        /// (MV-324, MV-417) — tracked per area so an overflow robot released well after its own area
+        /// last filled still continues that area's own sequence instead of whichever area is
+        /// currently being filled.</summary>
+        private int NextSpawnIndex(int areaIndex)
+        {
+            _spawnIndexByArea.TryGetValue(areaIndex, out int index);
+            _spawnIndexByArea[areaIndex] = index + 1;
+            return index;
         }
 
         /// <summary>Picks a point inside the room, clear of walls, cover and other active robots, and —
