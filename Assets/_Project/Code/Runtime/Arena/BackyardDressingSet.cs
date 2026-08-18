@@ -526,17 +526,49 @@ namespace MaxWorlds.Arena
         };
 
         /// <summary>Planting at the foot of the fence, inside the rooms — hard against the boundary,
-        /// out of the fight. Every inner face long enough to read as a wall gets a run.</summary>
+        /// out of the fight. Every inner face long enough to read as a wall gets a run — judged
+        /// against the room's WHOLE boundary on that side (see <see cref="BoundaryLength"/>), not any
+        /// one wall fragment alone.</summary>
         private static void EdgePlanting(List<DressingProp> into, MapData map, List<WallFace> faces,
                                          Keepout keepout, System.Random rng)
         {
             foreach (WallFace face in faces)
             {
-                if (!face.FacesRoom || face.Length < MinPlantedFace) continue;
+                if (!face.FacesRoom) continue;
 
                 MapZone room = RoomBehind(map, face);
-                if (room != null) EdgeRun(into, keepout, rng, face, room);
+                if (room == null) continue;
+                if (BoundaryLength(map, faces, face, room) < MinPlantedFace) continue;
+
+                EdgeRun(into, keepout, rng, face, room);
             }
+        }
+
+        /// <summary>The combined length of every face along this room's boundary on this side — not
+        /// just this one fragment's own. <see cref="MapGeometry"/> solves the wall network per LINE,
+        /// so a room's single straight edge can come back as several short fragments where a
+        /// neighbour's width does not match this room's (MV-418) or a doorway cuts through it; judged
+        /// fragment by fragment, a room whose edge is plenty long enough to plant reads as all stubs.
+        /// Summing every fragment that shares this room and this side is the room's real edge
+        /// length.</summary>
+        private static float BoundaryLength(MapData map, List<WallFace> faces, in WallFace face, MapZone room)
+        {
+            bool alongX = Mathf.Abs(face.Direction.x) > 0.5f;
+            float coord = alongX ? face.A.y : face.A.x;
+
+            float total = 0f;
+            foreach (WallFace other in faces)
+            {
+                if (!other.FacesRoom || other.Out != face.Out) continue;
+                if (Mathf.Abs(other.Direction.x) > 0.5f != alongX) continue;
+
+                float otherCoord = alongX ? other.A.y : other.A.x;
+                if (!Geo.Same(otherCoord, coord)) continue;
+                if (!ReferenceEquals(RoomBehind(map, other), room)) continue;
+
+                total += other.Length;
+            }
+            return total;
         }
 
         /// <summary>
