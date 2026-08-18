@@ -146,6 +146,41 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ---------------------------------------------------------------- MV-432: doubled thickness
+
+        /// <summary>AC1/AC2: the shaft and warhead band are doubled in cross-section, and each fin's
+        /// inner face sits exactly on the shaft surface rather than floating in a gap (the same
+        /// detached-geometry class as the MV-430 gear teeth).</summary>
+        [Test]
+        public void TheMissileGeometry_MatchesTheDoubledThicknessSpec()
+        {
+            HomingMissile missile = HomingMissile.Fire(Vector3.zero, null, speed: 1f, damage: 1f,
+                splashRadius: 1f);
+            try
+            {
+                Transform shaft = missile.transform.Find("Shaft");
+                Transform band = missile.transform.Find("WarheadBand");
+
+                Assert.AreEqual(new Vector3(0.22f, 0.30f, 0.22f), shaft.localScale,
+                    "the shaft did not double to (0.22, 0.30, 0.22) — it will still read as a needle at the 72° camera.");
+                Assert.AreEqual(new Vector3(0.26f, 0.05f, 0.26f), band.localScale,
+                    "the warhead band did not double to (0.26, 0.05, 0.26) alongside the shaft.");
+
+                foreach (Transform child in missile.transform)
+                {
+                    if (child.name != "Fin") continue;
+
+                    float expectedOffset = 0.5f * (shaft.localScale.x + child.localScale.x);
+                    Assert.AreEqual(expectedOffset, Mathf.Abs(child.localPosition.x), 1e-4f,
+                        "a fin's inner face does not sit on the shaft surface — it floats in a gap instead of being seated.");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(missile.gameObject);
+            }
+        }
+
         /// <summary>Pins the boundary at the fuel budget itself, and that it is an ordinary, reachable
         /// number rather than 0/negative/absurd (AC3: "reachable in normal play").</summary>
         [TestCase(0f, false)]
