@@ -1,4 +1,6 @@
+using System.IO;
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Weapons;
 
@@ -300,6 +302,97 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(afterSecondAcquire[0], Is.EqualTo(beforeSecondAcquire[0]),
                 "the first-acquired ability's slot must not move when a second is granted");
             Assert.That(afterSecondAcquire[1], Is.EqualTo(AbilityKind.Teleport));
+        }
+
+        // ---------------------------------------------------------------- AcquireById (MV-435)
+
+        [Test]
+        public void AcquireByIdRoutesALegacyIdThroughAcquire()
+        {
+            // e_ff maps to AbilityKind.ForceField — AcquireById must produce exactly what a direct
+            // Acquire(ForceField) call would: owned, level 1, in the acquisition order.
+            Assert.That(WeaponSystemState.AcquireById("e_ff"), Is.True);
+            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.ForceField), Is.True);
+            Assert.That(WeaponSystemState.AbilityLevel(AbilityKind.ForceField), Is.EqualTo(1));
+            CollectionAssert.Contains(new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired), AbilityKind.ForceField);
+        }
+
+        [Test]
+        public void AcquireByIdFiresChangedForEveryHudBearingAbility_MV435()
+        {
+            // The exact bug MV-435 fixes: the draft's grant must reach every subscriber of
+            // WeaponSystemState.Changed (HudController among them), for every ability the board can
+            // grant — not just the one Lee happened to draft first (Force Field).
+            foreach (string id in new[] { "m_spd", "m_tp", "s_bal", "e_ff", "u_sen" })
+            {
+                WeaponSystemState.Reset();
+                int fired = 0;
+                System.Action handler = () => fired++;
+                WeaponSystemState.Changed += handler;
+                try
+                {
+                    Assert.That(WeaponSystemState.AcquireById(id), Is.True, $"{id} should have granted");
+                    Assert.That(fired, Is.EqualTo(1), $"AcquireById({id}) must fire Changed exactly once");
+                }
+                finally
+                {
+                    WeaponSystemState.Changed -= handler;
+                }
+            }
+        }
+
+        [Test]
+        public void AcquireByIdGrantsARigOnlyIdAndStillFiresChanged()
+        {
+            // e_cel has no AbilityKind (no HUD button to reveal) — it must still grant and still fire
+            // Changed (other HUD reads, e.g. cell capacity, depend on it), just without an
+            // acquisition-order entry.
+            int fired = 0;
+            System.Action handler = () => fired++;
+            WeaponSystemState.Changed += handler;
+            try
+            {
+                Assert.That(WeaponSystemState.AcquireById("e_cel"), Is.True);
+                Assert.That(RigState.IsOwned("e_cel"), Is.True);
+                Assert.That(fired, Is.EqualTo(1));
+            }
+            finally
+            {
+                WeaponSystemState.Changed -= handler;
+            }
+            Assert.That(WeaponSystemState.Acquired, Is.Empty,
+                "a RIG-only id has no AbilityKind, so it must not enter the acquisition-order list");
+        }
+
+        [Test]
+        public void AcquireByIdFailsForAnUnreachedOrUnknownId()
+        {
+            Assert.That(WeaponSystemState.AcquireById("p_prc"), Is.False, "p_prc's parent (p_flw) isn't reached at run start");
+            Assert.That(WeaponSystemState.AcquireById("not_a_real_id"), Is.False);
+        }
+
+        /// <summary>MV-435 AC5: a raw <c>RigState.AcquireCap</c> call outside this class silently skips
+        /// <see cref="Changed"/>, and that is exactly the bug — the grant lands in <see cref="RigState"/>
+        /// but nothing tells a subscriber (HudController) to re-check. Scoped to the production
+        /// draft/HUD path (<c>Runtime/UI</c>, <c>Runtime/Weapons</c>); the ui-screens capture harness
+        /// under <c>Runtime/Dev</c> stages <see cref="RigState"/> directly for a static screenshot
+        /// fixture (MV-421) and was never routed through the draft UI in the first place, so it isn't
+        /// part of the signal-chain bug this ticket fixes.</summary>
+        [Test]
+        public void RigStateAcquireCapHasNoRawCallerOutsideWeaponSystemState_MV435()
+        {
+            string repoRoot = Directory.GetParent(Application.dataPath).FullName;
+            foreach (string sub in new[] { "UI", "Weapons" })
+            {
+                string dir = Path.Combine(repoRoot, "Assets", "_Project", "Code", "Runtime", sub);
+                foreach (string file in Directory.GetFiles(dir, "*.cs", SearchOption.AllDirectories))
+                {
+                    if (Path.GetFileName(file) == "WeaponSystemState.cs") continue; // the sanctioned call site
+                    string text = File.ReadAllText(file);
+                    Assert.That(text, Does.Not.Contain("RigState.AcquireCap"),
+                        $"{Path.GetFileName(file)} calls RigState.AcquireCap directly — route it through WeaponSystemState.AcquireById instead");
+                }
+            }
         }
 
         // ---------------------------------------------------------------- cooldowns

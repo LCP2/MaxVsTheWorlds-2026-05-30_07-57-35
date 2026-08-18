@@ -211,7 +211,7 @@ namespace MaxWorlds.UI
             }
             if (candidateIds.Length == 1)
             {
-                RigState.AcquireCap(candidateIds[0]);
+                WeaponSystemState.AcquireById(candidateIds[0]);
                 return;
             }
 
@@ -494,7 +494,7 @@ namespace MaxWorlds.UI
             {
                 if (_draftCandidateIds.Contains(id))
                 {
-                    RigState.AcquireCap(id);
+                    WeaponSystemState.AcquireById(id);
                     Close();
                 }
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here

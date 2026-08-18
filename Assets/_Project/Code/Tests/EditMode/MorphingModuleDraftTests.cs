@@ -154,6 +154,111 @@ namespace MaxWorlds.Tests.EditMode
                 "the band must not reach up far enough to cover the category row (y <= 306)");
         }
 
+        // ---------------------------------------------------------------- MV-435: the grant reaches the HUD
+
+        /// <summary>The root cause: both draft grant paths used to call <c>RigState.AcquireCap</c>
+        /// directly, which never raises <see cref="WeaponSystemState.Changed"/> — the only signal
+        /// <see cref="HudController"/> listens for to reveal an ability's control. Fixed by routing
+        /// both through <see cref="WeaponSystemState.AcquireById"/>.</summary>
+        [Test]
+        public void TappingACandidateOnTheBoardRaisesWeaponSystemStateChanged_ForEveryHudBearingAbility()
+        {
+            foreach (string id in new[] { "m_spd", "m_tp", "s_bal", "e_ff", "u_sen" })
+            {
+                RigState.Reset();
+                _screen.OpenMorphingModuleDraft(new[] { id, "e_cel" }); // 2 candidates -> opens the board
+
+                int fired = 0;
+                System.Action handler = () => fired++;
+                WeaponSystemState.Changed += handler;
+                try
+                {
+                    var node = _screen.BoardNode(id);
+                    node.GetComponentInChildren<Button>().onClick.Invoke();
+                    Assert.That(fired, Is.EqualTo(1), $"taking '{id}' on the board must fire WeaponSystemState.Changed exactly once");
+                }
+                finally
+                {
+                    WeaponSystemState.Changed -= handler;
+                }
+            }
+        }
+
+        [Test]
+        public void TheOneCandidateAutoGrantAlsoRaisesWeaponSystemStateChanged()
+        {
+            int fired = 0;
+            System.Action handler = () => fired++;
+            WeaponSystemState.Changed += handler;
+            try
+            {
+                _screen.OpenMorphingModuleDraft(new[] { "e_ff" });
+                Assert.That(fired, Is.EqualTo(1), "the 1-candidate auto-grant path must also fire Changed (MV-435)");
+            }
+            finally
+            {
+                WeaponSystemState.Changed -= handler;
+            }
+        }
+
+        [Test]
+        public void ADraftedAbilityLandsInAcquiredInDraftOrder()
+        {
+            _screen.OpenMorphingModuleDraft(new[] { "u_sen", "m_spd" });
+            _screen.BoardNode("u_sen").GetComponentInChildren<Button>().onClick.Invoke();
+
+            CollectionAssert.Contains(new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Acquired), AbilityKind.Sentinels);
+        }
+
+        [Test]
+        public void TappingForceFieldOnTheBoardRevealsTheHudButton_DrivingTheRealSignalChain()
+        {
+            HudController.SkipTouchControlsForTests = true;
+            var hudGo = new GameObject("HUD");
+            var hud = hudGo.AddComponent<HudController>();
+            // Awake/OnEnable aren't reliably invoked for AddComponent outside Play mode (same
+            // workaround WaterBlasterGateDamageTests/RuntimeSurfaceDirectorTests already rely on) —
+            // drive them directly so HudController actually builds and subscribes to
+            // WeaponSystemState.Changed.
+            InvokeLifecycle(hud, "Awake");
+            InvokeLifecycle(hud, "OnEnable");
+            try
+            {
+                var fieldButton = FindRect(hudGo, "Force Field Button");
+                Assert.That(fieldButton, Is.Not.Null, "the HUD must build a Force Field button root");
+                Assert.That(fieldButton.gameObject.activeSelf, Is.False, "Force Field isn't owned yet");
+
+                _screen.OpenMorphingModuleDraft(new[] { "e_ff", "m_spd" });
+                _screen.BoardNode("e_ff").GetComponentInChildren<Button>().onClick.Invoke();
+
+                Assert.That(fieldButton.gameObject.activeSelf, Is.True,
+                    "drafting Force Field on the board must reveal the HUD's FIELD button without closing/reopening anything");
+            }
+            finally
+            {
+                // OnEnable subscribed hud.OnAbilitiesChanged to WeaponSystemState.Changed — without
+                // OnDisable that subscription outlives DestroyImmediate and a later test's Changed
+                // fire would hit a destroyed MonoBehaviour.
+                InvokeLifecycle(hud, "OnDisable");
+                Object.DestroyImmediate(hudGo);
+                HudController.SkipTouchControlsForTests = false;
+            }
+        }
+
+        /// <summary>Same lookup <c>HudDropsPlayTests.FindRect</c> uses for the live HUD.</summary>
+        private static RectTransform FindRect(GameObject go, string name)
+        {
+            foreach (var rt in go.GetComponentsInChildren<RectTransform>(true))
+                if (rt.name == name) return rt;
+            return null;
+        }
+
+        private static void InvokeLifecycle(Object component, string methodName)
+        {
+            component.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(component, null);
+        }
+
         // ---------------------------------------------------------------- the old card modal is gone
 
         [Test]

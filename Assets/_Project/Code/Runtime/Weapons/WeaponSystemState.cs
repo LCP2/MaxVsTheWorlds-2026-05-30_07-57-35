@@ -154,6 +154,40 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
+        /// <summary>Grant a RIG node by its own string id (MV-435) — THE RIG board's draft (both the
+        /// on-board tap and the 1-candidate auto-grant in <see cref="MaxWorlds.UI.WeaponsScreen"/>)
+        /// deals in ids, not <see cref="AbilityKind"/>. Routes through <see cref="Acquire"/> when the
+        /// id maps to a legacy HUD-bearing kind, so acquisition order and <see cref="Changed"/> both
+        /// fire exactly as a direct <see cref="Acquire"/> call would; for a RIG-only id with no
+        /// AbilityKind equivalent (<c>p_prc</c>, <c>e_cel</c>, <c>e_mag</c>) grants straight through
+        /// <see cref="RigState.AcquireCap"/> and still fires <see cref="Changed"/>, just without an
+        /// acquisition-order entry (there is no HUD control for these to reveal). This is meant to be
+        /// THE RIG's only entry point into <see cref="RigState.AcquireCap"/> — no caller outside this
+        /// class should call it directly, or the grant silently skips <see cref="Changed"/> and every
+        /// HUD control gated on it never appears (the bug this method fixes).</summary>
+        public static bool AcquireById(string id)
+        {
+            AbilityKind? kind = KindForId(id);
+            if (kind.HasValue) return Acquire(kind.Value);
+
+            if (!RigState.AcquireCap(id)) return false;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>The inverse of <see cref="MapId(AbilityKind)"/> — every legacy HUD-bearing kind's
+        /// RIG id, for <see cref="AcquireById"/> to route back onto <see cref="Acquire"/>.</summary>
+        private static AbilityKind? KindForId(string id) => id switch
+        {
+            "m_spd" => AbilityKind.Speed,
+            "m_tp" => AbilityKind.Teleport,
+            "s_bal" => AbilityKind.WaterBalloon,
+            "s_aut" => AbilityKind.WaterBalloonAutoFire,
+            "e_ff" => AbilityKind.ForceField,
+            "u_sen" => AbilityKind.Sentinels,
+            _ => null,
+        };
+
         /// <summary>Spend a part to raise an OWNED ability by one level (WV-228), up to its RIG level
         /// cap. An unacquired ability can't be leveled (returns false) — "unowned/locked items can't
         /// be upgraded".</summary>
