@@ -106,6 +106,25 @@ namespace MaxWorlds.Enemies
         /// in <see cref="FillArea"/>; null while <see cref="_concealedRemainingThisArea"/> is 0.</summary>
         private DormantGroup _currentConcealedGroup;
 
+        /// <summary>Which area each currently-active robot this director spawned was placed for (MV-417)
+        /// — looked up in <see cref="OnEnemyDied"/> so <see cref="AreaSpawnQueue.ReportDestroyed(int)"/>
+        /// frees the right area's slot, now that the cap is per-area rather than field-wide. Entries are
+        /// added by <see cref="Spawn"/>/<see cref="SeedGarrison"/> and removed once reported.</summary>
+        private readonly Dictionary<RobotEnemy, int> _areaByRobot = new Dictionary<RobotEnemy, int>();
+
+        /// <summary>Consecutive placement failures (every candidate this pass read as on-screen) for one
+        /// area (MV-417) — see <see cref="TryFindSpawnPoint"/>. Reset to 0 on any successful placement
+        /// or door fallback; once it reaches <see cref="MaxConsecutivePlacementFailures"/> the next
+        /// attempt for that area arrives through the door instead of deferring again.</summary>
+        private readonly Dictionary<int, int> _consecutivePlacementFailuresByArea = new Dictionary<int, int>();
+
+        /// <summary>How many release intervals (0.35 s each, ~1 s total) a single area is allowed to
+        /// keep deferring a placement before it gives up finding an off-screen spot and arrives through
+        /// the door instead (MV-417). A robot standing still in the far-side band the whole time would
+        /// otherwise exhaust every candidate forever — arriving through a doorway reads as intentional;
+        /// never spawning at all does not.</summary>
+        private const int MaxConsecutivePlacementFailures = 3;
+
         /// <summary>The 1-based area the player is currently standing in (or last stood in, once past
         /// the final "area&lt;N&gt;" zone — the compost clearing does not advance it further).</summary>
         public int CurrentArea { get; private set; } = 1;
@@ -164,6 +183,8 @@ namespace MaxWorlds.Enemies
                 DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots)));
             _filledAreas.Clear();
             _largeCountByArea.Clear();
+            _areaByRobot.Clear();
+            _consecutivePlacementFailuresByArea.Clear();
             _rushersQueuedThisLevel = 0;
             CurrentArea = 1;
             _physicalArea = 1;
@@ -207,7 +228,14 @@ namespace MaxWorlds.Enemies
         /// index (<see cref="WorldConfig.SolveComposition"/>/<see cref="AreaPopulation.ComposeForArea"/>),
         /// so re-running <see cref="FillArea"/> gives back the identical authored roster — only the
         /// "already filled" guard and this area's own spawn/concealment counters reset. A no-op for
-        /// the entry stub or an unrecognised area (nothing to restore).</summary>
+        /// the entry stub or an unrecognised area (nothing to restore).
+        ///
+        /// Scans <see cref="Object.FindObjectsByType{T}(FindObjectsSortMode)"/> rather than
+        /// <see cref="RobotEnemy.Active"/> (MV-417) — the latter is populated from <c>OnEnable</c>,
+        /// which Unity does not invoke on a plain MonoBehaviour outside Play mode, so it stays empty for
+        /// every EditMode test and this despawn pass would silently do nothing, leaving a restored
+        /// area's old roster alive and its queue slots stuck occupied. Both enumerate the same live set
+        /// at runtime, since every robot's <c>OnEnable</c> does run there.</summary>
         public void RestoreArea(int areaIndex)
         {
             if (areaIndex <= 0 || _map == null || _queue == null) return;
@@ -215,9 +243,9 @@ namespace MaxWorlds.Enemies
             MapZone zone = _map.Zone($"area{areaIndex}");
             if (zone == null) return;
 
-            foreach (RobotEnemy robot in new List<RobotEnemy>(RobotEnemy.Active))
+            foreach (RobotEnemy robot in Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
             {
-                if (robot == null) continue;
+                if (robot == null || !robot.IsAlive) continue;
                 Vector3 p = robot.transform.position;
                 MapZone at = _map.ZoneAt(p.x, p.z);
                 if (at != null && at.id == zone.id) robot.Despawn();
@@ -274,13 +302,15 @@ namespace MaxWorlds.Enemies
             }
 
             // Overflow only, by now — FillArea already released everything a fresh room could fit
-            // under the cap. This is what lets the rest in as the field's live count drops, spaced out
-            // rather than dumped all at once.
+            // under its own area's cap. This is what lets the rest in as that area's live count drops,
+            // spaced out rather than dumped all at once. Gated on the queue's per-area cap only (MV-417)
+            // — no longer on RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies, a field-wide
+            // count that let a robot alive three rooms back starve the room the player is standing in.
             _timer += Time.deltaTime;
             if (_timer < ReleaseInterval) return;
             _timer = 0f;
 
-            if (RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies && _queue.TryRelease(out int releaseArea, out EnemyKind kind))
+            if (_queue.TryRelease(out int releaseArea, out EnemyKind kind))
                 Spawn(releaseArea, kind);
         }
 
@@ -288,6 +318,7 @@ namespace MaxWorlds.Enemies
         {
             if (areaIndex <= 0 || !_filledAreas.Add(areaIndex)) return;
             _spawnIndexByArea[areaIndex] = 0;
+            _consecutivePlacementFailuresByArea[areaIndex] = 0;
 
             // The lead-in/entry room (area1's "Patio & Back Door") is where Max spawns — it must stay
             // empty so a fresh run has a safe beat to orient before meeting a robot (MV-256). Marked
@@ -325,6 +356,14 @@ namespace MaxWorlds.Enemies
                 totalForArea = large + small;
             }
 
+            // MV-417: a garrison is placed synchronously, before and independent of the queue's own
+            // cap — the only thing that can guarantee this room is populated the instant the player
+            // walks into it, rather than depending on the queue/interval/cap timing lining up. Seeded
+            // from THIS area's own just-queued composition (deducted from what's queued, not added on
+            // top of it), so RestoreArea (which re-runs this same method) gets exactly the same
+            // guarantee on a post-death re-entry that first entry does.
+            SeedGarrison(areaIndex, _worldCfg?.AreaByIndex(areaIndex));
+
             // MV-363: a big enough room spares a small knot of robots to start concealed behind
             // cover instead of joining the fight the instant it fills — see Spawn() and
             // ConcealedSpawnPointInArea(). One knot per room, not a blanket policy.
@@ -332,9 +371,51 @@ namespace MaxWorlds.Enemies
             _currentConcealedGroup = _concealedRemainingThisArea > 0 ? new DormantGroup() : null;
 
             // Instantly, not paced — this room's population must already be standing by the time the
-            // player can see it (MV-245). Only what does not fit under the concurrent cap stays queued.
-            while (RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies && _queue.TryRelease(out int fillArea, out EnemyKind kind))
-                Spawn(fillArea, kind);
+            // player can see it (MV-245). Targeted at this area specifically (MV-417) rather than plain
+            // FIFO release, so a stale backlog left over from an area the player has already passed
+            // can't sit ahead of the room just filled. Only what does not fit under this area's own cap
+            // stays queued; a placement that can't find a legal spot this tick requeues itself and stops
+            // the loop rather than spinning on the same entry (see Spawn/TryFindSpawnPoint).
+            while (_queue.TryReleaseArea(areaIndex, out EnemyKind kind))
+            {
+                if (!Spawn(areaIndex, kind)) break;
+            }
+        }
+
+        /// <summary>Places <see cref="Garrison.SeedCount"/> robots from <paramref name="areaIndex"/>'s
+        /// just-queued composition at <see cref="Garrison.SeedPositions"/> — authored, deterministic
+        /// positions, standing there already rather than popping in (MV-269/MV-417). Bypasses the
+        /// queue's concurrent cap entirely via <see cref="AreaSpawnQueue.TryTakeForGarrison"/>: a
+        /// garrison must be guaranteed present regardless of whatever cap/timing state the ambient
+        /// top-up queue happens to be in. A no-op without a live world config (no <see cref="WorldArea"/>
+        /// to read <c>garrisonDensity</c>/positions from) or when <paramref name="area"/> is null (area
+        /// never filled / unrecognised).</summary>
+        private void SeedGarrison(int areaIndex, WorldArea area)
+        {
+            if (_worldCfg == null || area == null) return;
+
+            int seedCount = Garrison.SeedCount(areaIndex, _worldCfg);
+            if (seedCount <= 0) return;
+
+            Vector3[] positions = Garrison.SeedPositions(area, seedCount);
+            for (int i = 0; i < positions.Length; i++)
+            {
+                if (!_queue.TryTakeForGarrison(areaIndex, out EnemyKind kind)) break;
+
+                EnemyArchetype archetype = EnemyArchetype.Of(kind)
+                    .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
+                    .Toughened(DifficultyDirector.ToughnessMultiplier);
+
+                RobotEnemy e = Take(kind, archetype);
+                Vector3 pos = positions[i];
+                pos.y = archetype.SpawnHeight;
+                e.transform.position = pos;
+                e.transform.rotation = Quaternion.identity;
+                e.gameObject.SetActive(true);
+                _areaByRobot[e] = areaIndex;
+
+                LetThePlayerThrough(e.gameObject);
+            }
         }
 
         /// <summary>Applies <see cref="RusherCap.Apply"/> against this director's running total, then
@@ -356,23 +437,51 @@ namespace MaxWorlds.Enemies
         /// queued for (MV-417), which the caller must pass through from <see cref="AreaSpawnQueue.TryRelease(out int, out EnemyKind)"/>
         /// rather than assuming <see cref="CurrentArea"/>. An overflow robot released after the player
         /// has moved on to a later area no longer materialises wherever the field happens to be right
-        /// now — it lands back in the room it was meant for, even if that is behind the player.</summary>
-        private void Spawn(int areaIndex, EnemyKind kind)
+        /// now — it lands back in the room it was meant for, even if that is behind the player.
+        ///
+        /// Returns false, WITHOUT placing anything, if a non-concealed placement couldn't find a legal
+        /// spot this tick and the starvation guard hasn't tripped yet (MV-417) — the caller's queue
+        /// entry has already been put back via <see cref="AreaSpawnQueue.Requeue"/> and will be retried
+        /// on the next release interval. A pooled instance is never taken for a spawn that isn't going
+        /// to be placed.</summary>
+        private bool Spawn(int areaIndex, EnemyKind kind)
         {
             EnemyArchetype archetype = EnemyArchetype.Of(kind)
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
 
-            RobotEnemy e = Take(kind, archetype);
-
             // MV-363: never the centreDenial Bomber barrage — that cluster is meant to read as
             // visible, denied ground, not a hidden knot.
             bool concealed = _concealedRemainingThisArea > 0 && kind != EnemyKind.Bomber;
-            e.transform.position = concealed
-                ? ConcealedSpawnPointInArea(areaIndex, archetype.SpawnHeight)
-                : SpawnPointInArea(areaIndex, kind, archetype.SpawnHeight, NextSpawnIndex(areaIndex));
+            Vector3 position;
+
+            if (concealed)
+            {
+                position = ConcealedSpawnPointInArea(areaIndex, archetype.SpawnHeight);
+            }
+            else if (TryFindSpawnPoint(areaIndex, kind, archetype.SpawnHeight, NextSpawnIndex(areaIndex), out position))
+            {
+                _consecutivePlacementFailuresByArea[areaIndex] = 0;
+            }
+            else if (IncrementPlacementFailure(areaIndex) >= MaxConsecutivePlacementFailures)
+            {
+                // MV-417 starvation guard: every candidate this pass read as on-screen (e.g. the player
+                // standing in the far-side band the whole time). Rather than keep deferring forever,
+                // arrive through the door — reads as intentional, unlike popping into open lawn.
+                position = DoorPoint(areaIndex, archetype.SpawnHeight);
+                _consecutivePlacementFailuresByArea[areaIndex] = 0;
+            }
+            else
+            {
+                _queue.Requeue(areaIndex, kind);
+                return false;
+            }
+
+            RobotEnemy e = Take(kind, archetype);
+            e.transform.position = position;
             e.transform.rotation = Quaternion.identity;
             e.gameObject.SetActive(true);
+            _areaByRobot[e] = areaIndex;
 
             // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
             // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.
@@ -386,6 +495,38 @@ namespace MaxWorlds.Enemies
             // Re-applied on every spawn, not just on creation — Unity drops an ignored collider pair
             // when the collider is disabled, and pooling disables it on every death.
             LetThePlayerThrough(e.gameObject);
+            return true;
+        }
+
+        private int IncrementPlacementFailure(int areaIndex)
+        {
+            _consecutivePlacementFailuresByArea.TryGetValue(areaIndex, out int count);
+            count++;
+            _consecutivePlacementFailuresByArea[areaIndex] = count;
+            return count;
+        }
+
+        /// <summary>Approximates where <paramref name="areaIndex"/>'s door is: the midpoint of the wall
+        /// on the near side from <see cref="MapRuntime.EntryDirection"/> (MV-417's starvation-guard
+        /// fallback). Not the gate's exact geometry — this class only has the zone's own bounds to work
+        /// with — but close enough that a robot arriving here reads as coming through the doorway rather
+        /// than materialising in open lawn. Falls back to the room's centre when no entry direction is
+        /// known (e.g. area 1, entered from outside the map rather than through an authored gate).</summary>
+        private Vector3 DoorPoint(int areaIndex, float height)
+        {
+            MapZone zone = _map.Zone($"area{areaIndex}");
+            if (zone == null) return _target != null ? _target.position : Vector3.zero;
+
+            float xMin = zone.XMin + EdgeMargin, xMax = zone.XMax - EdgeMargin;
+            float zMin = zone.ZMin + EdgeMargin, zMax = zone.ZMax - EdgeMargin;
+            float cx = (xMin + xMax) * 0.5f, cz = (zMin + zMax) * 0.5f;
+
+            Vector3 awayFromDoor = MapRuntime.EntryDirection(_map, zone.id);
+            if (awayFromDoor.sqrMagnitude < 1e-6f) return new Vector3(cx, height, cz);
+
+            return Mathf.Abs(awayFromDoor.x) >= Mathf.Abs(awayFromDoor.z)
+                ? new Vector3(awayFromDoor.x >= 0f ? xMin : xMax, height, cz)
+                : new Vector3(cx, height, awayFromDoor.z >= 0f ? zMin : zMax);
         }
 
         /// <summary>The next stagger-band ordinal for a placement into <paramref name="areaIndex"/>
@@ -405,20 +546,31 @@ namespace MaxWorlds.Enemies
         /// player has already been fighting there for a while (MV-245, MV-273). Never being seen matters
         /// more than a clean gap from cover or another robot, so a second, wider pass ignores overlap
         /// once the ideal search comes up empty (see <see cref="MaxOffScreenAttempts"/>) rather than
-        /// falling straight back to an on-screen spawn. Placement always succeeds; only if no off-screen
-        /// point exists in the room at all (both passes exhausted) does the last candidate tried get
-        /// used rather than refusing to place the robot.</summary>
-        private Vector3 SpawnPointInArea(int areaIndex, EnemyKind kind, float height, int spawnIndex)
+        /// falling straight back to an on-screen spawn.
+        ///
+        /// Returns false (not a candidate) only when a camera exists AND every candidate across both
+        /// passes read as on-screen (MV-417) — e.g. the player standing in the middle of the far-side
+        /// band, where the visible footprint covers most of the room. The old behaviour silently placed
+        /// the last candidate anyway, which is exactly the "robots just appearing out of nowhere" defect
+        /// this exists to fix; the caller (<see cref="Spawn"/>) now defers or falls back to the door
+        /// instead. Without a camera to ask (e.g. EditMode), placement still always succeeds.</summary>
+        private bool TryFindSpawnPoint(int areaIndex, EnemyKind kind, float height, int spawnIndex, out Vector3 point)
         {
             MapZone zone = _map.Zone($"area{areaIndex}");
             if (zone == null || zone.width <= EdgeMargin * 2f || zone.depth <= EdgeMargin * 2f)
-                return _target != null ? _target.position : Vector3.zero;
+            {
+                point = _target != null ? _target.position : Vector3.zero;
+                return true;
+            }
 
             // MV-365: a centreDenial scenario's Bomber-kind spawns bias toward the room's middle
             // instead of the usual far-side-from-door band — "a barrage of missiles in the middle,
             // surrounded by robots" is a placement fact, not just a count.
             if (kind == EnemyKind.Bomber && IsCenterDenialScenario(areaIndex))
-                return RandomPointIn(SpawnBias.CenterBand(zone, EdgeMargin), height);
+            {
+                point = RandomPointIn(SpawnBias.CenterBand(zone, EdgeMargin), height);
+                return true;
+            }
 
             // MV-323: bias candidates to the side of the room opposite the door robots/Max just came
             // through, so the ambient fight tends to stay off the entrance rather than piling up on it.
@@ -438,19 +590,30 @@ namespace MaxWorlds.Enemies
                 if (OverlapsCoverOrRobot(candidate)) continue;
                 if (cam != null && IsOnScreen(cam, candidate)) continue;
 
-                return candidate;
+                point = candidate;
+                return true;
             }
 
-            if (cam != null)
+            if (cam == null)
             {
-                for (int attempt = 0; attempt < MaxOffScreenAttempts; attempt++)
+                // No camera to ask (EditMode/tests) — on-screen can't be evaluated, so the un-biased
+                // last candidate is as good as any; this path never fails.
+                point = candidate;
+                return true;
+            }
+
+            for (int attempt = 0; attempt < MaxOffScreenAttempts; attempt++)
+            {
+                candidate = RandomPointIn(bounds, height);
+                if (!IsOnScreen(cam, candidate))
                 {
-                    candidate = RandomPointIn(bounds, height);
-                    if (!IsOnScreen(cam, candidate)) return candidate;
+                    point = candidate;
+                    return true;
                 }
             }
 
-            return candidate;
+            point = default;
+            return false;
         }
 
         /// <summary>Where a concealed robot lands (MV-363): behind the room's own deepest authored
@@ -577,7 +740,9 @@ namespace MaxWorlds.Enemies
 
         private void OnEnemyDied(RobotEnemy e)
         {
-            _queue?.ReportDestroyed();
+            int area = _areaByRobot.TryGetValue(e, out int a) ? a : 0;
+            _areaByRobot.Remove(e);
+            _queue?.ReportDestroyed(area);
             if (!_pools.TryGetValue(e.Kind, out var pool))
             {
                 pool = new Stack<RobotEnemy>();

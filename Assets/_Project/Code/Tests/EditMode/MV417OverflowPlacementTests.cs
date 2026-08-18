@@ -8,35 +8,46 @@ using MaxWorlds.Enemies;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-417: some Backyard areas showed no robots at all. Root cause confirmed by static reading
-    /// (this repo's autonomy contract forbids authoring PlayMode tests or harnesses, so no live 18-area
-    /// playtest log backs this — see the ticket comment): AreaAccumulationDirector.Spawn() always
-    /// placed a released robot at CurrentArea, the FURTHEST area reached so far, never the area it was
-    /// actually queued for. Once the queue's concurrent-cap forced part of an area's population to stay
-    /// queued past that area's instant fill (MV-411 grew the level from 3 sheds/10 areas to 6 sheds/20
-    /// areas, so the cap binds far more often now), that overflow released later, after Update() had
-    /// already advanced CurrentArea past it, and materialised in whatever area the player had since
-    /// reached instead of the room it was meant for.
+    /// MV-417: some Backyard areas showed no robots at all. First diagnosed as a placement bug
+    /// (AreaAccumulationDirector.Spawn() always placed a released robot at CurrentArea, the FURTHEST
+    /// area reached so far, never the area it was actually queued for — fixed in 7c060cf) but Lee kept
+    /// reproducing the empty-room symptom afterwards (see the ticket comments dated 2026-08-18). The
+    /// actual root cause: the queue's concurrent-release cap was FIELD-WIDE (one shared
+    /// <c>AreaSpawnQueue.ActiveCount</c>/<c>MaxActive</c> across every area in the run), so a robot
+    /// alive in an area the player had already left could block a release into the room the player was
+    /// currently standing in — "a robot alive three rooms back must not starve the room the player is
+    /// standing in" (Lee, comment dated 2026-08-18). The cap is now enforced PER AREA
+    /// (<c>AreaSpawnQueue.ActiveCountForArea</c>), so one area being full never blocks another's own
+    /// release. <see cref="AreaAccumulationDirectorGarrisonAndPlacementTests"/> covers the other two
+    /// legs of the fix (the Garrison guarantee and the on-screen spawn fallback).
     ///
     /// EditMode only. Reflection drives Update() directly (same idiom as SentinelAreaCrossingTests)
     /// since Unity does not invoke a plain MonoBehaviour's Update outside Play mode, and TakeDamage
-    /// kills a robot to free the queue's one concurrent-cap slot without needing the OnEnable/OnDisable
-    /// lifecycle that also never runs here (see AreaAccumulationWorldConfigTests's note on
-    /// RobotEnemy.ActiveCount staying 0 in EditMode). A single-kind (Rusher-only) authored composition
-    /// keeps the enemy pool deterministic: the one robot killed is the only thing in that pool, so the
-    /// next release is guaranteed to reuse its exact GameObject, letting the test read the answer
-    /// straight off that instance's own transform.
+    /// kills a robot to free its area's cap slot without needing the OnEnable/OnDisable lifecycle that
+    /// also never runs here (see AreaAccumulationWorldConfigTests's note on RobotEnemy.ActiveCount
+    /// staying 0 in EditMode). A single-kind (Rusher-only) authored composition keeps the enemy pool
+    /// deterministic: the one robot killed is the only thing in that pool, so the next release is
+    /// guaranteed to reuse its exact GameObject, letting the test read the answer straight off that
+    /// instance's own transform.
     /// </summary>
     public sealed class MV417OverflowPlacementTests
     {
         private GameObject _directorGo;
         private GameObject _playerGo;
+        private Camera[] _suppressedAmbientCameras;
 
         [SetUp]
         public void SetUp()
         {
             DevTuning.Reset();
             RobotEnemy.ResetRegistry();
+            // These tests rely on Camera.main being null (see TryFindSpawnPoint's "no camera to ask"
+            // path, which is what makes placement here unconditional). Whatever scene the Editor
+            // happens to have open when cc-verify launches (e.g. Backyard_Slice.unity, which does carry
+            // a real MainCamera-tagged object) is still loaded for an EditMode run, so Camera.main can
+            // resolve to that real camera and make every candidate in this test's small synthetic world
+            // read as on-screen. Suppress any such camera for the duration of this test.
+            _suppressedAmbientCameras = CameraTestUtil.SuppressAmbientMainCameras();
         }
 
         [TearDown]
@@ -47,6 +58,7 @@ namespace MaxWorlds.Tests.EditMode
             if (_directorGo != null) Object.DestroyImmediate(_directorGo);
             if (_playerGo != null) Object.DestroyImmediate(_playerGo);
 
+            CameraTestUtil.RestoreAmbientMainCameras(_suppressedAmbientCameras);
             RobotEnemy.ResetRegistry();
             DevTuning.Reset();
         }
@@ -116,7 +128,11 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void OverflowRobot_ReleasedAfterPlayerAdvances_LandsInTheAreaItWasQueuedFor()
         {
-            WorldConfig cfg = TwoAreaWorld(area1Rushers: 3, area2Rushers: 2);
+            // Area 2 carries no robots of its own here so this test isolates the placement guarantee
+            // (does an overflow robot land where it was queued for, not wherever CurrentArea now is)
+            // from the per-area cap-independence guarantee, which OverflowInOneArea_NeverBlocksAnother
+            // covers separately.
+            WorldConfig cfg = TwoAreaWorld(area1Rushers: 3, area2Rushers: 0);
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
             MapZone area1 = map.Zone("area1");
@@ -124,8 +140,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNotNull(area1);
             Assert.IsNotNull(area2);
 
-            // Force area 1's 3-robot population to overflow a 1-robot concurrent cap, reproducing what
-            // MV-411's much larger level made common at the real (24-robot field-wide) cap.
+            // Force area 1's 3-robot population to overflow a 1-robot-per-area cap.
             DevTuning.MaxActiveRobots = 1f;
 
             _directorGo = new GameObject("Area Accumulation");
@@ -133,7 +148,7 @@ namespace MaxWorlds.Tests.EditMode
             director.ConfigureWorld(cfg);
             director.Configure(map, System.Array.Empty<CoverPiece>());
 
-            Assert.AreEqual(1, director.ActiveCount, "only one robot fits under the forced 1-robot cap");
+            Assert.AreEqual(1, director.ActiveCount, "only one robot fits under the forced 1-robot-per-area cap");
             Assert.AreEqual(2, director.QueuedCount, "area 1's other two Rushers must still be queued");
 
             RobotEnemy[] instantFilled = Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None);
@@ -147,15 +162,14 @@ namespace MaxWorlds.Tests.EditMode
             InvokeUpdate(director); // establishes _target
 
             // Max opens the gate into area 2 (AreaGate.Opened -> EnterArea) and walks through, same as
-            // SentinelAreaCrossingTests. CurrentArea now reads 2 while area 1's overflow is still queued
-            // behind the field-wide cap.
+            // SentinelAreaCrossingTests. CurrentArea now reads 2 while area 1's overflow is still queued.
             director.EnterArea(2);
             _playerGo.transform.position = area2.Center;
             InvokeUpdate(director);
 
-            Assert.AreEqual(4, director.QueuedCount, "area 2's two Rushers must have queued behind area 1's leftover two");
+            Assert.AreEqual(2, director.QueuedCount, "area 2 has no composition of its own - area 1's leftover two are untouched");
 
-            // Free the one concurrent-cap slot area 1's instant-fill robot was holding, so the next
+            // Free the one per-area cap slot area 1's instant-fill robot was holding, so the next
             // Update() release actually pulls the queue's FIFO front item back off: area 1's own leftover.
             activeRobot.TakeDamage(new DamageInfo(9999f, activeRobot.transform.position, Vector3.forward, Team.Player));
             Assert.AreEqual(RobotEnemy.State.Dead, activeRobot.Current);
@@ -163,7 +177,7 @@ namespace MaxWorlds.Tests.EditMode
             ForceReleaseTimerReady(director);
             InvokeUpdate(director);
 
-            Assert.AreEqual(3, director.QueuedCount, "one queued robot must have released");
+            Assert.AreEqual(1, director.QueuedCount, "one queued robot must have released");
 
             // Single-kind (Rusher-only) composition means the pool this release drew from held exactly
             // one entry: the robot just killed. Take() always drains the pool before creating a new
@@ -177,6 +191,35 @@ namespace MaxWorlds.Tests.EditMode
                 "area 1 permanently empty from the player's point of view");
             Assert.IsFalse(area2.Contains(releasedPos.x, releasedPos.z),
                 "the bug this guards against: area 1's overflow must not land in area 2 just because the player moved on");
+        }
+
+        [Test]
+        public void OverflowInOneArea_NeverBlocksAnothersOwnInstantFill()
+        {
+            // The actual root cause behind Lee's repeated "still no robots" reports: the queue's
+            // concurrent-release cap used to be shared field-wide, so a robot still alive in an area the
+            // player had already left could hold the one slot and starve every later area's instant
+            // fill. The cap is now per-area (AreaSpawnQueue.ActiveCountForArea) - area 1 sitting at its
+            // own cap must never stop area 2 from getting its own robot on entry.
+            WorldConfig cfg = TwoAreaWorld(area1Rushers: 2, area2Rushers: 2);
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
+
+            DevTuning.MaxActiveRobots = 1f; // 1 active robot per area, not 1 for the whole field
+
+            _directorGo = new GameObject("Area Accumulation");
+            var director = _directorGo.AddComponent<AreaAccumulationDirector>();
+            director.ConfigureWorld(cfg);
+            director.Configure(map, System.Array.Empty<CoverPiece>());
+
+            Assert.AreEqual(1, director.ActiveCount, "area 1 fills to its own 1-robot cap");
+            Assert.AreEqual(1, director.QueuedCount, "area 1's second Rusher stays queued behind its own cap");
+
+            director.EnterArea(2);
+
+            Assert.AreEqual(2, director.ActiveCount,
+                "area 2 must get its own instant-fill robot even though area 1 is already at its cap - " +
+                "before this fix, one shared field-wide cap would have left area 2 completely empty here");
+            Assert.AreEqual(2, director.QueuedCount, "one Rusher left over in each area, each behind its own cap");
         }
     }
 }

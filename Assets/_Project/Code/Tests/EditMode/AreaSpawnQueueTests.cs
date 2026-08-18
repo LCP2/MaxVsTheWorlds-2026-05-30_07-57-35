@@ -109,6 +109,77 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1, queue.MaxActive);
         }
 
+        // --- Per-area cap (MV-417) — the cap used to be shared field-wide, so a robot alive in one -----
+        // --- area could block release into a different area entirely; it is now checked per-area. ------
+
+        [Test]
+        public void AnAreaAtItsOwnCapNeverBlocksAnotherAreasRelease()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 1);
+            queue.Fill(largeCount: 0, smallCount: 2, areaIndex: 1);
+            queue.Fill(largeCount: 0, smallCount: 2, areaIndex: 2);
+
+            Assert.IsTrue(queue.TryRelease(out int area1, out _));
+            Assert.AreEqual(1, area1, "area 1's own release fills its 1-robot cap");
+
+            Assert.IsTrue(queue.TryRelease(out int area2, out _),
+                "area 2 must release its own robot even though area 1 is already at its cap - " +
+                "before MV-417 a single shared cap would have blocked this");
+            Assert.AreEqual(2, area2);
+
+            Assert.IsFalse(queue.TryRelease(out _, out _), "both areas are now at their own 1-robot cap");
+            Assert.AreEqual(2, queue.ActiveCount);
+            Assert.AreEqual(1, queue.ActiveCountForArea(1));
+            Assert.AreEqual(1, queue.ActiveCountForArea(2));
+        }
+
+        [Test]
+        public void TryReleaseArea_TargetsOneAreaOnly_EvenOutOfFifoOrder()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 5);
+            queue.Fill(largeCount: 0, smallCount: 1, areaIndex: 1);
+            queue.Fill(largeCount: 0, smallCount: 1, areaIndex: 2);
+
+            Assert.IsTrue(queue.TryReleaseArea(2, out _), "must find area 2's entry despite area 1 sitting at the FIFO front");
+            Assert.AreEqual(1, queue.ActiveCountForArea(2));
+            Assert.AreEqual(0, queue.ActiveCountForArea(1));
+            Assert.AreEqual(1, queue.QueuedCount, "area 1's entry must still be queued, untouched");
+
+            Assert.IsFalse(queue.TryReleaseArea(2, out _), "nothing left queued for area 2");
+        }
+
+        [Test]
+        public void TryTakeForGarrison_IgnoresTheCapEntirely()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 1);
+            queue.Fill(largeCount: 0, smallCount: 3, areaIndex: 1);
+
+            Assert.IsTrue(queue.TryTakeForGarrison(1, out _));
+            Assert.IsTrue(queue.TryTakeForGarrison(1, out _));
+            Assert.IsTrue(queue.TryTakeForGarrison(1, out _));
+            Assert.IsFalse(queue.TryTakeForGarrison(1, out _), "nothing left to take");
+
+            Assert.AreEqual(3, queue.ActiveCount, "all 3 taken despite a cap of 1 - garrison bypasses it entirely");
+            Assert.AreEqual(0, queue.QueuedCount);
+        }
+
+        [Test]
+        public void Requeue_PutsAnEntryBackAndFreesItsAreasCapSlot()
+        {
+            var queue = new AreaSpawnQueue(maxActive: 1);
+            queue.Fill(largeCount: 0, smallCount: 1, areaIndex: 1);
+
+            Assert.IsTrue(queue.TryRelease(out EnemyKind kind));
+            Assert.AreEqual(1, queue.ActiveCountForArea(1));
+            Assert.AreEqual(0, queue.QueuedCount);
+
+            queue.Requeue(1, kind);
+
+            Assert.AreEqual(0, queue.ActiveCountForArea(1), "the cap slot must free up again");
+            Assert.AreEqual(1, queue.QueuedCount, "the entry must be back on the queue, not lost");
+            Assert.IsTrue(queue.TryRelease(out _), "it must be releasable again");
+        }
+
         // --- FillForArea (v0.5 recut spec §2-3, MV-224) -----------------------------------------
 
         [Test]
