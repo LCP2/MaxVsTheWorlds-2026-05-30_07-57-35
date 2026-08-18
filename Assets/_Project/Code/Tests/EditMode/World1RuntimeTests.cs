@@ -62,11 +62,73 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
-            foreach (string shedAreaId in new[] { "a3", "a6", "a8", "a11", "a14", "a17" })
+            foreach (string shedAreaId in new[] { "a1", "a3", "a6", "a8", "a9", "a11", "a14", "a15", "a17" })
             {
                 MapEntity factory = map.Entity($"{shedAreaId}_shed");
                 Assert.IsNotNull(factory, $"shed area '{shedAreaId}' has no factory entity");
                 Assert.AreEqual(EntityKind.Factory, factory.Kind);
+            }
+        }
+
+        // --- MV-437: raised world 1 from 6 sheds to 9 so a full run can reach more than 6 of the ---
+        // --- 23 Rig abilities (MV-436 made every ability draft-only) and so the opening third of a ---
+        // --- run isn't a single-sink DAMAGE grind before the first Morphing Module. ------------------
+
+        [Test]
+        public void World1_HasExactlyNineShedsAtTheAuthoredIndices()
+        {
+            WorldConfig cfg = LoadWorld1();
+
+            var shedIndices = new System.Collections.Generic.List<int>();
+            foreach (WorldArea area in cfg.areas)
+                if (area.hasShed) shedIndices.Add(area.index);
+            shedIndices.Sort();
+
+            CollectionAssert.AreEqual(new[] { 1, 3, 6, 8, 9, 11, 14, 15, 17 }, shedIndices,
+                "World 1 must carry exactly 9 shed areas, at indices 1, 3, 6, 8, 9, 11, 14, 15, 17");
+        }
+
+        [Test]
+        public void World1_EveryShedSitsInsideItsOwnAreasBounds()
+        {
+            WorldConfig cfg = LoadWorld1();
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                if (!area.hasShed) continue;
+                Assert.IsNotNull(area.shed, $"area '{area.id}' has hasShed=true but no shed object");
+
+                Assert.That(area.shed.x, Is.InRange(area.XMin, area.XMax),
+                    $"shed '{area.id}' x={area.shed.x} falls outside its area's [{area.XMin}, {area.XMax}] bounds");
+                Assert.That(area.shed.z, Is.InRange(area.ZMin, area.ZMax),
+                    $"shed '{area.id}' z={area.shed.z} falls outside its area's [{area.ZMin}, {area.ZMax}] bounds");
+            }
+        }
+
+        [Test]
+        public void World1_TheThreeNewShedAreasHaveTheShedRoleAndAName()
+        {
+            WorldConfig cfg = LoadWorld1();
+
+            foreach (int index in new[] { 1, 9, 15 })
+            {
+                WorldArea area = cfg.AreaByIndex(index);
+                Assert.IsNotNull(area, $"area at index {index} is missing");
+                Assert.AreEqual("shed", area.role, $"area at index {index} must carry role \"shed\"");
+                Assert.IsFalse(string.IsNullOrEmpty(area.name), $"area at index {index} has no name");
+            }
+        }
+
+        [Test]
+        public void World1_TheThreeNewShedAreasGarrisonAtLeastOneRobot()
+        {
+            WorldConfig cfg = LoadWorld1();
+
+            foreach (int index in new[] { 1, 9, 15 })
+            {
+                DifficultyEngine.Composition composition = cfg.SolveComposition(index);
+                Assert.Greater(composition.TotalCount, 0,
+                    $"new shed area at index {index} garrisons no robots — it would be an empty arena");
             }
         }
 

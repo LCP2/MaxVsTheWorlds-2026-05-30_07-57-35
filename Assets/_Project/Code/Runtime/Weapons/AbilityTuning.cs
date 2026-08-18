@@ -77,6 +77,12 @@ namespace MaxWorlds.Weapons
         /// authored placeholder, same as the cooldowns above until Lee tunes it).</summary>
         public const float DefaultWaterBalloonStopDurationSeconds = 1.5f;
 
+        /// <summary>DELUGE (MV-426 fusion <c>f_del</c>, Primary+Secondary, HUD slot B): "Balloon splash
+        /// leaves a puddle" — seconds a <see cref="WaterPuddle"/> lingers at the splash point before
+        /// popping, authored placeholder same status as <see cref="DefaultWaterBalloonStopDurationSeconds"/>
+        /// until Lee tunes it on device.</summary>
+        public const float DefaultPuddleDurationSeconds = 4f;
+
         /// <summary>Fraction each Speed level adds to Max's walk speed. The spec's settings list
         /// (§9) doesn't name this one explicitly the way it does Water Balloon/Power
         /// Efficiency/Weapon Cooldown; authored the same per-level-multiplier shape as those.</summary>
@@ -95,6 +101,23 @@ namespace MaxWorlds.Weapons
         /// shape as <see cref="WaterBalloonDistance"/>.</summary>
         public static float TeleportDistance(int level, float baseDistance, float perLevel) =>
             baseDistance + perLevel * Mathf.Max(0, level - 1);
+
+        /// <summary>SKIRMISH (MV-426 fusion <c>f_skr</c>, Move+Support, HUD slot U): "Teleport snaps to
+        /// a live [Sentinel] at any range" — once forged, a blink with a deployed sentinel nearby lands
+        /// beside it instead of the normal short aimed hop. Returns a point offset from
+        /// <paramref name="sentinelPosition"/> toward <paramref name="from"/> by <paramref name="standoff"/>
+        /// metres, so Max lands next to the turret rather than inside its collider. Pure so the landing
+        /// point is unit-testable without a live <see cref="MaxWorlds.Arena.Sentinel"/>.</summary>
+        public static Vector3 SkirmishSnapPoint(Vector3 sentinelPosition, Vector3 from, float standoff)
+        {
+            Vector3 delta = from - sentinelPosition; delta.y = 0f;
+            Vector3 dir = delta.sqrMagnitude > 1e-4f ? delta.normalized : Vector3.forward;
+            return sentinelPosition + dir * standoff;
+        }
+
+        /// <summary>How far beside the sentinel a SKIRMISH snap-teleport lands, metres — clear of its
+        /// own collider without reading as "landed somewhere else".</summary>
+        public const float DefaultSkirmishSnapStandoff = 2f;
 
         /// <summary>Max's walk-speed multiplier at a given Speed level — 1x at level 0 (not owned).</summary>
         public static float SpeedMultiplier(int level, float perLevel) =>
@@ -154,6 +177,12 @@ namespace MaxWorlds.Weapons
         /// everything touching the bubble (DECISION #4: "stays exactly where the Upgrade track already
         /// scoped it, level 3").</summary>
         public static bool ForceFieldPopDealsDamage(int level) => level >= 3;
+
+        /// <summary>BLINKGUARD (MV-426 fusion <c>f_bgd</c>, Energy+Move, HUD slot B): "Teleport leaves
+        /// the Force Field behind you, and it pops where you left" — seconds the stationary bubble left
+        /// at the departure point survives before popping on its own, since (unlike Max's own bubble)
+        /// nothing ever pops it early by absorbing damage down to zero on this slice.</summary>
+        public const float DefaultBlinkguardBubbleDurationSeconds = 5f;
 
         /// <summary>
         /// Applies <paramref name="incoming"/> damage against the bubble's remaining absorb budget.
@@ -248,6 +277,14 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Seconds between sentinel shots — fixed, not one of the six leveled axes.</summary>
         public const float DefaultSentinelFireInterval = 0.6f;
+
+        /// <summary>OVERCHARGE (MV-426 fusion <c>f_ovc</c>, Energy+Support, HUD slot U): "the Sentinel
+        /// runs off your cells: double rate of fire while you have charge to spend" — half the normal
+        /// interval between shots while forged AND at least one power cell is banked, the ordinary
+        /// interval otherwise. Pure so the halving rule is unit-testable without a live
+        /// <see cref="MaxWorlds.Arena.Sentinel"/>.</summary>
+        public static float SentinelFireInterval(float baseInterval, bool overchargeActive) =>
+            overchargeActive ? baseInterval * 0.5f : baseInterval;
 
         /// <summary>How fast the sentinel follows Max at a given Move (u_mov) level, m/s — level 0
         /// (u_mov is a stat, un-owned starting point) means the sentinel does not follow at all

@@ -64,6 +64,9 @@ namespace MaxWorlds.UI
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
         // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
         private static readonly Color PartColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
+        /// <summary>The WEAPONS button's idle-state ring (MV-425) — "deliberately recessive... it
+        /// should disappear mid-fight," a thin cool grey rather than any of the amber/cyan alert hues.</summary>
+        private static readonly Color WeaponsButtonIdleRingColor = new Color(0.55f, 0.58f, 0.62f, 1f);
         // Minimap fog-of-war (MV-264, spatial rework MV-341): a visited room is a plain dim readout,
         // current borrows the tech-ring cyan already used for "this is you" elsewhere on the HUD, and
         // a hidden room is not drawn at all — the panel behind it IS the fog.
@@ -89,9 +92,12 @@ namespace MaxWorlds.UI
         private readonly float[] _slotReadyFlash = new float[2];
         private readonly bool[] _slotWasReady = new bool[2];
 
-        // Ability slots (0 Bomb, 1 Ultimate)
+        // Ability slots (0 Bomb, 1 Ultimate — "B"/"U", also the two FORGE HUD slot ids, MV-426)
         private readonly Image[] _slotRadial = new Image[2];
         private readonly Image[] _slotGlow = new Image[2];
+        private readonly Image[] _slotIcon = new Image[2];
+        private readonly Text[] _slotLetter = new Text[2];
+        private readonly Text[] _slotLocked = new Text[2];
 
         // The Hydro burst button (YT-215): hidden until UpgradeState.HydroAssembled, same TechRings
         // visual language the other ability controls use.
@@ -194,19 +200,30 @@ namespace MaxWorlds.UI
         private float _warningTimer;
         private float _bossIncomingTimer;
 
-        // Robot drops (YT-131): banked power-cell counter + the flashing "install available" badge.
+        // Robot drops (YT-131): banked power-cell counter.
         private Text _cellCount;
         private Image _cellIcon;
         private float _cellPop;              // one-shot scale pop when a cell is banked
-        private RectTransform _partAlertRoot;
-        private Image _partAlertBg;
-        private Image _partAlertIcon;
-        private Image _partAlertGlow;
 
-        // The always-available WEAPONS access button (YT-178). The part-alert chip above used to BE
-        // this button, gated on a part being pending; now it's a small badge pinned to this button's
-        // corner, and the button itself is always up.
+        // The always-available WEAPONS access button (YT-178), redrawn as THE RIG's own hexagonal
+        // mark (MV-425, retiring both the old ABILITIES pill and the single-chip corner badge YT-131/
+        // YT-178/MV-358 built up on it). _weaponsButtonRing is the state-coloured stroke (grey/amber/
+        // module-cyan); _weaponsModuleHalo* are the module-captured state's double halo
+        // (GlowRadiusMultiplier-style, only ever active for ModuleCaptured/Both); the two corner
+        // badges are built and animated separately below.
         private RectTransform _weaponsButtonRoot;
+        private Image _weaponsButtonRing;
+        private Image _weaponsButtonMark;
+        private RectTransform _weaponsModuleHaloRoot;
+        private Image _weaponsModuleHaloOuter, _weaponsModuleHaloInner;
+
+        private RectTransform _partsBadgeRoot;
+        private Image _partsBadgeGlow, _partsBadgeBg;
+        private Text _partsBadgeCount;
+
+        private RectTransform _moduleBadgeRoot;
+        private Image _moduleBadgeGlow, _moduleBadgeBg;
+        private Text _moduleBadgeMark;
 
         private void Awake()
         {
@@ -235,7 +252,7 @@ namespace MaxWorlds.UI
             BuildWarning();
             BuildPowerCellCounter();
             BuildWeaponsButton();
-            BuildPartAlert();
+            BuildWeaponsButtonBadges();
             BuildFloatingLayer();
             if (!SkipTouchControlsForTests) BuildTouchControls();
 
@@ -259,6 +276,7 @@ namespace MaxWorlds.UI
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
             AbilityCreditBank.Changed += OnAbilityCreditsChanged;
+            PendingMorphingModule.Changed += OnPendingModuleChanged;
         }
 
         private void OnDisable()
@@ -278,6 +296,7 @@ namespace MaxWorlds.UI
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
             AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
+            PendingMorphingModule.Changed -= OnPendingModuleChanged;
         }
 
         /// <summary>The Hydro burst button appears the moment the harness + condenser are both
@@ -315,26 +334,75 @@ namespace MaxWorlds.UI
             if (_cellCount != null) _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{capacity}";
         }
 
-        private void OnParts(int banked) => RefreshPartAlert();
+        private void OnParts(int banked) => RefreshWeaponsButtonAlert();
 
-        /// <summary>MV-358: a banked shed credit flashes the exact same ABILITIES-button badge a banked
+        /// <summary>MV-358: a banked shed credit flashes the exact same WEAPONS-button badge a banked
         /// part already does — "something is waiting in the Abilities screen", regardless of which kind
         /// — rather than a separate tell the player has to learn twice.</summary>
-        private void OnAbilityCreditsChanged(int banked) => RefreshPartAlert();
+        private void OnAbilityCreditsChanged(int banked) => RefreshWeaponsButtonAlert();
 
-        /// <summary>The chip is shown while a part is banked and unspent (YT-131) OR an ability credit
-        /// is banked and unspent (MV-358). It flashes in Update; here we just toggle its presence.</summary>
-        private void RefreshPartAlert()
+        /// <summary>MV-425: a Morphing Module draft banked/taken (<see cref="PendingMorphingModule"/>)
+        /// flips the button's cyan "module captured" state.</summary>
+        private void OnPendingModuleChanged() => RefreshWeaponsButtonAlert();
+
+        /// <summary>The four-state alert this button carries (MV-425): idle, parts-to-fit (amber),
+        /// module-captured (cyan) or both. Immediate toggle of what's shown; the pulse/flash animation
+        /// itself runs every frame in <see cref="UpdateWeaponsButton"/>.</summary>
+        private void RefreshWeaponsButtonAlert()
         {
-            if (_partAlertRoot != null)
-                _partAlertRoot.gameObject.SetActive(ShouldShowPartAlert(
-                    MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked));
+            var alert = CurrentWeaponsButtonAlert();
+            if (_partsBadgeRoot != null) _partsBadgeRoot.gameObject.SetActive(ShowsPartsBadge(alert));
+            if (_moduleBadgeRoot != null) _moduleBadgeRoot.gameObject.SetActive(ShowsModuleBadge(alert));
+            if (_weaponsModuleHaloRoot != null) _weaponsModuleHaloRoot.gameObject.SetActive(ShowsModuleRing(alert));
         }
 
-        /// <summary>Pure predicate behind <see cref="RefreshPartAlert"/> (MV-358) — pinned by an EditMode
-        /// test without building a canvas: the badge is up if either kind of spend is waiting.</summary>
+        private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
+            ShouldShowPartAlert(MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked),
+            PendingMorphingModule.HasPending);
+
+        /// <summary>Pure predicate (MV-358) — pinned by an EditMode test without building a canvas: a
+        /// spend is waiting if either kind of banked token is &gt; 0.</summary>
         public static bool ShouldShowPartAlert(int partsBanked, int abilityCreditsBanked) =>
             partsBanked > 0 || abilityCreditsBanked > 0;
+
+        /// <summary>The WEAPONS button's four alert states (MV-425). Amber ("parts to fit") means
+        /// something is spendable and the player chooses when; cyan ("module captured") means the game
+        /// is waiting on a decision the player hasn't made — they never share a colour, and cyan always
+        /// wins the ring.</summary>
+        public enum WeaponsButtonAlert { Idle, PartsToFit, ModuleCaptured, Both }
+
+        /// <summary>Pure — pinned directly by an EditMode test, no canvas needed.</summary>
+        public static WeaponsButtonAlert ComputeWeaponsButtonAlert(bool partsToFit, bool moduleCaptured) =>
+            partsToFit && moduleCaptured ? WeaponsButtonAlert.Both
+            : moduleCaptured ? WeaponsButtonAlert.ModuleCaptured
+            : partsToFit ? WeaponsButtonAlert.PartsToFit
+            : WeaponsButtonAlert.Idle;
+
+        public static bool ShowsPartsBadge(WeaponsButtonAlert alert) =>
+            alert == WeaponsButtonAlert.PartsToFit || alert == WeaponsButtonAlert.Both;
+
+        public static bool ShowsModuleBadge(WeaponsButtonAlert alert) =>
+            alert == WeaponsButtonAlert.ModuleCaptured || alert == WeaponsButtonAlert.Both;
+
+        /// <summary>Cyan always wins the ring — "Both" shows the module halo, not the amber ring; the
+        /// amber count keeps its own corner badge regardless.</summary>
+        public static bool ShowsModuleRing(WeaponsButtonAlert alert) =>
+            alert == WeaponsButtonAlert.ModuleCaptured || alert == WeaponsButtonAlert.Both;
+
+        /// <summary>The module-cyan colour (<c>rig_board.json</c> "module", #7FE3FF) — the single named
+        /// constant that data file's own colours block has asked for since MV-423
+        /// (<c>"constant": "NEW - add HudController.ModuleColor"</c>). Read live off
+        /// <see cref="RigBoardLayout"/> rather than a second hand-copied hex, the same "source, not a
+        /// matched copy" idiom <see cref="PartColor"/> already follows.</summary>
+        public static Color ModuleColor => RigBoardLayout.Colour("module");
+
+        /// <summary>The ring/mark stroke colour for each state — module cyan sourced from
+        /// <see cref="ModuleColor"/> so the HUD tell and the board it points at (MV-433's node glow)
+        /// never drift apart.</summary>
+        public static Color WeaponsButtonRingColor(WeaponsButtonAlert alert) =>
+            ShowsModuleRing(alert) ? ModuleColor
+            : alert == WeaponsButtonAlert.PartsToFit ? PartColor
+            : WeaponsButtonIdleRingColor;
 
         /// <summary>Tapping the WEAPONS button (YT-178) opens the weapons area to show Max's current
         /// loadout on demand — the button is always-available access, not gated on a part being banked.
@@ -433,6 +501,7 @@ namespace MaxWorlds.UI
             UpdateBoss();
             UpdateWarnings(dt);
             UpdateDrops(dt);
+            UpdateWeaponsButton();
             FlushDamageNumbers();
         }
 
@@ -445,49 +514,20 @@ namespace MaxWorlds.UI
                 float s = 1f + 0.35f * _cellPop;
                 _cellIcon.rectTransform.localScale = new Vector3(s, s, 1f);
             }
-
-            // The part chip FLASHES while it's shown — the "you have an upgrade waiting" tell that YT-132
-            // turns into the upgrade screen. It now beats in the shared collectible orange (YT-147): a
-            // real dim->bright + scale pulse that reads as a beacon, not the old barely-there alpha fade
-            // on a gold badge that read as static and yellow. MV-300: bigger badge, a stronger scale
-            // pulse and an outer glow ring make the beat unmissable at a glance.
-            if (_partAlertRoot != null && _partAlertRoot.gameObject.activeSelf)
-            {
-                float t = PartAlertFlash(Time.unscaledTime);
-                if (_partAlertBg != null) _partAlertBg.color = PartAlertColor(t);
-
-                // A scale pop on the beat, so the flash reads even in a busy corner of the screen.
-                float s = 1f + 0.22f * t;
-                _partAlertRoot.localScale = new Vector3(s, s, 1f);
-
-                if (_partAlertIcon != null)
-                {
-                    var ic = Color.white; ic.a = 0.65f + 0.35f * t; _partAlertIcon.color = ic;
-                }
-
-                // Outer glow ring: swells and brightens on the same beat, fading to nothing in the
-                // trough so it reads as a halo pulsing outward, not a static ring.
-                if (_partAlertGlow != null)
-                {
-                    var gc = PartColor; gc.a = 0.55f * t;
-                    _partAlertGlow.color = gc;
-                    float gs = 1f + 0.18f * t;
-                    _partAlertGlow.rectTransform.localScale = new Vector3(gs, gs, 1f);
-                }
-            }
         }
 
         /// <summary>
-        /// The part-ready chip's flash, 0..1. Pure and driven by unscaled time so it keeps flashing
-        /// while the upgrade screen has the game paused with the part still waiting (YT-147). ~1 Hz —
-        /// a touch quicker than the on-ground aura's ambient breath, because this is an alert.
+        /// The parts-badge flash, 0..1. Pure and driven by unscaled time so it keeps flashing while a
+        /// paused screen still shows the badge waiting (YT-147). ~1 Hz — a touch quicker than the
+        /// on-ground aura's ambient breath, because this is an alert. Deliberately slower than
+        /// <see cref="ModuleAlertFlash"/> (MV-425 design: amber reads as patient, cyan as urgent).
         /// </summary>
         public static float PartAlertFlash(float unscaledTime)
             => 0.5f + 0.5f * Mathf.Sin(unscaledTime * 6f);
 
         /// <summary>
-        /// The chip's colour at flash amount <paramref name="t"/>: the shared collectible orange swung
-        /// dim->full so it reads as an active beacon, not a static badge (YT-147). The hue is
+        /// The parts badge's colour at flash amount <paramref name="t"/>: the shared collectible orange
+        /// swung dim-&gt;full so it reads as an active beacon, not a static badge (YT-147). The hue is
         /// <see cref="PartColor"/> — the same orange the on-ground pickup glows — so the two never drift
         /// and neither is the forbidden yellow.
         /// </summary>
@@ -500,10 +540,131 @@ namespace MaxWorlds.UI
             return c;
         }
 
+        /// <summary>The module badge/halo's flash, 0..1 (MV-425) — roughly twice <see cref="PartAlertFlash"/>'s
+        /// rate: "cyan should read as roughly twice as urgent" as amber.</summary>
+        public static float ModuleAlertFlash(float unscaledTime)
+            => 0.5f + 0.5f * Mathf.Sin(unscaledTime * 12f);
+
+        /// <summary>The module badge/ring/halo's colour at flash amount <paramref name="t"/> — the same
+        /// dim-&gt;full swing <see cref="PartAlertColor"/> uses, in module cyan instead of parts amber.</summary>
+        public static Color ModuleAlertColor(float t)
+        {
+            t = Mathf.Clamp01(t);
+            Color c = ModuleColor * (0.32f + 0.68f * t);
+            c.a = 0.55f + 0.45f * t;
+            return c;
+        }
+
+        /// <summary>Drives the WEAPONS button's ring/halo/mark and both corner badges every frame
+        /// (MV-425) off the four-state alert (<see cref="RefreshWeaponsButtonAlert"/> already toggled
+        /// which pieces are active; this only animates them). Unscaled time throughout — same reason
+        /// <see cref="PartAlertFlash"/> always was: a badge must keep flashing while a paused screen
+        /// still shows something waiting.</summary>
+        private void UpdateWeaponsButton()
+        {
+            if (_weaponsButtonRoot == null) return;
+            var alert = CurrentWeaponsButtonAlert();
+
+            if (_weaponsButtonMark != null)
+            {
+                var mc = BoneWhite;
+                mc.a = alert == WeaponsButtonAlert.Idle ? 0.6f : 1f;
+                _weaponsButtonMark.color = mc;
+            }
+
+            if (_weaponsButtonRing != null)
+            {
+                var rc = WeaponsButtonRingColor(alert);
+                if (alert == WeaponsButtonAlert.Idle)
+                {
+                    rc.a = 0.7f; // thin, steady — deliberately recessive
+                }
+                else
+                {
+                    float flash = ShowsModuleRing(alert) ? ModuleAlertFlash(Time.unscaledTime) : PartAlertFlash(Time.unscaledTime);
+                    rc.a = 0.6f + 0.4f * flash;
+                }
+                _weaponsButtonRing.color = rc;
+            }
+
+            if (_weaponsModuleHaloRoot != null && _weaponsModuleHaloRoot.gameObject.activeSelf)
+            {
+                float t = ModuleAlertFlash(Time.unscaledTime);
+                var hc = ModuleColor; hc.a = 0.30f * (0.4f + 0.6f * t);
+                if (_weaponsModuleHaloOuter != null) _weaponsModuleHaloOuter.color = hc;
+                if (_weaponsModuleHaloInner != null) _weaponsModuleHaloInner.color = hc;
+            }
+
+            if (_partsBadgeRoot != null && _partsBadgeRoot.gameObject.activeSelf)
+            {
+                int count = MaxWorlds.Pickups.PickupWallet.PartsBanked + AbilityCreditBank.Banked;
+                if (_partsBadgeCount != null) _partsBadgeCount.text = count.ToString();
+                AnimateBadge(_partsBadgeRoot, _partsBadgeBg, _partsBadgeGlow, PartColor, PartAlertFlash(Time.unscaledTime));
+            }
+
+            if (_moduleBadgeRoot != null && _moduleBadgeRoot.gameObject.activeSelf)
+            {
+                AnimateBadge(_moduleBadgeRoot, _moduleBadgeBg, _moduleBadgeGlow, ModuleColor, ModuleAlertFlash(Time.unscaledTime));
+            }
+        }
+
+        /// <summary>One corner badge's beat: chip colour swings dim-&gt;full, a scale pop on the beat,
+        /// and an outer glow ring swelling/brightening in step — same shape MV-300 built for the single
+        /// chip this replaces, now shared by both.</summary>
+        private static void AnimateBadge(RectTransform root, Image bg, Image glow, Color hue, float t)
+        {
+            if (bg != null)
+            {
+                Color c = hue * (0.32f + 0.68f * t);
+                c.a = 0.55f + 0.45f * t;
+                bg.color = c;
+            }
+
+            float s = 1f + 0.22f * t;
+            root.localScale = new Vector3(s, s, 1f);
+
+            if (glow != null)
+            {
+                var gc = hue; gc.a = 0.55f * t;
+                glow.color = gc;
+                float gs = 1f + 0.18f * t;
+                glow.rectTransform.localScale = new Vector3(gs, gs, 1f);
+            }
+        }
+
+        private static readonly string[] AbilitySlotGlyphs = { "B", "U" };
+
+        /// <summary>MV-426: a forged FORGE fusion permanently occupies its named slot ("B"/"U"),
+        /// replacing the LOCKED placeholder with its icon and a steady ready-glow — none of the four
+        /// fusion effects (DELUGE/BLINKGUARD/OVERCHARGE/SKIRMISH) are player-activated, so there is no
+        /// cooldown to wipe; the slot simply reads as permanently equipped. An unforged slot keeps the
+        /// pre-RIG Bomb/Ultimate placeholder behaviour untouched.</summary>
         private void UpdateAbilitySlots(float dt)
         {
-            SetSlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
-            SetSlot(1, _model.UltimateRadialFill, _model.UltimateReady);
+            UpdateAbilitySlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
+            UpdateAbilitySlot(1, _model.UltimateRadialFill, _model.UltimateReady);
+        }
+
+        private void UpdateAbilitySlot(int i, float placeholderRadialFill, bool placeholderReady)
+        {
+            string fusionId = RigFusionState.ForgedInSlot(AbilitySlotGlyphs[i]);
+            bool forged = fusionId != null;
+
+            _slotLocked[i].gameObject.SetActive(!forged);
+            _slotLetter[i].gameObject.SetActive(!forged);
+            _slotIcon[i].gameObject.SetActive(forged);
+
+            if (forged)
+            {
+                _slotIcon[i].sprite = HudTextures.VectorIcon(RigBoardLayout.Icon("fuse"), 40);
+                _slotIcon[i].color = BoneWhite;
+                _slotRadial[i].fillAmount = 0f;
+                SetSlot(i, 0f, true);
+            }
+            else
+            {
+                SetSlot(i, placeholderRadialFill, placeholderReady);
+            }
         }
 
         private void SetSlot(int i, float radialFill, bool ready)
@@ -856,12 +1017,23 @@ namespace MaxWorlds.UI
                                      TextAnchor.MiddleCenter);
                 Stretch(letter.rectTransform);
                 letter.text = glyphs[i];
+                _slotLetter[i] = letter;
 
                 var locked = AddText(slot.rectTransform, 15f,
                                      new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f),
                                      TextAnchor.LowerCenter);
                 Stretch(locked.rectTransform);
                 locked.text = "LOCKED";
+                _slotLocked[i] = locked;
+
+                // A forged FORGE fusion's icon (MV-426) — hidden until RigFusionState.ForgedInSlot
+                // says this slot is occupied; see UpdateAbilitySlots.
+                var icon = new GameObject("Fusion Icon", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+                icon.transform.SetParent(slot.rectTransform, false);
+                Stretch(icon.rectTransform, 14f);
+                icon.raycastTarget = false;
+                icon.gameObject.SetActive(false);
+                _slotIcon[i] = icon;
 
                 // Cooldown radial wipe overlay (darkens the covered fraction).
                 var radial = AddImage(slot.rectTransform, HudTextures.Disc(96), new Color(0f, 0f, 0f, 0.62f), "Radial");
@@ -1709,69 +1881,116 @@ namespace MaxWorlds.UI
             _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
         }
 
-        /// <summary>The always-available WEAPONS button (YT-178): a persistent chip pinned to the right
-        /// edge that opens the weapons area on demand — any time, not only when a part is waiting. Sits
-        /// where the old part-only chip lived; that chip is now the badge <see cref="BuildPartAlert"/>
-        /// pins to its corner.</summary>
+        /// <summary>Hexagon bounding-box texture size THE WEAPONS button's background/ring/halo sprites
+        /// bake at (MV-425) — independent of the RectTransform's own <see cref="WeaponsButtonSize"/>,
+        /// which is what actually sets the tap target.</summary>
+        private const int WeaponsButtonHexTex = 108;
+
+        /// <summary>MV-425 AC1 (the live bug this ticket fixes): 96px read 42.2pt on the 932x430pt
+        /// 6-inch target (<c>SettingsPanel.Scale6Inch</c>, 0.44) — under Apple's 44pt HIG minimum.
+        /// 108px -&gt; 47.5pt clears it. <c>WeaponsButtonAlertTests</c> (EditMode) pins both the old
+        /// failure and the new pass.</summary>
+        private const float WeaponsButtonSize = 108f;
+
+        /// <summary>The always-available WEAPONS button (YT-178, redrawn MV-425): a hexagonal mark —
+        /// three linked nodes, a miniature of THE RIG board itself — replacing the old ABILITIES pill
+        /// in place (same anchor, same <c>(-28, 120)</c> position). All procedural: hexagons, circles,
+        /// strokes, no art asset, no font glyph (<c>HudFont</c> has no coverage for this symbol). The
+        /// ring/halo are driven every frame in <see cref="UpdateWeaponsButton"/> off
+        /// <see cref="WeaponsButtonAlert"/>; the two corner badges are a separate build,
+        /// <see cref="BuildWeaponsButtonBadges"/>.</summary>
         private void BuildWeaponsButton()
         {
             _weaponsButtonRoot = NewRect("Weapons Button", Root);
             Anchor(_weaponsButtonRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            _weaponsButtonRoot.sizeDelta = new Vector2(96f, 96f);
+            _weaponsButtonRoot.sizeDelta = new Vector2(WeaponsButtonSize, WeaponsButtonSize);
             _weaponsButtonRoot.anchoredPosition = new Vector2(-28f, 120f); // right edge, above the aim stick
 
-            var bg = AddImage(_weaponsButtonRoot, HudTextures.RoundedBox(72, 0.3f), PanelColor, "Weapons BG");
-            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            // Module-captured halo (double ring, MV-425 spec): behind everything else, only ever active
+            // for ModuleCaptured/Both (RefreshWeaponsButtonAlert). Sized as multiples of the button's
+            // own radius, same GlowRadiusMultiplier-style idiom THE RIG board's own node glow uses.
+            _weaponsModuleHaloRoot = NewRect("Module Halo", _weaponsButtonRoot);
+            Stretch(_weaponsModuleHaloRoot);
+            float halfSize = WeaponsButtonSize * 0.5f;
+            _weaponsModuleHaloOuter = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Outer");
+            Stretch(_weaponsModuleHaloOuter.rectTransform, halfSize * 0.42f); // r*1.42
+            _weaponsModuleHaloOuter.raycastTarget = false;
+            _weaponsModuleHaloInner = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Inner");
+            Stretch(_weaponsModuleHaloInner.rectTransform, halfSize * 0.24f); // r*1.24
+            _weaponsModuleHaloInner.raycastTarget = false;
+            _weaponsModuleHaloRoot.gameObject.SetActive(false);
+
+            var bg = AddImage(_weaponsButtonRoot, HudTextures.Polygon(6, -90f, WeaponsButtonHexTex, WeaponsButtonHexTex), PanelColor, "Weapons BG");
+            Stretch(bg.rectTransform);
             bg.raycastTarget = true;
 
             var button = bg.gameObject.AddComponent<Button>();
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(OnWeaponsButtonTapped);
 
-            var label = AddText(_weaponsButtonRoot, 18f, BoneWhite, TextAnchor.MiddleCenter);
-            Stretch(label.rectTransform, -8f);
-            label.text = "ABILITIES";
-            label.fontStyle = FontStyle.Bold;
-            label.resizeTextForBestFit = true;
-            label.resizeTextMinSize = 10;
-            label.resizeTextMaxSize = 20;
-            label.raycastTarget = false;
+            _weaponsButtonRing = AddImage(_weaponsButtonRoot, HudTextures.PolygonOutline(6, -90f, WeaponsButtonHexTex, WeaponsButtonHexTex, 4f), WeaponsButtonIdleRingColor, "Ring");
+            Stretch(_weaponsButtonRing.rectTransform);
+            _weaponsButtonRing.raycastTarget = false;
+
+            // The mark: three linked nodes, a spine forking into two — deliberately geometric, echoing
+            // THE RIG board's own ability nodes at a glance, in a 44x44 vector-icon box (HudTextures
+            // convention). White/alpha so Update can dim it for the recessive Idle state without a
+            // second sprite.
+            _weaponsButtonMark = AddImage(_weaponsButtonRoot, HudTextures.VectorIcon(
+                "<path d=\"M0,-13 L-11,11\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3.4\" stroke-linecap=\"round\"/>" +
+                "<path d=\"M0,-13 L11,11\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3.4\" stroke-linecap=\"round\"/>" +
+                "<circle cx=\"0\" cy=\"-13\" r=\"5.5\" fill=\"#ICON#\" stroke=\"none\"/>" +
+                "<circle cx=\"-11\" cy=\"11\" r=\"5.5\" fill=\"#ICON#\" stroke=\"none\"/>" +
+                "<circle cx=\"11\" cy=\"11\" r=\"5.5\" fill=\"#ICON#\" stroke=\"none\"/>", 64),
+                BoneWhite, "Mark");
+            Center(_weaponsButtonMark.rectTransform, WeaponsButtonSize * 0.6f);
+            _weaponsButtonMark.raycastTarget = false;
         }
 
-        /// <summary>The flashing "install available" badge (YT-131, corner-pinned to the WEAPONS button
-        /// since YT-178): pulses the moment a part is picked up — the tell that drives YT-132's upgrade
-        /// flow. It no longer gates access to the weapons area (the button beneath it does that always);
-        /// it just signals that a part is waiting, so it stays purely visual and lets taps fall through.
-        /// MV-300: sized up and given a pulsing outer glow ring so a waiting upgrade is obvious at a
-        /// glance, not something you notice only if you happen to look at the corner.</summary>
-        private void BuildPartAlert()
+        /// <summary>The button's two corner badges (MV-425), replacing the single 56px chip YT-131/
+        /// YT-178/MV-358 built up over time: amber count top-left ("parts to fit" — a part or ability
+        /// credit banked), cyan "!" top-right ("module captured" — a Morphing Module draft waiting,
+        /// <see cref="PendingMorphingModule"/>). Fixed opposite corners so both can be up at once
+        /// (the "Both" state) without colliding. Same glow-ring-behind-chip shape the old single badge
+        /// used (MV-300), just split and shrunk to fit two.</summary>
+        private void BuildWeaponsButtonBadges()
         {
-            _partAlertRoot = NewRect("Part Alert", _weaponsButtonRoot);
-            Anchor(_partAlertRoot, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            _partAlertRoot.sizeDelta = new Vector2(56f, 56f);
-            _partAlertRoot.anchoredPosition = new Vector2(12f, 12f); // pinned to the button's top-right corner
+            _partsBadgeRoot = BuildCornerBadge("Parts Badge", new Vector2(0f, 1f), new Vector2(-10f, 12f),
+                out _partsBadgeGlow, out _partsBadgeBg);
+            _partsBadgeCount = AddText(_partsBadgeRoot, 20f, Color.black, TextAnchor.MiddleCenter);
+            Stretch(_partsBadgeCount.rectTransform);
+            _partsBadgeCount.fontStyle = FontStyle.Bold;
+            _partsBadgeCount.raycastTarget = false;
 
-            // Outer glow ring — behind the chip, expanding beyond it as a halo. Purely visual (no
-            // raycast) so it never steals taps from the WEAPONS button beneath.
-            _partAlertGlow = AddImage(_partAlertRoot, HudTextures.RoundedBox(88, 0.35f), Color.clear, "Glow Ring");
-            Stretch(_partAlertGlow.rectTransform, 10f); // expands 10px beyond the chip as a halo
-            _partAlertGlow.type = Image.Type.Sliced;
-            _partAlertGlow.raycastTarget = false;
+            _moduleBadgeRoot = BuildCornerBadge("Module Badge", new Vector2(1f, 1f), new Vector2(10f, 12f),
+                out _moduleBadgeGlow, out _moduleBadgeBg);
+            _moduleBadgeMark = AddText(_moduleBadgeRoot, 22f, Color.black, TextAnchor.MiddleCenter);
+            Stretch(_moduleBadgeMark.rectTransform);
+            _moduleBadgeMark.text = "!";
+            _moduleBadgeMark.fontStyle = FontStyle.Bold;
+            _moduleBadgeMark.raycastTarget = false;
 
-            _partAlertBg = AddImage(_partAlertRoot, HudTextures.RoundedBox(72, 0.3f), PartColor, "Chip");
-            Stretch(_partAlertBg.rectTransform); _partAlertBg.type = Image.Type.Sliced;
-            _partAlertBg.raycastTarget = false;  // the WEAPONS button underneath handles taps (YT-178)
+            RefreshWeaponsButtonAlert();
+        }
 
-            // The part icon (YT-168): a black salvage-nut silhouette, not the old "PART" text — a
-            // shape reads faster than a word, and BLACK is the one tint that stays high-contrast
-            // against the chip's warm orange. The sprite bakes its own black, so tint white to render
-            // it as authored (the same trick the power-cell icon uses).
-            _partAlertIcon = AddImage(_partAlertRoot, WeaponHudIcons.Part(64), Color.white, "Part Icon");
-            Stretch(_partAlertIcon.rectTransform, -8f);   // inset from the badge edge
-            _partAlertIcon.raycastTarget = false;
+        private RectTransform BuildCornerBadge(string name, Vector2 corner, Vector2 offset, out Image glow, out Image bg)
+        {
+            var root = NewRect(name, _weaponsButtonRoot);
+            Anchor(root, corner, corner, corner);
+            root.sizeDelta = new Vector2(40f, 40f);
+            root.anchoredPosition = offset;
 
-            _partAlertRoot.gameObject.SetActive(ShouldShowPartAlert(
-                MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked));
+            glow = AddImage(root, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
+            Stretch(glow.rectTransform, 8f); // expands beyond the chip as a halo
+            glow.type = Image.Type.Sliced;
+            glow.raycastTarget = false;
+
+            bg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), PartColor, "Chip");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            bg.raycastTarget = false;  // the WEAPONS button underneath handles taps
+
+            root.gameObject.SetActive(false);
+            return root;
         }
 
         private void BuildFloatingLayer()

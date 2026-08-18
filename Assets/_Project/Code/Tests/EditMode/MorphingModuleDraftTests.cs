@@ -29,6 +29,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             RigState.Reset();
             PickupWallet.Reset();
+            PendingMorphingModule.Reset();
             _go = new GameObject("WeaponsScreen");
             _screen = _go.AddComponent<WeaponsScreen>();
         }
@@ -39,6 +40,7 @@ namespace MaxWorlds.Tests.EditMode
             if (_go != null) Object.DestroyImmediate(_go);
             RigState.Reset();
             PickupWallet.Reset();
+            PendingMorphingModule.Reset();
             Time.timeScale = 1f;
         }
 
@@ -135,6 +137,53 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.Level("e_cel"), Is.EqualTo(1), "the sole candidate must be granted outright");
             Assert.That(_screen.IsOpen, Is.False, "a single candidate must never open the board");
+        }
+
+        // ---------------------------------------------------------------- MV-425: 2-3 candidates wait, not force-open
+
+        [Test]
+        public void TwoOrMoreCandidatesNoLongerOpenTheScreenAtDrawTime_TheyBankInstead()
+        {
+            // PickupDirector (not exercised here — no live pickup) now calls PendingMorphingModule.Set
+            // for 2-3 candidates instead of OpenMorphingModuleDraft directly. This pins the class the
+            // pool actually lands in when drawn, independent of any live pickup/scene wiring.
+            PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
+
+            Assert.That(_screen.IsOpen, Is.False, "a banked draft must not force the board open");
+            Assert.That(Time.timeScale, Is.EqualTo(1f), "a banked draft must not pause the fight");
+            Assert.That(PendingMorphingModule.HasPending, Is.True);
+        }
+
+        [Test]
+        public void OpeningWeaponsWithAPendingDraftShowsItInstead_AndClearsThePending()
+        {
+            var candidates = new[] { "s_bal", "e_ff", "m_spd" };
+            PendingMorphingModule.Set(candidates);
+
+            _screen.Open();
+
+            Assert.That(_screen.IsOpen, Is.True, "opening WEAPONS with a draft waiting must show it");
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "the fight must pause once the draft is actually shown");
+            Assert.That(PendingMorphingModule.HasPending, Is.False, "Open() must consume the pending draft");
+
+            foreach (var id in candidates)
+            {
+                var badge = _screen.BoardNode(id).Find("Draft Badge");
+                Assert.That(badge.gameObject.activeSelf, Is.True, $"'{id}' must show as a draft candidate");
+            }
+        }
+
+        [Test]
+        public void OpeningWeaponsWithNothingPendingOpensThePlainBoard()
+        {
+            Assert.That(PendingMorphingModule.HasPending, Is.False);
+
+            _screen.Open();
+
+            Assert.That(_screen.IsOpen, Is.True);
+            var scrim = _screen.BoardNode("Draft Scrim");
+            Assert.That(scrim == null || !scrim.gameObject.activeSelf, Is.True,
+                "no draft is pending — the board must open plain, not dimmed for a draft");
         }
 
         // ---------------------------------------------------------------- the bottom band

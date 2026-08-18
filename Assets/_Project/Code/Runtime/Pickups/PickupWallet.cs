@@ -81,11 +81,15 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
-        public static void AddPowerCell()
+        /// <summary>Bank one collected power cell. Returns false and changes nothing at capacity
+        /// (MV-439) — the caller (<see cref="PickupDirector.Collect"/>) must not consume the pickup,
+        /// emit a gain, or pull it via Magneto when this refuses.</summary>
+        public static bool AddPowerCell()
         {
-            if (PowerCells >= Capacity) return;   // reserve is full (YT-137)
+            if (PowerCells >= Capacity) return false;   // reserve is full (YT-137)
             PowerCells++;
             PowerCellsChanged?.Invoke(PowerCells);
+            return true;
         }
 
         /// <summary>Set the banked total directly — a save slot restoring what was on disk (YT-151),
@@ -139,6 +143,19 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
+        /// <summary>Spend several banked parts atomically for a single fusion forge (MV-426) — a
+        /// FORGE tap either affords its whole 3-part cost or doesn't spend at all, same
+        /// all-or-nothing shape <see cref="TrySpendPowerCells"/> already uses for a Water Balloon
+        /// throw.</summary>
+        public static bool TrySpendParts(int amount)
+        {
+            if (amount <= 0) return true;
+            if (PartsBanked < amount) return false;
+            PartsBanked -= amount;
+            PartsChanged?.Invoke(PartsBanked);
+            return true;
+        }
+
         /// <summary>Wipe the bank (new run / test isolation). Fires the change events so any live HUD
         /// re-reads zero rather than keeping a stale count on screen. MV-422: Cell Capacity
         /// (<c>e_cel</c>) now lives in the shared <see cref="RigState"/>, which has no per-node reset —
@@ -151,6 +168,7 @@ namespace MaxWorlds.Pickups
             PowerCells = 0;
             PartsBanked = 0;
             RigState.Reset();
+            RigFusionState.Reset();
             PowerCellsChanged?.Invoke(0);
             PartsChanged?.Invoke(0);
             CapacityChanged?.Invoke(Capacity);

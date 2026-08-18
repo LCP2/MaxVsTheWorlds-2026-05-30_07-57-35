@@ -31,16 +31,23 @@ namespace MaxWorlds.VFX
         private static readonly Color PowerBlue = new Color(0.20f, 0.42f, 0.85f);
         private static readonly Color HarnessGreen = new Color(0.28f, 0.62f, 0.34f);
         private static readonly Color EngineOrange = new Color(0.92f, 0.48f, 0.16f);
-        private static readonly Color HydroGlow = new Color(0.45f, 0.9f, 1f);
         private static readonly Color Steel = new Color(0.55f, 0.58f, 0.63f);
         private static readonly Color DarkSteel = new Color(0.24f, 0.26f, 0.30f);
+        // The ability module's own colour family (MV-431) — it used to wear DarkSteel + Steel + the cell's
+        // own HydroGlow cyan, so at the 72° camera it read as "a slightly larger part" instead of the
+        // run-defining drop it is. Public: PickupArtDirector's ground ring already wears ModuleGlow's value
+        // (MV-429, ahead of this ticket) so the ring and the prop land on the same red without drifting.
+        private static readonly Color ModuleRed = new Color(0.85f, 0.12f, 0.10f);
+        public static readonly Color ModuleGlow = new Color(1.00f, 0.24f, 0.08f);
         // Bright cool chrome — the accent/trim on the parts and the power-cell caps. Replaces the old
         // brass (0.72,0.55,0.22): brass is a warm mid-value that the 0.6 sunlit-albedo ceiling
         // (SunlitAlbedo.Clamp, under the yard's 1.8x key) scaled down into a muddy BROWN, so the caps,
         // the power-nozzle ring and the harness clip all read dull/dirty (YT-146). A near-neutral
         // chrome stays a bright metal at any value — it can't go brown — so the pickups read as clean
         // collectibles, not rust.
-        private static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
+        // Public: MV-429's ground ring for a Part pickup reads this back so the ring agrees with the
+        // chrome trim of the machine-internals prop it surrounds.
+        public static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
         // Public: PickupArtDirector reads this back to drive the cell's gentle radiance (MV-304), the
         // same idiom as GlistenColor below.
         public static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
@@ -85,12 +92,15 @@ namespace MaxWorlds.VFX
 
         /// <summary>The pool <see cref="PickupArtDirector"/> draws from to dress a dropped part
         /// (WV-237) — one entry per machine-internals design, kept as one array so "how many designs
-        /// exist" and "which keys count" can't drift apart.</summary>
-        public static readonly string[] MachineInternalsKeys =
-        {
-            Keys.Gear, Keys.Coil, Keys.CircuitBlock, Keys.Piston, Keys.ValveManifold,
-            Keys.CapacitorBank, Keys.CogCluster, Keys.HydraulicRam, Keys.FuseBlock, Keys.WiringLoom,
-        };
+        /// exist" and "which keys count" can't drift apart.
+        ///
+        /// MV-430: collapsed from ten designs to one. At the fixed 72° camera a unit of height projects
+        /// to ~0.31 of a unit on screen, so nine of the ten collapsed to "a small stack on a white
+        /// disc" — the variety cost read clarity and bought nothing, since a part carries no gameplay
+        /// identity anyway (WV-228). The other nine <c>Build*</c> methods below are left in place and
+        /// still reachable through <see cref="Build"/> — this is a one-line change to restore them if
+        /// the tight-slice call ever reverses.</summary>
+        public static readonly string[] MachineInternalsKeys = { Keys.Gear };
 
         /// <summary>Build a prop by key (see <see cref="Keys"/>). Returns null for an unknown key rather
         /// than throwing, so a gameplay drop table with a typo drops nothing instead of erroring a run.</summary>
@@ -217,14 +227,22 @@ namespace MaxWorlds.VFX
 
         /// <summary>The Hydro device's pickup reads a chunk bigger than the power cell (WV-236) — it's
         /// "a new weapon/ability", not just another drop — applied by <c>PickupArtDirector</c> as a
-        /// uniform scale on top of this authored geometry, same idiom as the untouched four parts.</summary>
-        public const float HydroDeviceGroundScale = 1.6f;
+        /// uniform scale on top of this authored geometry, same idiom as the untouched four parts.
+        ///
+        /// MV-431: bumped 1.6 -> 2.0 alongside the device's own red colour pass, so it stays the largest
+        /// of the three ground scales (power cell 1.6, part 1.8, device 2.0) — the rarest drop reads as
+        /// the biggest thing on the lawn.</summary>
+        public const float HydroDeviceGroundScale = 2.0f;
 
         /// <summary>The power cell reads too small in-arena at its authored size (MV-316) — bumped up
         /// on top of its authored geometry, same idiom as <see cref="HydroDeviceGroundScale"/>. Stays
         /// below the Hydro device's multiplier so the cell still reads as "the common collectible", not
-        /// the rarer device.</summary>
-        public const float PowerCellGroundScale = 1.4f;
+        /// the rarer device.
+        ///
+        /// MV-429: bumped again, 1.4 -> 1.6, now that the oversized <c>CollectibleGlow</c> aura that used
+        /// to pad the cell's apparent size is gone (replaced by a ground-hugging ring) — the cell needs
+        /// its own geometry to carry more of the "read me" job the aura used to do for free.</summary>
+        public const float PowerCellGroundScale = 1.6f;
 
         /// <summary>A dropped part's machine-internals design (<see cref="MachineInternalsKeys"/>) was
         /// never given a ground multiplier at all — it stayed at its authored size while the power cell
@@ -232,10 +250,18 @@ namespace MaxWorlds.VFX
         /// their already-distinct shapes/colours (MV-326: "Max is shown approaching what look like two
         /// identical cells, but one is actually a part"). MV-326's first pass set this to a bare 1.75x —
         /// only 1.25x relative to the cell's own 1.4x, still inside the noise at the fixed 72° camera
-        /// (MV-347). Expressed as a multiple of <see cref="PowerCellGroundScale"/>, not a second bare
-        /// constant, so "a part is exactly 2x a cell's footprint" survives any future retune of the cell's
-        /// own scale instead of the two silently drifting apart again.</summary>
-        public const float PartGroundScale = PowerCellGroundScale * 2f;
+        /// (MV-347), so it was then expressed as <see cref="PowerCellGroundScale"/> * 2f so the ratio
+        /// couldn't drift.
+        ///
+        /// MV-429 breaks that derivation: bumping <see cref="PowerCellGroundScale"/> to 1.6 would have
+        /// silently dragged this to 3.2 along with it, growing the part on a ticket that never asked for
+        /// that. Pinned back to its previous effective value (2.8 = the old 1.4 * 2) as an explicit
+        /// literal instead — unchanged part size, no more silent coupling to the cell's own constant.
+        ///
+        /// MV-430 retunes it: with the machine-internals pool collapsed to one clean gear design and the
+        /// power cell already at 1.6 (MV-429), a part no longer needs to out-size the cell 2x to read as
+        /// its own thing — 1.8 keeps it just barely the larger of the two.</summary>
+        public const float PartGroundScale = 1.8f;
 
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
@@ -246,37 +272,42 @@ namespace MaxWorlds.VFX
         {
             var root = Root("HydroDevice", parent);
             Material shell = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            Material coil = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material coil = MaterialLibrary.Tinted(SurfaceKind.Metal, ModuleRed);
+            Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
             Part(root, "Base", PrimitiveType.Cylinder, new Vector3(0f, 0.08f, 0f),
                  new Vector3(0.34f, 0.08f, 0.34f), null, shell);
-            // The glowing condensation core.
-            Glow(root, "Core", new Vector3(0f, 0.32f, 0f), 0.26f, HydroGlow);
-            // Coil rings stacked around the core.
+            // The glowing condensation core — MV-431: bigger and its own red-orange, not the cell's cyan.
+            Glow(root, "Core", new Vector3(0f, 0.34f, 0f), 0.32f, ModuleGlow);
+            // Coil rings stacked around the core — MV-431: ModuleRed, not neutral Steel.
             for (int i = 0; i < 3; i++)
             {
                 float y = 0.22f + i * 0.11f;
                 float r = 0.3f - i * 0.03f;
                 Part(root, $"Coil{i}", PrimitiveType.Cylinder, new Vector3(0f, y, 0f),
-                     new Vector3(r, 0.025f, r), null, coil);
+                     new Vector3(r, 0.03f, r), null, coil);
             }
-            // Radiator fins splaying out — the "condenser" read.
+            // Radiator fins splaying out — the "condenser" read. MV-431: dark, not Steel, so the red core
+            // stays the only bright thing; already seated against the base (do not "fix" the position).
             for (int i = 0; i < 4; i++)
             {
                 float a = i * 90f;
                 Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
                 Part(root, $"Fin{i}", PrimitiveType.Cube, dir * 0.24f + Vector3.up * 0.16f,
-                     new Vector3(0.05f, 0.2f, 0.16f), Quaternion.Euler(0f, a, 0f), coil);
+                     new Vector3(0.055f, 0.2f, 0.16f), Quaternion.Euler(0f, a, 0f), shell);
             }
+            // The cap (MV-431) — a readable top face at the 72° camera, chrome to match every other prop's
+            // trim accent.
+            Part(root, "Cap", PrimitiveType.Cylinder, new Vector3(0f, 0.52f, 0f),
+                 new Vector3(0.10f, 0.02f, 0.10f), null, cap);
 
             // The SHIMMER (WV-236): "shimmers like a cell" — the same specular-dot language as the power
             // cell's own glints (YT-167), riding the coil rings so the sparkle sits on a surface that's
-            // already part of the read rather than tacked onto a flat face. Three, not the cell's four,
-            // and bigger — this prop already reads busier than the cell, so it needs fewer, bolder catches
-            // of light rather than a dense cluster that would just blur into the coils.
-            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.22f, 0.31f), 0.06f);
-            Glisten(root, GlistenPrefix + "1", OnCircle(150f, 0.33f, 0.28f), 0.05f);
-            Glisten(root, GlistenPrefix + "2", OnCircle(260f, 0.44f, 0.26f), 0.055f);
+            // already part of the read rather than tacked onto a flat face. MV-431: two, not three — this
+            // prop already reads busier than the cell, so it needs fewer, bolder catches of light rather
+            // than a dense cluster that would just blur into the coils.
+            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.24f, 0.31f), 0.07f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(150f, 0.36f, 0.28f), 0.06f);
             return root;
         }
 
@@ -347,42 +378,59 @@ namespace MaxWorlds.VFX
         /// footprint and height, so the ticket's "consistent pickup silhouette" holds even though the
         /// crown on top of each is completely different; each also gets its own <see cref="Glisten"/>
         /// dot(s) so every design shimmers, not just the old power-cell/Hydro-device pair.
-        /// MV-180 reversed the ground pickup back to a plain box (Lee's playtest call) — kept here as a
-        /// retained design library, not currently drawn from by <see cref="PickupArtDirector"/>.</summary>
-        private const float PartPlinthRadius = 0.2f;
+        /// MV-305 draws from these today (<see cref="PickupArtDirector.RollPartArtKey"/>) — only
+        /// <see cref="Keys.Gear"/> is currently in <see cref="MachineInternalsKeys"/> (MV-430), but the
+        /// other nine builders stay reachable by key for when variety returns.</summary>
+        private const float PartPlinthRadius = 0.22f;
         private const float PartPlinthHeight = 0.06f;
 
-        private static void PartPlinth(GameObject root, Material mat)
+        /// <summary>MV-430: the plinth was <see cref="Chrome"/> — near-white at radius 0.2, so on most
+        /// designs it out-shone the part sitting on it and the eye read the base instead of the object.
+        /// <see cref="DarkSteel"/> instead, hardcoded here rather than taken as a parameter, so every
+        /// part builder gets the same dark, recessive base without each call site having to remember to
+        /// ask for it.</summary>
+        private static void PartPlinth(GameObject root)
         {
             // A cylinder's local scale.y IS its half-height (default primitive spans -1..1), so
             // position.y has to equal that half-height too for the plinth's underside to sit at y = 0
             // instead of poking below the ground.
             float half = PartPlinthHeight * 0.5f;
+            Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
             Part(root, "Plinth", PrimitiveType.Cylinder, new Vector3(0f, half, 0f),
                  new Vector3(PartPlinthRadius, half, PartPlinthRadius), null, mat);
         }
 
-        /// <summary>A toothed cog — a flat disc ringed with square teeth around a hub.</summary>
+        /// <summary>A toothed cog — a flat disc ringed with square teeth around a hub. MV-430: rebuilt
+        /// so the teeth sit flush against the disc rim instead of floating clear of it — the same
+        /// detached-geometry trap <see cref="BuildPowerCell"/>'s <see cref="CasingRadius"/> doc already
+        /// called out. The tooth ring radius is derived from the disc's own scale, not written as a
+        /// second literal, so the two can never drift apart again.</summary>
         public static GameObject BuildGear(Transform parent = null)
         {
             var root = Root("Gear", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material chrome = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material darkSteel = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
             Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
-            Part(root, "Disc", PrimitiveType.Cylinder, new Vector3(0f, 0.24f, 0f),
-                 new Vector3(0.17f, 0.05f, 0.17f), null, body);
+            Vector3 discScale = new Vector3(0.30f, 0.055f, 0.30f);
+            Part(root, "Disc", PrimitiveType.Cylinder, new Vector3(0f, 0.22f, 0f), discScale, null, body);
+
+            float toothRadius = discScale.x * 0.5f;
             for (int i = 0; i < 8; i++)
             {
                 float a = i * 45f;
                 Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
-                Part(root, $"Tooth{i}", PrimitiveType.Cube, dir * 0.18f + Vector3.up * 0.24f,
-                     new Vector3(0.05f, 0.06f, 0.05f), Quaternion.Euler(0f, a, 0f), body);
+                Part(root, $"Tooth{i}", PrimitiveType.Cube, dir * toothRadius + Vector3.up * 0.22f,
+                     new Vector3(0.055f, 0.07f, 0.075f), Quaternion.Euler(0f, a, 0f), body);
             }
             Part(root, "Hub", PrimitiveType.Cylinder, new Vector3(0f, 0.24f, 0f),
-                 new Vector3(0.05f, 0.07f, 0.05f), null, plinth);
-            Glisten(root, GlistenPrefix + "0", new Vector3(0.13f, 0.24f, 0.09f), 0.045f);
-            Glisten(root, GlistenPrefix + "1", new Vector3(-0.1f, 0.24f, -0.12f), 0.04f);
+                 new Vector3(0.11f, 0.075f, 0.11f), null, chrome);
+            // The hub pin (MV-430): gives the gear's top face a readable centre at the 72° camera.
+            Part(root, "HubPin", PrimitiveType.Cylinder, new Vector3(0f, 0.26f, 0f),
+                 new Vector3(0.05f, 0.07f, 0.05f), null, darkSteel);
+            Glisten(root, GlistenPrefix + "0", new Vector3(0.10f, 0.25f, 0.07f), 0.05f);
+            Glisten(root, GlistenPrefix + "1", new Vector3(-0.08f, 0.25f, -0.09f), 0.042f);
             return root;
         }
 
@@ -390,9 +438,8 @@ namespace MaxWorlds.VFX
         public static GameObject BuildCoil(Transform parent = null)
         {
             var root = Root("Coil", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             for (int i = 0; i < 5; i++)
             {
@@ -411,10 +458,9 @@ namespace MaxWorlds.VFX
         public static GameObject BuildCircuitBlock(Transform parent = null)
         {
             var root = Root("CircuitBlock", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material board = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
             Material trace = MaterialLibrary.Tinted(SurfaceKind.Metal, BeamCyan);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Part(root, "Board", PrimitiveType.Cube, new Vector3(0f, 0.18f, 0f),
                  new Vector3(0.3f, 0.2f, 0.3f), null, board);
@@ -435,14 +481,14 @@ namespace MaxWorlds.VFX
         public static GameObject BuildPiston(Transform parent = null)
         {
             var root = Root("Piston", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material trim = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Part(root, "Cylinder", PrimitiveType.Cylinder, new Vector3(0f, 0.22f, 0f),
                  new Vector3(0.15f, 0.2f, 0.15f), null, housing);
             Part(root, "Rod", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
-                 new Vector3(0.045f, 0.1f, 0.045f), null, plinth);
+                 new Vector3(0.045f, 0.1f, 0.045f), null, trim);
             Part(root, "Head", PrimitiveType.Cylinder, new Vector3(0f, 0.5f, 0f),
                  new Vector3(0.1f, 0.03f, 0.1f), null, housing);
             Glisten(root, GlistenPrefix + "0", new Vector3(0.08f, 0.42f, 0f), 0.035f);
@@ -454,10 +500,9 @@ namespace MaxWorlds.VFX
         public static GameObject BuildValveManifold(Transform parent = null)
         {
             var root = Root("ValveManifold", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material pipe = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
             Material wheel = MaterialLibrary.Tinted(SurfaceKind.Metal, EngineOrange);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Part(root, "Body", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f),
                  new Vector3(0.14f, 0.16f, 0.14f), null, pipe);
@@ -481,9 +526,8 @@ namespace MaxWorlds.VFX
         public static GameObject BuildCapacitorBank(Transform parent = null)
         {
             var root = Root("CapacitorBank", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material can = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             for (int i = 0; i < 3; i++)
             {
@@ -500,9 +544,8 @@ namespace MaxWorlds.VFX
         public static GameObject BuildCogCluster(Transform parent = null)
         {
             var root = Root("CogCluster", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material cog = MaterialLibrary.Tinted(SurfaceKind.Metal, HarnessGreen);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Vector3[] offsets = { new Vector3(0.08f, 0.2f, 0f), new Vector3(-0.09f, 0.3f, 0.04f) };
             float[] radii = { 0.11f, 0.09f };
@@ -527,10 +570,9 @@ namespace MaxWorlds.VFX
         public static GameObject BuildHydraulicRam(Transform parent = null)
         {
             var root = Root("HydraulicRam", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
             Material fluid = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Part(root, "Housing", PrimitiveType.Cylinder, new Vector3(0f, 0.16f, 0f),
                  new Vector3(0.14f, 0.15f, 0.14f), null, housing);
@@ -547,9 +589,8 @@ namespace MaxWorlds.VFX
         public static GameObject BuildFuseBlock(Transform parent = null)
         {
             var root = Root("FuseBlock", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material block = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Part(root, "Block", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0f),
                  new Vector3(0.28f, 0.16f, 0.17f), null, block);
@@ -567,9 +608,8 @@ namespace MaxWorlds.VFX
         public static GameObject BuildWiringLoom(Transform parent = null)
         {
             var root = Root("WiringLoom", parent);
-            Material plinth = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            PartPlinth(root, plinth);
+            PartPlinth(root);
 
             Part(root, "Connector", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0f),
                  new Vector3(0.13f, 0.14f, 0.13f), null, wire);

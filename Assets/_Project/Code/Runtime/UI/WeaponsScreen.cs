@@ -34,6 +34,15 @@ namespace MaxWorlds.UI
 
         private const float RefW = 1920f, RefH = 1080f;
 
+        /// <summary>MV-433: below this, <see cref="ComputeBoardScale"/> refuses to shrink the board
+        /// further — an ability node (r 50) at the floor is 90 ref-px / ~39.6pt at the project's
+        /// established 6-inch-screen scale (<c>SettingsPanel.Scale6Inch</c>, 0.44 — see that file's own
+        /// derivation), already under Apple's 44pt HIG minimum on its own. The floor doesn't claim to
+        /// clear 44pt (it can't, at this node size — flagged in the MV-433 fix comment); it exists so a
+        /// narrower aspect than 1.6:1 doesn't shrink tap targets even further chasing zero crop. Below
+        /// the floor, a little edge crop is accepted instead (see <see cref="VisibleRefXWindow"/>).</summary>
+        private const float BoardScaleFloor = 0.9f;
+
         private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
         private static readonly Color PanelColor = new Color(0.04f, 0.05f, 0.06f, 0.99f);
         private static readonly Color HeaderAccent = new Color(0.07f, 0.17f, 0.15f, 1f);
@@ -55,12 +64,22 @@ namespace MaxWorlds.UI
         private const int HexSides = 6;
         private const int FusionSides = 4;
         private const float HexRotationDeg = -90f;   // pointy-top: vertex angles 60*i-90
+        private const float FusionRotationDeg = 45f; // MV-433: diamond, not the hex's pointy-top rotation
         private const float Sqrt3 = 1.7320508f;
         private const float PartsSocketSize = 34f;
 
+        // MV-433: owned/lit-category halo radius as a multiple of the node's own radius, and the two
+        // peak alphas the halo's shared Glow texture is tinted to (module cyan for a draftable
+        // capability, family colour for owned/lit) — the halo itself fades to 0 by its own outer edge.
+        private const float GlowRadiusMultiplier = 1.30f;
+        private const float GlowAlphaOwned = 0.28f;
+        private const float GlowAlphaDraftable = 0.22f;
+
         private Canvas _canvas;
+        private Image _background;
         private RectTransform _safeRoot;
         private GameObject _root;
+        private RectTransform _boardScaleRoot;
         private RectTransform _boardRoot;
 
         private Text _cellsText;
@@ -74,11 +93,15 @@ namespace MaxWorlds.UI
 
         private readonly Dictionary<string, RigNodeVisual> _abilityNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, RigNodeVisual> _categoryNodes = new Dictionary<string, RigNodeVisual>();
+        private readonly Dictionary<string, RigNodeVisual> _fusionNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, Image> _categoryPanels = new Dictionary<string, Image>();
 
         // ------------------------------------------------------------------ Morphing Module draft (MV-424)
 
-        private static readonly Color DraftBadgeColor = new Color(0.5f, 0.89f, 1f);   // module cyan (rig_board.json "module")
+        // MV-425: was a hand-copied approximation of rig_board.json's "module" hex (#7FE3FF); now reads
+        // the single named constant that data file's own colours block asked for. A property, not a
+        // `static readonly` field, so it never bakes in a value ahead of RigBoardLayout's own load.
+        private static Color DraftBadgeColor => HudController.ModuleColor;
 
         private Image _draftScrim;
         private RectTransform _draftBand;
@@ -101,11 +124,26 @@ namespace MaxWorlds.UI
             return t != null ? (RectTransform)t : null;
         }
 
+        /// <summary>MV-433: the full-canvas opaque backdrop, first child of the Rig's own canvas
+        /// GameObject (drawn behind the Safe Area, the top bar and the board) — test-only access, same
+        /// idiom as <see cref="BoardNode"/>.</summary>
+        public Image Background => _background;
+
+        /// <summary>MV-433: a category's tinted backdrop column — test-only access, same idiom as
+        /// <see cref="BoardNode"/>.</summary>
+        public Image CategoryPanel(string id) => _categoryPanels.TryGetValue(id, out var p) ? p : null;
+
+        /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
+        /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
+        /// space regardless of this wrapper's scale) — test-only access to confirm the clamp applied.</summary>
+        public float BoardScale => _boardScaleRoot != null ? _boardScaleRoot.localScale.x : 1f;
+
         private void Start() => Build();
 
         private void OnEnable()
         {
             RigState.Changed += Refresh;
+            RigFusionState.Changed += Refresh;
             PickupWallet.PartsChanged += OnPartsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
             PickupWallet.CapacityChanged += OnCellsChanged;
@@ -114,6 +152,7 @@ namespace MaxWorlds.UI
         private void OnDisable()
         {
             RigState.Changed -= Refresh;
+            RigFusionState.Changed -= Refresh;
             PickupWallet.PartsChanged -= OnPartsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
             PickupWallet.CapacityChanged -= OnCellsChanged;
@@ -135,6 +174,32 @@ namespace MaxWorlds.UI
             if (partsBanked <= 0) return 0f;
             float t = 0.5f + 0.5f * Mathf.Sin(unscaledTime * 6f);
             return 0.5f * t;
+        }
+
+        /// <summary>MV-433: the board's scale-to-fit factor for a given screen aspect ratio (width /
+        /// height), under the canvas's own <c>matchWidthOrHeight = 1</c> (match-by-height) rule — pure
+        /// so the clamp is pinned by an EditMode test without building a canvas or touching
+        /// <see cref="Screen"/>. 1.0 at 16:9 and wider (nothing to fit); shrinks below that, floored at
+        /// <see cref="BoardScaleFloor"/> so a very narrow window never pushes a tap target smaller than
+        /// the floor already costs (see that constant's own doc comment).</summary>
+        public static float ComputeBoardScale(float aspect)
+        {
+            if (aspect <= 0f) return 1f;
+            float visibleRefWidth = RefH * aspect;
+            float raw = Mathf.Min(1f, visibleRefWidth / RefW);
+            return Mathf.Max(raw, BoardScaleFloor);
+        }
+
+        /// <summary>MV-433: the board frame's own x-range (in its unscaled 1920x1080 reference space)
+        /// that's actually on screen at a given aspect ratio, under match-by-height — independent of
+        /// <see cref="ComputeBoardScale"/>'s clamp, this is simply what the device shows. Wider than
+        /// 16:9 (e.g. the 932x430 phone target) shows the whole frame and then some (MinX goes
+        /// negative); narrower crops both edges symmetrically about the frame's own centre (960).</summary>
+        public static (float MinX, float MaxX) VisibleRefXWindow(float aspect)
+        {
+            float visibleRefWidth = RefH * aspect;
+            float minX = (RefW - visibleRefWidth) * 0.5f;
+            return (minX, RefW - minX);
         }
 
         private void Update()
@@ -163,6 +228,16 @@ namespace MaxWorlds.UI
                     var c = v.OuterRing.color;
                     c.a = pulse;
                     v.OuterRing.color = c;
+
+                    // MV-433: the draftable node's module-cyan halo pulses with the same ring/cadence —
+                    // OuterRing is only ever active in the draftable state, so this never touches the
+                    // owned/lit halo (which stays a flat GlowAlphaOwned, no pulse).
+                    if (v.Glow != null && v.Glow.gameObject.activeSelf)
+                    {
+                        var g = v.Glow.color;
+                        g.a = pulse * GlowAlphaDraftable;
+                        v.Glow.color = g;
+                    }
                 }
             }
             _ = dt;
@@ -171,10 +246,20 @@ namespace MaxWorlds.UI
         private void OnPartsChanged(int banked) => Refresh();
         private void OnCellsChanged(int cells) => Refresh();
 
-        /// <summary>Open THE RIG, pausing the game. Ignored if already open.</summary>
+        /// <summary>Open THE RIG, pausing the game. Ignored if already open. MV-425: if a Morphing
+        /// Module draft is banked and waiting (<see cref="PendingMorphingModule"/>), opening here shows
+        /// it immediately rather than the plain board — the player asked to open WEAPONS precisely
+        /// because the HUD's cyan badge told them one was waiting.</summary>
         public void Open()
         {
             if (_open) return;
+
+            if (PendingMorphingModule.HasPending)
+            {
+                OpenMorphingModuleDraft(PendingMorphingModule.Take());
+                return;
+            }
+
             if (_canvas == null) Build();
 
             _open = true;
@@ -249,9 +334,11 @@ namespace MaxWorlds.UI
             _cellsChipBg.color = capacitySpendable ? SpendReady : RowColor;
 
             RefreshPartsTray(banked);
+            ApplyBoardScale();
 
             foreach (var cat in RigBoardLayout.Categories) RefreshCategoryNode(cat, banked);
             foreach (var ab in RigBoardLayout.Abilities) RefreshAbilityNode(ab, banked);
+            foreach (var fusion in RigBoardLayout.Fusions) RefreshFusionNode(fusion, banked);
 
             RefreshMorphingModuleDraft();
         }
@@ -287,29 +374,18 @@ namespace MaxWorlds.UI
             _draftBandReason.text = DraftReasonLine(_draftCandidateIds[0], _draftCandidateIds.Count - 1);
         }
 
-        /// <summary>"<c>MAGNETO is here because you put 3 parts into COOLDOWN. The two you leave go
-        /// back in the pool.</c>" — the ticket's own example, generalised: a parent that's a stat names
-        /// the parts spent on it; a parent that's a cap names itself as already owned; a root cap (no
-        /// parent) was simply open from the run's start.</summary>
+        /// <summary>"<c>MAGNETO is here because you already have COOLDOWN.</c>" — schema 3 (MV-436)
+        /// retired the "you put N parts into X" wording: every parent is a draft grant now, never a
+        /// parts-spendable stat, so a candidate's parent is either already owned (having itself been
+        /// drafted) or the candidate is a root node, open from the run's start.</summary>
         private static string DraftReasonLine(string candidateId, int leftBehindCount)
         {
             string label = AbilityLabel(candidateId);
             string parent = RigBoard.Parent(candidateId);
 
-            string why;
-            if (string.IsNullOrEmpty(parent))
-            {
-                why = $"{label} is here because it was open from the run's start.";
-            }
-            else if (RigBoard.IsCap(parent))
-            {
-                why = $"{label} is here because you already have {AbilityLabel(parent)}.";
-            }
-            else
-            {
-                int level = RigState.Level(parent);
-                why = $"{label} is here because you put {level} part{(level == 1 ? "" : "s")} into {AbilityLabel(parent)}.";
-            }
+            string why = string.IsNullOrEmpty(parent)
+                ? $"{label} is here because it was open from the run's start."
+                : $"{label} is here because you already have {AbilityLabel(parent)}.";
 
             string leftBehind = leftBehindCount == 1
                 ? "The one you leave goes back in the pool."
@@ -365,7 +441,7 @@ namespace MaxWorlds.UI
             v.HexFill.color = new Color(family.r, family.g, family.b, lit ? 0.20f : 0.05f);
             v.HexOutline.color = lit ? family : new Color(family.r, family.g, family.b, 0.35f);
             v.Glow.gameObject.SetActive(lit);
-            if (lit) v.Glow.color = new Color(family.r, family.g, family.b, 0.45f);
+            if (lit) v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaOwned);
 
             v.PillText.text = $"{owned}/{total}";
             v.PillBg.color = lit ? new Color(family.r, family.g, family.b, 0.30f) : new Color(1f, 1f, 1f, 0.06f);
@@ -390,12 +466,15 @@ namespace MaxWorlds.UI
 
             bool owned = RigState.IsOwned(ab.Id);
             bool reached = RigState.IsReached(ab.Id);
-            bool isCap = ab.Kind == "cap";
-            bool draftable = isCap && reached && !owned;
+            // Schema 3 (MV-436): every ability is unlocked the same way, so "reached and unowned"
+            // is the one capability state — it used to also require ab.Kind == "cap" back when a
+            // stat could be reached-and-spendable without ever being a draft candidate.
+            bool draftable = reached && !owned;
             bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
 
             Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
             Color cyan = RigBoardLayout.Colour("sec");
+            Color module = RigBoardLayout.Colour("module");
 
             v.OuterRing.gameObject.SetActive(draftable);
             v.CapMarker.gameObject.SetActive(draftable);
@@ -406,7 +485,8 @@ namespace MaxWorlds.UI
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.20f);
                 v.HexOutline.color = family;
                 v.Glow.gameObject.SetActive(true);
-                v.Glow.color = new Color(family.r, family.g, family.b, 0.4f);
+                v.Glow.rectTransform.sizeDelta = new Vector2(v.Radius * GlowRadiusMultiplier * 2f, v.Radius * GlowRadiusMultiplier * 2f);
+                v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaOwned);
                 v.PillText.text = $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
                 v.PillBg.color = new Color(family.r, family.g, family.b, 0.30f);
                 v.PillText.color = TextColor;
@@ -418,7 +498,12 @@ namespace MaxWorlds.UI
             {
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.10f);
                 v.HexOutline.color = new Color(family.r, family.g, family.b, 0.8f);
-                v.Glow.gameObject.SetActive(false);
+                // MV-433 item 3: the dashed-outer-ring halo — module cyan, on the ring's own radius
+                // (r + capOuterRingOffset), pulsing in Update() alongside the ring itself.
+                float ringR = v.Radius + RigBoardLayout.CapOuterRingOffset;
+                v.Glow.gameObject.SetActive(true);
+                v.Glow.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
+                v.Glow.color = new Color(module.r, module.g, module.b, GlowAlphaDraftable);
                 v.CapMarker.color = cyan;
                 v.PillText.text = "SHED";
                 v.PillBg.color = new Color(cyan.r, cyan.g, cyan.b, 0.25f);
@@ -426,18 +511,6 @@ namespace MaxWorlds.UI
                 v.Label.text = ab.Label;
                 v.Label.color = TextColor;
                 v.Icon.color = new Color(family.r, family.g, family.b, 0.9f);
-            }
-            else if (reached)   // stat, reached, level 0
-            {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.20f);
-                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.5f);
-                v.Glow.gameObject.SetActive(false);
-                v.PillText.text = $"0/{ab.MaxLevel}";
-                v.PillBg.color = new Color(1f, 1f, 1f, 0.08f);
-                v.PillText.color = Dim;
-                v.Label.text = ab.Label;
-                v.Label.color = TextColor;
-                v.Icon.color = TextColor;
             }
             else   // not reached
             {
@@ -456,6 +529,54 @@ namespace MaxWorlds.UI
             v.Button.interactable = spendable;
         }
 
+        /// <summary>A FORGE fusion diamond (MV-426, 5/5): faint with <c>? ? ?</c> and its two parent
+        /// category names until both are lit, then amber with its real name and cost/slot once
+        /// eligible — independent of the currently-banked PARTS count (MV-423.png vs -noparts.png) —
+        /// and a stronger solid amber once actually forged, matching an owned ability's own "solid,
+        /// no longer a prospect" read.</summary>
+        private void RefreshFusionNode(RigFusionLayout fusion, int banked)
+        {
+            if (!_fusionNodes.TryGetValue(fusion.Id, out var v)) return;
+
+            bool forged = RigFusionState.IsForged(fusion.Id);
+            bool eligible = RigFusionState.IsEligible(fusion.Id);
+            Color amber = PartsColor;
+
+            if (forged)
+            {
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.28f);
+                v.HexOutline.color = amber;
+                v.Icon.color = TextColor;
+                v.Label.text = fusion.Label;
+                v.Label.color = TextColor;
+                v.Sub.text = $"FORGED · SLOT {fusion.HudSlot}";
+                v.Sub.color = amber;
+                v.Button.interactable = false;
+            }
+            else if (eligible)
+            {
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.14f);
+                v.HexOutline.color = amber;
+                v.Icon.color = amber;
+                v.Label.text = fusion.Label;
+                v.Label.color = TextColor;
+                v.Sub.text = $"{fusion.PartCost} PARTS · SLOT {fusion.HudSlot}";
+                v.Sub.color = amber;
+                v.Button.interactable = banked >= fusion.PartCost;
+            }
+            else
+            {
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.03f);
+                v.HexOutline.color = new Color(1f, 1f, 1f, 0.14f);
+                v.Icon.color = Dim;
+                v.Label.text = "? ? ?";
+                v.Label.color = Dim;
+                v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
+                v.Sub.color = Dim;
+                v.Button.interactable = false;
+            }
+        }
+
         /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
         /// glow, numbered 1-3 in a badge above the hex, and <c>TAKE</c> in the level pill in place of
         /// the usual level/SHED/LOCK reading. Always tappable — draft candidates ignore the PARTS bank
@@ -472,7 +593,8 @@ namespace MaxWorlds.UI
             v.HexFill.color = new Color(family.r, family.g, family.b, 0.22f);
             v.HexOutline.color = family;
             v.Glow.gameObject.SetActive(true);
-            v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);
+            v.Glow.rectTransform.sizeDelta = new Vector2(v.Radius * GlowRadiusMultiplier * 2f, v.Radius * GlowRadiusMultiplier * 2f);
+            v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);   // MV-424's own stronger draft-candidate glow, unchanged by MV-433
             v.Icon.color = TextColor;
             v.Label.text = ab.Label;
             v.Label.color = TextColor;
@@ -499,10 +621,21 @@ namespace MaxWorlds.UI
                 }
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
             }
+            if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
             PartSpend.TrySpendOnRigNode(id);
         }
 
         private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
+
+        /// <summary>MV-433 AC1: <c>colours.base</c>, forced fully opaque — the backdrop is meant to
+        /// read as "the game is paused behind it; there is nothing to see through to," not a scrim, so
+        /// alpha is never anything the data file (or a stray hex-with-alpha) could weaken.</summary>
+        private static Color OpaqueBase()
+        {
+            var c = RigBoardLayout.Colour("base");
+            c.a = 1f;
+            return c;
+        }
 
         // ------------------------------------------------------------------ build
 
@@ -523,6 +656,13 @@ namespace MaxWorlds.UI
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 1f;
 
+            // MV-433: opaque, first child of the CANVAS itself (not Safe Area) so it sits behind the
+            // top bar too and ignores the safe-area inset — the board draws over live gameplay
+            // otherwise, which is what washed every family colour out against the lawn.
+            _background = AddImage(_canvas.transform, HudTextures.Solid(), OpaqueBase(), "Background");
+            Stretch(_background.rectTransform);
+            _background.raycastTarget = false;
+
             _safeRoot = NewRect("Safe Area", _canvas.transform, Vector2.zero, Vector2.one);
             Stretch(_safeRoot);
             _safeRoot.gameObject.AddComponent<SafeArea>();
@@ -536,11 +676,22 @@ namespace MaxWorlds.UI
             Stretch(scrim.rectTransform);
             scrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
+            // MV-433: a scale-to-fit wrapper, pivoted at the board's own centre (960,540) so
+            // ComputeBoardScale's shrink is centred rather than pinned to a corner — occupies exactly
+            // the same screen rect Board Root used to occupy directly, so at scale 1 (16:9 and wider)
+            // nothing about the board's own position changes.
+            _boardScaleRoot = NewRect("Board Scale Root", rootRt, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            _boardScaleRoot.pivot = new Vector2(0.5f, 0.5f);
+            _boardScaleRoot.sizeDelta = new Vector2(RefW, RefH);
+            _boardScaleRoot.anchoredPosition = new Vector2(RefW * 0.5f, -RefH * 0.5f);
+
             // MV-423: the board is a fixed 1920x1080 frame (top-left anchored/pivoted) so every node's
             // json (x,y) maps 1:1 onto anchoredPosition — RigBoardLayoutTests asserts that mapping
-            // exactly. It sits directly under Safe Area (not a further-inset content rect) because the
-            // json's own coordinates (rowY.category=230 etc.) already clear the top bar (28/104).
-            _boardRoot = NewRect("Board Root", rootRt, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            // exactly, in Board Root's own LOCAL space, which the scale wrapper above never touches (a
+            // parent's localScale doesn't change a child's anchoredPosition/sizeDelta). It sits directly
+            // under the scale wrapper (not a further-inset content rect) because the json's own
+            // coordinates (rowY.category=230 etc.) already clear the top bar (28/104).
+            _boardRoot = NewRect("Board Root", _boardScaleRoot, new Vector2(0f, 1f), new Vector2(0f, 1f));
             _boardRoot.pivot = new Vector2(0f, 1f);
             _boardRoot.sizeDelta = new Vector2(RefW, RefH);
             _boardRoot.anchoredPosition = Vector2.zero;
@@ -555,7 +706,20 @@ namespace MaxWorlds.UI
 
             BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
 
+            ApplyBoardScale();
             _root.SetActive(false);
+        }
+
+        /// <summary>MV-433: recomputes and applies the board's scale-to-fit factor from the current
+        /// screen aspect. Called from <see cref="Build"/> once and from <see cref="Refresh"/> on every
+        /// state change so a resize (or a different device) since the last <see cref="Open"/> is picked
+        /// up without needing its own event — cheap enough to just fold into the existing refresh.</summary>
+        private void ApplyBoardScale()
+        {
+            if (_boardScaleRoot == null) return;
+            float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
+            float scale = ComputeBoardScale(aspect);
+            _boardScaleRoot.localScale = new Vector3(scale, scale, 1f);
         }
 
         /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
@@ -646,11 +810,11 @@ namespace MaxWorlds.UI
             band.gameObject.SetActive(false);
         }
 
-        /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) only has
-        /// to PLACE and LABEL these (RigBoardLayoutTests covers position/size); a fusion's own
-        /// draft/spend state machine is 5/5's job, so every diamond here renders permanently locked —
-        /// "???" over its parent-category pairing, never the mock's one-off lit OVERCHARGE state,
-        /// which depends on logic this ticket doesn't build.</summary>
+        /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) placed and
+        /// labelled these (RigBoardLayoutTests covers position/size); MV-426 (5/5) gives them their
+        /// real state machine via <see cref="RefreshFusionNode"/>, called once by <see cref="Refresh"/>
+        /// right after <see cref="Build"/> — this method only builds the static shell each starts
+        /// from.</summary>
         private void BuildForgeSection(RectTransform boardRoot)
         {
             float dividerY = RigBoardLayout.ForgeDividerY;
@@ -674,7 +838,7 @@ namespace MaxWorlds.UI
             caption.rectTransform.sizeDelta = new Vector2(700f, 28f);
             caption.text = "two lit categories · costs parts, never a shed · lands in the B / U slot";
 
-            foreach (var fusion in RigBoardLayout.Fusions) BuildFusionNode(boardRoot, fusion);
+            foreach (var fusion in RigBoardLayout.Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
         }
 
         private RigNodeVisual BuildFusionNode(RectTransform boardRoot, RigFusionLayout fusion)
@@ -700,12 +864,16 @@ namespace MaxWorlds.UI
             sub.rectTransform.sizeDelta = new Vector2(260f, 20f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
+            shell.Sub = sub;
 
             shell.PillBg.gameObject.SetActive(false);   // fusions carry no level pill
             shell.PartBadge.gameObject.SetActive(false);
             shell.OuterRing.gameObject.SetActive(false);
             shell.CapMarker.gameObject.SetActive(false);
-            shell.Button.interactable = false;
+            shell.Button.interactable = false;   // RefreshFusionNode (MV-426) turns this on once eligible
+
+            string id = fusion.Id;   // capture by value, not the loop variable
+            shell.Button.onClick.AddListener(() => OnRigNodeTapped(id));
             return shell;
         }
 
@@ -790,10 +958,13 @@ namespace MaxWorlds.UI
             float hexW = sides == HexSides ? r * Sqrt3 : r * 2f;
             float hexH = r * 2f;
 
-            var glow = AddImage(root, PolygonFillSprite(sides, Mathf.CeilToInt(hexW * 1.18f), Mathf.CeilToInt(hexH * 1.18f)),
-                Color.clear, "Glow");
+            // MV-433: a round radial-falloff halo behind the node plate (drawn first among this shell's
+            // children, so it renders behind Fill/Outline/Icon), not the old flat-alpha hex-shaped fill —
+            // one shared HudTextures.Glow texture, resized/tinted per state in Refresh*Node below (owned
+            // at r*GlowRadiusMultiplier, draftable at the outer dashed ring's own radius).
+            var glow = AddImage(root, HudTextures.Glow(128), Color.clear, "Glow");
             Anchor(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            glow.rectTransform.sizeDelta = new Vector2(hexW * 1.18f, hexH * 1.18f);
+            glow.rectTransform.sizeDelta = new Vector2(r * GlowRadiusMultiplier * 2f, r * GlowRadiusMultiplier * 2f);
             glow.raycastTarget = false;
             glow.gameObject.SetActive(false);
 
@@ -876,14 +1047,20 @@ namespace MaxWorlds.UI
             return root;
         }
 
-        private static Sprite PolygonFillSprite(int sides, int w, int h) => HudTextures.Polygon(sides, HexRotationDeg, w, h);
+        // MV-433: FORGE's fusion nodes (sides == FusionSides) render as diamonds — Polygon(4, 45) per
+        // geometry.radius.fusion — not squares; every other caller (hex nodes, the parts tray's hex
+        // sockets) keeps the pointy-top hex rotation. A single shared rotation constant for both shapes
+        // was the bug (fusion squares in MV-423's build).
+        private static float RotationFor(int sides) => sides == FusionSides ? FusionRotationDeg : HexRotationDeg;
+
+        private static Sprite PolygonFillSprite(int sides, int w, int h) => HudTextures.Polygon(sides, RotationFor(sides), w, h);
 
         private Sprite SolidHexOutlineSprite(float r) => SolidPolygonOutlineSprite(HexSides, r);
 
         private Sprite SolidPolygonOutlineSprite(int sides, float r)
         {
             float w = sides == HexSides ? r * Sqrt3 : r * 2f, h = r * 2f;
-            return HudTextures.PolygonOutline(sides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeOwned);
+            return HudTextures.PolygonOutline(sides, RotationFor(sides), Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeOwned);
         }
 
         private Sprite DashedHexSprite(float r)
@@ -903,6 +1080,11 @@ namespace MaxWorlds.UI
             public Text PillText, Label, DraftBadgeText;
             public Button Button;
             public float Radius;
+
+            /// <summary>Fusion nodes only (MV-426): the sub-label beneath the name — parent category
+            /// names while unforgeable, "<c>N PARTS · SLOT B</c>" once eligible, "<c>FORGED · SLOT B</c>"
+            /// once forged. Null for category/ability nodes.</summary>
+            public Text Sub;
         }
 
         // ------------------------------------------------------------------ top bar
@@ -914,10 +1096,14 @@ namespace MaxWorlds.UI
             bar.sizeDelta = new Vector2(-2f * ContentMargin, TopBarHeight);
             bar.anchoredPosition = new Vector2(0f, -ContentMargin);
 
-            var accent = AddImage(bar, HudTextures.RoundedBox(32, 0.35f), HeaderAccent, "Title Accent");
+            // MV-433: inset (not flush to the bar's own edges) so it reads as a soft-cornered panel
+            // INSIDE the top bar, per MV-423.png — flush-to-edge plus a shallow corner radius is what
+            // made it read as a hard rectangle overlapping the debug FPS readout (Bootstrap.cs OnGUI,
+            // screen pixels 12,8-652,68 — squarely under the old flush plate).
+            var accent = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), HeaderAccent, "Title Accent");
             Anchor(accent.rectTransform, new Vector2(0f, 0f), new Vector2(0.34f, 1f), new Vector2(0f, 0.5f));
-            accent.rectTransform.offsetMin = Vector2.zero;
-            accent.rectTransform.offsetMax = Vector2.zero;
+            accent.rectTransform.offsetMin = new Vector2(0f, 12f);
+            accent.rectTransform.offsetMax = new Vector2(-6f, -12f);
             accent.type = Image.Type.Sliced;
 
             var title = AddText(bar, 38, TextColor, TextAnchor.MiddleLeft);
@@ -941,7 +1127,9 @@ namespace MaxWorlds.UI
             const float partsTrayWidth = 340f;
             cursor = BuildPartsTray(bar, cursor, partsTrayWidth) - 16f;
 
-            const float cellsChipWidth = 170f;
+            // MV-433: widened from 170 — "28 / 30 CELLS" at the chip's own min best-fit size (14pt)
+            // was clipping its leading digit against the icon at the old width.
+            const float cellsChipWidth = 190f;
             var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor,
                 HudTextures.Disc(32), 20f, out _cellsText, out _);
             cellsChip.name = "Cells Chip";

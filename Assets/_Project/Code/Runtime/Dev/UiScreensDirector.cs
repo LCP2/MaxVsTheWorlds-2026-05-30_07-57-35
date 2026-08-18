@@ -25,9 +25,10 @@ namespace MaxWorlds.Dev
     /// <see cref="UiScreensCapture"/>), and never both directors at once — the two marker files are
     /// deliberately distinct so a capture run only ever arms the one it asked for.
     ///
-    /// Scope for this pass (MV-421): THE RIG board only — the screen the ticket calls out as
-    /// "the one that matters most" and the one MV-433/424/425/426 need real evidence against. HUD,
-    /// HomeScreen and ResultScreen are follow-up work, not rebuilt here.
+    /// Scope for MV-421: THE RIG board — the screen the ticket calls out as "the one that matters
+    /// most" and the one MV-433/424/425/426 need real evidence against. MV-425 extends it with the
+    /// HUD's WEAPONS button (its own four alert states); HomeScreen and ResultScreen remain
+    /// follow-up work, not rebuilt here.
     /// </summary>
     public sealed class UiScreensDirector : MonoBehaviour
     {
@@ -70,6 +71,7 @@ namespace MaxWorlds.Dev
             Log($"ui-screens capture starting → {_outDir}");
 
             yield return CaptureRigBoard();
+            yield return CaptureWeaponsButton();
 
             Finish();
         }
@@ -123,16 +125,21 @@ namespace MaxWorlds.Dev
         private static void SpendRigFixtureLevels()
         {
             SpendToLevel("p_dmg", 4);
+            RigState.AcquireCap("p_rng");
             SpendToLevel("p_rng", 3);
+            RigState.AcquireCap("p_flw");
             SpendToLevel("p_flw", 2);
 
             RigState.AcquireCap("e_ff");
             SpendToLevel("e_ff", 2);
             RigState.AcquireCap("e_cel");
+            RigState.AcquireCap("e_cd");
             SpendToLevel("e_cd", 3);
 
             RigState.AcquireCap("u_sen");
+            RigState.AcquireCap("u_dmg");
             SpendToLevel("u_dmg", 2);
+            RigState.AcquireCap("u_rng");
             SpendToLevel("u_rng", 1);
         }
 
@@ -146,6 +153,54 @@ namespace MaxWorlds.Dev
                     break;
                 }
             }
+        }
+
+        // --- WEAPONS button (MV-425 scope) ------------------------------------------------------
+
+        /// <summary>Four shots, one per <see cref="HudController.WeaponsButtonAlert"/> state — the
+        /// "real evidence" MV-425's own AC asks for. HudController is already live in this scene (it's
+        /// not self-installing like WeaponsScreen), so there's no open/close pair — the fixture drives
+        /// PickupWallet/AbilityCreditBank/PendingMorphingModule directly, the same static-state-fixture
+        /// idiom <see cref="ApplyRigFixture"/> already uses for RigState, and the button reacts to the
+        /// real signal chain (OnParts/OnPendingModuleChanged) exactly as it would from a live pickup.</summary>
+        private IEnumerator CaptureWeaponsButton()
+        {
+            var hud = FindFirstObjectByType<HudController>();
+            if (hud == null) { LogWarn("weapons-button: no HudController in the scene"); yield break; }
+
+            yield return CaptureFixtureScreen("weapons-button-idle", 1920, 1080, ApplyWeaponsButtonIdleFixture, null, null);
+            yield return CaptureFixtureScreen("weapons-button-parts", 1920, 1080, ApplyWeaponsButtonPartsFixture, null, null);
+            yield return CaptureFixtureScreen("weapons-button-module", 1920, 1080, ApplyWeaponsButtonModuleFixture, null, null);
+            yield return CaptureFixtureScreen("weapons-button-both", 1920, 1080, ApplyWeaponsButtonBothFixture, null, null);
+
+            ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
+        }
+
+        public static void ApplyWeaponsButtonIdleFixture()
+        {
+            PickupWallet.Reset();
+            AbilityCreditBank.Reset();
+            PendingMorphingModule.Reset();
+        }
+
+        /// <summary>4 parts banked — matches the "4" badge in MV-425.png.</summary>
+        public static void ApplyWeaponsButtonPartsFixture()
+        {
+            ApplyWeaponsButtonIdleFixture();
+            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+        }
+
+        public static void ApplyWeaponsButtonModuleFixture()
+        {
+            ApplyWeaponsButtonIdleFixture();
+            PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
+        }
+
+        public static void ApplyWeaponsButtonBothFixture()
+        {
+            ApplyWeaponsButtonIdleFixture();
+            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+            PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
         }
 
         // --- capture -----------------------------------------------------------------------------
@@ -210,7 +265,7 @@ namespace MaxWorlds.Dev
             Log($"ui-screens capture complete ({_shotsWritten}/{ExpectedShotCount} shots)");
         }
 
-        private const int ExpectedShotCount = 3;
+        private const int ExpectedShotCount = 7;   // 3 THE RIG (MV-421) + 4 WEAPONS button states (MV-425)
 
         private static void Log(string m) => Debug.Log("[UiScreens] " + m);
         private static void LogWarn(string m) => Debug.LogWarning("[UiScreens] " + m);

@@ -69,5 +69,18 @@ namespace MaxWorlds.Weapons
             PickupWallet.TrySpendPart();
             return true;
         }
+
+        /// <summary>Forge a FORGE fusion (MV-426): 3 parts, never a shed. Fails cleanly (nothing
+        /// spent) below the fusion's own cost, if it's already forged, or if either parent category
+        /// isn't lit yet — same "check the sink can accept it BEFORE touching the bank" order every
+        /// other spend above follows.</summary>
+        public static bool TrySpendOnFusion(string fusionId)
+        {
+            if (!RigBoard.TryGetFusion(fusionId, out var def)) return false;
+            if (PickupWallet.PartsBanked < def.PartCost) return false;
+            if (!RigFusionState.TryForge(fusionId)) return false;
+            PickupWallet.TrySpendParts(def.PartCost);
+            return true;
+        }
     }
 }

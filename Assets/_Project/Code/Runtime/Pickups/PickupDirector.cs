@@ -68,6 +68,12 @@ namespace MaxWorlds.Pickups
         }
 
         private readonly List<Pickup> _live = new List<Pickup>(32);
+
+        /// <summary>Pickups a refused-at-capacity tell has already fired for during the current
+        /// walk-over (MV-439) — cleared the moment Max steps back out of <see cref="CollectRadius"/>,
+        /// so a fresh entry gets one fresh tell rather than the frame-by-frame spam a naive re-emit
+        /// on every <see cref="Collect"/> call inside the radius would cause.</summary>
+        private readonly HashSet<Pickup> _reserveFullTold = new HashSet<Pickup>();
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
@@ -215,9 +221,11 @@ namespace MaxWorlds.Pickups
             _areaDirector != null ? _areaDirector.BruiserCountForArea(areaIndex) : 0;
 
         /// <summary>A cosmetic-only flavour for a dropped part (WV-228) — parts carry no gameplay
-        /// identity anymore, but <c>PickupArtDirector</c> still swaps in the Hydro device's art for
-        /// <see cref="MaxWorlds.Upgrades.PartKind.Hydro"/>, so cycling through the old catalog keeps
-        /// that variety alive instead of every part looking identical forever.</summary>
+        /// identity anymore, and <c>PickupArtDirector</c> does not read this at all: a dropped part's
+        /// ground art comes from <see cref="MaxWorlds.VFX.WeaponPartArt.MachineInternalsKeys"/> alone
+        /// (MV-430 — currently just the one gear design), independent of which <c>PartKind</c> this
+        /// returns. What this cycles through is the HUD pickup toast's name/accent
+        /// (<c>BossVictoryPayoff.CollectLanded</c>), not the ground prop.</summary>
         private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
             MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
@@ -288,11 +296,13 @@ namespace MaxWorlds.Pickups
                 float dz = p.transform.position.z - m.z;
                 float d2 = dx * dx + dz * dz;
                 if (d2 <= r2) { Collect(i, p); continue; }
+                _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
 
                 // Magneto (MV-422, e_mag): a caught power cell flies to Max from range instead of
                 // waiting for a manual walk-over. Only power cells — parts/devices stay a deliberate
-                // walk-over pickup.
-                if (p.Kind == PickupKind.PowerCell && magnetoRadius > 0f && d2 <= magnetoRadius * magnetoRadius)
+                // walk-over pickup. MV-439: never pulls once the reserve is full — an owned ability
+                // must not actively destroy the player's resources.
+                if (MagnetoShouldPull(p.Kind, magnetoRadius, d2))
                 {
                     Vector3 pos = p.transform.position;
                     Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
@@ -303,22 +313,47 @@ namespace MaxWorlds.Pickups
             }
         }
 
+        /// <summary>Whether Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled out
+        /// as a pure function so the reserve-full guard is testable without a live scene. Public: the
+        /// EditMode test assembly has no <c>InternalsVisibleTo</c> back to Gameplay.</summary>
+        public static bool MagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
+            kind == PickupKind.PowerCell && magnetoRadius > 0f
+            && squaredDistance <= magnetoRadius * magnetoRadius
+            && PickupWallet.PowerCells < PickupWallet.Capacity;
+
         private void Collect(int index, Pickup p)
         {
             switch (p.Kind)
             {
                 case PickupKind.PowerCell:
-                    PickupWallet.AddPowerCell();
+                    if (!PickupWallet.AddPowerCell())
+                    {
+                        // MV-439: at capacity, walking over a cell must do nothing — leave it active
+                        // and on the ground, no gain claimed, no per-frame spam while Max stands on it.
+                        // TODO(MV-439/MV-429): dim this pickup's GroundRing to ~30% alpha while inert
+                        // once MV-429 lands a ring on Pickup — it hasn't yet, so there is no ring to dim.
+                        if (_reserveFullTold.Add(p))
+                            HudSignals.EmitPickup(p.transform.position, "RESERVE FULL", new Color(0.9f, 0.35f, 0.25f));
+                        return;
+                    }
                     HudSignals.EmitPickup(p.transform.position, "+1 CELL", new Color(0.31f, 0.86f, 0.98f));
                     break;
                 case PickupKind.Device:
-                    // MV-424: walking over the device — now a Morphing Module — draws THE RIG's own
-                    // candidate pool immediately and routes straight to the draft outcome (0 consumes it,
-                    // 1 grants directly, 2-3 opens the board), instead of banking a credit for a later,
-                    // separate BUILD ABILITY step.
+                    // MV-424 drew THE RIG's candidate pool and routed straight to the draft outcome on
+                    // walk-over. MV-425 keeps the 0/1-candidate outcomes instant (nothing to show, or a
+                    // silent grant) but stops 2-3 candidates from force-opening the board mid-fight —
+                    // that pool now banks in PendingMorphingModule and waits for the player to tap
+                    // WEAPONS on their own schedule (see that class's doc comment).
                     var candidates = RigDraft.DrawCandidates();
-                    var rig = FindFirstObjectByType<WeaponsScreen>();
-                    if (rig != null) rig.OpenMorphingModuleDraft(candidates);
+                    if (candidates.Length <= 1)
+                    {
+                        var rig = FindFirstObjectByType<WeaponsScreen>();
+                        if (rig != null) rig.OpenMorphingModuleDraft(candidates);
+                    }
+                    else
+                    {
+                        PendingMorphingModule.Set(candidates);
+                    }
                     HudSignals.EmitPickup(p.transform.position, "MORPHING MODULE",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
@@ -328,6 +363,7 @@ namespace MaxWorlds.Pickups
                     break;
             }
 
+            _reserveFullTold.Remove(p);
             p.gameObject.SetActive(false);
             _live.RemoveAt(index);
             Stack<Pickup> pool = p.Kind switch
