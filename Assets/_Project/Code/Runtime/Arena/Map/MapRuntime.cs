@@ -71,6 +71,11 @@ namespace MaxWorlds.Arena
             // test) starts counting toward the field-wide spawn budget (YT-186).
             RobotEnemy.ResetRegistry();
 
+            // A stale attack-token count must never survive into the next level (MV-428) — the last
+            // level's Rushers/Blinkers are all being wiped by the reset above without ever reaching
+            // Recover to hand their tokens back.
+            LungeTokenPool.Reset();
+
             // Sentinels aren't pooled — a fresh level must tear any leftover ones down outright, not
             // just forget them (MV-362).
             Sentinel.DestroyAllActive();

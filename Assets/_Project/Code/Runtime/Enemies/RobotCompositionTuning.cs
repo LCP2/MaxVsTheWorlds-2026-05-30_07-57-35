@@ -42,5 +42,16 @@ namespace MaxWorlds.Enemies
         /// <summary>Percent of large slots a tough tier substitutes for once introduced
         /// (<c>toughSubstitutionPct</c>).</summary>
         public const float DefaultToughSubstitutionPct = 25f;
+
+        /// <summary>Seconds between contact-damage ticks for a kind that no longer lunges (MV-428:
+        /// Bruiser/Heavy/Brute) while it stands touching Max — the readability fix's Change 1. Read
+        /// live via <see cref="MaxWorlds.Core.DevTuning.ContactDamageCooldown"/>.</summary>
+        public const float DefaultContactCooldown = 1.0f;
+
+        /// <summary>How many Rusher/Blinker-kind robots may hold an attack token — be mid-Telegraph
+        /// or mid-Lunge — at once (MV-428's Change 2). A robot without a token keeps closing and
+        /// pressuring at its normal move speed instead of committing. Read live via
+        /// <see cref="MaxWorlds.Core.DevTuning.LungeTokenCap"/>.</summary>
+        public const float DefaultLungeTokenCap = 2f;
     }
 }

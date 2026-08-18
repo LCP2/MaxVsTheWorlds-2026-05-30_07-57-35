@@ -276,6 +276,16 @@ namespace MaxWorlds.Core
         /// introduced (<c>toughSubstitutionPct</c>).</summary>
         public static float? ToughSubstitutionPct { get; set; }
 
+        /// <summary>Seconds between contact-damage ticks for Bruiser/Heavy/Brute while touching Max
+        /// (MV-428) — these kinds no longer lunge, so this is the per-robot cooldown that stands in
+        /// for it. The Settings FEEL tab's "Contact cooldown" knob.</summary>
+        public static float? ContactDamageCooldown { get; set; }
+
+        /// <summary>How many Rusher/Blinker-kind robots may be mid-Telegraph or mid-Lunge at once
+        /// (MV-428) — the readability fix's attack-token cap. The Settings ENEMIES tab's "Lunge
+        /// token cap" knob.</summary>
+        public static float? LungeTokenCap { get; set; }
+
         // --- World & Difficulty Framework dials (MV-269/270, Confluence MVW 34439170 §8) — the
         // level-config's own high-leverage levers. Read live by WorldConfig.SolveComposition /
         // WorldToughnessCurve.ToEngineCurve, so a moved slider retunes composition from the next
@@ -360,7 +370,8 @@ namespace MaxWorlds.Core
             ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue ||
             GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
             WorldBaseThreat.HasValue || WorldThreatGrowth.HasValue || WorldHeavyFromArea.HasValue ||
-            WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue;
+            WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
+            ContactDamageCooldown.HasValue || LungeTokenCap.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -438,6 +449,8 @@ namespace MaxWorlds.Core
             WorldHeavyFromArea = null;
             WorldBruteFromArea = null;
             WorldTankShareEnd = null;
+            ContactDamageCooldown = null;
+            LungeTokenCap = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -524,6 +537,8 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(WorldHeavyFromArea), () => WorldHeavyFromArea, v => WorldHeavyFromArea = v),
             (PrefsPrefix + nameof(WorldBruteFromArea), () => WorldBruteFromArea, v => WorldBruteFromArea = v),
             (PrefsPrefix + nameof(WorldTankShareEnd), () => WorldTankShareEnd, v => WorldTankShareEnd = v),
+            (PrefsPrefix + nameof(ContactDamageCooldown), () => ContactDamageCooldown, v => ContactDamageCooldown = v),
+            (PrefsPrefix + nameof(LungeTokenCap), () => LungeTokenCap, v => LungeTokenCap = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never
