@@ -5,11 +5,11 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The weapon/ability backbone (WV-230): the RCDA primary's tracks start owned at Level 1,
-    /// the abilities start unowned at Level 0 and are granted (not leveled) one at a time, both
-    /// respect their catalog caps, and the Weapon Cooldown ability shortens every other active
-    /// ability's cooldown. (Capacity/Weapon Efficiency tracks and the Power Efficiency ability were
-    /// retired by MV-290.)
+    /// The weapon/ability backbone (WV-230), now a thin enum-typed layer over THE RIG's unified node
+    /// model (MV-422, see <see cref="RigStateTests"/> for the model's own rules). Run start: only
+    /// <c>p_dmg</c> (RCDA Damage) is owned, at Level 1 — every other track/ability starts at 0 and is
+    /// gated by <see cref="RigState.IsReached"/>. <see cref="AbilityKind.WeaponCooldown"/> is retired
+    /// (no RIG node) and can never be acquired.
     /// </summary>
     public sealed class WeaponSystemStateTests
     {
@@ -24,10 +24,26 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- fresh state
 
         [Test]
-        public void FreshStateHasEveryTrackAtLevel1()
+        public void FreshStateOwnsOnlyDamageAtLevelOne()
         {
-            foreach (var kind in WeaponCatalog.AllTrackKinds)
-                Assert.That(WeaponSystemState.TrackLevel(kind), Is.EqualTo(1), $"{kind} must start owned at L1");
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(1),
+                "p_dmg is THE RIG's one run-start exception");
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(0));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), Is.EqualTo(0));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.DepletionRate), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void RangeAndFlowAreImmediatelySpendableAtRunStart_ButSpreadIsNot()
+        {
+            // p_rng and p_flw (DepletionRate) are both direct children of p_dmg, which is already at
+            // L1 at run start — reached immediately. p_spr's parent is p_rng, still at 0, so it is
+            // NOT reached until a part is spent on Range first.
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.True);
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate), Is.True);
+            WeaponSystemState.Reset();
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread), Is.False,
+                "Spread must not be spendable until Range has raised it to reached");
         }
 
         [Test]
@@ -39,9 +55,9 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(WeaponSystemState.AbilityLevel(kind), Is.EqualTo(0));
             }
 
-            // MV-380: WaterBalloonAutoFire is a prerequisite chain — Unacquired never offers it until
-            // WaterBalloon itself is owned, so at a fresh run it's excluded from the pool even though
-            // nothing is acquired yet.
+            // MV-380/MV-422: WaterBalloonAutoFire is a prerequisite chain — Unacquired never offers it
+            // until WaterBalloon itself is owned, so at a fresh run it's excluded from the pool even
+            // though nothing is acquired yet.
             var expectedUnacquired = new System.Collections.Generic.List<AbilityKind>(WeaponCatalog.AllAbilityKinds);
             expectedUnacquired.Remove(AbilityKind.WaterBalloonAutoFire);
             CollectionAssert.AreEquivalent(expectedUnacquired, WeaponSystemState.Unacquired);
@@ -49,11 +65,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void FreshStateHasEveryWaterBalloonTrackAtLevel1_MV370()
+        public void WeaponCooldownCanNeverBeAcquired_RetiredByMV422()
         {
-            foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds)
-                Assert.That(WeaponSystemState.WaterBalloonTrackLevel(kind), Is.EqualTo(1),
-                    $"{kind} must start owned at L1 — a primary add-on, not a shed find");
+            Assert.That(WeaponSystemState.Acquire(AbilityKind.WeaponCooldown), Is.False,
+                "WeaponCooldown has no node in the canonical rig_board.json — MV-422 retires it");
+            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.WeaponCooldown), Is.False);
+            CollectionAssert.DoesNotContain(
+                new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Unacquired), AbilityKind.WeaponCooldown);
         }
 
         // ---------------------------------------------------------------- tracks
@@ -62,18 +80,17 @@ namespace MaxWorlds.Tests.EditMode
         public void LevelUpTrackIncrementsByOne()
         {
             Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.True);
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(2));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
         }
 
         [Test]
         public void LevelUpTrackStopsAtItsCap()
         {
-            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Spread); i++)
-                Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread), Is.True);
+            for (int i = 0; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Damage) - 1; i++)
+                Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage), Is.True);
 
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread)));
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread), Is.False, "must not level past the cap");
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread)));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage)));
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage), Is.False, "must not level past the cap");
         }
 
         [Test]
@@ -86,26 +103,35 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void RangeAndSpreadCapAtNineLevels_MV367()
         {
-            // MV-367: Range and Spread get 3 more steps than Damage/DepletionRate so a lower ceiling
-            // still reads as steady, frequent growth rather than two giant jumps to godhood.
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(9));
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(9));
         }
 
-        // ---------------------------------------------------------------- Water Balloon tracks (MV-370)
+        // ---------------------------------------------------------------- Water Balloon tracks (MV-370/MV-422)
 
         [Test]
-        public void LevelUpWaterBalloonTrackIncrementsByOne()
+        public void WaterBalloonTracksAreNotReachedUntilBalloonIsOwned()
         {
+            Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range), Is.False,
+                "s_lob's parent is s_bal — unreached until Water Balloon is acquired");
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(0));
+        }
+
+        [Test]
+        public void LevelUpWaterBalloonTrackIncrementsByOneOnceOwned()
+        {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+
             Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range), Is.True);
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(2));
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(1));
         }
 
         [Test]
         public void LevelUpWaterBalloonTrackStopsAtItsCap()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             int cap = WeaponCatalog.MaxLevel(WaterBalloonTrackKind.SplashArea);
-            for (int i = 1; i < cap; i++)
+            for (int i = 0; i < cap; i++)
                 Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.SplashArea), Is.True);
 
             Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(cap));
@@ -114,23 +140,39 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void RepeatFireTrackIsNotReachedUntilAutoFireIsOwned()
+        {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire), Is.False,
+                "s_rte's parent is s_aut (Auto-Fire), not s_bal — Balloon alone isn't enough");
+
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloonAutoFire);
+            Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire), Is.True);
+        }
+
+        [Test]
         public void EachWaterBalloonTrackLevelsIndependently()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range);
 
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(2));
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(1),
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(0),
                 "leveling Range must not touch Splash Area");
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.RepeatFire), Is.EqualTo(1),
-                "leveling Range must not touch Repeat Fire");
         }
 
         [Test]
         public void WaterBalloonEffectiveCooldownShortensAsRepeatFireLevelsUp()
         {
+            // The formula's own Mathf.Max(1, level) clamp reads level 0 and level 1 identically (both
+            // "not shortened yet", same as every other track pre-MV-422) — level 2 is the first level
+            // that actually moves the cooldown.
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloonAutoFire);
+            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire); // to L1
             float baseCooldown = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
 
-            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire);
+            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire); // to L2
 
             Assert.That(WeaponSystemState.WaterBalloonEffectiveCooldownSeconds(), Is.LessThan(baseCooldown),
                 "a Repeat Fire level must shorten the throw cooldown");
@@ -177,7 +219,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AcquiredAndUnacquiredPartitionAllSevenAbilities_MV362()
+        public void AcquiredAndUnacquiredPartitionAllSixAbilities()
         {
             WeaponSystemState.Acquire(AbilityKind.Speed);
 
@@ -185,8 +227,7 @@ namespace MaxWorlds.Tests.EditMode
             // WaterBalloonAutoFire stays out of Unacquired too — its prerequisite (WaterBalloon) isn't
             // owned yet.
             CollectionAssert.AreEquivalent(
-                new[] { AbilityKind.Teleport, AbilityKind.WeaponCooldown, AbilityKind.WaterBalloon,
-                        AbilityKind.ForceField, AbilityKind.Sentinels },
+                new[] { AbilityKind.Teleport, AbilityKind.WaterBalloon, AbilityKind.ForceField, AbilityKind.Sentinels },
                 WeaponSystemState.Unacquired);
         }
 
@@ -237,14 +278,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AcquiredListsAbilitiesInAcquisitionOrderNotCatalogOrder_MV333()
         {
-            // WeaponCooldown is last in WeaponCatalog.AllAbilityKinds but granted first here — it must
+            // ForceField is last in WeaponCatalog.AllAbilityKinds but granted first here — it must
             // still come out first, and Speed (first in catalog order) must land second, not
             // displace it.
-            WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
+            WeaponSystemState.Acquire(AbilityKind.Sentinels);
             WeaponSystemState.Acquire(AbilityKind.Speed);
 
             CollectionAssert.AreEqual(
-                new[] { AbilityKind.WeaponCooldown, AbilityKind.Speed }, WeaponSystemState.Acquired);
+                new[] { AbilityKind.Sentinels, AbilityKind.Speed }, WeaponSystemState.Acquired);
         }
 
         [Test]
@@ -279,52 +320,26 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void WaterBalloonHasAPositiveBaseCooldown_MV370()
         {
-            // MV-370: Water Balloon's base cooldown moved off the AbilityKind switch when it left the
-            // shed-drop pool — WeaponCatalog.WaterBalloonBaseCooldownSeconds() is its replacement.
             Assert.That(WeaponCatalog.WaterBalloonBaseCooldownSeconds(), Is.GreaterThan(0f));
         }
 
         [Test]
-        public void EffectiveCooldownIsTheBaseWithoutWeaponCooldownOwned()
+        public void EffectiveCooldownIsAlwaysTheBase_WeaponCooldownRetiredByMV422()
         {
             Assert.That(WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport),
                 Is.EqualTo(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Teleport)).Within(1e-4f),
-                "Weapon Cooldown not owned (L0) must not shorten anything");
+                "WeaponCooldown can never be acquired any more, so this multiplier is always a no-op (1x)");
         }
 
         [Test]
-        public void WaterBalloonEffectiveCooldownIsTheBaseAtRepeatFireLevel1_MV370()
+        public void WaterBalloonEffectiveCooldownIsTheBaseAtRepeatFireLevel0()
         {
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            WeaponSystemState.Acquire(AbilityKind.WaterBalloonAutoFire);
+
             Assert.That(WeaponSystemState.WaterBalloonEffectiveCooldownSeconds(),
                 Is.EqualTo(WeaponCatalog.WaterBalloonBaseCooldownSeconds()).Within(1e-4f),
-                "Repeat Fire at its starting L1 must not shorten anything yet");
-        }
-
-        [Test]
-        public void EffectiveCooldownShrinksAsWeaponCooldownLevelsUp()
-        {
-            float baseCooldown = WeaponCatalog.BaseCooldownSeconds(AbilityKind.Teleport);
-            WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
-
-            float atL1 = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
-            Assert.That(atL1, Is.LessThan(baseCooldown), "L1 Weapon Cooldown must shorten the base cooldown");
-
-            for (int i = 1; i < WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown); i++)
-                WeaponSystemState.LevelUpAbility(AbilityKind.WeaponCooldown);
-
-            float atMax = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
-            Assert.That(atMax, Is.LessThan(atL1), "a maxed Weapon Cooldown must shorten it further than L1");
-            Assert.That(atMax, Is.GreaterThanOrEqualTo(0f), "the multiplier must never take a cooldown negative");
-        }
-
-        [Test]
-        public void WeaponCooldownDoesNotAffectPassiveAbilitiesZeroCooldown()
-        {
-            WeaponSystemState.Acquire(AbilityKind.WeaponCooldown);
-            for (int i = 1; i < WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown); i++)
-                WeaponSystemState.LevelUpAbility(AbilityKind.WeaponCooldown);
-
-            Assert.That(WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Speed), Is.EqualTo(0f));
+                "Repeat Fire at its starting L0 must not shorten anything yet");
         }
 
         // ---------------------------------------------------------------- reset / events
@@ -337,7 +352,8 @@ namespace MaxWorlds.Tests.EditMode
 
             WeaponSystemState.Reset();
 
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(0));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(1));
             Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Speed), Is.False);
         }
 
@@ -365,12 +381,12 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- catalog
 
         [Test]
-        public void CatalogListsAllSevenAbilitiesFourTracksAndThreeWaterBalloonTracks_MV362()
+        public void CatalogListsAllSixAbilitiesFourTracksAndThreeWaterBalloonTracks()
         {
-            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(7), "MV-362 added Sentinels, on top of MV-361's Force Field and MV-380's restored Water Balloon + Auto-fire");
+            Assert.That(WeaponCatalog.AllAbilityKinds.Length, Is.EqualTo(6),
+                "MV-422 retired WeaponCooldown — no RIG node for a global cooldown-reduction ability");
             Assert.That(WeaponCatalog.AllTrackKinds.Length, Is.EqualTo(4), "MV-299 reinstated Depletion Rate as the fourth track");
             Assert.That(WeaponCatalog.AllWaterBalloonTrackKinds.Length, Is.EqualTo(3), "MV-370: Range, Splash Area, Repeat Fire — unchanged by MV-380");
-            Assert.That(WeaponCatalog.AllSentinelTrackKinds.Length, Is.EqualTo(3), "MV-362: Wall Strength, Gunner Power, Deployment Count");
         }
 
         [Test]
@@ -378,8 +394,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Speed), Is.EqualTo(4));
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.Teleport), Is.EqualTo(4), "MV-339 widened Teleport from 2 levels to 4");
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.WeaponCooldown), Is.EqualTo(5));
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(3), "MV-361: a 3-level track, matching the other abilities");
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(5), "MV-422: e_ff's RIG maxLevel rose to 5");
         }
 
         [Test]

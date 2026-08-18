@@ -55,12 +55,10 @@ namespace MaxWorlds.UI
         /// <summary>The Force Field button's colour (MV-361) — the same ready-cyan the bubble itself
         /// glows, so the button and the shield read as one thing.</summary>
         private static readonly Color ForceFieldColor = new Color(0.31f, 0.76f, 0.97f);
-        /// <summary>The Wall sentinel button's colour (MV-362) — the same greybox timber
-        /// <see cref="MaxWorlds.Arena.WallSentinel"/> itself is tinted.</summary>
-        private static readonly Color WallSentinelColor = new Color(0.72f, 0.58f, 0.42f);
-        /// <summary>The Gunner sentinel button's colour (MV-362) — the primary's own blue, since the
-        /// turret is meant to read as Max's own tech ("a hose pipe on a stick").</summary>
-        private static readonly Color GunnerSentinelColor = new Color(0.45f, 0.65f, 0.85f);
+        /// <summary>The Sentinel deploy button's colour (MV-362, MV-422: one sentinel only) — the
+        /// primary's own blue, since the turret is meant to read as Max's own tech ("a hose pipe on a
+        /// stick").</summary>
+        private static readonly Color SentinelColor = new Color(0.45f, 0.65f, 0.85f);
         // The part-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell and
         // the pickup it points at read as ONE language. Sourced from the constant the aura uses, not a
         // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
@@ -114,16 +112,16 @@ namespace MaxWorlds.UI
         private bool _forceFieldWasActive;
         private float _forceFieldReadyFlash;
 
-        // The Sentinel deploy joysticks (MV-362, aimed-placement MV-399): hidden until
-        // AbilityKind.Sentinels is acquired, same tech-ring joystick shape Water Balloon/Teleport use
-        // below — a sentinel isn't cooldown-gated, so the radial covers/uncovers on cell cost + the
-        // shared deployment-slot cap instead of a cooldown sweep (same "empty bank reads as covered"
-        // idiom Water Balloon's own radial already uses for its cell gate).
-        private RectTransform _wallSentinelRoot, _gunnerSentinelRoot;
-        private AbilityControlArt.JoystickVisual _wallSentinelVisual, _gunnerSentinelVisual;
-        private Image _wallSentinelRadial, _gunnerSentinelRadial;
-        private Image _wallSentinelDeniedIcon, _gunnerSentinelDeniedIcon;
-        private int _wallSentinelBuiltLevel = -1, _gunnerSentinelBuiltLevel = -1;
+        // The Sentinel deploy joystick (MV-362, aimed-placement MV-399, one sentinel only MV-422):
+        // hidden until AbilityKind.Sentinels is acquired, same tech-ring joystick shape Water
+        // Balloon/Teleport use below — a sentinel isn't cooldown-gated, so the radial covers/uncovers
+        // on cell cost + the deployment-slot cap instead of a cooldown sweep (same "empty bank reads
+        // as covered" idiom Water Balloon's own radial already uses for its cell gate).
+        private RectTransform _sentinelRoot;
+        private AbilityControlArt.JoystickVisual _sentinelVisual;
+        private Image _sentinelRadial;
+        private Image _sentinelDeniedIcon;
+        private int _sentinelBuiltLevel = -1;
         private float _forceFieldSnapFlash;
 
         // Joysticks
@@ -226,8 +224,7 @@ namespace MaxWorlds.UI
             BuildAbilitySlots();
             BuildHydroButton();
             BuildForceFieldButton();
-            BuildWallSentinelJoystick();
-            BuildGunnerSentinelJoystick();
+            BuildSentinelJoystick();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
@@ -299,8 +296,7 @@ namespace MaxWorlds.UI
         {
             RebuildWaterBalloonJoystickIfNeeded();
             RebuildTeleportJoystickIfNeeded();
-            RebuildWallSentinelJoystickIfNeeded();
-            RebuildGunnerSentinelJoystickIfNeeded();
+            RebuildSentinelJoystickIfNeeded();
             RefreshWaterBalloonAutoFireToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
@@ -427,7 +423,7 @@ namespace MaxWorlds.UI
             UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
             UpdateForceFieldButton(dt);
-            UpdateSentinelJoysticks();
+            UpdateSentinelJoystick();
             UpdateAbilityControls();
             UpdateJoysticks();
             UpdateArena(dt);
@@ -619,35 +615,23 @@ namespace MaxWorlds.UI
             }
         }
 
-        /// <summary>Drives the two Sentinel deploy joysticks (MV-362, aimed MV-399) — no-op while
-        /// hidden (not yet acquired). No cooldown: a sentinel is gated purely on cell cost and the
-        /// shared deployment-slot cap, so the radial simply covers/uncovers on that gate — the same
-        /// "empty bank reads as covered" idiom <see cref="UpdateAbilityControls"/> already uses for
-        /// Water Balloon's own cell gate — and the label keeps the live slot-count readout the old
-        /// buttons showed.</summary>
-        private void UpdateSentinelJoysticks()
+        /// <summary>Drives the Sentinel deploy joystick (MV-362, aimed MV-399, one sentinel only
+        /// MV-422) — no-op while hidden (not yet acquired). No cooldown: a sentinel is gated purely on
+        /// cell cost and the deployment-slot cap, so the radial simply covers/uncovers on that gate —
+        /// the same "empty bank reads as covered" idiom <see cref="UpdateAbilityControls"/> already
+        /// uses for Water Balloon's own cell gate — and the label keeps the live slot-count readout
+        /// the old buttons showed.</summary>
+        private void UpdateSentinelJoystick()
         {
             if (_abilities == null) return;
+            if (_sentinelRadial == null || _sentinelRoot == null || !_sentinelRoot.gameObject.activeSelf) return;
 
-            if (_wallSentinelRadial != null && _wallSentinelRoot != null && _wallSentinelRoot.gameObject.activeSelf)
-            {
-                _wallSentinelRadial.fillAmount = _abilities.WallSentinelReady ? 0f : 1f;
-                if (_wallSentinelDeniedIcon != null)
-                    _wallSentinelDeniedIcon.gameObject.SetActive(
-                        MaxWorlds.Pickups.PickupWallet.PowerCells < PlayerAbilities.SentinelWallCost);
-                if (_wallSentinelVisual.Label != null)
-                    _wallSentinelVisual.Label.text = $"WALL\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
-            }
-
-            if (_gunnerSentinelRadial != null && _gunnerSentinelRoot != null && _gunnerSentinelRoot.gameObject.activeSelf)
-            {
-                _gunnerSentinelRadial.fillAmount = _abilities.GunnerSentinelReady ? 0f : 1f;
-                if (_gunnerSentinelDeniedIcon != null)
-                    _gunnerSentinelDeniedIcon.gameObject.SetActive(
-                        MaxWorlds.Pickups.PickupWallet.PowerCells < PlayerAbilities.SentinelGunnerCost);
-                if (_gunnerSentinelVisual.Label != null)
-                    _gunnerSentinelVisual.Label.text = $"GUN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
-            }
+            _sentinelRadial.fillAmount = _abilities.SentinelReady ? 0f : 1f;
+            if (_sentinelDeniedIcon != null)
+                _sentinelDeniedIcon.gameObject.SetActive(
+                    MaxWorlds.Pickups.PickupWallet.PowerCells < PlayerAbilities.SentinelCost);
+            if (_sentinelVisual.Label != null)
+                _sentinelVisual.Label.text = $"SEN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
         }
 
         /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
@@ -1005,32 +989,29 @@ namespace MaxWorlds.UI
 
         private const float ForceFieldButtonGap = 16f;   // clearance above the Hydro button below it
 
-        // Sentinel deploy joysticks (MV-362, aimed placement MV-399): their own column, well clear of
-        // the Hydro/Force Field column's own stack below (top edge ~620) and the boss bar's y-band
-        // (rise 300, half 8) beneath that — same "half-extent-plus-margin clearance" reasoning the
-        // Water Balloon/Teleport column below uses for itself. Side by side rather than stacked (like
-        // Teleport-above-Water-Balloon) because two full-height joysticks stacked here would run off
-        // the top of the 1080-tall reference canvas.
+        // The Sentinel deploy joystick (MV-362, aimed placement MV-399, one sentinel only MV-422):
+        // well clear of the Hydro/Force Field column's own stack below (top edge ~620) and the boss
+        // bar's y-band (rise 300, half 8) beneath that — same "half-extent-plus-margin clearance"
+        // reasoning the Water Balloon/Teleport column below uses for itself.
         private const float SentinelJoystickRise = 820f;
-        private const float WallSentinelJoystickX = 360f;
-        private const float GunnerSentinelJoystickX = 660f;
+        private const float SentinelJoystickX = 360f;
 
-        private void BuildWallSentinelJoystick() => RebuildWallSentinelJoystick();
+        private void BuildSentinelJoystick() => RebuildSentinelJoystick();
 
-        private void RebuildWallSentinelJoystick()
+        private void RebuildSentinelJoystick()
         {
-            if (_wallSentinelRoot != null) Destroy(_wallSentinelRoot.gameObject);
+            if (_sentinelRoot != null) Destroy(_sentinelRoot.gameObject);
 
-            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength);
-            int maxLevel = WeaponCatalog.MaxLevel(SentinelTrackKind.WallStrength);
-            var anchoredPos = new Vector2(WallSentinelJoystickX, SentinelJoystickRise);
-            _wallSentinelVisual = AbilityControlArt.BuildJoystick(
-                Root, "Wall Sentinel Joystick", anchoredPos, WallSentinelColor, "WALL", level, maxLevel);
-            _wallSentinelRoot = _wallSentinelVisual.Root;
+            int level = RigState.Level("u_dmg");
+            int maxLevel = RigBoard.MaxLevel("u_dmg");
+            var anchoredPos = new Vector2(SentinelJoystickX, SentinelJoystickRise);
+            _sentinelVisual = AbilityControlArt.BuildJoystick(
+                Root, "Sentinel Joystick", anchoredPos, SentinelColor, "SEN", level, maxLevel);
+            _sentinelRoot = _sentinelVisual.Root;
 
             // No cooldown — covers/uncovers on the cell-cost + deployment-cap gate instead, same
             // "empty bank reads as covered" idiom Water Balloon's own radial uses (UpdateAbilityControls).
-            var radial = AddImage(_wallSentinelRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
+            var radial = AddImage(_sentinelRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
             radial.type = Image.Type.Filled;
             radial.fillMethod = Image.FillMethod.Radial360;
@@ -1038,22 +1019,22 @@ namespace MaxWorlds.UI
             radial.fillClockwise = true;
             radial.fillAmount = 0f;
             radial.raycastTarget = false;
-            _wallSentinelRadial = radial;
+            _sentinelRadial = radial;
 
             // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
             // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
-            var denied = AddImage(_wallSentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Cells");
+            var denied = AddImage(_sentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Cells");
             denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             denied.rectTransform.sizeDelta = new Vector2(72f, 72f);
             denied.rectTransform.anchoredPosition = Vector2.zero;
             denied.raycastTarget = false;
             denied.gameObject.SetActive(false);
-            _wallSentinelDeniedIcon = denied;
+            _sentinelDeniedIcon = denied;
 
-            var pad = new GameObject("Wall Sentinel Touch", typeof(RectTransform), typeof(Image));
+            var pad = new GameObject("Sentinel Touch", typeof(RectTransform), typeof(Image));
             var padRect = (RectTransform)pad.transform;
-            padRect.SetParent(_wallSentinelRoot, false);
+            padRect.SetParent(_sentinelRoot, false);
             padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
             padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
             var padImg = pad.GetComponent<Image>();
@@ -1061,86 +1042,23 @@ namespace MaxWorlds.UI
             padImg.raycastTarget = true;
 
             var control = pad.AddComponent<SentinelJoystickControl>();
-            control.Init(_wallSentinelVisual.Knob, _player != null ? _player.transform : null, _abilities,
-                SentinelKind.Wall, _wallSentinelVisual.Rings);
+            control.Init(_sentinelVisual.Knob, _player != null ? _player.transform : null, _abilities,
+                _sentinelVisual.Rings);
 
-            _wallSentinelBuiltLevel = level;
-            _wallSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+            _sentinelBuiltLevel = level;
+            _sentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
         }
 
-        private void RebuildWallSentinelJoystickIfNeeded()
+        private void RebuildSentinelJoystickIfNeeded()
         {
-            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength);
-            if (level == _wallSentinelBuiltLevel)
+            int level = RigState.Level("u_dmg");
+            if (level == _sentinelBuiltLevel)
             {
-                if (_wallSentinelRoot != null)
-                    _wallSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
+                if (_sentinelRoot != null)
+                    _sentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
                 return;
             }
-            RebuildWallSentinelJoystick();
-        }
-
-        private void BuildGunnerSentinelJoystick() => RebuildGunnerSentinelJoystick();
-
-        private void RebuildGunnerSentinelJoystick()
-        {
-            if (_gunnerSentinelRoot != null) Destroy(_gunnerSentinelRoot.gameObject);
-
-            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.GunnerPower);
-            int maxLevel = WeaponCatalog.MaxLevel(SentinelTrackKind.GunnerPower);
-            var anchoredPos = new Vector2(GunnerSentinelJoystickX, SentinelJoystickRise);
-            _gunnerSentinelVisual = AbilityControlArt.BuildJoystick(
-                Root, "Gunner Sentinel Joystick", anchoredPos, GunnerSentinelColor, "GUN", level, maxLevel);
-            _gunnerSentinelRoot = _gunnerSentinelVisual.Root;
-
-            var radial = AddImage(_gunnerSentinelRoot, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
-            Stretch(radial.rectTransform, -6f);
-            radial.type = Image.Type.Filled;
-            radial.fillMethod = Image.FillMethod.Radial360;
-            radial.fillOrigin = (int)Image.Origin360.Top;
-            radial.fillClockwise = true;
-            radial.fillAmount = 0f;
-            radial.raycastTarget = false;
-            _gunnerSentinelRadial = radial;
-
-            // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
-            // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
-            var denied = AddImage(_gunnerSentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Cells");
-            denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
-            denied.rectTransform.sizeDelta = new Vector2(72f, 72f);
-            denied.rectTransform.anchoredPosition = Vector2.zero;
-            denied.raycastTarget = false;
-            denied.gameObject.SetActive(false);
-            _gunnerSentinelDeniedIcon = denied;
-
-            var pad = new GameObject("Gunner Sentinel Touch", typeof(RectTransform), typeof(Image));
-            var padRect = (RectTransform)pad.transform;
-            padRect.SetParent(_gunnerSentinelRoot, false);
-            padRect.anchorMin = Vector2.zero; padRect.anchorMax = Vector2.one;
-            padRect.offsetMin = new Vector2(-30f, -30f); padRect.offsetMax = new Vector2(30f, 30f);
-            var padImg = pad.GetComponent<Image>();
-            padImg.color = new Color(0f, 0f, 0f, 0f);
-            padImg.raycastTarget = true;
-
-            var control = pad.AddComponent<SentinelJoystickControl>();
-            control.Init(_gunnerSentinelVisual.Knob, _player != null ? _player.transform : null, _abilities,
-                SentinelKind.Gunner, _gunnerSentinelVisual.Rings);
-
-            _gunnerSentinelBuiltLevel = level;
-            _gunnerSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
-        }
-
-        private void RebuildGunnerSentinelJoystickIfNeeded()
-        {
-            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.GunnerPower);
-            if (level == _gunnerSentinelBuiltLevel)
-            {
-                if (_gunnerSentinelRoot != null)
-                    _gunnerSentinelRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.Sentinels));
-                return;
-            }
-            RebuildGunnerSentinelJoystick();
+            RebuildSentinelJoystick();
         }
 
         // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits

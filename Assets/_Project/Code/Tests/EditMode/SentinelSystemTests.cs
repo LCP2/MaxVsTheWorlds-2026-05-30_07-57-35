@@ -8,11 +8,13 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-362's pure/state layer: Sentinel tracks start owned at Level 1 like Water Balloon's, but
-    /// spending on one — unlike Water Balloon — is gated on <see cref="AbilityKind.Sentinels"/> being
-    /// acquired first; the Gunner's damage fraction always stays below 1.0 (the DECISION's "always
-    /// weaker than Max's CURRENT primary" enforced structurally); and the Deployment Count track's
-    /// level IS the slot count.
+    /// MV-362's pure/state layer, restructured MV-422 onto THE RIG's six <c>u_sen</c> child axes
+    /// (Damage/Range/Health/Move/Cost/Slots — <c>u_dmg</c>/<c>u_rng</c>/<c>u_hp</c>/<c>u_mov</c>/
+    /// <c>u_cst</c>/<c>u_slt</c>): every axis starts at 0 and is only reached (spendable) once the
+    /// <c>u_sen</c> cap (<see cref="AbilityKind.Sentinels"/>) is drafted — the same "unowned/locked
+    /// items can't be upgraded" gate the old <c>SentinelTrackKind</c> enforced. The sentinel's damage
+    /// fraction always stays below 1.0 (the DECISION's "always weaker than Max's CURRENT primary"
+    /// enforced structurally), and the Slots axis's level IS the deployment cap.
     /// </summary>
     public sealed class SentinelSystemTests
     {
@@ -26,141 +28,164 @@ namespace MaxWorlds.Tests.EditMode
             Sentinel.DestroyAllActive();
         }
 
-        // ---------------------------------------------------------------- WeaponSystemState
+        // ---------------------------------------------------------------- RigState gating
 
         [Test]
-        public void FreshStateHasEverySentinelTrackAtLevel1()
+        public void EverySentinelAxisStartsAtZero()
         {
-            foreach (var kind in WeaponCatalog.AllSentinelTrackKinds)
-                Assert.That(WeaponSystemState.SentinelTrackLevel(kind), Is.EqualTo(1),
-                    $"{kind} must start owned at L1, same as a Water Balloon track");
+            foreach (string id in new[] { "u_dmg", "u_rng", "u_hp", "u_mov", "u_cst", "u_slt" })
+                Assert.That(RigState.Level(id), Is.EqualTo(0), $"{id} must start unleveled");
         }
 
         [Test]
-        public void SentinelsStartsUnacquired()
+        public void DirectChildAxesAreNotReachedUntilSentinelsIsAcquired()
         {
-            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Sentinels), Is.False);
+            Assert.That(RigState.IsReached("u_dmg"), Is.False);
+            Assert.That(RigState.TrySpendPart("u_dmg"), Is.False,
+                "unowned/locked items can't be upgraded (spec §5) — u_sen isn't drafted yet");
         }
 
         [Test]
-        public void LevelingASentinelTrackFailsUntilSentinelsIsAcquired()
-        {
-            Assert.That(WeaponSystemState.LevelUpSentinelTrack(SentinelTrackKind.WallStrength), Is.False,
-                "unowned/locked items can't be upgraded (spec §5) — Sentinels isn't acquired yet");
-            Assert.That(WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength), Is.EqualTo(1),
-                "a failed level-up must not move the level");
-        }
-
-        [Test]
-        public void LevelingASentinelTrackSucceedsOnceAcquired()
+        public void DirectChildAxesBecomeSpendableOnceSentinelsIsAcquired()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
 
-            Assert.That(WeaponSystemState.LevelUpSentinelTrack(SentinelTrackKind.DeploymentCount), Is.True);
-            Assert.That(WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.DeploymentCount), Is.EqualTo(2));
+            Assert.That(RigState.TrySpendPart("u_dmg"), Is.True);
+            Assert.That(RigState.Level("u_dmg"), Is.EqualTo(1));
         }
 
         [Test]
-        public void ASentinelTrackCannotLevelPastItsCap()
+        public void GrandchildAxesNeedTheirOwnParentReachedToo()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            int cap = WeaponCatalog.MaxLevel(SentinelTrackKind.DeploymentCount);
-            for (int i = 1; i < cap; i++)
-                Assert.That(WeaponSystemState.LevelUpSentinelTrack(SentinelTrackKind.DeploymentCount), Is.True);
 
-            Assert.That(WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.DeploymentCount), Is.EqualTo(cap));
-            Assert.That(WeaponSystemState.LevelUpSentinelTrack(SentinelTrackKind.DeploymentCount), Is.False,
-                "already at the cap");
+            Assert.That(RigState.TrySpendPart("u_mov"), Is.False, "u_mov's parent is u_dmg, still at 0");
+
+            RigState.TrySpendPart("u_dmg");
+            Assert.That(RigState.TrySpendPart("u_mov"), Is.True);
         }
 
         [Test]
-        public void ResetPutsEverySentinelTrackBackToLevel1AndForgetsAcquisition()
+        public void ASentinelAxisCannotLevelPastItsCap()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            WeaponSystemState.LevelUpSentinelTrack(SentinelTrackKind.GunnerPower);
+            int cap = RigBoard.MaxLevel("u_dmg");
+            for (int i = 0; i < cap; i++)
+                Assert.That(RigState.TrySpendPart("u_dmg"), Is.True);
+
+            Assert.That(RigState.Level("u_dmg"), Is.EqualTo(cap));
+            Assert.That(RigState.TrySpendPart("u_dmg"), Is.False, "already at the cap");
+        }
+
+        [Test]
+        public void ResetPutsEverySentinelAxisBackToZeroAndForgetsAcquisition()
+        {
+            WeaponSystemState.Acquire(AbilityKind.Sentinels);
+            RigState.TrySpendPart("u_dmg");
 
             WeaponSystemState.Reset();
 
             Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Sentinels), Is.False);
-            Assert.That(WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.GunnerPower), Is.EqualTo(1));
+            Assert.That(RigState.Level("u_dmg"), Is.EqualTo(0));
         }
 
         // ---------------------------------------------------------------- PartSpend
 
         [Test]
-        public void PartSpendOnSentinelTrackFailsWithNoBankedPart()
+        public void PartSpendOnAbilityFailsWithNoBankedPartEvenOnceAcquired()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            Assert.That(PartSpend.TrySpendOnSentinelTrack(SentinelTrackKind.WallStrength), Is.False);
-        }
-
-        [Test]
-        public void PartSpendOnSentinelTrackFailsWhenUnacquiredAndDoesNotConsumeTheBankedPart()
-        {
-            PickupWallet.AddPart();
-            Assert.That(PartSpend.TrySpendOnSentinelTrack(SentinelTrackKind.WallStrength), Is.False);
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "a failed spend must not consume the part");
-        }
-
-        [Test]
-        public void PartSpendOnSentinelTrackSpendsExactlyOnePartOnSuccess()
-        {
-            WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
-
-            Assert.That(PartSpend.TrySpendOnSentinelTrack(SentinelTrackKind.GunnerPower), Is.True);
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1));
-            Assert.That(WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.GunnerPower), Is.EqualTo(2));
+            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.Sentinels), Is.False,
+                "Sentinels itself is a cap 1 boolean unlock, already at its max once drafted");
         }
 
         // ---------------------------------------------------------------- AbilityTuning math
 
         [Test]
-        public void WallMaxHpGrowsLinearlyPerLevel()
+        public void MaxHpGrowsLinearlyFromLevelZero()
         {
-            Assert.That(AbilityTuning.SentinelWallMaxHp(1, 200f, 40f), Is.EqualTo(200f).Within(1e-4f));
-            Assert.That(AbilityTuning.SentinelWallMaxHp(4, 200f, 40f), Is.EqualTo(320f).Within(1e-4f));
+            Assert.That(AbilityTuning.SentinelMaxHp(0, 60f, 20f), Is.EqualTo(60f).Within(1e-4f));
+            Assert.That(AbilityTuning.SentinelMaxHp(3, 60f, 20f), Is.EqualTo(120f).Within(1e-4f));
         }
 
         [Test]
-        public void GunnerPowerFractionNeverReachesOrExceedsOne()
+        public void DamageFractionNeverReachesOrExceedsOne()
         {
-            for (int level = 1; level <= WeaponCatalog.MaxLevel(SentinelTrackKind.GunnerPower); level++)
+            for (int level = 0; level <= RigBoard.MaxLevel("u_dmg"); level++)
             {
-                float fraction = AbilityTuning.SentinelGunnerPowerFraction(
-                    level, AbilityTuning.DefaultSentinelGunnerPowerFraction, AbilityTuning.DefaultSentinelGunnerPowerFractionPerLevel);
+                float fraction = AbilityTuning.SentinelDamageFraction(
+                    level, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
                 Assert.That(fraction, Is.LessThan(1f),
                     $"level {level} must stay strictly below Max's own current primary output");
             }
         }
 
         [Test]
-        public void GunnerDamagePerShotIsAlwaysBelowThePrimaryItIsAFractionOf()
+        public void DamagePerShotIsAlwaysBelowThePrimaryItIsAFractionOf()
         {
             const float primaryDamage = 8f; // an arbitrary "Max's current primary tick damage"
-            for (int level = 1; level <= WeaponCatalog.MaxLevel(SentinelTrackKind.GunnerPower); level++)
+            for (int level = 0; level <= RigBoard.MaxLevel("u_dmg"); level++)
             {
-                float shot = AbilityTuning.SentinelGunnerDamagePerShot(
+                float shot = AbilityTuning.SentinelDamagePerShot(
                     primaryDamage, level,
-                    AbilityTuning.DefaultSentinelGunnerPowerFraction, AbilityTuning.DefaultSentinelGunnerPowerFractionPerLevel);
+                    AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
                 Assert.That(shot, Is.LessThan(primaryDamage),
                     "the DECISION: sentinel damage must never catch up to Max's own current primary");
             }
         }
 
         [Test]
-        public void DeploymentSlotsEqualsTheTrackLevel()
+        public void RangeGrowsLinearlyFromLevelZero()
         {
-            Assert.That(AbilityTuning.SentinelDeploymentSlots(1), Is.EqualTo(1));
+            float l0 = AbilityTuning.SentinelRange(0, 7f, 1.5f);
+            float l2 = AbilityTuning.SentinelRange(2, 7f, 1.5f);
+            Assert.That(l0, Is.EqualTo(7f).Within(1e-4f));
+            Assert.Greater(l2, l0);
+        }
+
+        [Test]
+        public void CostNeverGoesBelowTheFortyPercentFloor()
+        {
+            int cost = AbilityTuning.SentinelCost(99, 5, 0.15f);
+            Assert.That(cost, Is.GreaterThanOrEqualTo(Mathf.RoundToInt(5 * 0.4f)));
+        }
+
+        [Test]
+        public void MoveSpeedIsZeroUntilTheAxisIsLeveled()
+        {
+            Assert.That(AbilityTuning.SentinelMoveSpeed(0, 1.2f), Is.EqualTo(0f),
+                "MV-422: the sentinel does not follow at all until Move is actually spent on — matches pre-MV-422 behaviour");
+            Assert.That(AbilityTuning.SentinelMoveSpeed(1, 1.2f), Is.GreaterThan(0f));
+        }
+
+        [Test]
+        public void StandoffStepMovesTowardTheTargetButStopsAtTheStandoffDistance()
+        {
+            Vector3 current = Vector3.zero;
+            Vector3 target = new Vector3(10f, 0f, 0f);
+
+            Vector3 afterOneSecond = AbilityTuning.SentinelStandoffStep(current, target, standoff: 2.5f, speed: 3f, dt: 1f);
+            Assert.That(afterOneSecond.x, Is.EqualTo(3f).Within(1e-3f), "must close the gap at the given speed");
+
+            Vector3 alreadyClose = AbilityTuning.SentinelStandoffStep(
+                new Vector3(8f, 0f, 0f), target, standoff: 2.5f, speed: 3f, dt: 1f);
+            Assert.That(alreadyClose.x, Is.EqualTo(8f).Within(1e-3f),
+                "already within the standoff band — must not creep into Max's own feet");
+        }
+
+        [Test]
+        public void DeploymentSlotsEqualsTheAxisLevel_FlooredAtOne()
+        {
+            Assert.That(AbilityTuning.SentinelDeploymentSlots(0), Is.EqualTo(1),
+                "u_slt starts at level 0 (a stat, not the old cap-1-from-run-start track) — still floors at 1 slot");
             Assert.That(AbilityTuning.SentinelDeploymentSlots(4), Is.EqualTo(4));
         }
 
         [Test]
         public void DestroyingASentinelFreesItsDeploymentSlotForAnImmediateRedeploy()
         {
-            // MV-397, the exact repro Lee hit: base case, Deployment Count = 1 (no upgrades) —
-            // deploy, let it die, deploy again.
+            // MV-397, the exact repro Lee hit: base case, one free slot (u_slt at level 0) — deploy,
+            // let it die, deploy again.
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
 
@@ -168,9 +193,9 @@ namespace MaxWorlds.Tests.EditMode
             var abilities = maxGo.AddComponent<PlayerAbilities>();
             try
             {
-                Assert.That(abilities.TryDeployWallSentinel(), Is.True, "first deploy should succeed");
+                Assert.That(abilities.TryDeploySentinel(), Is.True, "first deploy should succeed");
                 Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(1));
-                Assert.That(abilities.WallSentinelReady, Is.False, "the single slot is now full");
+                Assert.That(abilities.SentinelReady, Is.False, "the single slot is now full");
 
                 Sentinel deployed = Sentinel.Active[0];
                 deployed.TakeDamage(new DamageInfo(
@@ -178,8 +203,8 @@ namespace MaxWorlds.Tests.EditMode
 
                 Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(0),
                     "the slot must be free immediately after the sentinel dies");
-                Assert.That(abilities.TryDeployWallSentinel(), Is.True,
-                    "a fresh Wall should be deployable again once the old one is destroyed");
+                Assert.That(abilities.TryDeploySentinel(), Is.True,
+                    "a fresh sentinel should be deployable again once the old one is destroyed");
                 Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(1));
             }
             finally

@@ -40,7 +40,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MaxedSpreadTrack_ReadsFullVisualStrength()
         {
-            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Spread); i++)
+            // MV-422: p_spr's RIG parent is p_rng — unreached (and so un-levelable) until Range has
+            // been spent at least once.
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+            for (int i = 0; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Spread); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
 
             Assert.That(_blaster.VisualStrength, Is.EqualTo(1f).Within(1e-5f),
@@ -50,10 +53,16 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void LevelingSpreadRaisesVisualStrength_WithoutMovingTheFunctionalConeAtLevelOne()
         {
+            // MV-422: level 0 and level 1 both read as Spread's un-widened starting point (the
+            // formula's own Mathf.Max(1, level) clamp, unchanged since pre-MV-422) — so level 1 is
+            // where "without moving the cone at level one" is actually measured from; level 2 is the
+            // first level that visibly moves either dial.
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range); // MV-422: unlocks Spread's own reached-ness
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread); // Spread to L1 — the starting point
             float before = _blaster.VisualStrength;
             float coneBefore = _blaster.ConeHalfAngle;
 
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread); // Spread to L2
 
             Assert.That(_blaster.VisualStrength, Is.GreaterThan(before),
                 "spending a level on Spread must visibly thicken the weapon's presentation");

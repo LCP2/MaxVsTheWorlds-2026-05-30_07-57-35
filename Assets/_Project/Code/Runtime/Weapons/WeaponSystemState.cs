@@ -5,104 +5,95 @@ using MaxWorlds.Core;
 namespace MaxWorlds.Weapons
 {
     /// <summary>
-    /// The re-cut's weapon/ability backbone (WV-230): the RCDA primary's four tracks (owned from run
-    /// start, all Level 1) and the six shed-acquired abilities (Level 0 = not owned). Same
-    /// static/event-driven shape as <see cref="MaxWorlds.Upgrades.UpgradeState"/> — one Max, several
-    /// systems reading the same numbers — since this is the system that gradually replaces it as
-    /// WV-226/228/229/231 land. <see cref="Reset"/> for a new run and test isolation.
+    /// The re-cut's weapon/ability backbone (WV-230). MV-422 collapses what used to be four separate
+    /// per-enum dictionaries (<see cref="WeaponTrackKind"/>, the old <c>WaterBalloonTrackKind</c>
+    /// dictionary, the old <c>SentinelTrackKind</c> dictionary, <see cref="AbilityKind"/>) into one
+    /// shared node model, <see cref="RigState"/>, keyed by THE RIG's own string ids
+    /// (<see cref="RigBoard"/>) — this class is now a thin, enum-typed compatibility layer over that
+    /// single source of truth, so every existing call site (<c>WaterBlaster</c>, <c>WeaponsScreen</c>,
+    /// <c>HudController</c>, ...) keeps compiling unchanged while the actual levels/gating live in one
+    /// place. <see cref="AbilityKind.WeaponCooldown"/> has no node in the canonical <c>rig_board.json</c>
+    /// (it names exactly 23 abilities, none of them a global cooldown-reduction ability) — MV-422
+    /// retires it: <see cref="MapId(AbilityKind)"/> returns null for it, so it can never be acquired,
+    /// never appears in <see cref="Unacquired"/>, and <see cref="EffectiveCooldownSeconds"/> always
+    /// multiplies by 1x (unchanged code, since <see cref="AbilityTuning.CooldownMultiplier"/> at level
+    /// 0 is already a no-op).
     /// </summary>
     public static class WeaponSystemState
     {
-        private static readonly Dictionary<WeaponTrackKind, int> s_trackLevels = new Dictionary<WeaponTrackKind, int>();
-        private static readonly Dictionary<AbilityKind, int> s_abilityLevels = new Dictionary<AbilityKind, int>();
-        private static readonly Dictionary<WaterBalloonTrackKind, int> s_waterBalloonTrackLevels = new Dictionary<WaterBalloonTrackKind, int>();
-        private static readonly Dictionary<SentinelTrackKind, int> s_sentinelTrackLevels = new Dictionary<SentinelTrackKind, int>();
         // MV-333: the order abilities were actually granted in, not the catalog's fixed order — the
         // weapons screen's slots are keyed off this so a slot, once filled, never moves when a later
-        // ability is acquired (the catalog order previously resorted "Acquired" every Refresh, which
-        // both showed the wrong ability first when a late-catalog one like Weapon Cooldown was granted
-        // alone, and reshuffled it out of slot 1 the moment an earlier-catalog ability arrived).
+        // ability is acquired. RigState has no concept of "acquisition order" (it is a tree, not a
+        // queue), so this stays local state here, alongside the enum<->id mapping.
         private static readonly List<AbilityKind> s_acquisitionOrder = new List<AbilityKind>();
-
-        static WeaponSystemState() => ResetLevels();
 
         /// <summary>Fired whenever a track levels up, an ability is acquired, an ability levels up, or
         /// the state is reset. Systems that cache a derived value rebuild on this.</summary>
         public static event Action Changed;
 
-        /// <summary>An RCDA track's current level. Every track starts at 1 and is owned from run
-        /// start — unlike an ability, there is no "not owned" state for the primary.</summary>
-        public static int TrackLevel(WeaponTrackKind kind) => s_trackLevels[kind];
+        // ---------------------------------------------------------------- enum <-> RIG id mapping
 
-        /// <summary>Spend a part to raise a track by one level (WV-228), up to its
-        /// <see cref="WeaponCatalog.MaxLevel(WeaponTrackKind)"/> cap. No-ops (returns false) already
-        /// at the cap.</summary>
+        private static string MapId(WeaponTrackKind kind) => kind switch
+        {
+            WeaponTrackKind.Range => "p_rng",
+            WeaponTrackKind.Spread => "p_spr",
+            WeaponTrackKind.Damage => "p_dmg",
+            WeaponTrackKind.DepletionRate => "p_flw",
+            _ => null,
+        };
+
+        private static string MapId(WaterBalloonTrackKind kind) => kind switch
+        {
+            WaterBalloonTrackKind.Range => "s_lob",
+            WaterBalloonTrackKind.SplashArea => "s_spl",
+            WaterBalloonTrackKind.RepeatFire => "s_rte",
+            _ => null,
+        };
+
+        /// <summary>Null for <see cref="AbilityKind.WeaponCooldown"/> — see the class doc comment.</summary>
+        private static string MapId(AbilityKind kind) => kind switch
+        {
+            AbilityKind.Speed => "m_spd",
+            AbilityKind.Teleport => "m_tp",
+            AbilityKind.WaterBalloon => "s_bal",
+            AbilityKind.WaterBalloonAutoFire => "s_aut",
+            AbilityKind.ForceField => "e_ff",
+            AbilityKind.Sentinels => "u_sen",
+            _ => null,
+        };
+
+        // ---------------------------------------------------------------- RCDA tracks
+
+        /// <summary>An RCDA track's current level — <c>p_dmg</c> starts at 1 (run start), the rest at
+        /// 0 until reached/spent (MV-422: only <c>p_dmg</c> is owned at run start now; Range/Spread/
+        /// Flow are stats that become spendable once their own parent is at level &gt;= 1).</summary>
+        public static int TrackLevel(WeaponTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>Spend a part to raise a track by one level (WV-228). Fails if the underlying RIG
+        /// node isn't reached yet (MV-422: e.g. Spread needs Range &gt;= 1 first) or is already at its
+        /// cap.</summary>
         public static bool LevelUpTrack(WeaponTrackKind kind)
         {
-            int level = s_trackLevels[kind];
-            if (level >= WeaponCatalog.MaxLevel(kind)) return false;
-            s_trackLevels[kind] = level + 1;
+            if (!RigState.TrySpendPart(MapId(kind))) return false;
             Changed?.Invoke();
             return true;
         }
 
-        /// <summary>0 if not yet acquired from a shed; 1..cap once owned.</summary>
-        public static int AbilityLevel(AbilityKind kind) => s_abilityLevels[kind];
+        // ---------------------------------------------------------------- abilities
 
-        /// <summary>A Water Balloon track's current level (MV-370). Every track starts at 1 and is
-        /// owned from run start, same as an RCDA track — Water Balloon is a primary add-on now, not a
-        /// shed-acquired ability.</summary>
-        public static int WaterBalloonTrackLevel(WaterBalloonTrackKind kind) => s_waterBalloonTrackLevels[kind];
-
-        /// <summary>Spend a part to raise a Water Balloon track by one level (MV-370), up to its
-        /// <see cref="WeaponCatalog.MaxLevel(WaterBalloonTrackKind)"/> cap. No-ops (returns false)
-        /// already at the cap.</summary>
-        public static bool LevelUpWaterBalloonTrack(WaterBalloonTrackKind kind)
+        /// <summary>0 if not yet acquired from a shed; 1..cap once owned. Always 0 for
+        /// <see cref="AbilityKind.WeaponCooldown"/> (retired, MV-422).</summary>
+        public static int AbilityLevel(AbilityKind kind)
         {
-            int level = s_waterBalloonTrackLevels[kind];
-            if (level >= WeaponCatalog.MaxLevel(kind)) return false;
-            s_waterBalloonTrackLevels[kind] = level + 1;
-            Changed?.Invoke();
-            return true;
+            string id = MapId(kind);
+            return id == null ? 0 : RigState.Level(id);
         }
 
-        /// <summary>The Water Balloon's own Repeat Fire track's cooldown-cut-per-level fraction, read
-        /// through <see cref="DevTuning"/> so the panel can dial it live (MV-370, same idiom as
-        /// <see cref="WeaponCooldownReductionPerLevel"/>).</summary>
-        private static float WaterBalloonRepeatFirePerLevel => DevTuning.Or(
-            DevTuning.WaterBalloonRepeatFirePerLevel, AbilityTuning.DefaultWaterBalloonRepeatFirePerLevel);
-
-        /// <summary>Water Balloon's throw cooldown after its own Repeat Fire track (MV-370) — the
-        /// on-screen control's cooldown sweep reads this, same role <see cref="EffectiveCooldownSeconds"/>
-        /// plays for the AbilityKind-gated controls Water Balloon left behind.</summary>
-        public static float WaterBalloonEffectiveCooldownSeconds() => AbilityTuning.WaterBalloonCooldownSeconds(
-            WaterBalloonTrackLevel(WaterBalloonTrackKind.RepeatFire),
-            WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
-            WaterBalloonRepeatFirePerLevel);
-
-        /// <summary>A Sentinel track's current level (MV-362). Every track starts at 1, same
-        /// "owned/leveled from run start" shape as <see cref="WaterBalloonTrackLevel"/> — but unlike
-        /// Water Balloon's tracks, actually SPENDING a part on one requires
-        /// <see cref="AbilityKind.Sentinels"/> to be acquired first (<see cref="LevelUpSentinelTrack"/>),
-        /// since these tracks do nothing until the system they belong to is owned.</summary>
-        public static int SentinelTrackLevel(SentinelTrackKind kind) => s_sentinelTrackLevels[kind];
-
-        /// <summary>Spend a part to raise a Sentinel track by one level (MV-362), up to its
-        /// <see cref="WeaponCatalog.MaxLevel(SentinelTrackKind)"/> cap. Fails (returns false, spends
-        /// nothing) if <see cref="AbilityKind.Sentinels"/> isn't owned yet — "unowned/locked items
-        /// can't be upgraded" (spec §5), the same rule <see cref="LevelUpAbility"/> enforces — or the
-        /// track is already at its cap.</summary>
-        public static bool LevelUpSentinelTrack(SentinelTrackKind kind)
+        public static bool IsAcquired(AbilityKind kind)
         {
-            if (!IsAcquired(AbilityKind.Sentinels)) return false;
-            int level = s_sentinelTrackLevels[kind];
-            if (level >= WeaponCatalog.MaxLevel(kind)) return false;
-            s_sentinelTrackLevels[kind] = level + 1;
-            Changed?.Invoke();
-            return true;
+            string id = MapId(kind);
+            return id != null && RigState.IsOwned(id);
         }
-
-        public static bool IsAcquired(AbilityKind kind) => s_abilityLevels[kind] > 0;
 
         /// <summary>Every ability Max currently owns, in the order they were acquired (MV-333) — the
         /// weapons screen's Abilities section (WV-232) grows from this; unacquired abilities are never
@@ -110,18 +101,21 @@ namespace MaxWorlds.Weapons
         /// filled.</summary>
         public static IEnumerable<AbilityKind> Acquired => s_acquisitionOrder;
 
-        /// <summary>Abilities Max doesn't own yet — the pool a destroyed shed draws from (WV-229):
-        /// "one random ability Max doesn't already own". MV-380: Auto-fire is a prerequisite chain —
-        /// it's never offered/drawn until <see cref="AbilityKind.WaterBalloon"/> itself is already
-        /// owned, so a shed can't hand out the auto-aim upgrade before the ability it augments.</summary>
+        /// <summary>Abilities Max doesn't own yet AND are reached — the pool a destroyed shed draws
+        /// from (WV-229). MV-380/MV-422: Auto-fire is never offered until Water Balloon itself is
+        /// already owned — this used to be a hard-coded special case; now it falls straight out of
+        /// <c>s_aut</c>'s RIG parent being <c>s_bal</c>, the same reached-ness rule every other node
+        /// uses, no special-casing needed.</summary>
         public static IEnumerable<AbilityKind> Unacquired
         {
             get
             {
                 foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 {
-                    if (IsAcquired(kind)) continue;
-                    if (kind == AbilityKind.WaterBalloonAutoFire && !IsAcquired(AbilityKind.WaterBalloon)) continue;
+                    string id = MapId(kind);
+                    if (id == null) continue; // WeaponCooldown — retired, no RIG node
+                    if (RigState.IsOwned(id)) continue;
+                    if (!RigState.IsReached(id)) continue;
                     yield return kind;
                 }
             }
@@ -145,60 +139,90 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        /// <summary>Grant an ability at Level 1 — a shed's device (WV-229). Idempotent: granting an
-        /// already-owned ability is a no-op (returns false); a shed should draw from
-        /// <see cref="Unacquired"/> so this shouldn't normally happen.</summary>
+        /// <summary>Grant an ability at Level 1 — a shed's device (WV-229; a Morphing Module draft in
+        /// RIG terms). Idempotent: granting an already-owned ability, or one whose RIG node isn't
+        /// reached, is a no-op (returns false); a shed should draw from <see cref="Unacquired"/> so
+        /// this shouldn't normally happen. Always fails for <see cref="AbilityKind.WeaponCooldown"/>
+        /// (retired, MV-422).</summary>
         public static bool Acquire(AbilityKind kind)
         {
-            if (s_abilityLevels[kind] > 0) return false;
-            s_abilityLevels[kind] = 1;
+            string id = MapId(kind);
+            if (id == null) return false;
+            if (!RigState.AcquireCap(id)) return false;
             s_acquisitionOrder.Add(kind);
             Changed?.Invoke();
             return true;
         }
 
-        /// <summary>Spend a part to raise an OWNED ability by one level (WV-228), up to its
-        /// <see cref="WeaponCatalog.MaxLevel(AbilityKind)"/> cap. An unacquired ability can't be
-        /// leveled (returns false) — "unowned/locked items can't be upgraded".</summary>
+        /// <summary>Spend a part to raise an OWNED ability by one level (WV-228), up to its RIG level
+        /// cap. An unacquired ability can't be leveled (returns false) — "unowned/locked items can't
+        /// be upgraded".</summary>
         public static bool LevelUpAbility(AbilityKind kind)
         {
-            int level = s_abilityLevels[kind];
-            if (level <= 0) return false;
-            if (level >= WeaponCatalog.MaxLevel(kind)) return false;
-            s_abilityLevels[kind] = level + 1;
+            string id = MapId(kind);
+            if (id == null) return false;
+            if (!RigState.TrySpendPart(id)) return false;
             Changed?.Invoke();
             return true;
         }
 
         /// <summary>The Weapon Cooldown ability's own reduction-per-level fraction, read through
-        /// <see cref="DevTuning"/> so the panel can dial it live (WV-234).</summary>
+        /// <see cref="DevTuning"/> so the panel can dial it live (WV-234). Retained for
+        /// <see cref="EffectiveCooldownSeconds"/>'s formula shape even though the ability itself is
+        /// retired (MV-422) — <see cref="AbilityLevel(AbilityKind)"/> for
+        /// <see cref="AbilityKind.WeaponCooldown"/> is always 0, so this multiplier is always a no-op
+        /// (1x) in practice now.</summary>
         private static float WeaponCooldownReductionPerLevel => DevTuning.Or(
             DevTuning.WeaponCooldownReductionPerLevel, AbilityTuning.DefaultWeaponCooldownReductionPerLevel);
 
-        /// <summary>An ability's cooldown after the Weapon Cooldown ability's per-level reduction —
-        /// the number its on-screen control (a controls-ticket concern, WV-240) sweeps against.
-        /// Passive abilities have a base cooldown of 0 and always return 0.</summary>
+        /// <summary>An ability's cooldown after the (now-retired) Weapon Cooldown ability's per-level
+        /// reduction — the number its on-screen control (WV-240) sweeps against. Passive abilities
+        /// have a base cooldown of 0 and always return 0.</summary>
         public static float EffectiveCooldownSeconds(AbilityKind kind) =>
             WeaponCatalog.BaseCooldownSeconds(kind) *
             AbilityTuning.CooldownMultiplier(AbilityLevel(AbilityKind.WeaponCooldown), WeaponCooldownReductionPerLevel);
 
-        /// <summary>Back to a fresh run's baseline: every track at Level 1, no abilities owned. Fires
-        /// <see cref="Changed"/> so the live systems (the blaster's Power Efficiency read, a future
-        /// weapons screen) re-fit.</summary>
-        public static void Reset()
+        // ---------------------------------------------------------------- Water Balloon tracks (MV-370)
+
+        /// <summary>A Water Balloon track's current level (MV-370/MV-422). <c>s_spl</c>/<c>s_lob</c>
+        /// are reached once <c>s_bal</c> (the Balloon itself) is owned; <c>s_rte</c> additionally needs
+        /// <c>s_aut</c> (Auto-Fire) owned — the throw's own tracks are no longer free-standing "owned
+        /// from run start" tracks the way they were pre-MV-422.</summary>
+        public static int WaterBalloonTrackLevel(WaterBalloonTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>Spend a part to raise a Water Balloon track by one level (MV-370). Fails if its RIG
+        /// node isn't reached yet or is already at its cap.</summary>
+        public static bool LevelUpWaterBalloonTrack(WaterBalloonTrackKind kind)
         {
-            ResetLevels();
+            if (!RigState.TrySpendPart(MapId(kind))) return false;
             Changed?.Invoke();
+            return true;
         }
 
-        private static void ResetLevels()
+        /// <summary>The Water Balloon's own Repeat Fire track's cooldown-cut-per-level fraction, read
+        /// through <see cref="DevTuning"/> so the panel can dial it live (MV-370, same idiom as
+        /// <see cref="WeaponCooldownReductionPerLevel"/>).</summary>
+        private static float WaterBalloonRepeatFirePerLevel => DevTuning.Or(
+            DevTuning.WaterBalloonRepeatFirePerLevel, AbilityTuning.DefaultWaterBalloonRepeatFirePerLevel);
+
+        /// <summary>Water Balloon's throw cooldown after its own Repeat Fire track (MV-370) — the
+        /// on-screen control's cooldown sweep reads this, same role <see cref="EffectiveCooldownSeconds"/>
+        /// plays for the AbilityKind-gated controls Water Balloon left behind.</summary>
+        public static float WaterBalloonEffectiveCooldownSeconds() => AbilityTuning.WaterBalloonCooldownSeconds(
+            WaterBalloonTrackLevel(WaterBalloonTrackKind.RepeatFire),
+            WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
+            WaterBalloonRepeatFirePerLevel);
+
+        /// <summary>Back to a fresh run's baseline: THE RIG's own start levels (today, every node 0
+        /// except <c>p_dmg</c> at 1), no abilities owned, acquisition order cleared. Fires
+        /// <see cref="Changed"/> so the live systems (the blaster's track reads, the weapons screen)
+        /// re-fit.</summary>
+        public static void Reset()
         {
-            foreach (var kind in WeaponCatalog.AllTrackKinds) s_trackLevels[kind] = 1;
-            foreach (var kind in WeaponCatalog.AllAbilityKinds) s_abilityLevels[kind] = 0;
-            foreach (var kind in WeaponCatalog.AllWaterBalloonTrackKinds) s_waterBalloonTrackLevels[kind] = 1;
-            foreach (var kind in WeaponCatalog.AllSentinelTrackKinds) s_sentinelTrackLevels[kind] = 1;
+            RigState.Reset();
             s_acquisitionOrder.Clear();
             s_waterBalloonAutoFireEnabled = true;
+            Changed?.Invoke();
         }
     }
 }

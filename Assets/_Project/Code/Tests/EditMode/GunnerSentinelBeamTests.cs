@@ -7,11 +7,10 @@ using MaxWorlds.Enemies;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-395: the Gunner Sentinel was damaging robots with no visible beam/stream at all — the
-    /// targeting and damage logic (<see cref="GunnerSentinel"/>'s Update) never drew anything, it only
-    /// called <c>TakeDamage</c>. This proves a shot now actually draws a tracer from the turret to the
-    /// robot it just hit, not just that the robot takes damage (already covered by <see
-    /// cref="SentinelTests"/>).
+    /// MV-395: the sentinel was damaging robots with no visible beam/stream at all — the targeting and
+    /// damage logic (<see cref="Sentinel"/>'s Update) never drew anything, it only called
+    /// <c>TakeDamage</c>. This proves a shot now actually draws a tracer from the turret to the robot
+    /// it just hit, not just that the robot takes damage (already covered by <see cref="SentinelTests"/>).
     /// </summary>
     public sealed class GunnerSentinelBeamTests
     {
@@ -19,10 +18,10 @@ namespace MaxWorlds.Tests.EditMode
         [TearDown]
         public void Clear() => Sentinel.ResetRegistry();
 
-        private static void InvokeUpdate(GunnerSentinel gunner)
+        private static void InvokeUpdate(Sentinel sentinel)
         {
-            typeof(GunnerSentinel).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(gunner, null);
+            typeof(Sentinel).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(sentinel, null);
         }
 
         private static RobotEnemy NewTarget(Vector3 position)
@@ -38,22 +37,22 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FiringAtARobotDrawsAVisibleTracerFromTheTurretToTheHit()
         {
-            var gunnerGo = new GameObject("Gunner Sentinel");
-            var gunner = gunnerGo.AddComponent<GunnerSentinel>();
+            var sentinelGo = new GameObject("Sentinel");
+            var sentinel = sentinelGo.AddComponent<Sentinel>();
             RobotEnemy target = null;
             try
             {
-                gunner.Init(Vector3.zero, 60f, 7f, 0.6f);
+                sentinel.Init(Vector3.zero, 60f, 7f, 0.6f, moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);
                 target = NewTarget(new Vector3(2f, 0f, 0f));
 
                 // autoSyncTransforms is off project-wide — every transform set above needs an explicit
-                // sync before the physics overlap query in GunnerSentinel.Update runs, same as
+                // sync before the physics overlap query in Sentinel.Update runs, same as
                 // WaterBlasterGateDamageTests/GateSolidityTests.
                 Physics.SyncTransforms();
 
-                InvokeUpdate(gunner);
+                InvokeUpdate(sentinel);
 
-                var beamGo = gunner.transform.Find("Beam");
+                var beamGo = sentinel.transform.Find("Beam");
                 Assert.IsNotNull(beamGo, "no Beam child was built — the shot is still invisible");
 
                 var beam = beamGo.GetComponent<LineRenderer>();
@@ -69,7 +68,7 @@ namespace MaxWorlds.Tests.EditMode
             }
             finally
             {
-                Object.DestroyImmediate(gunnerGo);
+                Object.DestroyImmediate(sentinelGo);
                 if (target != null) Object.DestroyImmediate(target.gameObject);
             }
         }

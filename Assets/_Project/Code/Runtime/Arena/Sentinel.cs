@@ -1,39 +1,54 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using UnityEngine.Rendering;
+using MaxWorlds.Combat;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Player;
+using MaxWorlds.UI;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
-    /// <summary>Which of Max's deployable structures this is (MV-362).</summary>
-    public enum SentinelKind { Wall, Gunner }
-
     /// <summary>
-    /// Base for Max's deployable Sentinels (MV-362): a Wall (Blocker) or a Gunner (Attack turret),
-    /// placed at Max's own position, with their own HP. Deployed sentinels are permanent until
-    /// destroyed — no recall, no player-triggered repair (DECISION, Lee 15 Aug 2026) — so unlike
-    /// <see cref="MaxWorlds.Enemies.RobotEnemy"/> they are never pooled; <see cref="Die"/> destroys
-    /// the GameObject outright, the same one-shot lifecycle <see cref="MaxWorlds.Factories.MowerHutch"/>
-    /// uses for its own death. MV-398 (same day) reversed only the "no repair" half: a damaged-but-alive
-    /// sentinel now passively regens HP once left unhit for a while — see <see cref="Update"/> — but a
-    /// destroyed one still never comes back, and there is still no manual repair action.
+    /// Max's deployable Sentinel (MV-362, restructured MV-422: "Delete the Wall Sentinel entirely...
+    /// one sentinel only — the Gunner, now just 'Sentinel'"). A low-HP turret — "a hose pipe on a
+    /// stick", reusing the primary's own blue — that auto-fires at the nearest robot in range and,
+    /// once its Move axis is leveled, follows Max at a standoff distance. Placed at an aimed point,
+    /// with its own HP.
+    ///
+    /// Six RIG axes (<c>u_sen</c>'s children, MV-422) replace the old three tracks: Damage
+    /// (<c>u_dmg</c>), Range (<c>u_rng</c>), Health (<c>u_hp</c>) — all direct children of
+    /// <c>u_sen</c> — then Move (<c>u_mov</c>), Cost (<c>u_cst</c>), Slots (<c>u_slt</c>) behind
+    /// Damage/Range/Health respectively. "Always weaker than Max's CURRENT primary" is enforced
+    /// structurally, not by a cap that could drift out of date: every shot's damage is a FRACTION
+    /// (&lt; 1.0, see <see cref="AbilityTuning.SentinelDamagePerShot"/>) of Max's own live RCDA
+    /// Damage-track output, read fresh from <see cref="WeaponSystemState"/>/<see cref="WeaponCatalog"/>
+    /// on every shot.
+    ///
+    /// Deployed sentinels are permanent until destroyed — no recall, no player-triggered repair
+    /// (DECISION, Lee 15 Aug 2026) — so unlike <see cref="MaxWorlds.Enemies.RobotEnemy"/> it is never
+    /// pooled; <see cref="Die"/> destroys the GameObject outright, the same one-shot lifecycle
+    /// <see cref="MaxWorlds.Factories.MowerHutch"/> uses for its own death. MV-398 (same day)
+    /// reversed only the "no repair" half: a damaged-but-alive sentinel now passively regens HP once
+    /// left unhit for a while — see <see cref="Update"/> — but a destroyed one still never comes
+    /// back, and there is still no manual repair action.
     ///
     /// <see cref="Team"/> is <see cref="Team.Player"/> — Max's own device. <see cref="DamageRules"/>'s
     /// same-team rejection means a robot (Team.Enemy) CAN hit it, and Max's own primary (Team.Player)
     /// CANNOT — <c>WaterBlaster.FireTick</c> already skips every <c>Team.Player</c> receiver, so
-    /// nothing extra is needed to stop Max from shooting his own wall.
+    /// nothing extra is needed to stop Max from shooting his own sentinel.
     /// </summary>
-    public abstract class Sentinel : MonoBehaviour, IDamageable, IHealthReadout
+    public sealed class Sentinel : MonoBehaviour, IDamageable, IHealthReadout
     {
         private static readonly List<Sentinel> _active = new List<Sentinel>(8);
 
-        /// <summary>Every sentinel deployed right now, across both kinds — what
-        /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s retargeting reads to find the nearest one, and
-        /// what <see cref="MaxWorlds.Weapons.PlayerAbilities"/> counts against the shared Deployment
-        /// Count cap (DECISION: "shared across both types").</summary>
+        /// <summary>Every sentinel deployed right now — what <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s
+        /// retargeting reads to find the nearest one, and what
+        /// <see cref="MaxWorlds.Weapons.PlayerAbilities"/> counts against the Slots (u_slt) cap.</summary>
         public static IReadOnlyList<Sentinel> Active => _active;
 
         /// <summary>Empties the registry ONLY — mirrors <see cref="MaxWorlds.Enemies.RobotEnemy.ResetRegistry"/>'s
@@ -47,8 +62,8 @@ namespace MaxWorlds.Arena
         /// build, and <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.PlayerCrossedIntoArea"/>
         /// (MV-362 spec: "they do not travel between areas... passing a gate clears them and refunds
         /// the slots" — MV-396 fixed "passing" to mean Max has actually walked through, not merely that
-        /// the gate broke) — the "refund" is automatic here, since the Deployment Count cap is always
-        /// checked live against <see cref="Active"/>.Count, never a separately-tracked balance.</summary>
+        /// the gate broke) — the "refund" is automatic here, since the Slots cap is always checked
+        /// live against <see cref="Active"/>.Count, never a separately-tracked balance.</summary>
         public static void DestroyAllActive()
         {
             if (_active.Count == 0) return;
@@ -62,7 +77,32 @@ namespace MaxWorlds.Arena
             }
         }
 
-        public abstract SentinelKind Kind { get; }
+        private static readonly Color BodyColor = new Color(0.35f, 0.55f, 0.75f); // the primary's blue
+        private static readonly Collider[] s_hits = new Collider[16];
+
+        // MV-395: the shot itself was invisible — damage landed but nothing was ever drawn from the
+        // turret to its target. A LineRenderer flash tracer, built the same way RobotRig builds the
+        // enemy Gunner's beam (see RobotRig.BuildBeamLine), tinted with the primary's own blue
+        // (BodyColor above) per MV-362's "reuses the primary weapon's visual language".
+        private static readonly Color BeamColor = new Color(0.55f, 0.85f, 1f, 1f);
+        private const float BeamHalfWidth = 0.06f;
+        private const float MuzzleHeight = 1.1f; // near the top of the Body cylinder (see BuildBody)
+
+        /// <summary>How long the tracer stays on screen per shot. Capped below the fire interval so a
+        /// fast-firing turret's beam never runs into the next shot's own flash.</summary>
+        private float BeamVisibleSeconds => Mathf.Min(0.12f, _fireInterval * 0.9f);
+
+        private LineRenderer _beamLine;
+        private float _beamTimer;
+
+        public string ReadoutName => "SENTINEL";
+
+        private float _range;
+        private float _fireInterval;
+        private float _fireCooldown;
+        private float _moveSpeed;
+        private float _standoffDistance;
+        private Transform _followTarget;
 
         private DestructibleHealth _health;
         private float _timeSinceDamage;
@@ -74,10 +114,52 @@ namespace MaxWorlds.Arena
         public float Normalized => _health?.Normalized ?? 0f;
         public float HealthNormalized => Normalized;
         public float HealthCurrent => _health?.Current ?? 0f;
-        public abstract string ReadoutName { get; }
 
         /// <summary>Fired once, the instant this sentinel is destroyed.</summary>
         public event Action<Sentinel> Died;
+
+        /// <summary>Places and builds the turret. <paramref name="range"/>/<paramref name="moveSpeed"/>
+        /// are the Range (u_rng)/Move (u_mov) axes' CURRENT values at deploy time — read fresh from
+        /// <see cref="WeaponSystemState"/>-adjacent <c>RigState</c> lookups by the caller, not cached
+        /// here beyond this one deploy (matching the old Gunner's own "read fresh each shot" rule for
+        /// damage). <paramref name="followTarget"/>/<paramref name="standoffDistance"/> drive the
+        /// Move axis's follow behaviour (MV-422) — null/0 speed leaves it stationary, the pre-MV-422
+        /// behaviour.</summary>
+        public void Init(Vector3 position, float maxHp, float range, float fireInterval,
+            float moveSpeed, float standoffDistance, Transform followTarget)
+        {
+            transform.position = position;
+            _range = range;
+            _fireInterval = fireInterval;
+            _moveSpeed = moveSpeed;
+            _standoffDistance = standoffDistance;
+            _followTarget = followTarget;
+            InitHealth(maxHp);
+            BuildBody();
+            WorldHealthBar.Attach(gameObject, this, 1.9f, 1.2f, alwaysShow: true);
+            Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (see GateSolidityTests)
+        }
+
+        private void BuildBody()
+        {
+            var vis = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            vis.name = "Body";
+            vis.transform.SetParent(transform, worldPositionStays: false);
+            vis.transform.localPosition = new Vector3(0f, 0.6f, 0f);
+            vis.transform.localScale = new Vector3(0.5f, 0.6f, 0.5f);
+
+            var rend = vis.GetComponent<Renderer>();
+            if (rend != null)
+            {
+                var mpb = new MaterialPropertyBlock();
+                rend.GetPropertyBlock(mpb);
+                mpb.SetColor("_BaseColor", BodyColor);
+                rend.SetPropertyBlock(mpb);
+            }
+
+            var col = vis.GetComponent<Collider>();
+            if (col != null) col.isTrigger = false; // solid — robots route around it like any wall
+        }
 
         protected void InitHealth(float maxHp)
         {
@@ -91,12 +173,12 @@ namespace MaxWorlds.Arena
             if (!_active.Contains(this)) _active.Add(this);
         }
 
-        protected virtual void OnEnable()
+        private void OnEnable()
         {
             if (!_active.Contains(this)) _active.Add(this);
         }
 
-        protected virtual void OnDisable() => _active.Remove(this);
+        private void OnDisable() => _active.Remove(this);
 
         public void TakeDamage(in DamageInfo info)
         {
@@ -114,10 +196,7 @@ namespace MaxWorlds.Arena
         public static float Regenerate(float current, float max, float timeSinceDamage, float delay, float perSec, float dt) =>
             PlayerHealth.Regenerate(current, max, timeSinceDamage, delay, perSec, dt);
 
-        /// <summary>Ticks the passive regen (MV-398). Not sealed: <see cref="GunnerSentinel"/>
-        /// overrides to also drive its own fire-control loop, calling this via <c>base.Update()</c>
-        /// so both sentinel kinds regen identically.</summary>
-        protected virtual void Update()
+        private void Update()
         {
             if (!IsAlive) return;
             float dt = Time.deltaTime;
@@ -127,16 +206,119 @@ namespace MaxWorlds.Arena
                 AbilityTuning.DefaultSentinelRegenDelaySeconds, AbilityTuning.DefaultSentinelRegenPerSec, dt);
             float healAmount = next - _health.Current;
             if (healAmount > 0f) _health.Heal(healAmount);
+
+            if (_followTarget != null && _moveSpeed > 0f)
+            {
+                Vector3 next3 = AbilityTuning.SentinelStandoffStep(
+                    transform.position, _followTarget.position, _standoffDistance, _moveSpeed, dt);
+                if (next3 != transform.position)
+                {
+                    transform.position = next3;
+                    Physics.SyncTransforms();
+                }
+            }
+
+            if (_beamTimer > 0f)
+            {
+                _beamTimer -= dt;
+                if (_beamTimer <= 0f && _beamLine != null) _beamLine.enabled = false;
+            }
+
+            _fireCooldown -= dt;
+            if (_fireCooldown > 0f) return;
+
+            RobotEnemy target = NearestRobotInRange();
+            if (target == null) return;
+
+            _fireCooldown = _fireInterval;
+
+            // Max's CURRENT primary per-tick damage, read live — this is what keeps the sentinel
+            // "always weaker" as Max's own Damage track climbs (see the class doc comment).
+            float primaryDamage = WeaponCatalog.EffectiveDamagePerTick(
+                WaterBlaster.DefaultDamagePerTick,
+                WeaponSystemState.TrackLevel(WeaponTrackKind.Damage),
+                WeaponCatalog.DefaultRcdaDamagePerLevel);
+
+            int damageLevel = RigState.Level("u_dmg");
+            float damage = AbilityTuning.SentinelDamagePerShot(
+                primaryDamage, damageLevel,
+                AbilityTuning.DefaultSentinelDamageFraction,
+                AbilityTuning.DefaultSentinelDamageFractionPerLevel);
+
+            Vector3 dir = target.transform.position - transform.position; dir.y = 0f;
+            dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;
+            transform.rotation = Quaternion.LookRotation(dir, Vector3.up); // the turret tracks its target
+
+            if (damage > 0f)
+            {
+                target.TakeDamage(new DamageInfo(damage, target.transform.position, dir, Team,
+                    source: DamageSource.Ability));
+                FireBeam(target.transform.position);
+            }
+        }
+
+        /// <summary>Flashes the tracer from the turret's muzzle to the point it just hit. Cosmetic
+        /// only — the damage above has already landed regardless of whether this draws.</summary>
+        private void FireBeam(Vector3 targetPosition)
+        {
+            if (_beamLine == null) _beamLine = BuildBeamLine();
+
+            Vector3 muzzle = transform.position + Vector3.up * MuzzleHeight;
+            Vector3 end = new Vector3(targetPosition.x, muzzle.y, targetPosition.z);
+            _beamLine.SetPosition(0, muzzle);
+            _beamLine.SetPosition(1, end);
+            _beamLine.enabled = true;
+            _beamTimer = BeamVisibleSeconds;
+        }
+
+        /// <summary>Built once and reused for this turret's whole life (a Sentinel is never pooled —
+        /// see the class doc). World-space positions, same idiom as
+        /// <see cref="MaxWorlds.VFX.RobotRig.BuildBeamLine"/>.</summary>
+        private LineRenderer BuildBeamLine()
+        {
+            var go = new GameObject("Beam");
+            go.transform.SetParent(transform, worldPositionStays: false);
+
+            var lr = go.AddComponent<LineRenderer>();
+            lr.useWorldSpace = true;
+            lr.positionCount = 2;
+            lr.numCapVertices = 4;
+            lr.numCornerVertices = 0;
+            lr.shadowCastingMode = ShadowCastingMode.Off;
+            lr.receiveShadows = false;
+            lr.material = VfxMaterials.Additive(VfxMaterials.Glow());
+            lr.widthMultiplier = BeamHalfWidth * 2f;
+            lr.startColor = BeamColor;
+            lr.endColor = BeamColor;
+            lr.enabled = false;
+            return lr;
+        }
+
+        private RobotEnemy NearestRobotInRange()
+        {
+            int count = Physics.OverlapSphereNonAlloc(
+                transform.position, _range, s_hits, ~0, QueryTriggerInteraction.Ignore);
+
+            RobotEnemy best = null;
+            float bestSq = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                if (s_hits[i] == null) continue;
+                if (!s_hits[i].TryGetComponent<RobotEnemy>(out var robot) || !robot.IsAlive) continue;
+                float d = (robot.transform.position - transform.position).sqrMagnitude;
+                if (d < bestSq) { bestSq = d; best = robot; }
+            }
+            return best;
         }
 
         private void Die()
         {
             // Remove from the registry BEFORE Destroy/DestroyImmediate, not after — OnDisable below
             // would eventually do this too, but Destroy() defers OnDisable to the end of the current
-            // frame in play mode (MV-397: a dead sentinel still counted against the shared Deployment
-            // Count cap for the rest of that frame, so an immediate redeploy attempt read the slot as
-            // still full). Removing here makes the slot free the instant the sentinel dies, matching
-            // "read live off Active, never a separately-tracked balance" above.
+            // frame in play mode (MV-397: a dead sentinel still counted against the Slots cap for
+            // the rest of that frame, so an immediate redeploy attempt read the slot as still full).
+            // Removing here makes the slot free the instant the sentinel dies, matching "read live
+            // off Active, never a separately-tracked balance" above.
             _active.Remove(this);
             Died?.Invoke(this);
             if (Application.isPlaying) Destroy(gameObject);

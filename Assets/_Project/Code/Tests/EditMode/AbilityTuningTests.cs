@@ -215,9 +215,10 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ForceFieldIsAThreeLevelTrackMatchingTheOtherAbilities()
+        public void ForceFieldIsAFiveLevelTrack_MV422()
         {
-            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(3));
+            // MV-422's RIG restructure raised e_ff's own maxLevel from 3 to 5 (radius now levels too).
+            Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(5));
         }
     }
 }

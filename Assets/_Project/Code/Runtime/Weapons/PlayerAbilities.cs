@@ -94,9 +94,12 @@ namespace MaxWorlds.Weapons
         public static int ForceFieldActivationCost => Mathf.Max(0, Mathf.RoundToInt(
             DevTuning.Or(DevTuning.ForceFieldActivationCost, AbilityTuning.DefaultForceFieldActivationCost)));
 
-        /// <summary>The bubble's radius this run, metres (DECISION #3, MV-361) — fixed, not leveled.</summary>
-        public static float ForceFieldRadius =>
-            DevTuning.Or(DevTuning.ForceFieldRadius, AbilityTuning.DefaultForceFieldRadius);
+        /// <summary>The bubble's radius this run, metres — levels with Force Field now (MV-422:
+        /// "levels raise absorb AND radius together"), read fresh off <c>e_ff</c>'s current level.
+        /// <see cref="DevTuning.ForceFieldRadius"/> still fully overrides it when set, same as before.</summary>
+        public static float ForceFieldRadius => DevTuning.Or(DevTuning.ForceFieldRadius,
+            AbilityTuning.ForceFieldRadius(WeaponSystemState.AbilityLevel(AbilityKind.ForceField),
+                AbilityTuning.DefaultForceFieldRadius, AbilityTuning.DefaultForceFieldRadiusPerLevel));
 
         /// <summary>The splash radius the current settings would produce — what WV-241's landing
         /// circle and this component's own damage query both size themselves from. MV-370: scales with
@@ -400,40 +403,31 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        // --- Deployable Sentinels (MV-362) ---
+        // --- The Sentinel (MV-362, restructured MV-422) ---
 
-        /// <summary>How many sentinels — any mix of Wall/Gunner — Max may have deployed at once right
-        /// now, from the Deployment Count track's current level (shared across both kinds, DECISION).</summary>
-        public static int SentinelDeploymentCap => AbilityTuning.SentinelDeploymentSlots(
-            WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.DeploymentCount));
+        /// <summary>How many sentinels Max may have deployed at once right now, from the Slots
+        /// (<c>u_slt</c>) axis's current level.</summary>
+        public static int SentinelDeploymentCap => AbilityTuning.SentinelDeploymentSlots(RigState.Level("u_slt"));
 
         /// <summary>How many sentinels are deployed right now — read live off <see cref="Sentinel.Active"/>,
         /// never a separately-tracked balance, so any sentinel dying (to a robot, a gate crossing, or a
         /// level reset) frees its slot automatically.</summary>
         public static int SentinelDeployedCount => Sentinel.Active.Count;
 
-        /// <summary>Power cells deploying a Wall costs (DECISION, fixed, not leveled).</summary>
-        public static int SentinelWallCost => AbilityTuning.DefaultSentinelWallCost;
-
-        /// <summary>Power cells deploying a Gunner costs (DECISION, fixed, not leveled).</summary>
-        public static int SentinelGunnerCost => AbilityTuning.DefaultSentinelGunnerCost;
+        /// <summary>Power cells deploying the sentinel costs right now, from the Cost (<c>u_cst</c>)
+        /// axis's current level.</summary>
+        public static int SentinelCost => AbilityTuning.SentinelCost(
+            RigState.Level("u_cst"), AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel);
 
         /// <summary>Owned, a deployment slot free, AND enough cells banked — what an on-screen deploy
         /// control gates its press on (same shape as <see cref="ForceFieldReady"/>).</summary>
-        public bool WallSentinelReady =>
+        public bool SentinelReady =>
             WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
             SentinelDeployedCount < SentinelDeploymentCap &&
-            PickupWallet.PowerCells >= SentinelWallCost;
-
-        public bool GunnerSentinelReady =>
-            WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
-            SentinelDeployedCount < SentinelDeploymentCap &&
-            PickupWallet.PowerCells >= SentinelGunnerCost;
+            PickupWallet.PowerCells >= SentinelCost;
 
         /// <summary>How close an aimed placement point must stay to an existing sentinel or a live
-        /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC) —
-        /// sized against the Wall's own footprint (3 m wide) so a wall can never be dropped through
-        /// another body.</summary>
+        /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC).</summary>
         public const float SentinelPlacementClearance = 1.5f;
 
         /// <summary>Whether an aimed point is clear of every other deployed sentinel and live robot.
@@ -464,46 +458,33 @@ namespace MaxWorlds.Weapons
             return Mathf.Sqrt(dx * dx + dz * dz);
         }
 
-        /// <summary>Deploy a Wall sentinel at Max's own current position, facing his current heading —
-        /// the convenience shape older callers/tests still use. MV-399 reverses MV-362's "deployed at
-        /// Max's position, not aimed at range" DECISION for the on-screen control (see the aimed
-        /// overload below), but Max's own feet remain a perfectly valid drop point.</summary>
-        public bool TryDeployWallSentinel() => TryDeployWallSentinel(transform.position, transform.rotation);
+        /// <summary>Deploy the sentinel at Max's own current position — the convenience shape older
+        /// callers/tests still use. MV-399 reverses MV-362's "deployed at Max's position, not aimed at
+        /// range" DECISION for the on-screen control (see the aimed overload below), but Max's own
+        /// feet remain a perfectly valid drop point.</summary>
+        public bool TryDeploySentinel() => TryDeploySentinel(transform.position);
 
-        /// <summary>Deploy a Wall sentinel at an aimed <paramref name="position"/>/<paramref name="rotation"/>
-        /// (MV-399's placement joystick). Returns false (nothing spent, nothing deployed) if unowned,
-        /// the deployment cap is full, the bank can't cover the cost, or the point is already occupied
-        /// (<see cref="IsValidSentinelPlacement"/>).</summary>
-        public bool TryDeployWallSentinel(Vector3 position, Quaternion rotation)
+        /// <summary>Deploy the sentinel at an aimed <paramref name="position"/> (MV-399's placement
+        /// joystick). Returns false (nothing spent, nothing deployed) if unowned, the deployment cap
+        /// is full, the bank can't cover the cost, or the point is already occupied
+        /// (<see cref="IsValidSentinelPlacement"/>). Reads every RIG axis (Health/Range/Move) fresh at
+        /// deploy time (MV-422).</summary>
+        public bool TryDeploySentinel(Vector3 position)
         {
-            if (!WallSentinelReady) return false;
+            if (!SentinelReady) return false;
             if (!IsValidSentinelPlacement(position)) return false;
-            if (!PickupWallet.TrySpendPowerCells(SentinelWallCost)) return false;
+            if (!PickupWallet.TrySpendPowerCells(SentinelCost)) return false;
 
-            int level = WeaponSystemState.SentinelTrackLevel(SentinelTrackKind.WallStrength);
-            float maxHp = AbilityTuning.SentinelWallMaxHp(
-                level, AbilityTuning.DefaultSentinelWallBaseHp, AbilityTuning.DefaultSentinelWallHpPerLevel);
+            float maxHp = AbilityTuning.SentinelMaxHp(
+                RigState.Level("u_hp"), AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel);
+            float range = AbilityTuning.SentinelRange(
+                RigState.Level("u_rng"), AbilityTuning.DefaultSentinelRange, AbilityTuning.DefaultSentinelRangePerLevel);
+            float moveSpeed = AbilityTuning.SentinelMoveSpeed(
+                RigState.Level("u_mov"), AbilityTuning.DefaultSentinelMoveSpeedPerLevel);
 
-            var wall = new GameObject("Wall Sentinel").AddComponent<WallSentinel>();
-            wall.Init(position, rotation, maxHp);
-            return true;
-        }
-
-        /// <summary>Deploy a Gunner sentinel at Max's own current position — the convenience shape
-        /// older callers/tests still use. Same gating shape as <see cref="TryDeployWallSentinel()"/>.</summary>
-        public bool TryDeployGunnerSentinel() => TryDeployGunnerSentinel(transform.position);
-
-        /// <summary>Deploy a Gunner sentinel at an aimed <paramref name="position"/> (MV-399's
-        /// placement joystick). Same gating shape as <see cref="TryDeployWallSentinel(Vector3, Quaternion)"/>.</summary>
-        public bool TryDeployGunnerSentinel(Vector3 position)
-        {
-            if (!GunnerSentinelReady) return false;
-            if (!IsValidSentinelPlacement(position)) return false;
-            if (!PickupWallet.TrySpendPowerCells(SentinelGunnerCost)) return false;
-
-            var gunner = new GameObject("Gunner Sentinel").AddComponent<GunnerSentinel>();
-            gunner.Init(position, AbilityTuning.DefaultSentinelGunnerHp,
-                AbilityTuning.DefaultSentinelGunnerRange, AbilityTuning.DefaultSentinelGunnerFireInterval);
+            var sentinel = new GameObject("Sentinel").AddComponent<Sentinel>();
+            sentinel.Init(position, maxHp, range, AbilityTuning.DefaultSentinelFireInterval,
+                moveSpeed, AbilityTuning.DefaultSentinelStandoffDistance, transform);
             return true;
         }
     }

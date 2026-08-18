@@ -1,5 +1,6 @@
 using System;
 using UnityEngine;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Pickups
 {
@@ -30,26 +31,27 @@ namespace MaxWorlds.Pickups
         /// flashing edge icon off this (YT-131); the weapons area spends them (WV-228).</summary>
         public static event Action<int> PartsChanged;
 
-        /// <summary>Max power cells the reserve holds at Cell Capacity level 0 (MV-374: dropped from
+        /// <summary>Max power cells the reserve holds at Cell Storage level 0 (MV-374: dropped from
         /// the old flat 30 — that number now sits at level 1 of 3, see <see cref="PowerCellCapacityPerLevel"/>).
         /// Collecting past the reserve's current <see cref="Capacity"/> is wasted; the Hydro device
         /// drains against it. Tunable via <see cref="MaxWorlds.Core.DevTuning.PowerCellCapacity"/>,
         /// which overrides the whole level-based formula outright.</summary>
         public const int DefaultCapacity = 20;
 
-        /// <summary>Extra capacity each Cell Capacity level adds (MV-374): 3 levels at +10 each carry
-        /// the reserve from 20 up to 50 (20, 30, 40, 50).</summary>
+        /// <summary>Extra capacity each Cell Storage level adds (MV-374): 10 per level, see
+        /// <see cref="BaseCapacity"/>.</summary>
         public const int PowerCellCapacityPerLevel = 10;
 
-        /// <summary>The Cell Capacity track's level cap (MV-374) — 3 purchasable levels, same
-        /// "spend a part" idiom as <see cref="MaxWorlds.Weapons.WeaponSystemState"/>'s tracks, but
-        /// this one is a general player stat rather than a weapon/ability track, so it lives here
-        /// rather than under <c>MaxWorlds.Weapons</c>.</summary>
-        public const int PowerCellCapacityMaxLevel = 3;
+        /// <summary>Cell Storage's (<c>e_cel</c>) level cap — MV-422 moved this track off
+        /// <see cref="PickupWallet"/> onto THE RIG's own <c>e_cel</c> node (a <c>cap</c>: it must be
+        /// taken in a Morphing Module draft before any part can raise it further, unlike the old
+        /// "owned/spendable from run start" track this replaces).</summary>
+        public static int PowerCellCapacityMaxLevel => RigBoard.MaxLevel("e_cel");
 
         /// <summary>Levels bought via <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnCellCapacity"/>,
-        /// 0 (fresh run) to <see cref="PowerCellCapacityMaxLevel"/>.</summary>
-        public static int PowerCellCapacityLevel { get; private set; }
+        /// 0 (fresh run, unowned) to <see cref="PowerCellCapacityMaxLevel"/> — now a thin read of
+        /// <c>e_cel</c>'s live RIG level (MV-422), not separately tracked state.</summary>
+        public static int PowerCellCapacityLevel => RigState.Level("e_cel");
 
         /// <summary>The reserve's current full mark before any <see cref="MaxWorlds.Core.DevTuning"/>
         /// override — <see cref="DefaultCapacity"/> plus whatever <see cref="PowerCellCapacityLevel"/>
@@ -66,14 +68,15 @@ namespace MaxWorlds.Pickups
         /// current count didn't change.</summary>
         public static event Action<int> CapacityChanged;
 
-        /// <summary>Raise Cell Capacity by one level (MV-374), up to <see cref="PowerCellCapacityMaxLevel"/>.
-        /// No-ops (returns false) already at the cap. Call through
+        /// <summary>Raise Cell Storage (<c>e_cel</c>) by one level, up to <see cref="PowerCellCapacityMaxLevel"/>.
+        /// MV-422: <c>e_cel</c> is a RIG <c>cap</c> — this can only ever raise an ALREADY-OWNED level
+        /// further (RigState.TrySpendPart's own rule); the initial 0-&gt;1 unlock is a Morphing Module
+        /// draft, not a part spend, same as every other cap. Call through
         /// <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnCellCapacity"/> so a part is only actually
         /// spent when this succeeds.</summary>
         public static bool LevelUpCellCapacity()
         {
-            if (PowerCellCapacityLevel >= PowerCellCapacityMaxLevel) return false;
-            PowerCellCapacityLevel++;
+            if (!RigState.TrySpendPart("e_cel")) return false;
             CapacityChanged?.Invoke(Capacity);
             return true;
         }
@@ -137,13 +140,17 @@ namespace MaxWorlds.Pickups
         }
 
         /// <summary>Wipe the bank (new run / test isolation). Fires the change events so any live HUD
-        /// re-reads zero rather than keeping a stale count on screen. MV-374: Cell Capacity resets to
-        /// level 0 too, same as every other run-scoped upgrade track.</summary>
+        /// re-reads zero rather than keeping a stale count on screen. MV-422: Cell Capacity
+        /// (<c>e_cel</c>) now lives in the shared <see cref="RigState"/>, which has no per-node reset —
+        /// this resets THE WHOLE RIG tree, not just <c>e_cel</c>, so a caller doesn't also need to
+        /// remember <see cref="MaxWorlds.Weapons.WeaponSystemState.Reset"/> just to get a clean
+        /// Cell-Capacity baseline (harmless double-reset on the production "new run" path,
+        /// <c>HomeScreen.StartSlot</c>, which already calls both).</summary>
         public static void Reset()
         {
             PowerCells = 0;
             PartsBanked = 0;
-            PowerCellCapacityLevel = 0;
+            RigState.Reset();
             PowerCellsChanged?.Invoke(0);
             PartsChanged?.Invoke(0);
             CapacityChanged?.Invoke(Capacity);

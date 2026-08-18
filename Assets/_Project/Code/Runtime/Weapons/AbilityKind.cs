@@ -44,14 +44,13 @@ namespace MaxWorlds.Weapons
         /// touching the bubble. See <see cref="PlayerAbilities.TryActivateForceField"/>.</summary>
         ForceField,
 
-        /// <summary>Unlocks deployable Sentinels (MV-362) — a Wall (Blocker) and a Gunner (Attack
-        /// turret), both placed at Max's own position; robots attack them instead of, or as well as,
-        /// Max. A boolean unlock, cap 1 — both sentinel kinds are usable the instant this is owned,
-        /// and their own magnitudes live on <see cref="SentinelTrackKind"/>'s three independent
-        /// tracks (Wall Strength, Gunner Power, and a Deployment Count shared by both kinds), not on
-        /// this ability's own level, the same "unlock here, tracks elsewhere" split
-        /// <see cref="WaterBalloon"/> uses for <see cref="WaterBalloonTrackKind"/>. See
-        /// <see cref="PlayerAbilities.TryDeployWallSentinel"/>/<see cref="PlayerAbilities.TryDeployGunnerSentinel"/>.</summary>
+        /// <summary>Unlocks the deployable Sentinel (MV-362; deleted the Wall/Blocker entirely and
+        /// left one sentinel only, the Gunner turret, under MV-422) — placed at an aimed point;
+        /// robots attack it instead of, or as well as, Max. A boolean unlock, cap 1 — the sentinel is
+        /// usable the instant this is owned, and its own magnitudes live on THE RIG's six child nodes
+        /// under <c>u_sen</c> (Damage/Range/Health/Move/Cost/Slots), not on this ability's own level,
+        /// the same "unlock here, tracks elsewhere" split <see cref="WaterBalloon"/> uses for
+        /// <see cref="WaterBalloonTrackKind"/>. See <see cref="PlayerAbilities.TryDeploySentinel()"/>.</summary>
         Sentinels,
     }
 }

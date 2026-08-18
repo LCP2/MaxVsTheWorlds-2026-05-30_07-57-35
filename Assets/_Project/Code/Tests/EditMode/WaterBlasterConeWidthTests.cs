@@ -89,6 +89,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void OnlySpread_WidensTheCone_MV403()
         {
+            // MV-422: p_spr's RIG parent is p_rng, not p_dmg — it isn't reached until Range has been
+            // spent at least once. p_rng itself IS reached from run start (its own parent, p_dmg, is
+            // already at L1), so this one Range spend is the minimum needed before Spread can move at
+            // all. Spread's own formula treats level 0 and level 1 identically (both read as "not
+            // widened yet", same as the old model's level-1 starting point) — two Spread spends are
+            // needed to see the cone actually move.
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
             float coneBefore = _blaster.ConeHalfAngle;
 
             WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);

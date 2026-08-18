@@ -61,8 +61,9 @@ namespace MaxWorlds.Tests.EditMode
             _playerGo = new GameObject("Player") { tag = "Player" };
             _playerGo.transform.position = area1.Center;
 
-            var wallGo = new GameObject("Wall Sentinel");
-            wallGo.AddComponent<WallSentinel>().Init(area1.Center, Quaternion.identity, 200f);
+            var sentinelGo = new GameObject("Sentinel");
+            sentinelGo.AddComponent<Sentinel>().Init(area1.Center, 200f, range: 7f, fireInterval: 0.6f,
+                moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);
             Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
 
             InvokeUpdate(director); // establishes _target; Max hasn't moved, no crossing yet

@@ -41,23 +41,30 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsNull(SentinelTargeting.Nearest(Vector3.zero));
         }
 
+        private static Sentinel NewSentinel(GameObject go, Vector3 position, float maxHp)
+        {
+            var sentinel = go.AddComponent<Sentinel>();
+            sentinel.Init(position, maxHp, range: 7f, fireInterval: 0.6f,
+                moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);
+            return sentinel;
+        }
+
         [Test]
         public void NearestPicksTheClosestLivingSentinel()
         {
             Sentinel.ResetRegistry();
-            var near = new GameObject("Near").AddComponent<WallSentinel>();
-            var far = new GameObject("Far").AddComponent<WallSentinel>();
+            var nearGo = new GameObject("Near");
+            var farGo = new GameObject("Far");
+            var near = NewSentinel(nearGo, new Vector3(1f, 0f, 0f), 200f);
+            NewSentinel(farGo, new Vector3(20f, 0f, 0f), 200f);
             try
             {
-                near.Init(new Vector3(1f, 0f, 0f), Quaternion.identity, 200f);
-                far.Init(new Vector3(20f, 0f, 0f), Quaternion.identity, 200f);
-
                 Assert.That(SentinelTargeting.Nearest(Vector3.zero), Is.SameAs(near));
             }
             finally
             {
-                Object.DestroyImmediate(near.gameObject);
-                Object.DestroyImmediate(far.gameObject);
+                Object.DestroyImmediate(nearGo);
+                Object.DestroyImmediate(farGo);
             }
         }
 
@@ -65,13 +72,12 @@ namespace MaxWorlds.Tests.EditMode
         public void NearestSkipsADeadSentinel()
         {
             Sentinel.ResetRegistry();
-            var near = new GameObject("Near").AddComponent<WallSentinel>();
-            var far = new GameObject("Far").AddComponent<WallSentinel>();
+            var nearGo = new GameObject("Near");
+            var farGo = new GameObject("Far");
+            var near = NewSentinel(nearGo, new Vector3(1f, 0f, 0f), 10f);
+            var far = NewSentinel(farGo, new Vector3(20f, 0f, 0f), 200f);
             try
             {
-                near.Init(new Vector3(1f, 0f, 0f), Quaternion.identity, 10f);
-                far.Init(new Vector3(20f, 0f, 0f), Quaternion.identity, 200f);
-
                 near.TakeDamage(new MaxWorlds.Core.DamageInfo(10f, Vector3.zero, Vector3.forward, MaxWorlds.Core.Team.Enemy));
                 Assert.That(near.IsAlive, Is.False);
 
