@@ -81,11 +81,15 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
-        public static void AddPowerCell()
+        /// <summary>Bank one collected power cell. Returns false and changes nothing at capacity
+        /// (MV-439) — the caller (<see cref="PickupDirector.Collect"/>) must not consume the pickup,
+        /// emit a gain, or pull it via Magneto when this refuses.</summary>
+        public static bool AddPowerCell()
         {
-            if (PowerCells >= Capacity) return;   // reserve is full (YT-137)
+            if (PowerCells >= Capacity) return false;   // reserve is full (YT-137)
             PowerCells++;
             PowerCellsChanged?.Invoke(PowerCells);
+            return true;
         }
 
         /// <summary>Set the banked total directly — a save slot restoring what was on disk (YT-151),

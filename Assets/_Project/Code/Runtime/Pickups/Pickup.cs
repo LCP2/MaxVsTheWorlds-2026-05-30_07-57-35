@@ -60,7 +60,13 @@ namespace MaxWorlds.Pickups
             bool cell = Kind == PickupKind.PowerCell;
             var prim = GameObject.CreatePrimitive(cell ? PrimitiveType.Sphere : PrimitiveType.Cube);
             prim.name = "Visual";
-            Destroy(prim.GetComponent<Collider>());   // walk-over is a distance check, not physics
+            // walk-over is a distance check, not physics. Destroy() is illegal outside Play mode
+            // (MV-439: EditMode tests now build a real Pickup via PickupDirector.SpawnDrop), so this
+            // must switch to DestroyImmediate there — same idiom as everywhere else in the project
+            // that builds objects reachable from both a live run and an EditMode test.
+            var collider = prim.GetComponent<Collider>();
+            if (Application.isPlaying) Destroy(collider);
+            else DestroyImmediate(collider);
             prim.transform.SetParent(transform, worldPositionStays: false);
             prim.transform.localScale = Vector3.one * (cell ? 0.32f : 0.5f);
             prim.transform.localPosition = Vector3.zero;
