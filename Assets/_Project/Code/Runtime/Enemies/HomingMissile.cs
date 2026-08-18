@@ -140,7 +140,11 @@ namespace MaxWorlds.Enemies
             // this object's forward — the same trick every beam/tube part in the game uses to point a
             // cylinder primitive down its own travel direction.
             shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            shaft.transform.localScale = new Vector3(0.11f, 0.30f, 0.11f);
+            // MV-432: doubled from (0.11, 0.30, 0.11) — at the fixed 72° camera the missile is seen
+            // nearly end-on, so cross-section (not length) is most of what reaches the screen, and the
+            // old thickness read as a needle. Length (Y) is untouched.
+            Vector3 shaftScale = new Vector3(0.22f, 0.30f, 0.22f);
+            shaft.transform.localScale = shaftScale;
             if (shaftMat != null) shaft.GetComponent<MeshRenderer>().sharedMaterial = shaftMat;
 
             // A red tip band at the nose (MV-405) — the AC's "reads as ordnance", not just "reads as a
@@ -152,11 +156,15 @@ namespace MaxWorlds.Enemies
             band.transform.SetParent(parent, false);
             band.transform.localPosition = new Vector3(0f, 0f, 0.34f);
             band.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            band.transform.localScale = new Vector3(0.13f, 0.05f, 0.13f);
+            // MV-432: doubled alongside the shaft so the band stays proportional to the fatter body.
+            band.transform.localScale = new Vector3(0.26f, 0.05f, 0.26f);
             if (tipMat != null) band.GetComponent<MeshRenderer>().sharedMaterial = tipMat;
 
             // Tail fins — two flat vanes at the back, the part of the silhouette that says "missile"
             // rather than "dropped tool" even at gameplay zoom.
+            // MV-432: fin scale doubled on X/Y alongside the shaft so the vanes stay proportional to
+            // the fatter body.
+            Vector3 finScale = new Vector3(0.04f, 0.32f, 0.12f);
             for (int i = 0; i < 2; i++)
             {
                 float side = i == 0 ? -1f : 1f;
@@ -164,8 +172,12 @@ namespace MaxWorlds.Enemies
                 fin.name = "Fin";
                 Strip(fin);
                 fin.transform.SetParent(parent, false);
-                fin.transform.localPosition = new Vector3(side * 0.10f, 0f, -0.26f);
-                fin.transform.localScale = new Vector3(0.02f, 0.16f, 0.12f);
+                // MV-432: derived, not a literal — this is what puts the fin's inner face exactly on
+                // the shaft surface (previously a 0.035 gap left two loose slivers, the same
+                // detached-geometry class as the MV-430 gear teeth).
+                float finOffsetX = 0.5f * (shaftScale.x + finScale.x);
+                fin.transform.localPosition = new Vector3(side * finOffsetX, 0f, -0.26f);
+                fin.transform.localScale = finScale;
                 if (shaftMat != null) fin.GetComponent<MeshRenderer>().sharedMaterial = shaftMat;
             }
         }
@@ -173,7 +185,12 @@ namespace MaxWorlds.Enemies
         private static void Strip(GameObject go)
         {
             var col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col); // manual proximity check in Update, not physics
+            if (col == null) return;
+            // manual proximity check in Update, not physics — same Application.isPlaying idiom as
+            // MaterialLibrary.Clear (MV-304): Destroy is illegal outside play mode, which an EditMode
+            // test calling HomingMissile.Fire() hits directly.
+            if (Application.isPlaying) Object.Destroy(col);
+            else Object.DestroyImmediate(col);
         }
 
         private void Init(Transform target, float speed, float damage, float splashRadius)
