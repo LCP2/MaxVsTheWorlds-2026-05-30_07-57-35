@@ -50,11 +50,20 @@ namespace MaxWorlds.Enemies
         /// closed to melee range (MV-293). Zero for every other kind — they only ever walk.</summary>
         public readonly float TeleportCooldown;
 
+        /// <summary>Damage dealt per contact-cooldown tick while standing in touch range (MV-428) —
+        /// the readability fix's Change 1: Bruiser/Heavy/Brute lose the lunge entirely and hit on a
+        /// timer instead. Deliberately a SEPARATE number from <see cref="ContactDamage"/> (which
+        /// still describes the old single-hit lunge and stays what <see cref="EnemyArchetypeTests"/>
+        /// compares kinds by) — a repeating tick has to be worth much less per hit than a one-shot
+        /// lunge, or a crowd standing in contact turns 200 HP into a near-instant death. Zero for
+        /// every kind that still lunges — they never read this field.</summary>
+        public readonly float TouchDamage;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
             float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay,
-            float standoffRange = 0f, float teleportCooldown = 0f)
+            float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -64,6 +73,7 @@ namespace MaxWorlds.Enemies
             LungeSpeed = lungeSpeed; LungeTime = lungeTime; RecoverTime = recoverTime;
             KnockbackDecay = knockbackDecay;
             StandoffRange = standoffRange; TeleportCooldown = teleportCooldown;
+            TouchDamage = touchDamage;
         }
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
@@ -110,6 +120,12 @@ namespace MaxWorlds.Enemies
         /// hit, not its footprint — it's half again the rusher's width but still no bigger than Max,
         /// because a swarm of things larger than the player stops reading as a swarm and starts
         /// reading as a moving wall (YT-74).
+        ///
+        /// MV-428: no longer lunges at all — "a wardrobe should not leap". It walks to contact and
+        /// hits for <see cref="TouchDamage"/> on a per-robot cooldown (<see cref="RobotEnemy"/>'s
+        /// <c>TickContactTouch</c>) instead of the old single-hit lunge; <see cref="ContactDamage"/>
+        /// (28) is kept as the archetype's comparative "how hard does it hit" number — still what
+        /// <see cref="EnemyArchetypeTests"/> checks it against the rusher's — and is otherwise unread.
         /// </summary>
         public static EnemyArchetype Bruiser => new EnemyArchetype(
             EnemyKind.Bruiser, EnemyShape.Box, new Vector3(1.15f, 1.15f, 1.15f),
@@ -122,7 +138,8 @@ namespace MaxWorlds.Enemies
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
-            knockbackDecay: 70f);
+            knockbackDecay: 70f,
+            touchDamage: 10f);  // MV-428: see the fix comment for the crowd-DPS arithmetic
 
         /// <summary>The first later-area tier (v0.5 recut spec §2-3, MV-224): Area 5 onward
         /// substitutes a slice of the bruiser's large slots with something that just plain outlasts
@@ -138,7 +155,8 @@ namespace MaxWorlds.Enemies
             contactDamage: 32f, contactRadius: 1.5f,
             lungeRange: 2.6f, telegraphTime: 1.05f,
             lungeSpeed: 8.5f, lungeTime: 0.35f, recoverTime: 1.5f,
-            knockbackDecay: 95f);
+            knockbackDecay: 95f,
+            touchDamage: 12f);  // MV-428: no lunge — see Bruiser's doc comment
 
         /// <summary>The second later-area tier (Area 8 on, spec §2 table) — the top of the
         /// composition ladder, introduced alongside <see cref="Heavy"/> rather than replacing it (the
@@ -152,7 +170,8 @@ namespace MaxWorlds.Enemies
             contactDamage: 38f, contactRadius: 1.6f,
             lungeRange: 2.6f, telegraphTime: 1.15f,
             lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
-            knockbackDecay: 120f);
+            knockbackDecay: 120f,
+            touchDamage: 14f);  // MV-428: no lunge — see Bruiser's doc comment
 
         /// <summary>
         /// Ranged laser (MV-293), displayed to the player as "LASER" (MV-404: display-only rename,
@@ -262,7 +281,7 @@ namespace MaxWorlds.Enemies
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
-            StandoffRange, TeleportCooldown);
+            StandoffRange, TeleportCooldown, TouchDamage * multiplier);
 
         /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
         /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
@@ -273,7 +292,7 @@ namespace MaxWorlds.Enemies
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
-            StandoffRange, TeleportCooldown);
+            StandoffRange, TeleportCooldown, TouchDamage);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>

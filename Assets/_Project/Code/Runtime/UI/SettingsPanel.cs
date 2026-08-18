@@ -273,6 +273,12 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.SprayKnockback, WaterBlaster.DefaultSprayKnockback),
                 v => DevTuning.SprayKnockback = v, tab: TabFeel);
 
+            // MV-428 Change 1: Bruiser/Heavy/Brute no longer lunge — this is the per-robot cooldown
+            // between their contact-damage ticks while standing in touch range.
+            Add("Contact cooldown", "s", 0.2f, 3f, RobotCompositionTuning.DefaultContactCooldown,
+                () => DevTuning.Or(DevTuning.ContactDamageCooldown, RobotCompositionTuning.DefaultContactCooldown),
+                v => DevTuning.ContactDamageCooldown = v, tab: TabFeel);
+
             // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights
             // through, the gated-area knobs (WV-234, spec §1/§9), and the World & Difficulty
             // Framework's own dials (below). ----
@@ -437,6 +443,12 @@ namespace MaxWorlds.UI
             Add("Max active robots", "bots", 4f, 40f, RobotCompositionTuning.DefaultMaxActiveRobots,
                 () => DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots),
                 v => DevTuning.MaxActiveRobots = v, tab: TabEnemies);
+
+            // MV-428 Change 2: how many Rusher/Blinker-kind robots may be mid-Telegraph or mid-Lunge
+            // at once — the readability fix's attack-token cap.
+            Add("Lunge token cap", "bots", 0f, 8f, RobotCompositionTuning.DefaultLungeTokenCap,
+                () => DevTuning.Or(DevTuning.LungeTokenCap, RobotCompositionTuning.DefaultLungeTokenCap),
+                v => DevTuning.LungeTokenCap = v, tab: TabEnemies);
 
             // ---- ECONOMY tab: cells are a vestigial display-only counter since MV-290 (nothing
             // spends them any more) — only their drop pacing/cap remain tunable — plus parts and

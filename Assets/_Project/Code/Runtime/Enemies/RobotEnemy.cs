@@ -58,6 +58,17 @@ namespace MaxWorlds.Enemies
         private float EffectiveMinSeparation =>
             DevTuning.Or(DevTuning.RobotMinSeparation, EnemySeparation.DefaultMinDistance);
 
+        /// <summary>Contact-damage cooldown for a non-lunging kind (MV-428), after any dev override —
+        /// same live-read idiom as <see cref="EffectiveMoveSpeed"/>.</summary>
+        private float EffectiveContactCooldown =>
+            DevTuning.Or(DevTuning.ContactDamageCooldown, RobotCompositionTuning.DefaultContactCooldown);
+
+        /// <summary>How many Rusher/Blinker-kind robots may hold an attack token at once (MV-428),
+        /// after any dev override. Rounded — the panel's slider is continuous but a token count is
+        /// not.</summary>
+        private static int EffectiveLungeTokenCap => Mathf.Max(0, Mathf.RoundToInt(
+            DevTuning.Or(DevTuning.LungeTokenCap, RobotCompositionTuning.DefaultLungeTokenCap)));
+
         [Header("Lunge")]
         [SerializeField] private float lungeRange = 2.2f;     // start telegraph within this
         [SerializeField] private float telegraphTime = 0.55f; // wind-up (dodge window)
@@ -66,6 +77,11 @@ namespace MaxWorlds.Enemies
         [SerializeField] private float recoverTime = 0.7f;
         [SerializeField] private float contactDamage = 12f;
         [SerializeField] private float contactRadius = 1.0f;
+
+        /// <summary>MV-428: Bruiser/Heavy/Brute's replacement for the lunge — damage per
+        /// contact-cooldown tick while standing in <see cref="contactRadius"/> of Max. 0 for every
+        /// kind that still lunges, which never reads it (see <see cref="TickContactTouch"/>).</summary>
+        [SerializeField] private float touchDamage = 0f;
 
         [Header("Ranged / teleport (MV-293) — Gunner/Bomber/Blinker only, 0 for every melee kind")]
         [Tooltip("A ranged kind backs off inside this instead of closing — see EnemyArchetype.StandoffRange.")]
@@ -157,6 +173,7 @@ namespace MaxWorlds.Enemies
             maxHealth = a.MaxHealth;
             contactDamage = a.ContactDamage;
             contactRadius = a.ContactRadius;
+            touchDamage = a.TouchDamage;
             lungeRange = a.LungeRange;
             telegraphTime = a.TelegraphTime;
             lungeSpeed = a.LungeSpeed;
@@ -211,6 +228,18 @@ namespace MaxWorlds.Enemies
         private float _verticalVel;
         private Vector3 _lungeDir;
         private bool _dealtThisLunge;
+
+        /// <summary>Counts down to the next contact-damage tick for a non-lunging kind (MV-428).
+        /// Seeded to a full <see cref="EffectiveContactCooldown"/> on reset — same "no free first hit"
+        /// convention as <see cref="_teleportTimer"/> — and read/reset only by
+        /// <see cref="TickContactTouch"/>.</summary>
+        private float _contactCooldownTimer;
+
+        /// <summary>True while this robot holds a slot in <see cref="LungeTokenPool"/> (MV-428) —
+        /// only ever set for a Rusher/Blinker that is mid-Telegraph or mid-Lunge. Tracked per-instance
+        /// so <see cref="Die"/>/<see cref="Despawn"/> can hand the token back even if death interrupts
+        /// the attack before it reaches Recover.</summary>
+        private bool _holdsAttackToken;
         private MaterialPropertyBlock _mpb;
         private Vector3 _knockback;
         [Tooltip("How fast a spray shove bleeds off (m/s²). Higher = a shorter shove (YT-64).")]
@@ -348,6 +377,12 @@ namespace MaxWorlds.Enemies
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
             _teleportTimer = teleportCooldown;
+            // Same convention (MV-428): a fresh Bruiser/Heavy/Brute doesn't get a free hit the
+            // instant it touches Max.
+            _contactCooldownTimer = EffectiveContactCooldown;
+            // A pooled robot must never hand back a token it doesn't hold — Die()/Despawn() already
+            // released whatever this body was carrying in its last life before it got here.
+            _holdsAttackToken = false;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -673,6 +708,16 @@ namespace MaxWorlds.Enemies
                 return;
             }
 
+            // MV-428 Change 1: Bruiser/Heavy/Brute never wind up at all any more — "a wardrobe should
+            // not leap". They just keep walking and hit on a cooldown the instant they're in touch
+            // range, checked every Chase tick rather than through a Telegraph/Lunge/Recover cycle
+            // that no longer has a tell worth keeping for this kind.
+            if (!LungesAsKind(Kind))
+            {
+                TickContactTouch(dt);
+                return;
+            }
+
             // Only wind up at something you can actually SEE. Without this a robot lunges at the
             // tree Max is standing behind, which looks broken and is free damage for the player.
             //
@@ -682,9 +727,52 @@ namespace MaxWorlds.Enemies
             // true before it took that one step back.
             if (_sight.HasSight && dist <= lungeRange && !tooClose)
             {
+                // MV-428 Change 2: Rusher/Blinker must hold an attack token to commit. Without one, a
+                // robot just keeps closing and pressuring at normal move speed (exactly what the
+                // FaceAndMove call above this frame already did) and tries again next tick — it takes
+                // a token the instant one frees rather than queueing for a specific turn.
+                bool needsToken = NeedsAttackToken(Kind);
+                if (needsToken && !LungeTokenPool.TryAcquire(EffectiveLungeTokenCap)) return;
+
+                _holdsAttackToken = needsToken;
                 Current = State.Telegraph;
                 _stateTimer = 0f;
                 SetTell(windupTell);   // visual tell: dodge window opens
+            }
+        }
+
+        /// <summary>Whether <paramref name="kind"/> still telegraphs and commits to a Lunge (MV-428).
+        /// False for Bruiser/Heavy/Brute, which lose the state entirely — see <see cref="TickChase"/>
+        /// and <see cref="TickContactTouch"/>.</summary>
+        private static bool LungesAsKind(EnemyKind kind) =>
+            kind != EnemyKind.Bruiser && kind != EnemyKind.Heavy && kind != EnemyKind.Brute;
+
+        /// <summary>Whether <paramref name="kind"/> is gated by <see cref="LungeTokenPool"/> (MV-428
+        /// Change 2) — only the two kinds that keep the raw dash: Rusher and Blinker. Gunner/Bomber
+        /// also reach <see cref="State.Telegraph"/>/<see cref="State.Lunge"/> but are explicitly out
+        /// of scope ("they never lunged" — the ticket means never committed a melee dash) and stay
+        /// uncapped.</summary>
+        private static bool NeedsAttackToken(EnemyKind kind) =>
+            kind == EnemyKind.Rusher || kind == EnemyKind.Blinker;
+
+        /// <summary>Bruiser/Heavy/Brute's whole attack (MV-428 Change 1): no wind-up, no commit — just
+        /// <see cref="touchDamage"/> on <see cref="EffectiveContactCooldown"/> while standing within
+        /// <see cref="contactRadius"/> of Max, ticked every Chase frame regardless of range so the
+        /// cooldown keeps counting down while it's still closing.</summary>
+        private void TickContactTouch(float dt)
+        {
+            _contactCooldownTimer -= dt;
+            if (target == null || _contactCooldownTimer > 0f) return;
+
+            Vector3 to = target.position - transform.position; to.y = 0f;
+            if (to.magnitude > contactRadius) return;
+
+            _contactCooldownTimer = EffectiveContactCooldown;
+            _targetDamageable ??= target.GetComponent<IDamageable>();
+            if (_targetDamageable != null && _targetDamageable.IsAlive)
+            {
+                _targetDamageable.TakeDamage(
+                    new DamageInfo(touchDamage, transform.position, to.normalized, Team.Enemy));
             }
         }
 
@@ -759,12 +847,24 @@ namespace MaxWorlds.Enemies
         {
             CharacterControllerMotion.SafeMove(_cc, _lungeDir * lungeSpeed * dt); // MV-386
             if (!_dealtThisLunge) TryContactDamage();
-            if (_stateTimer >= lungeTime)
+            if (_stateTimer >= lungeTime) EnterRecover();
+        }
+
+        /// <summary>Leave Telegraph/Lunge for Recover, handing back this robot's attack token
+        /// (MV-428) if it's holding one — the release side of <see cref="LungeTokenPool"/>'s
+        /// acquire in <see cref="TickChase"/>. A no-op for every kind that never needed a token
+        /// (<see cref="_holdsAttackToken"/> is false for them), so this is safe to call from every
+        /// Lunge variant unconditionally.</summary>
+        private void EnterRecover()
+        {
+            if (_holdsAttackToken)
             {
-                Current = State.Recover;
-                _stateTimer = 0f;
-                SetTell(idleTell);
+                LungeTokenPool.Release();
+                _holdsAttackToken = false;
             }
+            Current = State.Recover;
+            _stateTimer = 0f;
+            SetTell(idleTell);
         }
 
         /// <summary>Gunner's laser (MV-293): <see cref="_lungeDir"/> was locked the instant the
@@ -785,12 +885,7 @@ namespace MaxWorlds.Enemies
                 }
             }
 
-            if (_stateTimer >= lungeTime)
-            {
-                Current = State.Recover;
-                _stateTimer = 0f;
-                SetTell(idleTell);
-            }
+            if (_stateTimer >= lungeTime) EnterRecover();
         }
 
         /// <summary>Bomber's homing missile (MV-293): fired once, on the first tick of the state —
@@ -806,12 +901,7 @@ namespace MaxWorlds.Enemies
                     HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage, contactRadius);
             }
 
-            if (_stateTimer >= lungeTime)
-            {
-                Current = State.Recover;
-                _stateTimer = 0f;
-                SetTell(idleTell);
-            }
+            if (_stateTimer >= lungeTime) EnterRecover();
         }
 
         private void TickRecover(float dt)
@@ -945,6 +1035,9 @@ namespace MaxWorlds.Enemies
 
         private void Die(Vector3 fromDir)
         {
+            // MV-428: death mid-Telegraph/Lunge must not leak the attack token — nothing else on
+            // this path ever visits Recover to release it.
+            if (_holdsAttackToken) { LungeTokenPool.Release(); _holdsAttackToken = false; }
             Current = State.Dead;
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
             // The death VFX also hangs off this signal (CombatVfx, YT-48).
@@ -965,6 +1058,7 @@ namespace MaxWorlds.Enemies
         public void Despawn()
         {
             if (!IsAlive) return;
+            if (_holdsAttackToken) { LungeTokenPool.Release(); _holdsAttackToken = false; } // MV-428
             Current = State.Dead;
             _health = 0f;
             Died?.Invoke(this);
