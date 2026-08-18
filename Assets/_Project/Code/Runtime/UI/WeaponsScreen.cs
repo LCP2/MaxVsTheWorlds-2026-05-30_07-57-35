@@ -97,7 +97,10 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ Morphing Module draft (MV-424)
 
-        private static readonly Color DraftBadgeColor = new Color(0.5f, 0.89f, 1f);   // module cyan (rig_board.json "module")
+        // MV-425: was a hand-copied approximation of rig_board.json's "module" hex (#7FE3FF); now reads
+        // the single named constant that data file's own colours block asked for. A property, not a
+        // `static readonly` field, so it never bakes in a value ahead of RigBoardLayout's own load.
+        private static Color DraftBadgeColor => HudController.ModuleColor;
 
         private Image _draftScrim;
         private RectTransform _draftBand;
@@ -240,10 +243,20 @@ namespace MaxWorlds.UI
         private void OnPartsChanged(int banked) => Refresh();
         private void OnCellsChanged(int cells) => Refresh();
 
-        /// <summary>Open THE RIG, pausing the game. Ignored if already open.</summary>
+        /// <summary>Open THE RIG, pausing the game. Ignored if already open. MV-425: if a Morphing
+        /// Module draft is banked and waiting (<see cref="PendingMorphingModule"/>), opening here shows
+        /// it immediately rather than the plain board — the player asked to open WEAPONS precisely
+        /// because the HUD's cyan badge told them one was waiting.</summary>
         public void Open()
         {
             if (_open) return;
+
+            if (PendingMorphingModule.HasPending)
+            {
+                OpenMorphingModuleDraft(PendingMorphingModule.Take());
+                return;
+            }
+
             if (_canvas == null) Build();
 
             _open = true;

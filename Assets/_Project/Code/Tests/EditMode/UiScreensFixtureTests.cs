@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using MaxWorlds.Dev;
+using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 using MaxWorlds.Pickups;
 
@@ -22,6 +23,8 @@ namespace MaxWorlds.Tests.EditMode
         {
             RigState.Reset();
             PickupWallet.Reset();
+            AbilityCreditBank.Reset();
+            PendingMorphingModule.Reset();
         }
 
         [Test]
@@ -103,6 +106,49 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.Level("p_dmg"), Is.EqualTo(4));
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(2));
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+        }
+
+        // ---------------------------------------------------------------- MV-425: WEAPONS button fixtures
+
+        [Test]
+        public void WeaponsButtonIdleFixtureLeavesEverythingAtZero()
+        {
+            UiScreensDirector.ApplyWeaponsButtonIdleFixture();
+
+            Assert.That(HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked), Is.False);
+            Assert.That(PendingMorphingModule.HasPending, Is.False);
+        }
+
+        [Test]
+        public void WeaponsButtonPartsFixtureBanksExactlyFourParts()
+        {
+            UiScreensDirector.ApplyWeaponsButtonPartsFixture();
+
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+            Assert.That(PendingMorphingModule.HasPending, Is.False);
+        }
+
+        [Test]
+        public void WeaponsButtonModuleFixtureBanksADraftAndNothingElse()
+        {
+            UiScreensDirector.ApplyWeaponsButtonModuleFixture();
+
+            Assert.That(PendingMorphingModule.HasPending, Is.True);
+            Assert.That(HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked), Is.False);
+        }
+
+        [Test]
+        public void WeaponsButtonBothFixtureBanksPartsAndADraftTogether()
+        {
+            UiScreensDirector.ApplyWeaponsButtonBothFixture();
+
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+            Assert.That(PendingMorphingModule.HasPending, Is.True);
+
+            var alert = HudController.ComputeWeaponsButtonAlert(
+                HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked),
+                PendingMorphingModule.HasPending);
+            Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Both));
         }
     }
 }
