@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Reflection;
@@ -16,6 +17,8 @@ using MaxWorlds.UI;
 using MaxWorlds.Bosses;
 using MaxWorlds.VFX;
 using MaxWorlds.Upgrades;
+using MaxWorlds.Weapons;
+using MaxWorlds.Pickups;
 
 namespace MaxWorlds.Dev
 {
@@ -42,11 +45,21 @@ namespace MaxWorlds.Dev
     public sealed class PressKitDirector : MonoBehaviour
     {
         // --- capture config -------------------------------------------------------------------
-        private const int OutW = 2560;
-        private const int OutH = 1440;
+        private const int DefaultOutW = 2560;
+        private const int DefaultOutH = 1440;
         private const int SuperSample = 2;             // render at 2x then downscale — clean AA regardless of URP MSAA
         private const float FramePitch = 72f;          // the game's fixed top-down angle
         private const string DoneMarker = "_done.txt";
+
+        // --- ui-screens job config (MV-421) -----------------------------------------------------
+        // The two reference frames a UI ticket needs evidence against: the canvas's own 1920x1080
+        // design frame, and 1728x1080 (1.6:1) — the narrowest aspect a desktop browser realistically
+        // presents, where a canvas using matchWidthOrHeight=1 (match by height) crops furthest.
+        private static readonly (int w, int h, string suffix)[] UiScreenSizes =
+        {
+            (1920, 1080, "16x9"),
+            (1728, 1080, "16x10"),
+        };
 
         private string _outDir;
         private readonly StringBuilder _manifest = new StringBuilder();
@@ -54,7 +67,7 @@ namespace MaxWorlds.Dev
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (!Armed()) return;
+            if (!Armed() && !UiScreensArmed()) return;
             if (FindFirstObjectByType<PressKitDirector>() != null) return;
             new GameObject("PressKitDirector").AddComponent<PressKitDirector>();
         }
@@ -70,6 +83,19 @@ namespace MaxWorlds.Dev
             catch { return false; }
         }
 
+        /// <summary>Only run the ui-screens job (MV-421) when the process was explicitly launched to —
+        /// the <c>-uiscreens</c> flag or a <c>Temp/uiscreens.arm</c> marker, same idiom as
+        /// <see cref="Armed"/> uses for the gameplay press-kit. Deliberately separate from
+        /// <see cref="Armed"/>: this job wants to actually see the Home screen's pick-a-slot modal and
+        /// the paused Rig board, not skip past them the way a gameplay film run does.</summary>
+        public static bool UiScreensArmed()
+        {
+            foreach (var a in Environment.GetCommandLineArgs())
+                if (string.Equals(a, "-uiscreens", StringComparison.OrdinalIgnoreCase)) return true;
+            try { return File.Exists(Path.Combine("Temp", "uiscreens.arm")); }
+            catch { return false; }
+        }
+
         private static string Arg(string name)
         {
             var args = Environment.GetCommandLineArgs();
@@ -78,13 +104,13 @@ namespace MaxWorlds.Dev
             return null;
         }
 
-        private void Start() => StartCoroutine(Run());
+        private void Start() => StartCoroutine(UiScreensArmed() ? RunUiScreens() : Run());
 
         private IEnumerator Run()
         {
             _outDir = Arg("-presskitOut") ?? Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press"));
             Directory.CreateDirectory(_outDir);
-            Log($"press-kit capture starting → {_outDir}  ({OutW}x{OutH}, {SuperSample}x SSAA)");
+            Log($"press-kit capture starting → {_outDir}  ({DefaultOutW}x{DefaultOutH}, {SuperSample}x SSAA)");
 
             // Filming powers: keep Max alive through the boss and combat stages, and let the blaster
             // fire hands-free. The dev-mode OVERLAY is IMGUI, so it never lands in a Camera.Render() —
@@ -98,7 +124,7 @@ namespace MaxWorlds.Dev
             var cam = Camera.main;
             if (cam == null) { Fail("no Camera.main in the scene"); yield break; }
             if (cam.TryGetComponent<CinemachineBrain>(out var brain)) brain.enabled = false;
-            cam.aspect = (float)OutW / OutH;
+            cam.aspect = (float)DefaultOutW / DefaultOutH;
 
             // Let the self-installing systems dress the world (materials, props, Max, HUD, lighting).
             for (int i = 0; i < 4; i++) yield return null;
@@ -259,35 +285,108 @@ namespace MaxWorlds.Dev
         // --- HUD -------------------------------------------------------------------------------
 
         private HudController _hud;
-        private Canvas _hudCanvas;
-        private RenderMode _hudMode;
 
         private HudController Hud => _hud != null ? _hud : (_hud = FindFirstObjectByType<HudController>());
 
         private void HideHud()
         {
+            RestoreCanvas();
             var hud = Hud;
             if (hud != null) hud.gameObject.SetActive(false);
         }
 
-        /// <summary>Make the HUD render INTO the capture camera. A ScreenSpaceOverlay canvas draws
-        /// straight to the backbuffer and never appears in a Camera.Render(); flipping it to
-        /// ScreenSpace-Camera composites it into our RenderTexture instead.</summary>
+        /// <summary>Make the HUD render INTO the capture camera, at the gameplay press-kit's own
+        /// resolution. Thin wrapper over <see cref="ShowCanvasOnCamera"/> — kept so the six existing
+        /// gameplay shots don't have to know their own output size.</summary>
         private void ShowHud(Camera cam)
         {
             var hud = Hud;
             if (hud == null) return;
             hud.gameObject.SetActive(true);
+            var canvas = hud.GetComponentInChildren<Canvas>(true);
+            ShowCanvasOnCamera(canvas, cam, DefaultOutW, DefaultOutH);
+        }
+
+        // --- generic canvas capture (MV-421) ----------------------------------------------------
+        // ScreenSpaceOverlay draws straight to the backbuffer and never appears in a Camera.Render();
+        // flipping a canvas to ScreenSpace-Camera composites it into our RenderTexture instead. This
+        // generalises the old HUD-only ShowHud to ANY self-installing screen's canvas — WeaponsScreen,
+        // HomeScreen, ResultScreen and HudController are each a separate GameObject with their own
+        // canvas, so a single "the HUD" lookup can't reach them.
+
+        private Canvas _activeCaptureCanvas;
+        private RenderMode _activeCaptureCanvasPrevMode;
+        private Camera _activeCaptureCanvasPrevWorldCam;
+        private float _activeCaptureCanvasPrevScaleFactor;
+        private CanvasScaler _activeCaptureScaler;
+        private bool _activeCaptureScalerWasEnabled;
+
+        /// <summary>Composite <paramref name="canvas"/> into <paramref name="cam"/>'s render at exactly
+        /// the UI scale a <paramref name="w"/>x<paramref name="h"/> screen would produce.
+        ///
+        /// CanvasScaler's own "Scale With Screen Size" always reads the ambient <c>Screen.width</c>/
+        /// <c>Screen.height</c> — which in Editor Play Mode is the Game View's window size, not this
+        /// capture's target resolution, and <c>Screen.SetResolution</c> is a no-op in Play Mode. Left
+        /// enabled, CanvasScaler would size the UI for the wrong frame entirely. So: disable it for the
+        /// duration and set <c>canvas.scaleFactor</c> ourselves with <see cref="ComputeScaleFactor"/>,
+        /// which reimplements CanvasScaler's own match-width-or-height formula against the explicit
+        /// (w, h) this shot is actually rendering at. A ScreenSpaceCamera canvas's on-screen EXTENT
+        /// already tracks the camera's targetTexture size correctly on its own — only the scale factor
+        /// needs this workaround.</summary>
+        private void ShowCanvasOnCamera(Canvas canvas, Camera cam, int w, int h)
+        {
+            if (canvas == null || cam == null) return;
             int ui = LayerMask.NameToLayer("UI");
             if (ui >= 0) cam.cullingMask |= (1 << ui);   // a camera-space canvas only draws if its layer is rendered
-            if (_hudCanvas == null) _hudCanvas = hud.GetComponentInChildren<Canvas>(true);
-            if (_hudCanvas != null)
+
+            _activeCaptureCanvas = canvas;
+            _activeCaptureCanvasPrevMode = canvas.renderMode;
+            _activeCaptureCanvasPrevWorldCam = canvas.worldCamera;
+            _activeCaptureCanvasPrevScaleFactor = canvas.scaleFactor;
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = cam;
+            canvas.planeDistance = 1f;
+
+            _activeCaptureScaler = canvas.GetComponent<CanvasScaler>();
+            if (_activeCaptureScaler != null)
             {
-                _hudMode = _hudCanvas.renderMode;
-                _hudCanvas.renderMode = RenderMode.ScreenSpaceCamera;
-                _hudCanvas.worldCamera = cam;
-                _hudCanvas.planeDistance = 1f;
+                _activeCaptureScalerWasEnabled = _activeCaptureScaler.enabled;
+                _activeCaptureScaler.enabled = false;
+                canvas.scaleFactor = ComputeScaleFactor(_activeCaptureScaler, w, h);
             }
+        }
+
+        /// <summary>Undo <see cref="ShowCanvasOnCamera"/> — safe to call even if nothing is showing.</summary>
+        private void RestoreCanvas()
+        {
+            if (_activeCaptureCanvas == null) return;
+            _activeCaptureCanvas.renderMode = _activeCaptureCanvasPrevMode;
+            _activeCaptureCanvas.worldCamera = _activeCaptureCanvasPrevWorldCam;
+            _activeCaptureCanvas.scaleFactor = _activeCaptureCanvasPrevScaleFactor;
+            if (_activeCaptureScaler != null) _activeCaptureScaler.enabled = _activeCaptureScalerWasEnabled;
+            _activeCaptureCanvas = null;
+            _activeCaptureScaler = null;
+        }
+
+        /// <summary>Reimplements <c>CanvasScaler</c>'s "Scale With Screen Size" / match-width-or-height
+        /// math (Unity's own documented log-lerp formula) against an explicit (w, h) instead of
+        /// <c>Screen.width</c>/<c>Screen.height</c>. Public and pure so it's pinned by an EditMode test
+        /// without building a canvas — e.g. a 1920x1080-reference canvas with <c>matchWidthOrHeight=1</c>
+        /// (match by height) captured at 1728x1080 must resolve to scaleFactor 1, exactly the "visible
+        /// reference width collapses to 1728" arithmetic MV-421 was opened to catch. Expand/Shrink match
+        /// modes aren't used by any screen today; they fall back to the tighter/looser axis respectively,
+        /// same as CanvasScaler itself.</summary>
+        public static float ComputeScaleFactor(CanvasScaler scaler, int w, int h)
+        {
+            if (scaler.uiScaleMode != CanvasScaler.ScaleMode.ScaleWithScreenSize) return 1f;
+            Vector2 refRes = scaler.referenceResolution;
+            if (scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.Expand)
+                return Mathf.Min(w / refRes.x, h / refRes.y);
+            if (scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.Shrink)
+                return Mathf.Max(w / refRes.x, h / refRes.y);
+            float logW = Mathf.Log(w / refRes.x, 2f);
+            float logH = Mathf.Log(h / refRes.y, 2f);
+            return Mathf.Pow(2f, Mathf.Lerp(logW, logH, scaler.matchWidthOrHeight));
         }
 
         // --- camera framing --------------------------------------------------------------------
@@ -346,38 +445,195 @@ namespace MaxWorlds.Dev
             catch (Exception e) { LogWarn($"{name}: capture failed — {e.Message}"); }
         }
 
-        private void Capture(Camera cam, string name)
+        private void Capture(Camera cam, string name) => CaptureSized(cam, name, DefaultOutW, DefaultOutH, SuperSample);
+
+        /// <summary>Render <paramref name="cam"/> into an RGB PNG at exactly <paramref name="w"/>x
+        /// <paramref name="h"/>, optionally supersampled <paramref name="superSample"/>x for clean edges
+        /// then downscaled. Generalises the old fixed-2560x1440 capture (MV-421) so one path serves both
+        /// the gameplay press-kit's resolution and the ui-screens job's two explicit reference sizes.</summary>
+        private void CaptureSized(Camera cam, string name, int w, int h, int superSample)
         {
-            int rw = OutW * SuperSample, rh = OutH * SuperSample;
+            int rw = w * superSample, rh = h * superSample;
             var rt = new RenderTexture(rw, rh, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var small = new RenderTexture(OutW, OutH, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
-            var tex = new Texture2D(OutW, OutH, TextureFormat.RGB24, false);
+            var small = superSample > 1
+                ? new RenderTexture(w, h, 0, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB)
+                : null;
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
             var prevTarget = cam.targetTexture;
             var prevActive = RenderTexture.active;
+            float prevAspect = cam.aspect;
             try
             {
+                cam.aspect = (float)w / h;
                 cam.targetTexture = rt;
                 cam.Render();
                 cam.targetTexture = prevTarget;
 
-                Graphics.Blit(rt, small);                    // supersample down for clean edges
-                RenderTexture.active = small;
-                tex.ReadPixels(new Rect(0, 0, OutW, OutH), 0, 0);
+                if (small != null)
+                {
+                    Graphics.Blit(rt, small);                 // supersample down for clean edges
+                    RenderTexture.active = small;
+                }
+                else
+                {
+                    RenderTexture.active = rt;
+                }
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
                 tex.Apply();
 
                 string path = Path.Combine(_outDir, name + ".png");
                 File.WriteAllBytes(path, tex.EncodeToPNG());
                 _manifest.AppendLine(name + ".png");
-                Log($"wrote {name}.png");
+                Log($"wrote {name}.png ({w}x{h})");
             }
             finally
             {
+                cam.aspect = prevAspect;
                 RenderTexture.active = prevActive;
                 cam.targetTexture = prevTarget;
                 Destroy(tex);
                 rt.Release(); Destroy(rt);
-                small.Release(); Destroy(small);
+                if (small != null) { small.Release(); Destroy(small); }
             }
+        }
+
+        // --- ui-screens job (MV-421) -------------------------------------------------------------
+        // A separate capture sequence from the six gameplay press-kit shots above: it opens each
+        // full-screen UI panel with fixed fixture state, captures it at both UiScreenSizes, and closes
+        // it again — rather than filming a live playthrough.
+
+        private IEnumerator RunUiScreens()
+        {
+            _outDir = Arg("-uiscreensOut") ?? Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "ui-screens"));
+            Directory.CreateDirectory(_outDir);
+            Log($"ui-screens capture starting → {_outDir}");
+
+            var cam = Camera.main;
+            if (cam == null) { Fail("no Camera.main in the scene"); yield break; }
+            if (cam.TryGetComponent<CinemachineBrain>(out var brain)) brain.enabled = false;
+
+            // Let the self-installing screens finish building before we go looking for them.
+            for (int i = 0; i < 4; i++) yield return null;
+
+            yield return CaptureRigScreens(cam);
+            yield return CaptureHudScreens(cam);
+
+            Finish();
+        }
+
+        /// <summary>Every screen this shot needs, captured at every size in <paramref name="sizes"/>,
+        /// named <c>&lt;baseName&gt;-&lt;suffix&gt;.png</c>. Show/capture/restore per size rather than
+        /// once for all sizes so each shot gets its own freshly-computed scale factor.</summary>
+        private IEnumerator CaptureCanvasAtSizes(Canvas canvas, Camera cam, string baseName,
+            IReadOnlyList<(int w, int h, string suffix)> sizes)
+        {
+            foreach (var s in sizes)
+            {
+                ShowCanvasOnCamera(canvas, cam, s.w, s.h);
+                yield return null;   // let the canvas rebuild its layout at the new scale factor
+                yield return null;
+                CaptureSized(cam, $"{baseName}-{s.suffix}", s.w, s.h, superSample: 1);
+                RestoreCanvas();
+            }
+        }
+
+        /// <summary>THE RIG board (MV-421 AC1) — the fixed fixture from the ticket, matching
+        /// <c>MV-423.png</c> so the capture is directly comparable to the design reference, plus a
+        /// zero-parts variant of the same fixture. Comparing the two is how the amber "+" badge and the
+        /// parts tray's empty state get verified.</summary>
+        private IEnumerator CaptureRigScreens(Camera cam)
+        {
+            var weapons = FindFirstObjectByType<WeaponsScreen>();
+            if (weapons == null) { LogWarn("ui-screens: no WeaponsScreen in the scene"); yield break; }
+
+            ApplyRigFixture();
+            weapons.Open();
+            yield return null;
+            yield return null;
+
+            var canvas = weapons.GetComponentInChildren<Canvas>(true);
+            if (canvas == null) { LogWarn("ui-screens: WeaponsScreen built no canvas"); weapons.Close(); yield break; }
+
+            yield return CaptureCanvasAtSizes(canvas, cam, "rig", UiScreenSizes);
+            weapons.Close();
+
+            // Same node fixture, banked parts spent to zero — TrySpendPart only decrements the wallet's
+            // count, it never touches a RigState node level (see PickupWallet.TrySpendPart's own doc),
+            // so this leaves every node exactly where ApplyRigFixture put it.
+            for (int i = 0; i < 4; i++) PickupWallet.TrySpendPart();
+
+            weapons.Open();
+            yield return null;
+            yield return null;
+            yield return CaptureCanvasAtSizes(canvas, cam, "rig-noparts", new[] { UiScreenSizes[0] });
+            weapons.Close();
+        }
+
+        /// <summary>Drives THE RIG (MV-422/423) to the exact node/currency state MV-421 specifies:
+        /// <c>p_dmg</c> 4, <c>p_rng</c> 3, <c>p_flw</c> 2, <c>p_spr</c> 0, <c>p_prc</c> reached-not-owned,
+        /// <c>s_bal</c> reached-not-owned, <c>e_ff</c> 2, <c>e_cel</c> 1, <c>e_cd</c> 3, <c>e_mag</c>
+        /// reached-not-owned, <c>m_spd</c>/<c>m_tp</c> not reached, <c>u_sen</c> 1, <c>u_dmg</c> 2,
+        /// <c>u_rng</c> 1, <c>u_hp</c>/<c>u_mov</c>/<c>u_cst</c> 0, <c>u_slt</c> not reached. Cells 28/30,
+        /// parts banked 4. There is no bulk setter on <see cref="RigState"/> by design (a fixture going
+        /// through the same spend/acquire API a run uses is also the only way to know it's reachable in
+        /// play) — so every node is driven up one level at a time.</summary>
+        private void ApplyRigFixture()
+        {
+            PickupWallet.Reset();   // also resets RigState — see PickupWallet.Reset's own doc
+
+            void RaiseTo(string id, int target)
+            {
+                while (RigState.Level(id) < target)
+                {
+                    bool ok = RigBoard.IsCap(id) && RigState.Level(id) == 0
+                        ? RigState.AcquireCap(id)
+                        : RigState.TrySpendPart(id);
+                    if (!ok) { LogWarn($"ui-screens: rig fixture couldn't raise {id} to {target}"); return; }
+                }
+            }
+
+            RaiseTo("p_dmg", 4);
+            RaiseTo("p_rng", 3);
+            RaiseTo("p_flw", 2);
+            // p_spr stays 0; p_prc is reached (p_flw owned) but left un-acquired — the SHED badge state.
+            // s_bal is a root cap, left un-acquired — reached-not-owned.
+            RaiseTo("e_ff", 2);
+            RaiseTo("e_cel", 1);     // also lifts PickupWallet.Capacity to 30 (20 + 1 * 10)
+            RaiseTo("e_cd", 3);
+            // e_mag is reached (e_cd owned) but left un-acquired — the SHED badge state.
+            // m_spd, m_tp are root caps, left un-acquired — not reached is impossible for a root, so this
+            // fixture leaves them at the same reached-not-owned state as every other unacquired root cap.
+            RaiseTo("u_sen", 1);
+            RaiseTo("u_dmg", 2);
+            RaiseTo("u_rng", 1);
+            // u_hp stays 0, which keeps its child u_slt genuinely not-reached.
+
+            PickupWallet.SetPowerCells(28);   // Capacity is 30 once e_cel is level 1, above
+            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+        }
+
+        /// <summary>In-game HUD (MV-421 AC "priority 2") at the shipped gameplay framing (matches shot
+        /// 03_hud_minimap above), captured over the dressed-but-static opening frame — no combat staged,
+        /// since the point here is the HUD chrome itself, not a gameplay moment.</summary>
+        private IEnumerator CaptureHudScreens(Camera cam)
+        {
+            var max = GameObject.FindGameObjectWithTag("Player");
+            var hud = Hud;
+            if (max == null || hud == null)
+            {
+                LogWarn("ui-screens: no Player/HudController in the scene, skipping hud shots");
+                yield break;
+            }
+
+            var canvas = hud.GetComponentInChildren<Canvas>(true);
+            if (canvas == null) { LogWarn("ui-screens: HudController built no canvas"); yield break; }
+
+            hud.gameObject.SetActive(true);
+            PlaceOrbit(cam, max.transform.position, FramePitch, 0f, 25.1f);
+            yield return null;
+
+            yield return CaptureCanvasAtSizes(canvas, cam, "hud", UiScreenSizes);
+            hud.gameObject.SetActive(false);
         }
 
         // --- lifecycle / reporting -------------------------------------------------------------
