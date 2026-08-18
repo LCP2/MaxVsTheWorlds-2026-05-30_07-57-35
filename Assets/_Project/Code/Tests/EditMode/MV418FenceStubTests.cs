@@ -6,25 +6,31 @@ using UnityEngine;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-418: a2 (20 m wide, x 11-31) and a3 (24 m wide, x 11-35) share the z=26 line, but only
-    /// overlap across x 11-31. <see cref="MapGeometry.Solids"/> correctly reads that as a party wall
-    /// for the shared span (offset 0, both rooms) and a one-sided run for a3's remaining x 31-35
-    /// (offset -half, a3 only) — individually correct, but the two runs disagree about their offset
-    /// on what is meant to read as ONE continuous boundary, so the remainder renders as a short fence
-    /// jogged 0.2 m sideways, standing alone with no planting or corner post tying it to its
-    /// neighbour (MinPlantedFace/CornerPosts both key off the run being long/aligned, and this run is
-    /// neither).
+    /// MV-418, general pass.
     ///
-    /// A geometry-wide "no two overlapping collinear runs may disagree about their offset" version of
-    /// this assertion was tried first and rejected: World 1 has other, pre-existing, differently-sized
-    /// neighbours (e.g. the entry stub is narrower than Area 1) that produce the exact same jogged
-    /// pattern at a room's own corner, on purpose, and are out of this ticket's scope — flagging them
-    /// too would make the test fail forever, not just on 7c060cf. This asserts the one line the ticket
-    /// actually reports.
+    /// The first pass (`141428f`) widened `a2` to match `a3`, closing the one seam the ticket was
+    /// originally reported on. It was reopened because the same bug kept showing up elsewhere (Area
+    /// 4, on `dadd9f1`) — the underlying cause is not specific to a2/a3, it is
+    /// <see cref="MapGeometry.Solids"/> treating any two rooms of different widths that share a line
+    /// as a party wall for their overlap PLUS a separate, differently-offset one-sided run for
+    /// whichever room is wider. Individually correct, but the two disagree about their offset on what
+    /// is meant to read as one continuous boundary, so the wider room's remainder renders as a short
+    /// fence jogged half a wall's thickness sideways — standing alone, with no planting or corner
+    /// post tying it to its neighbour, because <c>BackyardDressingSet</c> judges each fragment on its
+    /// own.
     ///
-    /// Confirmed FAILING on 7c060cf (pre-fix HEAD): the wall segments straddling z=26 split into two
-    /// groups at z=26.0 (the x 11-31 party run) and z=25.8 (the x 31-35 one-sided stub) — a 0.2 m jog,
-    /// exactly the offset the root-cause analysis above predicts (half of the 0.4 m wallThickness).
+    /// A table run against `main` while reopening the ticket found 13+ seams still jogging this way
+    /// (a0/a1, a6/a7, a8/a9, a9/a10, a10/a11, a11/a12, a12/a13, a13/a14, a14/a15, a15/a16, a16/a17,
+    /// a17/a18, a18/a19 — see the ticket comment for the full table), so this asserts the general
+    /// invariant over the WHOLE shipped world rather than pinning one seam: no two wall segments that
+    /// run the same way, are close enough to be the same architectural line, and touch or overlap
+    /// along it, may sit at different line coordinates. That is exactly what a jog is.
+    ///
+    /// Confirmed FAILING on `dadd9f1` (this test, run against that commit's `MapGeometry.Solids` with
+    /// no snap step) — multiple seams from the table above trip it. Fixed by
+    /// <see cref="MapGeometry.Walls"/> → <c>Solids</c> → the new <c>SnapOneSidedRunsToPartyOffset</c>
+    /// step, which snaps a one-sided run's offset to match a party run it directly touches, so the two
+    /// read as one line instead of jogging.
     /// </summary>
     public sealed class MV418FenceStubTests
     {
@@ -37,28 +43,49 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void World1_A2A3BoundaryIsOneUnjoggedPartyWall_NoOrphanStub()
+        public void World1_NoTwoTouchingCollinearWallsDisagreeAboutTheirOffset()
         {
             MapData map = ShippedWorld1();
             List<WallSegment> walls = MapGeometry.Walls(map);
+            Assert.IsNotEmpty(walls, "World1 produced no walls at all — MapGeometry regressed");
 
-            // Every AlongX wall segment within a thickness of the a2/a3 shared line (z=26) — the
-            // party run plus whatever the gate g2 doorway split it into.
-            var onSharedLine = walls.FindAll(w => w.AlongX && Mathf.Abs(w.Center.z - 26f) <= map.wallThickness);
-            Assert.IsNotEmpty(onSharedLine, "no wall found near the a2/a3 shared line at z=26");
+            int checkedPairs = 0;
 
-            float firstZ = onSharedLine[0].Center.z;
-            foreach (WallSegment w in onSharedLine)
-                Assert.That(w.Center.z, Is.EqualTo(firstZ).Within(0.01f),
-                    $"'{w.Name}' sits at z={w.Center.z:0.##}, jogged off the other run(s) on the a2/a3 " +
-                    $"line at z={firstZ:0.##} — the MV-418 orphan fence stub");
+            for (int i = 0; i < walls.Count; i++)
+            {
+                WallSegment a = walls[i];
+                float lineA = a.AlongX ? a.Center.z : a.Center.x;
+                float aMin = a.AlongX ? a.Center.x - a.Size.x * 0.5f : a.Center.z - a.Size.z * 0.5f;
+                float aMax = a.AlongX ? a.Center.x + a.Size.x * 0.5f : a.Center.z + a.Size.z * 0.5f;
 
-            // The gap the stub used to hide beyond (x 31-35) must now be covered by the SAME run as
-            // the rest of the boundary, not left as a hole in the wall network.
-            bool coversPastOldA2Edge = onSharedLine.Exists(w =>
-                w.Center.x + w.Size.x * 0.5f >= 34.5f);
-            Assert.IsTrue(coversPastOldA2Edge,
-                "the a2/a3 boundary wall no longer reaches x=35 — a3's east end is unwalled");
+                for (int j = i + 1; j < walls.Count; j++)
+                {
+                    WallSegment b = walls[j];
+                    if (a.AlongX != b.AlongX) continue;   // a corner, not a candidate for a jog
+
+                    float lineB = b.AlongX ? b.Center.z : b.Center.x;
+
+                    // Close enough to plausibly be the same architectural line — real distinct lines
+                    // in World1 are whole rooms apart (metres), never within a couple of wall
+                    // thicknesses of each other.
+                    if (Mathf.Abs(lineA - lineB) > map.wallThickness * 2f) continue;
+
+                    float bMin = b.AlongX ? b.Center.x - b.Size.x * 0.5f : b.Center.z - b.Size.z * 0.5f;
+                    float bMax = b.AlongX ? b.Center.x + b.Size.x * 0.5f : b.Center.z + b.Size.z * 0.5f;
+
+                    bool touches = aMax >= bMin && bMax >= aMin;
+                    if (!touches) continue;
+
+                    checkedPairs++;
+                    Assert.That(lineA, Is.EqualTo(lineB).Within(0.01f),
+                        $"'{a.Name}' sits at {(a.AlongX ? "z" : "x")}={lineA:0.##} but the collinear, " +
+                        $"touching '{b.Name}' sits at {(b.AlongX ? "z" : "x")}={lineB:0.##} — a jogged " +
+                        "fence, the MV-418 orphan stub pattern");
+                }
+            }
+
+            Assert.Greater(checkedPairs, 0,
+                "no collinear touching wall pairs were found at all — the adjacency scan itself is broken");
         }
     }
 }

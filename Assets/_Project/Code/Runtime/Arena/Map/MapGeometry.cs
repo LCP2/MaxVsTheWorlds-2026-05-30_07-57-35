@@ -373,7 +373,42 @@ namespace MaxWorlds.Arena
             }
             if (open) result.Add(new Run(new Span(runMin, runMax), runOffset, runLower, runUpper));
 
+            SnapOneSidedRunsToPartyOffset(result);
+
             return Cap(result, line.Holes, t);
+        }
+
+        /// <summary>
+        /// A one-sided run (a room on only one side of the line) that directly touches a party run (a
+        /// room on both sides, straddling at offset 0) is snapped to that same offset instead of
+        /// sitting pushed clear of its room by half a wall thickness.
+        ///
+        /// Without this, a room narrower or wider than the neighbour it shares a line with produces a
+        /// party wall for the shared span and a SEPARATE one-sided run for the leftover — individually
+        /// correct, but the two disagree about their offset on what is meant to read as ONE continuous
+        /// boundary, so the leftover renders as a short fence jogged half a wall thickness sideways,
+        /// standing alone with no planting or corner post tying it to its neighbour (MV-418).
+        ///
+        /// The cost is a sliver — half a wall thickness — trimmed off the wider room's own edge along
+        /// that leftover stretch. Worth it: a fence that never breaks step beats a room that keeps
+        /// every last centimetre it was authored.
+        /// </summary>
+        private static void SnapOneSidedRunsToPartyOffset(List<Run> result)
+        {
+            for (int i = 0; i < result.Count; i++)
+            {
+                Run run = result[i];
+                if (run.Lower && run.Upper) continue;              // already a party run — offset 0
+                if (Geo.Same(run.Offset, 0f)) continue;            // nothing to snap
+
+                bool touchesPartyBelow = i > 0 && Geo.Same(result[i - 1].Span.Max, run.Span.Min)
+                                          && result[i - 1].Lower && result[i - 1].Upper;
+                bool touchesPartyAbove = i < result.Count - 1 && Geo.Same(result[i + 1].Span.Min, run.Span.Max)
+                                          && result[i + 1].Lower && result[i + 1].Upper;
+
+                if (touchesPartyBelow || touchesPartyAbove)
+                    result[i] = new Run(run.Span, 0f, run.Lower, run.Upper);
+            }
         }
 
         /// <summary>Grow each wall's ends out to close the corners. Where two perpendicular walls meet
