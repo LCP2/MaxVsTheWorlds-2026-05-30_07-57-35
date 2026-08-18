@@ -4,6 +4,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Arena
 {
@@ -17,6 +18,12 @@ namespace MaxWorlds.Arena
     /// MV-427: also the death-continues-the-run orchestrator. It already owns the boss-gate identity
     /// and (via the map) every other gate's, which is exactly the context a respawn needs to pick the
     /// right door to re-close and never touch the one that isn't allowed to.
+    ///
+    /// MV-438: the respawn itself no longer runs synchronously off the death. <see cref="OnPlayerDied"/>
+    /// now only records the death and shows <see cref="DeathOverlay"/>; everything MV-427 used to do
+    /// immediately — area restore, gate reclose, sentinel wipe, teleport — waits in
+    /// <see cref="_pendingRespawn"/> for <see cref="Continue"/>, which the overlay's CONTINUE button
+    /// calls.
     /// </summary>
     public sealed class WorldRunner : MonoBehaviour
     {
@@ -34,6 +41,16 @@ namespace MaxWorlds.Arena
         private PickupDirector _pickupDirector;
         private PlayerHealth _playerHealth;
         private Transform _player;
+        private DeathOverlay _deathOverlay;
+
+        /// <summary>MV-438: the deferred respawn a death worked out but hasn't run yet — set the
+        /// instant Max falls, cleared (and acted on) only when <see cref="Continue"/> runs. Null
+        /// whenever the overlay isn't up, so <see cref="HasPendingRespawn"/> also answers "is a death
+        /// overlay currently owed a Continue".</summary>
+        private RespawnPlan? _pendingRespawn;
+
+        /// <summary>Test-only access, same idiom as the rest of this project's screen classes.</summary>
+        public bool HasPendingRespawn => _pendingRespawn.HasValue;
 
         /// <summary>The combat gate leading INTO each 1-based area — the one a death in that area
         /// re-closes (unless it's the boss gate; see <see cref="RespawnPlan.RecloseGate"/>) and the one
@@ -120,9 +137,10 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>Max fell (MV-427). The run doesn't end: the arena he died in resets to its
-        /// authored composition, its gate re-closes (unless it's the boss gate — that one never does),
-        /// and he lands back at that gate, alive, one area behind.</summary>
+        /// <summary>Max fell (MV-427). The run doesn't end, but MV-438 stops it continuing silently:
+        /// this only records the death, works out the plan, and shows the overlay — the actual area
+        /// restore/gate-reclose/respawn (what this method did in full, pre-MV-438) waits in
+        /// <see cref="Continue"/> for the player's own CONTINUE tap.</summary>
         private void OnPlayerDied()
         {
             if (_areaDirector == null || _cfg?.dials == null) return;
@@ -134,6 +152,30 @@ namespace MaxWorlds.Arena
             RespawnPlan plan = RespawnPlanner.Resolve(deathArea, _cfg.dials.areaCount);
 
             DeathRunState.RecordDeath();
+            _pendingRespawn = plan;
+
+            Time.timeScale = 0f;   // frozen until CONTINUE — nothing below this line until then
+
+            WorldArea restoreArea = _cfg.AreaByIndex(plan.RestoreAreaIndex);
+            string areaName = restoreArea != null ? restoreArea.name : $"Area {plan.RestoreAreaIndex}";
+
+            if (_deathOverlay == null)
+            {
+                _deathOverlay = FindFirstObjectByType<DeathOverlay>();
+                if (_deathOverlay == null) _deathOverlay = new GameObject("DeathOverlay").AddComponent<DeathOverlay>();
+            }
+            _deathOverlay.Show(areaName, plan.RecloseGate, DeathRunState.DeathsTaken, Continue);
+        }
+
+        /// <summary>CONTINUE was tapped (MV-438) — runs the deferred respawn sequence exactly as
+        /// <see cref="OnPlayerDied"/> did in full before this ticket, then un-pauses. A no-op if there
+        /// is nothing pending (e.g. a stray extra call), so this is always safe to wire straight to a
+        /// button.</summary>
+        public void Continue()
+        {
+            if (!_pendingRespawn.HasValue) return;
+            RespawnPlan plan = _pendingRespawn.Value;
+            _pendingRespawn = null;
 
             // Wipe and respawn the death arena's robots to its authored composition. Sheds and the
             // area's own part-grant flag are untouched by this — a destroyed shed's DestructibleHealth
@@ -153,6 +195,8 @@ namespace MaxWorlds.Arena
 
             RespawnPlayer(plan);
             _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
+
+            Time.timeScale = 1f;
         }
 
         private void EnsurePlayer()
