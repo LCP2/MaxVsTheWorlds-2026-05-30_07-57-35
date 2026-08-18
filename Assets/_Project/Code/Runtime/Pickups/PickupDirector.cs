@@ -260,12 +260,31 @@ namespace MaxWorlds.Pickups
 
             Vector3 m = _max.position;
             float r2 = CollectRadius * CollectRadius;
+            float magnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
+                MaxWorlds.Weapons.RigState.Level("e_mag"),
+                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
+                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
+            float dt = Time.deltaTime;
+
             for (int i = _live.Count - 1; i >= 0; i--)
             {
                 Pickup p = _live[i];
                 float dx = p.transform.position.x - m.x;
                 float dz = p.transform.position.z - m.z;
-                if (dx * dx + dz * dz <= r2) Collect(i, p);
+                float d2 = dx * dx + dz * dz;
+                if (d2 <= r2) { Collect(i, p); continue; }
+
+                // Magneto (MV-422, e_mag): a caught power cell flies to Max from range instead of
+                // waiting for a manual walk-over. Only power cells — parts/devices stay a deliberate
+                // walk-over pickup.
+                if (p.Kind == PickupKind.PowerCell && magnetoRadius > 0f && d2 <= magnetoRadius * magnetoRadius)
+                {
+                    Vector3 pos = p.transform.position;
+                    Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
+                    float step = MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullSpeed * dt;
+                    if (step * step >= d2) p.transform.position = new Vector3(m.x, pos.y, m.z);
+                    else p.transform.position = pos + toMax.normalized * step;
+                }
             }
         }
 

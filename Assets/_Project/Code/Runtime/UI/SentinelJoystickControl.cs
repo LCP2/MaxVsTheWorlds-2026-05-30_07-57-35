@@ -9,14 +9,12 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// MV-399: an aimed-placement joystick for deploying a Wall or Gunner sentinel away from Max,
-    /// reusing the exact press/drag/release + landing-preview shape already built for Teleport and
-    /// Water Balloon (MV-371/370/372) rather than a new targeting system — reversing MV-362's
-    /// "deployed at Max's position, not aimed at range" DECISION per Lee's 15 Aug 2026 request: "I
-    /// should be able to put them anywhere in the current arena."
-    ///
-    /// One class, not two, parameterized by <see cref="SentinelKind"/> — <see cref="Sentinel"/> itself
-    /// already takes the same shape rather than a Wall/Gunner subclass pair.
+    /// MV-399: an aimed-placement joystick for deploying the sentinel away from Max, reusing the exact
+    /// press/drag/release + landing-preview shape already built for Teleport and Water Balloon
+    /// (MV-371/370/372) rather than a new targeting system — reversing MV-362's "deployed at Max's
+    /// position, not aimed at range" DECISION per Lee's 15 Aug 2026 request: "I should be able to put
+    /// them anywhere in the current arena." MV-422 deletes the Wall/Gunner split entirely — one
+    /// sentinel, one control, no <c>SentinelKind</c> parameter.
     ///
     /// The reticle is CLAMPED into Max's own current room (<see cref="MapZone.Clamp"/>) as it is
     /// aimed, not merely tinted a warning colour past the edge — MV-393 flagged exactly that failure
@@ -27,27 +25,23 @@ namespace MaxWorlds.UI
     [RequireComponent(typeof(Image))]
     public sealed class SentinelJoystickControl : AbilityJoystickControlBase
     {
-        /// <summary>The reticle radius, world metres — roughly a sentinel's own footprint.</summary>
+        /// <summary>The reticle radius, world metres — roughly the sentinel's own footprint.</summary>
         private const float PlacementRadius = 0.9f;
 
-        /// <summary>Keeps the Wall's 3 m-wide body clear of the wall it's dropped near — sized off the
-        /// Wall's own half-width (the larger of the two bodies), so one margin serves both kinds.</summary>
-        private static readonly float ZoneEdgeMargin = WallSentinel.Width * 0.5f + 0.25f;
+        /// <summary>Keeps the sentinel's own body clear of whatever it's dropped near.</summary>
+        private const float ZoneEdgeMargin = 1.5f;
 
         private Transform _origin;
         private PlayerAbilities _abilities;
-        private SentinelKind _kind;
 
         private GameObject _circleGo;
 
         /// <summary>Wired by <c>HudController</c> right after construction — the same hand-off shape
-        /// <see cref="TeleportJoystickControl.Init"/> uses, plus which sentinel kind this control
-        /// deploys.</summary>
-        public void Init(RectTransform knob, Transform origin, PlayerAbilities abilities, SentinelKind kind, Image rings = null)
+        /// <see cref="TeleportJoystickControl.Init"/> uses.</summary>
+        public void Init(RectTransform knob, Transform origin, PlayerAbilities abilities, Image rings = null)
         {
             _origin = origin;
             _abilities = abilities;
-            _kind = kind;
             InitBase(knob, origin, rings);
         }
 
@@ -57,8 +51,7 @@ namespace MaxWorlds.UI
 
         protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.Sentinels);
 
-        protected override bool AbilityReady => _abilities != null &&
-            (_kind == SentinelKind.Wall ? _abilities.WallSentinelReady : _abilities.GunnerSentinelReady);
+        protected override bool AbilityReady => _abilities != null && _abilities.SentinelReady;
 
         /// <summary>Deploys at the ability's full authored range in the dragged direction — same "the
         /// drag aims a DIRECTION, it doesn't shorten the throw" shape Teleport's blink already uses,
@@ -68,10 +61,7 @@ namespace MaxWorlds.UI
             if (_abilities == null || _origin == null) return;
 
             Vector3 point = PlacementPoint(direction, AbilityTuning.DefaultSentinelPlacementRange);
-            if (_kind == SentinelKind.Wall)
-                _abilities.TryDeployWallSentinel(point, Quaternion.LookRotation(FlatFacing(direction)));
-            else
-                _abilities.TryDeployGunnerSentinel(point);
+            _abilities.TryDeploySentinel(point);
         }
 
         private void OnDestroy()
@@ -94,8 +84,7 @@ namespace MaxWorlds.UI
         {
             if (_circleGo != null) return;
 
-            string name = _kind == SentinelKind.Wall ? "Wall Sentinel Placement Circle" : "Gunner Sentinel Placement Circle";
-            _circleGo = new GameObject(name, typeof(MeshFilter), typeof(MeshRenderer));
+            _circleGo = new GameObject("Sentinel Placement Circle", typeof(MeshFilter), typeof(MeshRenderer));
             // Marks the renderer as owned so neither RuntimeSurfaceDirector nor CharacterSkinDirector
             // repaints it — same guard Teleport/Water Balloon's own aim meshes carry.
             _circleGo.AddComponent<KeepsOwnMaterial>();
@@ -104,12 +93,6 @@ namespace MaxWorlds.UI
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
             _circleGo.SetActive(false);
-        }
-
-        private static Vector3 FlatFacing(Vector3 direction)
-        {
-            Vector3 flat = new Vector3(direction.x, 0f, direction.z);
-            return flat.sqrMagnitude > 1e-6f ? flat.normalized : Vector3.forward;
         }
 
         /// <summary>The aimed point at <paramref name="distance"/> from Max, pulled back inside Max's

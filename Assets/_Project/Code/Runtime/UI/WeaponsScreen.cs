@@ -80,7 +80,7 @@ namespace MaxWorlds.UI
         private const string MaxPortraitResourcePath = "Art/Max";
 
         private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 6;    // count of AllAbilityKinds where WeaponCatalog.ShowsInAbilitiesGrid is true (MV-409 excluded WaterBalloon, leaving 6 of 7)
+        private const int MaxAbilityRows = 6;    // count of AllAbilityKinds where WeaponCatalog.ShowsInAbilitiesGrid is true (MV-409 excluded WaterBalloon; MV-422 retired WeaponCooldown, leaving 5 of 6 — one slot in this fixed grid now always reads locked/empty, tolerated per MV-422's "keeps rendering whatever it can until 2/5 replaces it")
         private const int AbilityColumns = 3;    // fixed column count (matches the Primary Add-ons row below) — MaxAbilityRows now wraps past it into a 2nd row instead of growing the row width
         private const int WaterBalloonTrackCount = 3;   // WeaponCatalog.AllWaterBalloonTrackKinds.Length (MV-370)
 

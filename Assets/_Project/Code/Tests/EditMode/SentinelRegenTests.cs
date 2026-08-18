@@ -51,11 +51,11 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void TheGunnersLowerMaxHpStillFullyHealsInAFiniteTime()
+        public void TheSentinelsBaseHpStillFullyHealsInAFiniteTime()
         {
             // Starts at 1 HP, not 0 — 0 HP means already destroyed (see ItNeverRevivesADestroyedSentinel
             // above), which a live sentinel's Update() never reaches in the first place (IsAlive gates it).
-            float secondsToFull = 59f / PerSec; // Gunner's fixed 60 HP (AbilityTuning.DefaultSentinelGunnerHp)
+            float secondsToFull = 59f / PerSec; // the sentinel's base 60 HP (AbilityTuning.DefaultSentinelBaseHp)
             Assert.Greater(secondsToFull, 0f);
             Assert.AreEqual(60f, Regen(1f, 60f, timeSinceDamage: Delay + secondsToFull, dt: secondsToFull), 1e-3);
         }

@@ -1,6 +1,7 @@
 using NUnit.Framework;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -117,7 +118,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0));
         }
 
-        // ---------------------------------------------------------------- MV-374: Cell Capacity track
+        // ---------------------------------------------------------------- MV-374/MV-422: Cell Storage (e_cel)
 
         [Test]
         public void CapacityStartsAtTheBase20()
@@ -127,34 +128,55 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void LevelingUpCellCapacityAdds10PerLevelUpTo3Levels()
+        public void LevelUpFailsUntilCellStorageIsDrafted_MV422()
         {
-            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
+            // e_cel is a RIG cap now — a part/LevelUpCellCapacity can never perform its 0->1 unlock,
+            // only a Morphing Module draft can (RigState.AcquireCap, exercised directly here since the
+            // draft screen/shed-flow wiring is out of this ticket's scope).
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.False);
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
+        }
+
+        [Test]
+        public void DraftingCellStorageGrantsLevelOneAtThirtyCapacity_MV422()
+        {
+            RigState.AcquireCap("e_cel");
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(1));
             Assert.That(PickupWallet.Capacity, Is.EqualTo(30));
+        }
+
+        [Test]
+        public void LevelingUpCellCapacityAdds10PerLevelUpToFourLevels()
+        {
+            RigState.AcquireCap("e_cel"); // level 1, capacity 30
             Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
             Assert.That(PickupWallet.Capacity, Is.EqualTo(40));
             Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
-            Assert.That(PickupWallet.Capacity, Is.EqualTo(50), "3 levels at +10 each cap out at 50");
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(50));
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.True);
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(60), "e_cel's RIG maxLevel is 4 — 4 levels at +10 each cap out at 60");
         }
 
         [Test]
         public void LevelingUpCellCapacityPastTheCapFails()
         {
-            for (int i = 0; i < PickupWallet.PowerCellCapacityMaxLevel; i++) PickupWallet.LevelUpCellCapacity();
-            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.False, "only 3 levels exist");
-            Assert.That(PickupWallet.Capacity, Is.EqualTo(50));
+            RigState.AcquireCap("e_cel");
+            for (int i = 1; i < PickupWallet.PowerCellCapacityMaxLevel; i++) PickupWallet.LevelUpCellCapacity();
+            Assert.That(PickupWallet.LevelUpCellCapacity(), Is.False, $"only {PickupWallet.PowerCellCapacityMaxLevel} levels exist");
+            Assert.That(PickupWallet.Capacity, Is.EqualTo(60));
         }
 
         [Test]
         public void LevelingUpCellCapacityFiresCapacityChangedWithTheNewCapacity()
         {
+            RigState.AcquireCap("e_cel");
             int seen = -1;
             void Handler(int n) => seen = n;
             PickupWallet.CapacityChanged += Handler;
             try
             {
                 PickupWallet.LevelUpCellCapacity();
-                Assert.That(seen, Is.EqualTo(30), "the HUD/weapons screen redraw off this event even though the count didn't move");
+                Assert.That(seen, Is.EqualTo(40), "the HUD/weapons screen redraw off this event even though the count didn't move");
             }
             finally { PickupWallet.CapacityChanged -= Handler; }
         }
@@ -162,17 +184,19 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void RaisingCapacityDoesNotWasteAlreadyBankedCellsHeadroom()
         {
-            for (int i = 0; i < 20; i++) PickupWallet.AddPowerCell();
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(20), "full at the base cap");
+            RigState.AcquireCap("e_cel"); // capacity 30 already, before filling
+            for (int i = 0; i < PickupWallet.Capacity; i++) PickupWallet.AddPowerCell();
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(30), "full at the drafted cap");
 
             PickupWallet.LevelUpCellCapacity();
             PickupWallet.AddPowerCell();
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(21), "the new headroom must be collectible immediately");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(31), "the new headroom must be collectible immediately");
         }
 
         [Test]
         public void ResetClearsCellCapacityLevelBackToTheBase()
         {
+            RigState.AcquireCap("e_cel");
             PickupWallet.LevelUpCellCapacity();
             PickupWallet.Reset();
             Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));

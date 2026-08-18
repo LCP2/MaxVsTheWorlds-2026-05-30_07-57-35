@@ -15,9 +15,10 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-399: Sentinel deployment moves from "always at Max's feet" (MV-362) to an aimed placement
     /// joystick, reusing Teleport/Water Balloon's shared press/drag/release layer (MV-372). Covers the
-    /// new pure math (<see cref="MapZone.Clamp"/>), the new aimed-position overloads' cost/cap/overlap
+    /// new pure math (<see cref="MapZone.Clamp"/>), the aimed-position overload's cost/cap/overlap
     /// gating, and the joystick control's own arm/disarm + placement-reticle lifecycle — the same shape
-    /// <c>AbilityJoystickArmDisarmTests</c> already proves for Teleport/Water Balloon.
+    /// <c>AbilityJoystickArmDisarmTests</c> already proves for Teleport/Water Balloon. MV-422 collapses
+    /// the Wall/Gunner split to one sentinel, one <see cref="SentinelJoystickControl"/>.
     /// </summary>
     public sealed class SentinelPlacementTests
     {
@@ -61,7 +62,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(clamped.z, Is.EqualTo(-1f).Within(1e-4f));
         }
 
-        // ---------------------------------------------------------------- PlayerAbilities aimed overloads
+        // ---------------------------------------------------------------- PlayerAbilities aimed overload
 
         private static GameObject NewMax()
         {
@@ -71,7 +72,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AimedWallDeployPlacesTheWallAtTheAimedPointNotMaxsFeet()
+        public void AimedDeployPlacesTheSentinelAtTheAimedPointNotMaxsFeet()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
@@ -80,7 +81,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var aimedPoint = new Vector3(5f, 0f, -3f);
-                Assert.That(abilities.TryDeployWallSentinel(aimedPoint, Quaternion.identity), Is.True);
+                Assert.That(abilities.TryDeploySentinel(aimedPoint), Is.True);
 
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
                 Assert.That(Sentinel.Active[0].transform.position, Is.EqualTo(aimedPoint),
@@ -90,7 +91,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ParameterlessWallDeployStillDeploysAtMaxsOwnPosition()
+        public void ParameterlessDeployStillDeploysAtMaxsOwnPosition()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
@@ -99,7 +100,7 @@ namespace MaxWorlds.Tests.EditMode
             var abilities = maxGo.GetComponent<PlayerAbilities>();
             try
             {
-                Assert.That(abilities.TryDeployWallSentinel(), Is.True,
+                Assert.That(abilities.TryDeploySentinel(), Is.True,
                     "the zero-arg convenience overload must keep working for existing callers/tests");
                 Assert.That(Sentinel.Active[0].transform.position, Is.EqualTo(maxGo.transform.position));
             }
@@ -107,20 +108,21 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void AimedGunnerDeployIsRejectedWhenThePointAlreadyHoldsASentinel()
+        public void AimedDeployIsRejectedWhenThePointAlreadyHoldsASentinel()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            WeaponSystemState.LevelUpSentinelTrack(SentinelTrackKind.DeploymentCount); // 2 slots free
+            RigState.TrySpendPart("u_hp");
+            RigState.TrySpendPart("u_slt"); // 2 slots free — proves this is an overlap rejection, not a cap rejection
             PickupWallet.SetPowerCells(100);
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();
             try
             {
                 var point = new Vector3(2f, 0f, 2f);
-                Assert.That(abilities.TryDeployWallSentinel(point, Quaternion.identity), Is.True);
+                Assert.That(abilities.TryDeploySentinel(point), Is.True);
 
                 int cellsBefore = PickupWallet.PowerCells;
-                Assert.That(abilities.TryDeployGunnerSentinel(point), Is.False,
+                Assert.That(abilities.TryDeploySentinel(new Vector3(2.1f, 0f, 2f)), Is.False,
                     "a second sentinel must not be allowed to land on top of the first — the slot cap " +
                     "alone (2 free) would not have caught this");
                 Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsBefore),
@@ -140,7 +142,7 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var point = new Vector3(-3f, 0f, 1f);
-                abilities.TryDeployWallSentinel(point, Quaternion.identity);
+                abilities.TryDeploySentinel(point);
                 Assert.That(abilities.IsValidSentinelPlacement(point), Is.False);
 
                 Sentinel deployed = Sentinel.Active[0];
@@ -156,10 +158,8 @@ namespace MaxWorlds.Tests.EditMode
         public void AimedDeployIsRejectedWhenThePointOverlapsALiveRobot()
         {
             // RobotEnemy.Active is only populated by OnEnable, which Unity does not invoke for plain
-            // MonoBehaviours outside Play mode (see EnemyFriendlyFireTests.NewEnemy's own note, and
-            // AreaAccumulationWorldConfigTests' for why it avoids asserting on RobotEnemy.Active at
-            // all) — so OnEnable is invoked directly here, the same reflection-a-private-Unity-callback
-            // idiom SentinelAreaCrossingTests.InvokeUpdate already uses for AreaAccumulationDirector.
+            // MonoBehaviours outside Play mode — so OnEnable is invoked directly here, the same
+            // reflection-a-private-Unity-callback idiom SentinelAreaCrossingTests.InvokeUpdate uses.
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
             var maxGo = NewMax();
@@ -173,7 +173,7 @@ namespace MaxWorlds.Tests.EditMode
                 typeof(RobotEnemy).GetMethod("OnEnable", BindingFlags.NonPublic | BindingFlags.Instance)
                     .Invoke(robot, null);
 
-                Assert.That(abilities.TryDeployWallSentinel(robotGo.transform.position, Quaternion.identity), Is.False,
+                Assert.That(abilities.TryDeploySentinel(robotGo.transform.position), Is.False,
                     "a sentinel must not be dropped on top of a live robot");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(0));
             }
@@ -191,12 +191,12 @@ namespace MaxWorlds.Tests.EditMode
         private GameObject _max;
         private GameObject _pad;
 
-        private SentinelJoystickControl NewControl(SentinelKind kind)
+        private SentinelJoystickControl NewControl()
         {
             var abilities = _max.GetComponent<PlayerAbilities>();
             var control = _pad.AddComponent<SentinelJoystickControl>();
             var knob = new GameObject("Knob", typeof(RectTransform)).GetComponent<RectTransform>();
-            control.Init(knob, _max.transform, abilities, kind, rings: null);
+            control.Init(knob, _max.transform, abilities, rings: null);
             return control;
         }
 
@@ -209,7 +209,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.SetPowerCells(100);
             _max = NewMax();
             _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
-            var control = NewControl(SentinelKind.Wall);
+            var control = NewControl();
             try
             {
                 control.OnPointerDown(At(new Vector2(0f, 0f)));
@@ -229,7 +229,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.SetPowerCells(100);
             _max = NewMax();
             _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
-            var control = NewControl(SentinelKind.Gunner);
+            var control = NewControl();
             try
             {
                 control.OnPointerDown(At(new Vector2(0f, 0f)));
@@ -248,11 +248,11 @@ namespace MaxWorlds.Tests.EditMode
         public void ReleasingWhileStillInTheDeadZoneDeploysNothing()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(100); // clamps to PickupWallet.Capacity (20 at Cell Capacity level 0)
+            PickupWallet.SetPowerCells(100); // clamps to PickupWallet.Capacity (20 at Cell Storage level 0)
             int cellsBefore = PickupWallet.PowerCells;
             _max = NewMax();
             _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
-            var control = NewControl(SentinelKind.Wall);
+            var control = NewControl();
             try
             {
                 control.OnPointerDown(At(new Vector2(0f, 0f)));

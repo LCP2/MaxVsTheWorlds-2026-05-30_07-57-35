@@ -111,10 +111,23 @@ namespace MaxWorlds.Weapons
         /// bigger number" shape as <see cref="TeleportDistance"/>, so a level-up is a felt difference.</summary>
         public const float DefaultForceFieldAbsorbCapPerLevel = 30f;
 
-        /// <summary>Radius of the bubble, metres (DECISION #3, MV-361) — pinned to the live world's
-        /// normal gate width (3 m diameter), NOT leveled: a chokepoint-sized bubble that grew with
-        /// upgrades would eventually swallow rooms whole.</summary>
+        /// <summary>Radius of the bubble at Level 1, metres (DECISION #3, MV-361) — originally pinned
+        /// to the live world's normal gate width (3 m diameter) and never leveled; MV-422 ("Force
+        /// Field radius now levels... levels raise absorb AND radius together") makes this the
+        /// Level-1 starting point of a leveled axis instead of a permanent hard lock — see
+        /// <see cref="ForceFieldRadius"/>.</summary>
         public const float DefaultForceFieldRadius = 1.5f;
+
+        /// <summary>Extra bubble radius each Force Field level beyond L1 adds (MV-422) — same
+        /// additive "level = bigger number" shape as <see cref="DefaultForceFieldAbsorbCapPerLevel"/>,
+        /// small enough that even a maxed L5 bubble (2.5 m) still reads as a personal shield, not a
+        /// room-swallowing dome.</summary>
+        public const float DefaultForceFieldRadiusPerLevel = 0.25f;
+
+        /// <summary>The bubble's radius at a given Force Field level — level 1 is the DECISION's
+        /// originally-pinned 1.5 m, each level above it widens it further (MV-422).</summary>
+        public static float ForceFieldRadius(int level, float baseRadius, float perLevel) =>
+            Mathf.Max(0f, baseRadius) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
 
         /// <summary>Power cells Force Field spends on activation (DECISION #2, MV-361) — fixed, not
         /// leveled, same reasoning as <see cref="DefaultForceFieldRadius"/>.</summary>
@@ -157,80 +170,147 @@ namespace MaxWorlds.Weapons
             return (absorbed, safeIncoming - absorbed);
         }
 
-        // --- Deployable Sentinels (MV-362) ---
+        // --- The Sentinel (MV-362, restructured MV-422) ---
+        //
+        // MV-422 deletes the Wall (Blocker) entirely — one sentinel only, the Gunner, now just
+        // "Sentinel" — and replaces the old three tracks (Wall Strength/Gunner Power/Deployment
+        // Count) with six axes under the RIG's u_sen node: Damage, Range, Health (children of
+        // u_sen), then Move, Cost, Slots (children of Damage/Range/Health respectively). Every axis
+        // below is keyed by its RIG id, not an enum — see RigState.
 
-        /// <summary>Power cells the Wall sentinel costs to deploy (DECISION, 16 Aug 2026, MV-408 — was
-        /// 10; Lee flattened Wall and Gunner to the same 5-cell cost) — fixed, not leveled, same
-        /// "authored, not a track" shape as <see cref="DefaultForceFieldActivationCost"/>.</summary>
-        public const int DefaultSentinelWallCost = 5;
+        /// <summary>Power cells deploying the sentinel costs at u_cst Level 0 (not yet leveled) —
+        /// same flat 5-cell cost the old Wall/Gunner split shared (DECISION, 16 Aug 2026, MV-408).</summary>
+        public const int DefaultSentinelCost = 5;
 
-        /// <summary>Power cells the Gunner sentinel costs to deploy (DECISION, 16 Aug 2026, MV-408 —
-        /// was 15).</summary>
-        public const int DefaultSentinelGunnerCost = 5;
+        /// <summary>Fraction each Cost (u_cst) level CUTS the deploy cost — same inverse "spend a
+        /// level, pay less" shape as <see cref="DefaultRcdaDepletionRatePerLevel"/>. Floored (see
+        /// <see cref="SentinelCost"/>) so a maxed track buys a much cheaper deploy, never a free one.</summary>
+        public const float DefaultSentinelCostReductionPerLevel = 0.15f;
 
-        /// <summary>The Wall's HP at Wall Strength Level 1 — sized against Max's own 200 max HP
-        /// (<see cref="MaxWorlds.Player.PlayerHealth"/>, MV-315-baked) so a fresh wall reads as
-        /// roughly "as tough as Max himself", a legible baseline before any upgrade.</summary>
-        public const float DefaultSentinelWallBaseHp = 200f;
+        /// <summary>The sentinel's deploy cost, power cells, at a given Cost (u_cst) level — level 0
+        /// (not yet leveled, u_cst is a stat so this is its un-owned starting point) is the
+        /// unmodified base; each level above it shaves off <paramref name="perLevel"/>, floored at
+        /// 40% of base.</summary>
+        public static int SentinelCost(int level, int baseCost, float perLevel) =>
+            Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(0, baseCost) * Mathf.Max(0.4f, 1f - perLevel * Mathf.Max(0, level))));
 
-        /// <summary>Extra Wall HP each Wall Strength level beyond L1 adds — same additive "level =
-        /// bigger number" shape as <see cref="DefaultForceFieldAbsorbCapPerLevel"/>.</summary>
-        public const float DefaultSentinelWallHpPerLevel = 40f;
+        /// <summary>The sentinel's HP at Health (u_hp) Level 0 (not yet leveled) — deliberately BELOW
+        /// Max's own 200 max HP ("trades durability for damage", the old Gunner's own baseline): a
+        /// couple of Bruiser hits (28 dmg each, <see cref="MaxWorlds.Enemies.EnemyArchetype.Bruiser"/>)
+        /// or a single Bomber splash (<see cref="MaxWorlds.Enemies.EnemyArchetype.Bomber"/>) puts a
+        /// real dent in it.</summary>
+        public const float DefaultSentinelBaseHp = 60f;
 
-        /// <summary>The Wall's HP at a given Wall Strength level.</summary>
-        public static float SentinelWallMaxHp(int level, float baseHp, float perLevel) =>
-            Mathf.Max(1f, baseHp) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
+        /// <summary>Extra HP each Health (u_hp) level adds — same additive "level = bigger number"
+        /// shape as <see cref="DefaultForceFieldAbsorbCapPerLevel"/>. u_hp is a stat (spendable from
+        /// level 0), unlike the old Wall Strength cap, so level 0 is a real, un-upgraded state, not
+        /// an unreachable one.</summary>
+        public const float DefaultSentinelHpPerLevel = 20f;
 
-        /// <summary>The Gunner's HP — fixed, not leveled ("one upgrade track only: the power of the
-        /// hose"; its survivability never changes). Deliberately BELOW the Wall's base 200: "trades
-        /// durability for damage" (spec) — a couple of Bruiser hits (28 dmg each,
-        /// <see cref="MaxWorlds.Enemies.EnemyArchetype.Bruiser"/>) or a single Bomber splash
-        /// (<see cref="MaxWorlds.Enemies.EnemyArchetype.Bomber"/>) puts a real dent in it.</summary>
-        public const float DefaultSentinelGunnerHp = 60f;
+        /// <summary>The sentinel's max HP at a given Health (u_hp) level.</summary>
+        public static float SentinelMaxHp(int level, float baseHp, float perLevel) =>
+            Mathf.Max(1f, baseHp) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level);
 
-        /// <summary>Fraction of Max's CURRENT primary per-tick damage the Gunner sentinel's shot deals
-        /// at Gunner Power Level 1 — always below 1.0 by construction (see
-        /// <see cref="SentinelGunnerDamagePerShot"/>), which is what DECISION's "always weaker than
-        /// Max's CURRENT primary... it must stay below Max's current power as he upgrades" actually
-        /// means in code: the sentinel's damage is computed as a fraction of whatever the RCDA Damage
-        /// track currently is, not a fixed number that could eventually catch up to it.</summary>
-        public const float DefaultSentinelGunnerPowerFraction = 0.4f;
+        /// <summary>Fraction of Max's CURRENT primary per-tick damage the sentinel's shot deals at
+        /// Damage (u_dmg) Level 0 — always below 1.0 by construction (see
+        /// <see cref="SentinelDamagePerShot"/>), same "always weaker than Max's CURRENT primary...
+        /// it must stay below Max's current power as he upgrades" rule the old Gunner Power track
+        /// enforced.</summary>
+        public const float DefaultSentinelDamageFraction = 0.4f;
 
-        /// <summary>Extra fraction each Gunner Power level beyond L1 adds — capped so even a maxed
-        /// track (<see cref="SentinelGunnerPowerFraction"/> clamps to 1.0) can never reach, let alone
-        /// exceed, Max's own current output.</summary>
-        public const float DefaultSentinelGunnerPowerFractionPerLevel = 0.1f;
+        /// <summary>Extra fraction each Damage (u_dmg) level adds — capped so even a maxed track
+        /// (<see cref="SentinelDamageFraction"/> clamps to 1.0) can never reach, let alone exceed,
+        /// Max's own current output.</summary>
+        public const float DefaultSentinelDamageFractionPerLevel = 0.1f;
 
-        /// <summary>How far the Gunner sentinel's auto-fire reaches, metres — a little past the
-        /// primary's own authored base reach (<see cref="MaxWorlds.Combat.WaterBlaster.DefaultRange"/>,
+        /// <summary>Fraction of Max's current primary damage-per-tick the sentinel deals per shot at
+        /// a given Damage (u_dmg) level — clamped below 1.0, so whatever <paramref
+        /// name="currentPrimaryDamagePerTick"/> is (it already reflects Max's live RCDA Damage track,
+        /// see the sentinel's own call site), this can never equal or exceed it.</summary>
+        public static float SentinelDamageFraction(int level, float baseFraction, float perLevel) =>
+            Mathf.Clamp01(Mathf.Max(0f, baseFraction) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level));
+
+        /// <summary>The sentinel's actual per-shot damage right now.</summary>
+        public static float SentinelDamagePerShot(float currentPrimaryDamagePerTick, int level, float baseFraction, float perLevel) =>
+            Mathf.Max(0f, currentPrimaryDamagePerTick) * SentinelDamageFraction(level, baseFraction, perLevel);
+
+        /// <summary>How far the sentinel's auto-fire reaches at Range (u_rng) Level 0 — a little past
+        /// the primary's own authored base reach (<see cref="MaxWorlds.Combat.WaterBlaster.DefaultRange"/>,
         /// 5 m) so a placed turret threatens the space around it, not just an adjacent robot.</summary>
-        public const float DefaultSentinelGunnerRange = 7f;
+        public const float DefaultSentinelRange = 7f;
 
-        /// <summary>Seconds between Gunner sentinel shots.</summary>
-        public const float DefaultSentinelGunnerFireInterval = 0.6f;
+        /// <summary>Extra auto-fire reach each Range (u_rng) level adds.</summary>
+        public const float DefaultSentinelRangePerLevel = 1.5f;
+
+        /// <summary>The sentinel's auto-fire reach at a given Range (u_rng) level.</summary>
+        public static float SentinelRange(int level, float baseRange, float perLevel) =>
+            Mathf.Max(0f, baseRange) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level);
+
+        /// <summary>Seconds between sentinel shots — fixed, not one of the six leveled axes.</summary>
+        public const float DefaultSentinelFireInterval = 0.6f;
+
+        /// <summary>How fast the sentinel follows Max at a given Move (u_mov) level, m/s — level 0
+        /// (u_mov is a stat, un-owned starting point) means the sentinel does not follow at all
+        /// (MV-422: "Move is new — Gunner HP is currently fixed and it cannot move"), matching the
+        /// pre-MV-422 behaviour exactly until a player actually spends on this axis.</summary>
+        public const float DefaultSentinelMoveSpeedPerLevel = 1.2f;
+
+        /// <summary>True once the sentinel should follow Max at all (Move level &gt;= 1).</summary>
+        public static bool SentinelCanMove(int level) => level >= 1;
+
+        /// <summary>The sentinel's follow speed at a given Move (u_mov) level, m/s — 0 at level 0
+        /// (stationary, matching the sentinel's pre-MV-422 behaviour), rising linearly above it.</summary>
+        public static float SentinelMoveSpeed(int level, float perLevel) =>
+            SentinelCanMove(level) ? Mathf.Max(0f, perLevel) * level : 0f;
+
+        /// <summary>How far behind Max the sentinel holds station while following, metres — close
+        /// enough to stay useful, far enough that it never crowds his own hitbox/aim.</summary>
+        public const float DefaultSentinelStandoffDistance = 2.5f;
+
+        /// <summary>One frame of the sentinel's follow-at-a-standoff-distance movement (MV-422) — pure
+        /// so the step is unit-testable without a live Transform. Moves <paramref name="current"/>
+        /// toward <paramref name="target"/> at <paramref name="speed"/>, but only far enough to close
+        /// to <paramref name="standoff"/> metres away — it never walks into Max's own feet, and holds
+        /// still (no overshoot/jitter) once already within the standoff band.</summary>
+        public static Vector3 SentinelStandoffStep(Vector3 current, Vector3 target, float standoff, float speed, float dt)
+        {
+            Vector3 toTarget = target - current;
+            float distance = toTarget.magnitude;
+            float excess = distance - Mathf.Max(0f, standoff);
+            if (excess <= 0f || speed <= 0f || dt <= 0f) return current;
+
+            float step = Mathf.Min(excess, speed * dt);
+            return current + toTarget.normalized * step;
+        }
+
+        /// <summary>How many sentinels Max may have deployed at once, at a given Slots (u_slt) level —
+        /// same "the level IS the slot count, floored at 1" shape the old Deployment Count track used.</summary>
+        public static int SentinelDeploymentSlots(int level) => Mathf.Max(1, level);
 
         /// <summary>How far the aimed placement joystick's reticle reaches, metres (MV-399, reversing
         /// MV-362's "deployed at Max's position" DECISION per Lee's 15 Aug 2026 request). Fixed, not
-        /// leveled — same "authored, not a track" shape as <see cref="DefaultSentinelWallCost"/>.
+        /// leveled — same "authored, not a track" shape as <see cref="DefaultSentinelCost"/>.
         /// Matches <see cref="DefaultTeleportBaseDistance"/> rather than a fresh number: both need a
         /// single drag to cover "anywhere in the current arena" from one spot in the room.</summary>
         public const float DefaultSentinelPlacementRange = DefaultTeleportBaseDistance;
 
-        /// <summary>Fraction of Max's current primary damage-per-tick the Gunner sentinel deals per
-        /// shot at a given Gunner Power level — clamped below 1.0, so whatever <paramref
-        /// name="currentPrimaryDamagePerTick"/> is (it already reflects Max's live RCDA Damage track,
-        /// see the Gunner sentinel's own call site), this can never equal or exceed it.</summary>
-        public static float SentinelGunnerPowerFraction(int level, float baseFraction, float perLevel) =>
-            Mathf.Clamp01(Mathf.Max(0f, baseFraction) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1));
+        // --- Magneto (MV-422, e_mag) ---
 
-        /// <summary>The Gunner sentinel's actual per-shot damage right now.</summary>
-        public static float SentinelGunnerDamagePerShot(float currentPrimaryDamagePerTick, int level, float baseFraction, float perLevel) =>
-            Mathf.Max(0f, currentPrimaryDamagePerTick) * SentinelGunnerPowerFraction(level, baseFraction, perLevel);
+        /// <summary>Cell pull radius at Magneto Level 1, metres (MV-422: "3 m at level 1").</summary>
+        public const float DefaultMagnetoPullRadiusBase = 3f;
 
-        /// <summary>How many sentinels (any mix of Wall/Gunner) Max may have deployed at once, at a
-        /// given Deployment Count level — the DECISION's "starts at 1, upgradeable to 2, 3, 4" maps
-        /// directly: the level IS the slot count.</summary>
-        public static int SentinelDeploymentSlots(int level) => Mathf.Max(1, level);
+        /// <summary>Extra pull radius each Magneto level beyond L1 adds (MV-422: "+2 m per level to
+        /// 11 m at level 5" — 3 + 2*4 = 11).</summary>
+        public const float DefaultMagnetoPullRadiusPerLevel = 2f;
+
+        /// <summary>How fast a caught power cell flies to Max, m/s — fast enough to read as "pulled",
+        /// not a lazy drift.</summary>
+        public const float DefaultMagnetoPullSpeed = 10f;
+
+        /// <summary>Magneto's pull radius at a given level — 0 while unowned (level 0), so an
+        /// un-drafted Magneto pulls nothing.</summary>
+        public static float MagnetoPullRadius(int level, float baseRadius, float perLevel) =>
+            level <= 0 ? 0f : Mathf.Max(0f, baseRadius) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
 
         /// <summary>Seconds a sentinel must go without taking a hit before its passive regen starts
         /// (MV-398, same-day reversal of MV-362's "no repair" DECISION — passive only, still no
