@@ -236,6 +236,14 @@ namespace MaxWorlds.Weapons
                 if (s_hits[i].TryGetComponent<IHaltable>(out var haltable))
                     haltable.ApplyHalt(stopSeconds);
             }
+
+            // MV-426 DELUGE (f_del): the splash leaves a puddle behind once Primary+Secondary is
+            // forged — WaterBlaster reads WaterPuddle.Active to arc its stream between wet robots.
+            if (RigFusionState.IsForged("f_del"))
+            {
+                var puddle = new GameObject("Water Puddle").AddComponent<WaterPuddle>();
+                puddle.Init(point, radius, AbilityTuning.DefaultPuddleDurationSeconds);
+            }
         }
 
         /// <summary>Blink toward <paramref name="aimDirection"/> (MV-292: an AIMED blink at every
@@ -267,9 +275,20 @@ namespace MaxWorlds.Weapons
             float perLevel = DevTuning.Or(DevTuning.TeleportDistancePerLevel, AbilityTuning.DefaultTeleportDistancePerLevel);
             float distance = AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
 
-            Vector3 offset = dir * distance;
             Vector3 from = transform.position;
-            Vector3 target = from + offset;
+            Vector3 target = from + dir * distance;
+
+            // MV-426 SKIRMISH (f_skr): Move+Support forged means the blink snaps to a live Sentinel at
+            // any range instead of the normal short aimed hop, once one is deployed.
+            if (RigFusionState.IsForged("f_skr"))
+            {
+                Sentinel nearest = NearestSentinel(from);
+                if (nearest != null)
+                    target = AbilityTuning.SkirmishSnapPoint(nearest.transform.position, from,
+                        AbilityTuning.DefaultSkirmishSnapStandoff);
+            }
+
+            Vector3 offset = target - from;
 
             if (CanWarpAcrossAreas(EnemyNavigation.Map, from, target, EnemyNavigation.IsGateOpen))
             {
@@ -282,11 +301,41 @@ namespace MaxWorlds.Weapons
             else if (_cc != null) _cc.Move(offset);
             else transform.position += offset;
 
+            // MV-426 BLINKGUARD (f_bgd): Energy+Move forged leaves a stationary Force Field bubble at
+            // the departure point — the normal bubble follows Max; this one stays behind and pops on
+            // its own once its slice duration runs out.
+            if (RigFusionState.IsForged("f_bgd")) SpawnBlinkguardBubble(from);
+
             // MV-338: HudSignals is the same decoupled hand-off BlinkerTeleported already uses — the
             // VFX beat (CombatVfx) and the brief time-slow (GameFeel) both react to this without
             // PlayerAbilities needing to know either exists.
             HudSignals.EmitMaxTeleported(from, transform.position);
             return true;
+        }
+
+        private static Sentinel NearestSentinel(Vector3 from)
+        {
+            Sentinel best = null;
+            float bestSq = float.MaxValue;
+            foreach (Sentinel s in Sentinel.Active)
+            {
+                if (s == null || !s.IsAlive) continue;
+                float d = (s.transform.position - from).sqrMagnitude;
+                if (d < bestSq) { bestSq = d; best = s; }
+            }
+            return best;
+        }
+
+        /// <summary>MV-426 BLINKGUARD's left-behind bubble — a bare <see cref="ForceFieldBubble"/> with
+        /// no owner (so it neither follows Max nor is exempted from his own collision) that pops itself
+        /// after <see cref="AbilityTuning.DefaultBlinkguardBubbleDurationSeconds"/>.</summary>
+        private void SpawnBlinkguardBubble(Vector3 position)
+        {
+            var go = new GameObject("Blinkguard Force Field Bubble");
+            var bubble = go.AddComponent<ForceFieldBubble>();
+            bubble.Init(null, null, ForceFieldRadius);
+            go.transform.position = position;   // Init() re-centres on its (null) owner; set after
+            if (Application.isPlaying) Destroy(go, AbilityTuning.DefaultBlinkguardBubbleDurationSeconds);
         }
 
         /// <summary>True if <paramref name="to"/> lands in a DIFFERENT area than <paramref name="from"/>

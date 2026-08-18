@@ -6,6 +6,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -230,7 +231,10 @@ namespace MaxWorlds.Arena
             RobotEnemy target = NearestRobotInRange();
             if (target == null) return;
 
-            _fireCooldown = _fireInterval;
+            // MV-426 OVERCHARGE (f_ovc): "runs off your cells: double rate of fire while you have
+            // charge to spend" — forged AND a power cell banked halves the interval before the next shot.
+            bool overchargeActive = RigFusionState.IsForged("f_ovc") && PickupWallet.PowerCells > 0;
+            _fireCooldown = AbilityTuning.SentinelFireInterval(_fireInterval, overchargeActive);
 
             // Max's CURRENT primary per-tick damage, read live — this is what keeps the sentinel
             // "always weaker" as Max's own Damage track climbs (see the class doc comment).
