@@ -92,9 +92,12 @@ namespace MaxWorlds.UI
         private readonly float[] _slotReadyFlash = new float[2];
         private readonly bool[] _slotWasReady = new bool[2];
 
-        // Ability slots (0 Bomb, 1 Ultimate)
+        // Ability slots (0 Bomb, 1 Ultimate — "B"/"U", also the two FORGE HUD slot ids, MV-426)
         private readonly Image[] _slotRadial = new Image[2];
         private readonly Image[] _slotGlow = new Image[2];
+        private readonly Image[] _slotIcon = new Image[2];
+        private readonly Text[] _slotLetter = new Text[2];
+        private readonly Text[] _slotLocked = new Text[2];
 
         // The Hydro burst button (YT-215): hidden until UpgradeState.HydroAssembled, same TechRings
         // visual language the other ability controls use.
@@ -629,10 +632,39 @@ namespace MaxWorlds.UI
             }
         }
 
+        private static readonly string[] AbilitySlotGlyphs = { "B", "U" };
+
+        /// <summary>MV-426: a forged FORGE fusion permanently occupies its named slot ("B"/"U"),
+        /// replacing the LOCKED placeholder with its icon and a steady ready-glow — none of the four
+        /// fusion effects (DELUGE/BLINKGUARD/OVERCHARGE/SKIRMISH) are player-activated, so there is no
+        /// cooldown to wipe; the slot simply reads as permanently equipped. An unforged slot keeps the
+        /// pre-RIG Bomb/Ultimate placeholder behaviour untouched.</summary>
         private void UpdateAbilitySlots(float dt)
         {
-            SetSlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
-            SetSlot(1, _model.UltimateRadialFill, _model.UltimateReady);
+            UpdateAbilitySlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
+            UpdateAbilitySlot(1, _model.UltimateRadialFill, _model.UltimateReady);
+        }
+
+        private void UpdateAbilitySlot(int i, float placeholderRadialFill, bool placeholderReady)
+        {
+            string fusionId = RigFusionState.ForgedInSlot(AbilitySlotGlyphs[i]);
+            bool forged = fusionId != null;
+
+            _slotLocked[i].gameObject.SetActive(!forged);
+            _slotLetter[i].gameObject.SetActive(!forged);
+            _slotIcon[i].gameObject.SetActive(forged);
+
+            if (forged)
+            {
+                _slotIcon[i].sprite = HudTextures.VectorIcon(RigBoardLayout.Icon("fuse"), 40);
+                _slotIcon[i].color = BoneWhite;
+                _slotRadial[i].fillAmount = 0f;
+                SetSlot(i, 0f, true);
+            }
+            else
+            {
+                SetSlot(i, placeholderRadialFill, placeholderReady);
+            }
         }
 
         private void SetSlot(int i, float radialFill, bool ready)
@@ -985,12 +1017,23 @@ namespace MaxWorlds.UI
                                      TextAnchor.MiddleCenter);
                 Stretch(letter.rectTransform);
                 letter.text = glyphs[i];
+                _slotLetter[i] = letter;
 
                 var locked = AddText(slot.rectTransform, 15f,
                                      new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f),
                                      TextAnchor.LowerCenter);
                 Stretch(locked.rectTransform);
                 locked.text = "LOCKED";
+                _slotLocked[i] = locked;
+
+                // A forged FORGE fusion's icon (MV-426) — hidden until RigFusionState.ForgedInSlot
+                // says this slot is occupied; see UpdateAbilitySlots.
+                var icon = new GameObject("Fusion Icon", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+                icon.transform.SetParent(slot.rectTransform, false);
+                Stretch(icon.rectTransform, 14f);
+                icon.raycastTarget = false;
+                icon.gameObject.SetActive(false);
+                _slotIcon[i] = icon;
 
                 // Cooldown radial wipe overlay (darkens the covered fraction).
                 var radial = AddImage(slot.rectTransform, HudTextures.Disc(96), new Color(0f, 0f, 0f, 0.62f), "Radial");

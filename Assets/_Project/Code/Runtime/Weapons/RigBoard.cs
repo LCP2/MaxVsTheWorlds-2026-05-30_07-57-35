@@ -29,6 +29,29 @@ namespace MaxWorlds.Weapons
         }
     }
 
+    /// <summary>One FORGE fusion's model-layer shape (MV-426, 5/5) — id, its two parent category ids,
+    /// which HUD slot ("B"/"U") it occupies once forged, and its part cost. The layout twin,
+    /// <see cref="MaxWorlds.UI.RigFusionLayout"/>, carries the same fields plus x/y/label for drawing;
+    /// kept separate so <see cref="RigFusionState"/> (gameplay gating) never has to reach into the UI
+    /// assembly for data it needs regardless of whether the board is even open.</summary>
+    public sealed class RigFusionDef
+    {
+        public readonly string Id;
+        public readonly string ParentA;
+        public readonly string ParentB;
+        public readonly string HudSlot;
+        public readonly int PartCost;
+
+        public RigFusionDef(string id, string parentA, string parentB, string hudSlot, int partCost)
+        {
+            Id = id;
+            ParentA = parentA;
+            ParentB = parentB;
+            HudSlot = hudSlot;
+            PartCost = partCost;
+        }
+    }
+
     // --- JsonUtility wire types — only the "model" fields this ticket's model layer actually
     // reads; geometry/colours/icons/fusions exist in the JSON for the UI layer (RigBoardLayout)
     // and are simply ignored by JsonUtility (unknown-to-this-type fields are skipped, not an
@@ -55,10 +78,21 @@ namespace MaxWorlds.Weapons
     }
 
     [Serializable]
+    internal sealed class RigFusionWire
+    {
+        public string id;
+        public string parentA;
+        public string parentB;
+        public string hudSlot;
+        public int partCost;
+    }
+
+    [Serializable]
     internal sealed class RigBoardWire
     {
         public RigCategoryWire[] categories = Array.Empty<RigCategoryWire>();
         public RigAbilityWire[] abilities = Array.Empty<RigAbilityWire>();
+        public RigFusionWire[] fusions = Array.Empty<RigFusionWire>();
     }
 
     /// <summary>
@@ -84,6 +118,8 @@ namespace MaxWorlds.Weapons
 
         private static Dictionary<string, RigNodeDef> s_nodes;
         private static string[] s_allIds;
+        private static Dictionary<string, RigFusionDef> s_fusions;
+        private static RigFusionDef[] s_allFusions;
 
         private static void EnsureLoaded()
         {
@@ -91,6 +127,8 @@ namespace MaxWorlds.Weapons
 
             s_nodes = new Dictionary<string, RigNodeDef>();
             s_allIds = Array.Empty<string>();
+            s_fusions = new Dictionary<string, RigFusionDef>();
+            s_allFusions = Array.Empty<RigFusionDef>();
 
             TextAsset asset = Resources.Load<TextAsset>(ResourcePath);
             if (asset == null)
@@ -121,6 +159,16 @@ namespace MaxWorlds.Weapons
                 ids.Add(a.id);
             }
             s_allIds = ids.ToArray();
+
+            var fusions = new List<RigFusionDef>(wire.fusions.Length);
+            foreach (RigFusionWire f in wire.fusions)
+            {
+                if (f == null || string.IsNullOrEmpty(f.id)) continue;
+                var def = new RigFusionDef(f.id, f.parentA, f.parentB, f.hudSlot, f.partCost);
+                s_fusions[f.id] = def;
+                fusions.Add(def);
+            }
+            s_allFusions = fusions.ToArray();
         }
 
         /// <summary>Every ability id in the tree, in the JSON's own authored order — also the full
@@ -155,6 +203,17 @@ namespace MaxWorlds.Weapons
         public static string Parent(string id) => Get(id)?.Parent;
 
         public static string Category(string id) => Get(id)?.Category;
+
+        /// <summary>Every FORGE fusion in the JSON's own authored order (MV-426).</summary>
+        public static IReadOnlyList<RigFusionDef> Fusions { get { EnsureLoaded(); return s_allFusions; } }
+
+        public static bool FusionExists(string id) { EnsureLoaded(); return s_fusions.ContainsKey(id); }
+
+        public static bool TryGetFusion(string id, out RigFusionDef def)
+        {
+            EnsureLoaded();
+            return s_fusions.TryGetValue(id, out def);
+        }
 
         /// <summary>Reloads from Resources on the next access — test isolation only (a live build
         /// never needs this; the tree never changes at runtime).</summary>

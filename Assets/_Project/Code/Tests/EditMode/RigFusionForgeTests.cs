@@ -1,0 +1,227 @@
+using System.Reflection;
+using NUnit.Framework;
+using UnityEngine;
+using UnityEngine.UI;
+using MaxWorlds.Pickups;
+using MaxWorlds.UI;
+using MaxWorlds.Weapons;
+
+namespace MaxWorlds.Tests.EditMode
+{
+    /// <summary>
+    /// THE RIG 5/5 (MV-426) — the FORGE's four fusions. Covers the AC this worker can prove without a
+    /// PlayMode test: eligibility gated on both parent categories being lit (independent of banked
+    /// parts, MV-423.png vs -noparts.png), the exact 3-part forge cost failing cleanly at 2, a forged
+    /// fusion occupying its named HUD slot in place of LOCKED, and no Morphing Module draft ever
+    /// offering a fusion id. The four effects' actual gameplay behaviour (DELUGE's arc, BLINKGUARD's
+    /// left-behind bubble, OVERCHARGE's fire-rate double, SKIRMISH's area-survival/teleport-snap) needs
+    /// a live scene to observe end-to-end and is intentionally NOT covered here — see the fix comment
+    /// on MV-426 for the PlayMode gap this project's autonomy contract asks to be noted rather than
+    /// worked around with a forbidden PlayMode test.
+    /// </summary>
+    public sealed class RigFusionForgeTests
+    {
+        [SetUp]
+        public void SetUp()
+        {
+            RigState.Reset();
+            RigFusionState.ResetForTests();
+            PickupWallet.Reset();
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            RigState.Reset();
+            RigFusionState.ResetForTests();
+            PickupWallet.Reset();
+        }
+
+        // ---------------------------------------------------------------- schema sanity
+
+        [Test]
+        public void AllFourFusionsAreDefinedWithTheirAuthoredParentsSlotAndCost()
+        {
+            AssertFusion("f_del", "PRIMARY", "SECONDARY", "B", 3);
+            AssertFusion("f_bgd", "ENERGY", "MOVE", "B", 3);
+            AssertFusion("f_ovc", "ENERGY", "SUPPORT", "U", 3);
+            AssertFusion("f_skr", "MOVE", "SUPPORT", "U", 3);
+        }
+
+        private static void AssertFusion(string id, string parentA, string parentB, string hudSlot, int cost)
+        {
+            Assert.That(RigBoard.TryGetFusion(id, out var def), Is.True, $"'{id}' must be a defined fusion");
+            Assert.That(def.ParentA, Is.EqualTo(parentA));
+            Assert.That(def.ParentB, Is.EqualTo(parentB));
+            Assert.That(def.HudSlot, Is.EqualTo(hudSlot));
+            Assert.That(def.PartCost, Is.EqualTo(cost));
+        }
+
+        // ---------------------------------------------------------------- AC1: both parents must be lit
+
+        [Test]
+        public void AFusionCannotBeForgedUntilBothParentCategoriesAreLit_AllFour()
+        {
+            // Run start: p_dmg (PRIMARY) is the only owned ability anywhere — no category but
+            // PRIMARY is lit, so every fusion must read ineligible.
+            AssertIneligibleThenEligibleOnceBothLit("f_del", "p_dmg", "s_bal");
+            RigState.Reset();
+            AssertIneligibleThenEligibleOnceBothLit("f_bgd", "e_ff", "m_spd");
+            RigState.Reset();
+            AssertIneligibleThenEligibleOnceBothLit("f_ovc", "e_ff", "u_sen");
+            RigState.Reset();
+            AssertIneligibleThenEligibleOnceBothLit("f_skr", "m_spd", "u_sen");
+        }
+
+        /// <summary><paramref name="rootA"/>/<paramref name="rootB"/> are root (parentless) abilities
+        /// of the fusion's own two parent categories, per model.rules — <c>RigState.AcquireCap</c>
+        /// grants them directly with no ancestor chain to walk first.</summary>
+        private static void AssertIneligibleThenEligibleOnceBothLit(string fusionId, string rootA, string rootB)
+        {
+            Assert.That(RigFusionState.IsEligible(fusionId), Is.False,
+                $"'{fusionId}' must be ineligible with neither parent category owned beyond the run-start baseline");
+
+            RigState.AcquireCap(rootA);
+            Assert.That(RigFusionState.IsEligible(fusionId), Is.False,
+                $"'{fusionId}' must stay ineligible with only ONE parent category lit ({rootA})");
+
+            RigState.AcquireCap(rootB);
+            Assert.That(RigFusionState.IsEligible(fusionId), Is.True,
+                $"'{fusionId}' must become eligible once BOTH parent categories are lit ({rootA} + {rootB})");
+        }
+
+        [Test]
+        public void EligibilityIsIndependentOfBankedParts_ReadyAtZeroBanked()
+        {
+            // MV-423.png vs -noparts.png: OVERCHARGE stays amber/ready with the parts tray dark.
+            RigState.AcquireCap("e_ff");
+            RigState.AcquireCap("u_sen");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0));
+            Assert.That(RigFusionState.IsEligible("f_ovc"), Is.True,
+                "readiness reads off owned categories only, never the currently-banked part count");
+        }
+
+        // ---------------------------------------------------------------- AC2: exact 3-part cost
+
+        [Test]
+        public void ForgingDeductsExactlyThreePartsAndFailsCleanlyAtTwo()
+        {
+            RigState.AcquireCap("p_dmg"); // already owned at run start, but explicit for clarity
+            RigState.AcquireCap("s_bal");
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False, "2 parts must not be enough to forge a 3-part fusion");
+            Assert.That(RigFusionState.IsForged("f_del"), Is.False);
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(2), "a failed forge must not spend anything");
+
+            PickupWallet.AddPart(); // now 3
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True, "3 parts must forge a 3-part fusion");
+            Assert.That(RigFusionState.IsForged("f_del"), Is.True);
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "forging must spend exactly the fusion's own cost, not more or less");
+        }
+
+        [Test]
+        public void ForgingFailsWithoutEligibilityEvenWithEnoughParts()
+        {
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False,
+                "3 parts banked is not enough on its own — SECONDARY has never been touched");
+            Assert.That(RigFusionState.IsForged("f_del"), Is.False);
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(3), "an ineligible forge attempt must not spend anything");
+        }
+
+        [Test]
+        public void ForgingTwiceFailsTheSecondTime_AlreadyForged()
+        {
+            RigState.AcquireCap("s_bal");
+            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True);
+
+            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False, "an already-forged fusion cannot be forged again");
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(3), "the second, refused attempt must not spend anything");
+        }
+
+        // ---------------------------------------------------------------- AC3: occupies its named HUD slot
+
+        [Test]
+        public void AForgedFusionOccupiesItsNamedHudSlot_AndNoOtherFusionClaimsIt()
+        {
+            RigState.AcquireCap("s_bal");
+            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True);
+
+            Assert.That(RigFusionState.ForgedInSlot("B"), Is.EqualTo("f_del"));
+            Assert.That(RigFusionState.ForgedInSlot("U"), Is.Null, "slot U must still read LOCKED — nothing forged there");
+        }
+
+        /// <summary>Mirrors <c>WeaponsButtonAlertTests</c>' own reflection-driven Awake pattern for a
+        /// HudController outside Play mode — <see cref="HudController.BuildAbilitySlots"/> runs from
+        /// <c>Awake</c>, and <c>UpdateAbilitySlots</c> is what MV-426 wires to
+        /// <see cref="RigFusionState.ForgedInSlot"/>.</summary>
+        [Test]
+        public void TheHudSlotStopsRenderingLockedOnceItsFusionIsForged()
+        {
+            RigState.AcquireCap("s_bal");
+            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True); // slot B
+
+            var hudGo = new GameObject("HUD");
+            var hud = hudGo.AddComponent<HudController>();
+            InvokeLifecycle(hud, "Awake", null);
+            try
+            {
+                InvokeLifecycle(hud, "UpdateAbilitySlots", new object[] { 0f });
+
+                var locked = GetArrayField<Text>(hud, "_slotLocked");
+                var letter = GetArrayField<Text>(hud, "_slotLetter");
+                var icon = GetArrayField<Image>(hud, "_slotIcon");
+
+                Assert.That(locked[0].gameObject.activeSelf, Is.False, "slot B (index 0) must stop rendering LOCKED once f_del is forged");
+                Assert.That(letter[0].gameObject.activeSelf, Is.False, "slot B's plain 'B' letter must also give way to the fusion icon");
+                Assert.That(icon[0].gameObject.activeSelf, Is.True, "slot B must show the forged fusion's icon");
+
+                Assert.That(locked[1].gameObject.activeSelf, Is.True, "slot U (index 1) has nothing forged — must keep reading LOCKED");
+                Assert.That(icon[1].gameObject.activeSelf, Is.False);
+            }
+            finally
+            {
+                Object.DestroyImmediate(hudGo);
+            }
+        }
+
+        // ---------------------------------------------------------------- AC4: never a draft candidate
+
+        [Test]
+        public void NoMorphingModuleDraftEverOffersAFusion()
+        {
+            // Light every category so every ability in the tree is reached — the widest possible
+            // candidate pool a draft could ever offer.
+            foreach (string rootId in new[] { "p_dmg", "s_bal", "e_ff", "m_spd", "u_sen" })
+                RigState.AcquireCap(rootId);
+
+            var eligible = new System.Collections.Generic.HashSet<string>(RigState.EligibleCapIds());
+            foreach (var fusion in RigBoard.Fusions)
+                Assert.That(eligible.Contains(fusion.Id), Is.False, $"'{fusion.Id}' must never appear in a Morphing Module draft pool");
+        }
+
+        // ---------------------------------------------------------------- reflection helpers
+
+        private static void InvokeLifecycle(Object component, string methodName, object[] args)
+        {
+            component.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(component, args);
+        }
+
+        private static T[] GetArrayField<T>(object target, string fieldName)
+        {
+            var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.That(field, Is.Not.Null, $"HudController must declare a private field '{fieldName}'");
+            return (T[])field.GetValue(target);
+        }
+    }
+}

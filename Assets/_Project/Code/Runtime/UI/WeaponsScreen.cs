@@ -93,6 +93,7 @@ namespace MaxWorlds.UI
 
         private readonly Dictionary<string, RigNodeVisual> _abilityNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, RigNodeVisual> _categoryNodes = new Dictionary<string, RigNodeVisual>();
+        private readonly Dictionary<string, RigNodeVisual> _fusionNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, Image> _categoryPanels = new Dictionary<string, Image>();
 
         // ------------------------------------------------------------------ Morphing Module draft (MV-424)
@@ -142,6 +143,7 @@ namespace MaxWorlds.UI
         private void OnEnable()
         {
             RigState.Changed += Refresh;
+            RigFusionState.Changed += Refresh;
             PickupWallet.PartsChanged += OnPartsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
             PickupWallet.CapacityChanged += OnCellsChanged;
@@ -150,6 +152,7 @@ namespace MaxWorlds.UI
         private void OnDisable()
         {
             RigState.Changed -= Refresh;
+            RigFusionState.Changed -= Refresh;
             PickupWallet.PartsChanged -= OnPartsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
             PickupWallet.CapacityChanged -= OnCellsChanged;
@@ -335,6 +338,7 @@ namespace MaxWorlds.UI
 
             foreach (var cat in RigBoardLayout.Categories) RefreshCategoryNode(cat, banked);
             foreach (var ab in RigBoardLayout.Abilities) RefreshAbilityNode(ab, banked);
+            foreach (var fusion in RigBoardLayout.Fusions) RefreshFusionNode(fusion, banked);
 
             RefreshMorphingModuleDraft();
         }
@@ -525,6 +529,54 @@ namespace MaxWorlds.UI
             v.Button.interactable = spendable;
         }
 
+        /// <summary>A FORGE fusion diamond (MV-426, 5/5): faint with <c>? ? ?</c> and its two parent
+        /// category names until both are lit, then amber with its real name and cost/slot once
+        /// eligible — independent of the currently-banked PARTS count (MV-423.png vs -noparts.png) —
+        /// and a stronger solid amber once actually forged, matching an owned ability's own "solid,
+        /// no longer a prospect" read.</summary>
+        private void RefreshFusionNode(RigFusionLayout fusion, int banked)
+        {
+            if (!_fusionNodes.TryGetValue(fusion.Id, out var v)) return;
+
+            bool forged = RigFusionState.IsForged(fusion.Id);
+            bool eligible = RigFusionState.IsEligible(fusion.Id);
+            Color amber = PartsColor;
+
+            if (forged)
+            {
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.28f);
+                v.HexOutline.color = amber;
+                v.Icon.color = TextColor;
+                v.Label.text = fusion.Label;
+                v.Label.color = TextColor;
+                v.Sub.text = $"FORGED · SLOT {fusion.HudSlot}";
+                v.Sub.color = amber;
+                v.Button.interactable = false;
+            }
+            else if (eligible)
+            {
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.14f);
+                v.HexOutline.color = amber;
+                v.Icon.color = amber;
+                v.Label.text = fusion.Label;
+                v.Label.color = TextColor;
+                v.Sub.text = $"{fusion.PartCost} PARTS · SLOT {fusion.HudSlot}";
+                v.Sub.color = amber;
+                v.Button.interactable = banked >= fusion.PartCost;
+            }
+            else
+            {
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.03f);
+                v.HexOutline.color = new Color(1f, 1f, 1f, 0.14f);
+                v.Icon.color = Dim;
+                v.Label.text = "? ? ?";
+                v.Label.color = Dim;
+                v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
+                v.Sub.color = Dim;
+                v.Button.interactable = false;
+            }
+        }
+
         /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
         /// glow, numbered 1-3 in a badge above the hex, and <c>TAKE</c> in the level pill in place of
         /// the usual level/SHED/LOCK reading. Always tappable — draft candidates ignore the PARTS bank
@@ -569,6 +621,7 @@ namespace MaxWorlds.UI
                 }
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
             }
+            if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
             PartSpend.TrySpendOnRigNode(id);
         }
 
@@ -757,11 +810,11 @@ namespace MaxWorlds.UI
             band.gameObject.SetActive(false);
         }
 
-        /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) only has
-        /// to PLACE and LABEL these (RigBoardLayoutTests covers position/size); a fusion's own
-        /// draft/spend state machine is 5/5's job, so every diamond here renders permanently locked —
-        /// "???" over its parent-category pairing, never the mock's one-off lit OVERCHARGE state,
-        /// which depends on logic this ticket doesn't build.</summary>
+        /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) placed and
+        /// labelled these (RigBoardLayoutTests covers position/size); MV-426 (5/5) gives them their
+        /// real state machine via <see cref="RefreshFusionNode"/>, called once by <see cref="Refresh"/>
+        /// right after <see cref="Build"/> — this method only builds the static shell each starts
+        /// from.</summary>
         private void BuildForgeSection(RectTransform boardRoot)
         {
             float dividerY = RigBoardLayout.ForgeDividerY;
@@ -785,7 +838,7 @@ namespace MaxWorlds.UI
             caption.rectTransform.sizeDelta = new Vector2(700f, 28f);
             caption.text = "two lit categories · costs parts, never a shed · lands in the B / U slot";
 
-            foreach (var fusion in RigBoardLayout.Fusions) BuildFusionNode(boardRoot, fusion);
+            foreach (var fusion in RigBoardLayout.Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
         }
 
         private RigNodeVisual BuildFusionNode(RectTransform boardRoot, RigFusionLayout fusion)
@@ -811,12 +864,16 @@ namespace MaxWorlds.UI
             sub.rectTransform.sizeDelta = new Vector2(260f, 20f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
+            shell.Sub = sub;
 
             shell.PillBg.gameObject.SetActive(false);   // fusions carry no level pill
             shell.PartBadge.gameObject.SetActive(false);
             shell.OuterRing.gameObject.SetActive(false);
             shell.CapMarker.gameObject.SetActive(false);
-            shell.Button.interactable = false;
+            shell.Button.interactable = false;   // RefreshFusionNode (MV-426) turns this on once eligible
+
+            string id = fusion.Id;   // capture by value, not the loop variable
+            shell.Button.onClick.AddListener(() => OnRigNodeTapped(id));
             return shell;
         }
 
@@ -1023,6 +1080,11 @@ namespace MaxWorlds.UI
             public Text PillText, Label, DraftBadgeText;
             public Button Button;
             public float Radius;
+
+            /// <summary>Fusion nodes only (MV-426): the sub-label beneath the name — parent category
+            /// names while unforgeable, "<c>N PARTS · SLOT B</c>" once eligible, "<c>FORGED · SLOT B</c>"
+            /// once forged. Null for category/ability nodes.</summary>
+            public Text Sub;
         }
 
         // ------------------------------------------------------------------ top bar

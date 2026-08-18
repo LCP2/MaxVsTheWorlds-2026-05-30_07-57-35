@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -98,7 +99,12 @@ namespace MaxWorlds.Arena
             // refunds the slots" — "passing" means Max has actually walked through, not merely that the
             // gate broke, so this hangs off the position-driven PlayerCrossedIntoArea, not any AreaGate's
             // Opened (which fires early, for population, well before Max is through the doorway).
-            _areaDirector.PlayerCrossedIntoArea += _ => Sentinel.DestroyAllActive();
+            // MV-426 SKIRMISH (f_skr): "Sentinels survive an area change" once Move+Support is forged —
+            // the only exception to the teardown above.
+            _areaDirector.PlayerCrossedIntoArea += _ =>
+            {
+                if (!RigFusionState.IsForged("f_skr")) Sentinel.DestroyAllActive();
+            };
 
             _worldRunner = new GameObject("World Runner").AddComponent<WorldRunner>();
             _worldRunner.transform.SetParent(transform, false);

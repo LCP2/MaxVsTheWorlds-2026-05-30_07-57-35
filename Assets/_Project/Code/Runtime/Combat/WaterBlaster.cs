@@ -222,6 +222,7 @@ namespace MaxWorlds.Combat
         private WaterVfx _vfx;
         private AimReticle _reticle;
         private readonly Collider[] _hits = new Collider[32];
+        private static readonly HashSet<IDamageable> s_arcHit = new HashSet<IDamageable>(8);
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
         // Collider that produced each buffered hit, parallel to s_buffer. Cosmetic use
         // only — it gives the splash a contact point on the target's surface.
@@ -413,6 +414,11 @@ namespace MaxWorlds.Combat
                 }
             }
 
+            // MV-426 DELUGE (f_del): once Primary+Secondary is forged, a directly-hit target standing
+            // in a WaterPuddle arcs this same tick's damage to every other wet robot in it.
+            if (RigFusionState.IsForged("f_del") && WaterPuddle.Active.Count > 0)
+                ApplyDelugeArc(dir, tickDamage);
+
             // Cosmetic (YT-53 readability): with nothing hit, a hitscan weapon gives the player no
             // landing point at all — the stream just stops in mid-air. Splash where the water meets
             // the ground so it's always obvious where the shot actually went.
@@ -420,6 +426,42 @@ namespace MaxWorlds.Combat
             {
                 Vector3 end = origin + dir * reach;
                 _vfx.Splash(new Vector3(end.x, 0f, end.z), dir, tickDamage * 0.5f);
+            }
+        }
+
+        /// <summary>DELUGE's arc (MV-426): for every target this tick's spray directly hit, find the
+        /// puddle (if any) standing under it and apply this same tick's damage to every OTHER wet robot
+        /// in that puddle too — "arcs between every wet robot standing in it". A robot already hit
+        /// directly, or already arced-to this tick (two directly-hit targets sharing one puddle), is
+        /// never double-counted.</summary>
+        private void ApplyDelugeArc(Vector3 dir, float tickDamage)
+        {
+            s_arcHit.Clear();
+            for (int i = 0; i < s_hitPoints.Count; i++)
+            {
+                WaterPuddle puddle = null;
+                for (int p = 0; p < WaterPuddle.Active.Count; p++)
+                {
+                    WaterPuddle candidate = WaterPuddle.Active[p];
+                    if (WaterPuddle.IsInside(candidate.Position, candidate.Radius, s_hitPoints[i]))
+                    {
+                        puddle = candidate;
+                        break;
+                    }
+                }
+                if (puddle == null) continue;
+
+                int count = Physics.OverlapSphereNonAlloc(
+                    puddle.Position, puddle.Radius, _hits, hitMask, QueryTriggerInteraction.Ignore);
+                for (int j = 0; j < count; j++)
+                {
+                    if (_hits[j] == null) continue;
+                    if (!_hits[j].TryGetComponent<IDamageable>(out var wet) || !wet.IsAlive || wet.Team == Team.Player) continue;
+                    if (s_buffer.Contains(wet)) continue;   // already hit directly this tick
+                    if (!s_arcHit.Add(wet)) continue;       // already arced to this tick
+                    wet.TakeDamage(new DamageInfo(tickDamage, _hits[j].transform.position, dir, Team.Player,
+                        soak: true, source: DamageSource.PrimaryWeapon));
+                }
             }
         }
 
