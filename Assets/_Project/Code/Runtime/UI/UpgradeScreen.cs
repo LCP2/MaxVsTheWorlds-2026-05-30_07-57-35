@@ -51,11 +51,6 @@ namespace MaxWorlds.UI
         private static readonly Color Locked = new Color(0.20f, 0.23f, 0.27f);
         private const int MaxFamilySize = 5;   // the HOSE family (Beam/Power/Range/WideBore/Harness) is the biggest
 
-        // MV-357: the shed ability draft-pick's card accent — abilities have no per-kind family colour
-        // the way parts do (UpgradeCatalog.For(kind).Accent), so every ability card shares this one,
-        // the same cyan WeaponsScreen already uses for its ability pips/icon tiles.
-        private static readonly Color AbilityCardAccent = new Color(0.35f, 0.85f, 0.95f);
-
         // Animation timing (seconds, unscaled). reveal → fit → settle, then the continue prompt.
         private const float RevealTime = 0.45f;
         private const float FitTime = 0.45f;
@@ -76,11 +71,11 @@ namespace MaxWorlds.UI
         private readonly Image[] _familyPipBg = new Image[MaxFamilySize];
         private readonly Text[] _familyPipLabel = new Text[MaxFamilySize];
 
-        // The draft-pick reveal (YT-207, generalized to abilities by MV-357): up to 3 tappable
-        // candidate cards, reusing the panel/scrim chrome but standing in for the single reveal-and-fit
-        // stage while a choice is pending. OpenChoice (parts) and OpenAbilityChoice (MV-357) both funnel
-        // through the same card rig and a per-open "what happens when a card is tapped" callback, so the
-        // card plumbing itself doesn't care which kind is being chosen.
+        // The draft-pick reveal (YT-207): up to 3 tappable candidate cards, reusing the panel/scrim
+        // chrome but standing in for the single reveal-and-fit stage while a choice is pending.
+        // OpenChoice (parts) funnels through the same card rig and a per-open "what happens when a
+        // card is tapped" callback — MV-424 moved the ability draft-pick off this card rig entirely and
+        // onto THE RIG board itself (WeaponsScreen.OpenMorphingModuleDraft), so this plumbing is parts-only now.
         private const int MaxCandidates = 3;
         private RectTransform _choiceRoot;
         private readonly Image[] _cardBg = new Image[MaxCandidates];
@@ -94,9 +89,9 @@ namespace MaxWorlds.UI
         private System.Action<int> _onCandidateChosen;
         private bool _choiceMode;
 
-        /// <summary>One card's display text for the draft-pick reveal — <see cref="OpenChoice"/> and
-        /// <see cref="OpenAbilityChoice"/> each build these from their own catalog before handing off to
-        /// the shared <see cref="OpenChoiceInternal"/>/<see cref="ShowCandidates"/> plumbing.</summary>
+        /// <summary>One card's display text for the draft-pick reveal — <see cref="OpenChoice"/> builds
+        /// these from its own catalog before handing off to the shared
+        /// <see cref="OpenChoiceInternal"/>/<see cref="ShowCandidates"/> plumbing.</summary>
         private readonly struct CandidateCard
         {
             public readonly string Name;
@@ -283,44 +278,9 @@ namespace MaxWorlds.UI
             });
         }
 
-        /// <summary>
-        /// The BUILD ABILITY draft-pick (MV-357's card rig, moved off the mid-fight modal and onto the
-        /// Abilities screen by MV-358): opened by <see cref="WeaponsScreen"/>'s BUILD ABILITY button,
-        /// never by a pickup directly — the pickup only banks an <see cref="MaxWorlds.Weapons.AbilityCreditBank"/>
-        /// credit. Shows up to <see cref="MaxCandidates"/> tappable ability cards, sampled by
-        /// <see cref="MaxWorlds.Weapons.AbilityDraft"/> from the abilities Max doesn't yet own. Tapping a
-        /// card grants exactly that ability via <see cref="MaxWorlds.Weapons.WeaponSystemState.Acquire"/>
-        /// and spends the credit that paid for the draw; the other candidates stay in the pool for a
-        /// later build. Same card rig as <see cref="OpenChoice"/> — only the catalog and the tap's
-        /// effect differ. WeaponsScreen is already paused when this opens (it never closes underneath),
-        /// so this just layers on top and hands the same pause back on close.
-        /// </summary>
-        public void OpenAbilityChoice(AbilityKind[] candidates)
-        {
-            if (_open) return;
-            if (candidates == null || candidates.Length == 0) return;
-            if (_canvas == null) Build();
-
-            var cards = new CandidateCard[candidates.Length];
-            for (int i = 0; i < candidates.Length; i++)
-            {
-                // MV-383: the glyph now lives in the icon tile, so the top tag reads as a category
-                // (matching the parts cards' family tag) instead of repeating the same glyph as text.
-                cards[i] = new CandidateCard(WeaponCatalog.DisplayName(candidates[i]), AbilityCardAccent,
-                    "ABILITY", WeaponCatalog.EffectLine(candidates[i]), WeaponCatalog.Glyph(candidates[i]));
-            }
-
-            AbilityKind[] picked = candidates;
-            OpenChoiceInternal("CHOOSE AN ABILITY", cards, index =>
-            {
-                WeaponSystemState.Acquire(picked[index]);
-                MaxWorlds.Weapons.AbilityCreditBank.TrySpend();
-            });
-        }
-
-        /// <summary>Shared open plumbing for <see cref="OpenChoice"/> and <see cref="OpenAbilityChoice"/>:
-        /// pause, show the title and up to <see cref="MaxCandidates"/> cards, and remember what a tap on
-        /// card <c>i</c> should do (<paramref name="onChosen"/>) — resolved by <see cref="ChooseCandidate"/>.</summary>
+        /// <summary>Shared open plumbing for <see cref="OpenChoice"/>: pause, show the title and up to
+        /// <see cref="MaxCandidates"/> cards, and remember what a tap on card <c>i</c> should do
+        /// (<paramref name="onChosen"/>) — resolved by <see cref="ChooseCandidate"/>.</summary>
         private void OpenChoiceInternal(string title, CandidateCard[] cards, System.Action<int> onChosen)
         {
             _candidateCount = cards.Length;
@@ -378,8 +338,8 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>A card was tapped: resolve whichever candidate it stood for via the callback
-        /// <see cref="OpenChoiceInternal"/> stashed (installs+spends a part for <see cref="OpenChoice"/>,
-        /// acquires an ability for <see cref="OpenAbilityChoice"/>), then resume.</summary>
+        /// <see cref="OpenChoiceInternal"/> stashed (installs+spends a part for <see cref="OpenChoice"/>),
+        /// then resume.</summary>
         private void ChooseCandidate(int index)
         {
             if (!_open || !_choiceMode) return;

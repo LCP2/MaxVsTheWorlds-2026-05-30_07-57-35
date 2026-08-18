@@ -76,6 +76,16 @@ namespace MaxWorlds.UI
         private readonly Dictionary<string, RigNodeVisual> _categoryNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, Image> _categoryPanels = new Dictionary<string, Image>();
 
+        // ------------------------------------------------------------------ Morphing Module draft (MV-424)
+
+        private static readonly Color DraftBadgeColor = new Color(0.5f, 0.89f, 1f);   // module cyan (rig_board.json "module")
+
+        private Image _draftScrim;
+        private RectTransform _draftBand;
+        private Text _draftBandTitle, _draftBandSubtitle, _draftBandReason;
+        private bool _draftActive;
+        private readonly List<string> _draftCandidateIds = new List<string>();
+
         private bool _open;
         private float _prevTimeScale = 1f;
 
@@ -180,8 +190,46 @@ namespace MaxWorlds.UI
         {
             if (!_open) return;
             _open = false;
+            _draftActive = false;
+            _draftCandidateIds.Clear();
             Time.timeScale = _prevTimeScale;
             _root.SetActive(false);
+        }
+
+        /// <summary>A Morphing Module was collected (MV-424, replacing the old shed → badge → BUILD
+        /// ABILITY modal chain): 0 candidates consumes the module with nothing granted, 1 grants it
+        /// directly with no screen, 2-3 opens THE RIG with just those candidates lit on the board —
+        /// numbered, TAKE-labelled — and everything else dimmed. One tap takes it and closes the
+        /// screen; the two left behind simply stay in <see cref="RigState.EligibleCapIds"/> for a
+        /// later module.</summary>
+        public void OpenMorphingModuleDraft(string[] candidateIds)
+        {
+            if (candidateIds == null || candidateIds.Length == 0)
+            {
+                Debug.Log("[WeaponsScreen] Morphing Module consumed — nothing left to offer.");
+                return;
+            }
+            if (candidateIds.Length == 1)
+            {
+                RigState.AcquireCap(candidateIds[0]);
+                return;
+            }
+
+            if (_canvas == null) Build();
+
+            _draftCandidateIds.Clear();
+            _draftCandidateIds.AddRange(candidateIds);
+            _draftActive = true;
+
+            if (!_open)
+            {
+                _open = true;
+                _prevTimeScale = Time.timeScale;
+                Time.timeScale = 0f;
+            }
+
+            Refresh();
+            _root.SetActive(true);
         }
 
         // ------------------------------------------------------------------ live state
@@ -204,6 +252,76 @@ namespace MaxWorlds.UI
 
             foreach (var cat in RigBoardLayout.Categories) RefreshCategoryNode(cat, banked);
             foreach (var ab in RigBoardLayout.Abilities) RefreshAbilityNode(ab, banked);
+
+            RefreshMorphingModuleDraft();
+        }
+
+        /// <summary>Dims the whole board behind a scrim and brings just the candidate nodes back above
+        /// it (MV-424) — the design's own "everything else dimmed" (MV-423.png vs MV-424.png). The scrim
+        /// also blocks taps to every non-candidate node while a draft is pending, same as the paused
+        /// screen already blocks the world underneath it.</summary>
+        private void RefreshMorphingModuleDraft()
+        {
+            if (_draftScrim != null) _draftScrim.gameObject.SetActive(_draftActive);
+            if (_draftBand != null) _draftBand.gameObject.SetActive(_draftActive);
+            if (!_draftActive) return;
+
+            for (int i = 0; i < _draftCandidateIds.Count; i++)
+            {
+                if (!_abilityNodes.TryGetValue(_draftCandidateIds[i], out var v)) continue;
+                v.Root.SetAsLastSibling();   // render above the scrim
+            }
+
+            UpdateDraftBandText();
+        }
+
+        /// <summary>The bottom band's copy (MV-424): a fixed title/subtitle plus one line naming why
+        /// the FIRST numbered candidate is in the pool — showing all three would clutter a single-line
+        /// band, and no acceptance criterion pins which one, so the numbered lead candidate is as good
+        /// an example as any.</summary>
+        private void UpdateDraftBandText()
+        {
+            if (_draftBandTitle == null || _draftCandidateIds.Count == 0) return;
+            _draftBandTitle.text = "MORPHING MODULE CAPTURED - CHOOSE AN ABILITY";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage
+            _draftBandSubtitle.text = "Only capabilities the tree already allows. A shed is the only way to own something new.";
+            _draftBandReason.text = DraftReasonLine(_draftCandidateIds[0], _draftCandidateIds.Count - 1);
+        }
+
+        /// <summary>"<c>MAGNETO is here because you put 3 parts into COOLDOWN. The two you leave go
+        /// back in the pool.</c>" — the ticket's own example, generalised: a parent that's a stat names
+        /// the parts spent on it; a parent that's a cap names itself as already owned; a root cap (no
+        /// parent) was simply open from the run's start.</summary>
+        private static string DraftReasonLine(string candidateId, int leftBehindCount)
+        {
+            string label = AbilityLabel(candidateId);
+            string parent = RigBoard.Parent(candidateId);
+
+            string why;
+            if (string.IsNullOrEmpty(parent))
+            {
+                why = $"{label} is here because it was open from the run's start.";
+            }
+            else if (RigBoard.IsCap(parent))
+            {
+                why = $"{label} is here because you already have {AbilityLabel(parent)}.";
+            }
+            else
+            {
+                int level = RigState.Level(parent);
+                why = $"{label} is here because you put {level} part{(level == 1 ? "" : "s")} into {AbilityLabel(parent)}.";
+            }
+
+            string leftBehind = leftBehindCount == 1
+                ? "The one you leave goes back in the pool."
+                : "The two you leave go back in the pool.";
+            return $"{why} {leftBehind}";
+        }
+
+        private static string AbilityLabel(string id)
+        {
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Id == id) return ab.Label;
+            return id;
         }
 
         private void RefreshPartsTray(int banked)
@@ -261,6 +379,14 @@ namespace MaxWorlds.UI
         private void RefreshAbilityNode(RigAbilityLayout ab, int banked)
         {
             if (!_abilityNodes.TryGetValue(ab.Id, out var v)) return;
+
+            int candidateIndex = _draftActive ? _draftCandidateIds.IndexOf(ab.Id) : -1;
+            if (candidateIndex >= 0)
+            {
+                RefreshCandidateNode(v, ab, candidateIndex);
+                return;
+            }
+            v.DraftBadge.gameObject.SetActive(false);
 
             bool owned = RigState.IsOwned(ab.Id);
             bool reached = RigState.IsReached(ab.Id);
@@ -330,7 +456,51 @@ namespace MaxWorlds.UI
             v.Button.interactable = spendable;
         }
 
-        private void OnRigNodeTapped(string id) => PartSpend.TrySpendOnRigNode(id);
+        /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
+        /// glow, numbered 1-3 in a badge above the hex, and <c>TAKE</c> in the level pill in place of
+        /// the usual level/SHED/LOCK reading. Always tappable — draft candidates ignore the PARTS bank
+        /// entirely, a different currency from the amber "+" spend.</summary>
+        private void RefreshCandidateNode(RigNodeVisual v, RigAbilityLayout ab, int candidateIndex)
+        {
+            Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
+
+            v.OuterRing.gameObject.SetActive(false);
+            v.CapMarker.gameObject.SetActive(false);
+            v.PartBadge.gameObject.SetActive(false);
+            v.HexOutline.sprite = SolidHexOutlineSprite(v.Radius);
+
+            v.HexFill.color = new Color(family.r, family.g, family.b, 0.22f);
+            v.HexOutline.color = family;
+            v.Glow.gameObject.SetActive(true);
+            v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);
+            v.Icon.color = TextColor;
+            v.Label.text = ab.Label;
+            v.Label.color = TextColor;
+
+            v.PillText.text = "TAKE";
+            v.PillBg.color = new Color(DraftBadgeColor.r, DraftBadgeColor.g, DraftBadgeColor.b, 0.30f);
+            v.PillText.color = DraftBadgeColor;
+
+            v.DraftBadge.gameObject.SetActive(true);
+            v.DraftBadge.color = DraftBadgeColor;
+            v.DraftBadgeText.text = (candidateIndex + 1).ToString();
+
+            v.Button.interactable = true;
+        }
+
+        private void OnRigNodeTapped(string id)
+        {
+            if (_draftActive)
+            {
+                if (_draftCandidateIds.Contains(id))
+                {
+                    RigState.AcquireCap(id);
+                    Close();
+                }
+                return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
+            }
+            PartSpend.TrySpendOnRigNode(id);
+        }
 
         private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
 
@@ -380,6 +550,9 @@ namespace MaxWorlds.UI
             foreach (var cat in RigBoardLayout.Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_boardRoot, cat);
             foreach (var ab in RigBoardLayout.Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_boardRoot, ab);
 
+            BuildDraftScrim(_boardRoot);   // MV-424: last board child so it dims everything built above,
+            BuildDraftBand(_boardRoot);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
+
             BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
 
             _root.SetActive(false);
@@ -413,6 +586,64 @@ namespace MaxWorlds.UI
                 panel.raycastTarget = false;
                 _categoryPanels[categories[i].Id] = panel;
             }
+        }
+
+        /// <summary>The Morphing Module draft's dimming scrim (MV-424) — one full-board rect, built
+        /// last among the board's normal children so it renders above every category/ability/fusion
+        /// node, and toggled active only while a draft is pending. Also the reason non-candidate nodes
+        /// stop receiving taps during a draft: a raycast target this high in the hierarchy eats them
+        /// before they reach anything drawn underneath it. <see cref="RefreshMorphingModuleDraft"/>
+        /// brings the candidate nodes themselves back above this via <c>SetAsLastSibling</c>.</summary>
+        private void BuildDraftScrim(RectTransform boardRoot)
+        {
+            var scrim = AddImage(boardRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0.82f), "Draft Scrim");
+            Stretch(scrim.rectTransform);
+            scrim.raycastTarget = true;
+            scrim.gameObject.SetActive(false);
+            _draftScrim = scrim;
+        }
+
+        /// <summary>The bottom band (MV-424): full width, anchored to the board's own bottom edge so
+        /// its position is pinned in the fixed 1920x1080 board frame regardless of Safe Area —
+        /// <see cref="RigBoardLayoutTests"/>'s own trick for exact-pixel assertions. Deliberately at the
+        /// BOTTOM, not the top: a top banner would cover the category row, and the whole value of
+        /// drafting on the board is seeing the current build while choosing (ticket, non-negotiable).</summary>
+        private void BuildDraftBand(RectTransform boardRoot)
+        {
+            const float bandHeight = 170f;
+            var band = NewRect("draft_band", boardRoot, new Vector2(0f, 0f), new Vector2(1f, 0f));
+            band.pivot = new Vector2(0.5f, 0f);
+            band.sizeDelta = new Vector2(0f, bandHeight);
+            band.anchoredPosition = Vector2.zero;
+            _draftBand = band;
+
+            var bg = AddImage(band, HudTextures.Solid(), new Color(0.02f, 0.05f, 0.07f, 0.96f), "Band BG");
+            Stretch(bg.rectTransform);
+            bg.raycastTarget = true;   // swallow taps under the band too, same as the scrim
+
+            var hairline = AddImage(band, HudTextures.Solid(), DraftBadgeColor, "Band Hairline");
+            Anchor(hairline.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+            hairline.rectTransform.sizeDelta = new Vector2(0f, 2f);
+            hairline.rectTransform.anchoredPosition = Vector2.zero;
+            hairline.raycastTarget = false;
+
+            _draftBandTitle = AddText(band, 34, DraftBadgeColor, TextAnchor.UpperCenter);
+            Anchor(_draftBandTitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+            _draftBandTitle.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 44f);
+            _draftBandTitle.rectTransform.anchoredPosition = new Vector2(0f, -22f);
+            _draftBandTitle.fontStyle = FontStyle.Bold;
+
+            _draftBandSubtitle = AddText(band, 18, Dim, TextAnchor.UpperCenter);
+            Anchor(_draftBandSubtitle.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+            _draftBandSubtitle.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 30f);
+            _draftBandSubtitle.rectTransform.anchoredPosition = new Vector2(0f, -66f);
+
+            _draftBandReason = AddText(band, 16, TextColor, TextAnchor.UpperCenter);
+            Anchor(_draftBandReason.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+            _draftBandReason.rectTransform.sizeDelta = new Vector2(-2f * ContentMargin, 30f);
+            _draftBandReason.rectTransform.anchoredPosition = new Vector2(0f, -100f);
+
+            band.gameObject.SetActive(false);
         }
 
         /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) only has
@@ -614,6 +845,21 @@ namespace MaxWorlds.UI
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
 
+            // MV-424: the Morphing Module draft's numbered badge (1-3), centred above the hex — a
+            // different corner language from the SHED/spend markers so a candidate reads unmistakably
+            // as "tap to take", not another passive state.
+            var draftBadge = AddImage(root, HudTextures.Disc(40), Color.clear, "Draft Badge");
+            Anchor(draftBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            draftBadge.rectTransform.sizeDelta = new Vector2(36f, 36f);
+            draftBadge.rectTransform.anchoredPosition = new Vector2(0f, r + 34f);
+            draftBadge.raycastTarget = false;
+            draftBadge.gameObject.SetActive(false);
+
+            var draftBadgeText = AddText(draftBadge.rectTransform, 18, PanelColor, TextAnchor.MiddleCenter);
+            Stretch(draftBadgeText.rectTransform);
+            draftBadgeText.fontStyle = FontStyle.Bold;
+            draftBadgeText.raycastTarget = false;
+
             var hit = AddImage(root, HudTextures.Solid(), Color.clear, "Hit");
             Stretch(hit.rectTransform);
             hit.raycastTarget = true;
@@ -624,7 +870,8 @@ namespace MaxWorlds.UI
             {
                 Root = root, Glow = glow, HexFill = fill, HexOutline = outline, Icon = icon,
                 OuterRing = outerRing, CapMarker = capMarker, PartBadge = partBadge,
-                PillBg = pillBg, PillText = pillText, Label = label, Button = button, Radius = r
+                PillBg = pillBg, PillText = pillText, Label = label, Button = button, Radius = r,
+                DraftBadge = draftBadge, DraftBadgeText = draftBadgeText
             };
             return root;
         }
@@ -652,8 +899,8 @@ namespace MaxWorlds.UI
         private sealed class RigNodeVisual
         {
             public RectTransform Root;
-            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartBadge, PillBg;
-            public Text PillText, Label;
+            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartBadge, PillBg, DraftBadge;
+            public Text PillText, Label, DraftBadgeText;
             public Button Button;
             public float Radius;
         }
