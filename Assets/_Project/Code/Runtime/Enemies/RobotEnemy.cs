@@ -69,6 +69,12 @@ namespace MaxWorlds.Enemies
         private static int EffectiveLungeTokenCap => Mathf.Max(0, Mathf.RoundToInt(
             DevTuning.Or(DevTuning.LungeTokenCap, RobotCompositionTuning.DefaultLungeTokenCap)));
 
+        /// <summary>How close this robot's centre may sit to Max's, XZ-plane only (MV-434) — the
+        /// body-separation floor <see cref="EnemyBodySeparation"/> enforces every Chase/Lunge tick.
+        /// Archetype-specific: a Heavy needs more clearance than a Rusher.</summary>
+        private float MinBodyDistance => EnemyBodySeparation.MinDistance(
+            EnemyArchetype.Of(Kind).ColliderRadius, EnemyArchetype.PlayerRadius);
+
         [Header("Lunge")]
         [SerializeField] private float lungeRange = 2.2f;     // start telegraph within this
         [SerializeField] private float telegraphTime = 0.55f; // wind-up (dodge window)
@@ -683,7 +689,21 @@ namespace MaxWorlds.Enemies
 
             bool hunting = !_sight.HasSight;
             float speed = EffectiveMoveSpeed;
+
+            // MV-434: a non-lunging kind (Bruiser/Heavy/Brute) presses against Max rather than
+            // pushing through him — stop closing once already at the body-separation distance,
+            // but keep facing him (FaceAndMove below still runs) and keep TickContactTouch running
+            // so its cooldown keeps ticking while it stands in contact.
+            if (!LungesAsKind(Kind) && dist <= MinBodyDistance) speed = 0f;
+
             FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
+
+            // MV-434: whatever FaceAndMove just did, this robot's centre may never end the tick
+            // closer to Max's CURRENT position than MinBodyDistance — Physics.IgnoreCollision (see
+            // EnemySpawner.LetThePlayerThrough) leaves nothing else to stop it. Measuring against
+            // Max's live position, not the stale goal above, is what lets a robot standing its
+            // ground get shoved aside as Max walks into it, rather than ever pinning him.
+            ClampBodySeparation();
 
             // Is it getting anywhere? Seeing Max is a new spot to walk to, so the clock starts again.
             //
@@ -813,7 +833,7 @@ namespace MaxWorlds.Enemies
             {
                 Vector3 to = target.position - transform.position; to.y = 0f;
                 if (to.sqrMagnitude > 0.001f)
-                    transform.rotation = Quaternion.LookRotation(to.normalized, Vector3.up);
+                    RotateToward(to.normalized, dt);
             }
             // Pulse the tell so the wind-up reads.
             float t = Mathf.PingPong(_stateTimer * 6f, 1f);
@@ -847,6 +867,11 @@ namespace MaxWorlds.Enemies
         {
             CharacterControllerMotion.SafeMove(_cc, _lungeDir * lungeSpeed * dt); // MV-386
             if (!_dealtThisLunge) TryContactDamage();
+            // MV-434: contact damage above reads the real, possibly-overlapping position the dash
+            // just reached — the clamp only settles where the robot ends the TICK, so a lunge's
+            // hit is never lost to it. Same clamp as TickChase, so a lunge ends against Max's body
+            // rather than inside it.
+            ClampBodySeparation();
             if (_stateTimer >= lungeTime) EnterRecover();
         }
 
@@ -991,9 +1016,36 @@ namespace MaxWorlds.Enemies
         {
             if (dir.sqrMagnitude > 0.001f)
             {
-                transform.rotation = Quaternion.LookRotation(dir, Vector3.up);
+                RotateToward(dir, dt);
                 CharacterControllerMotion.SafeMove(_cc, dir * speed * dt); // MV-386
             }
+        }
+
+        /// <summary>Turns toward <paramref name="dir"/> at a capped rate (MV-434) instead of
+        /// snapping instantly via <c>Quaternion.LookRotation</c> — the snap is what read as a rapid
+        /// spin once a robot pinned against Max made <paramref name="dir"/> numerically unstable
+        /// frame to frame. Capping the RATE means an unreliable direction still reads as a fast
+        /// turn, however often it flips, rather than a strobe.</summary>
+        private void RotateToward(Vector3 dir, float dt)
+        {
+            Quaternion target = Quaternion.LookRotation(dir, Vector3.up);
+            transform.rotation = Quaternion.RotateTowards(
+                transform.rotation, target, EnemyBodySeparation.DefaultMaxTurnDegreesPerSecond * dt);
+        }
+
+        /// <summary>Enforces <see cref="MinBodyDistance"/> against Max's CURRENT position (MV-434)
+        /// — never against wherever this robot was chasing toward, which may already be stale.
+        /// Disables the <see cref="CharacterController"/> around the correction, same idiom as
+        /// <see cref="TickTeleport"/>'s reposition, so it doesn't fight the controller's own
+        /// internal position state on the next <c>Move()</c>.</summary>
+        private void ClampBodySeparation()
+        {
+            if (_playerTarget == null) return;
+            Vector3 corrected = EnemyBodySeparation.Clamp(transform.position, _playerTarget.position, MinBodyDistance);
+            if (corrected == transform.position) return;
+            _cc.enabled = false;
+            transform.position = corrected;
+            _cc.enabled = true;
         }
 
         /// <summary>Remember the last piece of world geometry we walked into, so the chase can steer
