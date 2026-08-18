@@ -357,29 +357,18 @@ namespace MaxWorlds.UI
             _draftBandReason.text = DraftReasonLine(_draftCandidateIds[0], _draftCandidateIds.Count - 1);
         }
 
-        /// <summary>"<c>MAGNETO is here because you put 3 parts into COOLDOWN. The two you leave go
-        /// back in the pool.</c>" — the ticket's own example, generalised: a parent that's a stat names
-        /// the parts spent on it; a parent that's a cap names itself as already owned; a root cap (no
-        /// parent) was simply open from the run's start.</summary>
+        /// <summary>"<c>MAGNETO is here because you already have COOLDOWN.</c>" — schema 3 (MV-436)
+        /// retired the "you put N parts into X" wording: every parent is a draft grant now, never a
+        /// parts-spendable stat, so a candidate's parent is either already owned (having itself been
+        /// drafted) or the candidate is a root node, open from the run's start.</summary>
         private static string DraftReasonLine(string candidateId, int leftBehindCount)
         {
             string label = AbilityLabel(candidateId);
             string parent = RigBoard.Parent(candidateId);
 
-            string why;
-            if (string.IsNullOrEmpty(parent))
-            {
-                why = $"{label} is here because it was open from the run's start.";
-            }
-            else if (RigBoard.IsCap(parent))
-            {
-                why = $"{label} is here because you already have {AbilityLabel(parent)}.";
-            }
-            else
-            {
-                int level = RigState.Level(parent);
-                why = $"{label} is here because you put {level} part{(level == 1 ? "" : "s")} into {AbilityLabel(parent)}.";
-            }
+            string why = string.IsNullOrEmpty(parent)
+                ? $"{label} is here because it was open from the run's start."
+                : $"{label} is here because you already have {AbilityLabel(parent)}.";
 
             string leftBehind = leftBehindCount == 1
                 ? "The one you leave goes back in the pool."
@@ -460,8 +449,10 @@ namespace MaxWorlds.UI
 
             bool owned = RigState.IsOwned(ab.Id);
             bool reached = RigState.IsReached(ab.Id);
-            bool isCap = ab.Kind == "cap";
-            bool draftable = isCap && reached && !owned;
+            // Schema 3 (MV-436): every ability is unlocked the same way, so "reached and unowned"
+            // is the one capability state — it used to also require ab.Kind == "cap" back when a
+            // stat could be reached-and-spendable without ever being a draft candidate.
+            bool draftable = reached && !owned;
             bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
 
             Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
@@ -503,18 +494,6 @@ namespace MaxWorlds.UI
                 v.Label.text = ab.Label;
                 v.Label.color = TextColor;
                 v.Icon.color = new Color(family.r, family.g, family.b, 0.9f);
-            }
-            else if (reached)   // stat, reached, level 0
-            {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.20f);
-                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.5f);
-                v.Glow.gameObject.SetActive(false);
-                v.PillText.text = $"0/{ab.MaxLevel}";
-                v.PillBg.color = new Color(1f, 1f, 1f, 0.08f);
-                v.PillText.color = Dim;
-                v.Label.text = ab.Label;
-                v.Label.color = TextColor;
-                v.Icon.color = TextColor;
             }
             else   // not reached
             {

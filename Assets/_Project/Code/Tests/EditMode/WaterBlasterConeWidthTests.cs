@@ -37,6 +37,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             float coneBefore = _blaster.ConeHalfAngle;
 
+            RigState.AcquireCap("p_rng"); // MV-436: Range only reaches level 1 via a Morphing Module draft now
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Range); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
 
@@ -62,6 +63,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             float coneBefore = _blaster.ConeHalfAngle;
 
+            RigState.AcquireCap("p_flw"); // MV-436: Flow only reaches level 1 via a Morphing Module draft now
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate);
 
@@ -74,10 +76,12 @@ namespace MaxWorlds.Tests.EditMode
         {
             // The exact acceptance criterion: spend everywhere EXCEPT Spread, then confirm the
             // cone is still exactly the authored base — not just "unchanged from some prior read".
+            RigState.AcquireCap("p_rng");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Range); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Damage); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage);
+            RigState.AcquireCap("p_flw");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate);
 
@@ -89,14 +93,14 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void OnlySpread_WidensTheCone_MV403()
         {
-            // MV-422: p_spr's RIG parent is p_rng, not p_dmg — it isn't reached until Range has been
-            // spent at least once. p_rng itself IS reached from run start (its own parent, p_dmg, is
-            // already at L1), so this one Range spend is the minimum needed before Spread can move at
-            // all. Spread's own formula treats level 0 and level 1 identically (both read as "not
-            // widened yet", same as the old model's level-1 starting point) — two Spread spends are
-            // needed to see the cone actually move.
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
+            // p_spr's RIG parent is p_rng, not p_dmg — it isn't reached until Range is at level 1.
+            // Schema 3 (MV-436): both Range's own 0->1 unlock and Spread's own 0->1 unlock only
+            // happen via a Morphing Module draft now, never a part spend, so both are drafted
+            // directly here. Spread's own formula treats level 0 and level 1 identically (both read
+            // as "not widened yet") — one more Spread spend past the draft is what's needed to see
+            // the cone actually move.
+            RigState.AcquireCap("p_rng");
+            RigState.AcquireCap("p_spr");
             float coneBefore = _blaster.ConeHalfAngle;
 
             WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);

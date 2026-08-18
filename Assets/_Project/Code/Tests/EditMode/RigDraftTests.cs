@@ -19,7 +19,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void FreshStateDrawsTheMaxCandidateCount()
         {
-            // Run start offers exactly six eligible caps (RigStateTests), comfortably above
+            // Run start offers exactly eight eligible caps (RigStateTests, MV-436), comfortably above
             // DraftMaxCandidates (3), so a fresh draw is capped at the max rather than the whole pool.
             Assert.That(RigDraft.DrawCandidates().Length, Is.EqualTo(RigBoard.DraftMaxCandidates));
         }
@@ -46,15 +46,13 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void DrawShrinksAsThePoolDrains()
         {
-            // Run start's six root-reached caps: s_bal, e_ff, e_cel, m_spd, m_tp, u_sen. Owning s_bal
-            // also newly REACHES s_aut (s_bal's own cap child), so draining the pool to exactly one
-            // (u_sen) means acquiring that seventh cap too, not just the original six minus five.
-            RigState.AcquireCap("s_bal");
-            RigState.AcquireCap("s_aut");
-            RigState.AcquireCap("e_ff");
-            RigState.AcquireCap("e_cel");
-            RigState.AcquireCap("m_spd");
-            RigState.AcquireCap("m_tp");
+            // Schema 3 (MV-436): drafting a node immediately reaches its own children too, so
+            // draining a branch means walking it all the way to its leaves, not just drafting its
+            // root. Draft every node outside SUPPORT to exhaustion (RigBoard.AllIds is already
+            // parent-before-child order, so one pass suffices) and leave SUPPORT entirely untouched
+            // — u_sen (its own root, reached from run start) is then the only id anything can offer.
+            foreach (string id in RigBoard.AllIds)
+                if (RigBoard.Category(id) != "SUPPORT") RigState.AcquireCap(id);
 
             var candidates = RigDraft.DrawCandidates();
             Assert.That(candidates.Length, Is.EqualTo(1));
@@ -64,13 +62,11 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void DrawIsEmptyOnceEveryReachedCapIsOwned()
         {
-            // s_aut only becomes reached once s_bal is owned, so it must be acquired too — otherwise
-            // it is left sitting in the pool and this isn't actually "every reached cap owned".
-            foreach (var id in new[] { "s_bal", "s_aut", "e_ff", "e_cel", "m_spd", "m_tp", "u_sen" })
-                RigState.AcquireCap(id);
+            // One pass over every id in the tree's own parent-before-child order drafts the whole
+            // 23-ability tree (schema 3: drafting a node reaches its children, so nothing is ever
+            // left stranded by ordering).
+            foreach (string id in RigBoard.AllIds) RigState.AcquireCap(id);
 
-            // The deeper caps (p_prc, e_mag) are still unreached at this point — nothing left that a
-            // draft can legally offer right now.
             Assert.That(RigDraft.DrawCandidates(), Is.Empty,
                 "nothing reached-and-unowned is left to draft");
         }

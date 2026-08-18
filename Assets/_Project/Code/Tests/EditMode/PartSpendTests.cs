@@ -8,9 +8,10 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// Spending a banked part on a chosen owned track/ability (WV-228): a part is only actually
     /// consumed when the level-up it pays for actually happens — an empty bank, an unowned ability, or
-    /// a track/ability already at its cap must all leave the bank untouched. MV-422: every track now
-    /// starts at 0 (only <c>p_dmg</c> starts at 1) and each is gated by THE RIG's own reached-ness
-    /// rule — see <see cref="RigStateTests"/> for the model's own contract.
+    /// a track/ability already at its cap must all leave the bank untouched. Schema 3 (MV-436): every
+    /// track now starts at 0 (only <c>p_dmg</c> starts at 1) and is unlocked exclusively by a Morphing
+    /// Module draft (<see cref="RigState.AcquireCap"/>) — a part can only ever raise an already-owned
+    /// track further, never unlock one — see <see cref="RigStateTests"/> for the model's own contract.
     /// </summary>
     public sealed class PartSpendTests
     {
@@ -33,22 +34,40 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void SpendingOnATrackRaisesItsLevelAndConsumesOnePart()
         {
+            // p_dmg (Damage) is the one track owned from run start (MV-436) — every other track now
+            // needs a Morphing Module draft before a part can touch it (PartSpendTests below covers
+            // that gate).
             PickupWallet.AddPart();
             PickupWallet.AddPart();
 
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.True);
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Damage), Is.True);
 
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(2));
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "exactly one part must be spent per level");
+        }
+
+        [Test]
+        public void SpendingOnATrackFailsUntilDrafted_MV436()
+        {
+            // p_rng (Range) is no longer owned from run start — schema 3 retired the old cap/stat
+            // split, so a part can never perform Range's own 0->1 unlock, only a Morphing Module
+            // draft can (RigState.AcquireCap, exercised directly here since the draft screen/shed-flow
+            // wiring is out of this ticket's scope).
+            PickupWallet.AddPart();
+
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.False,
+                "unowned/locked items can't be upgraded (spec §5) — p_rng hasn't been drafted");
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(0));
+            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "a failed spend must not cost a part");
         }
 
         [Test]
         public void SpendingOnATrackAtItsCapFailsAndDoesNotSpendTheirPart()
         {
-            // MV-422: p_spr (Spread)'s RIG parent is p_rng (Range) — must be reached before Spread
-            // will accept any part at all.
-            PickupWallet.AddPart();
-            PartSpend.TrySpendOnTrack(WeaponTrackKind.Range);
+            // p_spr (Spread)'s RIG parent is p_rng (Range) — must be reached before Spread will
+            // accept any part at all. Range itself only reaches level 1 via a Morphing Module draft
+            // now (MV-436), so it's drafted directly rather than spent into.
+            RigState.AcquireCap("p_rng");
 
             for (int i = 0; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Spread); i++)
             {
@@ -118,12 +137,13 @@ namespace MaxWorlds.Tests.EditMode
         public void SpendingOnAWaterBalloonTrackRaisesItsLevelAndConsumesOnePartOnceOwned()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            RigState.AcquireCap("s_spl"); // MV-436: s_spl only reaches level 1 via a Morphing Module draft now
             PickupWallet.AddPart();
             PickupWallet.AddPart();
 
             Assert.That(PartSpend.TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind.SplashArea), Is.True);
 
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(2));
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "exactly one part must be spent per level");
         }
 
@@ -175,7 +195,7 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.AddPowerCell();
             PickupWallet.AddPowerCell();
 
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Range), Is.True);
+            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.Damage), Is.True);
 
             Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "the track upgrade must consume the part");
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a part spend must never also spend cells");

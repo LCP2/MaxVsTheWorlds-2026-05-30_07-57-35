@@ -36,16 +36,22 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeAndFlowAreImmediatelySpendableAtRunStart_ButSpreadIsNot()
+        public void RangeAndFlowAreDraftableButNotPartsSpendableAtRunStart_MV436()
         {
-            // p_rng and p_flw (DepletionRate) are both direct children of p_dmg, which is already at
-            // L1 at run start — reached immediately. p_spr's parent is p_rng, still at 0, so it is
-            // NOT reached until a part is spent on Range first.
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.True);
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate), Is.True);
-            WeaponSystemState.Reset();
+            // Schema 3 (MV-436) retired the old cap/stat split: p_rng and p_flw (DepletionRate) are
+            // both direct children of p_dmg, which is already at L1 at run start, so both are
+            // REACHED immediately — but reached only gates what a Morphing Module draft may offer
+            // now, it no longer confers spendability. A part can never perform either one's own
+            // 0->1 unlock.
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.False,
+                "p_rng is reached but unowned — only a draft can unlock it");
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate), Is.False,
+                "p_flw is reached but unowned — only a draft can unlock it");
+            Assert.That(RigState.EligibleCapIds(), Does.Contain("p_rng"));
+            Assert.That(RigState.EligibleCapIds(), Does.Contain("p_flw"));
+
             Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread), Is.False,
-                "Spread must not be spendable until Range has raised it to reached");
+                "Spread must not be spendable until Range has been drafted and reached level 1");
         }
 
         [Test]
@@ -81,8 +87,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void LevelUpTrackIncrementsByOne()
         {
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.True);
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(1));
+            // p_dmg (Damage) is the one track owned from run start (MV-436) — every other track needs
+            // a Morphing Module draft first (RangeAndFlowAreDraftableButNotPartsSpendableAtRunStart_MV436).
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage), Is.True);
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(2));
         }
 
         [Test]
@@ -123,17 +131,19 @@ namespace MaxWorlds.Tests.EditMode
         public void LevelUpWaterBalloonTrackIncrementsByOneOnceOwned()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            RigState.AcquireCap("s_lob"); // MV-436: s_lob only reaches level 1 via a Morphing Module draft now
 
             Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range), Is.True);
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(2));
         }
 
         [Test]
         public void LevelUpWaterBalloonTrackStopsAtItsCap()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            RigState.AcquireCap("s_spl");
             int cap = WeaponCatalog.MaxLevel(WaterBalloonTrackKind.SplashArea);
-            for (int i = 0; i < cap; i++)
+            for (int i = 1; i < cap; i++)
                 Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.SplashArea), Is.True);
 
             Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(cap));
@@ -149,6 +159,11 @@ namespace MaxWorlds.Tests.EditMode
                 "s_rte's parent is s_aut (Auto-Fire), not s_bal — Balloon alone isn't enough");
 
             WeaponSystemState.Acquire(AbilityKind.WaterBalloonAutoFire);
+            Assert.That(RigState.IsReached("s_rte"), Is.True, "reached now that s_aut is owned");
+            Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire), Is.False,
+                "s_rte itself still needs its own Morphing Module draft before a part can touch it (MV-436)");
+
+            Assert.That(RigState.AcquireCap("s_rte"), Is.True);
             Assert.That(WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire), Is.True);
         }
 
@@ -156,9 +171,10 @@ namespace MaxWorlds.Tests.EditMode
         public void EachWaterBalloonTrackLevelsIndependently()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
+            RigState.AcquireCap("s_lob");
             WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range);
 
-            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(1));
+            Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.Range), Is.EqualTo(2));
             Assert.That(WeaponSystemState.WaterBalloonTrackLevel(WaterBalloonTrackKind.SplashArea), Is.EqualTo(0),
                 "leveling Range must not touch Splash Area");
         }
@@ -167,11 +183,11 @@ namespace MaxWorlds.Tests.EditMode
         public void WaterBalloonEffectiveCooldownShortensAsRepeatFireLevelsUp()
         {
             // The formula's own Mathf.Max(1, level) clamp reads level 0 and level 1 identically (both
-            // "not shortened yet", same as every other track pre-MV-422) — level 2 is the first level
-            // that actually moves the cooldown.
+            // "not shortened yet") — level 2 is the first level that actually moves the cooldown.
+            // Schema 3 (MV-436): s_rte's own 0->1 unlock only happens via a Morphing Module draft now.
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             WeaponSystemState.Acquire(AbilityKind.WaterBalloonAutoFire);
-            WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire); // to L1
+            RigState.AcquireCap("s_rte"); // to L1
             float baseCooldown = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
 
             WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.RepeatFire); // to L2
@@ -440,13 +456,13 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ResetClearsTracksAndAbilities()
         {
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage); // p_dmg: 1 -> 2
             WeaponSystemState.Acquire(AbilityKind.Speed);
 
             WeaponSystemState.Reset();
 
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(1), "back to the run-start baseline, not the leveled-up value");
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(0));
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), Is.EqualTo(1));
             Assert.That(WeaponSystemState.IsAcquired(AbilityKind.Speed), Is.False);
         }
 
@@ -460,7 +476,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 WeaponSystemState.Acquire(AbilityKind.Speed);
                 WeaponSystemState.LevelUpAbility(AbilityKind.Speed);
-                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage);
                 WeaponSystemState.Reset();
 
                 Assert.That(fired, Is.EqualTo(4));
