@@ -92,17 +92,18 @@ namespace MaxWorlds.Save
             return data;
         }
 
-        /// <summary>A run on <paramref name="slot"/> just ended (win or lose) having peaked at
-        /// <paramref name="peakNormalized"/> Domination — bank it as the profile's personal best if
-        /// it beats the existing one. No-op for no active profile (e.g. tests driving a run with no
-        /// Home screen involved).</summary>
-        public static void RecordResult(int slot, float peakNormalized)
+        /// <summary>A run on <paramref name="slot"/> just finished (Victory — MV-427: death no longer
+        /// ends a run) having taken <paramref name="deathsTaken"/> deaths — bank it as the profile's
+        /// personal best if it beats the existing one (fewer is better; -1 means "no finished run
+        /// yet" and always loses). No-op for no active profile (e.g. tests driving a run with no Home
+        /// screen involved).</summary>
+        public static void RecordResult(int slot, int deathsTaken)
         {
             if (slot < 0) return;
             SaveSlotData data = Load(slot);
             if (!data.HasData) data = new SaveSlotData { HasData = true, DisplayName = DefaultDisplayName(slot) };
-            if (peakNormalized <= data.PersonalBestNormalized) return;
-            data.PersonalBestNormalized = peakNormalized;
+            if (data.BestDeathsToVictory >= 0 && deathsTaken >= data.BestDeathsToVictory) return;
+            data.BestDeathsToVictory = deathsTaken;
             Save(slot, data);
         }
 

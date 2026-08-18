@@ -44,7 +44,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 HasData = true,
                 DisplayName = "DEXTER",
-                PersonalBestNormalized = 0.82f,
+                BestDeathsToVictory = 3,
             };
             SaveSystem.Save(1, written);
 
@@ -52,7 +52,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(read.HasData, Is.True);
             Assert.That(read.DisplayName, Is.EqualTo("DEXTER"));
-            Assert.That(read.PersonalBestNormalized, Is.EqualTo(0.82f).Within(1e-4f));
+            Assert.That(read.BestDeathsToVictory, Is.EqualTo(3));
         }
 
         [Test]
@@ -84,46 +84,56 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(data.HasData, Is.True);
             Assert.That(data.DisplayName, Is.EqualTo(SaveSystem.DefaultDisplayName(2)));
-            Assert.That(data.PersonalBestNormalized, Is.EqualTo(0f));
+            Assert.That(data.BestDeathsToVictory, Is.EqualTo(-1), "an untouched slot has never finished a run");
             Assert.That(SaveSystem.Load(2).HasData, Is.True, "the profile must be persisted, not just returned");
         }
 
         [Test]
         public void EnsureProfile_LeavesAnExistingProfileUntouched()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 5 });
 
             SaveSlotData data = SaveSystem.EnsureProfile(0);
 
             Assert.That(data.DisplayName, Is.EqualTo("DEXTER"), "picking an existing profile must never rename it");
-            Assert.That(data.PersonalBestNormalized, Is.EqualTo(0.5f), "picking an existing profile must never reset its best");
+            Assert.That(data.BestDeathsToVictory, Is.EqualTo(5), "picking an existing profile must never reset its best");
         }
 
         [Test]
-        public void RecordResult_RaisesTheBestWhenThisRunBeatIt()
+        public void RecordResult_LowersTheBestWhenThisRunBeatIt()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.4f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 4 });
 
-            SaveSystem.RecordResult(0, 0.75f);
+            SaveSystem.RecordResult(0, 2);
 
-            Assert.That(SaveSystem.Load(0).PersonalBestNormalized, Is.EqualTo(0.75f).Within(1e-4f));
+            Assert.That(SaveSystem.Load(0).BestDeathsToVictory, Is.EqualTo(2), "fewer deaths taken is a better run");
+        }
+
+        [Test]
+        public void RecordResult_SetsTheBestOnAProfilesFirstEverFinish()
+        {
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = -1 });
+
+            SaveSystem.RecordResult(0, 7);
+
+            Assert.That(SaveSystem.Load(0).BestDeathsToVictory, Is.EqualTo(7));
         }
 
         [Test]
         public void RecordResult_LeavesTheBestAloneWhenThisRunFellShort()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.9f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 1 });
 
-            SaveSystem.RecordResult(0, 0.3f);
+            SaveSystem.RecordResult(0, 6);
 
-            Assert.That(SaveSystem.Load(0).PersonalBestNormalized, Is.EqualTo(0.9f).Within(1e-4f),
-                "a worse run must never overwrite a better personal best");
+            Assert.That(SaveSystem.Load(0).BestDeathsToVictory, Is.EqualTo(1),
+                "a run with more deaths must never overwrite a better (lower) personal best");
         }
 
         [Test]
         public void RecordResult_IgnoresNoActiveProfile()
         {
-            SaveSystem.RecordResult(-1, 0.9f);
+            SaveSystem.RecordResult(-1, 0);
             // No slot -1 file should ever be written; this is just asserting no exception is thrown.
         }
     }

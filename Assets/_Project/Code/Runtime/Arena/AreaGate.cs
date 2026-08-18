@@ -196,6 +196,36 @@ namespace MaxWorlds.Arena
             _health.TakeDamage(_health.Max);
         }
 
+        /// <summary>Restore this gate to intact — a fresh <see cref="DestructibleHealth"/> (never
+        /// revives an existing one; that class's one-shot <c>Destroyed</c> contract stays untouched
+        /// for every other consumer, e.g. <see cref="MowerHutch"/>), the threshold collider
+        /// re-enabled, and the leaf snapped back to its authored closed pose. Used when Max dies and
+        /// the arena he died in resets (MV-427) — the gate he broke to get in must block again.
+        ///
+        /// Only ever called on a gate that has already opened at least once (re-closing an
+        /// already-shut gate is a no-op the caller shouldn't need, but this guards it anyway) — never
+        /// on a gate whose <c>opensWith</c> is a condition rather than combat (the boss gate); that
+        /// distinction is the caller's to make (<see cref="WorldRunner"/>), not this class's.</summary>
+        public void Reclose()
+        {
+            if (!IsOpen) return;
+
+            float breakSeconds = Mathf.Max(0.1f,
+                DevTuning.Or(DevTuning.GateBreakSeconds, ArenaTuning.DefaultGateBreakSeconds));
+            _health = new DestructibleHealth(breakSeconds * AssumedPrimaryDps);
+            _health.Destroyed += Open;
+
+            IsOpen = false;
+            _hinging = false;
+            if (_thresholdCollider != null) _thresholdCollider.enabled = true;
+
+            // Snap the leaf back to the closed pose StartHingeSwing captured before it ever swung —
+            // _leafCollider rides this same transform and was deliberately left solid through the
+            // whole swing (MV-386), so restoring the transform is what clears the stale open leaf the
+            // ticket calls out, not just re-enabling a collider.
+            transform.SetPositionAndRotation(_closedPosition, _closedRotation);
+        }
+
         private void Open()
         {
             if (IsOpen) return;

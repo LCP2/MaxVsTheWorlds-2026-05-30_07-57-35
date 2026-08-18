@@ -121,8 +121,12 @@ namespace MaxWorlds.Pickups
             }
 
             // MV-401: exactly one part per arena, from the last Bruiser destroyed in it — not every
-            // large kind, and not a periodic count (see IsLastBruiserInArea).
-            if (kind == EnemyKind.Bruiser && IsLastBruiserInArea())
+            // large kind, and not a periodic count (see IsLastBruiserInArea). MV-427: granted at most
+            // once EVER, even across a death that wipes and respawns this same area's robots — without
+            // DeathRunState's flag, a restored area's fresh last Bruiser would mint another part and
+            // suicide-farming would be the optimal strategy.
+            if (kind == EnemyKind.Bruiser && IsLastBruiserInArea()
+                && MaxWorlds.Arena.DeathRunState.TryGrantAreaPart(ResolveCurrentArea()))
                 SpawnDrop(PickupKind.Part, pos, DecorativeKind());
         }
 
@@ -191,6 +195,17 @@ namespace MaxWorlds.Pickups
             if (_areaDirector == null)
                 _areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
             return _areaDirector != null ? _areaDirector.CurrentArea : 0;
+        }
+
+        /// <summary>Force <paramref name="areaIndex"/>'s last-Bruiser countdown to re-seed from a
+        /// fresh solved count next time it's asked (MV-427) — called when a death wipes and respawns
+        /// that area's robots, so the restored roster's own Bruisers count down from THEIR full number
+        /// instead of picking up wherever the pre-death fight left off. The "already granted, ever"
+        /// guard is separate (<see cref="MaxWorlds.Arena.DeathRunState"/>) — this only fixes the
+        /// countdown's bookkeeping, not whether a part is still allowed to drop.</summary>
+        public void ResetBruiserCountdown(int areaIndex)
+        {
+            if (_bruiserBudgetArea == areaIndex) _bruiserBudgetArea = -1;
         }
 
         private int ResolveLargeCountForArea(int areaIndex) =>

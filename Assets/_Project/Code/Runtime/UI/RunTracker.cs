@@ -1,25 +1,26 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
-using MaxWorlds.Player;
 using MaxWorlds.Save;
 
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// Watches a Backyard run and shows the Result screen when it ends (YT-31). Accumulates the
-    /// slice stats — run time, robots killed, factory destroyed — off <see cref="HudSignals"/>,
-    /// ends in Victory when the boss is defeated and Defeat when Max dies, then hands the stats
-    /// to a <see cref="ResultScreen"/>. Code-driven and self-wiring (finds PlayerHealth by type),
-    /// so it runs headlessly and on the WebGL build with no editor setup.
+    /// Watches a Backyard run and shows the Result screen when the boss falls (YT-31). Accumulates
+    /// the slice stats — run time, robots killed, factory destroyed — off <see cref="HudSignals"/>,
+    /// then hands them to a <see cref="ResultScreen"/> once Victory is sealed. Code-driven and
+    /// self-wiring, so it runs headlessly and on the WebGL build with no editor setup.
     ///
-    /// YT-152 — the win no longer cuts straight to the card. Beating the boss <em>seals</em> the
-    /// outcome as Victory (the clock stops on the kill, and a stray death during the celebration can
-    /// no longer flip it to Defeat), but the results are held back: the blow-up, the flung parts and
+    /// MV-427: a death no longer seals a Defeat outcome here — Max dying now continues the run
+    /// (<see cref="WorldRunner"/> handles the respawn), so the only way this run ever ends is Victory.
+    ///
+    /// YT-152 — the win doesn't cut straight to the card. Beating the boss <em>seals</em> the outcome
+    /// (the clock stops on the kill), but the results are held back: the blow-up, the flung parts and
     /// the walk-out to the exit gate play first, and the card only lands on
     /// <see cref="HudSignals.BossPayoffFinished"/> — raised by <c>BossVictoryPayoff</c> when Max steps
-    /// through the gate, or when that sequence times out. Defeat still shows immediately; there is
-    /// nothing to celebrate. A safety timeout guarantees the card appears even if that director is
-    /// absent, so a win can never strand the player on a frozen-in-nothing arena.
+    /// through the gate, or when that sequence times out. A safety timeout guarantees the card
+    /// appears even if that director is absent, so a win can never strand the player on a
+    /// frozen-in-nothing arena.
     /// </summary>
     public sealed class RunTracker : MonoBehaviour
     {
@@ -30,17 +31,11 @@ namespace MaxWorlds.UI
         private const float VictorySafetyTimeout = 20f;
 
         private readonly RunStats _stats = new RunStats();
-        private PlayerHealth _health;
 
         private bool _sealed;              // outcome decided; the clock stops and nothing may override it
         private bool _shown;              // the result card has been built
         private bool _awaitingPayoff;     // a victory is sealed and we're holding for the payoff to finish
         private float _sealedRealtime;
-
-        private void Awake()
-        {
-            _health = FindFirstObjectByType<PlayerHealth>();
-        }
 
         private void OnEnable()
         {
@@ -48,7 +43,6 @@ namespace MaxWorlds.UI
             HudSignals.FactoryDestroyed += OnFactory;
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.BossPayoffFinished += OnPayoffFinished;
-            if (_health != null) _health.Changed += OnHealthChanged;
         }
 
         private void OnDisable()
@@ -57,7 +51,6 @@ namespace MaxWorlds.UI
             HudSignals.FactoryDestroyed -= OnFactory;
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.BossPayoffFinished -= OnPayoffFinished;
-            if (_health != null) _health.Changed -= OnHealthChanged;
         }
 
         private void Update()
@@ -93,17 +86,6 @@ namespace MaxWorlds.UI
             if (_sealed) ShowResults();
         }
 
-        private void OnHealthChanged(float _)
-        {
-            if (_health != null && !_health.IsAlive)
-            {
-                // A death before the boss falls is a real Defeat; a death after the win is sealed is
-                // ignored by Seal's first-call-wins, and just brings the (Victory) card forward.
-                Seal(RunOutcome.Defeat);
-                ShowResults();
-            }
-        }
-
         private void Seal(RunOutcome outcome)
         {
             if (_sealed) return;
@@ -111,9 +93,11 @@ namespace MaxWorlds.UI
             _sealedRealtime = Time.unscaledTime;
             _stats.Finish(outcome);
 
-            // YT-218: a run that actually ends (win or lose) is what banks a profile's personal
-            // best — bailing out early via the HOME button records nothing.
-            SaveSystem.RecordResult(SaveSystem.ActiveSlot, _stats.PeakNormalized);
+            // MV-427: deaths taken is the new personal-best discriminator — the peak-Domination %
+            // stopped meaning anything once a death no longer ends the run (every player eventually
+            // reaches 100%). Still only banked on a run that actually finishes (Victory); bailing out
+            // early via the HOME button records nothing (YT-218).
+            SaveSystem.RecordResult(SaveSystem.ActiveSlot, DeathRunState.DeathsTaken);
         }
 
         private void ShowResults()

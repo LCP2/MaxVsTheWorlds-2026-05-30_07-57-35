@@ -150,7 +150,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator Play_OnAnExistingProfile_StartsFreshWithoutResettingItsPersonalBest()
         {
-            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.6f });
+            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 3 });
             UpgradeState.Install(PartKind.Hydro);
             PickupWallet.AddPowerCell();
 
@@ -160,7 +160,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(1));
-            Assert.That(SaveSystem.Load(1).PersonalBestNormalized, Is.EqualTo(0.6f).Within(1e-4f),
+            Assert.That(SaveSystem.Load(1).BestDeathsToVictory, Is.EqualTo(3),
                 "picking an existing profile must never reset its personal best");
             Assert.That(UpgradeState.IsInstalled(PartKind.Hydro), Is.False,
                 "a profile carries no mid-run state — every play starts fresh (YT-218)");
@@ -171,13 +171,13 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator AnExistingProfilesCardShowsItsNameAndPersonalBest()
         {
-            SaveSystem.Save(2, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.82f });
+            SaveSystem.Save(2, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 2 });
 
             yield return NewScreen();
 
             var texts = _screenGo.GetComponentsInChildren<Text>(true);
-            Assert.That(texts.Any(t => t.text == "DEXTER — best: 82%"), Is.True,
-                "the slot card must read '<name> — best: <pct>%'");
+            Assert.That(texts.Any(t => t.text == "DEXTER — best: 2 deaths"), Is.True,
+                "the slot card must read '<name> — best: N deaths'");
         }
 
         [UnityTest]
@@ -218,7 +218,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TappingResetOnAnOccupiedSlotOpensAConfirmDialogWithoutWipingYet()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 1 });
             yield return NewScreen();
 
             Assert.That(ResetButton(0).interactable, Is.True, "an occupied slot must offer Reset");
@@ -232,7 +232,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator CancellingTheResetConfirmLeavesTheSlotUntouched()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 1 });
             yield return NewScreen();
 
             ResetButton(0).onClick.Invoke();
@@ -244,14 +244,14 @@ namespace MaxWorlds.Tests.PlayMode
             SaveSlotData data = SaveSystem.Load(0);
             Assert.That(data.HasData, Is.True);
             Assert.That(data.DisplayName, Is.EqualTo("DEXTER"));
-            Assert.That(data.PersonalBestNormalized, Is.EqualTo(0.5f).Within(1e-4f));
+            Assert.That(data.BestDeathsToVictory, Is.EqualTo(1));
         }
 
         [UnityTest]
         public IEnumerator ConfirmingTheResetWipesOnlyThatSlotAndRedrawsItAsEmpty()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.5f });
-            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "MAX", PersonalBestNormalized = 0.7f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 1 });
+            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "MAX", BestDeathsToVictory = 4 });
             yield return NewScreen();
 
             ResetButton(0).onClick.Invoke();
@@ -271,7 +271,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator AResetSlotStartsAGenuinelyNewGame()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.9f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 5 });
             yield return NewScreen();
 
             ResetButton(0).onClick.Invoke();
@@ -282,7 +282,7 @@ namespace MaxWorlds.Tests.PlayMode
             PlayButton(0).onClick.Invoke();
             yield return null;
 
-            Assert.That(SaveSystem.Load(0).PersonalBestNormalized, Is.EqualTo(0f),
+            Assert.That(SaveSystem.Load(0).BestDeathsToVictory, Is.EqualTo(-1),
                 "a reset slot must start with no carried-over personal best");
         }
     }

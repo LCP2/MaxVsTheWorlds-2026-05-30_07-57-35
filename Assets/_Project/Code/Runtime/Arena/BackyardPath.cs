@@ -102,7 +102,7 @@ namespace MaxWorlds.Arena
 
             _worldRunner = new GameObject("World Runner").AddComponent<WorldRunner>();
             _worldRunner.transform.SetParent(transform, false);
-            _worldRunner.Configure(cfg, _build);
+            _worldRunner.Configure(cfg, _map, _build, _areaDirector);
 
             WireAreaGatesToPopulation();
         }

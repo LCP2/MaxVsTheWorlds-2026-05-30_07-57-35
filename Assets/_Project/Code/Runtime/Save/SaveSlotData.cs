@@ -22,8 +22,10 @@ namespace MaxWorlds.Save
         /// until a rename UI exists.</summary>
         public string DisplayName = string.Empty;
 
-        /// <summary>The best peak Domination % (0..1, <c>DifficultyDirector.Normalized</c>) this
-        /// profile has ever reached across any run — the score hooks arrive with YT-209.</summary>
-        public float PersonalBestNormalized;
+        /// <summary>Fewest deaths taken across any run this profile has ever finished (Victory) —
+        /// the score hooks arrive with YT-209. Replaces the old peak-Domination-%, which stopped
+        /// discriminating once a death no longer ends the run (MV-427: every player eventually
+        /// reaches 100%). -1 means this profile has never finished a run yet.</summary>
+        public int BestDeathsToVictory = -1;
     }
 }
