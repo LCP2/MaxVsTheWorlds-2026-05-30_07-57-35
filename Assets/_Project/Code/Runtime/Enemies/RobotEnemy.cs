@@ -956,6 +956,21 @@ namespace MaxWorlds.Enemies
             gameObject.SetActive(false);
         }
 
+        /// <summary>Remove this robot WITHOUT counting it as a kill (MV-427): no kill signal, no loot,
+        /// no death VFX — just the same <see cref="Died"/>/pooling handshake <see cref="Die"/> ends
+        /// on, so <c>AreaAccumulationDirector</c> still frees its spawn-queue slot and reclaims the
+        /// instance. What wipes an arena's robots when Max dies in it and the room resets to its
+        /// authored composition; a robot vanishing this way was never "defeated", so it must not
+        /// grant a kill count, cells, or a part.</summary>
+        public void Despawn()
+        {
+            if (!IsAlive) return;
+            Current = State.Dead;
+            _health = 0f;
+            Died?.Invoke(this);
+            gameObject.SetActive(false);
+        }
+
         private void SetTell(Color c)
         {
             if (tellRenderer == null) return;

@@ -197,6 +197,51 @@ namespace MaxWorlds.Enemies
             return int.TryParse(zoneId.Substring(4), out int n) ? n : 0;
         }
 
+        /// <summary>Wipe <paramref name="areaIndex"/>'s live/queued robots and re-solve a fresh
+        /// instance of its authored composition (MV-427: the arena Max died in fully resets). Every
+        /// robot currently standing inside the area's zone bounds is <see cref="RobotEnemy.Despawn"/>'d
+        /// (no kill credit, no loot — it was never defeated) rather than left to keep fighting a
+        /// player who is no longer there; anything still queued but not yet released for this area is
+        /// dropped too (<see cref="AreaSpawnQueue.RemoveQueued"/>), so the restored roster is never
+        /// topped up on top of a stale backlog. Composition solving is a pure function of the area
+        /// index (<see cref="WorldConfig.SolveComposition"/>/<see cref="AreaPopulation.ComposeForArea"/>),
+        /// so re-running <see cref="FillArea"/> gives back the identical authored roster — only the
+        /// "already filled" guard and this area's own spawn/concealment counters reset. A no-op for
+        /// the entry stub or an unrecognised area (nothing to restore).</summary>
+        public void RestoreArea(int areaIndex)
+        {
+            if (areaIndex <= 0 || _map == null || _queue == null) return;
+
+            MapZone zone = _map.Zone($"area{areaIndex}");
+            if (zone == null) return;
+
+            foreach (RobotEnemy robot in new List<RobotEnemy>(RobotEnemy.Active))
+            {
+                if (robot == null) continue;
+                Vector3 p = robot.transform.position;
+                MapZone at = _map.ZoneAt(p.x, p.z);
+                if (at != null && at.id == zone.id) robot.Despawn();
+            }
+
+            _queue.RemoveQueued(areaIndex);
+            _filledAreas.Remove(areaIndex);
+            FillArea(areaIndex);
+        }
+
+        /// <summary>Force <see cref="CurrentArea"/> and the physical-position tracker back to
+        /// <paramref name="areaIndex"/> (MV-427) — called once, right after a death respawn places Max
+        /// back in an earlier arena, so walking forward into the area he died in again re-fires
+        /// <see cref="PlayerCrossedIntoArea"/> and the normal gate-open population hand-off exactly as
+        /// it would on a first approach. Only ever rewinds — never raises either tracker, since
+        /// <see cref="EnterArea"/> and <see cref="Update"/>'s own position check already own forward
+        /// advancement.</summary>
+        public void SetCurrentArea(int areaIndex)
+        {
+            if (areaIndex <= 0) return;
+            if (areaIndex < CurrentArea) CurrentArea = areaIndex;
+            if (areaIndex < _physicalArea) _physicalArea = areaIndex;
+        }
+
         private void Update()
         {
             if (_map == null || _queue == null) return;

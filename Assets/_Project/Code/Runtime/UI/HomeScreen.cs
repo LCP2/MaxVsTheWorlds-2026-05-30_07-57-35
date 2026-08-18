@@ -154,6 +154,13 @@ namespace MaxWorlds.UI
             HydroBurst.Reset();   // a fresh run must not inherit a burst/cooldown in progress (YT-215)
             PickupWallet.Reset();
             WeaponSystemState.Reset();   // fresh RCDA tracks at L1, no abilities owned (WV-230)
+            // MV-427: was never wired anywhere — a fresh pick could inherit a stale banked ability
+            // credit left over from a previous slot's run.
+            AbilityCreditBank.Reset();
+            // MV-427: a fresh run starts with every area's part ungranted and no deaths taken —
+            // otherwise a profile that died in Area 3 last run would find Area 3's part permanently
+            // ungrantable on its next, unrelated run.
+            MaxWorlds.Arena.DeathRunState.Reset();
             if (playIntro) IntroCinematic.TryPlay();
         }
 
@@ -318,11 +325,14 @@ namespace MaxWorlds.UI
             _confirmRoot = null;
         }
 
-        /// <summary>"NAME — best: NN%" (YT-218's own worked example) — nothing else survives between
-        /// runs, so the personal best is the whole story a slot card has to tell.</summary>
+        /// <summary>"NAME — best: N deaths" (MV-427; supersedes YT-218's peak-Domination-% example,
+        /// which stopped discriminating once a death no longer ends the run) — nothing else survives
+        /// between runs, so the personal best is the whole story a slot card has to tell.</summary>
         private static string Summarise(SaveSlotData data)
         {
-            return $"{data.DisplayName} — best: {RunStats.FormatPercent(data.PersonalBestNormalized)}%";
+            if (data.BestDeathsToVictory < 0) return $"{data.DisplayName} — no finished run yet";
+            string deaths = data.BestDeathsToVictory == 1 ? "1 death" : $"{data.BestDeathsToVictory} deaths";
+            return $"{data.DisplayName} — best: {deaths}";
         }
 
         // ------------------------------------------------------------------ helpers (ResultScreen/UpgradeScreen idiom)

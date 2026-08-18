@@ -1,19 +1,20 @@
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
-using UnityEngine.SceneManagement;
-using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.UI;
-using MaxWorlds.Core;
 
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// Slice Result screen (YT-31, spec §4.9). Built entirely in code — a dim overlay with a
-    /// VICTORY/DEFEAT banner, the run's stat card (time, kills, factory destroyed), and the CTAs
-    /// (Replay, Next World — locked in the slice). Shown by <see cref="RunTracker"/> when a run
-    /// ends; it pauses the game (timeScale 0) and offers Replay via a clickable button or the R
-    /// key. Loads instantly (a code-built canvas), meeting the sub-3-second AC.
+    /// Slice Result screen (YT-31, spec §4.9). Built entirely in code — a dim overlay with the
+    /// VICTORY banner, the run's stat card (time, kills, factory destroyed), and NEXT WORLD (locked
+    /// in the slice). Shown by <see cref="RunTracker"/> once the boss falls and its payoff finishes;
+    /// it pauses the game (timeScale 0). Loads instantly (a code-built canvas), meeting the
+    /// sub-3-second AC.
+    ///
+    /// MV-427: Victory-only now. Death no longer ends the run (it respawns Max instead, handled by
+    /// <see cref="MaxWorlds.Arena.WorldRunner"/>), so this screen — and its old REPLAY CTA, which
+    /// reloaded the whole scene — never has a Defeat outcome to show any more.
     /// </summary>
     public sealed class ResultScreen : MonoBehaviour
     {
@@ -21,41 +22,13 @@ namespace MaxWorlds.UI
         private static readonly Color Panel = new Color(0.08f, 0.10f, 0.14f, 0.96f);
         private static readonly Color Gold = new Color(0.957f, 0.788f, 0.365f);
         private static readonly Color Bone = new Color(0.96f, 0.94f, 0.86f);
-        private static readonly Color Green = new Color(0.49f, 0.76f, 0.42f);
-        private static readonly Color Red = new Color(0.90f, 0.30f, 0.28f);
 
-        private InputAction _replay;
-
-        /// <summary>Build and show the screen for a finished run. Pauses the game.</summary>
+        /// <summary>Build and show the screen for a finished (Victory) run. Pauses the game.</summary>
         public void Show(RunStats stats)
         {
             EnsureEventSystem();
             BuildCanvas(stats);
-
-            _replay = new InputAction("ResultReplay", InputActionType.Button);
-            _replay.AddBinding("<Keyboard>/r");
-            _replay.AddBinding("<Keyboard>/enter");
-            _replay.Enable();
-
             Time.timeScale = 0f; // freeze the run behind the card
-        }
-
-        private void Update()
-        {
-            if (_replay != null && _replay.WasPressedThisFrame()) Replay();
-        }
-
-        private void OnDestroy()
-        {
-            _replay?.Dispose();
-        }
-
-        private void Replay()
-        {
-            BootTiming.Mark("replay-tapped");   // YT-216 — diff against HomeScreen's "controllable-replay"
-            Time.timeScale = 1f;
-            var scene = SceneManager.GetActiveScene();
-            SceneManager.LoadScene(scene.buildIndex);
         }
 
         private void BuildCanvas(RunStats stats)
@@ -78,47 +51,30 @@ namespace MaxWorlds.UI
             panel.type = Image.Type.Sliced;
             Center(panel.rectTransform, ResultLayout.PanelWidth, ResultLayout.PanelHeight);
 
-            bool win = stats.Outcome == RunOutcome.Victory;
-            var title = AddText(panel.rectTransform, 78f, win ? Gold : Red, TextAnchor.MiddleCenter, FontStyle.Bold);
+            // MV-427: the only outcome that ever reaches this screen now is Victory — death respawns
+            // Max instead of ending the run, so there is no DEFEAT banner/near-miss/REPLAY branch left.
+            var title = AddText(panel.rectTransform, 78f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
             Top(title.rectTransform, 0f, -60f, 680f, 90f);
             title.text = stats.Title;
 
             var sub = AddText(panel.rectTransform, 26f, Bone, TextAnchor.MiddleCenter, FontStyle.Normal);
             Top(sub.rectTransform, 0f, -140f, 680f, 40f);
-            sub.text = win ? "Backyard slice cleared" : "Max was overrun";
-
-            // YT-210: the near-miss is the hook that starts the next run — the biggest thing on a
-            // DEFEAT card, bar the banner itself. Victory already has its own payoff (the boss kill),
-            // so this only shows on a loss.
-            float y = -210f;
-            if (!win)
-            {
-                var nearMiss = AddText(panel.rectTransform, 44f, Gold, TextAnchor.MiddleCenter, FontStyle.Bold);
-                Top(nearMiss.rectTransform, 0f, -185f, 680f, 56f);
-                nearMiss.text = $"YOU REACHED {RunStats.FormatPercent(stats.PeakNormalized)}% OF DOMINATION";
-                y = -260f;
-            }
+            sub.text = "Backyard slice cleared";
 
             // Stat rows.
+            float y = -210f;
             AddStatRow(panel.rectTransform, "TIME", RunStats.FormatTime(stats.Elapsed), ref y);
             AddStatRow(panel.rectTransform, "ROBOTS DESTROYED", stats.Kills.ToString(), ref y);
             AddStatRow(panel.rectTransform, "FACTORIES DESTROYED", stats.FactoriesDestroyed.ToString(), ref y);
             AddStatRow(panel.rectTransform, "DIFFICULTY", "NORMAL", ref y);
 
-            // CTAs. Both sit on the same content column as the stat rows above (YT-81) — REPLAY used
-            // to be placed at a bare -300, which with a centred pivot put its left edge 90px outside
-            // the panel entirely.
-            var replayBtn = AddButton(panel.rectTransform, "REPLAY  (R)", Green, true, Replay);
-            Bottom(replayBtn, ResultLayout.LeftButtonX, 40f,
-                   ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
-
+            // One CTA now that REPLAY is gone (MV-427) — centred on the panel rather than the old
+            // two-button RightButtonX slot.
             var nextBtn = AddButton(panel.rectTransform, "NEXT WORLD", new Color(0.3f, 0.34f, 0.4f), false, null);
-            Bottom(nextBtn, ResultLayout.RightButtonX, 40f,
-                   ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
+            Bottom(nextBtn, 0f, 40f, ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
 
             var lockNote = AddText(panel.rectTransform, 16f, new Color(1, 1, 1, 0.5f), TextAnchor.MiddleCenter, FontStyle.Normal);
-            Bottom((RectTransform)lockNote.transform, ResultLayout.RightButtonX, 14f,
-                   ResultLayout.ButtonWidth, 20f);
+            Bottom((RectTransform)lockNote.transform, 0f, 14f, ResultLayout.ButtonWidth, 20f);
             lockNote.text = "locked in the slice";
         }
 

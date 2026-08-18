@@ -147,5 +147,21 @@ namespace MaxWorlds.Enemies
             _queued.Clear();
             ActiveCount = 0;
         }
+
+        /// <summary>Drops every entry still queued (not yet released) for one area, leaving every
+        /// other area's queued backlog and the global <see cref="ActiveCount"/> untouched (MV-427: an
+        /// area reset on death must not disturb an earlier area's own leftover overflow). Active
+        /// robots already released for this area are the caller's job to remove and report destroyed
+        /// individually (each one flows back through <see cref="ReportDestroyed"/>) — this only clears
+        /// the not-yet-placed backlog.</summary>
+        public void RemoveQueued(int areaIndex)
+        {
+            int count = _queued.Count;
+            for (int i = 0; i < count; i++)
+            {
+                QueuedSpawn next = _queued.Dequeue();
+                if (next.Area != areaIndex) _queued.Enqueue(next);
+            }
+        }
     }
 }

@@ -58,6 +58,12 @@ namespace MaxWorlds.Player
         /// <summary>Fired when HP changes (HUD subscribes). Arg = current HP.</summary>
         public event Action<float> Changed;
 
+        /// <summary>Fired once, the instant HP reaches zero (MV-427) — what a death-continues-the-run
+        /// flow hangs off instead of inferring death from <see cref="Changed"/> landing on zero. Not
+        /// fired again until a subsequent <see cref="Revive"/> and a fresh fall, since
+        /// <see cref="TakeDamage"/> already early-returns while <see cref="IsAlive"/> is false.</summary>
+        public event Action Died;
+
         // --- IHealthReadout (YT-111): what the floating bar over Max reads. ---
         public float HealthNormalized => Normalized;
         public float HealthCurrent => _health;
@@ -114,6 +120,17 @@ namespace MaxWorlds.Player
             if (amount <= 0f) return;
 
             _health = Mathf.Max(0f, _health - amount);
+            _timeSinceDamage = 0f;
+            Changed?.Invoke(_health);
+            if (_health <= 0f) Died?.Invoke();
+        }
+
+        /// <summary>Bring Max back after a death continues the run (MV-427) — full HP, same shape as a
+        /// fresh <see cref="Awake"/>. <see cref="IsAlive"/> flips back true the instant this runs, so
+        /// ordinary damage/regen resume on the next frame exactly as if he had never fallen.</summary>
+        public void Revive()
+        {
+            _health = Max;
             _timeSinceDamage = 0f;
             Changed?.Invoke(_health);
         }

@@ -100,7 +100,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator Tapped_LeavesThePersonalBestUntouched()
         {
-            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", PersonalBestNormalized = 0.4f });
+            SaveSystem.Save(0, new SaveSlotData { HasData = true, DisplayName = "DEXTER", BestDeathsToVictory = 2 });
 
             yield return EnterSlot(0);
 
@@ -117,7 +117,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             SaveSlotData data = SaveSystem.Load(0);
             Assert.That(data.DisplayName, Is.EqualTo("DEXTER"), "bailing out early must not touch the profile's identity");
-            Assert.That(data.PersonalBestNormalized, Is.EqualTo(0.4f).Within(1e-4f),
+            Assert.That(data.BestDeathsToVictory, Is.EqualTo(2),
                 "bailing out early via HOME must not bank a personal best — only a finished run does (YT-218)");
         }
     }

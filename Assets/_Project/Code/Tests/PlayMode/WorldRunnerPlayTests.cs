@@ -105,7 +105,7 @@ namespace MaxWorlds.Tests.PlayMode
             _built = MapRuntime.Build(map, _root.transform);
 
             var runner = _root.AddComponent<WorldRunner>();
-            runner.Configure(cfg, _built);
+            runner.Configure(cfg, map, _built, null);
             yield return null;
         }
 
