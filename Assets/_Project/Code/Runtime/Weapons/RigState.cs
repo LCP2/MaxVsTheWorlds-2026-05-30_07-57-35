@@ -55,6 +55,18 @@ namespace MaxWorlds.Weapons
         /// this returns true.</summary>
         public static bool TrySpendPart(string id)
         {
+            if (!CanSpendPart(id)) return false;
+            s_levels[id] = Level(id) + 1;
+            Changed?.Invoke();
+            return true;
+        }
+
+        /// <summary>Would <see cref="TrySpendPart"/> succeed right now, without spending anything? The
+        /// same rule <see cref="TrySpendPart"/> enforces, factored out so THE RIG board (MV-423) can
+        /// show its amber "+" badge on exactly the nodes a part would actually raise, without a
+        /// speculative spend-and-undo.</summary>
+        public static bool CanSpendPart(string id)
+        {
             if (!RigBoard.Exists(id)) return false;
             int level = Level(id);
             if (RigBoard.IsCap(id))
@@ -65,11 +77,7 @@ namespace MaxWorlds.Weapons
             {
                 return false;
             }
-
-            if (level >= RigBoard.MaxLevel(id)) return false;
-            s_levels[id] = level + 1;
-            Changed?.Invoke();
-            return true;
+            return level < RigBoard.MaxLevel(id);
         }
 
         /// <summary>Grant a <c>cap</c> at level 1 — a Morphing Module draft pick. Idempotent: a
