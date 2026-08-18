@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
-using UnityEngine.Rendering;
 using MaxWorlds.Pickups;
 
 namespace MaxWorlds.VFX
 {
     /// <summary>
-    /// Dresses the walk-over pickups with their real art (YT-134), and drives the shared collectible
-    /// glow every pickup wears on the ground (YT-145).
+    /// Dresses the walk-over pickups with their real art (YT-134), and drives their ground ring
+    /// (MV-429, formerly a floating aura — YT-145).
     ///
     /// YT-131/133 drop the pickups as greybox stand-ins — a cyan sphere for a power cell and, for a
     /// PART, a single cube. YT-134/145 swapped each greybox for a distinct <see cref="WeaponPartArt"/>
@@ -47,23 +46,48 @@ namespace MaxWorlds.VFX
         private readonly Dictionary<Pickup, bool> _partWasActive = new Dictionary<Pickup, bool>();
         private readonly Dictionary<Pickup, string> _partArtKey = new Dictionary<Pickup, string>();
 
-        // The collectible glow (YT-145): a soft additive bloom aura on every dropped pickup + power cell,
-        // with a subtle pulse, so they read as "grab me" from across the yard. One shared colour for the
-        // whole pickup language — the HUD part-ready icon (YT-147) is told to match it.
-        //
-        // ORANGE, not green: the lawn is green (BiomePalette turf/grass), so a green glow on it has almost
-        // no hue contrast — and readability is the craft bible's first tie-breaker. Orange is the
-        // complement of the grass, so it pops hardest; the pulse keeps it distinct from the game's STATIC
-        // hazard-orange (factory/telegraph), and it stays clear of the forbidden yellow/brown. The aura
-        // rides the floating pickup (it is NOT a ground ring) so it never reads as a danger telegraph.
-        private const string GlowName = "CollectibleGlow";
-        /// <summary>The collectible language colour: the on-ground pickup aura, and the shared source
-        /// the HUD part-ready chip reads so the tell matches the pickup it points at (YT-147). Retune
-        /// this one value and both the ground glow and the HUD chip move together — they can't drift.</summary>
+        /// <summary>The collectible language colour: shared with the HUD part-ready chip so the tell
+        /// matches the pickup it points at (YT-147). MV-429 retired the on-ground aura this used to also
+        /// paint (an additive sphere 2.3-2.7x wider than the prop it was meant to advertise, and centred
+        /// on the pickup's hover point rather than its mass — see <see cref="DressGroundRing"/> for what
+        /// replaced it) but the HUD still reads this constant, so it stays.</summary>
         public static readonly Color CollectibleGlow = new Color(1f, 0.52f, 0.12f);
-        private static readonly Color GlowColor = CollectibleGlow;
-        private const float GlowBaseScale = 0.72f;
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
+        // --- the ground ring (MV-429) -------------------------------------------------------------
+        //
+        // Replaces the old CollectibleGlow aura: a flat GroundRing per pickup, tracking the pickup's XZ
+        // but pinned to the ground plane (unlike the aura, it must NOT ride the float/bob — a ring that
+        // bounced with the prop would read as levitating scenery, not a ground mark). Sits below the
+        // danger telegraph (GroundRing.GroundLift = 0.03) and the always-on actor anchors
+        // (GroundAnchorTuning.RingLift = 0.020) in the ground-mark stacking order, so a telegraph can
+        // never be hidden by a pickup's own "grab me" tell.
+        private const string RingName = "GroundRing";
+        private const string RingOuterName = "GroundRingOuter";
+        private const string RingInnerName = "GroundRingInner";
+        private const float RingLift = 0.016f;
+
+        // The "grab me" beat the old aura pulsed with (same Mathf.Sin cadence), now driving the ring's
+        // alpha instead of the aura's scale/brightness — a breathing radius would read as a telegraph,
+        // so only alpha moves.
+        private const float RingPulseSpeed = 3.4f;
+        private const float RingPulseMin = 0.55f;
+        private const float RingPulseRange = 0.45f;
+
+        private const float PowerCellRingRadius = 0.50f;
+        private const float PartRingRadius = 0.46f;
+        private const float DeviceRingOuterRadius = 0.68f;
+        private const float DeviceRingInnerRadius = 0.44f;
+
+        private const float PowerCellRingAlpha = 0.85f;
+        private const float PartRingAlpha = 0.70f;
+        private const float DeviceRingOuterAlpha = 0.90f;
+        private const float DeviceRingInnerAlpha = 0.50f;
+
+        // MV-429: the ability-grant device's ring wears red ahead of MV-431's colour pass on the prop
+        // itself — this literal is the same value that ticket's ModuleGlow introduces, so the ring and
+        // the (future) prop land on the same red instead of drifting apart.
+        private static readonly Color DeviceRingColor = new Color(1.00f, 0.24f, 0.08f);
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -136,17 +160,17 @@ namespace MaxWorlds.VFX
                         // The GLISTEN/SHIMMER (YT-167, extended WV-236): flicker whichever specular dots
                         // WeaponPartArt built onto this prop — a missing index is a harmless no-op
                         // (PulseGlisten below bails if it can't find the child). Combined with the spin
-                        // above, this is what sells "shiny" over the plain aura below — a highlight that
-                        // visibly travels the surface and catches the light, not just a halo around it.
+                        // above, this is what sells "shiny" — a highlight that visibly travels the
+                        // surface and catches the light, not just a halo around it.
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "3", 4.6f);
                         // The gentle RADIATE (MV-304): the "Core" charge band WeaponPartArt built is
                         // otherwise a static light — breathing it slowly sells "energy source", not
-                        // "lamp". Deliberately calmer and slower than PulseGlow's orange aura below (the
+                        // "lamp". Deliberately calmer and slower than the ground ring's pulse (the
                         // ticket's own "far gentler than a radiant star") so the two don't compete —
-                        // the cell's own charge is a quiet pulse under the shared collectible glow.
+                        // the cell's own charge is a quiet pulse above the "grab me" ring below it.
                         PulseCellCore(art);
                     }
                 }
@@ -195,12 +219,12 @@ namespace MaxWorlds.VFX
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
                         PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
                         // MV-308 AC: "the glowing radiance the power cells have" — the same gentle
-                        // MV-304 Core breathe, not just the shared orange aura below.
+                        // MV-304 Core breathe, not just the shared "grab me" ring below it.
                         PulseCellCore(art);
                     }
                 }
 
-                PulseGlow(EnsureGlow(pickup.transform));
+                DressGroundRing(pickup.transform, pickup.Kind);
             }
         }
 
@@ -234,50 +258,51 @@ namespace MaxWorlds.VFX
             }
         }
 
-        /// <summary>The pickup's collectible aura, built once and reused. A sibling of the art (not a
-        /// PartArt: child), so it survives a pooled cell rebuilding its prop instead of getting torn
-        /// down with it.</summary>
-        private static Transform EnsureGlow(Transform pickup)
+        /// <summary>Ensures and pulses this pickup's ground ring(s) — one for a cell or part, two
+        /// (outer + inner) for a device. Built once per name and reused, the same idiom the old aura
+        /// used. Unscaled time so it keeps pulsing while a pickup sits on the ground under the paused
+        /// upgrade screen, matching the art's spin.</summary>
+        private static void DressGroundRing(Transform pickup, PickupKind kind)
         {
-            var existing = pickup.Find(GlowName);
-            if (existing != null) return existing;
+            float t = Mathf.Sin(Time.unscaledTime * RingPulseSpeed) * 0.5f + 0.5f;   // 0..1
+            float pulse = RingPulseMin + RingPulseRange * t;
 
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = GlowName;
-            var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);                 // the Pickup's own trigger owns walk-over
-            go.transform.SetParent(pickup, worldPositionStays: false);
-            go.transform.localPosition = Vector3.zero;     // centred on the prop mass; rides the float/bob
-            go.transform.localScale = Vector3.one * GlowBaseScale;
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
-            return go.transform;
-        }
-
-        /// <summary>Breathe the aura — a gentle scale + brightness pulse so it reads as an active beacon,
-        /// not a painted-on disc. Unscaled time so it keeps pulsing while a part sits on the ground under
-        /// the paused upgrade screen, matching the art's spin.</summary>
-        private static void PulseGlow(Transform glow)
-        {
-            if (glow == null) return;
-
-            float t = Mathf.Sin(Time.unscaledTime * 3.4f) * 0.5f + 0.5f;   // 0..1
-            glow.localScale = Vector3.one * (GlowBaseScale * (0.9f + 0.16f * t));
-
-            if (glow.TryGetComponent<MeshRenderer>(out var r))
+            if (kind == PickupKind.Device)
             {
-                var mpb = new MaterialPropertyBlock();
-                r.GetPropertyBlock(mpb);
-                mpb.SetColor(BaseColorId, GlowColor * (0.6f + 0.4f * t));   // additive: dimmer..full
-                r.SetPropertyBlock(mpb);
+                ShowRing(pickup, RingOuterName, DeviceRingOuterRadius, DeviceRingColor, DeviceRingOuterAlpha * pulse);
+                ShowRing(pickup, RingInnerName, DeviceRingInnerRadius, DeviceRingColor, DeviceRingInnerAlpha * pulse);
+                return;
             }
+
+            bool cell = kind == PickupKind.PowerCell;
+            float radius = cell ? PowerCellRingRadius : PartRingRadius;
+            Color color = cell ? WeaponPartArt.CellCyan : WeaponPartArt.Chrome;
+            float alpha = cell ? PowerCellRingAlpha : PartRingAlpha;
+            ShowRing(pickup, RingName, radius, color, alpha * pulse);
         }
 
-        // MV-304: the cell's own gentle radiance — slower and lower-amplitude than PulseGlow's shared
-        // orange aura, so it reads as a quiet inner charge rather than competing with the "grab me" tell.
+        /// <summary>Builds (once) or reuses the named <see cref="GroundRing"/> child and places it at the
+        /// pickup's XZ, pinned to the ground plane — <b>not</b> parented via local position, since
+        /// <see cref="GroundRing.Show"/> writes an absolute world position every call, which is what
+        /// keeps the ring from inheriting the pickup's float/bob.</summary>
+        private static void ShowRing(Transform pickup, string name, float radius, Color color, float alpha)
+        {
+            var existing = pickup.Find(name);
+            GroundRing ring = existing != null ? existing.GetComponent<GroundRing>() : null;
+            if (ring == null)
+            {
+                ring = GroundRing.Create(name);
+                ring.transform.SetParent(pickup, worldPositionStays: false);
+            }
+            ring.Lift = RingLift;
+
+            Vector3 groundPos = pickup.position;
+            groundPos.y = 0f;   // the lawn plane (GroundAnchorTuning) — the ring never reads the bob
+            ring.Show(groundPos, radius, new Color(color.r, color.g, color.b, alpha));
+        }
+
+        // MV-304: the cell's own gentle radiance — slower and lower-amplitude than the ground ring's
+        // pulse, so it reads as a quiet inner charge rather than competing with the "grab me" tell.
         private const string CellCoreName = "Core";
         private const float CellPulseSpeed = 1.1f;
         private const float CellPulseMin = 0.75f;

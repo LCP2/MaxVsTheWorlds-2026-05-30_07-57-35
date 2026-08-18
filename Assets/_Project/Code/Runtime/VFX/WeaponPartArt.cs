@@ -40,7 +40,9 @@ namespace MaxWorlds.VFX
         // the power-nozzle ring and the harness clip all read dull/dirty (YT-146). A near-neutral
         // chrome stays a bright metal at any value — it can't go brown — so the pickups read as clean
         // collectibles, not rust.
-        private static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
+        // Public: MV-429's ground ring for a Part pickup reads this back so the ring agrees with the
+        // chrome trim of the machine-internals prop it surrounds.
+        public static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
         // Public: PickupArtDirector reads this back to drive the cell's gentle radiance (MV-304), the
         // same idiom as GlistenColor below.
         public static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
@@ -223,8 +225,12 @@ namespace MaxWorlds.VFX
         /// <summary>The power cell reads too small in-arena at its authored size (MV-316) — bumped up
         /// on top of its authored geometry, same idiom as <see cref="HydroDeviceGroundScale"/>. Stays
         /// below the Hydro device's multiplier so the cell still reads as "the common collectible", not
-        /// the rarer device.</summary>
-        public const float PowerCellGroundScale = 1.4f;
+        /// the rarer device.
+        ///
+        /// MV-429: bumped again, 1.4 -> 1.6, now that the oversized <c>CollectibleGlow</c> aura that used
+        /// to pad the cell's apparent size is gone (replaced by a ground-hugging ring) — the cell needs
+        /// its own geometry to carry more of the "read me" job the aura used to do for free.</summary>
+        public const float PowerCellGroundScale = 1.6f;
 
         /// <summary>A dropped part's machine-internals design (<see cref="MachineInternalsKeys"/>) was
         /// never given a ground multiplier at all — it stayed at its authored size while the power cell
@@ -232,10 +238,15 @@ namespace MaxWorlds.VFX
         /// their already-distinct shapes/colours (MV-326: "Max is shown approaching what look like two
         /// identical cells, but one is actually a part"). MV-326's first pass set this to a bare 1.75x —
         /// only 1.25x relative to the cell's own 1.4x, still inside the noise at the fixed 72° camera
-        /// (MV-347). Expressed as a multiple of <see cref="PowerCellGroundScale"/>, not a second bare
-        /// constant, so "a part is exactly 2x a cell's footprint" survives any future retune of the cell's
-        /// own scale instead of the two silently drifting apart again.</summary>
-        public const float PartGroundScale = PowerCellGroundScale * 2f;
+        /// (MV-347), so it was then expressed as <see cref="PowerCellGroundScale"/> * 2f so the ratio
+        /// couldn't drift.
+        ///
+        /// MV-429 breaks that derivation: bumping <see cref="PowerCellGroundScale"/> to 1.6 would have
+        /// silently dragged this to 3.2 along with it, growing the part on a ticket that never asked for
+        /// that. Pinned back to its previous effective value (2.8 = the old 1.4 * 2) as an explicit
+        /// literal instead — unchanged part size, no more silent coupling to the cell's own constant. The
+        /// part's own ticket (MV-430) owns retuning this number on purpose.</summary>
+        public const float PartGroundScale = 2.8f;
 
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
