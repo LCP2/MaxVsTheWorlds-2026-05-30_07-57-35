@@ -47,8 +47,12 @@ namespace MaxWorlds.Tests.EditMode
         {
             float baseline = _blaster.EnergyPerTick;
 
+            // Schema 3 (MV-436): Range's and Spread's own 0->1 unlocks only happen via a Morphing
+            // Module draft now, never a part spend.
+            RigState.AcquireCap("p_rng");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Range); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+            RigState.AcquireCap("p_spr");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Spread); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
 
@@ -59,13 +63,16 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void LevelingDepletionRate_OffsetsTheIncreasedDrainFromOutput_MV368AC3()
         {
+            RigState.AcquireCap("p_rng");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Range); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+            RigState.AcquireCap("p_spr");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Spread); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
 
             float noDepletionSpend = _blaster.EnergyPerTick;
 
+            RigState.AcquireCap("p_flw");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate);
 

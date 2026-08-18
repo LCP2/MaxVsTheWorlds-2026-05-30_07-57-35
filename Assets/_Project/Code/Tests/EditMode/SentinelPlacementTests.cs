@@ -111,8 +111,9 @@ namespace MaxWorlds.Tests.EditMode
         public void AimedDeployIsRejectedWhenThePointAlreadyHoldsASentinel()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            RigState.TrySpendPart("u_hp");
-            RigState.TrySpendPart("u_slt"); // 2 slots free — proves this is an overlap rejection, not a cap rejection
+            RigState.AcquireCap("u_hp"); // reaches u_slt (its own RIG child)
+            RigState.AcquireCap("u_slt"); // u_slt to L1
+            RigState.TrySpendPart("u_slt"); // u_slt to L2 -> 2 slots free (Mathf.Max(1, level)) — proves this is an overlap rejection, not a cap rejection
             PickupWallet.SetPowerCells(100);
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();

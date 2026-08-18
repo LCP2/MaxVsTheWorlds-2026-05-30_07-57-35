@@ -117,13 +117,12 @@ namespace MaxWorlds.Tests.EditMode
                     $"'{bounds[i].Id}' and '{bounds[j].Id}' hit rects overlap");
         }
 
-        // Run-start spendable set, per RigStateTests (MV-422) — p_dmg is already owned (level 1 of 6,
-        // no parent); p_rng and p_flw are both direct children of p_dmg, so they're REACHED (and, being
-        // stats, spendable) the instant p_dmg is >= 1, with no draft needed. p_spr's parent is p_rng
-        // (still 0), so it isn't reached yet, and every cap (s_bal, e_ff, e_cel, m_spd, m_tp, u_sen) sits
-        // at level 0 — parts can never perform a cap's 0->1 unlock (model.rules) — so none of them are
-        // spendable either, reached or not.
-        private static readonly HashSet<string> RunStartSpendable = new HashSet<string> { "p_dmg", "p_rng", "p_flw" };
+        // Run-start spendable set, per RigStateTests (schema 3, MV-436 — the cap/stat split is
+        // retired). p_dmg is the one ability owned at run start (level 1 of 6, no parent), so it's
+        // the only one a part can raise. Every other ability — including p_rng/p_flw, which are
+        // merely REACHED (p_dmg's own direct children) — sits at level 0, and a part can never
+        // perform any ability's 0->1 unlock (model.rules); only a Morphing Module draft can.
+        private static readonly HashSet<string> RunStartSpendable = new HashSet<string> { "p_dmg" };
 
         [Test]
         public void AmberBadgeAppearsOnExactlyTheSpendableNodesWithOneBankedPart()

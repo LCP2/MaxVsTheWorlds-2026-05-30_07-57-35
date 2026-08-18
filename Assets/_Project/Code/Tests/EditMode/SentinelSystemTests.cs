@@ -8,13 +8,15 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-362's pure/state layer, restructured MV-422 onto THE RIG's six <c>u_sen</c> child axes
+    /// MV-362's pure/state layer, restructured onto THE RIG's six <c>u_sen</c> child axes
     /// (Damage/Range/Health/Move/Cost/Slots — <c>u_dmg</c>/<c>u_rng</c>/<c>u_hp</c>/<c>u_mov</c>/
-    /// <c>u_cst</c>/<c>u_slt</c>): every axis starts at 0 and is only reached (spendable) once the
-    /// <c>u_sen</c> cap (<see cref="AbilityKind.Sentinels"/>) is drafted — the same "unowned/locked
-    /// items can't be upgraded" gate the old <c>SentinelTrackKind</c> enforced. The sentinel's damage
-    /// fraction always stays below 1.0 (the DECISION's "always weaker than Max's CURRENT primary"
-    /// enforced structurally), and the Slots axis's level IS the deployment cap.
+    /// <c>u_cst</c>/<c>u_slt</c>): every axis starts at 0. Schema 3 (MV-436) makes every one of them
+    /// a <c>cap</c> — reached once the <c>u_sen</c> cap (<see cref="AbilityKind.Sentinels"/>) is
+    /// drafted, but each axis still needs its own Morphing Module draft (<see cref="RigState.AcquireCap"/>)
+    /// before a part can raise it further, the same "unowned/locked items can't be upgraded" gate the
+    /// old <c>SentinelTrackKind</c> enforced. The sentinel's damage fraction always stays below 1.0
+    /// (the DECISION's "always weaker than Max's CURRENT primary" enforced structurally), and the
+    /// Slots axis's level IS the deployment cap.
     /// </summary>
     public sealed class SentinelSystemTests
     {
@@ -46,11 +48,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DirectChildAxesBecomeSpendableOnceSentinelsIsAcquired()
+        public void DirectChildAxesBecomeDraftableOnceSentinelsIsAcquired_MV436()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
 
-            Assert.That(RigState.TrySpendPart("u_dmg"), Is.True);
+            Assert.That(RigState.IsReached("u_dmg"), Is.True);
+            Assert.That(RigState.CanSpendPart("u_dmg"), Is.False, "u_dmg is reached but still unowned — only a draft can unlock it");
+            Assert.That(RigState.AcquireCap("u_dmg"), Is.True);
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(1));
         }
 
@@ -59,18 +63,19 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
 
-            Assert.That(RigState.TrySpendPart("u_mov"), Is.False, "u_mov's parent is u_dmg, still at 0");
+            Assert.That(RigState.IsReached("u_mov"), Is.False, "u_mov's parent is u_dmg, still at 0");
 
-            RigState.TrySpendPart("u_dmg");
-            Assert.That(RigState.TrySpendPart("u_mov"), Is.True);
+            RigState.AcquireCap("u_dmg");
+            Assert.That(RigState.IsReached("u_mov"), Is.True, "the instant u_dmg hits level 1, u_mov becomes reached");
         }
 
         [Test]
         public void ASentinelAxisCannotLevelPastItsCap()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
+            RigState.AcquireCap("u_dmg");
             int cap = RigBoard.MaxLevel("u_dmg");
-            for (int i = 0; i < cap; i++)
+            for (int i = 1; i < cap; i++)
                 Assert.That(RigState.TrySpendPart("u_dmg"), Is.True);
 
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(cap));
@@ -81,7 +86,7 @@ namespace MaxWorlds.Tests.EditMode
         public void ResetPutsEverySentinelAxisBackToZeroAndForgetsAcquisition()
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            RigState.TrySpendPart("u_dmg");
+            RigState.AcquireCap("u_dmg");
 
             WeaponSystemState.Reset();
 

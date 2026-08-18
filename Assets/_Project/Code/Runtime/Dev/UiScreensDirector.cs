@@ -123,16 +123,21 @@ namespace MaxWorlds.Dev
         private static void SpendRigFixtureLevels()
         {
             SpendToLevel("p_dmg", 4);
+            RigState.AcquireCap("p_rng");
             SpendToLevel("p_rng", 3);
+            RigState.AcquireCap("p_flw");
             SpendToLevel("p_flw", 2);
 
             RigState.AcquireCap("e_ff");
             SpendToLevel("e_ff", 2);
             RigState.AcquireCap("e_cel");
+            RigState.AcquireCap("e_cd");
             SpendToLevel("e_cd", 3);
 
             RigState.AcquireCap("u_sen");
+            RigState.AcquireCap("u_dmg");
             SpendToLevel("u_dmg", 2);
+            RigState.AcquireCap("u_rng");
             SpendToLevel("u_rng", 1);
         }
 
