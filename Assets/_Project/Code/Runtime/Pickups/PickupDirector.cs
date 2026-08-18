@@ -38,13 +38,13 @@ namespace MaxWorlds.Pickups
     ///
     /// Sheds are the ability-unlock mechanic (WV-229; draft-pick MV-357; moved off the mid-fight modal
     /// by MV-358): a destroyed <c>MowerHutch</c> reports through <see cref="HudSignals.FactoryDestroyed"/>.
-    /// If any ability is still unowned, this director drops a visible <see cref="PickupKind.Device"/>
-    /// pickup at the shed's spot (MV-382, reinstating the walk-over collectible MV-357/358 had reduced to
-    /// an instant invisible grant) — no pause, no screen, the fight keeps going. Walking over it banks one
-    /// <see cref="AbilityCreditBank"/> credit exactly like every other walk-over pickup, and the player
-    /// later spends it from the Abilities screen's BUILD ABILITY button, which is what actually draws
-    /// candidates via <see cref="AbilityDraft"/>. None left falls back to a part plus a bigger "cell
-    /// cache" instead, same as before.
+    /// If any ability is still unowned, this director drops a visible <see cref="PickupKind.Device"/> —
+    /// now a Morphing Module — pickup at the shed's spot (MV-382, reinstating the walk-over collectible
+    /// MV-357/358 had reduced to an instant invisible grant) — no pause, no screen, the fight keeps
+    /// going. Walking over it draws THE RIG's candidate pool immediately and routes straight to the
+    /// outcome (MV-424, replacing the old bank-then-BUILD-ABILITY step): 0 candidates consumes the
+    /// module, 1 grants it directly, 2-3 opens THE RIG board's draft overlay. None left in the shed's own
+    /// gate falls back to a part plus a bigger "cell cache" instead, same as before.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -312,11 +312,14 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "+1 CELL", new Color(0.31f, 0.86f, 0.98f));
                     break;
                 case PickupKind.Device:
-                    // MV-382: walking over the shed's device banks a buildable credit — same
-                    // AbilityCreditBank the BUILD ABILITY button spends later, not a direct grant. Which
-                    // ability it becomes isn't decided until that later draw (AbilityDraft).
-                    AbilityCreditBank.Bank();
-                    HudSignals.EmitPickup(p.transform.position, "ABILITY DEVICE +1",
+                    // MV-424: walking over the device — now a Morphing Module — draws THE RIG's own
+                    // candidate pool immediately and routes straight to the draft outcome (0 consumes it,
+                    // 1 grants directly, 2-3 opens the board), instead of banking a credit for a later,
+                    // separate BUILD ABILITY step.
+                    var candidates = RigDraft.DrawCandidates();
+                    var rig = FindFirstObjectByType<WeaponsScreen>();
+                    if (rig != null) rig.OpenMorphingModuleDraft(candidates);
+                    HudSignals.EmitPickup(p.transform.position, "MORPHING MODULE",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
                 default:
