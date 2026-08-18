@@ -221,9 +221,11 @@ namespace MaxWorlds.Pickups
             _areaDirector != null ? _areaDirector.BruiserCountForArea(areaIndex) : 0;
 
         /// <summary>A cosmetic-only flavour for a dropped part (WV-228) — parts carry no gameplay
-        /// identity anymore, but <c>PickupArtDirector</c> still swaps in the Hydro device's art for
-        /// <see cref="MaxWorlds.Upgrades.PartKind.Hydro"/>, so cycling through the old catalog keeps
-        /// that variety alive instead of every part looking identical forever.</summary>
+        /// identity anymore, and <c>PickupArtDirector</c> does not read this at all: a dropped part's
+        /// ground art comes from <see cref="MaxWorlds.VFX.WeaponPartArt.MachineInternalsKeys"/> alone
+        /// (MV-430 — currently just the one gear design), independent of which <c>PartKind</c> this
+        /// returns. What this cycles through is the HUD pickup toast's name/accent
+        /// (<c>BossVictoryPayoff.CollectLanded</c>), not the ground prop.</summary>
         private MaxWorlds.Upgrades.PartKind DecorativeKind() =>
             MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
