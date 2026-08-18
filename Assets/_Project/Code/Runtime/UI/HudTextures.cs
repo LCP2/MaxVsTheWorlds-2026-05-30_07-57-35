@@ -43,6 +43,31 @@ namespace MaxWorlds.UI
             return Cache(key, tex, 100f);
         }
 
+        /// <summary>Soft radial halo — alpha 1 at the centre falling smoothly to 0 at the edge
+        /// (quadratic ease-out), unlike <see cref="Disc"/>'s hard feathered-edge fill. THE RIG board's
+        /// owned/draftable node glow (MV-433) reuses this one shared texture at whatever size/tint a
+        /// node's state calls for, rather than baking a texture per node. Tint (and the halo's overall
+        /// peak alpha, e.g. 0.28) via Image.color.</summary>
+        public static Sprite Glow(int size = 128)
+        {
+            string key = $"glow{size}";
+            if (s_cache.TryGetValue(key, out var s)) return s;
+            var tex = NewTex(size, size);
+            float r = size * 0.5f;
+            var px = new Color32[size * size];
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float dx = x + 0.5f - r, dy = y + 0.5f - r;
+                float d = Mathf.Sqrt(dx * dx + dy * dy);
+                float t = Mathf.Clamp01(d / r);
+                float a = 1f - t * t;
+                px[y * size + x] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels32(px); tex.Apply();
+            return Cache(key, tex, 100f);
+        }
+
         /// <summary>A cog/gear disc with notched teeth (MV-262: the Weapons screen's spinning
         /// "parts available" symbol) — deliberately asymmetric so a rotation actually reads as
         /// motion, unlike the symmetric <see cref="Disc"/>. Tint via Image.color.</summary>
