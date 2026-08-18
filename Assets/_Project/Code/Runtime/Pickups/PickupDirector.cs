@@ -337,13 +337,21 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "+1 CELL", new Color(0.31f, 0.86f, 0.98f));
                     break;
                 case PickupKind.Device:
-                    // MV-424: walking over the device — now a Morphing Module — draws THE RIG's own
-                    // candidate pool immediately and routes straight to the draft outcome (0 consumes it,
-                    // 1 grants directly, 2-3 opens the board), instead of banking a credit for a later,
-                    // separate BUILD ABILITY step.
+                    // MV-424 drew THE RIG's candidate pool and routed straight to the draft outcome on
+                    // walk-over. MV-425 keeps the 0/1-candidate outcomes instant (nothing to show, or a
+                    // silent grant) but stops 2-3 candidates from force-opening the board mid-fight —
+                    // that pool now banks in PendingMorphingModule and waits for the player to tap
+                    // WEAPONS on their own schedule (see that class's doc comment).
                     var candidates = RigDraft.DrawCandidates();
-                    var rig = FindFirstObjectByType<WeaponsScreen>();
-                    if (rig != null) rig.OpenMorphingModuleDraft(candidates);
+                    if (candidates.Length <= 1)
+                    {
+                        var rig = FindFirstObjectByType<WeaponsScreen>();
+                        if (rig != null) rig.OpenMorphingModuleDraft(candidates);
+                    }
+                    else
+                    {
+                        PendingMorphingModule.Set(candidates);
+                    }
                     HudSignals.EmitPickup(p.transform.position, "MORPHING MODULE",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;

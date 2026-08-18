@@ -157,6 +157,9 @@ namespace MaxWorlds.UI
             // MV-427: was never wired anywhere — a fresh pick could inherit a stale banked ability
             // credit left over from a previous slot's run.
             AbilityCreditBank.Reset();
+            // MV-425: same stale-state risk for a banked Morphing Module draft left over from a
+            // previous slot's run.
+            MaxWorlds.Weapons.PendingMorphingModule.Reset();
             // MV-427: a fresh run starts with every area's part ungranted and no deaths taken —
             // otherwise a profile that died in Area 3 last run would find Area 3's part permanently
             // ungrantable on its next, unrelated run.

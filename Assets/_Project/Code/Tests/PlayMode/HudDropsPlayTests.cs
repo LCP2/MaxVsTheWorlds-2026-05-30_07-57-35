@@ -51,8 +51,8 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TheCounterAndPartChipExist_AndTheChipStartsHidden()
         {
             Assert.That(FindRect("Power Cells"), Is.Not.Null, "the power-cell counter is missing from the HUD");
-            var alert = FindRect("Part Alert");
-            Assert.That(alert, Is.Not.Null, "the part-alert badge is missing from the HUD");
+            var alert = FindRect("Parts Badge");
+            Assert.That(alert, Is.Not.Null, "the parts badge is missing from the HUD (MV-425)");
             Assert.That(alert.gameObject.activeSelf, Is.False, "with no part collected the badge must be hidden");
             yield return null;
         }
@@ -106,48 +106,35 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator PickingUpAPartRaisesTheFlashingChip()
         {
-            var alert = FindRect("Part Alert");
+            var alert = FindRect("Parts Badge");
 
             PickupWallet.AddPart();
             yield return null;
-            Assert.That(alert.gameObject.activeSelf, Is.True, "a collected part must raise the edge chip");
+            Assert.That(alert.gameObject.activeSelf, Is.True, "a collected part must raise the badge");
 
             // And it clears once the weapons area spends the part (WV-228).
             PickupWallet.TrySpendPart();
             yield return null;
-            Assert.That(alert.gameObject.activeSelf, Is.False, "spending the part must clear the chip");
+            Assert.That(alert.gameObject.activeSelf, Is.False, "spending the part must clear the badge");
         }
 
         /// <summary>
-        /// YT-168: the chip must wear a purpose-built black part icon, not the old plain "PART" text —
-        /// black is the one tint that stays high-contrast against the chip's warm orange.
-        /// WeaponHudIcons.Part names its sprite "part".
+        /// MV-425: the badge wears a plain numeral now (a count you can read at a glance), not the old
+        /// black part-icon glyph — retiring YT-168's icon in favour of the design's amber count badge.
         /// </summary>
         [UnityTest]
-        public IEnumerator TheChipWearsABlackPartIcon_NotTextLabel()
+        public IEnumerator TheBadgeShowsTheBankedCount()
         {
+            PickupWallet.AddPart();
             PickupWallet.AddPart();
             yield return null;
 
-            Image icon = null;
-            foreach (var img in _hudGo.GetComponentsInChildren<Image>(true))
-                if (img.name == "Part Icon") icon = img;
+            var badge = FindRect("Parts Badge");
+            Text count = null;
+            foreach (var t in badge.GetComponentsInChildren<Text>(true)) count = t;
 
-            Assert.That(icon, Is.Not.Null, "the part chip has no icon");
-            Assert.That(icon.sprite, Is.Not.Null, "the part icon draws no sprite");
-            Assert.That(icon.sprite.name, Is.EqualTo("part"),
-                "the chip must wear the purpose-built part icon, not something generic");
-
-            var px = icon.sprite.texture.GetPixels32();
-            bool foundOpaqueDarkPixel = false;
-            foreach (var p in px)
-            {
-                if (p.a == 0) continue;
-                float brightness = (p.r + p.g + p.b) / (3f * 255f);
-                if (brightness < 0.15f) { foundOpaqueDarkPixel = true; break; }
-            }
-            Assert.That(foundOpaqueDarkPixel, Is.True,
-                "the part icon must be BLACK (high contrast), not a mid-tone shape");
+            Assert.That(count, Is.Not.Null, "the parts badge has no count label");
+            Assert.That(count.text, Is.EqualTo("2"), "the badge must show the banked count");
         }
 
         /// <summary>
@@ -161,10 +148,11 @@ namespace MaxWorlds.Tests.PlayMode
             PickupWallet.AddPart();
             yield return null;
 
+            var badge = FindRect("Parts Badge");
             Image chip = null;
-            foreach (var img in _hudGo.GetComponentsInChildren<Image>(true))
+            foreach (var img in badge.GetComponentsInChildren<Image>(true))
                 if (img.name == "Chip") chip = img;
-            Assert.That(chip, Is.Not.Null, "the raised chip has no 'Chip' background image");
+            Assert.That(chip, Is.Not.Null, "the raised badge has no 'Chip' background image");
 
             // Hue matches the on-ground pickup glow — a relationship, invariant under the flash
             // brightness, so it survives an art retune of the collectible orange.
