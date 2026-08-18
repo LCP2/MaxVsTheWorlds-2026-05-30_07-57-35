@@ -84,10 +84,10 @@ namespace MaxWorlds.VFX
         private const float DeviceRingOuterAlpha = 0.90f;
         private const float DeviceRingInnerAlpha = 0.50f;
 
-        // MV-429: the ability-grant device's ring wears red ahead of MV-431's colour pass on the prop
-        // itself — this literal is the same value that ticket's ModuleGlow introduces, so the ring and
-        // the (future) prop land on the same red instead of drifting apart.
-        private static readonly Color DeviceRingColor = new Color(1.00f, 0.24f, 0.08f);
+        // MV-429 wore this as its own literal ahead of MV-431's colour pass on the prop itself; now that
+        // WeaponPartArt.ModuleGlow exists, read it back so the ring and the prop's core can never drift
+        // apart onto two different reds.
+        private static readonly Color DeviceRingColor = WeaponPartArt.ModuleGlow;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()

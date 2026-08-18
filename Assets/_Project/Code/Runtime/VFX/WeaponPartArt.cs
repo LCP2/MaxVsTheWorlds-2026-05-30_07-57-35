@@ -31,9 +31,14 @@ namespace MaxWorlds.VFX
         private static readonly Color PowerBlue = new Color(0.20f, 0.42f, 0.85f);
         private static readonly Color HarnessGreen = new Color(0.28f, 0.62f, 0.34f);
         private static readonly Color EngineOrange = new Color(0.92f, 0.48f, 0.16f);
-        private static readonly Color HydroGlow = new Color(0.45f, 0.9f, 1f);
         private static readonly Color Steel = new Color(0.55f, 0.58f, 0.63f);
         private static readonly Color DarkSteel = new Color(0.24f, 0.26f, 0.30f);
+        // The ability module's own colour family (MV-431) — it used to wear DarkSteel + Steel + the cell's
+        // own HydroGlow cyan, so at the 72° camera it read as "a slightly larger part" instead of the
+        // run-defining drop it is. Public: PickupArtDirector's ground ring already wears ModuleGlow's value
+        // (MV-429, ahead of this ticket) so the ring and the prop land on the same red without drifting.
+        private static readonly Color ModuleRed = new Color(0.85f, 0.12f, 0.10f);
+        public static readonly Color ModuleGlow = new Color(1.00f, 0.24f, 0.08f);
         // Bright cool chrome — the accent/trim on the parts and the power-cell caps. Replaces the old
         // brass (0.72,0.55,0.22): brass is a warm mid-value that the 0.6 sunlit-albedo ceiling
         // (SunlitAlbedo.Clamp, under the yard's 1.8x key) scaled down into a muddy BROWN, so the caps,
@@ -222,8 +227,12 @@ namespace MaxWorlds.VFX
 
         /// <summary>The Hydro device's pickup reads a chunk bigger than the power cell (WV-236) — it's
         /// "a new weapon/ability", not just another drop — applied by <c>PickupArtDirector</c> as a
-        /// uniform scale on top of this authored geometry, same idiom as the untouched four parts.</summary>
-        public const float HydroDeviceGroundScale = 1.6f;
+        /// uniform scale on top of this authored geometry, same idiom as the untouched four parts.
+        ///
+        /// MV-431: bumped 1.6 -> 2.0 alongside the device's own red colour pass, so it stays the largest
+        /// of the three ground scales (power cell 1.6, part 1.8, device 2.0) — the rarest drop reads as
+        /// the biggest thing on the lawn.</summary>
+        public const float HydroDeviceGroundScale = 2.0f;
 
         /// <summary>The power cell reads too small in-arena at its authored size (MV-316) — bumped up
         /// on top of its authored geometry, same idiom as <see cref="HydroDeviceGroundScale"/>. Stays
@@ -263,37 +272,42 @@ namespace MaxWorlds.VFX
         {
             var root = Root("HydroDevice", parent);
             Material shell = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            Material coil = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material coil = MaterialLibrary.Tinted(SurfaceKind.Metal, ModuleRed);
+            Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
             Part(root, "Base", PrimitiveType.Cylinder, new Vector3(0f, 0.08f, 0f),
                  new Vector3(0.34f, 0.08f, 0.34f), null, shell);
-            // The glowing condensation core.
-            Glow(root, "Core", new Vector3(0f, 0.32f, 0f), 0.26f, HydroGlow);
-            // Coil rings stacked around the core.
+            // The glowing condensation core — MV-431: bigger and its own red-orange, not the cell's cyan.
+            Glow(root, "Core", new Vector3(0f, 0.34f, 0f), 0.32f, ModuleGlow);
+            // Coil rings stacked around the core — MV-431: ModuleRed, not neutral Steel.
             for (int i = 0; i < 3; i++)
             {
                 float y = 0.22f + i * 0.11f;
                 float r = 0.3f - i * 0.03f;
                 Part(root, $"Coil{i}", PrimitiveType.Cylinder, new Vector3(0f, y, 0f),
-                     new Vector3(r, 0.025f, r), null, coil);
+                     new Vector3(r, 0.03f, r), null, coil);
             }
-            // Radiator fins splaying out — the "condenser" read.
+            // Radiator fins splaying out — the "condenser" read. MV-431: dark, not Steel, so the red core
+            // stays the only bright thing; already seated against the base (do not "fix" the position).
             for (int i = 0; i < 4; i++)
             {
                 float a = i * 90f;
                 Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
                 Part(root, $"Fin{i}", PrimitiveType.Cube, dir * 0.24f + Vector3.up * 0.16f,
-                     new Vector3(0.05f, 0.2f, 0.16f), Quaternion.Euler(0f, a, 0f), coil);
+                     new Vector3(0.055f, 0.2f, 0.16f), Quaternion.Euler(0f, a, 0f), shell);
             }
+            // The cap (MV-431) — a readable top face at the 72° camera, chrome to match every other prop's
+            // trim accent.
+            Part(root, "Cap", PrimitiveType.Cylinder, new Vector3(0f, 0.52f, 0f),
+                 new Vector3(0.10f, 0.02f, 0.10f), null, cap);
 
             // The SHIMMER (WV-236): "shimmers like a cell" — the same specular-dot language as the power
             // cell's own glints (YT-167), riding the coil rings so the sparkle sits on a surface that's
-            // already part of the read rather than tacked onto a flat face. Three, not the cell's four,
-            // and bigger — this prop already reads busier than the cell, so it needs fewer, bolder catches
-            // of light rather than a dense cluster that would just blur into the coils.
-            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.22f, 0.31f), 0.06f);
-            Glisten(root, GlistenPrefix + "1", OnCircle(150f, 0.33f, 0.28f), 0.05f);
-            Glisten(root, GlistenPrefix + "2", OnCircle(260f, 0.44f, 0.26f), 0.055f);
+            // already part of the read rather than tacked onto a flat face. MV-431: two, not three — this
+            // prop already reads busier than the cell, so it needs fewer, bolder catches of light rather
+            // than a dense cluster that would just blur into the coils.
+            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.24f, 0.31f), 0.07f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(150f, 0.36f, 0.28f), 0.06f);
             return root;
         }
 
