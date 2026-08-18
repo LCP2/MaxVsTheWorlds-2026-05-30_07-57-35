@@ -68,6 +68,12 @@ namespace MaxWorlds.Pickups
         }
 
         private readonly List<Pickup> _live = new List<Pickup>(32);
+
+        /// <summary>Pickups a refused-at-capacity tell has already fired for during the current
+        /// walk-over (MV-439) — cleared the moment Max steps back out of <see cref="CollectRadius"/>,
+        /// so a fresh entry gets one fresh tell rather than the frame-by-frame spam a naive re-emit
+        /// on every <see cref="Collect"/> call inside the radius would cause.</summary>
+        private readonly HashSet<Pickup> _reserveFullTold = new HashSet<Pickup>();
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
@@ -288,11 +294,13 @@ namespace MaxWorlds.Pickups
                 float dz = p.transform.position.z - m.z;
                 float d2 = dx * dx + dz * dz;
                 if (d2 <= r2) { Collect(i, p); continue; }
+                _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
 
                 // Magneto (MV-422, e_mag): a caught power cell flies to Max from range instead of
                 // waiting for a manual walk-over. Only power cells — parts/devices stay a deliberate
-                // walk-over pickup.
-                if (p.Kind == PickupKind.PowerCell && magnetoRadius > 0f && d2 <= magnetoRadius * magnetoRadius)
+                // walk-over pickup. MV-439: never pulls once the reserve is full — an owned ability
+                // must not actively destroy the player's resources.
+                if (MagnetoShouldPull(p.Kind, magnetoRadius, d2))
                 {
                     Vector3 pos = p.transform.position;
                     Vector3 toMax = new Vector3(m.x - pos.x, 0f, m.z - pos.z);
@@ -303,12 +311,29 @@ namespace MaxWorlds.Pickups
             }
         }
 
+        /// <summary>Whether Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled out
+        /// as a pure function so the reserve-full guard is testable without a live scene. Public: the
+        /// EditMode test assembly has no <c>InternalsVisibleTo</c> back to Gameplay.</summary>
+        public static bool MagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
+            kind == PickupKind.PowerCell && magnetoRadius > 0f
+            && squaredDistance <= magnetoRadius * magnetoRadius
+            && PickupWallet.PowerCells < PickupWallet.Capacity;
+
         private void Collect(int index, Pickup p)
         {
             switch (p.Kind)
             {
                 case PickupKind.PowerCell:
-                    PickupWallet.AddPowerCell();
+                    if (!PickupWallet.AddPowerCell())
+                    {
+                        // MV-439: at capacity, walking over a cell must do nothing — leave it active
+                        // and on the ground, no gain claimed, no per-frame spam while Max stands on it.
+                        // TODO(MV-439/MV-429): dim this pickup's GroundRing to ~30% alpha while inert
+                        // once MV-429 lands a ring on Pickup — it hasn't yet, so there is no ring to dim.
+                        if (_reserveFullTold.Add(p))
+                            HudSignals.EmitPickup(p.transform.position, "RESERVE FULL", new Color(0.9f, 0.35f, 0.25f));
+                        return;
+                    }
                     HudSignals.EmitPickup(p.transform.position, "+1 CELL", new Color(0.31f, 0.86f, 0.98f));
                     break;
                 case PickupKind.Device:
@@ -328,6 +353,7 @@ namespace MaxWorlds.Pickups
                     break;
             }
 
+            _reserveFullTold.Remove(p);
             p.gameObject.SetActive(false);
             _live.RemoveAt(index);
             Stack<Pickup> pool = p.Kind switch

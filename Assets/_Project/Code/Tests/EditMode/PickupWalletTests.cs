@@ -93,6 +93,19 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void AddPowerCellReturnsWhetherItActuallyBanked()
+        {
+            // MV-439: the caller (PickupDirector.Collect) must be able to tell a refused add from a
+            // banked one — that's the one missing bit that let a cell get destroyed at the ceiling.
+            for (int i = 0; i < PickupWallet.Capacity; i++)
+                Assert.That(PickupWallet.AddPowerCell(), Is.True, "below capacity, every add must bank");
+
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity));
+            Assert.That(PickupWallet.AddPowerCell(), Is.False, "at capacity, nothing banked — MV-439");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity), "a refused add must not change the count");
+        }
+
+        [Test]
         public void SetPowerCellsClampsToCapacityAndFiresChange()
         {
             int seen = -1;
