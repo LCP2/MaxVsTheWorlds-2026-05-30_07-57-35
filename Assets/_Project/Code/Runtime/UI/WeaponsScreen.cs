@@ -5,36 +5,22 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
-using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
 {
     /// <summary>
-    /// The weapons area (MV-248, v0.5 recut spec §6): a pause-on-enter screen for the RCDA primary's
-    /// four upgrade tracks, the Water Balloon primary add-on's own three tracks (MV-370), and
-    /// whichever abilities Max has acquired so far, reimplemented to the intended design (MV-248)
-    /// after MV-234 shipped only a bare functional panel — a centred title, "Lv x/y" text rows and an
-    /// empty Abilities column, none of the intended layout/colour/copy.
+    /// THE RIG (MV-423) — Max's ability board, replacing the old ABILITIES screen's primary-track
+    /// grid, Water Balloon add-on row and 6-slot abilities grid with a single node-graph rendering of
+    /// <c>rig_board.json</c> (MV-422's canonical model, MV-423's own <see cref="RigBoardLayout"/> for
+    /// the geometry/colours/icons that model layer deliberately ignores). Every category, ability and
+    /// fusion node is placed at the data file's own pixel coordinates on a fixed 1920x1080 board frame
+    /// — <see cref="RigBoardLayoutTests"/> asserts this exactly, so this class never re-derives a
+    /// position; if a layout decision isn't in the JSON, it doesn't belong here.
     ///
-    /// Layout: a title + CELLS/PARTS/PAUSED cluster up top (MV-262: PARTS carries a spinning gear
-    /// glyph; MV-327: it's a wider chip with its own pulsing glow + unit suffix so it reads as a
-    /// bank at a glance rather than a bare number, and CELLS' label shrinks to fit instead of
-    /// overflowing over its icon), a narrow hero column on the left (Max's own key art
-    /// above the RCDA's live render with a glowing tech-ring "loadout" treatment), and on the right
-    /// a big hero-sized primary-weapon name followed by the 2x2 primary-track grid, a "PRIMARY
-    /// ADD-ONS" 1x3 row for Water Balloon's own three upgrade tracks (MV-370's magnitudes, unchanged),
-    /// and the abilities grid. The abilities grid always shows all its slots (MV-262; MV-380 grew the
-    /// pool back to five — Water Balloon and its Auto-fire sub-ability returned to it — after MV-370
-    /// had shrunk it to three): owned ones by name, the rest as greyed, unnamed placeholder tiles, so
-    /// the count of "more to find" reads at a glance instead of needing a text list. There is no
-    /// bottom spendbar/instructional line any more — the parts count lives
-    /// solely in the top-bar chip. Levels render as pip/segment bars, not text —
-    /// <see cref="BuildGridRow"/> builds a shared row shape (highlight ring, icon + glyph, name, pip
-    /// bar, + button) for all three sections so none of them can ever drift apart in style.
-    ///
-    /// Self-installing overlay, same pause idiom as UpgradeScreen/HomeScreen/ResultScreen: its own
-    /// canvas above the HUD, hidden until opened, freezes with <see cref="Time.timeScale"/> = 0 and
-    /// restores whatever speed it paused from.
+    /// Top bar keeps its existing geometry (28/104 inset/height), CLOSE, QUIT TO MENU and the CELLS
+    /// chip; PARTS becomes a six-socket tray and PAUSED is gone (there's no room and no need — the
+    /// screen's own presence already says the game is paused). Self-installing pause-on-open overlay,
+    /// same idiom as every other full-screen panel (UpgradeScreen/HomeScreen/ResultScreen).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WeaponsScreen : MonoBehaviour
@@ -52,168 +38,75 @@ namespace MaxWorlds.UI
         private static readonly Color PanelColor = new Color(0.04f, 0.05f, 0.06f, 0.99f);
         private static readonly Color HeaderAccent = new Color(0.07f, 0.17f, 0.15f, 1f);
         private static readonly Color RowColor = new Color(0.10f, 0.12f, 0.15f, 1f);
-        private static readonly Color CardColor = new Color(0.10f, 0.12f, 0.15f, 1f);
         private static readonly Color TextColor = Color.white;
         private static readonly Color Dim = new Color(1f, 1f, 1f, 0.6f);
 
         private static readonly Color CellsColor = new Color(0.35f, 0.85f, 0.95f);
         private static readonly Color PartsColor = new Color(1f, 0.72f, 0.28f);
-        private static readonly Color PrimaryAccent = new Color(0.66f, 0.48f, 0.98f);   // primary-weapon pips (spec: purple)
-        private static readonly Color AbilityAccent = new Color(0.35f, 0.85f, 0.95f);   // ability pips (spec: cyan)
-        private static readonly Color PipEmpty = new Color(1f, 1f, 1f, 0.14f);
-
         private static readonly Color SpendReady = PartsColor;
         private static readonly Color SpendDisabled = new Color(1f, 1f, 1f, 0.18f);
-        private static readonly Color NewBadgeColor = new Color(0.45f, 0.95f, 0.55f);   // MV-250: newly-acquired flag
-        private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);       // MV-257: destructive-red
-        private static readonly Color LockedIconBg = new Color(1f, 1f, 1f, 0.05f);      // MV-262: unowned ability tile
+        private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);   // MV-257: destructive-red
 
-        // MV-251: every row's icon tile now tints by its OWN section accent (instead of a near-invisible
-        // neutral box) and carries a short glyph, so a track/ability reads as a distinct tile at a glance
-        // instead of a blank square next to a name.
-        private static readonly Color TrackIconBg = new Color(PrimaryAccent.r, PrimaryAccent.g, PrimaryAccent.b, 0.22f);
-        private static readonly Color AbilityIconBg = new Color(AbilityAccent.r, AbilityAccent.g, AbilityAccent.b, 0.22f);
-
-        /// <summary>Where <c>Max.png</c> (MV-251, Lee's call for the hero panel) lives under a
-        /// Resources folder — loaded by stable key per <c>docs/CODE_DRIVEN_SCENES.md</c> rule 4, not an
-        /// Inspector-wired reference.</summary>
-        private const string MaxPortraitResourcePath = "Art/Max";
-
-        private const int TrackCount = 4;        // WeaponCatalog.AllTrackKinds.Length — every track is owned from run start (MV-291 added Damage, MV-299 added Depletion Rate)
-        private const int MaxAbilityRows = 6;    // count of AllAbilityKinds where WeaponCatalog.ShowsInAbilitiesGrid is true (MV-409 excluded WaterBalloon; MV-422 retired WeaponCooldown, leaving 5 of 6 — one slot in this fixed grid now always reads locked/empty, tolerated per MV-422's "keeps rendering whatever it can until 2/5 replaces it")
-        private const int AbilityColumns = 3;    // fixed column count (matches the Primary Add-ons row below) — MaxAbilityRows now wraps past it into a 2nd row instead of growing the row width
-        private const int WaterBalloonTrackCount = 3;   // WeaponCatalog.AllWaterBalloonTrackKinds.Length (MV-370)
-
-        // MV-367: Range/Spread's cap grew from 6 to 9, breaking the old "every row gets the same fixed
-        // pip count" assumption (a row built for 6 pips silently truncated levels 7-9 to an always-full
-        // bar). BuildGridRow now sizes each row's pip array to ITS OWN track/ability cap and fits it
-        // inside the same total pixel budget the old 6-pip row used, so a 9-pip row reads as more, and
-        // thinner, segments rather than overflowing the card.
-        private const float PipBudgetPx = 6f * 46f + 5f * 7f;   // the old fixed 6-pip row's width (pipW=46, gap=7)
-        private const float PipGap = 7f;
-
-        // MV-262: the abilities grid is a fixed-slot grid regardless of how many are owned, so unlike
-        // the old dynamic "shown + placeholder" layout there's a single worst case to verify: primary
-        // header + primary grid (2 rows, MV-299: 4 tracks at 2 cols) + add-ons header + add-ons grid
-        // (MV-370: 3 Water Balloon tracks, 1 row of 3 cols) + abilities header + abilities grid (MV-361:
-        // 6 abilities in the pool at a fixed 3 columns, so 2 rows not 1) all fit inside the
-        // content budget below the top bar (there's no bottom spendbar any more) — see the arithmetic in
-        // BuildPrimaryNameHeader/BuildPrimaryGrid/BuildWaterBalloonSection/BuildAbilitiesSection;
-        // there's no runtime overflow check, so this is verified by hand rather than measured. Column
-        // count stays fixed at 3 (not widened to 5) specifically so the pip budget per row — sized once
-        // for a 3-column card in BuildGridRow — never has to squeeze into a narrower card.
-        //
-        // MV-388: hand-verifying the worst case above (content height 906 vs. 936 needed) found the
-        // grids actually overflowed the content budget by ~30px, pushing the abilities grid's 2nd row
-        // past the safe-area bottom inset — the fixed HeroNameH box below was sized for up to ~2 lines
-        // of hero text but the primary name always renders on one, so most of that box was unused dead
-        // space rather than real content. Shrinking HeroNameH reclaims that dead space and closes the
-        // overflow with room to spare; see BuildPrimaryNameHeader.
-        private const float RowHeight = 108f;
-        private const float RowGap = 8f;
-        private const float SectionHeaderHeight = 38f;
-        private const float SectionHeaderGap = 10f;
-        private const float SectionGap = 16f;
         private const float TopBarHeight = 104f;
         private const float ContentMargin = 28f;
-        private const float ColGap = 0.04f;      // fraction of column width between the 2 grid cells
 
-        private const float HeroColumnFraction = 0.27f;   // MV-262: narrowed from ~0.335 to give the weapons UI more room
-        private const float HeroNameTagH = 28f;
-        private const int HeroNameFontSize = 42;           // MV-262: the hero label — much bigger than the old 26pt name
-        // MV-388: was 150f — the primary name always renders on one 42pt line, so ~90px of the old box
-        // was unused dead space between the hero name and the PRIMARY grid below it, and was also the
-        // cause of the grids overflowing the content budget by ~30px (see the comment above
-        // BuildAbilitiesSection). 96 keeps generous headroom for a single line (and light wrap
-        // tolerance) without the dead space.
-        private const float HeroNameH = 96f;
-        private const float HeroNameGap = 24f;
+        // ------------------------------------------------------------------ THE RIG board (MV-423)
+
+        private const int HexSides = 6;
+        private const int FusionSides = 4;
+        private const float HexRotationDeg = -90f;   // pointy-top: vertex angles 60*i-90
+        private const float Sqrt3 = 1.7320508f;
+        private const float PartsSocketSize = 34f;
 
         private Canvas _canvas;
         private RectTransform _safeRoot;
         private GameObject _root;
-        private UpgradeWeaponStage _weaponStage;   // MV-251: the RCDA's own live render — the hero panel used to mislabel Max's bust as this
-        private AbilityDeviceStage _buildAbilityStage;   // MV-382: BUILD ABILITY's own live spinning-device render
+        private RectTransform _boardRoot;
 
         private Text _cellsText;
-        private Image _cellsChipBg;    // MV-374: tints/becomes tappable when a Cell Capacity level-up is affordable
+        private Image _cellsChipBg;
         private Button _cellsChipButton;
-        private Text _partsText;
-        private Image _partsIcon;          // MV-262: the gear glyph next to the parts count — spins while open
-        private Image _partsGlow;          // MV-327: pulses while a part is banked — the "prominent, readable at a glance" tell
-        private Image _weaponGlowRing;     // MV-262: the "cooler under Max" tech-ring behind the RCDA render — spins while open
-        private Text _abilitiesHeaderText;
-        private RectTransform _buildAbilityRoot;   // MV-358: BUILD ABILITY — spends a banked shed credit
-        private Image _buildAbilityBg;
-        private Text _buildAbilityLabel;
-        private Button _buildAbilityButton;
 
-        private readonly Text[] _trackName = new Text[TrackCount];
-        private readonly Image[][] _trackPips = new Image[TrackCount][];
-        private readonly Button[] _trackButton = new Button[TrackCount];
-        private readonly Image[] _trackButtonBg = new Image[TrackCount];
+        private Image _partsTrayBg;
+        private Text _partsTrayLabel, _partsTraySub;
+        private readonly List<Image> _partsSockets = new List<Image>();
+        private Text _partsOverflowText;
 
-        // MV-370: the Water Balloon primary add-on's own three tracks — same per-track shape as the
-        // RCDA's own _track* arrays above, just a separate section (BuildWaterBalloonSection).
-        private readonly Text[] _waterBalloonName = new Text[WaterBalloonTrackCount];
-        private readonly Image[][] _waterBalloonPips = new Image[WaterBalloonTrackCount][];
-        private readonly Button[] _waterBalloonButton = new Button[WaterBalloonTrackCount];
-        private readonly Image[] _waterBalloonButtonBg = new Image[WaterBalloonTrackCount];
-        // MV-380 AC5: the whole section (header + rows) is hidden until Water Balloon itself is
-        // acquired — same "nothing to spend on until you own the base ability" rule the joystick
-        // control already enforces (HudController), now applied to its upgrade-track section too.
-        private readonly GameObject[] _waterBalloonRow = new GameObject[WaterBalloonTrackCount];
-        private Text _waterBalloonHeaderText;
-
-        // One row slot per catalog ability, always active (MV-262): the leading slots are populated
-        // from WeaponSystemState.Acquired in acquisition order (MV-333), the rest greyed via
-        // SetAbilityLocked. A slot, once filled, keeps its AbilityKind forever — only the trailing
-        // locked slots shift as more get acquired — but the kind behind each slot's button is still
-        // tracked live in _abilityRowKind rather than baked into the click handler at build time
-        // (locked slots' buttons are inactive, so their stale _abilityRowKind is never read).
-        private readonly GameObject[] _abilityRow = new GameObject[MaxAbilityRows];
-        private readonly Text[] _abilityName = new Text[MaxAbilityRows];
-        private readonly Image[][] _abilityPips = new Image[MaxAbilityRows][];
-        private readonly Button[] _abilityButton = new Button[MaxAbilityRows];
-        private readonly Image[] _abilityButtonBg = new Image[MaxAbilityRows];
-        private readonly AbilityKind[] _abilityRowKind = new AbilityKind[MaxAbilityRows];
-        private readonly Image[] _abilityIcon = new Image[MaxAbilityRows];
-
-        // MV-250: "clear feedback when something is picked up". An ability that's acquired since the
-        // player last actually looked at this screen gets a NEW badge for the whole session it's first
-        // shown in, then never again — _newThisOpen is a snapshot taken at Open() (so it doesn't churn
-        // if something else triggers a Refresh while already up), folded into _seenAbilities at Close().
-        private readonly HashSet<AbilityKind> _seenAbilities = new HashSet<AbilityKind>();
-        private readonly HashSet<AbilityKind> _newThisOpen = new HashSet<AbilityKind>();
-
-        // MV-251: per-row glyph label and highlight ring, alongside the existing icon-tint tell.
-        private readonly Text[] _abilityIconGlyph = new Text[MaxAbilityRows];
-        private readonly Image[] _abilityOutline = new Image[MaxAbilityRows];
+        private readonly Dictionary<string, RigNodeVisual> _abilityNodes = new Dictionary<string, RigNodeVisual>();
+        private readonly Dictionary<string, RigNodeVisual> _categoryNodes = new Dictionary<string, RigNodeVisual>();
+        private readonly Dictionary<string, Image> _categoryPanels = new Dictionary<string, Image>();
 
         private bool _open;
         private float _prevTimeScale = 1f;
 
-        /// <summary>Is the weapons area currently up (and the game paused)?</summary>
+        /// <summary>Is THE RIG currently up (and the game paused)?</summary>
         public bool IsOpen => _open;
+
+        /// <summary>A built node's root RectTransform by its <c>rig_board.json</c> id — the layout
+        /// test's only way in, so it never has to guess GameObject names.</summary>
+        public RectTransform BoardNode(string id)
+        {
+            if (_boardRoot == null) return null;
+            var t = _boardRoot.Find(id);
+            return t != null ? (RectTransform)t : null;
+        }
 
         private void Start() => Build();
 
         private void OnEnable()
         {
-            WeaponSystemState.Changed += Refresh;
+            RigState.Changed += Refresh;
             PickupWallet.PartsChanged += OnPartsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
             PickupWallet.CapacityChanged += OnCellsChanged;
-            AbilityCreditBank.Changed += OnAbilityCreditsChanged;
         }
 
         private void OnDisable()
         {
-            WeaponSystemState.Changed -= Refresh;
+            RigState.Changed -= Refresh;
             PickupWallet.PartsChanged -= OnPartsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
             PickupWallet.CapacityChanged -= OnCellsChanged;
-            AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
         }
 
         private void OnDestroy()
@@ -223,34 +116,10 @@ namespace MaxWorlds.UI
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
-        private void Update()
-        {
-            if (!_open) return;
-            if (_weaponStage != null) _weaponStage.Tick(Time.unscaledTime, 0f, 0f);
-            if (_buildAbilityStage != null) _buildAbilityStage.Tick();
-
-            // MV-262: "playful/animated, not a sentence" — the parts gear and the RCDA's glow ring
-            // spin while the screen is up. Time is frozen (Time.timeScale = 0 for the pause), so this
-            // has to ride unscaledDeltaTime rather than Update's usual scaled clock.
-            float dt = Time.unscaledDeltaTime;
-            if (_partsIcon != null) _partsIcon.rectTransform.Rotate(0f, 0f, -dt * 90f);
-            if (_weaponGlowRing != null) _weaponGlowRing.rectTransform.Rotate(0f, 0f, dt * 18f);
-
-            // MV-327: the PARTS chip's outer glow only beats while a part is actually banked and
-            // spendable — otherwise it stays fully transparent, same "only alert when actionable"
-            // rule HudController's own part-alert badge follows.
-            if (_partsGlow != null)
-            {
-                var c = PartsColor;
-                c.a = PartsGlowAlpha(Time.unscaledTime, PickupWallet.PartsBanked);
-                _partsGlow.color = c;
-            }
-        }
-
-        /// <summary>The PARTS chip's glow-ring alpha, 0..1 (MV-327) — a pure function so the beat is
-        /// pinned by an EditMode test without building a canvas. Zero whenever nothing is banked (no
-        /// upgrade to flag); otherwise the same trough/peak sine beat <see cref="HudController"/>'s own
-        /// part-alert badge uses, so every "a part is waiting" tell on screen pulses at one rate.</summary>
+        /// <summary>The PARTS tray's glow-ring alpha, 0..1 (MV-327, carried over) — a pure function so
+        /// the beat is pinned by an EditMode test without building a canvas. Zero whenever nothing is
+        /// banked; otherwise the same trough/peak sine beat every "something is waiting" tell on this
+        /// HUD uses.</summary>
         public static float PartsGlowAlpha(float unscaledTime, int partsBanked)
         {
             if (partsBanked <= 0) return 0f;
@@ -258,11 +127,41 @@ namespace MaxWorlds.UI
             return 0.5f * t;
         }
 
+        private void Update()
+        {
+            if (!_open) return;
+            float dt = Time.unscaledDeltaTime;
+
+            if (_partsTrayBg != null)
+            {
+                int banked = PickupWallet.PartsBanked;
+                var glow = PartsColor;
+                glow.a = 0.25f + PartsGlowAlpha(Time.unscaledTime, banked);
+                // Only the tray's own outline breathes; a fully dark tray (no parts) stays flat.
+                if (banked > 0) _partsTrayBg.color = glow;
+            }
+
+            // The draftable-capability dashed ring pulses (ticket: "Left to you — the pulse rate on a
+            // draftable capability"). Chosen: same family the PARTS glow uses, twice as slow, so the
+            // two "something's waiting" tells read as related but distinct.
+            float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 3f);
+            foreach (var kv in _abilityNodes)
+            {
+                var v = kv.Value;
+                if (v.OuterRing != null && v.OuterRing.gameObject.activeSelf)
+                {
+                    var c = v.OuterRing.color;
+                    c.a = pulse;
+                    v.OuterRing.color = c;
+                }
+            }
+            _ = dt;
+        }
+
         private void OnPartsChanged(int banked) => Refresh();
         private void OnCellsChanged(int cells) => Refresh();
-        private void OnAbilityCreditsChanged(int banked) => Refresh();
 
-        /// <summary>Open the weapons area, pausing the game. Ignored if already open.</summary>
+        /// <summary>Open THE RIG, pausing the game. Ignored if already open.</summary>
         public void Open()
         {
             if (_open) return;
@@ -272,193 +171,168 @@ namespace MaxWorlds.UI
             _prevTimeScale = Time.timeScale;
             Time.timeScale = 0f;   // freeze the fight while the player reads/spends
 
-            _newThisOpen.Clear();
-            foreach (var kind in WeaponSystemState.Acquired)
-                if (!_seenAbilities.Contains(kind)) _newThisOpen.Add(kind);
-
             Refresh();
             _root.SetActive(true);
-            if (_weaponStage != null) _weaponStage.ShowInstalled();
-            if (_buildAbilityStage != null) _buildAbilityStage.Show();
         }
 
-        /// <summary>Close the weapons area and resume at whatever speed it paused from.</summary>
+        /// <summary>Close THE RIG and resume at whatever speed it paused from.</summary>
         public void Close()
         {
             if (!_open) return;
             _open = false;
-            foreach (var kind in _newThisOpen) _seenAbilities.Add(kind);   // NEW badges don't return
-            _newThisOpen.Clear();
             Time.timeScale = _prevTimeScale;
             _root.SetActive(false);
-            if (_weaponStage != null) _weaponStage.Hide();
-            if (_buildAbilityStage != null) _buildAbilityStage.Hide();
         }
 
         // ------------------------------------------------------------------ live state
 
-        /// <summary>Redraws every row off the live systems — the four tracks, whichever abilities are
-        /// currently acquired (in catalog order, WV-230) as pip bars, and the CELLS/PARTS banks — so a
-        /// spend, a pickup, or a shed granting a new ability while this screen happens to be open
-        /// reflects immediately.</summary>
+        /// <summary>Redraws the CELLS/PARTS banks and every node's visual state off
+        /// <see cref="RigState"/> and <see cref="PickupWallet"/> — so a spend, a shed pickup, or a
+        /// draft acquire (once MV-424 lands) while this screen happens to be open reflects immediately.</summary>
         private void Refresh()
         {
             if (_root == null) return;
 
             int banked = PickupWallet.PartsBanked;
-            _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";   // MV-374: current/max
-            _partsText.text = $"{banked} PARTS";   // MV-327: a bare number read as decoration, not a bank
+            _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";
 
-            // MV-374: the CELLS chip doubles as Cell Capacity's spend button — tinted amber and
-            // tappable exactly when a part is banked and the track isn't already maxed.
             bool capacitySpendable = banked > 0 && PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel;
             _cellsChipButton.interactable = capacitySpendable;
             _cellsChipBg.color = capacitySpendable ? SpendReady : RowColor;
 
-            for (int i = 0; i < TrackCount; i++)
-            {
-                var kind = WeaponCatalog.AllTrackKinds[i];
-                int level = WeaponSystemState.TrackLevel(kind);
-                int cap = WeaponCatalog.MaxLevel(kind);
-                _trackName[i].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
-                SetPips(_trackPips[i], level, cap, PrimaryAccent);
-                SetSpendable(_trackButton[i], _trackButtonBg[i], banked > 0 && level < cap);
-            }
+            RefreshPartsTray(banked);
 
-            // MV-380 AC5: the Primary Add-ons section tracks Water Balloon's own acquisition — hidden
-            // until acquired, shown (and immediately spendable) the moment it is, since Refresh() is
-            // already wired to WeaponSystemState.Changed. MV-394: the RepeatFire column (relabelled
-            // "Auto Fire Rate") gates on the separate Auto-Fire ability too — Range/Splash Area stay
-            // gated on Water Balloon alone.
-            bool waterBalloonAcquired = WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon);
-            bool autoFireAcquired = WeaponSystemState.IsAcquired(AbilityKind.WaterBalloonAutoFire);
-            _waterBalloonHeaderText.gameObject.SetActive(waterBalloonAcquired);
-            for (int i = 0; i < WaterBalloonTrackCount; i++)
-            {
-                var kind = WeaponCatalog.AllWaterBalloonTrackKinds[i];
-                bool rowVisible = waterBalloonAcquired &&
-                    (kind != WaterBalloonTrackKind.RepeatFire || autoFireAcquired);
-                _waterBalloonRow[i].SetActive(rowVisible);
-                if (!rowVisible) continue;
-
-                int level = WeaponSystemState.WaterBalloonTrackLevel(kind);
-                int cap = WeaponCatalog.MaxLevel(kind);
-                _waterBalloonName[i].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
-                SetPips(_waterBalloonPips[i], level, cap, AbilityAccent);
-                SetSpendable(_waterBalloonButton[i], _waterBalloonButtonBg[i], banked > 0 && level < cap);
-            }
-
-            int shown = 0;
-            foreach (var kind in WeaponSystemState.Acquired)
-            {
-                // MV-409: Water Balloon's ownership/upgrades already show in the dedicated WATER
-                // BALLOON section above — a grid card would just duplicate it, so it never gets one.
-                if (!WeaponCatalog.ShowsInAbilitiesGrid(kind)) continue;
-                if (shown >= MaxAbilityRows) break;
-                int level = WeaponSystemState.AbilityLevel(kind);
-                int cap = WeaponCatalog.MaxLevel(kind);
-                _abilityRowKind[shown] = kind;
-                _abilityRow[shown].SetActive(true);
-                _abilityButton[shown].gameObject.SetActive(true);   // a slot that was locked last Refresh needs its + back
-                _abilityName[shown].color = TextColor;
-                _abilityName[shown].text = WeaponCatalog.TitleCase(WeaponCatalog.DisplayName(kind));
-                _abilityIconGlyph[shown].color = TextColor;
-                _abilityIconGlyph[shown].text = AbilityGlyph(kind);
-                SetPips(_abilityPips[shown], level, cap, AbilityAccent);
-                SetSpendable(_abilityButton[shown], _abilityButtonBg[shown], banked > 0 && level < cap);
-                // MV-250/MV-251: "clear feedback when something is picked up" — an ability first seen
-                // this Open() gets its icon lit and the whole card ringed in the same colour, not just a
-                // faint icon-tint change that's easy to miss.
-                bool isNew = _newThisOpen.Contains(kind);
-                _abilityIcon[shown].color = isNew ? NewBadgeColor : AbilityIconBg;
-                _abilityOutline[shown].color = isNew ? NewBadgeColor : Color.clear;
-                shown++;
-            }
-            // MV-262: every slot past the acquired count is now a greyed, unnamed placeholder tile
-            // (not hidden, and not a text list) — the fixed 6-slot grid itself communicates "there are
-            // more to find" at a glance.
-            for (int i = shown; i < MaxAbilityRows; i++)
-                SetAbilityLocked(i);
-
-            _abilitiesHeaderText.text = $"ABILITIES — {shown} of {MaxAbilityRows} unlocked";
-
-            // MV-358: the BUILD ABILITY button only exists while a shed credit is banked — no dead
-            // button otherwise — and its label carries the count so spending several in a row is legible.
-            int credits = AbilityCreditBank.Banked;
-            if (_buildAbilityRoot != null) _buildAbilityRoot.gameObject.SetActive(credits > 0);
-            if (_buildAbilityLabel != null)
-                _buildAbilityLabel.text = $"BUILD ABILITY ({credits})";
+            foreach (var cat in RigBoardLayout.Categories) RefreshCategoryNode(cat, banked);
+            foreach (var ab in RigBoardLayout.Abilities) RefreshAbilityNode(ab, banked);
         }
 
-        /// <summary>Greys out ability slot <paramref name="i"/> into an unnamed "still to find" tile —
-        /// no name, no pips, no spend button, just a dim "?" glyph.</summary>
-        private void SetAbilityLocked(int i)
+        private void RefreshPartsTray(int banked)
         {
-            _abilityRow[i].SetActive(true);
-            _abilityButton[i].gameObject.SetActive(false);
-            _abilityName[i].text = string.Empty;
-            _abilityIconGlyph[i].color = Dim;
-            _abilityIconGlyph[i].text = "?";
-            _abilityIcon[i].color = LockedIconBg;
-            _abilityOutline[i].color = Color.clear;
-            foreach (var pip in _abilityPips[i]) pip.gameObject.SetActive(false);
-        }
+            const int socketCount = 6;
+            bool any = banked > 0;
+            _partsTrayLabel.color = any ? PartsColor : Dim;
+            _partsTraySub.text = any ? "tap a node to fit one" : "none banked";
+            _partsTraySub.color = any ? new Color(TextColor.r, TextColor.g, TextColor.b, 0.7f) : Dim;
+            if (!any) _partsTrayBg.color = RowColor;
 
-        private static void SetPips(Image[] pips, int level, int cap, Color filled)
-        {
-            for (int i = 0; i < pips.Length; i++)
+            for (int i = 0; i < socketCount; i++)
             {
-                bool active = i < cap;
-                pips[i].gameObject.SetActive(active);
-                if (!active) continue;
-                bool isFilled = i < level;
-                pips[i].color = isFilled ? filled : PipEmpty;
-                pips[i].gameObject.name = isFilled ? "Pip Filled" : "Pip Empty";
+                bool filled = i < banked;
+                _partsSockets[i].sprite = filled
+                    ? PolygonFillSprite(HexSides, Mathf.CeilToInt(PartsSocketSize * Sqrt3 * 0.5f), Mathf.CeilToInt(PartsSocketSize))
+                    : SolidHexOutlineSprite(PartsSocketSize * 0.5f);
+                _partsSockets[i].color = filled ? PartsColor : new Color(1f, 1f, 1f, 0.10f);
             }
+            int overflow = Mathf.Max(0, banked - socketCount);
+            _partsOverflowText.gameObject.SetActive(overflow > 0);
+            _partsOverflowText.text = $"+{overflow}";
         }
 
-        private static void SetSpendable(Button button, Image bg, bool canSpend)
+        private void RefreshCategoryNode(RigCategoryLayout cat, int banked)
         {
-            button.interactable = canSpend;
-            bg.color = canSpend ? SpendReady : SpendDisabled;
+            if (!_categoryNodes.TryGetValue(cat.Id, out var v)) return;
+            int owned = 0, total = 0;
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                if (ab.Category != cat.Id) continue;
+                total++;
+                if (RigState.IsOwned(ab.Id)) owned++;
+            }
+            bool lit = owned > 0;
+            Color family = RigBoardLayout.Colour(cat.Family);
+
+            if (_categoryPanels.TryGetValue(cat.Id, out var panel))
+                panel.color = new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark);
+
+            v.HexFill.color = new Color(family.r, family.g, family.b, lit ? 0.20f : 0.05f);
+            v.HexOutline.color = lit ? family : new Color(family.r, family.g, family.b, 0.35f);
+            v.Glow.gameObject.SetActive(lit);
+            if (lit) v.Glow.color = new Color(family.r, family.g, family.b, 0.45f);
+
+            v.PillText.text = $"{owned}/{total}";
+            v.PillBg.color = lit ? new Color(family.r, family.g, family.b, 0.30f) : new Color(1f, 1f, 1f, 0.06f);
+            v.PillText.color = lit ? TextColor : Dim;
+            v.Icon.color = lit ? TextColor : Dim;
+            v.Label.color = lit ? TextColor : Dim;
+
+            _ = banked;
         }
 
-        private void OnTrackButtonTapped(int index) => PartSpend.TrySpendOnTrack(WeaponCatalog.AllTrackKinds[index]);
+        private void RefreshAbilityNode(RigAbilityLayout ab, int banked)
+        {
+            if (!_abilityNodes.TryGetValue(ab.Id, out var v)) return;
 
-        private void OnWaterBalloonTrackButtonTapped(int index) =>
-            PartSpend.TrySpendOnWaterBalloonTrack(WeaponCatalog.AllWaterBalloonTrackKinds[index]);
+            bool owned = RigState.IsOwned(ab.Id);
+            bool reached = RigState.IsReached(ab.Id);
+            bool isCap = ab.Kind == "cap";
+            bool draftable = isCap && reached && !owned;
+            bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
 
-        private void OnAbilityButtonTapped(int row) => PartSpend.TrySpendOnAbility(_abilityRowKind[row]);
+            Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
+            Color cyan = RigBoardLayout.Colour("sec");
+
+            v.OuterRing.gameObject.SetActive(draftable);
+            v.CapMarker.gameObject.SetActive(draftable);
+            v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : SolidHexOutlineSprite(v.Radius);
+
+            if (owned)
+            {
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.20f);
+                v.HexOutline.color = family;
+                v.Glow.gameObject.SetActive(true);
+                v.Glow.color = new Color(family.r, family.g, family.b, 0.4f);
+                v.PillText.text = $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
+                v.PillBg.color = new Color(family.r, family.g, family.b, 0.30f);
+                v.PillText.color = TextColor;
+                v.Label.text = ab.Label;
+                v.Label.color = TextColor;
+                v.Icon.color = TextColor;
+            }
+            else if (draftable)
+            {
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.10f);
+                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.8f);
+                v.Glow.gameObject.SetActive(false);
+                v.CapMarker.color = cyan;
+                v.PillText.text = "SHED";
+                v.PillBg.color = new Color(cyan.r, cyan.g, cyan.b, 0.25f);
+                v.PillText.color = cyan;
+                v.Label.text = ab.Label;
+                v.Label.color = TextColor;
+                v.Icon.color = new Color(family.r, family.g, family.b, 0.9f);
+            }
+            else if (reached)   // stat, reached, level 0
+            {
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.20f);
+                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.5f);
+                v.Glow.gameObject.SetActive(false);
+                v.PillText.text = $"0/{ab.MaxLevel}";
+                v.PillBg.color = new Color(1f, 1f, 1f, 0.08f);
+                v.PillText.color = Dim;
+                v.Label.text = ab.Label;
+                v.Label.color = TextColor;
+                v.Icon.color = TextColor;
+            }
+            else   // not reached
+            {
+                v.HexFill.color = new Color(1f, 1f, 1f, 0.02f);
+                v.HexOutline.color = new Color(1f, 1f, 1f, 0.12f);
+                v.Glow.gameObject.SetActive(false);
+                v.PillText.text = "LOCK";
+                v.PillBg.color = new Color(1f, 1f, 1f, 0.05f);
+                v.PillText.color = Dim;
+                v.Label.text = "? ? ?";
+                v.Label.color = Dim;
+                v.Icon.color = new Color(1f, 1f, 1f, 0.15f);
+            }
+
+            v.PartBadge.gameObject.SetActive(spendable);
+            v.Button.interactable = spendable;
+        }
+
+        private void OnRigNodeTapped(string id) => PartSpend.TrySpendOnRigNode(id);
 
         private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
-
-        /// <summary>BUILD ABILITY (MV-358): draws candidates the same way the old mid-fight modal did,
-        /// but on demand from this screen instead of the instant a shed dies. Two or three candidates
-        /// open the draft-pick card screen so the player chooses (<see cref="UpgradeScreen.OpenAbilityChoice"/>,
-        /// which itself spends the credit once a card is tapped); exactly one candidate builds directly —
-        /// a one-card choice would be a pointless tap, same rationale MV-357 used. Every ability already
-        /// owned (credits outlived the pool, e.g. two credits banked with only one ability left) spends
-        /// the credit with nothing to show for it rather than leaving a dead button.</summary>
-        private void OnBuildAbilityTapped()
-        {
-            if (AbilityCreditBank.Banked <= 0) return;
-
-            AbilityKind[] candidates = AbilityDraft.DrawCandidates();
-            switch (candidates.Length)
-            {
-                case 0:
-                    AbilityCreditBank.TrySpend();
-                    return;
-                case 1:
-                    WeaponSystemState.Acquire(candidates[0]);
-                    AbilityCreditBank.TrySpend();
-                    return;
-                default:
-                    var screen = FindFirstObjectByType<UpgradeScreen>();
-                    if (screen != null) screen.OpenAbilityChoice(candidates);
-                    return;
-            }
-        }
 
         // ------------------------------------------------------------------ build
 
@@ -471,13 +345,13 @@ namespace MaxWorlds.UI
             go.transform.SetParent(transform, false);
             _canvas = go.GetComponent<Canvas>();
             _canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            _canvas.sortingOrder = 210;   // same tier as the legacy UpgradeScreen it supersedes
+            _canvas.sortingOrder = 210;
 
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
             scaler.referenceResolution = new Vector2(RefW, RefH);
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
-            scaler.matchWidthOrHeight = 1f;   // match by height (shortest side) — consistent type/target sizes across iPhone aspect ratios
+            scaler.matchWidthOrHeight = 1f;
 
             _safeRoot = NewRect("Safe Area", _canvas.transform, Vector2.zero, Vector2.one);
             Stretch(_safeRoot);
@@ -492,17 +366,299 @@ namespace MaxWorlds.UI
             Stretch(scrim.rectTransform);
             scrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
-            _weaponStage = UpgradeWeaponStage.Create(transform);
-            _buildAbilityStage = AbilityDeviceStage.Create(transform);
+            // MV-423: the board is a fixed 1920x1080 frame (top-left anchored/pivoted) so every node's
+            // json (x,y) maps 1:1 onto anchoredPosition — RigBoardLayoutTests asserts that mapping
+            // exactly. It sits directly under Safe Area (not a further-inset content rect) because the
+            // json's own coordinates (rowY.category=230 etc.) already clear the top bar (28/104).
+            _boardRoot = NewRect("Board Root", rootRt, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            _boardRoot.pivot = new Vector2(0f, 1f);
+            _boardRoot.sizeDelta = new Vector2(RefW, RefH);
+            _boardRoot.anchoredPosition = Vector2.zero;
 
-            BuildTopBar(rootRt);
-            var content = BuildContentRect(rootRt);
-            BuildHeroColumn(content);
-            var main = BuildMainColumn(content);
-            BuildMainColumnContent(main);
+            BuildCategoryPanels(_boardRoot);
+            BuildForgeSection(_boardRoot);
+            foreach (var cat in RigBoardLayout.Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_boardRoot, cat);
+            foreach (var ab in RigBoardLayout.Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_boardRoot, ab);
+
+            BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
 
             _root.SetActive(false);
         }
+
+        /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
+        /// per category, spanning from the midpoint with its left neighbour to the midpoint with its
+        /// right one (the fusion row's diamonds sit exactly on these boundaries: <c>f_del</c> at
+        /// x=430 is the PRIMARY/SECONDARY midpoint, etc. — confirmed against the design file rather
+        /// than guessed). Drawn before the nodes so they sit behind everything.</summary>
+        private void BuildCategoryPanels(RectTransform boardRoot)
+        {
+            var categories = RigBoardLayout.Categories;
+            int n = categories.Count;
+            if (n == 0) return;
+            float spacing = n > 1 ? categories[1].X - categories[0].X : 0f;
+            float y = RigBoardLayout.RegionRectY, h = RigBoardLayout.RegionRectH, radius = RigBoardLayout.RegionRectRadius;
+
+            for (int i = 0; i < n; i++)
+            {
+                float left = i == 0 ? categories[i].X - spacing * 0.5f : (categories[i - 1].X + categories[i].X) * 0.5f;
+                float right = i == n - 1 ? categories[i].X + spacing * 0.5f : (categories[i].X + categories[i + 1].X) * 0.5f;
+                float w = right - left;
+
+                var panel = AddImage(boardRoot, HudTextures.RoundedBox(64, Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f)),
+                    new Color(1f, 1f, 1f, RigBoardLayout.RegionOpacityDark), $"{categories[i].Id} Panel");
+                Anchor(panel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+                panel.rectTransform.sizeDelta = new Vector2(w, h);
+                panel.rectTransform.anchoredPosition = new Vector2(left, -y);
+                panel.type = Image.Type.Sliced;
+                panel.raycastTarget = false;
+                _categoryPanels[categories[i].Id] = panel;
+            }
+        }
+
+        /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) only has
+        /// to PLACE and LABEL these (RigBoardLayoutTests covers position/size); a fusion's own
+        /// draft/spend state machine is 5/5's job, so every diamond here renders permanently locked —
+        /// "???" over its parent-category pairing, never the mock's one-off lit OVERCHARGE state,
+        /// which depends on logic this ticket doesn't build.</summary>
+        private void BuildForgeSection(RectTransform boardRoot)
+        {
+            float dividerY = RigBoardLayout.ForgeDividerY;
+            var divider = AddImage(boardRoot, HudTextures.Solid(), new Color(1f, 1f, 1f, 0.12f), "Forge Divider");
+            Anchor(divider.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
+            divider.rectTransform.offsetMin = new Vector2(ContentMargin, 0f);
+            divider.rectTransform.offsetMax = new Vector2(-ContentMargin, 0f);
+            divider.rectTransform.anchoredPosition = new Vector2(0f, -dividerY);
+            divider.rectTransform.sizeDelta = new Vector2(0f, 1.5f);
+
+            var forgeLabel = AddText(boardRoot, 22, PartsColor, TextAnchor.UpperLeft);
+            Anchor(forgeLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            forgeLabel.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 24f));
+            forgeLabel.rectTransform.sizeDelta = new Vector2(200f, 28f);
+            forgeLabel.fontStyle = FontStyle.Bold;
+            forgeLabel.text = "FORGE";
+
+            var caption = AddText(boardRoot, 18, Dim, TextAnchor.UpperLeft);
+            Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            caption.rectTransform.anchoredPosition = new Vector2(ContentMargin + 170f, -(dividerY + 24f));
+            caption.rectTransform.sizeDelta = new Vector2(700f, 28f);
+            caption.text = "two lit categories · costs parts, never a shed · lands in the B / U slot";
+
+            foreach (var fusion in RigBoardLayout.Fusions) BuildFusionNode(boardRoot, fusion);
+        }
+
+        private RigNodeVisual BuildFusionNode(RectTransform boardRoot, RigFusionLayout fusion)
+        {
+            float r = RigBoardLayout.RadiusFusion;
+            var node = BuildNodeShell(boardRoot, fusion.Id, fusion.X, fusion.Y, r, FusionSides, out var shell);
+
+            Color amber = PartsColor;
+            shell.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.03f);
+            shell.HexOutline.sprite = SolidPolygonOutlineSprite(FusionSides, r);
+            shell.HexOutline.color = new Color(1f, 1f, 1f, 0.14f);
+
+            int fuseIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleFusion);
+            shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon("fuse"), fuseIconSize);
+            shell.Icon.rectTransform.sizeDelta = new Vector2(fuseIconSize, fuseIconSize);
+            shell.Icon.color = Dim;
+
+            shell.Label.text = "? ? ?";
+            shell.Label.color = Dim;
+
+            var sub = AddText(node, 13, Dim, TextAnchor.UpperCenter);
+            Anchor(sub.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            sub.rectTransform.sizeDelta = new Vector2(260f, 20f);
+            sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
+            sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
+
+            shell.PillBg.gameObject.SetActive(false);   // fusions carry no level pill
+            shell.PartBadge.gameObject.SetActive(false);
+            shell.OuterRing.gameObject.SetActive(false);
+            shell.CapMarker.gameObject.SetActive(false);
+            shell.Button.interactable = false;
+            return shell;
+        }
+
+        private RigNodeVisual BuildCategoryNode(RectTransform boardRoot, RigCategoryLayout cat)
+        {
+            float r = RigBoardLayout.RadiusCategory;
+            BuildNodeShell(boardRoot, cat.Id, cat.X, cat.Y, r, HexSides, out var shell);
+
+            shell.HexOutline.sprite = SolidHexOutlineSprite(r);
+            int catIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleCategory);
+            shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(cat.Icon), catIconSize);
+            shell.Icon.rectTransform.sizeDelta = new Vector2(catIconSize, catIconSize);
+
+            shell.Label.fontSize = Mathf.RoundToInt(RigBoardLayout.CategoryLabelFontSize);
+            shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.CategoryLabelOffsetY(r));
+            shell.Label.text = cat.Id;
+
+            shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
+            shell.OuterRing.gameObject.SetActive(false);
+            shell.CapMarker.gameObject.SetActive(false);
+            shell.Button.interactable = false;
+            return shell;
+        }
+
+        private RigNodeVisual BuildAbilityNode(RectTransform boardRoot, RigAbilityLayout ab)
+        {
+            float r = RigBoardLayout.RadiusAbility;
+            BuildNodeShell(boardRoot, ab.Id, ab.X, ab.Y, r, HexSides, out var shell);
+
+            shell.HexOutline.sprite = SolidHexOutlineSprite(r);
+            int abIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleAbility);
+            shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
+            shell.Icon.rectTransform.sizeDelta = new Vector2(abIconSize, abIconSize);
+
+            // Outer dashed ring (capability draftable) — a circle at r + capOuterRingOffset, independent
+            // of the node's own hex outline so it can toggle without disturbing it.
+            float ringR = r + RigBoardLayout.CapOuterRingOffset;
+            shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
+            shell.OuterRing.sprite = HudTextures.Ring(96, RigBoardLayout.StrokeActive, true, 16);
+
+            float markerR = RigBoardLayout.CapMarkerRadius;
+            Vector2 markerOffset = RigBoardLayout.CapMarkerOffset(r);
+            shell.CapMarker.rectTransform.sizeDelta = new Vector2(markerR * 2f, markerR * 2f);
+            shell.CapMarker.rectTransform.anchoredPosition = markerOffset;
+            shell.CapMarker.sprite = HudTextures.Disc(32);
+
+            float badgeR = RigBoardLayout.PartBadgeRadius;
+            Vector2 badgeOffset = RigBoardLayout.PartBadgeOffset(r);
+            shell.PartBadge.rectTransform.sizeDelta = new Vector2(badgeR * 2f, badgeR * 2f);
+            shell.PartBadge.rectTransform.anchoredPosition = badgeOffset;
+            shell.PartBadge.sprite = HudTextures.Disc(32);
+            shell.PartBadge.color = PartsColor;
+
+            var plus = AddText(shell.PartBadge.rectTransform, 18, PanelColor, TextAnchor.MiddleCenter);
+            Stretch(plus.rectTransform);
+            plus.text = "+";
+            plus.fontStyle = FontStyle.Bold;
+            plus.raycastTarget = false;
+
+            shell.Label.text = ab.Label;
+
+            string id = ab.Id;   // capture by value, not the loop variable
+            shell.Button.onClick.AddListener(() => OnRigNodeTapped(id));
+            return shell;
+        }
+
+        /// <summary>The shared shell every node (category/ability/fusion) is built from: a
+        /// <paramref name="sides"/>-gon of circumradius <paramref name="r"/> centred at
+        /// (<paramref name="x"/>, <paramref name="y"/>) in the board's own frame, plus the pieces every
+        /// state needs — fill, outline, glow, outer ring, cap marker, part badge, level pill, label,
+        /// icon and a full-hit-rect button. The ROOT rect is a <c>2r x 2r</c> square (not the hex's own
+        /// narrower bounding box) so every node gets a full hit rect regardless of shape — the AC's own
+        /// wording ("do not shrink any radius").</summary>
+        private RectTransform BuildNodeShell(RectTransform boardRoot, string id, float x, float y, float r,
+            int sides, out RigNodeVisual shell)
+        {
+            var root = NewRect(id, boardRoot, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            root.pivot = new Vector2(0.5f, 0.5f);
+            root.sizeDelta = new Vector2(r * 2f, r * 2f);
+            root.anchoredPosition = new Vector2(x, -y);
+
+            float hexW = sides == HexSides ? r * Sqrt3 : r * 2f;
+            float hexH = r * 2f;
+
+            var glow = AddImage(root, PolygonFillSprite(sides, Mathf.CeilToInt(hexW * 1.18f), Mathf.CeilToInt(hexH * 1.18f)),
+                Color.clear, "Glow");
+            Anchor(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            glow.rectTransform.sizeDelta = new Vector2(hexW * 1.18f, hexH * 1.18f);
+            glow.raycastTarget = false;
+            glow.gameObject.SetActive(false);
+
+            var fill = AddImage(root, PolygonFillSprite(sides, Mathf.CeilToInt(hexW), Mathf.CeilToInt(hexH)), Color.clear, "Fill");
+            Anchor(fill.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            fill.rectTransform.sizeDelta = new Vector2(hexW, hexH);
+            fill.raycastTarget = false;
+
+            var outline = AddImage(root, null, Color.white, "Outline");
+            Anchor(outline.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            outline.rectTransform.sizeDelta = new Vector2(hexW, hexH);
+            outline.raycastTarget = false;
+
+            var icon = new GameObject("Icon", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
+            icon.transform.SetParent(root, false);
+            Anchor(icon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            icon.rectTransform.anchoredPosition = new Vector2(0f, RigBoardLayout.IconOffsetY);
+            icon.raycastTarget = false;
+
+            var outerRing = AddImage(root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, true, 16), Color.clear, "Outer Ring");
+            Anchor(outerRing.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            outerRing.raycastTarget = false;
+
+            var capMarker = AddImage(root, HudTextures.Disc(32), Color.clear, "Cap Marker");
+            Anchor(capMarker.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            capMarker.raycastTarget = false;
+
+            var partBadge = AddImage(root, HudTextures.Disc(32), Color.clear, "Part Badge");
+            Anchor(partBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            partBadge.raycastTarget = false;
+
+            float pillW = RigBoardLayout.LevelPillW, pillH = RigBoardLayout.LevelPillH;
+            var pillBg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), RowColor, "Pill");
+            Anchor(pillBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            pillBg.rectTransform.sizeDelta = new Vector2(pillW, pillH);
+            pillBg.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LevelPillOffsetY(r));
+            pillBg.type = Image.Type.Sliced;
+            pillBg.raycastTarget = false;
+
+            var pillText = AddText(pillBg.rectTransform, Mathf.RoundToInt(RigBoardLayout.LevelPillFontSize), TextColor, TextAnchor.MiddleCenter);
+            Stretch(pillText.rectTransform);
+            pillText.fontStyle = FontStyle.Bold;
+            pillText.raycastTarget = false;
+
+            var label = AddText(root, Mathf.RoundToInt(RigBoardLayout.LabelFontSize), TextColor, TextAnchor.UpperCenter);
+            Anchor(label.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            label.rectTransform.sizeDelta = new Vector2(r * 3f, 24f);
+            label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LabelOffsetY(r));
+            label.fontStyle = FontStyle.Bold;
+            label.raycastTarget = false;
+
+            var hit = AddImage(root, HudTextures.Solid(), Color.clear, "Hit");
+            Stretch(hit.rectTransform);
+            hit.raycastTarget = true;
+            var button = hit.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+
+            shell = new RigNodeVisual
+            {
+                Root = root, Glow = glow, HexFill = fill, HexOutline = outline, Icon = icon,
+                OuterRing = outerRing, CapMarker = capMarker, PartBadge = partBadge,
+                PillBg = pillBg, PillText = pillText, Label = label, Button = button, Radius = r
+            };
+            return root;
+        }
+
+        private static Sprite PolygonFillSprite(int sides, int w, int h) => HudTextures.Polygon(sides, HexRotationDeg, w, h);
+
+        private Sprite SolidHexOutlineSprite(float r) => SolidPolygonOutlineSprite(HexSides, r);
+
+        private Sprite SolidPolygonOutlineSprite(int sides, float r)
+        {
+            float w = sides == HexSides ? r * Sqrt3 : r * 2f, h = r * 2f;
+            return HudTextures.PolygonOutline(sides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeOwned);
+        }
+
+        private Sprite DashedHexSprite(float r)
+        {
+            float w = r * Sqrt3, h = r * 2f;
+            return HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h),
+                RigBoardLayout.StrokeActive, true, 14);
+        }
+
+        /// <summary>The refs a built node hands back to <see cref="Refresh"/> — one shared shape for
+        /// categories, abilities and fusions so all three can only ever drift apart in DATA (their
+        /// json entry), never in code structure.</summary>
+        private sealed class RigNodeVisual
+        {
+            public RectTransform Root;
+            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartBadge, PillBg;
+            public Text PillText, Label;
+            public Button Button;
+            public float Radius;
+        }
+
+        // ------------------------------------------------------------------ top bar
 
         private void BuildTopBar(RectTransform parent)
         {
@@ -517,81 +673,103 @@ namespace MaxWorlds.UI
             accent.rectTransform.offsetMax = Vector2.zero;
             accent.type = Image.Type.Sliced;
 
-            var title = AddText(bar, 42, TextColor, TextAnchor.MiddleLeft);
+            var title = AddText(bar, 38, TextColor, TextAnchor.MiddleLeft);
             Anchor(title.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.34f, 0.5f), new Vector2(0f, 0.5f));
             title.rectTransform.offsetMin = new Vector2(28f, -30f);
-            title.rectTransform.offsetMax = new Vector2(-12f, 30f);
+            title.rectTransform.offsetMax = new Vector2(-160f, 30f);
             title.fontStyle = FontStyle.Bold;
-            title.text = "ABILITIES";
+            title.text = "THE RIG";
 
-            // Right-hand cluster, laid out from the corner inward: a close affordance (the design has
-            // none, but the HUD's WEAPONS button only ever opens — MV-234's OnWeaponsButtonTapped calls
-            // Open(), never a toggle — so this screen needs its own way back out), then QUIT TO MENU
-            // (MV-257 — this screen's opaque scrim hides the HUD's own HOME button underneath it, so
-            // the only way back to the main menu while this is open used to be none at all), then
-            // PAUSED, then the PARTS/CELLS banks.
+            var subtitle = AddText(bar, 18, Dim, TextAnchor.MiddleLeft);
+            Anchor(subtitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.34f, 0.5f), new Vector2(0f, 0.5f));
+            subtitle.rectTransform.offsetMin = new Vector2(190f, -30f);
+            subtitle.rectTransform.offsetMax = new Vector2(-12f, 30f);
+            subtitle.fontStyle = FontStyle.Bold;
+            subtitle.text = "MAX'S WORKBENCH";
+
             float cursor = -16f;
             cursor = BuildCloseButton(bar, cursor) - 16f;
             cursor = BuildQuitButton(bar, cursor) - 16f;
 
-            var paused = AddText(bar, 26, PartsColor, TextAnchor.MiddleRight);
-            Anchor(paused.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            paused.rectTransform.sizeDelta = new Vector2(160f, 44f);
-            paused.rectTransform.anchoredPosition = new Vector2(cursor, 0f);
-            paused.fontStyle = FontStyle.Bold;
-            paused.text = "II PAUSED";
-            cursor -= 160f + 16f;
+            const float partsTrayWidth = 340f;
+            cursor = BuildPartsTray(bar, cursor, partsTrayWidth) - 16f;
 
-            // MV-262: the parts chip's dot becomes a spinning gear glyph (see Update()). MV-327: it's
-            // also wider, spells out PARTS instead of a bare number, and grows a pulsing glow ring
-            // while a part is banked — "just a number" didn't read as a bank at a glance.
-            const float partsChipWidth = 190f;
-            var partsChip = BuildChip(bar, new Vector2(cursor, 0f), partsChipWidth, PartsColor,
-                HudTextures.Gear(48, 8), 34f, out _partsText, out _partsIcon);
-            partsChip.name = "Parts Chip";
-
-            // Outer glow ring, same "halo behind an opaque pill" technique as HudController's own
-            // part-alert badge (BuildPartAlert): sits behind the chip's BG so only the 10px overflow
-            // beyond the pill's edge ever shows, driven by Update()'s pulse above.
-            _partsGlow = AddImage(partsChip, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
-            Stretch(_partsGlow.rectTransform, 10f);
-            _partsGlow.type = Image.Type.Sliced;
-            _partsGlow.raycastTarget = false;
-            _partsGlow.transform.SetAsFirstSibling();
-            cursor -= partsChipWidth + 16f;
-
-            // MV-327: the label now shrink-to-fits its box (see BuildChip) instead of overflowing past
-            // it, which used to draw wide strings like "224 CELLS" back over this dot icon.
             const float cellsChipWidth = 170f;
             var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor,
                 HudTextures.Disc(32), 20f, out _cellsText, out _);
             cellsChip.name = "Cells Chip";
 
-            // MV-374: Cell Capacity is a general player-stat upgrade track (spend a part to raise the
-            // reserve's cap), but this screen's grid sections are already tight on vertical room — see
-            // the height-budget note above BuildAbilitiesSection — so rather than adding a whole new
-            // section/row, the CELLS chip itself doubles as the spend affordance: Refresh() tints it
-            // and makes it tappable exactly when a level-up is affordable, same "you have something to
-            // spend" idiom the PARTS glow uses.
             _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
             _cellsChipButton = _cellsChipBg.gameObject.AddComponent<Button>();
             _cellsChipButton.transition = Selectable.Transition.None;
             _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
         }
 
-        /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.
-        /// MV-250: the original dark-on-dark square (same colour as every other row) read as
-        /// invisible in playtest — nobody could tell it was a button, let alone the only way out.
-        /// Filled bright amber with a dark bold label so it reads as an obvious, unmistakable
-        /// call-to-action against the screen's near-black palette. Returns the edge's new cursor
-        /// position (its left edge) for the next element to chain from.</summary>
+        /// <summary>MV-423's replacement for the old spinning-gear PARTS chip: six hex sockets (filled
+        /// amber up to the banked count, a <c>+N</c> overflow past six), captioned "tap a node to fit
+        /// one" while anything's banked and "none banked" (whole tray dark) when empty — the design's
+        /// own before/after pair (<c>MV-423.png</c> vs <c>MV-423-noparts.png</c>).</summary>
+        private float BuildPartsTray(RectTransform bar, float rightEdge, float width)
+        {
+            var tray = NewRect("Parts Tray", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            tray.pivot = new Vector2(1f, 0.5f);
+            tray.sizeDelta = new Vector2(width, 68f);
+            tray.anchoredPosition = new Vector2(rightEdge, 0f);
+
+            var bg = AddImage(tray, HudTextures.RoundedBox(32, 0.3f), RowColor, "Tray BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            _partsTrayBg = bg;
+
+            var inner = AddImage(tray, HudTextures.RoundedBox(32, 0.3f), PanelColor, "Tray Inner");
+            Stretch(inner.rectTransform, -2.5f); inner.type = Image.Type.Sliced;
+
+            _partsTrayLabel = AddText(tray, 18, PartsColor, TextAnchor.UpperLeft);
+            Anchor(_partsTrayLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 1f));
+            _partsTrayLabel.rectTransform.offsetMin = new Vector2(14f, -30f);
+            _partsTrayLabel.rectTransform.offsetMax = Vector2.zero;
+            _partsTrayLabel.fontStyle = FontStyle.Bold;
+            _partsTrayLabel.text = "PARTS";
+
+            _partsTraySub = AddText(tray, 13, Dim, TextAnchor.LowerLeft);
+            Anchor(_partsTraySub.rectTransform, new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f));
+            _partsTraySub.rectTransform.offsetMin = new Vector2(14f, 8f);
+            _partsTraySub.rectTransform.offsetMax = new Vector2(0f, 30f);
+
+            const int socketCount = 6;
+            const float socketGap = 4f;
+            float socketsWidth = socketCount * PartsSocketSize + (socketCount - 1) * socketGap;
+            var socketRow = NewRect("Sockets", tray, new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f));
+            socketRow.offsetMin = new Vector2(0f, -PartsSocketSize * 0.5f);
+            socketRow.offsetMax = new Vector2(-16f, PartsSocketSize * 0.5f);
+
+            _partsSockets.Clear();
+            for (int i = 0; i < socketCount; i++)
+            {
+                var socket = AddImage(socketRow, SolidHexOutlineSprite(PartsSocketSize * 0.5f), new Color(1f, 1f, 1f, 0.1f), $"Socket {i}");
+                Anchor(socket.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+                socket.rectTransform.sizeDelta = new Vector2(PartsSocketSize * Sqrt3 * 0.5f, PartsSocketSize);
+                socket.rectTransform.anchoredPosition = new Vector2(-(socketsWidth - (i + 0.5f) * (PartsSocketSize + socketGap)), 0f);
+                _partsSockets.Add(socket);
+            }
+
+            _partsOverflowText = AddText(socketRow, 14, PartsColor, TextAnchor.MiddleRight);
+            Anchor(_partsOverflowText.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            _partsOverflowText.rectTransform.sizeDelta = new Vector2(50f, 30f);
+            _partsOverflowText.rectTransform.anchoredPosition = new Vector2(6f, 0f);
+            _partsOverflowText.fontStyle = FontStyle.Bold;
+            _partsOverflowText.gameObject.SetActive(false);
+
+            return rightEdge - width;
+        }
+
+        /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.</summary>
         private float BuildCloseButton(RectTransform bar, float rightEdge)
         {
             const float w = 104f, h = 56f;
             var bg = AddImage(bar, HudTextures.RoundedBox(32, 0.5f), PartsColor, "Close Button");
             Anchor(bg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             bg.rectTransform.anchoredPosition = new Vector2(rightEdge, 0f);
-            bg.rectTransform.sizeDelta = new Vector2(w, h);   // wide pill, well above the 44pt tap-target floor
+            bg.rectTransform.sizeDelta = new Vector2(w, h);
             bg.type = Image.Type.Sliced;
             bg.raycastTarget = true;
 
@@ -608,10 +786,7 @@ namespace MaxWorlds.UI
             return rightEdge - w;
         }
 
-        /// <summary>MV-257: a second, distinctly-coloured pill next to CLOSE — abandons the run and
-        /// returns to the Home/save-slot screen via <see cref="RunFlow.QuitToMenu"/>. Red rather than
-        /// CLOSE's amber so it never reads as "close this screen" by mistake: it's the destructive
-        /// one. Same right-edge-cursor chaining as <see cref="BuildCloseButton"/>.</summary>
+        /// <summary>MV-257: abandons the run and returns to Home via <see cref="RunFlow.QuitToMenu"/>.</summary>
         private float BuildQuitButton(RectTransform bar, float rightEdge)
         {
             const float w = 200f, h = 56f;
@@ -636,12 +811,7 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>A rounded pill: a tinted icon + a live count/label, right-anchored at
-        /// <paramref name="offset"/> from the top bar's right edge (CELLS/PARTS). MV-262: the icon
-        /// sprite/size is now caller-supplied (and handed back via <paramref name="icon"/>) so the
-        /// PARTS chip can carry the spinning gear glyph while CELLS keeps the plain dot. MV-327: width
-        /// is caller-supplied too (PARTS needs more room for its glow + unit suffix), and the label
-        /// shrinks to fit its box instead of overflowing past it — the old fixed 24pt + Overflow wrap
-        /// let a wide string ("224 CELLS") draw back over the icon at the box's left edge.</summary>
+        /// <paramref name="offset"/> from the top bar's right edge (CELLS).</summary>
         private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
             Sprite iconSprite, float iconSize, out Text label, out Image icon)
         {
@@ -670,467 +840,6 @@ namespace MaxWorlds.UI
             return chip;
         }
 
-        /// <summary>The area below the top bar, holding the hero column and the main (primary +
-        /// abilities) column. MV-262: there's no bottom spendbar reserving space any more — the
-        /// content rect now runs all the way down to the margin.</summary>
-        private RectTransform BuildContentRect(RectTransform parent)
-        {
-            var content = NewRect("Content", parent, Vector2.zero, Vector2.one);
-            content.offsetMin = new Vector2(ContentMargin, ContentMargin);
-            content.offsetMax = new Vector2(-ContentMargin, -(TopBarHeight + ContentMargin * 1.5f));
-            return content;
-        }
-
-        /// <summary>Left strip (MV-262: narrowed to <see cref="HeroColumnFraction"/> so the weapons UI
-        /// on the right gets the reclaimed width): MAX's own key-art portrait, then the RCDA's live
-        /// render under a "LOADOUT" tag and a rotating tech-ring glow. The primary weapon's own name
-        /// now lives in the main column as the hero label (<see cref="BuildPrimaryNameHeader"/>) —
-        /// this column is purely Max + his gear.
-        ///
-        /// MV-251: the card here used to show a RawImage of <c>MaxPortraitStage</c> — Max's own bust —
-        /// under a "PRIMARY WEAPON" tag; the screen never rendered the weapon at all. Split honestly in
-        /// two: <see cref="MaxPortraitResourcePath"/> (Lee's call) as Max's own showcase, and a small
-        /// live render of the actual RCDA (<see cref="UpgradeWeaponStage"/>, already built and tested
-        /// for the legacy pickup-reveal screen) under its own card.</summary>
-        private RectTransform BuildHeroColumn(RectTransform content)
-        {
-            var column = NewRect("Hero Column", content, Vector2.zero, new Vector2(HeroColumnFraction, 1f));
-            column.offsetMin = Vector2.zero;
-            column.offsetMax = new Vector2(-16f, 0f);
-
-            // The hero column is a narrow strip, and the content width itself is only ever a phone's
-            // short edge (matchWidthOrHeight=1 keeps everything matched to height, not width). Every
-            // piece here stacks full-width, top to bottom — a side-by-side icon+text row has no room
-            // to breathe at this width.
-            const float portraitH = 460f, gap = 18f;
-            var card = NewRect("Portrait Card", column, new Vector2(0f, 1f), new Vector2(1f, 1f));
-            card.pivot = new Vector2(0.5f, 1f);
-            card.offsetMin = Vector2.zero; card.offsetMax = Vector2.zero;
-            card.sizeDelta = new Vector2(0f, portraitH);
-            card.anchoredPosition = Vector2.zero;
-
-            // A thin rim in Max's own hoodie colour, peeking out from behind the card — the same
-            // framing trick the legacy UpgradeScreen used (YT-176), so the two screens' Max art still
-            // reads as belonging to the same identity even though this one is a different medium.
-            var rim = AddImage(card, HudTextures.RoundedBox(40, 0.5f),
-                                CharacterSkin.BaseColorFor(CharacterRole.Player), "Rim");
-            Stretch(rim.rectTransform); rim.type = Image.Type.Sliced;
-
-            var cardBg = AddImage(card, HudTextures.RoundedBox(40, 0.5f), CardColor, "BG");
-            Stretch(cardBg.rectTransform, -4f); cardBg.type = Image.Type.Sliced;
-
-            // MAX's key art (MV-251, Lee's call): preserveAspect keeps the portrait's own proportions
-            // intact regardless of the card's actual on-device width, so it never stretches/distorts.
-            var portrait = new GameObject("Max Portrait", typeof(RectTransform), typeof(Image));
-            portrait.transform.SetParent(cardBg.rectTransform, false);
-            var portraitImg = portrait.GetComponent<Image>();
-            Stretch((RectTransform)portrait.transform, -14f);
-            portraitImg.sprite = Resources.Load<Sprite>(MaxPortraitResourcePath);
-            portraitImg.preserveAspect = true;
-            portraitImg.raycastTarget = false;
-
-            var mlabel = AddText(card, 24, TextColor, TextAnchor.LowerCenter);
-            Anchor(mlabel.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            mlabel.rectTransform.sizeDelta = new Vector2(300f, 36f);
-            mlabel.rectTransform.anchoredPosition = new Vector2(0f, 14f);
-            mlabel.fontStyle = FontStyle.Bold;
-            mlabel.text = "MAX";
-
-            // MV-262: "the area under Max much cooler, not empty/plain" — a LOADOUT tag and a
-            // rotating tech-ring glow (same idiom as the joystick base) behind the RCDA's live render,
-            // instead of the old flat, static card.
-            const float captionH = 30f;
-            var caption = AddText(column, 20, PrimaryAccent, TextAnchor.UpperLeft);
-            Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            caption.rectTransform.sizeDelta = new Vector2(0f, captionH);
-            caption.rectTransform.anchoredPosition = new Vector2(0f, -(portraitH + gap));
-            caption.fontStyle = FontStyle.Bold;
-            caption.text = "LOADOUT";
-
-            const float weaponCardH = 210f;
-            var weaponCard = NewRect("Weapon Card", column, new Vector2(0f, 1f), Vector2.one);
-            weaponCard.pivot = new Vector2(0.5f, 1f);
-            weaponCard.sizeDelta = new Vector2(0f, weaponCardH);
-            weaponCard.anchoredPosition = new Vector2(0f, -(portraitH + gap + captionH + 6f));
-
-            var ring = AddImage(weaponCard, HudTextures.TechRings(220, 3),
-                new Color(PrimaryAccent.r, PrimaryAccent.g, PrimaryAccent.b, 0.55f), "Glow Ring");
-            Anchor(ring.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            ring.rectTransform.sizeDelta = new Vector2(weaponCardH * 1.15f, weaponCardH * 1.15f);
-            ring.raycastTarget = false;
-            _weaponGlowRing = ring;
-
-            var weaponBg = AddImage(weaponCard, HudTextures.RoundedBox(28, 0.4f), CardColor, "BG");
-            Stretch(weaponBg.rectTransform); weaponBg.type = Image.Type.Sliced;
-
-            var weaponRender = AddRawImage(weaponCard, _weaponStage != null ? _weaponStage.Texture : null, "Weapon Render");
-            Stretch(weaponRender.rectTransform, -12f);
-
-            return column;
-        }
-
-        /// <summary>Right side (MV-262: widened via <see cref="HeroColumnFraction"/>): the hero-sized
-        /// primary-weapon name, the primary-track grid, then the abilities grid.</summary>
-        private RectTransform BuildMainColumn(RectTransform content)
-        {
-            var column = NewRect("Main Column", content, new Vector2(HeroColumnFraction, 0f), new Vector2(1f, 1f));
-            column.offsetMin = new Vector2(16f, 0f);
-            column.offsetMax = Vector2.zero;
-            return column;
-        }
-
-        /// <summary>Threads a single top-down "cursor" (y, 0 at the column's top edge, growing more
-        /// negative downward) through the primary-name header, the primary grid, and the abilities
-        /// grid — so each section's own height determines where the next one starts instead of the
-        /// three of them being laid out from independently hand-computed offsets.</summary>
-        private void BuildMainColumnContent(RectTransform main)
-        {
-            float y = BuildPrimaryNameHeader(main, 0f);
-            y = BuildPrimaryGrid(main, y);
-            y = BuildWaterBalloonSection(main, y);
-            BuildAbilitiesSection(main, y);
-        }
-
-        /// <summary>MV-262: the primary weapon's name, hoisted out of the cramped hero column into the
-        /// main column as a genuine hero label — "MUCH bigger" per the ticket, not a 26pt line under a
-        /// weapon-render card.</summary>
-        private float BuildPrimaryNameHeader(RectTransform column, float y)
-        {
-            var tag = AddText(column, 22, PrimaryAccent, TextAnchor.UpperLeft);
-            Anchor(tag.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            tag.rectTransform.sizeDelta = new Vector2(0f, HeroNameTagH);
-            tag.rectTransform.anchoredPosition = new Vector2(0f, y);
-            tag.fontStyle = FontStyle.Bold;
-            tag.text = "PRIMARY WEAPON";
-            y -= HeroNameTagH + 6f;
-
-            var name = AddText(column, HeroNameFontSize, TextColor, TextAnchor.UpperLeft);
-            Anchor(name.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            name.rectTransform.sizeDelta = new Vector2(0f, HeroNameH);
-            name.rectTransform.anchoredPosition = new Vector2(0f, y);
-            name.fontStyle = FontStyle.Bold;
-            name.horizontalOverflow = HorizontalWrapMode.Wrap;
-            name.verticalOverflow = VerticalWrapMode.Overflow;
-            name.text = WeaponCatalog.TitleCase(WeaponCatalog.PrimaryName);
-            y -= HeroNameH + HeroNameGap;
-
-            return y;
-        }
-
-        private float BuildPrimaryGrid(RectTransform column, float y)
-        {
-            var header = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
-            Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            header.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
-            header.rectTransform.anchoredPosition = new Vector2(0f, y);
-            header.fontStyle = FontStyle.Bold;
-            header.text = $"PRIMARY — {TrackCount} upgrade tracks";
-
-            float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
-            for (int i = 0; i < TrackCount; i++)
-            {
-                int index = i;   // capture by value, not the loop variable
-                var kind = WeaponCatalog.AllTrackKinds[i];
-                var r = BuildGridRow(column, "Track Row", i, 2, gridTop, RowHeight, RowGap, TrackIconBg,
-                    WeaponCatalog.MaxLevel(kind));
-                _trackName[i] = r.Name;
-                _trackPips[i] = r.Pips;
-                _trackButton[i] = r.PlusButton;
-                _trackButtonBg[i] = r.PlusBg;
-                r.IconGlyph.text = TrackGlyph(kind);   // static per track — never revisited by Refresh
-                _trackButton[i].onClick.AddListener(() => OnTrackButtonTapped(index));
-            }
-
-            float primaryRows = (TrackCount + 1) / 2;
-            return gridTop - (primaryRows * RowHeight + (primaryRows - 1) * RowGap) - SectionGap;
-        }
-
-        /// <summary>MV-370: the Water Balloon primary add-on's own three tracks (Range, Splash Area,
-        /// Repeat Fire) — a single 3-column row, same <see cref="BuildGridRow"/> row shape the primary
-        /// and abilities sections use, so it can never drift apart in style from either.</summary>
-        private float BuildWaterBalloonSection(RectTransform column, float y)
-        {
-            var header = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
-            Anchor(header.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-            header.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
-            header.rectTransform.anchoredPosition = new Vector2(0f, y);
-            header.fontStyle = FontStyle.Bold;
-            header.text = "WATER BALLOON";   // MV-390: was "PRIMARY ADD-ONS"
-            _waterBalloonHeaderText = header;
-
-            float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
-            for (int i = 0; i < WaterBalloonTrackCount; i++)
-            {
-                int index = i;   // capture by value, not the loop variable
-                var kind = WeaponCatalog.AllWaterBalloonTrackKinds[i];
-                var r = BuildGridRow(column, "Water Balloon Row", i, WaterBalloonTrackCount, gridTop,
-                    RowHeight, RowGap, AbilityIconBg, WeaponCatalog.MaxLevel(kind));
-                _waterBalloonName[i] = r.Name;
-                _waterBalloonPips[i] = r.Pips;
-                _waterBalloonButton[i] = r.PlusButton;
-                _waterBalloonButtonBg[i] = r.PlusBg;
-                _waterBalloonRow[i] = r.Row.gameObject;
-                r.IconGlyph.text = WaterBalloonTrackGlyph(kind);   // static per track — never revisited by Refresh
-                _waterBalloonButton[i].onClick.AddListener(() => OnWaterBalloonTrackButtonTapped(index));
-            }
-
-            return gridTop - RowHeight - SectionGap;
-        }
-
-        /// <summary>MV-262: always builds all ability slots as active rows (never SetActive(false)
-        /// past the acquired count) — <see cref="Refresh"/>/<see cref="SetAbilityLocked"/> then decide
-        /// per-slot whether a row shows real data or a greyed, unnamed placeholder. There is no
-        /// separate placeholder row any more; the grid itself is the "more to find" tell. MV-380: the
-        /// pool is back up to five (Water Balloon + Auto-fire returned to it), so at a fixed
-        /// <see cref="AbilityColumns"/> of 3 this now wraps into 2 rows rather than the single row
-        /// MV-370's smaller 3-ability pool fit.</summary>
-        private void BuildAbilitiesSection(RectTransform column, float y)
-        {
-            _abilitiesHeaderText = AddText(column, 28, TextColor, TextAnchor.UpperLeft);
-            Anchor(_abilitiesHeaderText.rectTransform, new Vector2(0f, 1f), new Vector2(0.6f, 1f), new Vector2(0f, 1f));
-            _abilitiesHeaderText.rectTransform.sizeDelta = new Vector2(0f, SectionHeaderHeight);
-            _abilitiesHeaderText.rectTransform.anchoredPosition = new Vector2(0f, y);
-            _abilitiesHeaderText.fontStyle = FontStyle.Bold;
-
-            BuildBuildAbilityButton(column, y);
-
-            float gridTop = y - (SectionHeaderHeight + SectionHeaderGap);
-            for (int i = 0; i < MaxAbilityRows; i++)
-            {
-                int row = i;   // capture by value, not the loop variable
-                // Ability slots are generic at build time (the kind behind a slot is only known once
-                // WeaponSystemState.Acquired assigns it, MV-333), so unlike the track rows above this
-                // can't size to one specific kind's cap — use the largest cap any ability actually has
-                // (WeaponCooldown, 5; see WeaponCatalog.MaxLevel(AbilityKind)).
-                var r = BuildGridRow(column, "Ability Row", i, AbilityColumns, gridTop, RowHeight, RowGap, AbilityIconBg, 5);
-                _abilityName[i] = r.Name;
-                _abilityPips[i] = r.Pips;
-                _abilityButton[i] = r.PlusButton;
-                _abilityButtonBg[i] = r.PlusBg;
-                _abilityIcon[i] = r.Icon;
-                _abilityIconGlyph[i] = r.IconGlyph;
-                _abilityOutline[i] = r.Outline;
-                _abilityButton[i].onClick.AddListener(() => OnAbilityButtonTapped(row));
-                _abilityRow[i] = r.Row.gameObject;
-            }
-        }
-
-        /// <summary>MV-358: a pill on the abilities header row, right of the "X of Y unlocked" text —
-        /// shown only while a shed credit is banked (see <see cref="Refresh"/>). Amber like the other
-        /// spend affordances (PARTS chip, +buttons), since it's the same "you have something to spend"
-        /// family of action. MV-382: carries a square icon of the same spinning HydroDevice prop the
-        /// shed's own ability pickup wears (<see cref="AbilityDeviceStage"/>) at its left edge — a real
-        /// render, not squashed to the pill's own wide aspect — so the button reads as "the ability
-        /// device" rather than the plain flat-colour-and-text pill it used to be.</summary>
-        private void BuildBuildAbilityButton(RectTransform column, float y)
-        {
-            _buildAbilityRoot = NewRect("Build Ability Root", column, new Vector2(0.6f, 1f), new Vector2(1f, 1f));
-            _buildAbilityRoot.pivot = new Vector2(1f, 1f);
-            _buildAbilityRoot.sizeDelta = new Vector2(0f, SectionHeaderHeight);
-            _buildAbilityRoot.anchoredPosition = new Vector2(0f, y);
-
-            _buildAbilityBg = AddImage(_buildAbilityRoot, HudTextures.RoundedBox(20, 0.5f), PartsColor, "Build Ability Button");
-            Stretch(_buildAbilityBg.rectTransform); _buildAbilityBg.type = Image.Type.Sliced;
-            _buildAbilityBg.raycastTarget = true;
-
-            _buildAbilityButton = _buildAbilityBg.gameObject.AddComponent<Button>();
-            _buildAbilityButton.transition = Selectable.Transition.None;
-            _buildAbilityButton.onClick.AddListener(OnBuildAbilityTapped);
-
-            var deviceIcon = AddRawImage(_buildAbilityRoot,
-                _buildAbilityStage != null ? _buildAbilityStage.Texture : null, "Build Ability Device");
-            Anchor(deviceIcon.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
-            deviceIcon.rectTransform.sizeDelta = new Vector2(SectionHeaderHeight, 0f);
-            deviceIcon.rectTransform.anchoredPosition = Vector2.zero;
-            deviceIcon.raycastTarget = false;
-
-            _buildAbilityLabel = AddText(_buildAbilityRoot, 22, PanelColor, TextAnchor.MiddleCenter);
-            Anchor(_buildAbilityLabel.rectTransform, Vector2.zero, Vector2.one, new Vector2(0.5f, 0.5f));
-            _buildAbilityLabel.rectTransform.offsetMin = new Vector2(SectionHeaderHeight, 0f);
-            _buildAbilityLabel.rectTransform.offsetMax = Vector2.zero;
-            _buildAbilityLabel.fontStyle = FontStyle.Bold;
-            _buildAbilityLabel.raycastTarget = false;
-
-            _buildAbilityRoot.gameObject.SetActive(false);   // Refresh() turns it on once a credit is banked
-        }
-
-        /// <summary>The refs a built grid row hands back — <see cref="BuildGridRow"/> grew a couple more
-        /// per-row pieces for MV-251 (an icon glyph, a highlight-ring "Outline"), enough that named
-        /// fields on a small struct read better than yet another <c>out</c> parameter.</summary>
-        private readonly struct GridRowRefs
-        {
-            public readonly RectTransform Row;
-            public readonly Text Name;
-            public readonly Image[] Pips;
-            public readonly Button PlusButton;
-            public readonly Image PlusBg;
-            public readonly Image Icon;
-            public readonly Text IconGlyph;
-            public readonly Image Outline;
-
-            public GridRowRefs(RectTransform row, Text name, Image[] pips, Button plusButton, Image plusBg,
-                Image icon, Text iconGlyph, Image outline)
-            {
-                Row = row; Name = name; Pips = pips; PlusButton = plusButton; PlusBg = plusBg;
-                Icon = icon; IconGlyph = iconGlyph; Outline = outline;
-            }
-        }
-
-        /// <summary>Builds one grid slot (highlight ring, icon + glyph, name, pip bar, + button) at
-        /// <paramref name="columns"/>-column/N-row index <paramref name="slot"/>, anchored under
-        /// <paramref name="top"/>. Shared by the primary tracks, the Water Balloon add-on tracks
-        /// (MV-370) and the abilities section so none of the three can ever drift apart in style.
-        /// <paramref name="iconColor"/> is the row's baseline icon tint — its own section accent
-        /// (MV-251: <c>TrackIconBg</c>/<c>AbilityIconBg</c>), not a shared neutral, so a tile reads as
-        /// belonging to its section before you even read its name.</summary>
-        private GridRowRefs BuildGridRow(RectTransform column, string name, int slot, int columns, float top,
-            float rowHeight, float rowGap, Color iconColor, int pipCap)
-        {
-            var row = NewRect(name, column, new Vector2(0f, 1f), Vector2.one);
-            row.pivot = new Vector2(0.5f, 1f);
-            row.sizeDelta = new Vector2(0f, rowHeight);
-            PlaceGridRow(row, slot, columns, top, rowHeight, rowGap);
-
-            // A ring behind the card, only ever visible as a thin border once BG (inset 3px) sits over
-            // it. Transparent by default; MV-251's "newly-acquired" tell lights this to NewBadgeColor
-            // instead of relying on the icon tint alone.
-            var outline = AddImage(row, HudTextures.RoundedBox(24, 0.35f), Color.clear, "Outline");
-            Stretch(outline.rectTransform); outline.type = Image.Type.Sliced;
-
-            var bg = AddImage(row, HudTextures.RoundedBox(24, 0.35f), RowColor, "BG");
-            Stretch(bg.rectTransform, -3f); bg.type = Image.Type.Sliced;
-
-            var iconBg = AddImage(row, HudTextures.RoundedBox(24, 0.35f), iconColor, "Icon");
-            Anchor(iconBg.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            iconBg.rectTransform.anchoredPosition = new Vector2(18f, 0f);
-            iconBg.rectTransform.sizeDelta = new Vector2(66f, 66f);
-            iconBg.type = Image.Type.Sliced;
-
-            var glyph = AddText(iconBg.rectTransform, 21, TextColor, TextAnchor.MiddleCenter);
-            Stretch(glyph.rectTransform);
-            glyph.fontStyle = FontStyle.Bold;
-            glyph.raycastTarget = false;
-
-            // Name sits in the row's upper half, pips in the lower half, both spanning the same
-            // horizontal band between the icon and the + button (the [0.13, 0.82] fraction of the row).
-            // MV-388: the 0.13 anchor lines up with the icon's own right edge (66px wide icon at 18px
-            // inset, in a ~645px-wide 2-col card ≈ 0.13), so the old 8px offsetMin left barely any air
-            // between icon and label ("crowd against each other with little breathing room" per the
-            // ticket) — widened to 18px. offsetMin.y likewise pulls the name's bottom edge up off the
-            // row's exact half-line so it doesn't sit flush against the pip row below.
-            var nameText = AddText(row, 32, TextColor, TextAnchor.UpperLeft);
-            Anchor(nameText.rectTransform, new Vector2(0.13f, 0.5f), new Vector2(0.82f, 1f), new Vector2(0f, 1f));
-            nameText.rectTransform.offsetMin = new Vector2(18f, 8f);
-            nameText.rectTransform.offsetMax = new Vector2(0f, -10f);
-            nameText.fontStyle = FontStyle.Bold;
-            // MV-370: a 3-column row (Primary Add-ons, Abilities) is narrower than the original 2-column
-            // one this row shape was authored for — auto-shrink rather than risk a long name ("WEAPON
-            // COOLDOWN") clipping past the card's edge, same idiom BuildChip's label already uses.
-            nameText.horizontalOverflow = HorizontalWrapMode.Wrap;
-            nameText.resizeTextForBestFit = true;
-            nameText.resizeTextMinSize = 18;
-            nameText.resizeTextMaxSize = 32;
-
-            var pipRow = NewRect("Pips", row, new Vector2(0.13f, 0f), new Vector2(0.82f, 0.5f));
-            pipRow.offsetMin = new Vector2(18f, 12f);   // MV-388: matches the widened icon-to-label gap above
-            pipRow.offsetMax = new Vector2(0f, -6f);
-
-            // MV-367: fit exactly pipCap segments inside the same budget the old fixed 6-pip row used,
-            // so a track with more levels (Range/Spread, cap 9) reads as narrower segments rather than
-            // truncating or overflowing the card.
-            var pips = new Image[pipCap];
-            float pipW = (PipBudgetPx - (pipCap - 1) * PipGap) / pipCap;
-            for (int i = 0; i < pipCap; i++)
-            {
-                var pip = AddImage(pipRow, HudTextures.RoundedBox(16, 0.5f), PipEmpty, "Pip Empty");
-                Anchor(pip.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 1f), new Vector2(0f, 0.5f));
-                pip.rectTransform.anchoredPosition = new Vector2(i * (pipW + PipGap), 0f);
-                pip.rectTransform.sizeDelta = new Vector2(pipW, 0f);
-                pip.type = Image.Type.Sliced;
-                pips[i] = pip;
-            }
-
-            var buttonBg = AddImage(row, HudTextures.RoundedBox(20, 0.5f), SpendDisabled, "Plus");
-            Anchor(buttonBg.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            buttonBg.rectTransform.anchoredPosition = new Vector2(-18f, 0f);
-            buttonBg.rectTransform.sizeDelta = new Vector2(70f, 70f);   // >= 44pt tap target at the height-matched scale
-            buttonBg.type = Image.Type.Sliced;
-            buttonBg.raycastTarget = true;
-
-            var plusButton = buttonBg.gameObject.AddComponent<Button>();
-            plusButton.transition = Selectable.Transition.None;
-
-            var plusLabel = AddText(buttonBg.rectTransform, 35, TextColor, TextAnchor.MiddleCenter);
-            Stretch(plusLabel.rectTransform);
-            plusLabel.text = "+";
-            plusLabel.fontStyle = FontStyle.Bold;
-            plusLabel.raycastTarget = false;
-
-            return new GridRowRefs(row, nameText, pips, plusButton, buttonBg, iconBg, glyph, outline);
-        }
-
-        /// <summary>Short glyphs for the RCDA tracks' icon tiles (MV-251) — abbreviations, not
-        /// gameplay identity, so kept local to this screen rather than added to <see cref="WeaponCatalog"/>.</summary>
-        private static string TrackGlyph(WeaponTrackKind kind)
-        {
-            switch (kind)
-            {
-                case WeaponTrackKind.Range: return "RNG";
-                case WeaponTrackKind.Spread: return "SPR";
-                case WeaponTrackKind.Damage: return "DMG";
-                case WeaponTrackKind.DepletionRate: return "DEP";
-                default: return "?";
-            }
-        }
-
-        /// <summary>Short glyphs for the abilities' icon tiles (MV-251) — same rationale as
-        /// <see cref="TrackGlyph"/>.</summary>
-        private static string AbilityGlyph(AbilityKind kind)
-        {
-            switch (kind)
-            {
-                case AbilityKind.Speed: return "SPD";
-                case AbilityKind.Teleport: return "TP";
-                case AbilityKind.WeaponCooldown: return "CD";
-                case AbilityKind.WaterBalloon: return "WB";
-                case AbilityKind.WaterBalloonAutoFire: return "AF";
-                case AbilityKind.ForceField: return "FF";
-                case AbilityKind.Sentinels: return "SEN";
-                default: return "?";
-            }
-        }
-
-        /// <summary>Short glyphs for the Water Balloon add-on tracks' icon tiles (MV-370) — same
-        /// rationale as <see cref="TrackGlyph"/>.</summary>
-        private static string WaterBalloonTrackGlyph(WaterBalloonTrackKind kind)
-        {
-            switch (kind)
-            {
-                case WaterBalloonTrackKind.Range: return "RNG";
-                case WaterBalloonTrackKind.SplashArea: return "SPL";
-                case WaterBalloonTrackKind.RepeatFire: return "RPT";
-                default: return "?";
-            }
-        }
-
-        /// <summary>Places a row at <paramref name="columns"/>-column/N-row slot index
-        /// <paramref name="slot"/> under <paramref name="top"/> — the fixed track/ability grid
-        /// positions, built once. MV-370: generalized from a hardcoded 2 columns so the Water Balloon
-        /// add-on and abilities sections can lay out 3 columns in a single row instead.</summary>
-        private static void PlaceGridRow(RectTransform row, int slot, int columns, float top, float rowHeight, float rowGap)
-        {
-            int r = slot / columns;
-            int c = slot % columns;
-            float y = top - r * (rowHeight + rowGap);
-            row.anchoredPosition = new Vector2(0f, y);
-
-            float colWidth = (1f - (columns - 1) * ColGap) / columns;
-            float xMin = c * (colWidth + ColGap);
-            float xMax = xMin + colWidth;
-            row.anchorMin = new Vector2(xMin, row.anchorMin.y);
-            row.anchorMax = new Vector2(xMax, row.anchorMax.y);
-        }
-
         // ------------------------------------------------------------------ helpers
 
         private static void EnsureEventSystem()
@@ -1156,15 +865,6 @@ namespace MaxWorlds.UI
             var img = go.GetComponent<Image>();
             img.sprite = sprite;
             img.color = color;
-            return img;
-        }
-
-        private static RawImage AddRawImage(Transform parent, Texture tex, string name)
-        {
-            var go = new GameObject(name, typeof(RectTransform), typeof(RawImage));
-            go.transform.SetParent(parent, false);
-            var img = go.GetComponent<RawImage>();
-            img.texture = tex;
             return img;
         }
 
