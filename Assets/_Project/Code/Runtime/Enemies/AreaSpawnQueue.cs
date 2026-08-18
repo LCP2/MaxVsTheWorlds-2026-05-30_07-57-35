@@ -28,12 +28,26 @@ namespace MaxWorlds.Enemies
 
         private readonly Queue<QueuedSpawn> _queued = new Queue<QueuedSpawn>();
 
-        /// <summary>The concurrent-robot ceiling this queue enforces (<c>maxActiveRobots</c>).</summary>
+        /// <summary>Active robots this queue is currently tracking, keyed by the area they were
+        /// released for (MV-417). <see cref="MaxActive"/> is enforced per-area against this, not
+        /// against the field-wide <see cref="ActiveCount"/> total - see <see cref="TryExtractEligible"/>.
+        /// A robot alive in an area three rooms back must never be able to block a release into the
+        /// room the player is standing in, which is exactly what a single shared cap did.</summary>
+        private readonly Dictionary<int, int> _activeByArea = new Dictionary<int, int>();
+
+        /// <summary>The concurrent-robot ceiling this queue enforces, per area (<c>maxActiveRobots</c>,
+        /// MV-417: was field-wide before this ticket - see <see cref="_activeByArea"/>).</summary>
         public int MaxActive { get; }
 
         /// <summary>Robots this queue currently considers active - released but not yet reported
-        /// destroyed.</summary>
+        /// destroyed. Field-wide total; see <see cref="ActiveCountForArea"/> for the per-area count
+        /// <see cref="MaxActive"/> is actually checked against.</summary>
         public int ActiveCount { get; private set; }
+
+        /// <summary>Robots this queue currently considers active for one specific area - what
+        /// <see cref="MaxActive"/> is enforced against (MV-417).</summary>
+        public int ActiveCountForArea(int areaIndex) =>
+            _activeByArea.TryGetValue(areaIndex, out int count) ? count : 0;
 
         /// <summary>Robots still waiting for a slot under <see cref="MaxActive"/>.</summary>
         public int QueuedCount => _queued.Count;
@@ -110,42 +124,113 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Releases the next queued robot if there is room under the concurrent cap. Returns
         /// false (and leaves the queue untouched) if the cap is full or nothing is queued. The caller
-        /// owns actually spawning it, and must call <see cref="ReportDestroyed"/> once it dies.</summary>
+        /// owns actually spawning it, and must call <see cref="ReportDestroyed(int)"/> once it dies.</summary>
         public bool TryRelease(out EnemyKind kind) => TryRelease(out _, out kind);
 
         /// <summary>Same as <see cref="TryRelease(out EnemyKind)"/>, but also hands back the area the
         /// released robot was originally queued for (MV-417) - the caller must place it there, not
         /// wherever it currently considers "current", or a room emptied by the concurrent cap can end
         /// up permanently unfilled from the player's point of view while its allotment materialises in
-        /// whatever room the player has since walked into.</summary>
-        public bool TryRelease(out int area, out EnemyKind kind)
+        /// whatever room the player has since walked into. Scans past a queued entry whose own area is
+        /// already at <see cref="MaxActive"/> rather than blocking outright on it (MV-417) - a capped-out
+        /// area three rooms back must not stall every other area's release just because it happens to
+        /// sit earlier in the FIFO.</summary>
+        public bool TryRelease(out int area, out EnemyKind kind) => TryExtractEligible(null, out area, out kind);
+
+        /// <summary>Releases the next queued robot originally queued for <paramref name="areaIndex"/>
+        /// specifically, still subject to that area's own <see cref="MaxActive"/> cap (MV-417) - lets a
+        /// caller top up exactly the room it cares about (e.g. the one just filled, or the one the
+        /// player is standing in) without disturbing any other area's queued backlog or release order.
+        /// False if nothing is queued for that area, or that area is already at its own cap.</summary>
+        public bool TryReleaseArea(int areaIndex, out EnemyKind kind) => TryExtractEligible(areaIndex, out _, out kind);
+
+        /// <summary>Scans the queue in FIFO order for the first entry that is both a match for
+        /// <paramref name="filterArea"/> (any area, if null) AND whose own area is currently under
+        /// <see cref="MaxActive"/>, extracts it, and marks it active for that area. Entries skipped
+        /// along the way (wrong area, or a match whose area is capped) are put back in their original
+        /// relative order - this is a targeted extraction, not a reorder of the queue.</summary>
+        private bool TryExtractEligible(int? filterArea, out int area, out EnemyKind kind)
         {
-            if (ActiveCount >= MaxActive || _queued.Count == 0)
+            int count = _queued.Count;
+            for (int i = 0; i < count; i++)
             {
-                area = 0;
-                kind = default;
-                return false;
+                QueuedSpawn next = _queued.Dequeue();
+                if ((filterArea == null || next.Area == filterArea.Value) && ActiveCountForArea(next.Area) < MaxActive)
+                {
+                    area = next.Area;
+                    kind = next.Kind;
+                    Activate(area);
+                    return true;
+                }
+                _queued.Enqueue(next);
             }
 
-            QueuedSpawn next = _queued.Dequeue();
-            area = next.Area;
-            kind = next.Kind;
-            ActiveCount++;
-            return true;
+            area = 0;
+            kind = default;
+            return false;
         }
 
-        /// <summary>One active robot died - frees a slot under the cap so the next queued robot can
-        /// release.</summary>
-        public void ReportDestroyed()
+        /// <summary>Takes the next queued robot for <paramref name="areaIndex"/> straight out of the
+        /// queue and marks it active, ignoring <see cref="MaxActive"/> entirely (MV-417) - a garrison
+        /// seed must be guaranteed present the instant an area is first entered (or restored),
+        /// independent of whatever concurrent-cap state the ambient top-up queue happens to be in. The
+        /// caller is expected to place exactly <see cref="Garrison.SeedCount"/> of these per area, which
+        /// is always at most that area's authored total, so this can never run the queue dry on its
+        /// own.</summary>
+        public bool TryTakeForGarrison(int areaIndex, out EnemyKind kind)
+        {
+            int count = _queued.Count;
+            for (int i = 0; i < count; i++)
+            {
+                QueuedSpawn next = _queued.Dequeue();
+                if (next.Area == areaIndex)
+                {
+                    kind = next.Kind;
+                    Activate(areaIndex);
+                    return true;
+                }
+                _queued.Enqueue(next);
+            }
+
+            kind = default;
+            return false;
+        }
+
+        /// <summary>Puts a released-but-not-yet-placed entry back on the queue for <paramref name="areaIndex"/>
+        /// (MV-417) - what a caller does when it pulled a robot off the queue but then couldn't find it
+        /// a legal spawn point this tick (see <c>AreaAccumulationDirector.TryFindSpawnPoint</c>) and
+        /// wants to retry on the next release interval, rather than either placing it somewhere wrong or
+        /// silently losing it from the area's roster.</summary>
+        public void Requeue(int areaIndex, EnemyKind kind)
+        {
+            _queued.Enqueue(new QueuedSpawn(areaIndex, kind));
+            Deactivate(areaIndex);
+        }
+
+        private void Activate(int areaIndex)
+        {
+            ActiveCount++;
+            _activeByArea[areaIndex] = ActiveCountForArea(areaIndex) + 1;
+        }
+
+        private void Deactivate(int areaIndex)
         {
             ActiveCount = Mathf.Max(0, ActiveCount - 1);
+            if (_activeByArea.TryGetValue(areaIndex, out int count))
+                _activeByArea[areaIndex] = Mathf.Max(0, count - 1);
         }
+
+        /// <summary>One active robot died - frees a slot under its area's cap so the next entry queued
+        /// for that area can release. Area 0 for a caller that doesn't track per-area origin (e.g. a
+        /// unit test exercising this queue directly via <see cref="Fill"/>).</summary>
+        public void ReportDestroyed(int areaIndex = 0) => Deactivate(areaIndex);
 
         /// <summary>Drops everything queued and active - a fresh area starting clean.</summary>
         public void Clear()
         {
             _queued.Clear();
             ActiveCount = 0;
+            _activeByArea.Clear();
         }
 
         /// <summary>Drops every entry still queued (not yet released) for one area, leaving every
