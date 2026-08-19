@@ -79,7 +79,20 @@
     "iconScaleAbility": 0.94,
     "iconScaleCategory": 1.2,
     "iconScaleFusion": 0.8,
-    "iconOffsetY": -4
+    "iconOffsetY": -4,
+    "connector": {
+      "$comment": "Cubic bezier from a parent node down to each child. Control points sit on the vertical between the two, at controlBias of the gap. MV-442.",
+      "width": 2.6,
+      "controlBias": 0.55,
+      "startOffsetCategory": 88,
+      "startOffsetAbility": "+r*0.92",
+      "endOffset": "-r*0.92",
+      "alphaLive": 0.45,
+      "alphaDim": 0.14,
+      "fusionWidth": 2.0,
+      "fusionAlpha": 0.07,
+      "fusionControlBias": 0.62
+    }
   },
   "colours": {
     "$comment": "Prefer the named existing constant where one exists.",

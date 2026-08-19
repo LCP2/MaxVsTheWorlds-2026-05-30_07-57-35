@@ -112,14 +112,14 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(glow.rectTransform.sizeDelta.x, Is.EqualTo(expectedDiameter).Within(0.5f), $"'{ab.Id}' glow diameter");
                 Assert.That(glow.rectTransform.sizeDelta.y, Is.EqualTo(expectedDiameter).Within(0.5f), $"'{ab.Id}' glow diameter");
 
-                float expectedAlpha = owned ? 0.28f : 0.22f;
+                // MV-443 defect 5: owned glow alpha raised 0.28 -> 0.55, and the draftable glow is now a
+                // soft FAMILY tint (0.22), not module cyan — the module tint moved to the dashed border
+                // and cap-marker dot instead, so the node's own family colour survives at a glance.
+                float expectedAlpha = owned ? 0.55f : 0.22f;
                 Assert.That(glow.color.a, Is.EqualTo(expectedAlpha).Within(0.02f), $"'{ab.Id}' glow alpha");
 
-                if (!owned)
-                {
-                    var module = RigBoardLayout.Colour("module");
-                    Assert.That(glow.color.r, Is.EqualTo(module.r).Within(0.02f), $"'{ab.Id}' draftable glow must be module cyan");
-                }
+                var family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
+                Assert.That(glow.color.r, Is.EqualTo(family.r).Within(0.02f), $"'{ab.Id}' glow must be family-coloured");
             }
         }
 
@@ -137,8 +137,83 @@ namespace MaxWorlds.Tests.EditMode
 
                 float expectedDiameter = RigBoardLayout.RadiusCategory * 1.30f * 2f;
                 Assert.That(glow.rectTransform.sizeDelta.x, Is.EqualTo(expectedDiameter).Within(0.5f));
-                Assert.That(glow.color.a, Is.EqualTo(0.28f).Within(0.02f));
+                Assert.That(glow.color.a, Is.EqualTo(0.55f).Within(0.02f));
             }
+        }
+
+        // ------------------------------------------------------------------ MV-443 AC2/AC3
+
+        [Test]
+        public void ConnectorExistsForEveryParentChildPairEveryCategoryToParentlessAbilityPairAndEveryFusionParent()
+        {
+            OpenScreen();
+
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                string id = string.IsNullOrEmpty(ab.Parent)
+                    ? $"conn:cat:{ab.Category}>{ab.Id}"
+                    : $"conn:ab:{ab.Parent}>{ab.Id}";
+                Assert.That(_screen.Connector(id), Is.Not.Null, $"missing connector '{id}'");
+            }
+
+            foreach (var fusion in RigBoardLayout.Fusions)
+            {
+                Assert.That(_screen.Connector($"conn:fusion:{fusion.Id}>{fusion.ParentA}"), Is.Not.Null, $"missing connector for '{fusion.Id}' <- '{fusion.ParentA}'");
+                Assert.That(_screen.Connector($"conn:fusion:{fusion.Id}>{fusion.ParentB}"), Is.Not.Null, $"missing connector for '{fusion.Id}' <- '{fusion.ParentB}'");
+            }
+        }
+
+        [Test]
+        public void EveryNodeHasALevelPill()
+        {
+            OpenScreen();
+            var ids = new System.Collections.Generic.List<string>();
+            foreach (var c in RigBoardLayout.Categories) ids.Add(c.Id);
+            foreach (var a in RigBoardLayout.Abilities) ids.Add(a.Id);
+
+            foreach (var id in ids)
+            {
+                var node = _screen.BoardNode(id);
+                Assert.That(node.Find("Pill"), Is.Not.Null, $"'{id}' has no level pill");
+                Assert.That(node.Find("Pill Border"), Is.Not.Null, $"'{id}' has no level pill border");
+            }
+        }
+
+        [Test]
+        public void ALockedAbilityNodesLabelReadsQuestionMarksWithSpaces()
+        {
+            OpenScreen();
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                if (RigState.IsReached(ab.Id)) continue;   // only "not reached" is locked
+                var node = _screen.BoardNode(ab.Id);
+                var label = node.Find("Text").GetComponent<Text>();
+                Assert.That(label.text, Is.EqualTo("? ? ?"), $"'{ab.Id}' locked label");
+            }
+        }
+
+        [Test]
+        public void ACategoryNodeNeverShowsLockOrQuestionMarks()
+        {
+            // Run start: only PRIMARY is lit; every other category is still the un-lit "third state"
+            // (defect 4) and must never read as locked.
+            OpenScreen();
+            foreach (var cat in RigBoardLayout.Categories)
+            {
+                var node = _screen.BoardNode(cat.Id);
+                var pillText = node.Find("Pill").GetComponentInChildren<Text>();
+                Assert.That(pillText.text, Does.Not.Contain("LOCK"), $"'{cat.Id}' pill must never read LOCK");
+                Assert.That(pillText.text, Does.Not.Contain("?"), $"'{cat.Id}' pill must never read '? ? ?'");
+                Assert.That(pillText.text, Is.EqualTo($"{(cat.Id == "PRIMARY" ? 1 : 0)}/{CountAbilitiesIn(cat.Id)}"));
+            }
+        }
+
+        private static int CountAbilitiesIn(string categoryId)
+        {
+            int n = 0;
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Category == categoryId) n++;
+            return n;
         }
 
         // ------------------------------------------------------------------ AC4: scale-to-fit keeps every node on screen

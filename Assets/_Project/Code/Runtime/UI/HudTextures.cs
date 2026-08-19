@@ -231,6 +231,74 @@ namespace MaxWorlds.UI
             return Cache(key, tex, 100f);
         }
 
+        /// <summary>Signed distance (px) from (px,py) to a w×h rounded-rect boundary of corner
+        /// <paramref name="radius"/> — negative inside, positive outside; the standard rounded-box SDF.
+        /// Backs both <see cref="RoundedBoxOutline"/> and <see cref="BezierStroke"/>'s neighbours below.</summary>
+        private static float RoundedBoxSdf(float px, float py, float w, float h, float radius)
+        {
+            float qx = Mathf.Abs(px - w * 0.5f) - (w * 0.5f - radius);
+            float qy = Mathf.Abs(py - h * 0.5f) - (h * 0.5f - radius);
+            float ax = Mathf.Max(qx, 0f), ay = Mathf.Max(qy, 0f);
+            return Mathf.Sqrt(ax * ax + ay * ay) + Mathf.Min(Mathf.Max(qx, qy), 0f) - radius;
+        }
+
+        /// <summary>Stroked (outline-only) rounded rect — THE RIG board's level-pill / currency-chip
+        /// border (MV-443). Same <c>size</c>/<paramref name="cornerFraction"/> convention as
+        /// <see cref="RoundedBox"/>; 9-sliced so it scales onto any rect without distorting the corner
+        /// radius or stroke width.</summary>
+        public static Sprite RoundedBoxOutline(int size, float cornerFraction, float strokeWidth)
+        {
+            string key = $"rboxO{size}_{Mathf.RoundToInt(cornerFraction * 100)}_{strokeWidth}";
+            if (s_cache.TryGetValue(key, out var s)) return s;
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];
+            float radius = size * cornerFraction;
+            for (int y = 0; y < size; y++)
+            for (int x = 0; x < size; x++)
+            {
+                float d = RoundedBoxSdf(x + 0.5f, y + 0.5f, size, size, radius);
+                float a = Mathf.Clamp01(strokeWidth * 0.5f - Mathf.Abs(d) + 0.5f);
+                px[y * size + x] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels32(px); tex.Apply();
+            float b = radius;
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f),
+                100f, 0, SpriteMeshType.FullRect, new Vector4(b, b, b, b));
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>Anti-aliased cubic-bezier stroke (MV-443: THE RIG board's parent/child connector
+        /// lines) — points are already expressed in the returned texture's own local, top-left-origin
+        /// pixel space (callers translate board-space coordinates by the curve's own bounding-box
+        /// minimum before calling). Reuses the same stroke-to-segment distance technique
+        /// <see cref="VectorIcon"/>'s path stroking already uses, just flattening a single cubic instead
+        /// of a whole SVG path.</summary>
+        public static Sprite BezierStroke(Vector2 p0, Vector2 p1, Vector2 p2, Vector2 p3, float strokeWidth, int width, int height)
+        {
+            string key = $"bez_{p0}_{p1}_{p2}_{p3}_{strokeWidth}_{width}_{height}";
+            if (s_cache.TryGetValue(key, out var s)) return s;
+
+            var pts = FlattenCubic(p0, p1, p2, p3, 24);
+            pts.Insert(0, p0);
+
+            var tex = NewTex(width, height);
+            var px = new Color32[width * height];
+            float half = strokeWidth * 0.5f;
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                var pt = new Vector2(x + 0.5f, y + 0.5f);
+                float a = 0f;
+                for (int i = 0; i < pts.Count - 1; i++)
+                    a = Mathf.Max(a, Mathf.Clamp01(half - DistanceToSegment(pt, pts[i], pts[i + 1]) + 0.5f));
+                px[y * width + x] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels32(px); tex.Apply();
+            return Cache(key, tex, 100f);
+        }
+
         /// <summary>Stroked circle — the capability node's outer dashed ring
         /// (<c>geometry.capOuterRingOffset</c>) and any other plain ring need. True circular distance
         /// (not a polygon approximation), so it stays round regardless of <paramref name="dashCount"/>.</summary>
