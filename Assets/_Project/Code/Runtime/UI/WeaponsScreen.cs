@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.UI
 {
@@ -305,6 +306,11 @@ namespace MaxWorlds.UI
             // draftable capability"). Chosen: same family the PARTS glow uses, twice as slow, so the
             // two "something's waiting" tells read as related but distinct.
             float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 3f);
+            // MV-470 AC1: "a node the player cannot yet afford reads as inert" — a flat, non-pulsing
+            // floor the ring/halo sit at once cellAffordable goes false, instead of Update() still
+            // animating a node with nothing tappable behind it.
+            const float InertRingAlpha = 0.16f;
+            int cellsBanked = PickupWallet.PowerCells;
             foreach (var kv in _abilityNodes)
             {
                 var v = kv.Value;
@@ -315,18 +321,24 @@ namespace MaxWorlds.UI
                     // Refresh(), so without this factor the ring/halo would flash back up to full
                     // brightness on every tick regardless of the static dim RefreshAbilityNode applied.
                     float dim = FamilyLitForAbility(kv.Key) ? 1f : RigBoardLayout.FamilyDimFactor;
+                    // MV-470: OuterRing is now also active on an owned-and-upgradeable node, not just a
+                    // draftable one — gate the animated pulse on real cell affordability either way, so
+                    // "can afford right now" reads live and "can't yet" reads inert, per AC1.
+                    bool affordable = CellSpend.IsCellActionAffordable(kv.Key, cellsBanked);
+                    float baseAlpha = affordable ? pulse : InertRingAlpha;
 
                     var c = v.OuterRing.color;
-                    c.a = pulse * dim;
+                    c.a = baseAlpha * dim;
                     v.OuterRing.color = c;
 
                     // MV-433/MV-443: the draftable node's soft family-tinted halo pulses with the same
-                    // ring/cadence — OuterRing is only ever active in the draftable state, so this never
-                    // touches the owned/lit halo (which stays a flat GlowAlphaOwned, no pulse).
-                    if (v.Glow != null && v.Glow.gameObject.activeSelf)
+                    // ring/cadence. MV-470: restricted to the unowned/draftable case — OuterRing is now
+                    // also active while owned-and-upgradeable, but that state's Glow is the flat
+                    // GlowAlphaOwned halo (set once in RefreshAbilityNode) and must never be touched here.
+                    if (!RigState.IsOwned(kv.Key) && v.Glow != null && v.Glow.gameObject.activeSelf)
                     {
                         var g = v.Glow.color;
-                        g.a = pulse * RigBoardLayout.GlowAlphaDraft * dim;
+                        g.a = baseAlpha * RigBoardLayout.GlowAlphaDraft * dim;
                         v.Glow.color = g;
                     }
                 }
@@ -457,13 +469,15 @@ namespace MaxWorlds.UI
         /// no longer a static tint set once at build time).</summary>
         private void RefreshConnectors()
         {
+            Color module = RigBoardLayout.Colour("module");
             foreach (var ab in RigBoardLayout.Abilities)
             {
                 Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
                 // MV-458: reads the tightened cells-unlock gate, not the looser IsReached the (now
                 // production-dead) ability-level Morphing Module draft pool still uses — a connector
                 // must not glow "live" toward a node the board can't actually let you tap open yet.
-                bool draftable = RigState.IsCellUnlockable(ab.Id) && !RigState.IsOwned(ab.Id);
+                bool owned = RigState.IsOwned(ab.Id);
+                bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
                 // MV-462 defect 3: a connector is wholly inside one family (both ends share ab.Category),
                 // so it dims exactly like every other graphic in an unlit one.
                 bool familyLit = CategoryHasOwnedAbility(ab.Category);
@@ -477,8 +491,18 @@ namespace MaxWorlds.UI
                 else
                 {
                     if (!_connectors.TryGetValue($"conn:ab:{ab.Parent}>{ab.Id}", out var img)) continue;
-                    bool live = RigState.IsOwned(ab.Parent);
-                    img.color = DimIfUnlit(new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim), familyLit);
+                    // MV-470: was RigState.IsOwned(ab.Parent) alone — a parent merely owned at level 1
+                    // (not yet the level 2 IsCellUnlockable needs) lit this connector "live" even though
+                    // the child itself still renders LOCK, the exact mismatch the ticket was filed over.
+                    // "Live" now tracks the CHILD's own state; a parent-gated child gets its own distinct
+                    // module-cyan tell instead, at the cell economy's colour, pointing back at whichever
+                    // parent needs a level.
+                    bool parentGated = !owned && !draftable && RigState.IsCategoryUnlocked(ab.Category);
+                    bool live = owned || draftable;
+                    Color lineColor = parentGated
+                        ? new Color(module.r, module.g, module.b, RigBoardLayout.ConnectorAlphaLive)
+                        : new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
+                    img.color = DimIfUnlit(lineColor, familyLit);
                 }
             }
 
@@ -704,14 +728,25 @@ namespace MaxWorlds.UI
             v.DraftBadge.gameObject.SetActive(false);
 
             bool owned = RigState.IsOwned(ab.Id);
+            bool maxed = owned && RigState.Level(ab.Id) >= ab.MaxLevel;
             // MV-458: "draftable" now means cell-unlockable — its category open and, for a non-root
             // node, its parent at level >= 2 (RigState.IsCellUnlockable, tighter than the IsReached the
             // now production-dead ability-level Morphing Module draft pool still uses).
             bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
+            // MV-470: the ticket's second lock reason — category already open (so the node IS reached
+            // the old way) but the parent hasn't hit level 2 yet, the tighter cell-unlock gate. Distinct
+            // from the deeper "family not unlocked" lock below; see RefreshConnectors for the matching
+            // connector-line tell.
+            bool parentGated = !owned && !draftable && RigState.IsCategoryUnlocked(ab.Category);
+            int cellsBanked = PickupWallet.PowerCells;
+            bool hasCellCost = draftable || (owned && !maxed);
             // MV-469: PartBadge (the amber "+") stays keyed to the part-spend path alone, unchanged —
             // Button.interactable covers every legal spend via the shared helper below.
             bool partSpendable = RigState.CanSpendPart(ab.Id) && banked > 0;
-            bool spendable = IsAbilityNodeSpendable(ab.Id, PickupWallet.PowerCells, banked);
+            bool spendable = IsAbilityNodeSpendable(ab.Id, cellsBanked, banked);
+            // MV-470: whether CELLS alone would pay for this node's action right now — drives the
+            // afford-dot (CapMarker) and, via Update(), whether the dashed ring pulses live or sits inert.
+            bool cellAffordable = CellSpend.IsCellActionAffordable(ab.Id, cellsBanked);
             // MV-462 defect 3: owned==true implies this ability's category already has ≥1 owned ability,
             // so familyLit is always true on the `owned` branch below — DimIfUnlit only ever bites on
             // the draftable/locked branches, which is exactly the "family with nothing owned" case.
@@ -721,9 +756,35 @@ namespace MaxWorlds.UI
             Color module = RigBoardLayout.Colour("module");
             Color ink = RigBoardLayout.Colour("ink");
 
-            v.OuterRing.gameObject.SetActive(draftable);
-            v.CapMarker.gameObject.SetActive(draftable);
+            // MV-470: the dashed affordance ring and its cap-marker dot now mark ANY live cell action —
+            // an owned node's upgrade as well as an unowned node's unlock — not just draftable, so a
+            // player sitting on affordable cells sees the same "something's waiting" tell everywhere one
+            // applies. CapMarker's own presence (rather than a flat colour) IS the "affordable now" read;
+            // Update() only ever pulses it while cellAffordable stays true.
+            v.OuterRing.gameObject.SetActive(draftable || (owned && !maxed));
+            v.CapMarker.gameObject.SetActive(cellAffordable);
             v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : owned ? SolidHexOutlineSprite(v.Radius) : LockedHexOutlineSprite(v.Radius);
+
+            // MV-470: the progress ring + cost tag are shared by both cell-costed branches (draftable's
+            // unlock, owned-and-below-max's upgrade) — accumulation and legible cost read the same way
+            // regardless of which side of "owned" the node is on.
+            if (hasCellCost)
+            {
+                v.ProgressRing.gameObject.SetActive(true);
+                v.ProgressRing.fillAmount = CellSpend.CellCostProgress01(ab.Id, cellsBanked);
+                v.ProgressRing.color = DimIfUnlit(new Color(module.r, module.g, module.b, 0.9f), familyLit);
+                v.CostIcon.gameObject.SetActive(true);
+                v.CostIcon.color = DimIfUnlit(module, familyLit);
+                v.CostText.gameObject.SetActive(true);
+                v.CostText.text = CellSpend.CurrentCellCost(ab.Id).ToString();
+                v.CostText.color = DimIfUnlit(module, familyLit);
+            }
+            else
+            {
+                v.ProgressRing.gameObject.SetActive(false);
+                v.CostIcon.gameObject.SetActive(false);
+                v.CostText.gameObject.SetActive(false);
+            }
 
             if (owned)
             {
@@ -740,6 +801,13 @@ namespace MaxWorlds.UI
                 v.Label.text = ab.Label;
                 v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.95f);
                 v.Icon.color = ink;
+                // MV-470: an owned-and-upgradeable node's own OuterRing/CapMarker read exactly like a
+                // draftable node's — same module cyan, same live/inert rule — so the ring colour is set
+                // here too, not left at BuildNodeShell's Color.clear (which only OuterRing's ALPHA gets
+                // touched by Update()'s pulse; its RGB has to be set at least once per state, same
+                // reasoning as MV-445 defect 4 below).
+                v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
+                v.CapMarker.color = module;
             }
             else if (draftable)
             {
@@ -772,7 +840,25 @@ namespace MaxWorlds.UI
                 v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f), familyLit);
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.95f), familyLit);
             }
-            else   // not reached
+            else if (parentGated)
+            {
+                // MV-470: the trap the ticket was filed over — a node whose family is wide open but
+                // whose own PARENT hasn't reached level 2 yet must not read identically to a node whose
+                // whole family is still locked. Same LOCK/??? text (no new prose), but tinted the same
+                // module cyan the cell economy uses everywhere else on the board, so the eye can trace
+                // "this needs a cell spend upstream" straight to the parent's own pulsing cost tag.
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), familyLit);
+                v.HexOutline.color = new Color(module.r, module.g, module.b, 0.40f);
+                v.Glow.gameObject.SetActive(false);
+                v.PillText.text = "LOCK";
+                v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
+                v.PillBorder.color = new Color(module.r, module.g, module.b, 0.35f);
+                v.PillText.color = new Color(module.r, module.g, module.b, 0.55f);
+                v.Label.text = "? ? ?";
+                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), familyLit);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
+            }
+            else   // family not unlocked — the deepest lock, unchanged from before MV-470
             {
                 v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), familyLit);
                 v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.24f), familyLit);
@@ -1365,6 +1451,47 @@ namespace MaxWorlds.UI
             plus.fontStyle = FontStyle.Bold;
             plus.raycastTarget = false;
 
+            // MV-470: the accumulation ring — a plain (non-dashed) ring just inside the dashed
+            // OuterRing/CapOuterRingOffset radius, revealed by Image.Type.Filled/Radial360 as
+            // cellsBanked climbs toward whichever cost currently applies (RefreshAbilityNode sets
+            // fillAmount off CellSpend.CellCostProgress01). Inactive until a cell cost applies.
+            float progressRingR = r + 4f;
+            shell.ProgressRing = AddImage(shell.Root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Ring");
+            Anchor(shell.ProgressRing.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            shell.ProgressRing.rectTransform.sizeDelta = new Vector2(progressRingR * 2f, progressRingR * 2f);
+            shell.ProgressRing.raycastTarget = false;
+            shell.ProgressRing.type = Image.Type.Filled;
+            shell.ProgressRing.fillMethod = Image.FillMethod.Radial360;
+            shell.ProgressRing.fillOrigin = (int)Image.Origin360.Top;
+            shell.ProgressRing.fillClockwise = true;
+            shell.ProgressRing.fillAmount = 0f;
+            shell.ProgressRing.gameObject.SetActive(false);
+
+            // MV-470: the cost tag — a small cell-glyph icon + number sitting in the real vertical gap
+            // between the level pill (bottom edge at LevelPillOffsetY - h/2) and the label (top edge at
+            // LabelOffsetY - 12), so it never fights the pill's own "{level}/{max}" text or the label's
+            // ability name. Same PowerCell glyph the CELLS header chip and the world HUD's own counter
+            // use, so a node's cost reads as CELLS on sight, not a naked integer.
+            float pillBottom = -RigBoardLayout.LevelPillOffsetY(r) - RigBoardLayout.LevelPillH * 0.5f;
+            float labelTop = -RigBoardLayout.LabelOffsetY(r) + 12f;
+            float costTagY = (pillBottom + labelTop) * 0.5f;
+            Color moduleColour = RigBoardLayout.Colour("module");
+
+            shell.CostIcon = AddImage(shell.Root, WeaponHudIcons.PowerCell(24), Color.clear, "Cost Icon");
+            Anchor(shell.CostIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            shell.CostIcon.rectTransform.sizeDelta = new Vector2(14f, 14f);
+            shell.CostIcon.rectTransform.anchoredPosition = new Vector2(-9f, costTagY);
+            shell.CostIcon.raycastTarget = false;
+            shell.CostIcon.gameObject.SetActive(false);
+
+            shell.CostText = AddText(shell.Root, 14, moduleColour, TextAnchor.MiddleLeft);
+            Anchor(shell.CostText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            shell.CostText.rectTransform.sizeDelta = new Vector2(30f, 18f);
+            shell.CostText.rectTransform.anchoredPosition = new Vector2(9f, costTagY);
+            shell.CostText.fontStyle = FontStyle.Bold;
+            shell.CostText.raycastTarget = false;
+            shell.CostText.gameObject.SetActive(false);
+
             shell.Label.text = ab.Label;
 
             string id = ab.Id;   // capture by value, not the loop variable
@@ -1562,6 +1689,14 @@ namespace MaxWorlds.UI
             /// names while unforgeable, "<c>N PARTS · SLOT B</c>" once eligible, "<c>FORGED · SLOT B</c>"
             /// once forged. Null for category/ability nodes.</summary>
             public Text Sub;
+
+            /// <summary>MV-470: ability nodes only (null for category/fusion) — the accumulation ring
+            /// (<see cref="Image.Type.Filled"/>/<see cref="Image.FillMethod.Radial360"/>, fillAmount =
+            /// cells-banked / cost) and the small cost-tag icon+number pair sitting between the level
+            /// pill and the label, where THE RIG's row spacing leaves real clearance. All three null
+            /// unless a cell cost currently applies to the node (draftable or owned-and-below-max).</summary>
+            public Image ProgressRing, CostIcon;
+            public Text CostText;
         }
 
         // ------------------------------------------------------------------ top bar

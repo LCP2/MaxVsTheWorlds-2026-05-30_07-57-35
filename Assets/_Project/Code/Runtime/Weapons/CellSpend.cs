@@ -1,4 +1,5 @@
 using MaxWorlds.Pickups;
+using UnityEngine;
 
 namespace MaxWorlds.Weapons
 {
@@ -46,6 +47,37 @@ namespace MaxWorlds.Weapons
             if (!RigState.TrySpendPart(id)) return false;
             PickupWallet.TrySpendPowerCells(UpgradeCostCells);
             return true;
+        }
+
+        /// <summary>MV-470: the CELLS-only half of a node's affordability — owned checks the upgrade
+        /// path, unowned checks the unlock path. Pure, so THE RIG board can drive its per-node "live vs
+        /// inert" read (a pulsing ring/badge vs a flat one) without a speculative spend-and-undo, same
+        /// idiom as <see cref="RigState.CanSpendPart"/>. Deliberately narrower than
+        /// <c>WeaponsScreen.IsAbilityNodeSpendable</c> (which also covers the PARTS fallback) — this is
+        /// only ever asked "would CELLS alone pay for this right now."</summary>
+        public static bool IsCellActionAffordable(string id, int cellsBanked) =>
+            RigState.IsOwned(id)
+                ? RigState.CanSpendPart(id) && cellsBanked >= UpgradeCostCells
+                : RigState.IsCellUnlockable(id) && cellsBanked >= UnlockCostCells;
+
+        /// <summary>MV-470: 0..1 progress toward whichever cell cost currently applies to
+        /// <paramref name="id"/> — the unlock cost while unowned-and-cell-unlockable, the upgrade cost
+        /// while owned-and-below-max, 0 when neither applies (nothing to accumulate toward). Feeds THE
+        /// RIG board's per-node progress ring.</summary>
+        public static float CellCostProgress01(string id, int cellsBanked)
+        {
+            if (RigState.IsOwned(id))
+                return RigState.CanSpendPart(id) ? Mathf.Clamp01((float)cellsBanked / UpgradeCostCells) : 0f;
+            return RigState.IsCellUnlockable(id) ? Mathf.Clamp01((float)cellsBanked / UnlockCostCells) : 0f;
+        }
+
+        /// <summary>MV-470: the cell price currently showing on <paramref name="id"/>'s cost tag — 0 when
+        /// no cell action currently applies (owned-and-maxed, or locked).</summary>
+        public static int CurrentCellCost(string id)
+        {
+            if (RigState.IsOwned(id))
+                return RigState.CanSpendPart(id) ? UpgradeCostCells : 0;
+            return RigState.IsCellUnlockable(id) ? UnlockCostCells : 0;
         }
     }
 }
