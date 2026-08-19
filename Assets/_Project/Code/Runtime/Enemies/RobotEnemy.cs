@@ -251,12 +251,23 @@ namespace MaxWorlds.Enemies
         [Tooltip("How fast a spray shove bleeds off (m/s²). Higher = a shorter shove (YT-64).")]
         [SerializeField] private float knockbackDecay = 28f;
 
-        [Tooltip("How long a wall stays 'in the way' after touching it — long enough to walk clear " +
-                 "of the corner rather than re-hugging it every frame (YT-68).")]
-        [SerializeField] private float wallMemory = 0.2f;
+        /// <summary>Rounds cover and walls it presses into (YT-68), latched rather than a bare timer
+        /// since MV-447 — see <see cref="WallLatch"/>'s own doc comment for the two bugs that lived in
+        /// the timer this replaced.</summary>
+        private readonly WallLatch _wallLatch = new WallLatch();
 
-        private Vector3 _wallNormal;
-        private float _wallTimer;
+        /// <summary>Which room this robot counts itself as routing from right now (MV-447 cause 3) —
+        /// see <see cref="ZoneHysteresis"/>'s own doc comment for the boundary-flip bug this fixes.</summary>
+        private readonly ZoneHysteresis _zoneHysteresis = new ZoneHysteresis();
+
+        /// <summary>Below this fraction of <see cref="standoffRange"/>, a ranged kind backs off
+        /// (MV-447 cause 4). Tuned against <see cref="StandoffCloseInFraction"/> to leave a band wide
+        /// enough that ordinary chase jitter can't cross it twice in one tick.</summary>
+        private const float StandoffBackOffFraction = 0.85f;
+
+        /// <summary>Above this fraction of <see cref="standoffRange"/>, a ranged kind closes in
+        /// (MV-447 cause 4). Between this and <see cref="StandoffBackOffFraction"/> it holds.</summary>
+        private const float StandoffCloseInFraction = 1.15f;
 
         [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100). " +
                  "Dropped further at YT-169 so the birth beat reads as a distinctly slower, more " +
@@ -373,7 +384,8 @@ namespace MaxWorlds.Enemies
             _health = maxHealth;
             Current = State.Chase;
             _stateTimer = 0f;
-            _wallTimer = 0f;          // a pooled robot doesn't inherit the last one's wall
+            _wallLatch.Reset();       // a pooled robot doesn't inherit the last one's wall
+            _zoneHysteresis.Reset();  // ...nor its idea of which room it was routing from
             _pursuitStall.NoteSightHeld(); // ...nor its idea of how well the last one was doing
             _knockback = Vector3.zero;
             _haltTimer = 0f;
@@ -638,7 +650,13 @@ namespace MaxWorlds.Enemies
             // the shed walks out of the shed instead of into the side of it. The route is computed to
             // the goal it BELIEVES in, never to Max — a robot that could be routed to a player it
             // cannot see would be omniscient again, and cover would stop working (YT-83).
-            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal);
+            // MV-447 cause 3: ask the map which room this robot's raw position is in, but route from
+            // the hysteresis-settled answer, not the raw one — a robot straddling a zone boundary
+            // flips the raw answer frame to frame, and the two rooms it flips between can route to
+            // materially different waypoints.
+            MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
+            string routedZoneId = _zoneHysteresis.Resolve(rawZone?.id, dt);
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId);
 
             // Its own lane, so a pack arrives as a fan rather than a queue. Only on the last leg: a
             // doorway is a metre wide and taking it at a personal angle just walks into the frame.
@@ -671,21 +689,29 @@ namespace MaxWorlds.Enemies
             dir = EnemySeparation.Steer(dir, separation);
 
             // The lawn has cover in it (YT-68). Beelining (or being shoved by a crowded neighbour)
-            // into a prop just presses against it, so while a wall is remembered, walk along it and
+            // into a prop just presses against it, so while a wall is latched, walk along it and
             // round the corner instead — the last word on direction, so nothing steered in above it
-            // can ever send this robot back into the wall it's already rounding.
-            if (_wallTimer > 0f)
-            {
-                _wallTimer -= dt;
-                dir = ObstacleSteering.SlideAlongWall(dir, _wallNormal, _preferSign);
-            }
+            // can ever send this robot back into the wall it's already rounding. MV-447 causes 1/2:
+            // see WallLatch's own doc comment for the limit cycle and same-frame race this replaced.
+            dir = _wallLatch.Tick(dir, transform.position, dt, _preferSign);
 
             // Gunner/Bomber (MV-293): the answer to a ranged kind must never be "walk at it" — inside
             // its standoff band it backs off along the same line it was closing on, rather than
             // committing to melee range like everything else in the swarm.
+            //
+            // MV-447 cause 4: a bare `dist < standoffRange` threshold flipped `dir` by a full 180
+            // degrees the instant dist crossed it, so a robot sitting exactly at standoffRange
+            // alternated advance/retreat every frame by construction. Replaced with a band: back off
+            // below the inner edge, close in above the outer edge, and inside the band hold position
+            // (speed 0, still facing Max via `to`) — no distance now produces a frame-to-frame flip.
             bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Bomber;
-            bool tooClose = ranged && standoffRange > 0f && _sight.HasSight && dist < standoffRange;
-            if (tooClose) dir = -dir;
+            bool inStandoffBand = false;
+            bool retreating = false;
+            if (ranged && standoffRange > 0f && _sight.HasSight)
+            {
+                if (dist < standoffRange * StandoffBackOffFraction) { dir = -dir; retreating = true; }
+                else if (dist <= standoffRange * StandoffCloseInFraction) { dir = to.normalized; inStandoffBand = true; }
+            }
 
             bool hunting = !_sight.HasSight;
             float speed = EffectiveMoveSpeed;
@@ -695,6 +721,10 @@ namespace MaxWorlds.Enemies
             // but keep facing him (FaceAndMove below still runs) and keep TickContactTouch running
             // so its cooldown keeps ticking while it stands in contact.
             if (!LungesAsKind(Kind) && dist <= MinBodyDistance) speed = 0f;
+
+            // MV-447 cause 4: holding in the standoff band means standing still, not creeping — `dir`
+            // is already the face-Max direction set above, so this only zeroes the move.
+            if (inStandoffBand) speed = 0f;
 
             FaceAndMove(dir, hunting ? speed * searchSpeedScale : speed, dt);
 
@@ -745,7 +775,7 @@ namespace MaxWorlds.Enemies
             // (MV-293) — without this check it "retreats" for exactly one frame and then fires from
             // point-blank anyway, since Telegraph holds position and dist <= lungeRange was already
             // true before it took that one step back.
-            if (_sight.HasSight && dist <= lungeRange && !tooClose)
+            if (_sight.HasSight && dist <= lungeRange && !retreating)
             {
                 // MV-428 Change 2: Rusher/Blinker must hold an attack token to commit. Without one, a
                 // robot just keeps closing and pressuring at normal move speed (exactly what the
@@ -1056,8 +1086,7 @@ namespace MaxWorlds.Enemies
         {
             if (Mathf.Abs(hit.normal.y) >= 0.5f) return;                       // floor/ramp, not a wall
             if (hit.collider.TryGetComponent<CharacterController>(out _)) return; // a character
-            _wallNormal = hit.normal;
-            _wallTimer = wallMemory;
+            _wallLatch.NoteHit(hit.normal);
         }
 
         private void ApplyGravity(float dt)

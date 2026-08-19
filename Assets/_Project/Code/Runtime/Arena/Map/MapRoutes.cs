@@ -125,12 +125,18 @@ namespace MaxWorlds.Arena
         /// stops advancing starts stalling <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own progress
         /// clock, and it already knows what to do once that runs out.
         /// </summary>
+        /// <param name="hereOverride">The room to route FROM, if the caller already knows which one
+        /// that should be. Null (the default) asks <c>map.ZoneAt(from)</c>, same as always — a robot
+        /// straddling a zone boundary can flip that raw answer frame to frame (MV-447), so
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy"/> resolves its own hysteresis
+        /// (<see cref="MaxWorlds.Enemies.ZoneHysteresis"/>) and passes the settled room here instead —
+        /// deliberately kept OUT of this class, which stays pure and keeps no clock of its own.</param>
         public static Vector2 Waypoint(MapData map, Vector2 from, Vector2 goal,
-                                       Func<string, bool> gateOpen = null)
+                                       Func<string, bool> gateOpen = null, MapZone hereOverride = null)
         {
             if (map == null) return goal;
 
-            MapZone here = map.ZoneAt(from.x, from.y);
+            MapZone here = hereOverride ?? map.ZoneAt(from.x, from.y);
             MapZone there = map.ZoneAt(goal.x, goal.y);
 
             if (here == null || there == null || here.id == there.id) return goal;

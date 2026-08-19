@@ -114,15 +114,21 @@ namespace MaxWorlds.Enemies
         /// a perfect path to a player it cannot see, which is the omniscience that ticket removed,
         /// wearing a pathfinder as a disguise. Cover has to keep working.
         /// </summary>
-        public static Vector3 Waypoint(Vector3 from, Vector3 goal)
+        /// <param name="fromZoneId">The room id the caller has already settled on routing from (MV-447
+        /// cause 3) — see <see cref="MaxWorlds.Enemies.ZoneHysteresis"/>. Null (the default) falls back
+        /// to asking the map directly for whatever room <paramref name="from"/> is in right now.</param>
+        public static Vector3 Waypoint(Vector3 from, Vector3 goal, string fromZoneId = null)
         {
             MapData map = Map;
             if (map == null) return goal;
 
+            MapZone fromZone = fromZoneId != null ? map.Zone(fromZoneId) : null;
+
             Vector2 next = MapRoutes.Waypoint(map,
                                               new Vector2(from.x, from.z),
                                               new Vector2(goal.x, goal.z),
-                                              IsGateOpen);
+                                              IsGateOpen,
+                                              fromZone);
 
             return new Vector3(next.x, goal.y, next.y);
         }
