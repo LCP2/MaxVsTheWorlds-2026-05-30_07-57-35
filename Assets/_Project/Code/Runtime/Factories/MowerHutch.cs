@@ -13,9 +13,10 @@ namespace MaxWorlds.Factories
     /// game is built on: <em>clear pressure by killing the source, not the symptoms.</em>
     /// While alive it drives an <see cref="EnemySpawner"/> that emits domestic robots on a
     /// tunable cadence; it takes Water-Blaster damage (<see cref="IDamageable"/>, Team.Enemy)
-    /// and carries its own world-space health bar. Destroying it stops the spawns, opens the
-    /// <see cref="SubZoneGate"/>, and pops a clear "source is gone" feedback. Greybox — the
-    /// primitive body is a stand-in until Phase C art.
+    /// and carries its own world-space health bar. Destroying it opens the <see cref="SubZoneGate"/>
+    /// and pops a clear "source is gone" feedback — but the spawner doesn't go quiet (MV-456): the
+    /// area stays a renewable cell faucet, trickling reinforcements at a slow steady cadence for a
+    /// player who stays to grind. Greybox — the primitive body is a stand-in until Phase C art.
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
     public sealed class MowerHutch : MonoBehaviour, IDamageable
@@ -161,15 +162,18 @@ namespace MaxWorlds.Factories
 
         private void OnDestroyed()
         {
-            // Death-throes surge (YT-182): fire BEFORE Stop() latches production off for good — the
+            // Death-throes surge (YT-182): fire BEFORE the post-destruction switch below — the
             // wreck coughs up one last wave (and, on a roll, a tougher "elite") so breaking the
             // source lands as a spike of danger instead of the quietest moment in the fight.
             if (_spawner != null) _spawner.SpawnSurge();
 
-            // Stop(), not enabled = false: dev mode re-asserts `enabled` on every spawner every
-            // frame, so switching the component off stopped this factory for exactly one frame and
-            // it produced robots for the rest of the run (YT-100).
-            if (_spawner != null) _spawner.Stop();                // spawns stop, and stay stopped
+            // MV-456: the shed area is a renewable cell faucet — a destroyed source drops to a slow
+            // steady trickle instead of stopping outright (it used to call Stop(), which latches
+            // production off for good, YT-100). Not enabled = false either: dev mode re-asserts
+            // `enabled` on every spawner every frame, so switching the component off stopped this
+            // factory for exactly one frame and it produced robots at the FULL rate for the rest of
+            // the run.
+            if (_spawner != null) _spawner.EnterPostDestructionMode();
             if (gate != null) gate.Unlock();                      // one key turned; the gate counts
             FactoryCensus.ReportDestroyed(this);                  // ...and the boss listens to that
             // The destruction VFX hangs off this signal (CombatVfx, YT-48).

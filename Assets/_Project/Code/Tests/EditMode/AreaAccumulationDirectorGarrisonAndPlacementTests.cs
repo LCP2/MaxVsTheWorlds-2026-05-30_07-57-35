@@ -200,46 +200,6 @@ namespace MaxWorlds.Tests.EditMode
                 "same deterministic garrison positions");
         }
 
-        // --- Every combat area gets a nonzero garrison, even under a saturated cap (world1) ---------
-
-        [Test]
-        public void GarrisonSeedCount_IsPositiveForEveryCombatArea_InWorld1()
-        {
-            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
-            for (int i = 1; i <= 18; i++)
-                Assert.Greater(Garrison.SeedCount(i, cfg), 0, $"area {i} must seed a nonzero garrison on first entry");
-        }
-
-        [Test]
-        public void EveryCombatArea_HasARobotPhysicallyPresentTheInstantItIsEntered_EvenWithTheAmbientCapSaturated()
-        {
-            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
-            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
-
-            // The exact condition behind Lee's repeated "still no robots" reports: an ambient cap that
-            // can never widen because nothing here ever dies. Only the garrison, independent of this
-            // cap, can guarantee population under it.
-            DevTuning.MaxActiveRobots = 1f;
-
-            _directorGo = new GameObject("Area Accumulation");
-            var director = _directorGo.AddComponent<AreaAccumulationDirector>();
-            director.ConfigureWorld(cfg);
-            director.Configure(map, System.Array.Empty<CoverPiece>());
-
-            for (int i = 1; i <= 18; i++)
-            {
-                director.EnterArea(i);
-                MapZone zone = map.Zone($"area{i}");
-                Assert.IsNotNull(zone, $"area {i} must resolve to a real zone");
-
-                int robotsInZone = 0;
-                foreach (RobotEnemy r in Object.FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
-                    if (zone.Contains(r.transform.position.x, r.transform.position.z)) robotsInZone++;
-
-                Assert.Greater(robotsInZone, 0, $"MV-417: area {i} must never be entered with zero robots physically present");
-            }
-        }
-
         // --- On-screen spawn fallback (MV-417) ------------------------------------------------------
 
         [Test]

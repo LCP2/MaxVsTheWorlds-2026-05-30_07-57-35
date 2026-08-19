@@ -40,6 +40,26 @@ echo Unity   : %UNITY_PATH%
 echo Log     : %LOG%
 echo.
 
+REM ----- 0. Unity project-lock guard (MV-465) ---------------------------------
+REM   If another Unity instance already holds this project (e.g. the CC worker
+REM   is live in this same clone), every batchmode call below exits instantly
+REM   and looks exactly like four independent failures — that cost a long,
+REM   wrong investigation once (see MV-465 comment). Detect the live lock and
+REM   abort with a distinct message/exit code instead of reporting false FAILs.
+REM   A stale lockfile (process died, file left behind) must NOT block forever,
+REM   so the check is "can it be opened exclusively", not just "does it exist".
+set "LOCKFILE=%PROJECT%\Temp\UnityLockfile"
+if exist "%LOCKFILE%" (
+  powershell -NoProfile -Command "try { $fs = [System.IO.File]::Open('%LOCKFILE%', 'Open', 'ReadWrite', 'None'); $fs.Close(); exit 0 } catch { exit 1 }"
+  if errorlevel 1 (
+    echo === cc-verify ABORTED - another Unity instance has this project open ===
+    echo     Nothing was verified. This is NOT a test failure.
+    exit /b 3
+  ) else (
+    echo [cc-verify] stale UnityLockfile found, no live Unity holds it - continuing.
+  )
+)
+
 REM ----- 1. Compile check (open project headless, exit) ----------------------
 echo [1/4] compile check ...
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -logFile "%PROJECT%\Logs\compile.log"

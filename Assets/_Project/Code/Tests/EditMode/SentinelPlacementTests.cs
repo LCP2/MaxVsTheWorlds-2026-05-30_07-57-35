@@ -27,7 +27,11 @@ namespace MaxWorlds.Tests.EditMode
         public void Clear()
         {
             WeaponSystemState.Reset();
-            PickupWallet.Reset();
+            PickupWallet.Reset();   // MV-457: also calls RigState.Reset() — the category unlock below must come AFTER this
+            // This suite is about aimed-placement math/gating once u_sen is owned, not MV-457's
+            // shed/category-lock gate (RigStateTests owns that) — force every category open so u_sen
+            // (SUPPORT's own root) stays reached, as it always was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             DevTuning.Reset();
             Sentinel.DestroyAllActive();
             Sentinel.ResetRegistry();

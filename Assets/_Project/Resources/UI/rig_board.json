@@ -12,14 +12,14 @@
     "bottom": 28
   },
   "model": {
-    "$comment": "Two currencies, one gate. A MORPHING MODULE (dropped by a shed) UNLOCKS an ability at level 1. PARTS raise the level of an ability you already own. Parts can NEVER unlock.",
+    "$comment": "Two currencies, one gate. A MORPHING MODULE (dropped by a shed) UNLOCKS an ability at level 1. PARTS raise the level of an ability you already own. Parts can NEVER unlock. MV-457: a shed's own draft now offers a locked CATEGORY, not a single ability - see rules below.",
     "rules": [
-      "Every ability is unlocked only by being taken in a Morphing Module draft. There is no parts-unlockable tier - the 'stat' kind from schema 2 no longer exists.",
+      "A category must be UNLOCKED (by a shed's Morphing Module) before any of its abilities can be reached at all - a root ability (no parent) is only reached once its own category is unlocked.",
+      "Destroying a shed offers a random choice of 2 still-locked categories; picking one unlocks that whole category. 1 locked category left is granted outright, no choice shown. 0 left falls back to a part plus a bigger cell cache.",
+      "Once a category is unlocked, every ability is still taken individually - there is no parts-unlockable tier for an ability itself; the 'stat' kind from schema 2 no longer exists.",
       "Parts raise an OWNED ability from its current level toward maxLevel. Parts spent on an unowned ability are impossible, not merely disallowed.",
-      "A node is REACHED when it has no parent, or its parent is at level >= 1.",
-      "Draft candidates are drawn ONLY from abilities that are reached and not owned. Max 3, sampled without replacement.",
-      "Run start: p_dmg (RCDA DAMAGE) is owned at level 1. Every other ability is level 0 and unowned. PRIMARY is the only lit category.",
-      "At run start the reached-and-unowned pool is p_rng, p_flw, s_bal, e_ff, e_cel, m_spd, m_tp, u_sen - eight candidates for the first draft of three."
+      "A non-root node is REACHED when its parent is at level >= 1, same as always.",
+      "Run start: p_dmg (RCDA DAMAGE) is owned at level 1, and PRIMARY is the only unlocked category. Every other ability is level 0, unowned, and unreached until its own category opens."
     ]
   },
   "geometry": {

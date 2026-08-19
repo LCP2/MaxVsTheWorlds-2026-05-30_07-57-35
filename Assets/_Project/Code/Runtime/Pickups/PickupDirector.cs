@@ -38,13 +38,14 @@ namespace MaxWorlds.Pickups
     ///
     /// Sheds are the ability-unlock mechanic (WV-229; draft-pick MV-357; moved off the mid-fight modal
     /// by MV-358): a destroyed <c>MowerHutch</c> reports through <see cref="HudSignals.FactoryDestroyed"/>.
-    /// If any ability is still unowned, this director drops a visible <see cref="PickupKind.Device"/> —
+    /// If any RIG category is still locked, this director drops a visible <see cref="PickupKind.Device"/> —
     /// now a Morphing Module — pickup at the shed's spot (MV-382, reinstating the walk-over collectible
     /// MV-357/358 had reduced to an instant invisible grant) — no pause, no screen, the fight keeps
-    /// going. Walking over it draws THE RIG's candidate pool immediately and routes straight to the
-    /// outcome (MV-424, replacing the old bank-then-BUILD-ABILITY step): 0 candidates consumes the
-    /// module, 1 grants it directly, 2-3 opens THE RIG board's draft overlay. None left in the shed's own
-    /// gate falls back to a part plus a bigger "cell cache" instead, same as before.
+    /// going. Walking over it draws THE RIG's locked-category pool immediately and routes straight to
+    /// the outcome (MV-424, replacing the old bank-then-BUILD-ABILITY step; MV-457 replaced the node draw
+    /// with a family draw): 0 candidates consumes the module, 1 unlocks it directly, 2 opens THE RIG
+    /// board's draft overlay to choose between them. Nothing left locked falls back to a part plus a
+    /// bigger "cell cache" instead, same as before.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class PickupDirector : MonoBehaviour
@@ -230,17 +231,18 @@ namespace MaxWorlds.Pickups
             MaxWorlds.Upgrades.UpgradeCatalog.AllKinds[_largeKills % MaxWorlds.Upgrades.UpgradeCatalog.AllKinds.Length];
 
         /// <summary>A shed's the unlock mechanic now (WV-229, spec §4/§6; draft-pick MV-357; a visible
-        /// walk-over pickup again as of MV-382): if any ability is still unowned, drop one
+        /// walk-over pickup again as of MV-382): if any RIG category is still locked, drop one
         /// <see cref="PickupKind.Device"/> pickup — no pause, no screen, the fight isn't interrupted; the
         /// credit itself only banks once Max walks over it (<see cref="Collect"/>), same as any other
-        /// drop. Once every ability is owned there is nothing left to build, so it falls back to a part +
-        /// a cell cache instead — the reward the shed no longer has a use for the ability pool to give.</summary>
+        /// drop. MV-457: a shed unlocks a whole ability FAMILY now, not a single node — once every
+        /// category is unlocked there is nothing left to open, so it falls back to a part + a cell cache
+        /// instead — the reward the shed no longer has a use for the family pool to give.</summary>
         private void OnFactoryDestroyed(Vector3 pos)
         {
-            bool anyUnacquired = false;
-            foreach (var _ in WeaponSystemState.Unacquired) { anyUnacquired = true; break; }
+            bool anyLocked = false;
+            foreach (var _ in RigState.LockedCategoryIds()) { anyLocked = true; break; }
 
-            if (!anyUnacquired)
+            if (!anyLocked)
             {
                 SpawnDrop(PickupKind.Part, pos, DecorativeKind());
                 for (int i = 0; i < ShedCellCacheAmount; i++)
@@ -343,8 +345,10 @@ namespace MaxWorlds.Pickups
                     // walk-over. MV-425 keeps the 0/1-candidate outcomes instant (nothing to show, or a
                     // silent grant) but stops 2-3 candidates from force-opening the board mid-fight —
                     // that pool now banks in PendingMorphingModule and waits for the player to tap
-                    // WEAPONS on their own schedule (see that class's doc comment).
-                    var candidates = RigDraft.DrawCandidates();
+                    // WEAPONS on their own schedule (see that class's doc comment). MV-457: the pool is
+                    // now up to 2 locked CATEGORY ids, not up to 3 ability ids — WeaponsScreen's draft
+                    // flow handles either id shape the same way (see GrantDraftCandidate).
+                    var candidates = RigDraft.DrawCandidateCategories();
                     if (candidates.Length <= 1)
                     {
                         var rig = FindFirstObjectByType<WeaponsScreen>();

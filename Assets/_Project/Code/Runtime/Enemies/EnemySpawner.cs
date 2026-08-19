@@ -64,12 +64,15 @@ namespace MaxWorlds.Enemies
         /// <see cref="maxLiveEnemies"/> at both ends — never past the authored ceiling, and never
         /// above it even mid-ramp if a test or a dialled override put <c>maxLiveEnemies</c> itself
         /// below <see cref="startingRobots"/>.</summary>
-        private int EffectiveMaxLiveEnemies => Mathf.Clamp(
-            Mathf.RoundToInt(Mathf.Lerp(
-                DevTuning.Or(DevTuning.StartingRobots, startingRobots),
-                maxLiveEnemies,
-                DifficultyDirector.Normalized)),
-            0, maxLiveEnemies);
+        private int EffectiveMaxLiveEnemies =>
+            _destroyed
+                ? postDestructionMaxLiveEnemies
+                : Mathf.Clamp(
+                    Mathf.RoundToInt(Mathf.Lerp(
+                        DevTuning.Or(DevTuning.StartingRobots, startingRobots),
+                        maxLiveEnemies,
+                        DifficultyDirector.Normalized)),
+                    0, maxLiveEnemies);
 
         /// <summary>The authored starting-robot count, for the Settings panel's reference default
         /// (YT-194) — same pattern as <see cref="AuthoredSpawnIntervalMin"/>.</summary>
@@ -83,6 +86,15 @@ namespace MaxWorlds.Enemies
         [SerializeField] private float spawnIntervalMin = 12f;
         [Tooltip("Seconds over which the cadence ramps from start to min.")]
         [SerializeField] private float rampSeconds = 45f;
+
+        [Header("Post-destruction faucet (MV-456) — a destroyed shed's area stays a renewable cell " +
+                "source for a player who grinds here instead of pushing on")]
+        [Tooltip("Steady-state spawn interval once this factory has been destroyed. Slower than the " +
+                 "live floor on purpose — a trickle, not still a threat.")]
+        [SerializeField] private float postDestructionSpawnIntervalMin = 20f;
+        [Tooltip("Max robots alive at once from this factory once destroyed — well under the live cap " +
+                 "so a grinding player isn't fighting live-shed pressure.")]
+        [SerializeField] private int postDestructionMaxLiveEnemies = 4;
 
         [Header("Mouth (YT-70) — robots pour OUT of the factory, toward Max")]
         [Tooltip("How far in front of the factory a robot lands. Must clear the factory body.")]
@@ -177,7 +189,8 @@ namespace MaxWorlds.Enemies
         /// door watches this to know when to start hauling itself up, so that it is open by the time
         /// the robot is ready rather than the robot waiting on a door that had no reason to move.</summary>
         public bool WantsToEmit =>
-            _running && _timer >= CurrentInterval && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom;
+            _running && !(_destroyed && _areaPaused) &&
+            _timer >= CurrentInterval && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom;
 
         /// <summary>How many robots this factory has ever put on the field. Only ever goes up, so a
         /// test can prove a dead factory emitted NOTHING — which <see cref="LiveCount"/> can't, since
@@ -207,6 +220,31 @@ namespace MaxWorlds.Enemies
         /// </summary>
         public void Stop() => _running = false;
 
+        private bool _destroyed;
+
+        /// <summary>Whether this factory has been destroyed and dropped into the post-destruction
+        /// trickle (MV-456) — distinct from <see cref="IsRunning"/>: a destroyed source keeps
+        /// <c>_running</c> true and just switches <see cref="CurrentInterval"/> and the live cap to
+        /// their reduced steady-state values.</summary>
+        public bool IsDestroyed => _destroyed;
+
+        /// <summary>This factory is gone but the area stays a renewable cell faucet (MV-456): drop to
+        /// a slow steady trickle instead of stopping outright. Called once, from
+        /// <see cref="MaxWorlds.Factories.MowerHutch.OnDestroyed"/>, after the death-throes surge — the
+        /// surge still fires at the live cap; only this call, right after it, switches the cadence.</summary>
+        public void EnterPostDestructionMode() => _destroyed = true;
+
+        private bool _areaPaused;
+
+        /// <summary>Pause/resume the post-destruction trickle (MV-456): a destroyed shed only streams
+        /// while the player is actually standing in its area. <see cref="MaxWorlds.Arena.WorldRunner"/>
+        /// drives this off the player's live position so a handful of destroyed sheds several rooms
+        /// back can never eat into the field-wide <see cref="GlobalMaxLiveEnemies"/> cap the room the
+        /// player is actually in depends on. Meaningless (and never called) for a factory that isn't
+        /// destroyed yet — the live cadence was never gated on area presence and this ticket doesn't
+        /// change that.</summary>
+        public void SetAreaPaused(bool paused) => _areaPaused = paused;
+
         /// <summary>Live count of one kind — lets a test prove the mix actually reaches the field.</summary>
         public int LiveCountOf(EnemyKind kind)
         {
@@ -232,8 +270,10 @@ namespace MaxWorlds.Enemies
         public float CurrentInterval =>
             DevTuning.SpawnInterval.HasValue
                 ? DevTuning.SpawnInterval.Value
-                : SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, EffectiveSpawnIntervalMin, rampSeconds)
-                    * DifficultyDirector.SpawnIntervalMultiplier;
+                : _destroyed
+                    ? postDestructionSpawnIntervalMin
+                    : SpawnCadence.IntervalAt(_elapsed, spawnIntervalStart, EffectiveSpawnIntervalMin, rampSeconds)
+                        * DifficultyDirector.SpawnIntervalMultiplier;
 
         /// <summary>The steady-state spawn interval in seconds — either the authored
         /// <see cref="spawnIntervalMin"/> or, if the Settings panel's more intuitive "Robot
@@ -254,6 +294,7 @@ namespace MaxWorlds.Enemies
         private void Update()
         {
             if (!_running) return;
+            if (_destroyed && _areaPaused) return;   // MV-456: only trickle while the player is here
             float dt = Time.deltaTime;
             _elapsed += dt;
             _timer += dt;

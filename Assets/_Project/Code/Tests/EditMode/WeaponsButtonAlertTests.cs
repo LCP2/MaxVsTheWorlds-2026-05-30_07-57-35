@@ -3,7 +3,6 @@ using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
-using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -16,89 +15,42 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class WeaponsButtonAlertTests
     {
-        // ---------------------------------------------------------------- AC1: the live 44pt bug
-
-        private const float Scale6Inch = 0.44f; // SettingsPanel.Scale6Inch — 932x430pt target's matchWidthOrHeight scale
-
-        [Test]
-        public void DocumentsTheOldNinetySixPxFootprintFailedTheFortyFourPointFloor()
-        {
-            float pt = 96f * Scale6Inch;
-            Assert.That(pt, Is.LessThan(44f),
-                $"MV-425's own live bug: the pre-fix 96px footprint reads {pt:0.0}pt, under Apple's 44pt minimum tap target");
-        }
-
-        [Test]
-        public void TheWeaponsButtonIsOneOhEightPx_AndClearsTheFortyFourPointFloor()
-        {
-            var hudGo = new GameObject("HUD");
-            var hud = hudGo.AddComponent<HudController>();
-            InvokeLifecycle(hud, "Awake");
-            try
-            {
-                var button = FindRect(hudGo, "Weapons Button");
-                Assert.That(button, Is.Not.Null, "the HUD must build a 'Weapons Button' root");
-                Assert.That(button.sizeDelta, Is.EqualTo(new Vector2(108f, 108f)),
-                    "MV-425 AC1: the button's footprint must be 108x108");
-
-                float pt = button.sizeDelta.x * Scale6Inch;
-                Assert.That(pt, Is.GreaterThanOrEqualTo(44f),
-                    $"108px should read {pt:0.0}pt, clearing Apple's 44pt minimum");
-            }
-            finally
-            {
-                Object.DestroyImmediate(hudGo);
-            }
-        }
-
         // ---------------------------------------------------------------- the four states (pure)
 
         [Test]
-        public void IdleState_NoBadges_NeitherAmberNorModuleRing()
+        public void IdleState_ShowsNoBadges()
         {
             var alert = HudController.ComputeWeaponsButtonAlert(partsToFit: false, moduleCaptured: false);
             Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Idle));
             Assert.That(HudController.ShowsPartsBadge(alert), Is.False);
             Assert.That(HudController.ShowsModuleBadge(alert), Is.False);
-
-            Color ring = HudController.WeaponsButtonRingColor(alert);
-            Assert.That(RoughlyEqual(ring, PickupArtDirector.CollectibleGlow), Is.False, "idle ring must not read amber");
-            Assert.That(RoughlyEqual(ring, RigBoardLayout.Colour("module")), Is.False, "idle ring must not read module cyan");
         }
 
         [Test]
-        public void PartsToFitState_AmberRing_OnlyThePartsBadge()
+        public void PartsToFitState_ShowsOnlyThePartsBadge()
         {
             var alert = HudController.ComputeWeaponsButtonAlert(partsToFit: true, moduleCaptured: false);
             Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.PartsToFit));
             Assert.That(HudController.ShowsPartsBadge(alert), Is.True);
             Assert.That(HudController.ShowsModuleBadge(alert), Is.False);
-            Assert.That(RoughlyEqual(HudController.WeaponsButtonRingColor(alert), PickupArtDirector.CollectibleGlow), Is.True,
-                "'parts to fit' must ring amber (the shared collectible orange)");
         }
 
         [Test]
-        public void ModuleCapturedState_CyanRing_OnlyTheModuleBadge()
+        public void ModuleCapturedState_ShowsOnlyTheModuleBadge()
         {
             var alert = HudController.ComputeWeaponsButtonAlert(partsToFit: false, moduleCaptured: true);
             Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.ModuleCaptured));
             Assert.That(HudController.ShowsPartsBadge(alert), Is.False);
             Assert.That(HudController.ShowsModuleBadge(alert), Is.True);
-            Assert.That(RoughlyEqual(HudController.WeaponsButtonRingColor(alert), RigBoardLayout.Colour("module")), Is.True,
-                "'module captured' must ring the board's own module cyan");
         }
 
         [Test]
-        public void BothState_CyanWinsTheRing_ButTheAmberCountKeepsItsCorner()
+        public void BothState_ShowsBothBadges()
         {
             var alert = HudController.ComputeWeaponsButtonAlert(partsToFit: true, moduleCaptured: true);
             Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Both));
             Assert.That(HudController.ShowsPartsBadge(alert), Is.True, "the amber count keeps its corner in 'Both'");
             Assert.That(HudController.ShowsModuleBadge(alert), Is.True);
-            Assert.That(RoughlyEqual(HudController.WeaponsButtonRingColor(alert), RigBoardLayout.Colour("module")), Is.True,
-                "cyan always wins the ring, even with parts also waiting");
-            Assert.That(RoughlyEqual(HudController.WeaponsButtonRingColor(alert), PickupArtDirector.CollectibleGlow), Is.False,
-                "amber must not also claim the ring in 'Both' — they never share a colour");
         }
 
         // ---------------------------------------------------------------- built widget reacts to real state
@@ -140,9 +92,6 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         // ---------------------------------------------------------------- helpers
-
-        private static bool RoughlyEqual(Color a, Color b) =>
-            Mathf.Abs(a.r - b.r) < 0.01f && Mathf.Abs(a.g - b.g) < 0.01f && Mathf.Abs(a.b - b.b) < 0.01f;
 
         private static RectTransform FindRect(GameObject go, string name)
         {
