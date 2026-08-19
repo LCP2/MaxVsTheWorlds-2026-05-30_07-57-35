@@ -217,13 +217,21 @@ namespace MaxWorlds.UI
         private RectTransform _weaponsModuleHaloRoot;
         private Image _weaponsModuleHaloOuter, _weaponsModuleHaloInner;
 
-        private RectTransform _partsBadgeRoot;
-        private Image _partsBadgeGlow, _partsBadgeBg;
-        private Text _partsBadgeCount;
-
         private RectTransform _moduleBadgeRoot;
         private Image _moduleBadgeGlow, _moduleBadgeBg;
         private Text _moduleBadgeMark;
+
+        // MV-471: the two always-on counters attached to THE RIG mark itself — replacing the old
+        // "Parts Badge" that only appeared while a part was banked, regardless of whether that part
+        // could actually buy anything. Both stay visible and flash only off RigActions' own
+        // affordability check, never off "you are holding something".
+        private RectTransform _rigPartCounterRoot;
+        private Image _rigPartCounterGlow, _rigPartCounterBg;
+        private Text _rigPartCounterText;
+
+        private RectTransform _rigCellCounterRoot;
+        private Image _rigCellCounterGlow, _rigCellCounterBg;
+        private Text _rigCellCounterText;
 
         private void Awake()
         {
@@ -325,6 +333,7 @@ namespace MaxWorlds.UI
         {
             if (_cellCount != null) _cellCount.text = $"{total}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
+            if (_rigCellCounterText != null) _rigCellCounterText.text = total.ToString();
         }
 
         /// <summary>MV-374: the reserve's cap itself moved (a Cell Capacity level-up) — the count
@@ -351,14 +360,23 @@ namespace MaxWorlds.UI
         private void RefreshWeaponsButtonAlert()
         {
             var alert = CurrentWeaponsButtonAlert();
-            if (_partsBadgeRoot != null) _partsBadgeRoot.gameObject.SetActive(ShowsPartsBadge(alert));
             if (_moduleBadgeRoot != null) _moduleBadgeRoot.gameObject.SetActive(ShowsModuleBadge(alert));
             if (_weaponsModuleHaloRoot != null) _weaponsModuleHaloRoot.gameObject.SetActive(ShowsModuleRing(alert));
+            if (_rigPartCounterText != null)
+                _rigPartCounterText.text = (MaxWorlds.Pickups.PickupWallet.PartsBanked + AbilityCreditBank.Banked).ToString();
         }
 
+        /// <summary>MV-471: the ring's amber "parts to fit" state now tracks the same "is a part spend
+        /// actually possible" question as the new PART counter (<see cref="RigActions.AnyPartActionAffordable"/>)
+        /// instead of "are you merely holding one" — a banked ability credit is always immediately
+        /// spendable (BUILD ABILITY never fails while one is banked), so it still counts on its own.</summary>
         private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
-            ShouldShowPartAlert(MaxWorlds.Pickups.PickupWallet.PartsBanked, AbilityCreditBank.Banked),
+            AnyPartAlertActionable(),
             PendingMorphingModule.HasPending);
+
+        private static bool AnyPartAlertActionable() =>
+            RigActions.AnyPartActionAffordable(MaxWorlds.Pickups.PickupWallet.PartsBanked) ||
+            AbilityCreditBank.Banked > 0;
 
         /// <summary>Pure predicate (MV-358) — pinned by an EditMode test without building a canvas: a
         /// spend is waiting if either kind of banked token is &gt; 0.</summary>
@@ -595,17 +613,53 @@ namespace MaxWorlds.UI
                 if (_weaponsModuleHaloInner != null) _weaponsModuleHaloInner.color = hc;
             }
 
-            if (_partsBadgeRoot != null && _partsBadgeRoot.gameObject.activeSelf)
-            {
-                int count = MaxWorlds.Pickups.PickupWallet.PartsBanked + AbilityCreditBank.Banked;
-                if (_partsBadgeCount != null) _partsBadgeCount.text = count.ToString();
-                AnimateBadge(_partsBadgeRoot, _partsBadgeBg, _partsBadgeGlow, PartColor, PartAlertFlash(Time.unscaledTime));
-            }
-
             if (_moduleBadgeRoot != null && _moduleBadgeRoot.gameObject.activeSelf)
             {
                 AnimateBadge(_moduleBadgeRoot, _moduleBadgeBg, _moduleBadgeGlow, ModuleColor, ModuleAlertFlash(Time.unscaledTime));
             }
+
+            UpdateRigCounters();
+        }
+
+        /// <summary>MV-471: redraws both always-on RIG-mark counters every frame — live count text plus
+        /// a flash that engages only when <see cref="RigActions"/> says that currency actually buys
+        /// something right now. A banked ability credit is always instantly spendable, so it counts
+        /// toward the PART counter's flash the same way it does for the ring, <see cref="AnyPartAlertActionable"/>.</summary>
+        private void UpdateRigCounters()
+        {
+            int partsBanked = MaxWorlds.Pickups.PickupWallet.PartsBanked;
+            int creditsBanked = AbilityCreditBank.Banked;
+            if (_rigPartCounterRoot != null)
+            {
+                if (_rigPartCounterText != null) _rigPartCounterText.text = (partsBanked + creditsBanked).ToString();
+                bool actionable = RigActions.AnyPartActionAffordable(partsBanked) || creditsBanked > 0;
+                SetRigCounterFlash(_rigPartCounterRoot, _rigPartCounterBg, _rigPartCounterGlow, PartColor, actionable);
+            }
+
+            if (_rigCellCounterRoot != null)
+            {
+                int cells = MaxWorlds.Pickups.PickupWallet.PowerCells;
+                if (_rigCellCounterText != null) _rigCellCounterText.text = cells.ToString();
+                bool actionable = RigActions.AnyCellActionAffordable(cells);
+                SetRigCounterFlash(_rigCellCounterRoot, _rigCellCounterBg, _rigCellCounterGlow, CellColor, actionable);
+            }
+        }
+
+        /// <summary>Idle: a flat neutral chip (the live count still shows). Actionable: the same
+        /// dim-&gt;full pulse <see cref="AnimateBadge"/> already uses for the module badge, in the
+        /// given currency's own colour — so "the RIG mark is worth a look" reads the same language
+        /// everywhere on this button.</summary>
+        private static void SetRigCounterFlash(RectTransform root, Image bg, Image glow, Color hue, bool actionable)
+        {
+            if (actionable)
+            {
+                AnimateBadge(root, bg, glow, hue, PartAlertFlash(Time.unscaledTime));
+                return;
+            }
+
+            if (bg != null) bg.color = PanelColor;
+            if (glow != null) glow.color = Color.clear;
+            root.localScale = Vector3.one;
         }
 
         /// <summary>One corner badge's beat: chip colour swings dim-&gt;full, a scale pop on the beat,
@@ -1955,13 +2009,6 @@ namespace MaxWorlds.UI
         /// used (MV-300), just split and shrunk to fit two.</summary>
         private void BuildWeaponsButtonBadges()
         {
-            _partsBadgeRoot = BuildCornerBadge("Parts Badge", new Vector2(0f, 1f), new Vector2(-10f, 12f),
-                out _partsBadgeGlow, out _partsBadgeBg);
-            _partsBadgeCount = AddText(_partsBadgeRoot, 20f, Color.black, TextAnchor.MiddleCenter);
-            Stretch(_partsBadgeCount.rectTransform);
-            _partsBadgeCount.fontStyle = FontStyle.Bold;
-            _partsBadgeCount.raycastTarget = false;
-
             _moduleBadgeRoot = BuildCornerBadge("Module Badge", new Vector2(1f, 1f), new Vector2(10f, 12f),
                 out _moduleBadgeGlow, out _moduleBadgeBg);
             _moduleBadgeMark = AddText(_moduleBadgeRoot, 22f, Color.black, TextAnchor.MiddleCenter);
@@ -1970,7 +2017,46 @@ namespace MaxWorlds.UI
             _moduleBadgeMark.fontStyle = FontStyle.Bold;
             _moduleBadgeMark.raycastTarget = false;
 
+            BuildRigCounters();
+
             RefreshWeaponsButtonAlert();
+        }
+
+        /// <summary>MV-471: PART count above the mark, CELL count below it — both always visible and
+        /// live, replacing the old "Parts Badge" corner chip that only showed up while a part was
+        /// banked. <see cref="UpdateRigCounters"/> drives their text and flash every frame.</summary>
+        private void BuildRigCounters()
+        {
+            _rigPartCounterRoot = BuildRigCounter("Rig Part Counter", above: true,
+                out _rigPartCounterGlow, out _rigPartCounterBg, out _rigPartCounterText);
+            _rigCellCounterRoot = BuildRigCounter("Rig Cell Counter", above: false,
+                out _rigCellCounterGlow, out _rigCellCounterBg, out _rigCellCounterText);
+        }
+
+        private RectTransform BuildRigCounter(string name, bool above, out Image glow, out Image bg, out Text text)
+        {
+            var root = NewRect(name, _weaponsButtonRoot);
+            Vector2 anchor = above ? new Vector2(0.5f, 1f) : new Vector2(0.5f, 0f);
+            Vector2 pivot = above ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f);
+            Anchor(root, anchor, anchor, pivot);
+            root.sizeDelta = new Vector2(48f, 30f);
+            root.anchoredPosition = new Vector2(0f, above ? 6f : -6f);
+
+            glow = AddImage(root, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
+            Stretch(glow.rectTransform, 6f); // expands beyond the chip as a halo
+            glow.type = Image.Type.Sliced;
+            glow.raycastTarget = false;
+
+            bg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), PanelColor, "Chip");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            bg.raycastTarget = false; // the WEAPONS button underneath handles taps
+
+            text = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(text.rectTransform);
+            text.fontStyle = FontStyle.Bold;
+            text.raycastTarget = false;
+
+            return root;
         }
 
         private RectTransform BuildCornerBadge(string name, Vector2 corner, Vector2 offset, out Image glow, out Image bg)
