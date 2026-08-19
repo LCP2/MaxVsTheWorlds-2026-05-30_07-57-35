@@ -1,0 +1,5 @@
+﻿FAIL node-position: 4/28 missing — first 5: p_rng, p_spr, u_hp, u_slt
+FAIL hex-orientation: 5/5 off-ratio — PRIMARY ratio=4.107 (w=115 h=28); SECONDARY ratio=6.143 (w=172 h=28); ENERGY ratio=5.733 (w=172 h=30); MOVE ratio=6.143 (w=172 h=28); SUPPORT ratio=4.071 (w=114 h=28)
+FAIL family-contrast: lit=0.094 unlit=0.087 ratio=1.071 (need >=1.5)
+FAIL glow-containment: 12/12 over 25% — PRIMARY 30.067%; ENERGY 59.633%; SUPPORT 29.621%; p_dmg 50%; p_rng 50%; p_flw 100%; e_ff 100%; e_cel 100%; e_cd 100%; u_sen 50%; u_dmg 100%; u_rng 50%
+PASS colour-probes: 7/7 sampled points match rig_board.json

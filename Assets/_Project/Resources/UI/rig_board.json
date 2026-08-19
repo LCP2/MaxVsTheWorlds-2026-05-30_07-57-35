@@ -11,6 +11,11 @@
     "top": 28,
     "bottom": 28
   },
+  "captureAspects": [
+    { "name": "16x9", "w": 1920, "h": 1080 },
+    { "name": "16x10", "w": 1728, "h": 1080 },
+    { "name": "phone", "w": 2340, "h": 1080 }
+  ],
   "model": {
     "$comment": "Two currencies, one gate. A MORPHING MODULE (dropped by a shed) UNLOCKS an ability at level 1. PARTS raise the level of an ability you already own. Parts can NEVER unlock.",
     "rules": [

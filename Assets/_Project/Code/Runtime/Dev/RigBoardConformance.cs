@@ -1,0 +1,144 @@
+using System.Globalization;
+using UnityEngine;
+
+namespace MaxWorlds.Dev
+{
+    /// <summary>
+    /// MV-463 Part 2 — the ui-screens harness's own conformance pass: the pixel-measurement primitives
+    /// <see cref="UiScreensDirector"/> uses to assert a just-captured THE RIG PNG actually matches
+    /// <c>rig_board.json</c>, instead of only ever taking a picture nobody automated ever looks at
+    /// again. Every method here is a pure function over a <see cref="Texture2D"/> and plain data — no
+    /// reach into <c>WeaponsScreen</c>, <c>RigState</c> or the scene — so an EditMode test can paint a
+    /// synthetic texture and assert a check's own math directly, without a play-mode capture.
+    /// </summary>
+    public static class RigBoardConformance
+    {
+        /// <summary>Texture2D is bottom-left origin; rig_board.json's canvas coordinates are top-left,
+        /// y-down (the same convention <c>UiScreensDirector</c>'s own pre-existing probe 6 already
+        /// uses) — this is the one place that conversion happens so every check above it can just think
+        /// in json coordinates.</summary>
+        public static Color GetJsonPixel(Texture2D tex, float jsonX, float jsonY)
+        {
+            int x = Mathf.Clamp(Mathf.RoundToInt(jsonX), 0, tex.width - 1);
+            int y = Mathf.Clamp(tex.height - 1 - Mathf.RoundToInt(jsonY), 0, tex.height - 1);
+            return tex.GetPixel(x, y);
+        }
+
+        /// <summary>Sum of the absolute per-channel RGB difference — cheap, monotonic, and all every
+        /// check here needs: "does this pixel read as meaningfully different from that one."</summary>
+        public static float ColorDistance(Color a, Color b) =>
+            Mathf.Abs(a.r - b.r) + Mathf.Abs(a.g - b.g) + Mathf.Abs(a.b - b.b);
+
+        /// <summary>Walks INWARD from <paramref name="maxDist"/> toward (<paramref name="cx"/>,
+        /// <paramref name="cy"/>) along (<paramref name="dx"/>, <paramref name="dy"/>), returning the
+        /// first (furthest-out) distance whose pixel differs from <paramref name="background"/> by more
+        /// than <paramref name="tolerance"/> — i.e. the outer edge of whatever ink is out there.
+        /// Deliberately outside-in, not centre-out: a node's own icon is stroke art with plenty of
+        /// transparent gaps in the middle of its bounding box (confirmed live running this exact
+        /// ticket — a centre-out walk along RANGE's own ray hit exactly such a gap and returned early),
+        /// so searching from the centre is unreliable. Approaching from outside the hex+glow, the first
+        /// hit found actually is the edge, regardless of what's transparent closer to the middle.</summary>
+        public static float RayInkDistance(Texture2D tex, float cx, float cy, float dx, float dy,
+            float maxDist, Color background, float tolerance)
+        {
+            for (float d = maxDist; d >= 1f; d -= 1f)
+            {
+                Color px = GetJsonPixel(tex, cx + dx * d, cy + dy * d);
+                if (ColorDistance(px, background) > tolerance) return d;
+            }
+            return 0f;
+        }
+
+        /// <summary>Does ANY pixel in the (2*<paramref name="halfBlock"/>+1) square centred on
+        /// (<paramref name="jsonX"/>, <paramref name="jsonY"/>) read as ink? A single centre pixel is
+        /// exactly as fragile as <see cref="RayInkDistance"/>'s old centre-out walk was — icon stroke
+        /// art routinely has a transparent gap at its own mathematical centre — so "is a node here at
+        /// all" needs a small neighbourhood, not one sample.</summary>
+        public static bool BlockHasInk(Texture2D tex, float jsonX, float jsonY, int halfBlock,
+            Color background, float tolerance)
+        {
+            for (int dy = -halfBlock; dy <= halfBlock; dy++)
+                for (int dx = -halfBlock; dx <= halfBlock; dx++)
+                    if (ColorDistance(GetJsonPixel(tex, jsonX + dx, jsonY + dy), background) > tolerance)
+                        return true;
+            return false;
+        }
+
+        /// <summary>Mean perceptual luminance (Rec. 709) over the json-space rect
+        /// [<paramref name="xMin"/>, <paramref name="xMax"/>) x [<paramref name="yMin"/>, <paramref name="yMax"/>),
+        /// sampled every <paramref name="step"/> px — a coarse grid is plenty for a column-band mean and
+        /// keeps a whole-region scan cheap.</summary>
+        public static float MeanLuminance(Texture2D tex, float xMin, float xMax, float yMin, float yMax, int step = 4)
+        {
+            double sum = 0;
+            int count = 0;
+            for (float y = yMin; y < yMax; y += step)
+                for (float x = xMin; x < xMax; x += step)
+                {
+                    Color c = GetJsonPixel(tex, x, y);
+                    sum += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
+                    count++;
+                }
+            return count > 0 ? (float)(sum / count) : 0f;
+        }
+
+        /// <summary>Fraction of sampled points in the annulus [<paramref name="rInner"/>, <paramref name="rOuter"/>]
+        /// around (<paramref name="cx"/>, <paramref name="cy"/>) that read as "ink" — differ from
+        /// <paramref name="background"/> by more than <paramref name="tolerance"/>. This is the glow
+        /// containment measure: a node's halo should fade out well before the outer radius, so a high
+        /// fraction here means the glow (or something else) is bleeding too far.
+        ///
+        /// Restricted to two 2*<paramref name="sectorHalfWidthDeg"/>-wide sectors centred on
+        /// <paramref name="sectorCenterDeg"/> and its opposite side (json-space angle, 0 = +x/right,
+        /// 90 = +y/down) — every tree connector runs roughly vertically out of its own node (down to a
+        /// child, up from a parent), so a full-circle annulus double-counts real, intentional connector
+        /// ink as glow bleed (confirmed live running this exact ticket: several owned nodes read
+        /// ~100% until this was scoped down). Left/right (0/180) dodges that for every node on this
+        /// board — no connector on THE RIG ever leaves a node sideways.</summary>
+        public static float AnnulusInkFraction(Texture2D tex, float cx, float cy, float rInner, float rOuter,
+            Color background, float tolerance, float sectorCenterDeg = 0f, float sectorHalfWidthDeg = 40f, int step = 3)
+        {
+            int hit = 0, total = 0;
+            for (float y = -rOuter; y <= rOuter; y += step)
+                for (float x = -rOuter; x <= rOuter; x += step)
+                {
+                    float d = Mathf.Sqrt(x * x + y * y);
+                    if (d < rInner || d > rOuter) continue;
+                    float ang = Mathf.Atan2(y, x) * Mathf.Rad2Deg;
+                    bool inSector = Mathf.Abs(Mathf.DeltaAngle(sectorCenterDeg, ang)) <= sectorHalfWidthDeg
+                                 || Mathf.Abs(Mathf.DeltaAngle(sectorCenterDeg + 180f, ang)) <= sectorHalfWidthDeg;
+                    if (!inSector) continue;
+                    total++;
+                    if (ColorDistance(GetJsonPixel(tex, cx + x, cy + y), background) > tolerance) hit++;
+                }
+            return total > 0 ? (float)hit / total : 0f;
+        }
+
+        /// <summary>Hue-direction distance between two colours — each normalised to its own RGB sum so
+        /// only the ratio between channels counts, not overall brightness. rig_board.json's own
+        /// comments (regionRect, lockedFusion) document that this project's Linear colour space makes a
+        /// low-alpha wash display several times brighter than a naive sRGB-space alpha blend predicts —
+        /// confirmed live running this exact check: an unlit category's actual fill measured brighter
+        /// than <see cref="Color.Lerp"/> against a known alpha predicted, by roughly the same multiple
+        /// those comments describe. Comparing hue direction instead of predicting exact composited
+        /// brightness sidesteps needing to reverse-engineer that gamma curve here.</summary>
+        public static float HueDistance(Color a, Color b)
+        {
+            Vector3 an = NormalizeHue(a), bn = NormalizeHue(b);
+            return Vector3.Distance(an, bn);
+        }
+
+        private static Vector3 NormalizeHue(Color c)
+        {
+            float sum = c.r + c.g + c.b;
+            return sum > 0.02f ? new Vector3(c.r, c.g, c.b) / sum : Vector3.zero;
+        }
+
+        public static string ColorHex(Color c) => "#" + ColorUtility.ToHtmlStringRGB(c);
+
+        public static string Fmt(float v) => v.ToString("0.###", CultureInfo.InvariantCulture);
+
+        public static string PassFailLine(string checkName, bool pass, string detail) =>
+            $"{(pass ? "PASS" : "FAIL")} {checkName}: {detail}";
+    }
+}
