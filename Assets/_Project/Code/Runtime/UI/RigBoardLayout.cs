@@ -12,9 +12,17 @@ namespace MaxWorlds.UI
     {
         public readonly string Id, Family, Icon;
         public readonly float X, Y;
-        public RigCategoryLayout(string id, string family, string icon, float x, float y)
+
+        /// <summary>MV-472: half the width of this family's own column, sized to its actual content
+        /// (the widest sibling spread anywhere in its ability tree) rather than a uniform 1/5 share of
+        /// the board — <see cref="RigBoardLayout"/>'s column-layout pass sets this; consumers building a
+        /// region panel or checking for clipping at the board's outer edge use it instead of guessing
+        /// a shared inter-category spacing (which is no longer uniform).</summary>
+        public readonly float ColumnHalfWidth;
+
+        public RigCategoryLayout(string id, string family, string icon, float x, float y, float columnHalfWidth)
         {
-            Id = id; Family = family; Icon = icon; X = x; Y = y;
+            Id = id; Family = family; Icon = icon; X = x; Y = y; ColumnHalfWidth = columnHalfWidth;
         }
     }
 
@@ -79,6 +87,19 @@ namespace MaxWorlds.UI
         private static readonly Dictionary<string, string> s_icons = new Dictionary<string, string>();
         private static readonly Dictionary<string, Color> s_colours = new Dictionary<string, Color>();
         private static GeometryWire s_geometry;
+
+        // MV-472: the raw, as-authored category/ability data (original x used only to sort siblings
+        // left-to-right, y as the tier hint) — kept so both the standard column layout (below) and the
+        // lazily-built phone layout can each derive their own positions from the same source topology
+        // without re-parsing the JSON.
+        private static CategoryWire[] s_rawCategories = Array.Empty<CategoryWire>();
+        private static AbilityWire[] s_rawAbilities = Array.Empty<AbilityWire>();
+        private static FusionWire[] s_rawFusions = Array.Empty<FusionWire>();
+
+        private static bool s_phoneLoaded;
+        private static RigCategoryLayout[] s_phoneCategories = Array.Empty<RigCategoryLayout>();
+        private static RigAbilityLayout[] s_phoneAbilities = Array.Empty<RigAbilityLayout>();
+        private static RigFusionLayout[] s_phoneFusions = Array.Empty<RigFusionLayout>();
 
         // ------------------------------------------------------------------ wire types (JsonUtility)
 
@@ -190,24 +211,20 @@ namespace MaxWorlds.UI
 
             s_geometry = wire.geometry ?? new GeometryWire();
 
-            var categories = new List<RigCategoryLayout>(wire.categories.Length);
+            s_rawCategories = Array.FindAll(wire.categories, c => c != null && !string.IsNullOrEmpty(c.id));
+            s_rawAbilities = Array.FindAll(wire.abilities, a => a != null && !string.IsNullOrEmpty(a.id));
+            s_rawFusions = Array.FindAll(wire.fusions, f => f != null && !string.IsNullOrEmpty(f.id));
+
             float categoryY = s_geometry.rowY?.category ?? 0f;
-            foreach (var c in wire.categories)
-                if (c != null && !string.IsNullOrEmpty(c.id))
-                    categories.Add(new RigCategoryLayout(c.id, c.family, c.icon, c.x, categoryY));
-            s_categories = categories.ToArray();
-
-            var abilities = new List<RigAbilityLayout>(wire.abilities.Length);
-            foreach (var a in wire.abilities)
-                if (a != null && !string.IsNullOrEmpty(a.id))
-                    abilities.Add(new RigAbilityLayout(a.id, a.category, a.icon, a.label, a.kind, a.parent, a.x, a.y, a.maxLevel));
-            s_abilities = abilities.ToArray();
-
-            var fusions = new List<RigFusionLayout>(wire.fusions.Length);
-            foreach (var f in wire.fusions)
-                if (f != null && !string.IsNullOrEmpty(f.id))
-                    fusions.Add(new RigFusionLayout(f.id, f.label, f.parentA, f.parentB, f.hudSlot, f.x, f.y, f.partCost));
-            s_fusions = fusions.ToArray();
+            float[] standardRowY = { categoryY, s_geometry.rowY?.tier1 ?? 0f, s_geometry.rowY?.tier2 ?? 0f, s_geometry.rowY?.tier3 ?? 0f };
+            float abR = s_geometry.radius?.ability ?? 50f;
+            float catR = s_geometry.radius?.category ?? 72f;
+            var standard = BuildColumnLayout(s_rawCategories, s_rawAbilities, s_rawFusions,
+                abR, catR, 2f * abR + StandardNodeGap, StandardTargetWidth, standardRowY,
+                s_geometry.rowY?.forge ?? 0f);
+            s_categories = standard.Categories;
+            s_abilities = standard.Abilities;
+            s_fusions = standard.Fusions;
 
             var captureAspects = new List<RigCaptureAspect>(wire.captureAspects.Length);
             foreach (var a in wire.captureAspects)
@@ -239,11 +256,260 @@ namespace MaxWorlds.UI
             if (ColorUtility.TryParseHtmlString(entry.hex, out var c)) s_colours[key] = c;
         }
 
+        private static void EnsurePhoneLoaded()
+        {
+            EnsureLoaded();
+            if (s_phoneLoaded) return;
+            s_phoneLoaded = true;
+
+            float[] phoneRowY = { CategoryYPhone, Tier1YPhone, Tier2YPhone, Tier3YPhone };
+            var phone = BuildColumnLayout(s_rawCategories, s_rawAbilities, s_rawFusions,
+                RadiusAbilityPhone, RadiusCategoryPhone, PhoneNodeSpacing, PhoneTargetWidth,
+                phoneRowY, FusionYPhone);
+            s_phoneCategories = phone.Categories;
+            s_phoneAbilities = phone.Abilities;
+            s_phoneFusions = phone.Fusions;
+        }
+
+        // ------------------------------------------------------------------ column layout (MV-472)
+        //
+        // MV-472 item 3: "lay the families out to their actual content, not a uniform grid" — the five
+        // ability families hold 5/5/4/2/7 nodes and, pre-fix, got an equal 1/5 share of the board's
+        // width regardless, so MOVE (2 nodes) sat mostly empty while SUPPORT (7 nodes, up to 3 siblings
+        // per row) ran out of room and clipped off the right edge below ~1.4:1 aspect. This walks each
+        // category's own ability tree (by PARENT, not by a shared row y — a tier's siblings can have
+        // different parents, e.g. SUPPORT's u_mov/u_cst/u_slt each sit under a different tier2 parent)
+        // and assigns every node a signed offset in ability-diameter-ish "spacing units" from its own
+        // immediate parent, recursively — so a family's required half-width is simply the widest
+        // absolute offset found anywhere in its tree, not a hand-tuned guess. Every column is then
+        // scaled by the SAME factor to exactly fill <paramref name="targetWidth"/>, so a wide family
+        // gets a wide column and a narrow one a narrow column, never a uniform share.
+        private const float StandardNodeGap = 20f;
+
+        /// <summary>Both modes leave this much clear board on each outer edge (PRIMARY's own left,
+        /// SUPPORT's own right) instead of packing columns flush to the 1920-wide frame's own edges — a
+        /// pure-background strip <c>UiScreensDirector</c>'s probe 6 (json x=20) samples to confirm
+        /// nothing renders outside the board's own content, same idiom the old uniform-grid layout's own
+        /// ~70px edge margin (250 - 360/2) already gave it.</summary>
+        private const float OuterMargin = 40f;
+        private const float StandardTargetWidth = 1920f - 2f * OuterMargin;
+
+        /// <summary>MV-472: phone mode's own node spacing — a RAW (pre-scale) value. Two competing
+        /// constraints bound it, in tension with each other:
+        ///
+        /// HEX clearance needs <c>scale &gt;= 1</c>. A sibling's own hex EDGE sits at
+        /// <c>offset*finalSpacing +/- abilityRadius</c> — note <c>abilityRadius</c> is NOT multiplied by
+        /// <c>scale</c> (node SIZE never scales, only POSITION does) — while its column's own half-width
+        /// is <c>(offset*nodeSpacing+abilityRadius)*scale</c>. Working the two against each other, the
+        /// nodeSpacing terms cancel and it reduces to <c>abilityRadius*scale &gt;= abilityRadius</c>, i.e.
+        /// scale itself must clear 1.0, full stop — independent of nodeSpacing. Below that, a fixed-size
+        /// hex literally cannot fit inside a column whose own width shrank by the same factor its
+        /// position did, and it spills into the neighbouring family — exactly what a first pass at
+        /// nodeSpacing=400 (scale ~0.64) did: ENERGY's own CELL STORAGE hex visibly overlapped MOVE's
+        /// SPEED hex.
+        ///
+        /// LABEL clearance wants nodeSpacing (hence finalSpacing = nodeSpacing*scale) as big as possible,
+        /// since best-fit shrinks each label into <see cref="PhoneLabelBoxWidth"/> but two adjacent boxes
+        /// still must not overlap EACH OTHER.
+        ///
+        /// Because scale = targetWidth / (7*nodeSpacing + 640) for this 5-category dataset, these pull in
+        /// opposite directions: bigger nodeSpacing raises finalSpacing but drops scale toward (and below)
+        /// 1. 190 is the highest value that keeps scale comfortably above 1 (~1.11, a real margin, not a
+        /// knife-edge) at <see cref="PhoneTargetWidth"/>'s current budget, landing finalSpacing ~211 —
+        /// PhoneLabelBoxWidth is sized under that with room to spare.</summary>
+        private const float PhoneNodeSpacing = 190f;
+
+        /// <summary>Unlike the standard frame (fixed at 1920 by <c>WeaponsScreen</c>'s own reference
+        /// canvas), phone mode never triggers <see cref="WeaponsScreen.ComputeBoardScale"/>'s width
+        /// squeeze (phone aspects are always wider than 16:9) — so this is a FIXED width budget, not
+        /// derived from the actual live aspect the way the standard frame's own 1920 is. It must therefore
+        /// be safe at the NARROWEST aspect phone mode can ever select at,
+        /// <see cref="WeaponsScreen.PhoneAspectThreshold"/> (2.10), not the wider real "phone"
+        /// captureAspect (2.1667) — sizing it to the latter is exactly what put phone mode's own content
+        /// wider than aspect 2.10's actual visible window, clipping PRIMARY's left edge (caught by this
+        /// file's own EditMode coverage). visibleRefWidth at 2.10 is 1080*2.10 = 2268; minus the same
+        /// outer margin both modes use.</summary>
+        private const float PhoneTargetWidth = 2268f - 2f * OuterMargin;
+
+        private sealed class ColumnLayoutResult
+        {
+            public RigCategoryLayout[] Categories;
+            public RigAbilityLayout[] Abilities;
+            public RigFusionLayout[] Fusions;
+        }
+
+        private static ColumnLayoutResult BuildColumnLayout(CategoryWire[] rawCategories, AbilityWire[] rawAbilities,
+            FusionWire[] rawFusions, float abilityRadius, float categoryRadius, float nodeSpacing, float targetWidth,
+            float[] rowY, float fusionY)
+        {
+            var abilitiesByCategory = new Dictionary<string, List<AbilityWire>>();
+            foreach (var cat in rawCategories) abilitiesByCategory[cat.id] = new List<AbilityWire>();
+            foreach (var ab in rawAbilities)
+                if (abilitiesByCategory.TryGetValue(ab.category, out var list)) list.Add(ab);
+
+            var offsetUnits = new Dictionary<string, float>();
+            var depthOf = new Dictionary<string, int>();
+            var rawHalfWidth = new Dictionary<string, float>();
+
+            foreach (var cat in rawCategories)
+            {
+                var byParent = new Dictionary<string, List<AbilityWire>>();
+                foreach (var ab in abilitiesByCategory[cat.id])
+                {
+                    string key = string.IsNullOrEmpty(ab.parent) ? "" : ab.parent;
+                    if (!byParent.TryGetValue(key, out var list)) byParent[key] = list = new List<AbilityWire>();
+                    list.Add(ab);
+                }
+                foreach (var list in byParent.Values) list.Sort((a, b) => a.x.CompareTo(b.x));
+
+                float maxAbs = 0f;
+                void Assign(string parentKey, float parentOffset, int depth)
+                {
+                    if (!byParent.TryGetValue(parentKey, out var siblings)) return;
+                    int n = siblings.Count;
+                    for (int i = 0; i < n; i++)
+                    {
+                        float local = n > 1 ? (i - (n - 1) * 0.5f) : 0f;
+                        float off = parentOffset + local;
+                        offsetUnits[siblings[i].id] = off;
+                        depthOf[siblings[i].id] = depth;
+                        if (Mathf.Abs(off) > maxAbs) maxAbs = Mathf.Abs(off);
+                        Assign(siblings[i].id, off, depth + 1);
+                    }
+                }
+                Assign("", 0f, 1);
+
+                rawHalfWidth[cat.id] = Mathf.Max(maxAbs * nodeSpacing + abilityRadius, categoryRadius);
+            }
+
+            float totalRaw = 0f;
+            foreach (var cat in rawCategories) totalRaw += rawHalfWidth[cat.id] * 2f;
+            float scale = totalRaw > 0f ? targetWidth / totalRaw : 1f;
+            float finalSpacing = nodeSpacing * scale;
+
+            // MV-472: centred on the fixed 1920-wide reference frame's own midpoint (960) — the pivot
+            // WeaponsScreen's _boardScaleRoot/_boardRoot machinery actually scales/positions around —
+            // not just left-packed with a margin. That's a no-op for standard mode (targetWidth < 1920,
+            // this is exactly OuterMargin on each side) but matters for phone mode, whose targetWidth
+            // legitimately EXCEEDS 1920 (using the extra width a wide phone aspect's own visible window
+            // provides): packing from a fixed left margin there put the content's own centre right of
+            // 960, so the whole phone board rendered off-centre and clipped its own right edge — caught
+            // by this file's own EditMode coverage (VisibleRefXWindow), not by eye.
+            float cursor = (1920f - targetWidth) * 0.5f;
+            var categoryX = new Dictionary<string, float>();
+            var categoryHalfWidth = new Dictionary<string, float>();
+            foreach (var cat in rawCategories)
+            {
+                float w = rawHalfWidth[cat.id] * 2f * scale;
+                categoryX[cat.id] = cursor + w * 0.5f;
+                categoryHalfWidth[cat.id] = w * 0.5f;
+                cursor += w;
+            }
+
+            var categories = new RigCategoryLayout[rawCategories.Length];
+            for (int i = 0; i < rawCategories.Length; i++)
+            {
+                var c = rawCategories[i];
+                categories[i] = new RigCategoryLayout(c.id, c.family, c.icon, categoryX[c.id], rowY[0], categoryHalfWidth[c.id]);
+            }
+
+            var abilities = new RigAbilityLayout[rawAbilities.Length];
+            for (int i = 0; i < rawAbilities.Length; i++)
+            {
+                var a = rawAbilities[i];
+                float x = categoryX.TryGetValue(a.category, out var cx) ? cx + offsetUnits[a.id] * finalSpacing : a.x;
+                int depth = depthOf.TryGetValue(a.id, out var d) ? d : 1;
+                float y = rowY[Mathf.Clamp(depth, 1, rowY.Length - 1)];
+                abilities[i] = new RigAbilityLayout(a.id, a.category, a.icon, a.label, a.kind, a.parent, x, y, a.maxLevel);
+            }
+
+            var fusions = new RigFusionLayout[rawFusions.Length];
+            for (int i = 0; i < rawFusions.Length; i++)
+            {
+                var f = rawFusions[i];
+                float x = categoryX.TryGetValue(f.parentA, out var ax) && categoryX.TryGetValue(f.parentB, out var bx)
+                    ? (ax + bx) * 0.5f : f.x;
+                fusions[i] = new RigFusionLayout(f.id, f.label, f.parentA, f.parentB, f.hudSlot, x, fusionY, f.partCost);
+            }
+
+            return new ColumnLayoutResult { Categories = categories, Abilities = abilities, Fusions = fusions };
+        }
+
         // ------------------------------------------------------------------ public reads
 
         public static IReadOnlyList<RigCategoryLayout> Categories { get { EnsureLoaded(); return s_categories; } }
         public static IReadOnlyList<RigAbilityLayout> Abilities { get { EnsureLoaded(); return s_abilities; } }
         public static IReadOnlyList<RigFusionLayout> Fusions { get { EnsureLoaded(); return s_fusions; } }
+
+        // ------------------------------------------------------------------ phone layout (MV-472)
+        //
+        // THE RIG's board is authored once (rig_board.json's own topology: which ability belongs to
+        // which category, and which ability is whose child) and rendered at TWO independent geometries
+        // chosen by WeaponsScreen off the live aspect ratio:
+        //  - Standard (the properties above): unchanged positions/radii, just no longer squeezed into a
+        //    uniform 1/5-per-family grid — see BuildColumnLayout's own doc comment.
+        //  - Phone (below): the SAME topology through the SAME column-layout algorithm, but with radii
+        //    and fonts big enough to clear Apple's 44pt tap target / 11pt legibility floors at a real
+        //    iPhone's match-by-height physical scale (~393pt tall, see WeaponsScreen.PhonePtScale), and
+        //    a taller row schedule (PhoneRowY) that needs a vertical scroll to hold — WeaponsScreen
+        //    builds phone-mode nodes inside a ScrollRect for exactly that reason.
+        public static IReadOnlyList<RigCategoryLayout> PhoneCategories { get { EnsurePhoneLoaded(); return s_phoneCategories; } }
+        public static IReadOnlyList<RigAbilityLayout> PhoneAbilities { get { EnsurePhoneLoaded(); return s_phoneAbilities; } }
+        public static IReadOnlyList<RigFusionLayout> PhoneFusions { get { EnsurePhoneLoaded(); return s_phoneFusions; } }
+
+        /// <summary>MV-472: big enough that a node's own 2r x 2r hit rect (the actual tap target —
+        /// <see cref="WeaponsScreen"/>'s <c>BuildNodeShell</c> sizes the Hit image to the root's own
+        /// square bounds, not the narrower hex silhouette) clears 44pt at a real iPhone's match-by-height
+        /// physical scale: 2*64*(393/1080) = 46.6pt. <see cref="RadiusCategoryPhone"/> stays at the
+        /// standard 72 — 2*72*(393/1080) = 52.4pt already clears the floor unchanged.</summary>
+        public static float RadiusAbilityPhone => 64f;
+        public static float RadiusCategoryPhone => 72f;
+        public static float RadiusFusionPhone => 64f;   // standard's 40 -> 2*40*(393/1080) = 29.1pt, under floor
+
+        /// <summary>16px labelFontSize -> 5.82pt at a real iPhone's physical scale (16*393/1080), well
+        /// under Apple's 11pt floor. 32 clears it with margin (11.6pt) without needing a per-field
+        /// scale derivation — every other small caption below uses the same floor-clearing value for the
+        /// same reason, sized generously rather than to the exact minimum since phone mode has a whole
+        /// scrollable canvas of room to spend.</summary>
+        public static float LabelFontSizePhone => 32f;
+        public static float CategoryLabelFontSizePhone => 36f;
+        public static float LevelPillFontSizePhone => 32f;
+        public static float LevelPillWPhone => 108f;
+        public static float LevelPillHPhone => 54f;
+        public static float FusionSubFontSizePhone => 32f;
+        public static float ForgeCaptionFontSizePhone => 32f;
+
+        /// <summary>MV-472: the box <c>WeaponsScreen.BuildNodeShell</c> best-fit-shrinks a phone-mode
+        /// label into instead of the standard mode's fixed <c>r*3</c> box — sized so two ADJACENT
+        /// siblings' labels (e.g. e_ff "FORCE FIELD" next to e_cel "CELL STORAGE", <see cref="PhoneNodeSpacing"/>
+        /// apart at 32pt) can each claim their own half of that gap without touching. Caught live: a
+        /// fixed 32pt with no shrink rendered "FORCE FIELDSTORAGE" — two same-family sibling labels
+        /// merged into one unreadable string, not clipped by a neighbouring family's column (that was a
+        /// separate, already-fixed bug) but literally overlapping each other.</summary>
+        public static float PhoneLabelBoxWidth => 190f;
+
+        /// <summary>The floor best-fit is never allowed to shrink a phone label past — 31, not exactly
+        /// 30.23 (the literal ref-px->11pt breakeven at a real iPhone's physical scale), for a whole-pixel
+        /// margin. A label that still doesn't fit at this size is left to overflow rather than drop
+        /// beneath Apple's legibility floor — illegible-but-present beats compliant-but-invisible.</summary>
+        public static float PhoneLabelFontSizeMin => 31f;
+
+        /// <summary>MV-472: the phone row schedule — generously spaced (vs. the standard rows) to clear
+        /// label text under the bigger phone radii without crowding the next tier; the resulting content
+        /// height exceeds a single 1080-tall screen, which is exactly why <c>WeaponsScreen</c> wraps
+        /// phone-mode board content in a vertical ScrollRect rather than trying to cram it in.</summary>
+        public static float CategoryYPhone => 250f;
+        public static float Tier1YPhone => 470f;
+        public static float Tier2YPhone => 680f;
+        public static float Tier3YPhone => 890f;
+        public static float ForgeDividerYPhone => 1050f;
+        public static float FusionYPhone => 1180f;
+
+        /// <summary>The scrollable content rect's own height — tall enough to clear
+        /// <see cref="FusionYPhone"/> plus the fusion node's own radius and sub-label, with a bottom
+        /// margin. A pure constant (not derived) so a future row-schedule tweak has to update it
+        /// deliberately rather than silently clipping the last row.</summary>
+        public static float PhoneContentHeight => 1360f;
 
         /// <summary>MV-463 Part 1: the ui-screens harness's own shot sizes, read from
         /// <c>rig_board.json</c>'s <c>captureAspects</c> — replaces the hard-coded 1920x1080/1728x1080
@@ -452,6 +718,6 @@ namespace MaxWorlds.UI
             new Regex("\"([\\w$]+)\"\\s*:\\s*\"((?:\\\\.|[^\"\\\\])*)\"", RegexOptions.Compiled);
 
         /// <summary>Reloads from Resources on the next access — test isolation only.</summary>
-        public static void ResetForTests() => s_loaded = false;
+        public static void ResetForTests() { s_loaded = false; s_phoneLoaded = false; }
     }
 }

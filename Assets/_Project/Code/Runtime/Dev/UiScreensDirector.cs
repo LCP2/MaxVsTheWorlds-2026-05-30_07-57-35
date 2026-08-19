@@ -811,14 +811,23 @@ namespace MaxWorlds.Dev
             var categories = RigBoardLayout.Categories;
             int n = categories.Count;
             float yMin = RigBoardLayout.RegionRectY, yMax = yMin + RigBoardLayout.RegionRectH;
-            float spacing = n > 1 ? categories[1].X - categories[0].X : 0f;
             var litVals = new System.Collections.Generic.List<float>();
             var unlitVals = new System.Collections.Generic.List<float>();
 
+            // MV-472: a column's own half-width now varies with its content (RigBoardLayout.ColumnHalfWidth)
+            // instead of a uniform 1/5 share, so SUPPORT genuinely carries more clear background around
+            // its own nodes than a 2-node family like MOVE does — sampling a lit column's FULL width would
+            // dilute its mean luminance by exactly how much extra room its own content earned it, which
+            // is the fix working, not a contrast regression. Cap the sample band so every family reads a
+            // comparably content-dense window regardless of its column's actual width.
+            const float MaxSampleHalfWidth = 170f;
+
             for (int i = 0; i < n; i++)
             {
-                float left = i == 0 ? categories[i].X - spacing * 0.5f : (categories[i - 1].X + categories[i].X) * 0.5f;
-                float right = i == n - 1 ? categories[i].X + spacing * 0.5f : (categories[i].X + categories[i + 1].X) * 0.5f;
+                float columnLeft = i == 0 ? categories[i].X - categories[i].ColumnHalfWidth : (categories[i - 1].X + categories[i].X) * 0.5f;
+                float columnRight = i == n - 1 ? categories[i].X + categories[i].ColumnHalfWidth : (categories[i].X + categories[i + 1].X) * 0.5f;
+                float left = Mathf.Max(columnLeft, categories[i].X - MaxSampleHalfWidth);
+                float right = Mathf.Min(columnRight, categories[i].X + MaxSampleHalfWidth);
 
                 bool lit = false;
                 foreach (var ab in RigBoardLayout.Abilities) if (ab.Category == categories[i].Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
