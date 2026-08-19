@@ -337,10 +337,14 @@ namespace MaxWorlds.UI
 
         /// <summary>A Morphing Module was collected (MV-424, replacing the old shed → badge → BUILD
         /// ABILITY modal chain): 0 candidates consumes the module with nothing granted, 1 grants it
-        /// directly with no screen, 2-3 opens THE RIG with just those candidates lit on the board —
+        /// directly with no screen, 2(-3) opens THE RIG with just those candidates lit on the board —
         /// numbered, TAKE-labelled — and everything else dimmed. One tap takes it and closes the
-        /// screen; the two left behind simply stay in <see cref="RigState.EligibleCapIds"/> for a
-        /// later module.</summary>
+        /// screen. MV-457: a shed now draws up to 2 locked CATEGORY ids instead of up to 3 ability ids
+        /// — <paramref name="candidateIds"/> takes either shape unchanged, since
+        /// <see cref="GrantDraftCandidate"/> and the board's own <c>_categoryNodes</c>/<c>_abilityNodes</c>
+        /// lookups both key off the same disjoint id namespaces (all-caps category ids vs lowercase
+        /// ability ids). Whichever candidate is left behind simply stays locked/unowned for a later
+        /// module.</summary>
         public void OpenMorphingModuleDraft(string[] candidateIds)
         {
             if (candidateIds == null || candidateIds.Length == 0)
@@ -350,7 +354,7 @@ namespace MaxWorlds.UI
             }
             if (candidateIds.Length == 1)
             {
-                WeaponSystemState.AcquireById(candidateIds[0]);
+                GrantDraftCandidate(candidateIds[0]);
                 return;
             }
 
@@ -460,8 +464,10 @@ namespace MaxWorlds.UI
 
             for (int i = 0; i < _draftCandidateIds.Count; i++)
             {
-                if (!_abilityNodes.TryGetValue(_draftCandidateIds[i], out var v)) continue;
-                v.Root.SetAsLastSibling();   // render above the scrim
+                string id = _draftCandidateIds[i];
+                RigNodeVisual v = _abilityNodes.TryGetValue(id, out var abilityVisual) ? abilityVisual
+                    : _categoryNodes.TryGetValue(id, out var categoryVisual) ? categoryVisual : null;
+                v?.Root.SetAsLastSibling();   // render above the scrim
             }
 
             UpdateDraftBandText();
@@ -474,6 +480,17 @@ namespace MaxWorlds.UI
         private void UpdateDraftBandText()
         {
             if (_draftBandTitle == null || _draftCandidateIds.Count == 0) return;
+
+            // MV-457: a shed's own draft now offers CATEGORY ids, not ability ids — RigBoard.Exists
+            // disambiguates the two disjoint id namespaces the same way GrantDraftCandidate does.
+            if (!RigBoard.Exists(_draftCandidateIds[0]))
+            {
+                _draftBandTitle.text = "MORPHING MODULE CAPTURED - CHOOSE A FAMILY";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage
+                _draftBandSubtitle.text = "Unlocks every ability in that family for the rest of the run.";
+                _draftBandReason.text = "The other family stays locked - the next shed offers it again.";
+                return;
+            }
+
             _draftBandTitle.text = "MORPHING MODULE CAPTURED - CHOOSE AN ABILITY";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage
             _draftBandSubtitle.text = "Only capabilities the tree already allows. A shed is the only way to own something new.";
             _draftBandReason.text = DraftReasonLine(_draftCandidateIds[0], _draftCandidateIds.Count - 1);
@@ -544,6 +561,16 @@ namespace MaxWorlds.UI
         private void RefreshCategoryNode(RigCategoryLayout cat, int banked)
         {
             if (!_categoryNodes.TryGetValue(cat.Id, out var v)) return;
+
+            int candidateIndex = _draftActive ? _draftCandidateIds.IndexOf(cat.Id) : -1;
+            if (candidateIndex >= 0)
+            {
+                RefreshCandidateNode(v, RigBoardLayout.Colour(cat.Family), cat.Id, candidateIndex);
+                return;
+            }
+            v.DraftBadge.gameObject.SetActive(false);
+            v.Button.interactable = false;   // MV-457: a category is only ever tappable as a draft candidate
+
             int owned = 0, total = 0;
             foreach (var ab in RigBoardLayout.Abilities)
             {
@@ -551,7 +578,9 @@ namespace MaxWorlds.UI
                 total++;
                 if (RigState.IsOwned(ab.Id)) owned++;
             }
-            bool lit = owned > 0;
+            // MV-457: "lit" now reads the shed's own unlock, not merely "has an owned ability" — a
+            // freshly-unlocked family reads lit immediately, before the player has spent anything into it.
+            bool lit = RigState.IsCategoryUnlocked(cat.Id);
             Color family = RigBoardLayout.Colour(cat.Family);
             Color ink = RigBoardLayout.Colour("ink");
 
@@ -597,7 +626,7 @@ namespace MaxWorlds.UI
             int candidateIndex = _draftActive ? _draftCandidateIds.IndexOf(ab.Id) : -1;
             if (candidateIndex >= 0)
             {
-                RefreshCandidateNode(v, ab, candidateIndex);
+                RefreshCandidateNode(v, RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category)), ab.Label, candidateIndex);
                 return;
             }
             v.DraftBadge.gameObject.SetActive(false);
@@ -745,11 +774,12 @@ namespace MaxWorlds.UI
         /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
         /// glow, numbered 1-3 in a badge above the hex, and <c>TAKE</c> in the level pill in place of
         /// the usual level/SHED/LOCK reading. Always tappable — draft candidates ignore the PARTS bank
-        /// entirely, a different currency from the amber "+" spend.</summary>
-        private void RefreshCandidateNode(RigNodeVisual v, RigAbilityLayout ab, int candidateIndex)
+        /// entirely, a different currency from the amber "+" spend. MV-457: shared by both an ability
+        /// node's own candidate render and a category node's — <paramref name="family"/>/<paramref name="label"/>
+        /// are passed in rather than re-derived from a <see cref="RigAbilityLayout"/>, since a category
+        /// candidate has no such layout to read.</summary>
+        private void RefreshCandidateNode(RigNodeVisual v, Color family, string label, int candidateIndex)
         {
-            Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
-
             v.OuterRing.gameObject.SetActive(false);
             v.CapMarker.gameObject.SetActive(false);
             v.PartBadge.gameObject.SetActive(false);
@@ -762,7 +792,7 @@ namespace MaxWorlds.UI
             v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
             v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);   // MV-424's own stronger draft-candidate glow, unchanged by MV-433/MV-446 (shape/size only)
             v.Icon.color = TextColor;
-            v.Label.text = ab.Label;
+            v.Label.text = label;
             v.Label.color = TextColor;
 
             v.PillText.text = "TAKE";
@@ -783,7 +813,7 @@ namespace MaxWorlds.UI
             {
                 if (_draftCandidateIds.Contains(id))
                 {
-                    WeaponSystemState.AcquireById(id);
+                    GrantDraftCandidate(id);
                     Close();
                 }
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
@@ -791,6 +821,13 @@ namespace MaxWorlds.UI
             if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
             PartSpend.TrySpendOnRigNode(id);
         }
+
+        /// <summary>Grants a single draft candidate, whichever shape it is (MV-457): an ability node id
+        /// (<see cref="RigBoard.Exists"/>) routes through <see cref="WeaponSystemState.AcquireById"/> as
+        /// before; a category id (never a RIG node) unlocks the whole family via
+        /// <see cref="RigState.UnlockCategory"/> instead.</summary>
+        private static bool GrantDraftCandidate(string id) =>
+            RigBoard.Exists(id) ? WeaponSystemState.AcquireById(id) : RigState.UnlockCategory(id);
 
         private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
 
@@ -1175,7 +1212,10 @@ namespace MaxWorlds.UI
 
             shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
             shell.CapMarker.gameObject.SetActive(false);
-            shell.Button.interactable = false;
+            shell.Button.interactable = false;   // MV-457: only tappable while it's a shed draft candidate — see RefreshCategoryNode
+
+            string catId = cat.Id;   // capture by value, not the loop variable
+            shell.Button.onClick.AddListener(() => OnRigNodeTapped(catId));
             return shell;
         }
 

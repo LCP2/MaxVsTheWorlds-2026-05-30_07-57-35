@@ -20,6 +20,10 @@ namespace MaxWorlds.Tests.EditMode
         public void SetUp()
         {
             WeaponSystemState.Reset();
+            // This suite is about the Speed multiplier once the ability is owned, not MV-457's
+            // shed/category-lock gate — force every category open so m_spd stays reached, as it always
+            // was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             DevTuning.Reset();
             _go = new GameObject("Max", typeof(CharacterController), typeof(PlayerController));
             _player = _go.GetComponent<PlayerController>();

@@ -15,25 +15,30 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class RigStateTests
     {
-        // model.rules' own worked example, verbatim: at run start p_dmg is the only owned ability,
-        // and these eight are reached-and-unowned — the first draft's whole candidate pool.
-        private static readonly string[] RunStartEligible =
-            { "p_rng", "p_flw", "s_bal", "e_ff", "e_cel", "m_spd", "m_tp", "u_sen" };
+        // model.rules' own worked example, verbatim: at run start p_dmg is the only owned ability and
+        // PRIMARY the only unlocked category (MV-457), so these two are the whole reached-and-unowned
+        // candidate pool.
+        private static readonly string[] RunStartEligible = { "p_rng", "p_flw" };
 
         [SetUp]
         [TearDown]
         public void Clear() => RigState.Reset();
 
-        /// <summary>Walks a node's own ancestor chain, drafting any unreached ancestor via
-        /// <see cref="RigState.AcquireCap"/> so <paramref name="id"/> itself becomes REACHED —
-        /// without this, a deep node like <c>p_prc</c>/<c>s_aut</c>/<c>e_mag</c> would never be
-        /// reached at a fresh Reset, and AC1's "never" would only be proven for the trivial
-        /// already-unreached case. Schema 3 (MV-436): every ancestor is drafted now, never leveled
-        /// by a part — there is no other way to raise a node from 0.</summary>
+        /// <summary>Walks a node's own ancestor chain, unlocking a root's own category or drafting any
+        /// unreached ancestor via <see cref="RigState.AcquireCap"/> so <paramref name="id"/> itself
+        /// becomes REACHED — without this, a deep node like <c>p_prc</c>/<c>s_aut</c>/<c>e_mag</c>
+        /// would never be reached at a fresh Reset, and AC1's "never" would only be proven for the
+        /// trivial already-unreached case. Schema 3 (MV-436): every ancestor is drafted now, never
+        /// leveled by a part — there is no other way to raise a node from 0. MV-457: a root's own
+        /// category must be shed-unlocked before it can be drafted at all.</summary>
         private static void Reach(string id)
         {
             string parent = RigBoard.Parent(id);
-            if (string.IsNullOrEmpty(parent)) return;
+            if (string.IsNullOrEmpty(parent))
+            {
+                RigState.UnlockCategory(RigBoard.Category(id));
+                return;
+            }
             Reach(parent);
             if (RigState.Level(parent) >= 1) return;
             RigState.AcquireCap(parent);
@@ -83,6 +88,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             // The "never" above is specifically the 0->1 unlock — once a node is OWNED, further
             // levels are an ordinary part spend like any other.
+            RigState.UnlockCategory("ENERGY");
             RigState.AcquireCap("e_ff");
             Assert.That(RigState.TrySpendPart("e_ff"), Is.True);
             Assert.That(RigState.Level("e_ff"), Is.EqualTo(2));
@@ -114,10 +120,19 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.IsReached("p_prc"), Is.True, "the instant p_flw hits level 1, p_prc becomes reached");
         }
 
+        /// <summary>MV-457's own regression: pre-ticket, a root (no-parent) node was reached from the
+        /// run's start regardless of category — this proves that's no longer true in general, only for
+        /// the category a shed has actually unlocked. p_dmg's own PRIMARY starts unlocked (it owns the
+        /// run-start ability); s_bal's SECONDARY does not, and stays unreached until a shed opens it.</summary>
         [Test]
-        public void ARootNodeWithNoParentIsAlwaysReached()
+        public void ARootNodesReachedNessDependsOnItsOwnCategoryBeingUnlocked()
         {
-            Assert.That(RigState.IsReached("p_dmg"), Is.True);
+            Assert.That(RigState.IsReached("p_dmg"), Is.True, "PRIMARY starts unlocked — it owns the run-start ability");
+            Assert.That(RigState.IsReached("s_bal"), Is.False, "SECONDARY starts locked — only a shed unlocks it (MV-457)");
+
+            RigState.UnlockCategory("SECONDARY");
+
+            Assert.That(RigState.IsReached("s_bal"), Is.True, "unlocking SECONDARY must reach its root nodes immediately");
         }
 
         // ---------------------------------------------------------------- AC3: run-start baseline
@@ -137,7 +152,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RunStartOffersExactlyTheEightModelRulesCandidates()
+        public void RunStartOffersExactlyThePrimaryCategorysTwoReachedCandidates()
         {
             var expected = new HashSet<string>(RunStartEligible);
             var actual = new HashSet<string>(RigState.EligibleCapIds());
@@ -167,6 +182,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.EligibleCapIds(), Does.Not.Contain("e_mag"),
                 "e_mag must not be a draft candidate before e_cd >= 1");
 
+            RigState.UnlockCategory("ENERGY");
             RigState.AcquireCap("e_cel");
             RigState.AcquireCap("e_cd"); // e_cd is a cap under schema 3 too — needs its own draft, not a part
 
@@ -191,6 +207,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ADraftedCapIsNeverOfferedAgain()
         {
+            RigState.UnlockCategory("MOVE");
             Assert.That(RigState.EligibleCapIds(), Does.Contain("m_spd"));
             RigState.AcquireCap("m_spd");
             Assert.That(RigState.EligibleCapIds(), Does.Not.Contain("m_spd"));
@@ -199,6 +216,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ResetReturnsToTheRunStartBaseline()
         {
+            RigState.UnlockCategory("ENERGY");
             RigState.AcquireCap("e_ff");
             RigState.AcquireCap("p_rng");
 
@@ -207,6 +225,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.Level("e_ff"), Is.EqualTo(0));
             Assert.That(RigState.Level("p_rng"), Is.EqualTo(0));
             Assert.That(RigState.Level("p_dmg"), Is.EqualTo(1));
+            Assert.That(RigState.IsCategoryUnlocked("ENERGY"), Is.False, "reset must re-lock every category except PRIMARY");
         }
 
         // ---------------------------------------------------------------- AC6: the amber "+" model — owned-and-not-maxed only, never an unowned node
@@ -220,6 +239,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(RigState.CanSpendPart(id), Is.EqualTo(ownedBelowMax), $"'{id}' CanSpendPart mismatch at run start");
             }
 
+            RigState.UnlockCategory("ENERGY");
             RigState.AcquireCap("e_ff");
             Assert.That(RigState.CanSpendPart("e_ff"), Is.True, "a freshly-drafted node below its cap must be spendable");
 

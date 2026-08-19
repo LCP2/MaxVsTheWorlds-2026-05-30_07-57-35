@@ -24,11 +24,22 @@ namespace MaxWorlds.Tests.EditMode
         private GameObject _go;
         private WeaponsScreen _screen;
 
+        /// <summary>This suite is about the board's own draft MECHANICS (numbering, tap-to-grant, HUD
+        /// signalling), not MV-457's shed/category-lock gate (<c>RigStateTests</c> owns that) — force
+        /// every category open so every ability id this file exercises stays reached, exactly as it
+        /// always was before MV-457. Called after every <c>RigState.Reset()</c> in this file, including
+        /// the one inside a test body (MV-435's HUD-signal test re-resets per iteration).</summary>
+        private static void UnlockAllCategories()
+        {
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
+        }
+
         [SetUp]
         public void SetUp()
         {
             RigState.Reset();
-            PickupWallet.Reset();
+            PickupWallet.Reset();   // MV-457: also calls RigState.Reset() — the category unlock below must come AFTER this
+            UnlockAllCategories();
             PendingMorphingModule.Reset();
             _go = new GameObject("WeaponsScreen");
             _screen = _go.AddComponent<WeaponsScreen>();
@@ -163,6 +174,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (string id in new[] { "m_spd", "m_tp", "s_bal", "e_ff", "u_sen" })
             {
                 RigState.Reset();
+                UnlockAllCategories();
                 _screen.OpenMorphingModuleDraft(new[] { id, "e_cel" }); // 2 candidates -> opens the board
 
                 int fired = 0;

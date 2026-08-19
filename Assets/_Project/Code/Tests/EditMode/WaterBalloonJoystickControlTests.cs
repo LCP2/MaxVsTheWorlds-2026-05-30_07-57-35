@@ -32,7 +32,11 @@ namespace MaxWorlds.Tests.EditMode
         public void SetUp()
         {
             WeaponSystemState.Reset();
-            PickupWallet.Reset();
+            PickupWallet.Reset();   // MV-457: also calls RigState.Reset() — the category unlock below must come AFTER this
+            // This suite is about the aim-visual lifecycle once Water Balloon is owned, not MV-457's
+            // shed/category-lock gate — force every category open so s_bal stays reached, as it always
+            // was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             PickupWallet.SetPowerCells(10);
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);   // MV-380: restored acquisition gate, same as Teleport
 

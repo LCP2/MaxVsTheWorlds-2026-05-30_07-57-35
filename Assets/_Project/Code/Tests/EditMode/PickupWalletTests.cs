@@ -14,7 +14,15 @@ namespace MaxWorlds.Tests.EditMode
     {
         [SetUp]
         [TearDown]
-        public void Clear() { PickupWallet.Reset(); DevTuning.Reset(); }
+        public void Clear()
+        {
+            PickupWallet.Reset();
+            // This suite is about the wallet's own counters/capacity math, not MV-457's shed/category-
+            // lock gate (RigStateTests owns that) — force every category open so a root ability (e_cel)
+            // this file drafts directly stays reached, as it always was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
+            DevTuning.Reset();
+        }
 
         [Test]
         public void PowerCellsAccumulate()
