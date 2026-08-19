@@ -153,7 +153,10 @@ namespace MaxWorlds.VFX
             var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
             go.name = "Lens";
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            // Application.isPlaying-gated (MV-304, same idiom as WeaponPartArt.Strip): Destroy is
+            // deferred to end-of-frame and logs an error without actually destroying anything in
+            // edit mode, which would leave the collider on a bust nothing is meant to collide with.
+            if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
 
             go.transform.SetParent(parent, false);
             go.transform.localPosition = at;
@@ -180,7 +183,10 @@ namespace MaxWorlds.VFX
             var go = GameObject.CreatePrimitive(shape);
             go.name = name;
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            // Application.isPlaying-gated (MV-304, same idiom as WeaponPartArt.Strip): Destroy is
+            // deferred to end-of-frame and logs an error without actually destroying anything in
+            // edit mode, which would leave the collider on a bust nothing is meant to collide with.
+            if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
 
             go.transform.SetParent(root, false);
             go.transform.localPosition = pos;

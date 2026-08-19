@@ -114,7 +114,10 @@ namespace MaxWorlds.VFX
             var patch = GameObject.CreatePrimitive(PrimitiveType.Quad);
             patch.name = "WetPatch";
             var col = patch.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            // Application.isPlaying-gated (MV-304, same idiom as WeaponPartArt.Strip): Destroy is
+            // deferred to end-of-frame and logs an error without actually destroying anything in
+            // edit mode, which would leave the collider on scenery nothing is meant to collide with.
+            if (col != null) { if (Application.isPlaying) Object.Destroy(col); else Object.DestroyImmediate(col); }
             patch.transform.SetParent(root.transform, worldPositionStays: false);
             patch.transform.localPosition = new Vector3(0f, 0.02f, 0.24f);
             patch.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);        // lie flat on the lawn
@@ -135,7 +138,8 @@ namespace MaxWorlds.VFX
             var go = GameObject.CreatePrimitive(shape);
             go.name = name;
             var col = go.GetComponent<Collider>();
-            if (col != null) Object.Destroy(col);
+            // Application.isPlaying-gated (MV-304, same idiom as WeaponPartArt.Strip) — see WetPatch above.
+            if (col != null) { if (Application.isPlaying) Object.Destroy(col); else Object.DestroyImmediate(col); }
             go.transform.SetParent(root.transform, worldPositionStays: false);
             go.transform.localPosition = pos;
             go.transform.localRotation = rot ?? Quaternion.identity;

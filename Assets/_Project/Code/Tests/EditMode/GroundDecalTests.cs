@@ -1,11 +1,9 @@
-using System.Collections;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.TestTools;
 using MaxWorlds.Bosses;
 using MaxWorlds.VFX;
 
-namespace MaxWorlds.Tests.PlayMode
+namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// The boss's ground marks have to be ON the ground (YT-113).
@@ -18,16 +16,20 @@ namespace MaxWorlds.Tests.PlayMode
     ///
     /// These assert world height and the lift ORDER, because that is what "lies on the grass and
     /// does not fight the marks around it" actually means.
+    ///
+    /// MV-464: moved from PlayMode. Everything asserted here is set synchronously inside
+    /// <see cref="DamageZone.Spawn"/> itself (a plain static builder, not an Awake/OnEnable-driven
+    /// one), so no frame or player loop was ever actually needed — the original's `yield return null`s
+    /// were bought at full PlayMode price for nothing they used.
     /// </summary>
-    public sealed class GroundDecalPlayTests
+    public sealed class GroundDecalTests
     {
         private DamageZone _zone;
 
-        [UnityTearDown]
-        public IEnumerator TearDown()
+        [TearDown]
+        public void TearDown()
         {
-            if (_zone != null) Object.Destroy(_zone.gameObject);
-            yield return null;
+            if (_zone != null) Object.DestroyImmediate(_zone.gameObject);
         }
 
         private DamageZone SpawnAt(Vector3 pos)
@@ -45,11 +47,10 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>Blade-rain: spawned at chest height, scattered around Max.</summary>
-        [UnityTest]
-        public IEnumerator ABladeZoneSpawnedAtChestHeightStillDrawsOnTheLawn()
+        [Test]
+        public void ABladeZoneSpawnedAtChestHeightStillDrawsOnTheLawn()
         {
             DamageZone zone = SpawnAt(new Vector3(4f, 1f, 2f));
-            yield return null;
 
             float y = Visual(zone).position.y;
             Assert.That(y, Is.LessThan(0.1f),
@@ -58,22 +59,20 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>Grass clippings: spawned at the boss's mid-body, which is higher still.</summary>
-        [UnityTest]
-        public IEnumerator AGrassZoneSpawnedAtTheBossesMidBodyStillDrawsOnTheLawn()
+        [Test]
+        public void AGrassZoneSpawnedAtTheBossesMidBodyStillDrawsOnTheLawn()
         {
             DamageZone zone = SpawnAt(new Vector3(-2f, 1.6f, 5f));
-            yield return null;
 
             Assert.That(Visual(zone).position.y, Is.LessThan(0.1f),
                         "the grass puddle is hanging in the air where the boss's belly is");
         }
 
         /// <summary>It must still be where the attack landed, in the plane that matters.</summary>
-        [UnityTest]
-        public IEnumerator TheMarkStaysOverTheGroundItThreatens()
+        [Test]
+        public void TheMarkStaysOverTheGroundItThreatens()
         {
             DamageZone zone = SpawnAt(new Vector3(4f, 1f, 2f));
-            yield return null;
 
             Vector3 p = Visual(zone).position;
             Assert.That(p.x, Is.EqualTo(4f).Within(0.01f));
@@ -85,14 +84,13 @@ namespace MaxWorlds.Tests.PlayMode
         /// footprint rings. Get this backwards and a decoration hides the one mark the player has to
         /// react to.
         /// </summary>
-        [UnityTest]
-        public IEnumerator TheZoneSitsBetweenTheFootprintRingsAndTheTelegraph()
+        [Test]
+        public void TheZoneSitsBetweenTheFootprintRingsAndTheTelegraph()
         {
             Assert.That(DamageZone.ZoneLift, Is.LessThan(GroundRing.GroundLift),
                         "the zone would cover the danger telegraph drawn on top of it");
             Assert.That(DamageZone.ZoneLift, Is.GreaterThan(GroundAnchorTuning.RingLift),
                         "a footprint ring would cover the boss's attack");
-            yield return null;
         }
 
         /// <summary>
@@ -100,8 +98,8 @@ namespace MaxWorlds.Tests.PlayMode
         /// every 0.18s through a charge, so "the sweep will fix it next frame" meant there was
         /// always one on screen that it hadn't fixed yet.
         /// </summary>
-        [UnityTest]
-        public IEnumerator TheMarkIsNeverDrawnWithoutAMaterial()
+        [Test]
+        public void TheMarkIsNeverDrawnWithoutAMaterial()
         {
             DamageZone zone = SpawnAt(new Vector3(1f, 1f, 1f));
 
@@ -109,7 +107,6 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsNotNull(mr.sharedMaterial, "spawned with no material — that frame draws white");
             Assert.IsNotNull(mr.sharedMaterial.mainTexture,
                              "an untextured disc is a flat white circle, which is the bug reported");
-            yield return null;
         }
     }
 }

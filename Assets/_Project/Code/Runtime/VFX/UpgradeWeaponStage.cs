@@ -252,7 +252,10 @@ namespace MaxWorlds.VFX
             var go = GameObject.CreatePrimitive(shape);
             go.name = name;
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            // Application.isPlaying-gated (MV-304, same idiom as WeaponPartArt.Strip): Destroy is
+            // deferred to end-of-frame and logs an error without actually destroying anything in
+            // edit mode, which would leave the collider on a prop nothing is meant to collide with.
+            if (col != null) { if (Application.isPlaying) Destroy(col); else DestroyImmediate(col); }
             go.transform.SetParent(root, false);
             go.transform.localPosition = pos;
             go.transform.localRotation = rot;
