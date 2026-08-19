@@ -76,6 +76,7 @@ namespace MaxWorlds.UI
         private const float GlowAlphaDraftable = 0.22f;
 
         private Canvas _canvas;
+        private RectTransform _screenRoot;
         private Image _background;
         private RectTransform _safeRoot;
         private GameObject _root;
@@ -124,9 +125,10 @@ namespace MaxWorlds.UI
             return t != null ? (RectTransform)t : null;
         }
 
-        /// <summary>MV-433: the full-canvas opaque backdrop, first child of the Rig's own canvas
-        /// GameObject (drawn behind the Safe Area, the top bar and the board) — test-only access, same
-        /// idiom as <see cref="BoardNode"/>.</summary>
+        /// <summary>MV-433: the full-canvas opaque backdrop, first child of <see cref="_screenRoot"/>
+        /// (drawn behind the Safe Area, the top bar and the board) — test-only access, same idiom as
+        /// <see cref="BoardNode"/>. MV-440: <c>_screenRoot</c> is the single toggle that opens/closes
+        /// THE RIG, so the backdrop can never again outlive the screen it belongs to.</summary>
         public Image Background => _background;
 
         /// <summary>MV-433: a category's tinted backdrop column — test-only access, same idiom as
@@ -267,7 +269,7 @@ namespace MaxWorlds.UI
             Time.timeScale = 0f;   // freeze the fight while the player reads/spends
 
             Refresh();
-            _root.SetActive(true);
+            _screenRoot.gameObject.SetActive(true);
         }
 
         /// <summary>Close THE RIG and resume at whatever speed it paused from.</summary>
@@ -278,7 +280,7 @@ namespace MaxWorlds.UI
             _draftActive = false;
             _draftCandidateIds.Clear();
             Time.timeScale = _prevTimeScale;
-            _root.SetActive(false);
+            _screenRoot.gameObject.SetActive(false);
         }
 
         /// <summary>A Morphing Module was collected (MV-424, replacing the old shed → badge → BUILD
@@ -314,7 +316,7 @@ namespace MaxWorlds.UI
             }
 
             Refresh();
-            _root.SetActive(true);
+            _screenRoot.gameObject.SetActive(true);
         }
 
         // ------------------------------------------------------------------ live state
@@ -656,14 +658,21 @@ namespace MaxWorlds.UI
             scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
             scaler.matchWidthOrHeight = 1f;
 
-            // MV-433: opaque, first child of the CANVAS itself (not Safe Area) so it sits behind the
+            // MV-440: one screen root, full-canvas, holding both the opaque backdrop and the Safe
+            // Area — this is the only GameObject Open()/Close()/OpenMorphingModuleDraft() ever toggle,
+            // so the backdrop (built as its first child, below) can never again go up without the rest
+            // of the screen, or outlive it. _root stays permanently active from here on.
+            _screenRoot = NewRect("Screen Root", _canvas.transform, Vector2.zero, Vector2.one);
+            Stretch(_screenRoot);
+
+            // MV-433: opaque, first child of the screen root (not Safe Area) so it sits behind the
             // top bar too and ignores the safe-area inset — the board draws over live gameplay
             // otherwise, which is what washed every family colour out against the lawn.
-            _background = AddImage(_canvas.transform, HudTextures.Solid(), OpaqueBase(), "Background");
+            _background = AddImage(_screenRoot, HudTextures.Solid(), OpaqueBase(), "Background");
             Stretch(_background.rectTransform);
             _background.raycastTarget = false;
 
-            _safeRoot = NewRect("Safe Area", _canvas.transform, Vector2.zero, Vector2.one);
+            _safeRoot = NewRect("Safe Area", _screenRoot, Vector2.zero, Vector2.one);
             Stretch(_safeRoot);
             _safeRoot.gameObject.AddComponent<SafeArea>();
 
@@ -707,7 +716,7 @@ namespace MaxWorlds.UI
             BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
 
             ApplyBoardScale();
-            _root.SetActive(false);
+            _screenRoot.gameObject.SetActive(false);
         }
 
         /// <summary>MV-433: recomputes and applies the board's scale-to-fit factor from the current

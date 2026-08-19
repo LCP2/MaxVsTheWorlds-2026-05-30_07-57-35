@@ -42,15 +42,23 @@ namespace MaxWorlds.Tests.EditMode
         // ------------------------------------------------------------------ AC1: opaque backdrop
 
         [Test]
-        public void BackgroundIsAnOpaqueFirstCanvasChildReadFromTheDataFile()
+        public void BackgroundIsAnOpaqueFirstScreenChildReadFromTheDataFile()
         {
             OpenScreen();
             var bg = _screen.Background;
             Assert.That(bg, Is.Not.Null);
-            Assert.That(bg.transform.parent.GetComponent<Canvas>(), Is.Not.Null,
-                "Background must be a direct child of the Rig's own Canvas, not Safe Area, so it sits behind the top bar too");
+
+            // MV-440: Background moved from a direct Canvas child to Screen Root's first child (with
+            // Safe Area as its very next sibling) so the two toggle together — not asserting the
+            // wrapper's own name/identity (an implementation detail), only the ordering AC3 pins:
+            // still behind everything, including the top bar inside Safe Area.
+            var screenParent = bg.transform.parent;
+            Assert.That(screenParent.GetComponent<Canvas>(), Is.Null,
+                "Background is no longer a direct Canvas child post-MV-440 — it is wrapped with Safe Area so both toggle as one");
             Assert.That(bg.transform.GetSiblingIndex(), Is.EqualTo(0),
-                "Background must be the canvas's first child so it draws behind everything");
+                "Background must be its parent's first child so it draws behind everything");
+            Assert.That(screenParent.GetChild(1).GetComponent<SafeArea>(), Is.Not.Null,
+                "Safe Area must be Background's very next sibling so Background still draws behind the top bar");
             Assert.That(bg.color.a, Is.EqualTo(1f).Within(1e-3f), "backdrop must be fully opaque, not a scrim");
 
             var expected = RigBoardLayout.Colour("base");
