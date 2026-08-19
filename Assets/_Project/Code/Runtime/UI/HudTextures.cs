@@ -330,21 +330,23 @@ namespace MaxWorlds.UI
             return Cache(key, tex, 100f);
         }
 
-        /// <summary>Coverage (0..1) of a regular <paramref name="sides"/>-gon with circumradius
-        /// <paramref name="r"/> at local point (<paramref name="lx"/>, <paramref name="ly"/>), centred on
-        /// the origin. <paramref name="strokeWidth"/> &lt;= 0 fills the whole shape; otherwise only the
-        /// band within half that width of the boundary is covered (an outline). The nearest-edge
-        /// distance formula: for the sector straddling <c>phi</c>, the edge sits at
-        /// <c>apothem / cos(a)</c> where <c>a</c> is <c>phi</c>'s offset from that sector's edge
-        /// midpoint — standard regular-polygon SDF, exact at edges, a mitred-corner approximation at
-        /// vertices (invisible at the stroke widths THE RIG's nodes use, 2-4px against a 40-72px
-        /// radius).</summary>
-        private static float PolygonAlpha(float lx, float ly, int sides, float rotationDeg, float r,
-            float strokeWidth, bool dashed, float dashLength, float gapLength)
+        /// <summary>The regular <paramref name="sides"/>-gon's own boundary radius (circumradius
+        /// <paramref name="r"/>) at local point (<paramref name="lx"/>, <paramref name="ly"/>)'s angle,
+        /// centred on the origin — i.e. how far from the centre the shape's edge sits along that ray.
+        /// For the sector straddling <c>phi</c>, the edge sits at <c>apothem / cos(a)</c> where
+        /// <c>a</c> is <c>phi</c>'s offset from that sector's edge midpoint — standard regular-polygon
+        /// SDF, exact at edges, a mitred-corner approximation at vertices (invisible at the stroke
+        /// widths THE RIG's nodes use, 2-4px against a 40-72px radius). Shared by
+        /// <see cref="PolygonAlpha"/> (fill/stroke/dash) and <see cref="PolygonGlow"/> (MV-446: the halo
+        /// needs the same edge to blur outward from, not a circle's constant radius).
+        /// <paramref name="edgeIndex"/>/<paramref name="a"/> are exposed for <see cref="PolygonAlpha"/>'s
+        /// own arc-length dash walk, which must stay in lockstep with the edge this returns.</summary>
+        private static float PolygonEdge(float lx, float ly, int sides, float rotationDeg, float r,
+            out int edgeIndex, out float a, out float apothem)
         {
             float segment = 2f * Mathf.PI / sides;
             float rot = rotationDeg * Mathf.Deg2Rad;
-            float apothem = r * Mathf.Cos(segment * 0.5f);
+            apothem = r * Mathf.Cos(segment * 0.5f);
             float phi = Mathf.Atan2(ly, lx);
 
             // rawAngle spans the FULL closed loop (0..sides*segment == 0..2*PI); decomposing it into
@@ -354,9 +356,15 @@ namespace MaxWorlds.UI
             // below — the two must stay in exact lockstep or the dash phase drifts from the edge the
             // stroke itself is drawn on.
             float rawAngle = Mathf.Repeat(phi - rot - segment * 0.5f, 2f * Mathf.PI);
-            int edgeIndex = Mathf.Clamp(Mathf.FloorToInt(rawAngle / segment), 0, sides - 1);
-            float a = (rawAngle - edgeIndex * segment) - segment * 0.5f;
-            float edge = apothem / Mathf.Cos(a);
+            edgeIndex = Mathf.Clamp(Mathf.FloorToInt(rawAngle / segment), 0, sides - 1);
+            a = (rawAngle - edgeIndex * segment) - segment * 0.5f;
+            return apothem / Mathf.Cos(a);
+        }
+
+        private static float PolygonAlpha(float lx, float ly, int sides, float rotationDeg, float r,
+            float strokeWidth, bool dashed, float dashLength, float gapLength)
+        {
+            float edge = PolygonEdge(lx, ly, sides, rotationDeg, r, out int edgeIndex, out float a, out float apothem);
             float d = Mathf.Sqrt(lx * lx + ly * ly);
 
             float alpha = strokeWidth <= 0f
@@ -369,6 +377,7 @@ namespace MaxWorlds.UI
                 // to a running arc-length position from edge 0's start by adding every whole edge already
                 // walked plus half of this one — one continuous path around the closed polygon, dash
                 // phase carried across every vertex, wrapping cleanly back to the start (MV-445 AC).
+                float segment = 2f * Mathf.PI / sides;
                 float sideLen = 2f * apothem * Mathf.Tan(segment * 0.5f);
                 float tangential = apothem * Mathf.Tan(a);
                 float arcLen = edgeIndex * sideLen + tangential + sideLen * 0.5f;
@@ -376,6 +385,38 @@ namespace MaxWorlds.UI
                 if (Mathf.Repeat(arcLen, period) >= dashLength) alpha = 0f;
             }
             return alpha;
+        }
+
+        /// <summary>Soft halo that follows a regular polygon's own silhouette (MV-446) instead of
+        /// <see cref="Glow"/>'s circular falloff — full alpha for every pixel inside the
+        /// <paramref name="shapeRadius"/>-circumradius <paramref name="sides"/>-gon, fading smoothly to 0
+        /// across <paramref name="blurPx"/> pixels beyond its edge. THE RIG board's owned/draftable node
+        /// halo used a plain radial gradient sized to the node's square bounding box, which both spilled
+        /// past a hexagon's narrower width (bounding box is 2r square; a pointy-top hex is only r*sqrt(3)
+        /// wide) and read as a lens flare behind the node rather than the node itself lighting up.
+        /// <paramref name="width"/>/<paramref name="height"/> is the full canvas (bigger than the shape
+        /// itself by the blur's headroom); tint/peak-alpha via Image.color as usual.</summary>
+        public static Sprite PolygonGlow(int sides, float rotationDeg, int width, int height,
+            float shapeRadius, float blurPx)
+        {
+            string key = $"polyGlow{sides}_{rotationDeg}_{width}_{height}_{shapeRadius}_{blurPx}";
+            if (s_cache.TryGetValue(key, out var s)) return s;
+            var tex = NewTex(width, height);
+            var px = new Color32[width * height];
+            float cx = width * 0.5f, cy = height * 0.5f;
+            float blur = Mathf.Max(blurPx, 0.001f);
+            for (int y = 0; y < height; y++)
+            for (int x = 0; x < width; x++)
+            {
+                float lx = x + 0.5f - cx, ly = y + 0.5f - cy;
+                float edge = PolygonEdge(lx, ly, sides, rotationDeg, shapeRadius, out _, out _, out _);
+                float d = Mathf.Sqrt(lx * lx + ly * ly);
+                float t = Mathf.Clamp01((d - edge) / blur);
+                float a = 1f - t * t;
+                px[y * width + x] = new Color(1, 1, 1, a);
+            }
+            tex.SetPixels32(px); tex.Apply();
+            return Cache(key, tex, 100f);
         }
 
         /// <summary>Renders one of THE RIG's procedural icons (MV-423, <c>rig_board.json</c>'s

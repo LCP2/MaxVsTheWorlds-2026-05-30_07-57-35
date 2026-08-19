@@ -58,7 +58,6 @@ namespace MaxWorlds.UI
 
         private static readonly Color CellsColor = new Color(0.35f, 0.85f, 0.95f);
         private static readonly Color PartsColor = new Color(1f, 0.72f, 0.28f);
-        private static readonly Color SpendReady = PartsColor;
         private static readonly Color SpendDisabled = new Color(1f, 1f, 1f, 0.18f);
         private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);   // MV-257: destructive-red
 
@@ -83,14 +82,15 @@ namespace MaxWorlds.UI
         // content-sized width (see that method's own doc comment).
         private const float PartsSocketSize = 26f;
 
-        // MV-433: owned/lit-category halo radius as a multiple of the node's own radius, and the two
-        // peak alphas the halo's shared Glow texture is tinted to (module cyan for a draftable
-        // capability, family colour for owned/lit) — the halo itself fades to 0 by its own outer edge.
-        private const float GlowRadiusMultiplier = 1.30f;
-        // MV-443 defect 5: owned raised 0.28 -> 0.55; draftable stays 0.22 but is now family-tinted,
-        // not module cyan (RefreshAbilityNode).
-        private const float GlowAlphaOwned = 0.55f;
-        private const float GlowAlphaDraftable = 0.22f;
+        // MV-433: owned/lit-category halo canvas size as a multiple of the node's own hex bounds.
+        // MV-446 defect 2 AC: must not exceed 1.25 (the halo's rect vs. the node radius) — headroom for
+        // HudTextures.PolygonGlow's blur to fade out in, not a size the shape itself grows to (the glow
+        // is drawn hex-tight now; see NodeGlowSprite). Peak alpha and blur width are data-driven
+        // (RigBoardLayout.GlowAlphaOwned/GlowBlurOwned, .../Draft) so they're tunable without a code
+        // change — was a plain circle sized to the node's SQUARE bounding box at a flat alpha, which
+        // both spilled past a hexagon's narrower width and, at MV-443's raised 0.55, bloomed into a
+        // lens-flare-looking blowout.
+        private const float GlowRadiusMultiplier = 1.15f;
 
         private Canvas _canvas;
         private RectTransform _screenRoot;
@@ -288,7 +288,7 @@ namespace MaxWorlds.UI
                     if (v.Glow != null && v.Glow.gameObject.activeSelf)
                     {
                         var g = v.Glow.color;
-                        g.a = pulse * GlowAlphaDraftable;
+                        g.a = pulse * RigBoardLayout.GlowAlphaDraft;
                         v.Glow.color = g;
                     }
                 }
@@ -384,7 +384,12 @@ namespace MaxWorlds.UI
 
             bool capacitySpendable = banked > 0 && PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel;
             _cellsChipButton.interactable = capacitySpendable;
-            _cellsChipBg.color = capacitySpendable ? SpendReady : RowColor;
+            // MV-446 defect 1: was tinting the BG PartsColor/amber when a capacity level-up is
+            // affordable — against the border/text's own colours.sec cyan (never touched here) that put
+            // two near-equal-luminance colours on top of each other, ~1.15:1 contrast, making the
+            // player's own cell count unreadable. The chip stays tappable via .interactable; readability
+            // wins over the spend affordance.
+            _cellsChipBg.color = RowColor;
 
             RefreshPartsTray(banked);
             ApplyBoardScale();
@@ -559,7 +564,9 @@ namespace MaxWorlds.UI
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
                 v.HexOutline.color = family;
                 v.Glow.gameObject.SetActive(true);
-                v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);
+                v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurOwned);
+                v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
+                v.Glow.color = new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaOwned);
                 v.OuterRing.gameObject.SetActive(true);
                 v.OuterRing.color = new Color(family.r, family.g, family.b, 0.45f);
                 v.Icon.color = ink;
@@ -615,8 +622,9 @@ namespace MaxWorlds.UI
                 v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
                 v.HexOutline.color = family;
                 v.Glow.gameObject.SetActive(true);
-                v.Glow.rectTransform.sizeDelta = new Vector2(v.Radius * GlowRadiusMultiplier * 2f, v.Radius * GlowRadiusMultiplier * 2f);
-                v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaOwned);
+                v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurOwned);
+                v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
+                v.Glow.color = new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaOwned);
                 v.PillText.text = $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
@@ -631,11 +639,13 @@ namespace MaxWorlds.UI
                 v.HexOutline.color = module;
                 // MV-433 item 3, MV-443 defect 5: the dashed-outer-ring halo is now a SOFT FAMILY glow
                 // (was module cyan) — the module tint lives on the border/dot instead so it still reads
-                // "draftable", pulsing in Update() alongside the ring itself.
-                float ringR = v.Radius + RigBoardLayout.CapOuterRingOffset;
+                // "draftable", pulsing in Update() alongside the ring itself. MV-446 defect 2: hex-tight
+                // (NodeGlowSprite/NodeGlowSize), not a circle sized to the dashed ring's own radius —
+                // that circle was wider than the hex on every axis the hex's flat edges don't reach.
                 v.Glow.gameObject.SetActive(true);
-                v.Glow.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
-                v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaDraftable);
+                v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurDraft);
+                v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
+                v.Glow.color = new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaDraft);
                 // MV-445 defect 4: OuterRing's RGB was never set here — Update()'s pulse only ever
                 // touched its alpha, leaving the dashed ring stuck at Color.clear's (0,0,0) RGB from
                 // BuildNodeShell, i.e. black dashes instead of the module cyan every other draftable
@@ -691,7 +701,7 @@ namespace MaxWorlds.UI
                 v.Label.color = TextColor;
                 v.Sub.text = $"FORGED · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
-                v.Sub.fontSize = 13;
+                v.Sub.fontSize = Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize);
                 v.Button.interactable = false;
             }
             else if (eligible)
@@ -704,7 +714,7 @@ namespace MaxWorlds.UI
                 v.Label.color = TextColor;
                 v.Sub.text = $"{fusion.PartCost} PARTS · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
-                v.Sub.fontSize = 13;
+                v.Sub.fontSize = Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize);
                 v.Button.interactable = banked >= fusion.PartCost;
             }
             else   // MV-443 defect 8, MV-445 defect 5: locked fusion diamond
@@ -718,7 +728,7 @@ namespace MaxWorlds.UI
                 v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
                 var ink = RigBoardLayout.Colour("ink");
                 v.Sub.color = new Color(ink.r, ink.g, ink.b, 0.22f);
-                v.Sub.fontSize = 12;
+                v.Sub.fontSize = Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize);
                 v.Button.interactable = false;
             }
         }
@@ -747,8 +757,9 @@ namespace MaxWorlds.UI
             v.HexFill.color = new Color(family.r, family.g, family.b, 0.22f);
             v.HexOutline.color = family;
             v.Glow.gameObject.SetActive(true);
-            v.Glow.rectTransform.sizeDelta = new Vector2(v.Radius * GlowRadiusMultiplier * 2f, v.Radius * GlowRadiusMultiplier * 2f);
-            v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);   // MV-424's own stronger draft-candidate glow, unchanged by MV-433
+            v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurOwned);
+            v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
+            v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);   // MV-424's own stronger draft-candidate glow, unchanged by MV-433/MV-446 (shape/size only)
             v.Icon.color = TextColor;
             v.Label.text = ab.Label;
             v.Label.color = TextColor;
@@ -1086,11 +1097,14 @@ namespace MaxWorlds.UI
             forgeLabel.text = "FORGE";
 
             // MV-443 defect 8: two short lines under the FORGE label (not one long line beside it,
-            // which used to run under the first diamond) — left of x=380, per MV-442.png.
-            var caption = AddText(boardRoot, 16, Dim, TextAnchor.UpperLeft);
+            // which used to run under the first diamond) — left of x=380, per MV-442.png. MV-446
+            // defect 3: fontSize now off rig_board.json (was a hardcoded 16, under the 16px readability
+            // floor once actually measured against the design's own 1920x1080 reference frame) — box
+            // height grown to match so two lines still clear it.
+            var caption = AddText(boardRoot, Mathf.RoundToInt(RigBoardLayout.ForgeCaptionFontSize), Dim, TextAnchor.UpperLeft);
             Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             caption.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 58f));
-            caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 44f);
+            caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 52f);
             caption.lineSpacing = 1.2f;
             caption.text = "two lit categories · costs parts\nnever a shed · lands in B / U";
 
@@ -1115,9 +1129,11 @@ namespace MaxWorlds.UI
             shell.Label.text = "? ? ?";
             shell.Label.color = Dim;
 
-            var sub = AddText(node, 13, Dim, TextAnchor.UpperCenter);
+            // MV-446 defect 3: fontSize off rig_board.json (was a hardcoded 13, dropping to 12 in the
+            // locked state — both under the 16px readability floor); box grown to match.
+            var sub = AddText(node, Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize), Dim, TextAnchor.UpperCenter);
             Anchor(sub.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            sub.rectTransform.sizeDelta = new Vector2(260f, 20f);
+            sub.rectTransform.sizeDelta = new Vector2(280f, 24f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
             shell.Sub = sub;
@@ -1222,13 +1238,15 @@ namespace MaxWorlds.UI
             float hexW = sides == HexSides ? r * Sqrt3 : r * 2f;
             float hexH = r * 2f;
 
-            // MV-433: a round radial-falloff halo behind the node plate (drawn first among this shell's
-            // children, so it renders behind Fill/Outline/Icon), not the old flat-alpha hex-shaped fill —
-            // one shared HudTextures.Glow texture, resized/tinted per state in Refresh*Node below (owned
-            // at r*GlowRadiusMultiplier, draftable at the outer dashed ring's own radius).
-            var glow = AddImage(root, HudTextures.Glow(128), Color.clear, "Glow");
+            // MV-433/MV-446: a soft halo behind the node plate (drawn first among this shell's children,
+            // so it renders behind Fill/Outline/Icon), not the old flat-alpha hex-shaped fill — a
+            // hex-silhouette-following HudTextures.PolygonGlow, sprite/size/tint set per state in
+            // Refresh*Node below (owned/draftable each pick their own blur+alpha off RigBoardLayout).
+            // Built once here at the owned blur just so the Image has a valid sprite before its first
+            // Refresh; every activation below reassigns it for the actual state.
+            var glow = AddImage(root, NodeGlowSprite(r, sides, RigBoardLayout.GlowBlurOwned), Color.clear, "Glow");
             Anchor(glow.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            glow.rectTransform.sizeDelta = new Vector2(r * GlowRadiusMultiplier * 2f, r * GlowRadiusMultiplier * 2f);
+            glow.rectTransform.sizeDelta = NodeGlowSize(r, sides);
             glow.raycastTarget = false;
             glow.gameObject.SetActive(false);
 
@@ -1328,6 +1346,26 @@ namespace MaxWorlds.UI
         private static float RotationFor(int sides) => sides == FusionSides ? FusionRotationDeg : HexRotationDeg;
 
         private static Sprite PolygonFillSprite(int sides, int w, int h) => HudTextures.Polygon(sides, RotationFor(sides), w, h);
+
+        /// <summary>A <paramref name="sides"/>-gon's own (width, height) bounding box at circumradius
+        /// <paramref name="r"/> — the same <c>hexW</c>/<c>hexH</c> pair <see cref="BuildNodeShell"/>'s
+        /// Fill/Outline already size themselves to, shared here so the glow halo (MV-446) follows the
+        /// SAME aspect instead of the square bounding box <see cref="HudTextures.Glow"/> used.</summary>
+        private static Vector2 HexBounds(float r, int sides) => new Vector2(sides == HexSides ? r * Sqrt3 : r * 2f, r * 2f);
+
+        /// <summary>The owned/draftable node halo's rect size (MV-446 defect 2 AC: at most 1.25x the
+        /// node's own radius) — the hex's own bounds scaled up by <see cref="GlowRadiusMultiplier"/> for
+        /// the blur's headroom, not a flat square.</summary>
+        private static Vector2 NodeGlowSize(float r, int sides) => HexBounds(r, sides) * GlowRadiusMultiplier;
+
+        /// <summary>The hex-silhouette-following glow sprite for a node of radius <paramref name="r"/>
+        /// (MV-446 defect 2) — <paramref name="blurPx"/> comes from <see cref="RigBoardLayout.GlowBlurOwned"/>/
+        /// <see cref="RigBoardLayout.GlowBlurDraft"/> so callers pick the state's own falloff width.</summary>
+        private static Sprite NodeGlowSprite(float r, int sides, float blurPx)
+        {
+            Vector2 size = NodeGlowSize(r, sides);
+            return HudTextures.PolygonGlow(sides, RotationFor(sides), Mathf.CeilToInt(size.x), Mathf.CeilToInt(size.y), r, blurPx);
+        }
 
         private Sprite SolidHexOutlineSprite(float r) => SolidPolygonOutlineSprite(HexSides, r);
 
@@ -1459,7 +1497,9 @@ namespace MaxWorlds.UI
 
             var tray = NewRect("Parts Tray", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             tray.pivot = new Vector2(1f, 0.5f);
-            tray.sizeDelta = new Vector2(width, 68f);
+            // MV-446 defect 3: grown from 68 -> 76 to give the sub-label's raised font floor (below)
+            // headroom for a two-line wrap without crowding the "PARTS" label above it.
+            tray.sizeDelta = new Vector2(width, 76f);
             tray.anchoredPosition = new Vector2(rightEdge, 0f);
 
             var bg = AddImage(tray, HudTextures.RoundedBox(32, 0.3f), RowColor, "Tray BG");
@@ -1484,15 +1524,17 @@ namespace MaxWorlds.UI
             _partsTrayLabel.text = "PARTS";
 
             // MV-443 defect 7: was clipping "...one banked" mid-word — best-fit shrink instead of a
-            // fixed 13pt, same idiom the CELLS chip's own label already uses for a tight box.
-            _partsTraySub = AddText(tray, 13, Dim, TextAnchor.LowerLeft);
+            // fixed 13pt, same idiom the CELLS chip's own label already uses for a tight box. MV-446
+            // defect 3: min/max raised off rig_board.json — the old 10-13pt range shrank well under the
+            // 16px readability floor for anything longer than "0 banked"; box height grown to match.
+            _partsTraySub = AddText(tray, Mathf.RoundToInt(RigBoardLayout.PartsTraySubFontSizeMax), Dim, TextAnchor.LowerLeft);
             Anchor(_partsTraySub.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
             _partsTraySub.rectTransform.anchoredPosition = new Vector2(14f, 8f);
-            _partsTraySub.rectTransform.sizeDelta = new Vector2(leftColumnWidth - 14f, 22f);
+            _partsTraySub.rectTransform.sizeDelta = new Vector2(leftColumnWidth - 14f, 30f);
             _partsTraySub.horizontalOverflow = HorizontalWrapMode.Wrap;
             _partsTraySub.resizeTextForBestFit = true;
-            _partsTraySub.resizeTextMinSize = 10;
-            _partsTraySub.resizeTextMaxSize = 13;
+            _partsTraySub.resizeTextMinSize = Mathf.RoundToInt(RigBoardLayout.PartsTraySubFontSizeMin);
+            _partsTraySub.resizeTextMaxSize = Mathf.RoundToInt(RigBoardLayout.PartsTraySubFontSizeMax);
 
             var socketRow = NewRect("Sockets", tray, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             socketRow.pivot = new Vector2(1f, 0.5f);

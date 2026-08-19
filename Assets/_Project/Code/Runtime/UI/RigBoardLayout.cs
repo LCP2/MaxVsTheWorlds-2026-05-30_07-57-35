@@ -108,6 +108,9 @@ namespace MaxWorlds.UI
             public float iconScaleAbility, iconScaleCategory, iconScaleFusion, iconOffsetY;
             public ConnectorWire connector;
             public LockedFusionWire lockedFusion;
+            public float glowBlurOwned, glowAlphaOwned, glowBlurDraft, glowAlphaDraft;
+            public float forgeCaptionFontSize, fusionSubFontSize;
+            public float partsTraySubFontSizeMin, partsTraySubFontSizeMax;
         }
 
         [Serializable] private sealed class ColourEntryWire { public string hex; }
@@ -318,6 +321,27 @@ namespace MaxWorlds.UI
 
         public static float LockedFusionBorderAlpha { get { EnsureLoaded(); return s_geometry.lockedFusion?.borderAlpha ?? 0.031f; } }
         public static float LockedFusionIconAlpha { get { EnsureLoaded(); return s_geometry.lockedFusion?.iconAlpha ?? 0.057f; } }
+
+        // ------------------------------------------------------------------ node glow (MV-446)
+
+        /// <summary>Blur width in px (texture space, 1:1 with on-screen px at 16:9) the owned/lit node
+        /// halo fades across beyond the hexagon's own edge — see <see cref="MaxWorlds.UI.HudTextures.PolygonGlow"/>.</summary>
+        public static float GlowBlurOwned { get { EnsureLoaded(); return s_geometry.glowBlurOwned > 0f ? s_geometry.glowBlurOwned : 14f; } }
+        public static float GlowAlphaOwned { get { EnsureLoaded(); return s_geometry.glowAlphaOwned > 0f ? s_geometry.glowAlphaOwned : 0.45f; } }
+        public static float GlowBlurDraft { get { EnsureLoaded(); return s_geometry.glowBlurDraft > 0f ? s_geometry.glowBlurDraft : 10f; } }
+        public static float GlowAlphaDraft { get { EnsureLoaded(); return s_geometry.glowAlphaDraft > 0f ? s_geometry.glowAlphaDraft : 0.18f; } }
+
+        // ------------------------------------------------------------------ small-type readability floor (MV-446 defect 3)
+
+        /// <summary>16px floor: the smallest size any of THE RIG's small captions may render at on the
+        /// 1920x1080 reference canvas (matches <see cref="LabelFontSize"/>, already used at that size for
+        /// every node's own caption) — MV-446 defect 3 found the FORGE caption, fusion sub-captions and
+        /// the PARTS tray's "N banked" line all sitting well under it (10-13px), muddy on a downscaled
+        /// 6-inch screen.</summary>
+        public static float ForgeCaptionFontSize { get { EnsureLoaded(); return s_geometry.forgeCaptionFontSize > 0f ? s_geometry.forgeCaptionFontSize : 18f; } }
+        public static float FusionSubFontSize { get { EnsureLoaded(); return s_geometry.fusionSubFontSize > 0f ? s_geometry.fusionSubFontSize : 16f; } }
+        public static float PartsTraySubFontSizeMin { get { EnsureLoaded(); return s_geometry.partsTraySubFontSizeMin > 0f ? s_geometry.partsTraySubFontSizeMin : 16f; } }
+        public static float PartsTraySubFontSizeMax { get { EnsureLoaded(); return s_geometry.partsTraySubFontSizeMax > 0f ? s_geometry.partsTraySubFontSizeMax : 18f; } }
 
         /// <summary>"<c>+r*0.92</c>" / "<c>-r*0.92</c>" — a node-radius multiplier, the connector block's
         /// own offset shape (distinct from <see cref="ResolveOffset"/>'s additive "<c>+r-6</c>" terms).</summary>

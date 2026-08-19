@@ -101,7 +101,17 @@
       "$comment": "MV-445 defect 5: locked FORGE diamond border/icon weight, halved from the previous hardcoded C# values (strokeOwned-equivalent border alpha 0.26, icon alpha 0.40) and then gamma-calibrated the same way as regionRect above.",
       "borderAlpha": 0.031,
       "iconAlpha": 0.057
-    }
+    },
+    "glowBlurOwned": 14,
+    "glowAlphaOwned": 0.45,
+    "glowBlurDraft": 10,
+    "glowAlphaDraft": 0.18,
+    "$comment_glow": "MV-446 defect 2: the owned/draftable node halo is now HudTextures.PolygonGlow (follows the hexagon's own silhouette, fading over glowBlur* px beyond its edge) instead of a plain circle sized to the node's square bounding box - the old shape both spilled past a hexagon's narrower width and read as a lens flare. glowAlphaOwned was 0.55 pre-MV-446 (MV-443 raised it from 0.28); lowered slightly alongside the shape fix since a hex-tight halo reads brighter than the same alpha did as a diffuse circle.",
+    "forgeCaptionFontSize": 18,
+    "fusionSubFontSize": 16,
+    "partsTraySubFontSizeMin": 16,
+    "partsTraySubFontSizeMax": 18,
+    "$comment_smallType": "MV-446 defect 3: floor of 16px (matches labelFontSize, already used at that size for every node's own caption) - the FORGE caption, fusion sub-captions and PARTS tray 'N banked' line were rendering as small as 10-13px, muddy on a downscaled 6-inch screen."
   },
   "colours": {
     "$comment": "Prefer the named existing constant where one exists.",

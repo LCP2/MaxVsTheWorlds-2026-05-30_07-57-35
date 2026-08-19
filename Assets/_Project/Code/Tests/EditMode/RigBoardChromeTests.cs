@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
@@ -153,6 +154,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             OpenScreen();
             float r = RigBoardLayout.RadiusAbility;
+            // MV-446 defect 2: the halo now follows the hex's own (narrower) width instead of a square
+            // bounding box — r*sqrt(3) x 2r, not 2r x 2r — scaled by the SAME headroom multiplier for
+            // both owned and draftable (no longer the draftable-only "out to the dashed ring" sizing).
+            float expectedW = r * Mathf.Sqrt(3f) * 1.15f;
+            float expectedH = r * 2f * 1.15f;
 
             foreach (var ab in RigBoardLayout.Abilities)
             {
@@ -167,16 +173,13 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(glow.gameObject.activeSelf, Is.EqualTo(expectedActive), $"'{ab.Id}' glow active");
                 if (!expectedActive) continue;
 
-                float expectedDiameter = owned
-                    ? r * 1.30f * 2f
-                    : (r + RigBoardLayout.CapOuterRingOffset) * 2f;
-                Assert.That(glow.rectTransform.sizeDelta.x, Is.EqualTo(expectedDiameter).Within(0.5f), $"'{ab.Id}' glow diameter");
-                Assert.That(glow.rectTransform.sizeDelta.y, Is.EqualTo(expectedDiameter).Within(0.5f), $"'{ab.Id}' glow diameter");
+                Assert.That(glow.rectTransform.sizeDelta.x, Is.EqualTo(expectedW).Within(0.5f), $"'{ab.Id}' glow width");
+                Assert.That(glow.rectTransform.sizeDelta.y, Is.EqualTo(expectedH).Within(0.5f), $"'{ab.Id}' glow height");
 
-                // MV-443 defect 5: owned glow alpha raised 0.28 -> 0.55, and the draftable glow is now a
-                // soft FAMILY tint (0.22), not module cyan — the module tint moved to the dashed border
-                // and cap-marker dot instead, so the node's own family colour survives at a glance.
-                float expectedAlpha = owned ? 0.55f : 0.22f;
+                // MV-446 defect 2: owned/draftable peak alpha (and blur width) now come off
+                // rig_board.json (RigBoardLayout.GlowAlphaOwned/GlowAlphaDraft) instead of a hardcoded
+                // 0.55/0.22 — tunable without a code change, per the ticket's own AC.
+                float expectedAlpha = owned ? RigBoardLayout.GlowAlphaOwned : RigBoardLayout.GlowAlphaDraft;
                 Assert.That(glow.color.a, Is.EqualTo(expectedAlpha).Within(0.02f), $"'{ab.Id}' glow alpha");
 
                 var family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
@@ -196,9 +199,10 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(glow.gameObject.activeSelf, Is.EqualTo(lit), $"'{cat.Id}' category glow");
                 if (!lit) continue;
 
-                float expectedDiameter = RigBoardLayout.RadiusCategory * 1.30f * 2f;
-                Assert.That(glow.rectTransform.sizeDelta.x, Is.EqualTo(expectedDiameter).Within(0.5f));
-                Assert.That(glow.color.a, Is.EqualTo(0.55f).Within(0.02f));
+                float r = RigBoardLayout.RadiusCategory;
+                Assert.That(glow.rectTransform.sizeDelta.x, Is.EqualTo(r * Mathf.Sqrt(3f) * 1.15f).Within(0.5f));
+                Assert.That(glow.rectTransform.sizeDelta.y, Is.EqualTo(r * 2f * 1.15f).Within(0.5f));
+                Assert.That(glow.color.a, Is.EqualTo(RigBoardLayout.GlowAlphaOwned).Within(0.02f));
             }
         }
 
@@ -536,6 +540,128 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(closeButton, Is.Not.Null, "Close Button not found");
             var label = closeButton.GetComponentInChildren<Text>();
             Assert.That(label.text, Is.EqualTo("× CLOSE"), "must be U+00D7 (supported by HudFont), not U+2715 (a dingbat with no glyph coverage)");
+        }
+
+        // ------------------------------------------------------------------ MV-446 defect 1: CELLS pill
+
+        /// <summary>Pixel-sampled off the real capture (rig-16x9.png): with parts banked and the cell
+        /// capacity track not yet maxed - true at run start, and the exact fixture the ticket's own
+        /// screenshot compare used - the fill rendered flat <c>colours.part</c> amber (255,184,71)
+        /// while the border/text stayed correctly <c>colours.sec</c> cyan, an ~1.15:1 luminance contrast
+        /// that made the player's own cell count unreadable. Must fail on 7a66d12 (the fill assertion
+        /// only - border/text were already correct pre-fix).</summary>
+        [Test]
+        public void CellsPillFillStaysDarkEvenWhenACapacityUpgradeIsAffordable()
+        {
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+            PickupWallet.AddPart();
+            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.LessThan(PickupWallet.PowerCellCapacityMaxLevel),
+                "fixture must actually reach the 'capacity upgrade affordable' branch for this test to mean anything");
+            OpenScreen();
+
+            var chip = _screen.transform.Find("Weapons Canvas/Screen Root/Safe Area/Weapons Root/Top Bar/Cells Chip");
+            Assert.That(chip, Is.Not.Null, "Cells Chip not found");
+            var bg = chip.Find("BG").GetComponent<Image>();
+            var border = chip.Find("Cells Border").GetComponent<Image>();
+            var text = chip.GetComponentInChildren<Text>();
+
+            Assert.That(Mathf.Max(bg.color.r, bg.color.g, bg.color.b), Is.LessThan(0.3f),
+                "CELLS pill fill must stay dark, not tint colours.part amber, even when a capacity upgrade is affordable");
+
+            Color sec = RigBoardLayout.Colour("sec");
+            Assert.That(border.color.r, Is.EqualTo(sec.r).Within(0.05f), "Cells Border must read colours.sec, not colours.part");
+            Assert.That(border.color.g, Is.EqualTo(sec.g).Within(0.05f));
+            Assert.That(border.color.b, Is.EqualTo(sec.b).Within(0.05f));
+            Assert.That(text.color.r, Is.EqualTo(sec.r).Within(0.05f), "Cells text must read colours.sec, not colours.part");
+            Assert.That(text.color.g, Is.EqualTo(sec.g).Within(0.05f));
+            Assert.That(text.color.b, Is.EqualTo(sec.b).Within(0.05f));
+        }
+
+        // ------------------------------------------------------------------ MV-446 defect 2: node glow
+
+        /// <summary>The old halo (<c>HudTextures.Glow</c>) was a plain circle sized to the node's SQUARE
+        /// bounding box, so it always drew width == height. A pointy-top hex is narrower than it is tall
+        /// (<c>r*sqrt(3)</c> vs <c>2r</c>) - the new hex-silhouette-following glow must size its rect to
+        /// that same narrower aspect, or it is still spilling past the hex's own left/right edges no
+        /// matter how tight its blur. Must fail on 7a66d12.</summary>
+        [Test]
+        public void OwnedNodeGlowFollowsTheHexagonsNarrowerWidthNotASquare()
+        {
+            OpenScreen();
+            var glow = _screen.BoardNode("p_dmg").Find("Glow").GetComponent<Image>();
+            Assert.That(glow.gameObject.activeSelf, Is.True, "p_dmg is owned at run start - its glow should be on");
+            Assert.That(glow.rectTransform.sizeDelta.x, Is.Not.EqualTo(glow.rectTransform.sizeDelta.y).Within(0.5f),
+                "glow rect must follow the hex's own (narrower) aspect ratio, not a square bounding box");
+        }
+
+        /// <summary>AC: the halo's rect must never exceed 1.25x the node's own radius - checked on both
+        /// an owned ability node and a lit category node (the ticket's own named examples). Must fail on
+        /// 7a66d12, whose GlowRadiusMultiplier was 1.30.</summary>
+        [Test]
+        public void NodeGlowRectNeverExceeds125xTheNodesOwnRadius()
+        {
+            OpenScreen();
+            AssertGlowWithin125x("p_dmg", RigBoardLayout.RadiusAbility);
+            AssertGlowWithin125x("PRIMARY", RigBoardLayout.RadiusCategory);
+        }
+
+        private void AssertGlowWithin125x(string nodeId, float r)
+        {
+            var glow = _screen.BoardNode(nodeId).Find("Glow").GetComponent<Image>();
+            float maxSize = r * 1.25f * 2f;
+            Assert.That(glow.rectTransform.sizeDelta.x, Is.LessThanOrEqualTo(maxSize + 0.5f), $"'{nodeId}' glow width exceeds 1.25x radius");
+            Assert.That(glow.rectTransform.sizeDelta.y, Is.LessThanOrEqualTo(maxSize + 0.5f), $"'{nodeId}' glow height exceeds 1.25x radius");
+        }
+
+        // ------------------------------------------------------------------ MV-446 defect 3: small-type readability floor
+
+        /// <summary>16px, matching <see cref="RigBoardLayout.LabelFontSize"/> (already used at that size
+        /// for every node's own caption) - the floor picked for the FORGE caption, fusion sub-captions
+        /// and the PARTS tray's "N banked" line, which pre-fix rendered as small as 10-13px.</summary>
+        private const float ReadabilityFloor = 16f;
+
+        [Test]
+        public void SmallTypeFontSizesComeFromTheDataFileAndClearTheReadabilityFloor()
+        {
+            Assert.That(RigBoardLayout.ForgeCaptionFontSize, Is.GreaterThanOrEqualTo(ReadabilityFloor));
+            Assert.That(RigBoardLayout.FusionSubFontSize, Is.GreaterThanOrEqualTo(ReadabilityFloor));
+            Assert.That(RigBoardLayout.PartsTraySubFontSizeMin, Is.GreaterThanOrEqualTo(ReadabilityFloor));
+            Assert.That(RigBoardLayout.PartsTraySubFontSizeMax, Is.GreaterThanOrEqualTo(RigBoardLayout.PartsTraySubFontSizeMin));
+        }
+
+        [Test]
+        public void ForgeCaptionIsBuiltAtItsDataFileFontSize()
+        {
+            OpenScreen();
+            var caption = _screen.GetComponentsInChildren<Text>(true)
+                .First(t => t.text.Contains("two lit categories"));
+            Assert.That(caption.fontSize, Is.EqualTo(Mathf.RoundToInt(RigBoardLayout.ForgeCaptionFontSize)));
+        }
+
+        [Test]
+        public void FusionSubIsBuiltAtItsDataFileFontSize()
+        {
+            // Run start: no fusion has both parent categories lit, so every fusion renders its LOCKED
+            // sub-caption ("ParentA + ParentB") - RefreshFusionNode's own font-size assignment for that
+            // branch, same rig_board.json value the eligible/forged branches also read.
+            OpenScreen();
+            var fusion = RigBoardLayout.Fusions[0];
+            var sub = _screen.BoardNode(fusion.Id).GetComponentsInChildren<Text>(true)
+                .First(t => t.text == $"{fusion.ParentA} + {fusion.ParentB}");
+            Assert.That(sub.fontSize, Is.EqualTo(Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize)));
+        }
+
+        [Test]
+        public void PartsTraySubBestFitRangeComesFromTheDataFile()
+        {
+            OpenScreen();
+            var tray = _screen.transform.Find("Weapons Canvas/Screen Root/Safe Area/Weapons Root/Top Bar/Parts Tray");
+            Assert.That(tray, Is.Not.Null, "Parts Tray not found");
+            var sub = tray.GetComponentsInChildren<Text>(true).First(t => t.text.Contains("banked"));
+            Assert.That(sub.resizeTextMinSize, Is.EqualTo(Mathf.RoundToInt(RigBoardLayout.PartsTraySubFontSizeMin)));
+            Assert.That(sub.resizeTextMaxSize, Is.EqualTo(Mathf.RoundToInt(RigBoardLayout.PartsTraySubFontSizeMax)));
         }
     }
 }
