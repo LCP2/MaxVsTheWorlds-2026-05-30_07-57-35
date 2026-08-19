@@ -14,7 +14,8 @@ namespace MaxWorlds.UI
     /// <c>rig_board.json</c> (MV-422's canonical model, MV-423's own <see cref="RigBoardLayout"/> for
     /// the geometry/colours/icons that model layer deliberately ignores). Every category, ability and
     /// fusion node is placed at the data file's own pixel coordinates on a fixed 1920x1080 board frame
-    /// — <see cref="RigBoardLayoutTests"/> asserts this exactly, so this class never re-derives a
+    /// — position/size conformance is asserted against the data file by MV-463's PNG-vs-spec harness
+    /// (MV-465 retired the EditMode coordinate assertions), so this class never re-derives a
     /// position; if a layout decision isn't in the JSON, it doesn't belong here.
     ///
     /// Top bar keeps its existing geometry (28/104 inset/height), CLOSE, QUIT TO MENU and the CELLS
@@ -1032,10 +1033,10 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>The bottom band (MV-424): full width, anchored to the board's own bottom edge so
-        /// its position is pinned in the fixed 1920x1080 board frame regardless of Safe Area —
-        /// <see cref="RigBoardLayoutTests"/>'s own trick for exact-pixel assertions. Deliberately at the
-        /// BOTTOM, not the top: a top banner would cover the category row, and the whole value of
-        /// drafting on the board is seeing the current build while choosing (ticket, non-negotiable).</summary>
+        /// its position is pinned in the fixed 1920x1080 board frame regardless of Safe Area.
+        /// Deliberately at the BOTTOM, not the top: a top banner would cover the category row, and the
+        /// whole value of drafting on the board is seeing the current build while choosing (ticket,
+        /// non-negotiable).</summary>
         private void BuildDraftBand(RectTransform boardRoot)
         {
             const float bandHeight = 170f;
