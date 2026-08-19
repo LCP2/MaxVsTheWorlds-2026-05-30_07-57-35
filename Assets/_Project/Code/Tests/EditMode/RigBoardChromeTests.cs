@@ -85,6 +85,67 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ------------------------------------------------------------------ MV-445 defect 1: composited alpha
+
+        /// <summary>MV-445 AC2: sums EVERY graphic under Board Root that actually covers a point clear
+        /// of any node/connector inside each category's own column, and asserts the combined coverage
+        /// (the standard <c>1 - product(1-a_i)</c> union of independent alpha layers, order-independent
+        /// so draw order doesn't matter for a pure coverage check) equals opacityLit/opacityDark within
+        /// 1e-3 — the ticket's own point: testing <see cref="RegionPanelOpacityIsReadFromTheDataFile"/>'s
+        /// single Image in isolation is exactly what let a second full-column layer go unnoticed.
+        /// y=345 is clear board-wide: below every category's own owned/lit glow (bottom edge
+        /// 230+72*1.30=323.6) and above every tier-1 ability's own glow (top edge 420-50*1.30=355) —
+        /// verified against both radii, not eyeballed.</summary>
+        [Test]
+        public void CompositedColumnCoverageAwayFromAnyNodeMatchesRegionOpacityExactly()
+        {
+            OpenScreen();
+            const float testY = 345f;
+            var boardRoot = _screen.BoardNode("PRIMARY").parent;
+            Assert.That(boardRoot, Is.Not.Null, "category node has no Board Root parent");
+
+            var images = boardRoot.GetComponentsInChildren<Image>(true);
+
+            foreach (var cat in RigBoardLayout.Categories)
+            {
+                bool lit = cat.Id == "PRIMARY";
+                float expected = lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark;
+
+                var worldPoint = boardRoot.TransformPoint(new Vector3(cat.X, -testY, 0f));
+                float coverage = 0f;
+                foreach (var img in images)
+                {
+                    if (!img.isActiveAndEnabled || img.color.a <= 0f) continue;
+                    var rt = img.rectTransform;
+                    var corners = new Vector3[4];
+                    rt.GetWorldCorners(corners);
+                    bool contains = worldPoint.x >= corners[0].x && worldPoint.x <= corners[2].x
+                                     && worldPoint.y >= corners[0].y && worldPoint.y <= corners[2].y;
+                    if (!contains) continue;
+
+                    // A 9-sliced image (the region panel/border) does not paint its flat tint uniformly
+                    // across its whole rect — the centre tile is a distinct texel range from the border
+                    // margin. Bounds-containment alone would wrongly count the border's OWN flat alpha
+                    // (a thin stroke) as if it filled the entire column. Sample the sprite texture's own
+                    // centre texel instead — representative of whatever a 9-slice centre tile actually
+                    // renders at any deep-interior point (this test's point always is one, hundreds of
+                    // px from every panel edge) — and fold color.a * textureAlpha, not color.a alone.
+                    float textureAlpha = 1f;
+                    if (img.sprite != null && img.sprite.texture != null)
+                    {
+                        var tex = img.sprite.texture;
+                        textureAlpha = tex.GetPixel(tex.width / 2, tex.height / 2).a;
+                    }
+                    float a = img.color.a * textureAlpha;
+                    if (a <= 0f) continue;
+                    coverage = coverage + a * (1f - coverage);
+                }
+
+                Assert.That(coverage, Is.EqualTo(expected).Within(1e-3f),
+                    $"'{cat.Id}' composited column coverage at y={testY} (clear of every node/connector)");
+            }
+        }
+
         // ------------------------------------------------------------------ AC3: owned/draftable glow
 
         [Test]
@@ -227,11 +288,16 @@ namespace MaxWorlds.Tests.EditMode
         /// <see cref="WeaponsScreen.ComputeBoardScale"/>/scale wrapper existed to bring it back in); it
         /// passes now because every node and region panel is checked post-scale, at the same clamped
         /// factor <see cref="WeaponsScreen.ApplyBoardScale"/> actually applies to the board.
+        ///
+        /// MV-445 defect 2: aspects widened to 1.4-2.4 (was 1.5-2.17) and <see cref="WeaponsScreen.BoardScaleFloor"/>
+        /// lowered 0.9 -> 0.83 to go with it — at 0.9 this test would have failed at 1.4 (SUPPORT
+        /// region panel's scaled right edge 1761 vs a visible max of 1716), exactly the clipping Lee
+        /// saw at his own ~1.65:1 viewport once a window resize left the board on a stale scale.
         /// </summary>
         [Test]
         public void EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect()
         {
-            float[] aspects = { 2.17f, 16f / 9f, 1.60f, 1.50f };
+            float[] aspects = { 2.4f, 2.17f, 2.0f, 1.78f, 1.60f, 1.50f, 1.4f };
             var categories = RigBoardLayout.Categories;
             int n = categories.Count;
             float spacing = n > 1 ? categories[1].X - categories[0].X : 0f;
@@ -268,21 +334,21 @@ namespace MaxWorlds.Tests.EditMode
         // ------------------------------------------------------------------ AC5: the scale clamp never chases the crop below its own floor
 
         /// <summary>
-        /// What's actually enforced: the clamp itself never drops below 0.9 at any aspect, however
-        /// narrow — that's the real content of "clamp the scale at 0.9 and accept a small crop below
-        /// that." The ticket's AC5 also asserts this keeps every node at/above Apple's 44pt HIG minimum
-        /// on the 932x430pt target; that specific numeric claim does NOT hold for the ability nodes at
-        /// this clamp (documented below and in the MV-433 fix comment) — the ticket's own "Fix" section
-        /// computes the identical number (90 ref-px -> 39.6pt) and calls it "under Apple's 44pt minimum"
-        /// in the very same breath as prescribing this same 0.9 floor, so the two clauses disagree with
-        /// each other, not just with the implementation. Flagged rather than asserted as true.
+        /// What's actually enforced: the clamp itself never drops below <see cref="WeaponsScreen.BoardScaleFloor"/>
+        /// (MV-445 defect 2: 0.83, was 0.9) at any aspect, however narrow — that's the real content of
+        /// "clamp the scale and accept a small crop below that." The ticket's AC5 also asserts this
+        /// keeps every node at/above Apple's 44pt HIG minimum on the 932x430pt target; that specific
+        /// numeric claim did NOT hold even at the old 0.9 floor (documented below and in the MV-433 fix
+        /// comment) and holds even less at 0.83 — MV-445 lowered the floor anyway because keeping every
+        /// node and region panel actually ON screen down to 1.4:1 (AC3) is the ticket's own explicit
+        /// priority over the 44pt target it separately flags as already broken. Flagged, not hidden.
         /// </summary>
         [Test]
         public void BoardScaleNeverDropsBelowItsOwnFloor()
         {
-            float[] aspects = { 2.17f, 16f / 9f, 1.60f, 1.50f, 1.33f, 1.0f };
+            float[] aspects = { 2.17f, 16f / 9f, 1.60f, 1.50f, 1.4f, 1.33f, 1.0f };
             foreach (float aspect in aspects)
-                Assert.That(WeaponsScreen.ComputeBoardScale(aspect), Is.GreaterThanOrEqualTo(0.9f - 1e-4f), $"aspect {aspect}");
+                Assert.That(WeaponsScreen.ComputeBoardScale(aspect), Is.GreaterThanOrEqualTo(0.83f - 1e-4f), $"aspect {aspect}");
         }
 
         [Test]
@@ -290,9 +356,9 @@ namespace MaxWorlds.Tests.EditMode
         {
             const float abilityDiameterRefPx = 100f;   // RigBoardLayout.RadiusAbility * 2
             const float scale6Inch = 0.44f;            // SettingsPanel.Scale6Inch (see that file's own sqrt(932/1920)*sqrt(430/1080) derivation)
-            float ptAtFloor = abilityDiameterRefPx * 0.9f * scale6Inch;
-            Assert.That(ptAtFloor, Is.EqualTo(39.6f).Within(0.1f),
-                "matches the MV-433 ticket's own worked example: even at the 0.9 floor this is under Apple's 44pt minimum");
+            float ptAtFloor = abilityDiameterRefPx * 0.83f * scale6Inch;
+            Assert.That(ptAtFloor, Is.EqualTo(36.52f).Within(0.1f),
+                "MV-445: floor lowered 0.9 -> 0.83 (AC3, keeping SUPPORT on screen down to 1.4:1) shrinks this further below Apple's 44pt minimum, not closer to it");
         }
 
         // ------------------------------------------------------------------ AC6: RigBoardLayoutTests untouched
@@ -302,5 +368,174 @@ namespace MaxWorlds.Tests.EditMode
         // not disturb; the board scale wrapper is a new ancestor of Board Root, and RigBoardLayoutTests
         // only ever reads anchoredPosition/sizeDelta in Board Root's own local space, which no ancestor
         // transform can affect.
+
+        // ------------------------------------------------------------------ MV-445 defect 4: dashed hex ring
+
+        /// <summary>Renders the exact sprite a draftable node's hex outline uses and walks the polygon's
+        /// own perimeter (via its 6 vertex positions, not the texture's raw pixel grid) counting on/off
+        /// transitions — the number of dashes actually painted must be within +/-1 of
+        /// perimeter/(dash+gap), i.e. an even, continuous ring, not "two or three stray dashes" (the old
+        /// angle-based phase bunched dashes near vertices and stretched/dropped them near edge
+        /// midpoints on a hexagon, where equal angle steps are not equal arc-length steps).</summary>
+        [Test]
+        public void DashedHexOutlineWalksTheClosedPolygonAsOneContinuousDashedRing()
+        {
+            float r = RigBoardLayout.RadiusAbility;
+            const float dash = 13f, gap = 9f;
+            int texW = Mathf.CeilToInt(r * 1.7320508f), texH = Mathf.CeilToInt(r * 2f);
+            var sprite = HudTextures.PolygonOutline(6, -90f, texW, texH, RigBoardLayout.StrokeActive, true, dash, gap);
+            var tex = sprite.texture;
+
+            float cx = texW * 0.5f, cy = texH * 0.5f, radius = texH * 0.5f;
+            const int sides = 6;
+            float segment = 2f * Mathf.PI / sides;
+            float rot = -90f * Mathf.Deg2Rad;
+            var vertices = new Vector2[sides];
+            for (int k = 0; k < sides; k++)
+            {
+                float ang = rot + k * segment;
+                vertices[k] = new Vector2(radius * Mathf.Cos(ang), radius * Mathf.Sin(ang));
+            }
+            float apothem = radius * Mathf.Cos(segment * 0.5f);
+            float sideLen = 2f * apothem * Mathf.Tan(segment * 0.5f);
+            float perimeter = sideLen * sides;
+
+            const int steps = 4000;
+            bool prevOn = false;
+            int dashCount = 0;
+            for (int i = 0; i <= steps; i++)
+            {
+                float t = (float)i / steps * perimeter;
+                int edgeIndex = Mathf.Clamp((int)(t / sideLen), 0, sides - 1);
+                float within = t - edgeIndex * sideLen;
+                float frac = within / sideLen;
+                Vector2 a = vertices[edgeIndex], b = vertices[(edgeIndex + 1) % sides];
+                Vector2 p = Vector2.Lerp(a, b, frac);
+                int px = Mathf.Clamp(Mathf.RoundToInt(cx + p.x), 0, texW - 1);
+                int py = Mathf.Clamp(Mathf.RoundToInt(cy + p.y), 0, texH - 1);
+                bool on = tex.GetPixel(px, py).a > 0.5f;
+                if (on && !prevOn) dashCount++;
+                prevOn = on;
+            }
+            // wrap: the walk starts partway through whatever segment sits at arc-length 0 (a dash
+            // straddling the seam could double-count), and perimeter/(dash+gap)=13.6 is not a whole
+            // number, so the final wrap-around segment is always a partial dash/gap that can round
+            // away at this texture's own pixel resolution (~87x100 for an ability node) — accept up to
+            // 2 off the ideal count, well short of the old bug's "2-3 dashes total".
+            float expected = perimeter / (dash + gap);
+            Assert.That(dashCount, Is.EqualTo(expected).Within(2.0),
+                $"expected ~{expected:N1} dashes walking the closed hex perimeter, got {dashCount}");
+            Assert.That(dashCount, Is.GreaterThan(3), "the old angle-based bug rendered only 2-3 stray dashes");
+        }
+
+        // ------------------------------------------------------------------ MV-445 defect 3: fusion connectors
+
+        [Test]
+        public void FusionConnectorsDrawAtFusionAlphaOnlyWhenBothParentCategoriesAreLit()
+        {
+            OpenScreen();
+            Color part = RigBoardLayout.Colour("part");
+            foreach (var fusion in RigBoardLayout.Fusions)
+            {
+                bool reachable = RigFusionState.IsEligible(fusion.Id);
+                float expected = reachable ? RigBoardLayout.ConnectorFusionAlpha : RigBoardLayout.ConnectorFusionAlphaLocked;
+                foreach (var parentId in new[] { fusion.ParentA, fusion.ParentB })
+                {
+                    var img = _screen.Connector($"conn:fusion:{fusion.Id}>{parentId}");
+                    Assert.That(img, Is.Not.Null, $"missing fusion connector '{fusion.Id}>{parentId}'");
+                    Assert.That(img.color.a, Is.EqualTo(expected).Within(1e-4f), $"'{fusion.Id}>{parentId}' fusion connector alpha");
+                    Assert.That(img.color.r, Is.EqualTo(part.r).Within(1e-3f), $"'{fusion.Id}>{parentId}' fusion connector colour");
+                }
+            }
+        }
+
+        [Test]
+        public void FusionAlphaLockedIsDimmerThanFusionAlpha()
+        {
+            Assert.That(RigBoardLayout.ConnectorFusionAlphaLocked, Is.LessThan(RigBoardLayout.ConnectorFusionAlpha));
+        }
+
+        // ------------------------------------------------------------------ MV-445 defect 5: locked FORGE diamond
+
+        [Test]
+        public void LockedFusionDiamondWeightsComeFromTheDataFileAndAreDimmerThanEligible()
+        {
+            OpenScreen();
+            foreach (var fusion in RigBoardLayout.Fusions)
+            {
+                if (RigFusionState.IsEligible(fusion.Id)) continue;   // only the locked (unreachable) state
+                var node = _screen.BoardNode(fusion.Id);
+                var outline = node.Find("Outline").GetComponent<Image>();
+                var icon = node.Find("Icon").GetComponent<Image>();
+                Assert.That(outline.color.a, Is.EqualTo(RigBoardLayout.LockedFusionBorderAlpha).Within(1e-4f), $"'{fusion.Id}' locked border alpha");
+                Assert.That(icon.color.a, Is.EqualTo(RigBoardLayout.LockedFusionIconAlpha).Within(1e-4f), $"'{fusion.Id}' locked icon alpha");
+            }
+        }
+
+        // ------------------------------------------------------------------ MV-445 defect 7: icon scale
+
+        /// <summary>Regression guard: a 50px-radius ability node and a 72px-radius category node must
+        /// both scale their icon against their OWN radius, not a shared fixed reference — already
+        /// correct in code (BuildAbilityNode/BuildCategoryNode each read <c>r</c> from their own local
+        /// variable), pinned here so it can't silently regress.</summary>
+        [Test]
+        public void IconSizeScalesAgainstEachNodesOwnRadius()
+        {
+            OpenScreen();
+            float abR = RigBoardLayout.RadiusAbility, catR = RigBoardLayout.RadiusCategory;
+            float expectedAbilityIcon = Mathf.RoundToInt(abR * RigBoardLayout.IconScaleAbility);
+            float expectedCategoryIcon = Mathf.RoundToInt(catR * RigBoardLayout.IconScaleCategory);
+            Assert.That(expectedAbilityIcon, Is.Not.EqualTo(expectedCategoryIcon),
+                "the two radii/scales must actually differ for this test to mean anything");
+
+            var ability = RigBoardLayout.Abilities[0];
+            var abilityIcon = _screen.BoardNode(ability.Id).Find("Icon").GetComponent<Image>();
+            Assert.That(abilityIcon.rectTransform.sizeDelta.x, Is.EqualTo(expectedAbilityIcon).Within(0.5f));
+
+            var category = RigBoardLayout.Categories[0];
+            var categoryIcon = _screen.BoardNode(category.Id).Find("Icon").GetComponent<Image>();
+            Assert.That(categoryIcon.rectTransform.sizeDelta.x, Is.EqualTo(expectedCategoryIcon).Within(0.5f));
+        }
+
+        // ------------------------------------------------------------------ MV-445 defect 6: top bar
+
+        [Test]
+        public void CellsChipHasNoLeadingIcon()
+        {
+            OpenScreen();
+            var chip = _screen.transform.Find("Weapons Canvas/Screen Root/Safe Area/Weapons Root/Top Bar/Cells Chip");
+            Assert.That(chip, Is.Not.Null, "Cells Chip not found");
+            Assert.That(chip.Find("Icon"), Is.Null, "CELLS chip must not carry a leading icon/dot — neither design image has one");
+        }
+
+        [Test]
+        public void PartsTrayWidthIsSizedToItsOwnContentNotAMagicConstant()
+        {
+            OpenScreen();
+            var tray = _screen.transform.Find("Weapons Canvas/Screen Root/Safe Area/Weapons Root/Top Bar/Parts Tray") as RectTransform;
+            Assert.That(tray, Is.Not.Null, "Parts Tray not found");
+
+            const int socketCount = 6, socketGap = 4;
+            // PartsSocketSize is private; re-derive its contribution from a built socket's own width
+            // (Sockets/Socket 0) instead of duplicating the constant.
+            var socket0 = tray.Find("Sockets/Socket 0") as RectTransform;
+            Assert.That(socket0, Is.Not.Null);
+            float socketSize = socket0.sizeDelta.y;
+            float socketsWidth = socketCount * socketSize + (socketCount - 1) * socketGap;
+            const float leftColumnWidth = 100f, midGap = 14f, rightPad = 16f;
+            float expectedWidth = leftColumnWidth + midGap + socketsWidth + rightPad;
+
+            Assert.That(tray.sizeDelta.x, Is.EqualTo(expectedWidth).Within(0.5f));
+        }
+
+        [Test]
+        public void CloseButtonUsesTheSupportedMultiplicationSignGlyph()
+        {
+            OpenScreen();
+            var closeButton = _screen.transform.Find("Weapons Canvas/Screen Root/Safe Area/Weapons Root/Top Bar/Close Button");
+            Assert.That(closeButton, Is.Not.Null, "Close Button not found");
+            var label = closeButton.GetComponentInChildren<Text>();
+            Assert.That(label.text, Is.EqualTo("× CLOSE"), "must be U+00D7 (supported by HudFont), not U+2715 (a dingbat with no glyph coverage)");
+        }
     }
 }

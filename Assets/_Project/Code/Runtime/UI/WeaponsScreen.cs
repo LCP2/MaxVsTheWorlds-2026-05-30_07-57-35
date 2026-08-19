@@ -34,14 +34,20 @@ namespace MaxWorlds.UI
 
         private const float RefW = 1920f, RefH = 1080f;
 
-        /// <summary>MV-433: below this, <see cref="ComputeBoardScale"/> refuses to shrink the board
-        /// further — an ability node (r 50) at the floor is 90 ref-px / ~39.6pt at the project's
-        /// established 6-inch-screen scale (<c>SettingsPanel.Scale6Inch</c>, 0.44 — see that file's own
-        /// derivation), already under Apple's 44pt HIG minimum on its own. The floor doesn't claim to
-        /// clear 44pt (it can't, at this node size — flagged in the MV-433 fix comment); it exists so a
-        /// narrower aspect than 1.6:1 doesn't shrink tap targets even further chasing zero crop. Below
-        /// the floor, a little edge crop is accepted instead (see <see cref="VisibleRefXWindow"/>).</summary>
-        private const float BoardScaleFloor = 0.9f;
+        /// <summary>MV-445 defect 2: lowered 0.9 -> 0.83. At 0.9 the SUPPORT region panel's right edge
+        /// (raw x=1850) clipped off screen at any aspect narrower than ~1.55:1 — verified against
+        /// Lee's own ~1.65:1 viewport, where HEALTH (u_hp) was sliced in half — because 0.9 wasn't
+        /// actually enough shrink to bring x=1850 back inside <see cref="VisibleRefXWindow"/> at 1.4:1
+        /// (scaled right edge 1761 vs a visible max of 1716). 0.83 is the tightest floor that keeps
+        /// every node AND region panel on screen down to 1.4:1 (see
+        /// <c>RigBoardChromeTests.EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect</c>).
+        /// Trade accepted, not hidden: an ability node (r 50) at this floor is 83 ref-px / ~36.5pt at the
+        /// project's established 6-inch-screen scale (<c>SettingsPanel.Scale6Inch</c>, 0.44), further
+        /// under Apple's 44pt HIG minimum than the old floor already was — see
+        /// <c>RigBoardChromeTests.DocumentsTheClampFloorsKnownShortfallAgainstTheLiteralFortyFourPointAc</c>.
+        /// Below the floor (aspects narrower than 1.4:1), a little edge crop is accepted instead (see
+        /// <see cref="VisibleRefXWindow"/>).</summary>
+        private const float BoardScaleFloor = 0.83f;
 
         private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
         private static readonly Color PanelColor = new Color(0.04f, 0.05f, 0.06f, 0.99f);
@@ -71,7 +77,11 @@ namespace MaxWorlds.UI
         private const float HexRotationDeg = -90f;   // pointy-top: vertex angles 60*i-90
         private const float FusionRotationDeg = 45f; // MV-433: diamond, not the hex's pointy-top rotation
         private const float Sqrt3 = 1.7320508f;
-        private const float PartsSocketSize = 34f;
+        // MV-445 defect 6: was 34 — at that size, 6 sockets (socketsWidth 224px) did not fit the
+        // socket row's own available half of BuildPartsTray's old fixed 340px width (154px), so the
+        // pips ran past the tray's own edge. Lowered alongside BuildPartsTray's move to a
+        // content-sized width (see that method's own doc comment).
+        private const float PartsSocketSize = 26f;
 
         // MV-433: owned/lit-category halo radius as a multiple of the node's own radius, and the two
         // peak alphas the halo's shared Glow texture is tinted to (module cyan for a draftable
@@ -231,10 +241,24 @@ namespace MaxWorlds.UI
             return (minX, RefW - minX);
         }
 
+        private int _lastScreenWidth, _lastScreenHeight;
+
         private void Update()
         {
             if (!_open) return;
             float dt = Time.unscaledDeltaTime;
+
+            // MV-445 defect 2: ApplyBoardScale otherwise only runs from Build()/Refresh(), both driven
+            // by RigState/PickupWallet events — a browser window resized WHILE the screen is open (no
+            // ability/parts change in between) never re-fit the board until something else happened to
+            // trigger a Refresh(). Cheap to poll every frame; only calls ApplyBoardScale on an actual
+            // change.
+            if (Screen.width != _lastScreenWidth || Screen.height != _lastScreenHeight)
+            {
+                _lastScreenWidth = Screen.width;
+                _lastScreenHeight = Screen.height;
+                ApplyBoardScale();
+            }
 
             if (_partsTrayBg != null)
             {
@@ -373,8 +397,10 @@ namespace MaxWorlds.UI
             RefreshMorphingModuleDraft();
         }
 
-        /// <summary>MV-443: the two live-state connector families (fusion connectors are a static amber
-        /// tint set once at build time and never touched here — see <see cref="BuildConnectors"/>).</summary>
+        /// <summary>MV-443/MV-445: all three live-state connector families — ability connectors (family
+        /// colour, alphaLive/alphaDim) and fusion connectors (defect 3: part/amber colour, gated by
+        /// <see cref="RigFusionState.IsEligible"/> between fusionAlpha and the dimmer fusionAlphaLocked,
+        /// no longer a static tint set once at build time).</summary>
         private void RefreshConnectors()
         {
             foreach (var ab in RigBoardLayout.Abilities)
@@ -393,6 +419,18 @@ namespace MaxWorlds.UI
                     if (!_connectors.TryGetValue($"conn:ab:{ab.Parent}>{ab.Id}", out var img)) continue;
                     bool live = RigState.IsOwned(ab.Parent);
                     img.color = new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
+                }
+            }
+
+            Color part = RigBoardLayout.Colour("part");
+            foreach (var fusion in RigBoardLayout.Fusions)
+            {
+                bool reachable = RigFusionState.IsEligible(fusion.Id);
+                float alpha = reachable ? RigBoardLayout.ConnectorFusionAlpha : RigBoardLayout.ConnectorFusionAlphaLocked;
+                foreach (var parentCategoryId in new[] { fusion.ParentA, fusion.ParentB })
+                {
+                    if (!_connectors.TryGetValue($"conn:fusion:{fusion.Id}>{parentCategoryId}", out var img)) continue;
+                    img.color = new Color(part.r, part.g, part.b, alpha);
                 }
             }
         }
@@ -514,7 +552,7 @@ namespace MaxWorlds.UI
             if (_categoryPanels.TryGetValue(cat.Id, out var panel))
                 panel.color = new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark);
             if (_categoryPanelBorders.TryGetValue(cat.Id, out var border))
-                border.color = new Color(family.r, family.g, family.b, lit ? 0.16f : 0.06f);
+                border.color = new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark);
 
             if (lit)
             {
@@ -598,6 +636,11 @@ namespace MaxWorlds.UI
                 v.Glow.gameObject.SetActive(true);
                 v.Glow.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
                 v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaDraftable);
+                // MV-445 defect 4: OuterRing's RGB was never set here — Update()'s pulse only ever
+                // touched its alpha, leaving the dashed ring stuck at Color.clear's (0,0,0) RGB from
+                // BuildNodeShell, i.e. black dashes instead of the module cyan every other draftable
+                // tell uses.
+                v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
                 v.CapMarker.color = module;
                 v.PillText.text = "SHED";
                 v.PillBg.color = PillBackdrop;
@@ -664,12 +707,12 @@ namespace MaxWorlds.UI
                 v.Sub.fontSize = 13;
                 v.Button.interactable = banked >= fusion.PartCost;
             }
-            else   // MV-443 defect 8: locked fusion diamond
+            else   // MV-443 defect 8, MV-445 defect 5: locked fusion diamond
             {
                 v.HexOutline.sprite = LockedFusionOutlineSprite(v.Radius);
                 v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.045f);
-                v.HexOutline.color = new Color(amber.r, amber.g, amber.b, 0.26f);
-                v.Icon.color = new Color(amber.r, amber.g, amber.b, 0.40f);
+                v.HexOutline.color = new Color(amber.r, amber.g, amber.b, RigBoardLayout.LockedFusionBorderAlpha);
+                v.Icon.color = new Color(amber.r, amber.g, amber.b, RigBoardLayout.LockedFusionIconAlpha);
                 v.Label.text = "? ? ?";
                 v.Label.color = Dim;
                 v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
@@ -916,7 +959,9 @@ namespace MaxWorlds.UI
                 }
             }
 
-            Color part = RigBoardLayout.Colour("part");
+            // MV-445 defect 3: geometry only here — colour is now live (RefreshConnectors), gated by
+            // RigFusionState.IsEligible so an unreachable fusion (not both parent categories lit) draws
+            // at the dimmer fusionAlphaLocked, not the old always-on fusionAlpha.
             float fusionBias = RigBoardLayout.ConnectorFusionControlBias, fusionWidth = RigBoardLayout.ConnectorFusionWidth;
             foreach (var fusion in RigBoardLayout.Fusions)
             {
@@ -925,8 +970,7 @@ namespace MaxWorlds.UI
                 {
                     if (!categoryById.TryGetValue(parentCategoryId, out var cat)) continue;
                     var start = new Vector2(cat.X, cat.Y + catR + RigBoardLayout.ConnectorStartOffsetCategory);
-                    var img = BuildConnector(boardRoot, $"conn:fusion:{fusion.Id}>{parentCategoryId}", start, end, fusionBias, fusionWidth);
-                    img.color = new Color(part.r, part.g, part.b, RigBoardLayout.ConnectorFusionAlpha);   // static, never refreshed
+                    BuildConnector(boardRoot, $"conn:fusion:{fusion.Id}>{parentCategoryId}", start, end, fusionBias, fusionWidth);
                 }
             }
         }
@@ -1293,11 +1337,16 @@ namespace MaxWorlds.UI
             return HudTextures.PolygonOutline(sides, RotationFor(sides), Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeOwned);
         }
 
+        // MV-445 defect 4: dash 13 / gap 9, walked as arc length around the closed hexagon (see
+        // HudTextures.PolygonOutline's own doc comment for why the old angle-based dash broke).
+        private const float DraftableDashLength = 13f;
+        private const float DraftableGapLength = 9f;
+
         private Sprite DashedHexSprite(float r)
         {
             float w = r * Sqrt3, h = r * 2f;
             return HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h),
-                RigBoardLayout.StrokeActive, true, 14);
+                RigBoardLayout.StrokeActive, true, DraftableDashLength, DraftableGapLength);
         }
 
         /// <summary>MV-443 defect 5: a locked ability's hex outline draws at <c>strokeLocked</c> (2px),
@@ -1364,14 +1413,12 @@ namespace MaxWorlds.UI
             cursor = BuildCloseButton(bar, cursor) - 16f;
             cursor = BuildQuitButton(bar, cursor) - 16f;
 
-            const float partsTrayWidth = 340f;
-            cursor = BuildPartsTray(bar, cursor, partsTrayWidth) - 16f;
+            cursor = BuildPartsTray(bar, cursor) - 16f;
 
             // MV-433: widened from 170 — "28 / 30 CELLS" at the chip's own min best-fit size (14pt)
             // was clipping its leading digit against the icon at the old width.
             const float cellsChipWidth = 190f;
-            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor,
-                HudTextures.Disc(32), 20f, out _cellsText, out _);
+            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor, out _cellsText);
             cellsChip.name = "Cells Chip";
 
             _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
@@ -1379,9 +1426,10 @@ namespace MaxWorlds.UI
             _cellsChipButton.transition = Selectable.Transition.None;
             _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
 
-            // MV-443 defect 7: a real rounded pill (radius 25) with a 2.5px colours.sec border — was a
-            // flat, borderless chip.
-            var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(50, 0.5f, 2.5f), CellsColor, "Cells Border");
+            // MV-443 defect 7, MV-445 defect 6: a real rounded pill (radius 25, matching BuildChip's own
+            // background corner) with a 2.5px colours.sec border — was a flat, borderless chip.
+            float cellsCornerFraction = Mathf.Clamp(25f / (Mathf.Min(cellsChipWidth, 52f) * 0.5f), 0.05f, 0.5f);
+            var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(32, cellsCornerFraction, 2.5f), CellsColor, "Cells Border");
             Stretch(cellsBorder.rectTransform);
             cellsBorder.type = Image.Type.Sliced;
             cellsBorder.raycastTarget = false;
@@ -1390,9 +1438,25 @@ namespace MaxWorlds.UI
         /// <summary>MV-423's replacement for the old spinning-gear PARTS chip: six hex sockets (filled
         /// amber up to the banked count, a <c>+N</c> overflow past six), captioned "tap a node to fit
         /// one" while anything's banked and "none banked" (whole tray dark) when empty — the design's
-        /// own before/after pair (<c>MV-423.png</c> vs <c>MV-423-noparts.png</c>).</summary>
-        private float BuildPartsTray(RectTransform bar, float rightEdge, float width)
+        /// own before/after pair (<c>MV-423.png</c> vs <c>MV-423-noparts.png</c>).
+        ///
+        /// MV-445 defect 6: width is now computed from actual content (label column + socket row +
+        /// paddings) instead of a hardcoded 340 — at that fixed width the socket row's old 50%-of-tray
+        /// anchor gave the six pips only 154px to share (170 half-width minus a 16px pad) against the
+        /// 224px <see cref="PartsSocketSize"/>(34) actually needed, so they overran the row's own
+        /// bounds. Both the label column and the socket row are now fixed-size blocks pinned to their
+        /// own edge, so the tray's width is simply their sum — it can never again under-provision one
+        /// side chasing a magic total.</summary>
+        private float BuildPartsTray(RectTransform bar, float rightEdge)
         {
+            const int socketCount = 6;
+            const float socketGap = 4f;
+            const float leftColumnWidth = 100f;
+            const float midGap = 14f;
+            const float rightPad = 16f;
+            float socketsWidth = socketCount * PartsSocketSize + (socketCount - 1) * socketGap;
+            float width = leftColumnWidth + midGap + socketsWidth + rightPad;
+
             var tray = NewRect("Parts Tray", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             tray.pivot = new Vector2(1f, 0.5f);
             tray.sizeDelta = new Vector2(width, 68f);
@@ -1413,29 +1477,27 @@ namespace MaxWorlds.UI
             border.raycastTarget = false;
 
             _partsTrayLabel = AddText(tray, 18, PartsColor, TextAnchor.UpperLeft);
-            Anchor(_partsTrayLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 1f));
-            _partsTrayLabel.rectTransform.offsetMin = new Vector2(14f, -30f);
-            _partsTrayLabel.rectTransform.offsetMax = Vector2.zero;
+            Anchor(_partsTrayLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            _partsTrayLabel.rectTransform.anchoredPosition = new Vector2(14f, -6f);
+            _partsTrayLabel.rectTransform.sizeDelta = new Vector2(leftColumnWidth - 14f, 24f);
             _partsTrayLabel.fontStyle = FontStyle.Bold;
             _partsTrayLabel.text = "PARTS";
 
             // MV-443 defect 7: was clipping "...one banked" mid-word — best-fit shrink instead of a
             // fixed 13pt, same idiom the CELLS chip's own label already uses for a tight box.
             _partsTraySub = AddText(tray, 13, Dim, TextAnchor.LowerLeft);
-            Anchor(_partsTraySub.rectTransform, new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f));
-            _partsTraySub.rectTransform.offsetMin = new Vector2(14f, 8f);
-            _partsTraySub.rectTransform.offsetMax = new Vector2(0f, 30f);
+            Anchor(_partsTraySub.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
+            _partsTraySub.rectTransform.anchoredPosition = new Vector2(14f, 8f);
+            _partsTraySub.rectTransform.sizeDelta = new Vector2(leftColumnWidth - 14f, 22f);
             _partsTraySub.horizontalOverflow = HorizontalWrapMode.Wrap;
             _partsTraySub.resizeTextForBestFit = true;
             _partsTraySub.resizeTextMinSize = 10;
             _partsTraySub.resizeTextMaxSize = 13;
 
-            const int socketCount = 6;
-            const float socketGap = 4f;
-            float socketsWidth = socketCount * PartsSocketSize + (socketCount - 1) * socketGap;
-            var socketRow = NewRect("Sockets", tray, new Vector2(0.5f, 0.5f), new Vector2(1f, 0.5f));
-            socketRow.offsetMin = new Vector2(0f, -PartsSocketSize * 0.5f);
-            socketRow.offsetMax = new Vector2(-16f, PartsSocketSize * 0.5f);
+            var socketRow = NewRect("Sockets", tray, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            socketRow.pivot = new Vector2(1f, 0.5f);
+            socketRow.sizeDelta = new Vector2(socketsWidth, PartsSocketSize);
+            socketRow.anchoredPosition = new Vector2(-rightPad, 0f);
 
             _partsSockets.Clear();
             _partsSocketGlows.Clear();
@@ -1487,7 +1549,10 @@ namespace MaxWorlds.UI
 
             var label = AddText(bg.rectTransform, 24, PanelColor, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
-            label.text = "✕ CLOSE";
+            // MV-445 defect 6: was U+2715 (heavy multiplication X, a dingbat) — HudFont's LegacyRuntime.ttf
+            // has no coverage for it (same class of gap as the draft band's own ASCII-hyphen note), so it
+            // rendered as a dropped/missing glyph. U+00D7 (the plain Latin-1 multiplication sign) is.
+            label.text = "× CLOSE";
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
 
@@ -1518,28 +1583,29 @@ namespace MaxWorlds.UI
             return rightEdge - w;
         }
 
-        /// <summary>A rounded pill: a tinted icon + a live count/label, right-anchored at
-        /// <paramref name="offset"/> from the top bar's right edge (CELLS).</summary>
+        /// <summary>A rounded pill: a live count/label, right-anchored at <paramref name="offset"/>
+        /// from the top bar's right edge (CELLS). MV-445 defect 6: dropped the leading icon dot —
+        /// neither design image carries one, "0 / 20 CELLS" reads on its own — and switched the
+        /// background to a true stadium radius (25, matching the ticket's own spec against this chip's
+        /// fixed 52px height) over a dark fill, not the lighter RowColor every other row uses.</summary>
         private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
-            Sprite iconSprite, float iconSize, out Text label, out Image icon)
+            out Text label)
         {
+            const float h = 52f;
+            const float radius = 25f;
+            float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(width, h) * 0.5f), 0.05f, 0.5f);
+
             var chip = NewRect("Chip", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             chip.pivot = new Vector2(1f, 0.5f);
-            chip.sizeDelta = new Vector2(width, 52f);
+            chip.sizeDelta = new Vector2(width, h);
             chip.anchoredPosition = offset;
 
-            var bg = AddImage(chip, HudTextures.RoundedBox(32, 0.5f), RowColor, "BG");
+            var bg = AddImage(chip, HudTextures.RoundedBox(32, cornerFraction), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
 
-            icon = AddImage(chip, iconSprite, accent, "Icon");
-            Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            icon.rectTransform.anchoredPosition = new Vector2(24f, 0f);
-            icon.rectTransform.sizeDelta = new Vector2(iconSize, iconSize);
-            icon.raycastTarget = false;
-
-            label = AddText(chip, 24, accent, TextAnchor.MiddleRight);
-            Anchor(label.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0.5f, 0.5f));
-            label.rectTransform.offsetMin = new Vector2(42f, -20f);
+            label = AddText(chip, 24, accent, TextAnchor.MiddleCenter);
+            Stretch(label.rectTransform);
+            label.rectTransform.offsetMin = new Vector2(14f, -20f);
             label.rectTransform.offsetMax = new Vector2(-14f, 20f);
             label.fontStyle = FontStyle.Bold;
             label.resizeTextForBestFit = true;
