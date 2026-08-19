@@ -81,8 +81,12 @@ namespace MaxWorlds.Tests.EditMode
                 var panel = _screen.CategoryPanel(cat.Id);
                 Assert.That(panel, Is.Not.Null, $"no region panel for '{cat.Id}'");
                 bool lit = cat.Id == "PRIMARY";
-                float expected = lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark;
-                Assert.That(panel.color.a, Is.EqualTo(expected).Within(1e-3f), $"'{cat.Id}' region opacity");
+                // MV-462 defect 3: an unlit category's panel is additionally dimmed by FamilyDimFactor on
+                // top of RegionOpacityDark — the panel alone was never enough to read as "receded"
+                // (that's this ticket's own point), but it still carries the multiplier like every other
+                // graphic in the family.
+                float expected = lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark * RigBoardLayout.FamilyDimFactor;
+                Assert.That(panel.color.a, Is.EqualTo(expected).Within(1e-4f), $"'{cat.Id}' region opacity");
             }
         }
 
@@ -110,7 +114,9 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var cat in RigBoardLayout.Categories)
             {
                 bool lit = cat.Id == "PRIMARY";
-                float expected = lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark;
+                // MV-462 defect 3: dimmed on top of RegionOpacityDark for an unlit category, same as
+                // RegionPanelOpacityIsReadFromTheDataFile.
+                float expected = lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark * RigBoardLayout.FamilyDimFactor;
 
                 var worldPoint = boardRoot.TransformPoint(new Vector3(cat.X, -testY, 0f));
                 float coverage = 0f;
@@ -179,7 +185,12 @@ namespace MaxWorlds.Tests.EditMode
                 // MV-446 defect 2: owned/draftable peak alpha (and blur width) now come off
                 // rig_board.json (RigBoardLayout.GlowAlphaOwned/GlowAlphaDraft) instead of a hardcoded
                 // 0.55/0.22 — tunable without a code change, per the ticket's own AC.
-                float expectedAlpha = owned ? RigBoardLayout.GlowAlphaOwned : RigBoardLayout.GlowAlphaDraft;
+                // MV-462 defect 3: a draftable node's glow is additionally dimmed when its own category
+                // has nothing owned anywhere in it — `owned` here already implies its category is lit
+                // (an owned ability lights its own category), so this only ever bites the draftable case.
+                bool familyLit = owned || CategoryHasOwnedAbilityInCategory(ab.Category);
+                float baseAlpha = owned ? RigBoardLayout.GlowAlphaOwned : RigBoardLayout.GlowAlphaDraft;
+                float expectedAlpha = familyLit ? baseAlpha : baseAlpha * RigBoardLayout.FamilyDimFactor;
                 Assert.That(glow.color.a, Is.EqualTo(expectedAlpha).Within(0.02f), $"'{ab.Id}' glow alpha");
 
                 var family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
@@ -279,6 +290,16 @@ namespace MaxWorlds.Tests.EditMode
             foreach (var ab in RigBoardLayout.Abilities)
                 if (ab.Category == categoryId) n++;
             return n;
+        }
+
+        /// <summary>MV-462 defect 3: test-side mirror of <c>WeaponsScreen.CategoryHasOwnedAbility</c>
+        /// (private) — whether ANY ability in <paramref name="categoryId"/> is owned, i.e. whether that
+        /// family is lit and exempt from the family dim.</summary>
+        private static bool CategoryHasOwnedAbilityInCategory(string categoryId)
+        {
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Category == categoryId && RigState.IsOwned(ab.Id)) return true;
+            return false;
         }
 
         // ------------------------------------------------------------------ AC4: scale-to-fit keeps every node on screen
