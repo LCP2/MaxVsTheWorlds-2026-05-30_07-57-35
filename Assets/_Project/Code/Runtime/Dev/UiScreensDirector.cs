@@ -147,9 +147,11 @@ namespace MaxWorlds.Dev
             }
             if (canvas == null) { LogWarn("rig: WeaponsScreen built no canvas"); yield break; }
 
-            yield return CaptureFixtureScreen("rig-16x9", 1920, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas);
-            yield return CaptureFixtureScreen("rig-16x10", 1728, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas);
-            yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas);
+            void ScaleBoardTo(int w, int h) => weapons.ApplyBoardScale((float)w / h);
+
+            yield return CaptureFixtureScreen("rig-16x9", 1920, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            yield return CaptureFixtureScreen("rig-16x10", 1728, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -281,8 +283,16 @@ namespace MaxWorlds.Dev
         /// for why this replaced <c>ScreenCapture.CaptureScreenshotAsTexture()</c> (MV-444). Every wait
         /// after <paramref name="open"/> uses <see cref="WaitForSecondsRealtime"/>, never
         /// <see cref="WaitForSeconds"/> — <c>WeaponsScreen.Open()</c> sets <c>Time.timeScale = 0</c>,
-        /// so a scaled wait would never elapse.</summary>
-        private IEnumerator CaptureFixtureScreen(string name, int w, int h, Action applyFixture, Action open, Action close, Canvas canvas)
+        /// so a scaled wait would never elapse.
+        ///
+        /// <paramref name="onSizeKnown"/> (MV-462 defect 2): fires with the actual (w, h) render target
+        /// right where <see cref="ShowCanvasOnCamera"/> already overrides the CanvasScaler against
+        /// ambient <c>Screen.width</c>/<c>Screen.height</c> — same reason, same timing (before the
+        /// settle-frame yields below, so the override is in place when the canvas rebuilds its layout).
+        /// <see cref="CaptureRigBoard"/> uses it to drive <c>WeaponsScreen.ApplyBoardScale(float)</c>
+        /// with this shot's real aspect instead of the ambient one, which otherwise shrank and recentred
+        /// the board on a headless capture whose batchmode window isn't actually 16:9.</summary>
+        private IEnumerator CaptureFixtureScreen(string name, int w, int h, Action applyFixture, Action open, Action close, Canvas canvas, Action<int, int> onSizeKnown = null)
         {
             Exception staged = null;
             try
@@ -316,6 +326,7 @@ namespace MaxWorlds.Dev
             }
 
             ShowCanvasOnCamera(canvas, _captureCam, w, h);
+            onSizeKnown?.Invoke(w, h);
 
             // MV-444: a ScreenSpaceCamera canvas's on-screen size is computed from the camera's CURRENT
             // pixel dimensions the next time Unity rebuilds canvas geometry (Canvas.SendWillRenderCanvases,

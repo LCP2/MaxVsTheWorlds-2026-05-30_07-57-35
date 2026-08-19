@@ -349,13 +349,18 @@ namespace MaxWorlds.UI
             apothem = r * Mathf.Cos(segment * 0.5f);
             float phi = Mathf.Atan2(ly, lx);
 
-            // rawAngle spans the FULL closed loop (0..sides*segment == 0..2*PI); decomposing it into
-            // edgeIndex (which of the `sides` flat edges) + a (this pixel's angular offset from that
-            // edge's own midpoint, -segment/2..+segment/2) reproduces the original single-edge `a` used
-            // for the outline/stroke test, while also exposing edgeIndex for the arc-length dash walk
-            // below — the two must stay in exact lockstep or the dash phase drifts from the edge the
-            // stroke itself is drawn on.
-            float rawAngle = Mathf.Repeat(phi - rot - segment * 0.5f, 2f * Mathf.PI);
+            // rawAngle spans the FULL closed loop (0..sides*segment == 0..2*PI), zeroed so a VERTEX (not
+            // an edge midpoint) sits at rotationDeg — matching Polygon's own doc comment ("a vertex sits
+            // at angle (360/sides)*i + rotationDeg") and rig_board.json's "hexOrientation" contract
+            // (vertex angles 60*i-90). MV-462: this used to zero at `rot + segment*0.5`, which put an
+            // EDGE midpoint at rotationDeg instead of a vertex — a hexagon at rotationDeg=-90 rendered
+            // flat-top (vertices left/right) instead of the intended pointy-top (vertex up/down), because
+            // every vertex landed 30 degrees off from where the doc comment (and the design data) said it
+            // would. Decomposing into edgeIndex (which of the `sides` flat edges) + a (this pixel's
+            // angular offset from that edge's own midpoint, -segment/2..+segment/2) still exposes
+            // edgeIndex for the arc-length dash walk below — the two must stay in exact lockstep or the
+            // dash phase drifts from the edge the stroke itself is drawn on.
+            float rawAngle = Mathf.Repeat(phi - rot, 2f * Mathf.PI);
             edgeIndex = Mathf.Clamp(Mathf.FloorToInt(rawAngle / segment), 0, sides - 1);
             a = (rawAngle - edgeIndex * segment) - segment * 0.5f;
             return apothem / Mathf.Cos(a);

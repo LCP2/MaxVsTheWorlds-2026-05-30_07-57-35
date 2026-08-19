@@ -111,7 +111,9 @@
     "fusionSubFontSize": 16,
     "partsTraySubFontSizeMin": 16,
     "partsTraySubFontSizeMax": 18,
-    "$comment_smallType": "MV-446 defect 3: floor of 16px (matches labelFontSize, already used at that size for every node's own caption) - the FORGE caption, fusion sub-captions and PARTS tray 'N banked' line were rendering as small as 10-13px, muddy on a downscaled 6-inch screen."
+    "$comment_smallType": "MV-446 defect 3: floor of 16px (matches labelFontSize, already used at that size for every node's own caption) - the FORGE caption, fusion sub-captions and PARTS tray 'N banked' line were rendering as small as 10-13px, muddy on a downscaled 6-inch screen.",
+    "familyDimFactor": 0.45,
+    "$comment_familyDim": "MV-462 defect 3: an ability family with zero owned abilities must recede as one unit - every graphic under it (category node fill/stroke/icon/label/pill, every ability node + label + pill, every connector inside the family, the region panel) has its alpha multiplied by this factor on top of whatever state-specific alpha it already carries."
   },
   "colours": {
     "$comment": "Prefer the named existing constant where one exists.",
