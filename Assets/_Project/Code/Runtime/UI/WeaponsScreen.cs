@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -36,20 +36,24 @@ namespace MaxWorlds.UI
 
         private const float RefW = 1920f, RefH = 1080f;
 
-        /// <summary>MV-445 defect 2: lowered 0.9 -> 0.83. At 0.9 the SUPPORT region panel's right edge
-        /// (raw x=1850) clipped off screen at any aspect narrower than ~1.55:1 — verified against
-        /// Lee's own ~1.65:1 viewport, where HEALTH (u_hp) was sliced in half — because 0.9 wasn't
-        /// actually enough shrink to bring x=1850 back inside <see cref="VisibleRefXWindow"/> at 1.4:1
-        /// (scaled right edge 1761 vs a visible max of 1716). 0.83 is the tightest floor that keeps
-        /// every node AND region panel on screen down to 1.4:1 (see
-        /// <c>RigBoardChromeTests.EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect</c>).
-        /// Trade accepted, not hidden: an ability node (r 50) at this floor is 83 ref-px / ~36.5pt at the
-        /// project's established 6-inch-screen scale (<c>SettingsPanel.Scale6Inch</c>, 0.44), further
-        /// under Apple's 44pt HIG minimum than the old floor already was — see
-        /// <c>RigBoardChromeTests.DocumentsTheClampFloorsKnownShortfallAgainstTheLiteralFortyFourPointAc</c>.
-        /// Below the floor (aspects narrower than 1.4:1), a little edge crop is accepted instead (see
-        /// <see cref="VisibleRefXWindow"/>).</summary>
-        private const float BoardScaleFloor = 0.83f;
+        /// <summary>MV-445 defect 2 lowered 0.9 -> 0.83 to stop SUPPORT clipping down to 1.4:1. MV-472
+        /// lowers it again, 0.83 -> 0.70: <see cref="RigBoardLayout"/>'s content-proportional column
+        /// layout (item 3 of that ticket) fixed WHICH family ran out of room, but the board's own OUTER
+        /// extent is unchanged by redistributing columns inside it — at iPad mini's aspect (the ticket's
+        /// own SG1 evidence, 1078x815 = 1.323:1) the un-floored fit-to-width scale is ~0.744, so the OLD
+        /// 0.83 floor was still artificially inflating the board past the visible window's own right edge
+        /// (scaled x=1920 lands at 1757 vs a visible max of 1678 at that aspect) — the exact clipping
+        /// this ticket's screenshot shows. 0.70 clears that with margin and, being a fit-to-width floor,
+        /// never engages at 1.4:1-and-wider aspects at all (unchanged there from MV-445). This is NOT the
+        /// ticket's own explicitly-forbidden fix for PHONE readability (44pt/11pt) — that's solved
+        /// entirely separately by <see cref="RigBoardLayout"/>'s phone-mode radii/fonts, which render at
+        /// board scale 1.0 always (phone's aspect is wider than 16:9, never narrower, so this floor never
+        /// touches it). See
+        /// <c>RigBoardChromeTests.EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect</c>.
+        /// Below the floor (aspects narrower than iPad mini's own), a little edge crop is still accepted
+        /// (see <see cref="VisibleRefXWindow"/>) — this ticket's own required coverage stops at iPad mini
+        /// and iPhone, not an unbounded narrower hypothetical.</summary>
+        private const float BoardScaleFloor = 0.70f;
 
         private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
         private static readonly Color PanelColor = new Color(0.04f, 0.05f, 0.06f, 0.99f);
@@ -106,6 +110,28 @@ namespace MaxWorlds.UI
         private RectTransform _boardScaleRoot;
         private RectTransform _boardRoot;
 
+        /// <summary>MV-472: true once the board has committed to the phone geometry/positions (bigger
+        /// radii/fonts, a scrollable content taller than 1080) instead of the standard fixed frame —
+        /// decided by <see cref="IsPhoneLayout"/> off the live aspect, and re-decided (triggering a
+        /// content rebuild) every time <see cref="ApplyBoardScale(float)"/> runs with a different verdict
+        /// than last time. See that method's own doc comment for why a one-time Build()-time decision
+        /// isn't enough — the ui-screens capture harness reuses one WeaponsScreen instance across every
+        /// registered aspect, phone included.</summary>
+        private bool _phoneMode;
+
+        /// <summary>The direct child of <see cref="_boardRoot"/> that owns everything
+        /// <see cref="BuildBoardContent"/> builds this pass — a plain full-frame passthrough in standard
+        /// mode, the scroll Viewport in phone mode. Torn down and rebuilt whole by
+        /// <see cref="DestroyBoardContent"/>/<see cref="BuildBoardContent"/> on a mode change, rather than
+        /// _boardRoot itself, so _boardRoot (and every ancestor above it) never has to be re-created.</summary>
+        private RectTransform _boardContentHost;
+
+        /// <summary>Where every category/ability/fusion node, panel and connector actually parents to —
+        /// <see cref="_boardContentHost"/> itself in standard mode, or its scroll Content child in phone
+        /// mode. <see cref="BoardNode"/> searches this, not <see cref="_boardRoot"/>, so it keeps working
+        /// after a phone-mode rebuild moves nodes a level deeper.</summary>
+        private RectTransform _nodeParent;
+
         private Text _cellsText;
         private Image _cellsChipBg;
         private Image _cellsBorder;
@@ -148,8 +174,8 @@ namespace MaxWorlds.UI
         /// test's only way in, so it never has to guess GameObject names.</summary>
         public RectTransform BoardNode(string id)
         {
-            if (_boardRoot == null) return null;
-            var t = _boardRoot.Find(id);
+            if (_nodeParent == null) return null;
+            var t = _nodeParent.Find(id);
             return t != null ? (RectTransform)t : null;
         }
 
@@ -273,6 +299,45 @@ namespace MaxWorlds.UI
             float minX = (RefW - visibleRefWidth) * 0.5f;
             return (minX, RefW - minX);
         }
+
+        // ------------------------------------------------------------------ phone layout (MV-472)
+
+        /// <summary>A real device's landscape aspect: iPhone lands around ~2.15-2.2:1 (this project's own
+        /// registered "phone" captureAspect is 2340x1080 = 2.1667), markedly wider than the tablet-class
+        /// aspects THE RIG is already captured at (16:9 = 1.78, 16:10 = 1.6) and wider still than iPad
+        /// mini's ~1.33.
+        ///
+        /// 2.10, not a rounder 1.95: <see cref="RigBoardLayout"/>'s phone content width is a FIXED budget
+        /// sized to fit safely at this threshold (see its own <c>PhoneTargetWidth</c> doc comment) — every
+        /// aspect phone mode ever actually renders at is >= this threshold, so a wider one only ever has
+        /// MORE window to spare, never less. Picking the threshold too low (1.95) left a gap between it
+        /// and the width budget's own safe floor where phone mode would select but its own fixed-width
+        /// content didn't yet fit that aspect's narrower window — caught by this file's own EditMode
+        /// coverage at an aspect of exactly 2.0, not a real device but well within where 1.95 would have
+        /// selected phone mode. 2.10 sits with margin below the real registered "phone" aspect (2.1667)
+        /// and above every tablet aspect this project targets, so all three still sort unambiguously.</summary>
+        private const float PhoneAspectThreshold = 2.10f;
+
+        /// <summary>MV-472: does <paramref name="aspect"/> call for the phone geometry (bigger radii/
+        /// fonts, a scrollable content taller than 1080) instead of the standard fixed 1920x1080 frame?
+        /// Pure so it's pinned by an EditMode test without building a canvas — same idiom as
+        /// <see cref="ComputeBoardScale"/>.</summary>
+        public static bool IsPhoneLayout(float aspect) => aspect >= PhoneAspectThreshold;
+
+        private IReadOnlyList<RigCategoryLayout> Categories => _phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
+        private IReadOnlyList<RigAbilityLayout> Abilities => _phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
+        private IReadOnlyList<RigFusionLayout> Fusions => _phoneMode ? RigBoardLayout.PhoneFusions : RigBoardLayout.Fusions;
+        private float RadiusCategory => _phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory;
+        private float RadiusAbility => _phoneMode ? RigBoardLayout.RadiusAbilityPhone : RigBoardLayout.RadiusAbility;
+        private float RadiusFusion => _phoneMode ? RigBoardLayout.RadiusFusionPhone : RigBoardLayout.RadiusFusion;
+        private float LabelFontSize => _phoneMode ? RigBoardLayout.LabelFontSizePhone : RigBoardLayout.LabelFontSize;
+        private float CategoryLabelFontSize => _phoneMode ? RigBoardLayout.CategoryLabelFontSizePhone : RigBoardLayout.CategoryLabelFontSize;
+        private float LevelPillFontSize => _phoneMode ? RigBoardLayout.LevelPillFontSizePhone : RigBoardLayout.LevelPillFontSize;
+        private float LevelPillW => _phoneMode ? RigBoardLayout.LevelPillWPhone : RigBoardLayout.LevelPillW;
+        private float LevelPillH => _phoneMode ? RigBoardLayout.LevelPillHPhone : RigBoardLayout.LevelPillH;
+        private float FusionSubFontSize => _phoneMode ? RigBoardLayout.FusionSubFontSizePhone : RigBoardLayout.FusionSubFontSize;
+        private float ForgeCaptionFontSize => _phoneMode ? RigBoardLayout.ForgeCaptionFontSizePhone : RigBoardLayout.ForgeCaptionFontSize;
+        private float ForgeDividerY => _phoneMode ? RigBoardLayout.ForgeDividerYPhone : RigBoardLayout.ForgeDividerY;
 
         private int _lastScreenWidth, _lastScreenHeight;
 
@@ -454,10 +519,20 @@ namespace MaxWorlds.UI
 
             RefreshPartsTray(banked);
             ApplyBoardScale();
+            RefreshBoardState();
+        }
 
-            foreach (var cat in RigBoardLayout.Categories) RefreshCategoryNode(cat, banked);
-            foreach (var ab in RigBoardLayout.Abilities) RefreshAbilityNode(ab, banked);
-            foreach (var fusion in RigBoardLayout.Fusions) RefreshFusionNode(fusion, banked);
+        /// <summary>MV-472: the state-repaint tail of <see cref="Refresh"/>, factored out so
+        /// <see cref="ApplyBoardScale(float)"/> can re-run it after a phone/standard mode change rebuilds
+        /// the board's nodes from scratch — a freshly built node starts in <see cref="BuildAbilityNode"/>'s
+        /// raw just-constructed state (label set, but no colour/pill/spend state applied yet), and this
+        /// is the same loop that already paints it in every other Refresh() call.</summary>
+        private void RefreshBoardState()
+        {
+            int banked = PickupWallet.PartsBanked;
+            foreach (var cat in Categories) RefreshCategoryNode(cat, banked);
+            foreach (var ab in Abilities) RefreshAbilityNode(ab, banked);
+            foreach (var fusion in Fusions) RefreshFusionNode(fusion, banked);
             RefreshConnectors();
 
             RefreshMorphingModuleDraft();
@@ -899,7 +974,7 @@ namespace MaxWorlds.UI
                 v.Label.color = TextColor;
                 v.Sub.text = $"FORGED · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
-                v.Sub.fontSize = Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize);
+                v.Sub.fontSize = Mathf.RoundToInt(FusionSubFontSize);
                 v.Button.interactable = false;
             }
             else if (eligible)
@@ -912,7 +987,7 @@ namespace MaxWorlds.UI
                 v.Label.color = TextColor;
                 v.Sub.text = $"{fusion.PartCost} PARTS · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
-                v.Sub.fontSize = Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize);
+                v.Sub.fontSize = Mathf.RoundToInt(FusionSubFontSize);
                 v.Button.interactable = banked >= fusion.PartCost;
             }
             else   // MV-443 defect 8, MV-445 defect 5: locked fusion diamond
@@ -926,7 +1001,7 @@ namespace MaxWorlds.UI
                 v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
                 var ink = RigBoardLayout.Colour("ink");
                 v.Sub.color = new Color(ink.r, ink.g, ink.b, 0.22f);
-                v.Sub.fontSize = Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize);
+                v.Sub.fontSize = Mathf.RoundToInt(FusionSubFontSize);
                 v.Button.interactable = false;
             }
         }
@@ -1065,14 +1140,26 @@ namespace MaxWorlds.UI
             Stretch(_screenScrim.rectTransform);
             _screenScrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
-            // MV-433: a scale-to-fit wrapper, pivoted at the board's own centre (960,540) so
-            // ComputeBoardScale's shrink is centred rather than pinned to a corner — occupies exactly
-            // the same screen rect Board Root used to occupy directly, so at scale 1 (16:9 and wider)
-            // nothing about the board's own position changes.
-            _boardScaleRoot = NewRect("Board Scale Root", rootRt, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            // MV-433: a scale-to-fit wrapper, pivoted at the board's own centre so ComputeBoardScale's
+            // shrink is centred rather than pinned to a corner.
+            //
+            // MV-472: anchor is (0.5, 1)-(0.5, 1) — a PROPORTIONAL horizontal-centre point on rootRt's
+            // own actual width — not the (0, 1)-(0, 1) top-left point anchor this used to be. That
+            // looked equivalent at 16:9 (rootRt is exactly 1920 wide there, so anchoredPosition.x=960
+            // WAS the true centre) but silently broke at any narrower aspect: under match-by-height,
+            // rootRt's own ref-space width is RefH*aspect, e.g. 1728 at 16:10 — a FIXED offset of 960
+            // from its top-left lands 96px right of that canvas's TRUE centre (864), so the whole
+            // (correctly scaled) board rendered shifted right by that same 96px, clipping the right edge
+            // by exactly the amount VisibleRefXWindow's own symmetric-crop formula assumed was already
+            // accounted for. Caught by actually opening rig-16x10.png during this ticket's own cc-screens
+            // pass — EditMode coverage (ComputeBoardScale/VisibleRefXWindow are pure functions, never
+            // rendered) couldn't have caught it, only a real capture could. A proportional anchor point
+            // is always at 50% of whatever rootRt's actual width is, so this now holds at every aspect,
+            // not just 16:9 — the exact fix VisibleRefXWindow's formula was already assuming existed.
+            _boardScaleRoot = NewRect("Board Scale Root", rootRt, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             _boardScaleRoot.pivot = new Vector2(0.5f, 0.5f);
             _boardScaleRoot.sizeDelta = new Vector2(RefW, RefH);
-            _boardScaleRoot.anchoredPosition = new Vector2(RefW * 0.5f, -RefH * 0.5f);
+            _boardScaleRoot.anchoredPosition = new Vector2(0f, -RefH * 0.5f);
 
             // MV-423: the board is a fixed 1920x1080 frame (top-left anchored/pivoted) so every node's
             // json (x,y) maps 1:1 onto anchoredPosition — RigBoardLayoutTests asserts that mapping
@@ -1085,14 +1172,16 @@ namespace MaxWorlds.UI
             _boardRoot.sizeDelta = new Vector2(RefW, RefH);
             _boardRoot.anchoredPosition = Vector2.zero;
 
-            BuildCategoryPanels(_boardRoot);
-            BuildConnectors(_boardRoot);   // MV-443: behind the panels' contents, but above the panel fill
-            BuildForgeSection(_boardRoot);
-            foreach (var cat in RigBoardLayout.Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_boardRoot, cat);
-            foreach (var ab in RigBoardLayout.Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_boardRoot, ab);
-
-            BuildDraftScrim(_boardRoot);   // MV-424: last board child so it dims everything built above,
-            BuildDraftBand(_boardRoot);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
+            // MV-472: the initial mode guess off the ambient aspect, same signal ApplyBoardScale()'s
+            // own paramless overload already reads — good enough for a real device/browser (the common
+            // case) since nothing has yet asked for a different aspect. ApplyBoardScale(float) below
+            // (called at the end of this method) re-derives the same verdict and finds it unchanged, so
+            // this never double-builds; it only matters as the seed a later explicit-aspect call (the
+            // ui-screens capture harness driving a shot through several registered aspects on this one
+            // instance) can detect a change against.
+            float initialAspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
+            _phoneMode = IsPhoneLayout(initialAspect);
+            BuildBoardContent();
 
             BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
 
@@ -1127,8 +1216,131 @@ namespace MaxWorlds.UI
         public void ApplyBoardScale(float aspect)
         {
             if (_boardScaleRoot == null) return;
+
+            // MV-472: the phone/standard verdict can change on THIS call — the ui-screens capture
+            // harness reuses one WeaponsScreen instance across every registered aspect (16:9, 16:10,
+            // phone), each shot calling this with its own real aspect well after Build() already ran
+            // once at whatever the ambient aspect happened to be. A verdict change means the board's
+            // nodes were built at the wrong radii/fonts/positions for this aspect, so rebuild them from
+            // scratch before applying the scale-to-fit factor below.
+            bool wantPhoneMode = IsPhoneLayout(aspect);
+            if (wantPhoneMode != _phoneMode || _nodeParent == null)
+            {
+                _phoneMode = wantPhoneMode;
+                DestroyBoardContent();
+                BuildBoardContent();
+                RefreshBoardState();
+            }
+
             float scale = ComputeBoardScale(aspect);
             _boardScaleRoot.localScale = new Vector3(scale, scale, 1f);
+        }
+
+        /// <summary>MV-472: builds everything under <see cref="_boardContentHost"/> — the category
+        /// panels/connectors/FORGE section/nodes/draft chrome, off whichever geometry <see cref="_phoneMode"/>
+        /// currently selects. Called once from <see cref="Build"/> and again from
+        /// <see cref="ApplyBoardScale(float)"/> whenever the phone/standard verdict changes.</summary>
+        private void BuildBoardContent()
+        {
+            _nodeParent = _phoneMode ? BuildPhoneScrollViewport(_boardRoot, out _boardContentHost) : BuildStandardBoardContent(_boardRoot);
+
+            BuildCategoryPanels(_nodeParent);
+            BuildConnectors(_nodeParent);   // MV-443: behind the panels' contents, but above the panel fill
+            BuildForgeSection(_nodeParent);
+            foreach (var cat in Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_nodeParent, cat);
+            foreach (var ab in Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_nodeParent, ab);
+
+            BuildDraftScrim(_nodeParent);   // MV-424: last board child so it dims everything built above,
+            BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
+        }
+
+        /// <summary>Standard mode's node parent: a plain full-frame passthrough, a distinct child of
+        /// <see cref="_boardRoot"/> (not _boardRoot itself) purely so <see cref="DestroyBoardContent"/>
+        /// has something of its own to destroy on a mode change without ever touching _boardRoot or any
+        /// of its ancestors.</summary>
+        private RectTransform BuildStandardBoardContent(RectTransform boardRoot)
+        {
+            var host = NewRect("Board Content", boardRoot, Vector2.zero, Vector2.one);
+            Stretch(host);
+            _boardContentHost = host;
+            return host;
+        }
+
+        /// <summary>Phone mode's node parent: a vertical ScrollRect (MV-472 item 2 — "reflow ... rather
+        /// than overflow"). The phone row schedule (<see cref="RigBoardLayout.PhoneContentHeight"/>) is
+        /// taller than the 1080-tall reference frame can show at once once nodes/fonts are big enough to
+        /// clear Apple's 44pt/11pt floors, so content scrolls under a masked viewport instead of clipping
+        /// or cramming. The viewport sits between the top bar and the board's own bottom margin, in the
+        /// SAME fixed 1920x1080 board frame every other measurement on this screen already uses.</summary>
+        private RectTransform BuildPhoneScrollViewport(RectTransform boardRoot, out RectTransform host)
+        {
+            const float viewportTop = 140f, viewportBottom = 1050f;
+
+            // MV-472: RigBoardLayout's phone column layout deliberately extends outside the standard
+            // [0, RefW] frame (its own centred-content math — see BuildColumnLayout's own cursor
+            // comment) since a wide phone aspect's real visible window is wider than 1920. A viewport
+            // sized to boardRoot's own 1920 width would RectMask2D-clip that overflow on both edges —
+            // caught live: a first pass sized the viewport to boardRoot's own width and PRIMARY clipped
+            // off the left edge of rig-phone.png despite fitting VisibleRefXWindow's own check (the mask
+            // was the thing clipping it, not the actual visible window). horizontalOverflow (700, each
+            // side) comfortably exceeds PhoneTargetWidth's own worst-case span with room to spare.
+            const float horizontalOverflow = 700f;
+
+            var viewport = NewRect("Board Viewport", boardRoot, new Vector2(0f, 1f), new Vector2(1f, 1f));
+            viewport.pivot = new Vector2(0.5f, 1f);
+            viewport.anchoredPosition = new Vector2(0f, -viewportTop);
+            viewport.sizeDelta = new Vector2(horizontalOverflow * 2f, viewportBottom - viewportTop);
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            // Content's own local origin (its top-left, where a node's anchoredPosition.x=0 would land)
+            // must still land on boardRoot-frame x=0 — the same reference every node's own RigBoardLayout
+            // x assumes — so it's offset by horizontalOverflow from viewport's own (now wider) left edge,
+            // not stretched to match viewport like the standard-mode content host is.
+            var content = NewRect("Board Content", viewport, new Vector2(0f, 1f), new Vector2(0f, 1f));
+            content.pivot = new Vector2(0f, 1f);
+            content.anchoredPosition = new Vector2(horizontalOverflow, 0f);
+            content.sizeDelta = new Vector2(RefW + horizontalOverflow * 2f, RigBoardLayout.PhoneContentHeight);
+
+            var scrollRect = viewport.gameObject.AddComponent<ScrollRect>();
+            scrollRect.viewport = viewport;
+            scrollRect.content = content;
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.scrollSensitivity = 24f;
+
+            host = viewport;
+            return content;
+        }
+
+        /// <summary>Tears down whatever <see cref="BuildBoardContent"/> built last pass — the whole
+        /// <see cref="_boardContentHost"/> subtree (nodes, panels, connectors, FORGE section, draft
+        /// chrome, and in phone mode the scroll viewport itself) — and clears every dictionary that
+        /// indexed into it, so a rebuild starts from the same clean state <see cref="Build"/> does.
+        /// <c>DestroyImmediate</c> outside Play mode, same idiom as every other rebuild-in-place in this
+        /// project (e.g. <c>Sentinel.cs</c>), since an EditMode test calling <see cref="ApplyBoardScale(float)"/>
+        /// synchronously must not find stale, about-to-be-destroyed objects still answering <c>Find</c>.</summary>
+        private void DestroyBoardContent()
+        {
+            if (_boardContentHost != null)
+            {
+                if (Application.isPlaying) Destroy(_boardContentHost.gameObject);
+                else DestroyImmediate(_boardContentHost.gameObject);
+            }
+            _boardContentHost = null;
+            _nodeParent = null;
+
+            _categoryNodes.Clear();
+            _abilityNodes.Clear();
+            _fusionNodes.Clear();
+            _categoryPanels.Clear();
+            _categoryPanelBorders.Clear();
+            _connectors.Clear();
+            _draftScrim = null;
+            _draftBand = null;
+            _draftBandTitle = null;
+            _draftBandSubtitle = null;
+            _draftBandReason = null;
         }
 
         /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
@@ -1138,16 +1350,20 @@ namespace MaxWorlds.UI
         /// than guessed). Drawn before the nodes so they sit behind everything.</summary>
         private void BuildCategoryPanels(RectTransform boardRoot)
         {
-            var categories = RigBoardLayout.Categories;
+            var categories = Categories;
             int n = categories.Count;
             if (n == 0) return;
-            float spacing = n > 1 ? categories[1].X - categories[0].X : 0f;
             float y = RigBoardLayout.RegionRectY, h = RigBoardLayout.RegionRectH, radius = RigBoardLayout.RegionRectRadius;
 
             for (int i = 0; i < n; i++)
             {
-                float left = i == 0 ? categories[i].X - spacing * 0.5f : (categories[i - 1].X + categories[i].X) * 0.5f;
-                float right = i == n - 1 ? categories[i].X + spacing * 0.5f : (categories[i].X + categories[i + 1].X) * 0.5f;
+                // MV-472: each family's own column is no longer a uniform 1/5 share of the board — its
+                // half-width is sized to its actual content (RigBoardLayout.ColumnHalfWidth). An interior
+                // boundary still splits the gap with its neighbour at the midpoint (works unchanged for
+                // non-uniform spacing); only the outer edges (first/last) needed their own column's own
+                // half-width instead of a shared "spacing" borrowed from the 0-1 gap.
+                float left = i == 0 ? categories[i].X - categories[i].ColumnHalfWidth : (categories[i - 1].X + categories[i].X) * 0.5f;
+                float right = i == n - 1 ? categories[i].X + categories[i].ColumnHalfWidth : (categories[i].X + categories[i + 1].X) * 0.5f;
                 float w = right - left;
 
                 float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f);
@@ -1180,15 +1396,15 @@ namespace MaxWorlds.UI
         /// fill) so nothing drawn later needs to know connectors exist.</summary>
         private void BuildConnectors(RectTransform boardRoot)
         {
-            float catR = RigBoardLayout.RadiusCategory, abR = RigBoardLayout.RadiusAbility, fuR = RigBoardLayout.RadiusFusion;
+            float catR = RadiusCategory, abR = RadiusAbility, fuR = RadiusFusion;
             float bias = RigBoardLayout.ConnectorControlBias, width = RigBoardLayout.ConnectorWidth;
 
             var categoryById = new Dictionary<string, RigCategoryLayout>();
-            foreach (var cat in RigBoardLayout.Categories) categoryById[cat.Id] = cat;
+            foreach (var cat in Categories) categoryById[cat.Id] = cat;
             var abilityById = new Dictionary<string, RigAbilityLayout>();
-            foreach (var ab in RigBoardLayout.Abilities) abilityById[ab.Id] = ab;
+            foreach (var ab in Abilities) abilityById[ab.Id] = ab;
 
-            foreach (var ab in RigBoardLayout.Abilities)
+            foreach (var ab in Abilities)
             {
                 var end = new Vector2(ab.X, ab.Y + RigBoardLayout.ConnectorEndOffset(abR));
                 if (string.IsNullOrEmpty(ab.Parent))
@@ -1209,7 +1425,7 @@ namespace MaxWorlds.UI
             // RigFusionState.IsEligible so an unreachable fusion (not both parent categories lit) draws
             // at the dimmer fusionAlphaLocked, not the old always-on fusionAlpha.
             float fusionBias = RigBoardLayout.ConnectorFusionControlBias, fusionWidth = RigBoardLayout.ConnectorFusionWidth;
-            foreach (var fusion in RigBoardLayout.Fusions)
+            foreach (var fusion in Fusions)
             {
                 var end = new Vector2(fusion.X, fusion.Y + RigBoardLayout.ConnectorEndOffset(fuR));
                 foreach (var parentCategoryId in new[] { fusion.ParentA, fusion.ParentB })
@@ -1316,7 +1532,7 @@ namespace MaxWorlds.UI
         /// from.</summary>
         private void BuildForgeSection(RectTransform boardRoot)
         {
-            float dividerY = RigBoardLayout.ForgeDividerY;
+            float dividerY = ForgeDividerY;
             var divider = AddImage(boardRoot, HudTextures.Solid(), new Color(1f, 1f, 1f, 0.12f), "Forge Divider");
             Anchor(divider.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0.5f, 1f));
             divider.rectTransform.offsetMin = new Vector2(ContentMargin, 0f);
@@ -1336,19 +1552,19 @@ namespace MaxWorlds.UI
             // defect 3: fontSize now off rig_board.json (was a hardcoded 16, under the 16px readability
             // floor once actually measured against the design's own 1920x1080 reference frame) — box
             // height grown to match so two lines still clear it.
-            var caption = AddText(boardRoot, Mathf.RoundToInt(RigBoardLayout.ForgeCaptionFontSize), Dim, TextAnchor.UpperLeft);
+            var caption = AddText(boardRoot, Mathf.RoundToInt(ForgeCaptionFontSize), Dim, TextAnchor.UpperLeft);
             Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             caption.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 58f));
             caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 52f);
             caption.lineSpacing = 1.2f;
             caption.text = "two lit categories · costs parts\nnever a shed · lands in B / U";
 
-            foreach (var fusion in RigBoardLayout.Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
+            foreach (var fusion in Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
         }
 
         private RigNodeVisual BuildFusionNode(RectTransform boardRoot, RigFusionLayout fusion)
         {
-            float r = RigBoardLayout.RadiusFusion;
+            float r = RadiusFusion;
             var node = BuildNodeShell(boardRoot, fusion.Id, fusion.X, fusion.Y, r, FusionSides, out var shell);
 
             Color amber = PartsColor;
@@ -1366,7 +1582,7 @@ namespace MaxWorlds.UI
 
             // MV-446 defect 3: fontSize off rig_board.json (was a hardcoded 13, dropping to 12 in the
             // locked state — both under the 16px readability floor); box grown to match.
-            var sub = AddText(node, Mathf.RoundToInt(RigBoardLayout.FusionSubFontSize), Dim, TextAnchor.UpperCenter);
+            var sub = AddText(node, Mathf.RoundToInt(FusionSubFontSize), Dim, TextAnchor.UpperCenter);
             Anchor(sub.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             sub.rectTransform.sizeDelta = new Vector2(280f, 24f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
@@ -1387,7 +1603,7 @@ namespace MaxWorlds.UI
 
         private RigNodeVisual BuildCategoryNode(RectTransform boardRoot, RigCategoryLayout cat)
         {
-            float r = RigBoardLayout.RadiusCategory;
+            float r = RadiusCategory;
             BuildNodeShell(boardRoot, cat.Id, cat.X, cat.Y, r, HexSides, out var shell);
 
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
@@ -1395,7 +1611,7 @@ namespace MaxWorlds.UI
             shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(cat.Icon), catIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(catIconSize, catIconSize);
 
-            shell.Label.fontSize = Mathf.RoundToInt(RigBoardLayout.CategoryLabelFontSize);
+            shell.Label.fontSize = Mathf.RoundToInt(CategoryLabelFontSize);
             shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.CategoryLabelOffsetY(r));
             shell.Label.text = cat.Id;
 
@@ -1418,7 +1634,7 @@ namespace MaxWorlds.UI
 
         private RigNodeVisual BuildAbilityNode(RectTransform boardRoot, RigAbilityLayout ab)
         {
-            float r = RigBoardLayout.RadiusAbility;
+            float r = RadiusAbility;
             BuildNodeShell(boardRoot, ab.Id, ab.X, ab.Y, r, HexSides, out var shell);
 
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
@@ -1472,7 +1688,7 @@ namespace MaxWorlds.UI
             // LabelOffsetY - 12), so it never fights the pill's own "{level}/{max}" text or the label's
             // ability name. Same PowerCell glyph the CELLS header chip and the world HUD's own counter
             // use, so a node's cost reads as CELLS on sight, not a naked integer.
-            float pillBottom = -RigBoardLayout.LevelPillOffsetY(r) - RigBoardLayout.LevelPillH * 0.5f;
+            float pillBottom = -RigBoardLayout.LevelPillOffsetY(r) - LevelPillH * 0.5f;
             float labelTop = -RigBoardLayout.LabelOffsetY(r) + 12f;
             float costTagY = (pillBottom + labelTop) * 0.5f;
             Color moduleColour = RigBoardLayout.Colour("module");
@@ -1557,7 +1773,7 @@ namespace MaxWorlds.UI
             Anchor(partBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             partBadge.raycastTarget = false;
 
-            float pillW = RigBoardLayout.LevelPillW, pillH = RigBoardLayout.LevelPillH;
+            float pillW = LevelPillW, pillH = LevelPillH;
             var pillBg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), PillBackdrop, "Pill");
             Anchor(pillBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             pillBg.rectTransform.sizeDelta = new Vector2(pillW, pillH);
@@ -1575,17 +1791,35 @@ namespace MaxWorlds.UI
             pillBorder.type = Image.Type.Sliced;
             pillBorder.raycastTarget = false;
 
-            var pillText = AddText(pillBg.rectTransform, Mathf.RoundToInt(RigBoardLayout.LevelPillFontSize), TextColor, TextAnchor.MiddleCenter);
+            var pillText = AddText(pillBg.rectTransform, Mathf.RoundToInt(LevelPillFontSize), TextColor, TextAnchor.MiddleCenter);
             Stretch(pillText.rectTransform);
             pillText.fontStyle = FontStyle.Bold;
             pillText.raycastTarget = false;
 
-            var label = AddText(root, Mathf.RoundToInt(RigBoardLayout.LabelFontSize), TextColor, TextAnchor.UpperCenter);
+            var label = AddText(root, Mathf.RoundToInt(LabelFontSize), TextColor, TextAnchor.UpperCenter);
             Anchor(label.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            label.rectTransform.sizeDelta = new Vector2(r * 3f, 24f);
             label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LabelOffsetY(r));
             label.fontStyle = FontStyle.Bold;
             label.raycastTarget = false;
+            if (_phoneMode)
+            {
+                // MV-472: phone mode's own bigger 32pt labels ("FORCE FIELD", "CELL STORAGE", ...) can
+                // run wider than the tighter sibling spacing phone-mode columns actually have room for —
+                // best-fit shrinks a long label down (never below the 11pt-clearing floor
+                // PhoneLabelFontSizeMin already sits above) instead of letting it bleed into a neighbour.
+                // Caught live: "FORCE FIELDSTORAGE" — ENERGY's own two tier-1 labels overlapping each
+                // other, not bleeding into a different family, so tighter spacing alone couldn't fix it
+                // without either cramming hexes together or capping label width somehow.
+                label.rectTransform.sizeDelta = new Vector2(RigBoardLayout.PhoneLabelBoxWidth, 52f);
+                label.horizontalOverflow = HorizontalWrapMode.Wrap;
+                label.resizeTextForBestFit = true;
+                label.resizeTextMinSize = Mathf.RoundToInt(RigBoardLayout.PhoneLabelFontSizeMin);
+                label.resizeTextMaxSize = Mathf.RoundToInt(RigBoardLayout.LabelFontSizePhone);
+            }
+            else
+            {
+                label.rectTransform.sizeDelta = new Vector2(r * 3f, 24f);
+            }
 
             // MV-424: the Morphing Module draft's numbered badge (1-3), centred above the hex — a
             // different corner language from the SHED/spend markers so a candidate reads unmistakably
