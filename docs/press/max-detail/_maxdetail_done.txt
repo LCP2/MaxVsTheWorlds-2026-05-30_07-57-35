@@ -1,0 +1,9 @@
+﻿ok
+max-yaw000.png
+max-yaw045.png
+max-yaw090.png
+max-yaw135.png
+max-yaw180.png
+max-yaw225.png
+max-yaw270.png
+max-yaw315.png
