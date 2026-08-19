@@ -1,6 +1,7 @@
 using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -53,6 +54,39 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(HudController.ShowsModuleBadge(alert), Is.True);
         }
 
+        // ---------------------------------------------------------------- MV-471: alert follows affordability, not "holding"
+
+        /// <summary>The live bug this ticket fixes: pre-MV-471, <c>CurrentWeaponsButtonAlert</c> flagged
+        /// "parts to fit" off <c>ShouldShowPartAlert(partsBanked, ...)</c> alone — a held part with
+        /// nowhere to spend it still lit the button. p_dmg is the only node owned at run start; drive it
+        /// to its own cap so nothing anywhere on the board is part-spendable, then bank a part.</summary>
+        [Test]
+        public void HoldingAPartWithNoLegalSpendDoesNotComputeAPartsToFitAlert()
+        {
+            PickupWallet.Reset();
+            PendingMorphingModule.Reset();
+            RigState.Reset();
+            RigFusionState.Reset();
+            try
+            {
+                while (RigState.CanSpendPart("p_dmg")) RigState.TrySpendPart("p_dmg");
+                PickupWallet.AddPart();
+
+                var method = typeof(HudController).GetMethod("CurrentWeaponsButtonAlert", BindingFlags.NonPublic | BindingFlags.Static);
+                var alert = (HudController.WeaponsButtonAlert)method.Invoke(null, null);
+
+                Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Idle),
+                    "a banked part with nothing spendable anywhere on the board must not flag PartsToFit");
+            }
+            finally
+            {
+                PickupWallet.Reset();
+                PendingMorphingModule.Reset();
+                RigState.Reset();
+                RigFusionState.Reset();
+            }
+        }
+
         // ---------------------------------------------------------------- built widget reacts to real state
 
         [Test]
@@ -67,20 +101,27 @@ namespace MaxWorlds.Tests.EditMode
             InvokeLifecycle(hud, "OnEnable");
             try
             {
-                var partsBadge = FindRect(hudGo, "Parts Badge");
+                // MV-471: the old "Parts Badge" (hidden until something was banked, regardless of
+                // whether it could buy anything) is gone — replaced by an always-visible RIG-mark
+                // part counter. Existence + live text is what this test can pin without a canvas
+                // render; the flash/affordability behaviour itself is RigActions' own job.
+                var partCounter = FindRect(hudGo, "Rig Part Counter");
                 var moduleBadge = FindRect(hudGo, "Module Badge");
-                Assert.That(partsBadge, Is.Not.Null);
+                Assert.That(partCounter, Is.Not.Null);
                 Assert.That(moduleBadge, Is.Not.Null);
-                Assert.That(partsBadge.gameObject.activeSelf, Is.False, "nothing banked yet");
+                Assert.That(partCounter.gameObject.activeSelf, Is.True, "the RIG mark's part counter is always visible");
                 Assert.That(moduleBadge.gameObject.activeSelf, Is.False, "no module waiting yet");
 
+                var partText = partCounter.GetComponentInChildren<Text>();
+                Assert.That(partText.text, Is.EqualTo("0"));
+
                 PickupWallet.AddPart();
-                Assert.That(partsBadge.gameObject.activeSelf, Is.True, "a banked part must raise the parts badge");
+                Assert.That(partText.text, Is.EqualTo("1"), "a banked part must raise the live count");
                 Assert.That(moduleBadge.gameObject.activeSelf, Is.False);
 
                 PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
                 Assert.That(moduleBadge.gameObject.activeSelf, Is.True, "a banked draft must raise the module badge");
-                Assert.That(partsBadge.gameObject.activeSelf, Is.True, "the parts badge must survive into 'Both'");
+                Assert.That(partText.text, Is.EqualTo("1"), "the part counter is unaffected by the module badge");
             }
             finally
             {
