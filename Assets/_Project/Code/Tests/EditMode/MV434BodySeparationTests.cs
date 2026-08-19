@@ -75,6 +75,16 @@ namespace MaxWorlds.Tests.EditMode
             var go = new GameObject($"Enemy {archetype.Kind}");
             go.transform.position = position;
             var cc = go.AddComponent<CharacterController>();
+            // MV-461: match EnemySpawner.CreateInstance's collider setup (no BodyScale divide needed
+            // here — this fixture never scales the transform, so the archetype's metres are already
+            // world metres). Without this the fixture kept CharacterController's un-configured
+            // defaults (radius 0.5, height 2) instead of the archetype's real footprint (Rusher:
+            // radius 0.4), an oversized capsule sweeping through geometry no production robot ever
+            // has — the actual source of this test's non-determinism (see RushersLunge's own
+            // comment), not anything about aim or formation bias.
+            cc.height = archetype.ColliderHeight;
+            cc.radius = archetype.ColliderRadius;
+            cc.center = Vector3.zero;
             var e = go.AddComponent<RobotEnemy>();
             CcField.SetValue(e, cc);
             e.Apply(archetype);
@@ -236,11 +246,24 @@ namespace MaxWorlds.Tests.EditMode
                 InvokeTickChase(rusher, 0.02f);
                 Assert.AreEqual(RobotEnemy.State.Telegraph, rusher.Current);
 
-                SetStateTimer(rusher, 999f);
-                InvokeTickTelegraph(rusher, 0.02f); // -> Lunge
+                // MV-461: tick the wind-up the same way Update() does — one dt at a time, with
+                // _stateTimer accumulating real ticks — instead of jumping _stateTimer straight to
+                // telegraphTime. That old shortcut captured _lungeDir (= transform.forward) after
+                // only ONE capped-rate rotation step (MV-434: 540 deg/s), aimed nowhere near the
+                // player. In real play the full 0.55s wind-up gives ~27 ticks, plenty to converge —
+                // this fixture now gets the same number instead of a single-tick shortcut, so the
+                // dash is aimed the way a real Telegraph always leaves it.
+                const float dt = 0.02f;
+                float elapsed = 0f;
+                while (elapsed < EnemyArchetype.Rusher.TelegraphTime)
+                {
+                    elapsed += dt;
+                    SetStateTimer(rusher, elapsed);
+                    InvokeTickTelegraph(rusher, dt);
+                }
                 Assert.AreEqual(RobotEnemy.State.Lunge, rusher.Current);
 
-                InvokeTickLunge(rusher, 0.02f); // dash, contact check, THEN the clamp
+                InvokeTickLunge(rusher, dt); // dash, contact check, THEN the clamp
 
                 Assert.AreEqual(1, _player.Hits, "the dash must still land its hit with the clamp now running right after it");
                 Assert.AreEqual(200f - EnemyArchetype.Rusher.ContactDamage, _player.Health, 1e-3f);
