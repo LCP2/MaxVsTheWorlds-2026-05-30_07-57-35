@@ -17,10 +17,16 @@ namespace MaxWorlds.Dev
     /// can't reach these: its capture technique is a manual <c>Camera.Render()</c>, which never draws
     /// a <c>ScreenSpaceOverlay</c> canvas (WeaponsScreen, HomeScreen, ResultScreen, SettingsPanel are
     /// each a separate self-installing GameObject with their own such canvas — none reachable via
-    /// <c>HudController</c> the way the press kit's own <c>ShowHud</c> flip works). This director
-    /// instead resizes the actual back-buffer with <see cref="Screen.SetResolution"/> and reads it
-    /// straight off the framebuffer with <see cref="ScreenCapture.CaptureScreenshotAsTexture()"/>,
-    /// which sees every canvas exactly as a player would, with no per-screen render-mode plumbing.
+    /// <c>HudController</c> the way the press kit's own <c>ShowHud</c> flip works).
+    ///
+    /// MV-444: capture technique is a dedicated, UI-only orthographic camera. The shot's target canvas
+    /// is flipped from <c>ScreenSpaceOverlay</c> to <c>ScreenSpaceCamera</c> on that camera (the same
+    /// idiom <see cref="PressKitDirector"/>'s <c>ShowHud</c> uses for the HUD, generalised to any
+    /// canvas), rendered into a <see cref="RenderTexture"/> sized to the shot, and read back with
+    /// <c>ReadPixels</c>. This never touches the real back buffer, so it works in <c>-batchmode</c>
+    /// with no attached display — <see cref="ScreenCapture.CaptureScreenshotAsTexture()"/>, the
+    /// technique this replaces, reads the back buffer and cannot. See MV-444 for the history: this was
+    /// diagnosed three times (MV-421 comment 11900, MV-441, MV-443) before actually being fixed.
     ///
     /// INERT in a normal session, same idiom as PressKitDirector: it installs only behind the
     /// <c>-uiscreens</c> command-line flag or a <c>Temp/uiscreens.arm</c> marker (see
@@ -47,6 +53,7 @@ namespace MaxWorlds.Dev
         private readonly StringBuilder _manifest = new StringBuilder();
         private readonly List<string> _failures = new List<string>();
         private int _shotsWritten;
+        private Camera _captureCam;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -84,10 +91,37 @@ namespace MaxWorlds.Dev
 
             Log($"ui-screens capture starting → {_outDir}" + (_outDir2 != null ? $" (+ {_outDir2})" : ""));
 
+            _captureCam = CreateCaptureCamera();
+
             yield return CaptureRigBoard();
             yield return CaptureWeaponsButton();
 
             Finish();
+
+            if (_captureCam != null) { Destroy(_captureCam.gameObject); _captureCam = null; }
+        }
+
+        /// <summary>A camera that exists only to render a single flipped-to-camera-space canvas into a
+        /// capture <see cref="RenderTexture"/> — never the scene's <c>Camera.main</c>, so this job never
+        /// disturbs the live gameplay camera or depends on where it happens to be pointed. Starts with
+        /// an empty culling mask; <see cref="ShowCanvasOnCamera"/> ORs in the UI layer per shot, so the
+        /// only thing this camera ever draws is the one canvas currently staged for capture — which is
+        /// also why "THE RIG board alone" (MV-444 AC2) holds regardless of what the 3D scene behind it
+        /// looks like.</summary>
+        private static Camera CreateCaptureCamera()
+        {
+            var go = new GameObject("UiScreensCaptureCamera");
+            var cam = go.AddComponent<Camera>();
+            cam.orthographic = true;
+            cam.orthographicSize = 5f;
+            cam.nearClipPlane = 0.01f;
+            cam.farClipPlane = 10f;
+            cam.clearFlags = CameraClearFlags.SolidColor;
+            cam.backgroundColor = Color.black;
+            cam.cullingMask = 0;
+            cam.depth = -100f;
+            cam.enabled = false;   // rendered manually via Camera.Render(), never as part of the automatic camera stack
+            return cam;
         }
 
         // --- THE RIG (MV-421 scope) -------------------------------------------------------------
@@ -100,9 +134,12 @@ namespace MaxWorlds.Dev
             var weapons = FindFirstObjectByType<WeaponsScreen>();
             if (weapons == null) { LogWarn("rig: no WeaponsScreen in the scene"); yield break; }
 
-            yield return CaptureFixtureScreen("rig-16x9", 1920, 1080, ApplyRigFixture, weapons.Open, weapons.Close);
-            yield return CaptureFixtureScreen("rig-16x10", 1728, 1080, ApplyRigFixture, weapons.Open, weapons.Close);
-            yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close);
+            var canvas = weapons.GetComponentInChildren<Canvas>(true);
+            if (canvas == null) { LogWarn("rig: WeaponsScreen built no canvas"); yield break; }
+
+            yield return CaptureFixtureScreen("rig-16x9", 1920, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas);
+            yield return CaptureFixtureScreen("rig-16x10", 1728, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas);
+            yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -182,10 +219,13 @@ namespace MaxWorlds.Dev
             var hud = FindFirstObjectByType<HudController>();
             if (hud == null) { LogWarn("weapons-button: no HudController in the scene"); yield break; }
 
-            yield return CaptureFixtureScreen("weapons-button-idle", 1920, 1080, ApplyWeaponsButtonIdleFixture, null, null);
-            yield return CaptureFixtureScreen("weapons-button-parts", 1920, 1080, ApplyWeaponsButtonPartsFixture, null, null);
-            yield return CaptureFixtureScreen("weapons-button-module", 1920, 1080, ApplyWeaponsButtonModuleFixture, null, null);
-            yield return CaptureFixtureScreen("weapons-button-both", 1920, 1080, ApplyWeaponsButtonBothFixture, null, null);
+            var canvas = hud.GetComponentInChildren<Canvas>(true);
+            if (canvas == null) { LogWarn("weapons-button: HudController built no canvas"); yield break; }
+
+            yield return CaptureFixtureScreen("weapons-button-idle", 1920, 1080, ApplyWeaponsButtonIdleFixture, null, null, canvas);
+            yield return CaptureFixtureScreen("weapons-button-parts", 1920, 1080, ApplyWeaponsButtonPartsFixture, null, null, canvas);
+            yield return CaptureFixtureScreen("weapons-button-module", 1920, 1080, ApplyWeaponsButtonModuleFixture, null, null, canvas);
+            yield return CaptureFixtureScreen("weapons-button-both", 1920, 1080, ApplyWeaponsButtonBothFixture, null, null, canvas);
 
             ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
         }
@@ -219,19 +259,15 @@ namespace MaxWorlds.Dev
 
         // --- capture -----------------------------------------------------------------------------
 
-        /// <summary>Resizes the real back-buffer to <paramref name="w"/>x<paramref name="h"/>,
-        /// applies a fixture, opens the screen and reads the framebuffer straight off
-        /// <see cref="ScreenCapture.CaptureScreenshotAsTexture()"/> — sees any canvas render mode,
-        /// so no screen needs a public Canvas accessor or a render-mode flip to be captured. Every
-        /// wait after <paramref name="open"/> uses <see cref="WaitForSecondsRealtime"/>, never
+        /// <summary>Applies a fixture, opens the screen, checks nothing else occludes it, then routes
+        /// <paramref name="canvas"/> through <see cref="ShowCanvasOnCamera"/> onto the dedicated capture
+        /// camera and reads the render back with <see cref="RenderCanvasToTexture"/> — see the class doc
+        /// for why this replaced <c>ScreenCapture.CaptureScreenshotAsTexture()</c> (MV-444). Every wait
+        /// after <paramref name="open"/> uses <see cref="WaitForSecondsRealtime"/>, never
         /// <see cref="WaitForSeconds"/> — <c>WeaponsScreen.Open()</c> sets <c>Time.timeScale = 0</c>,
         /// so a scaled wait would never elapse.</summary>
-        private IEnumerator CaptureFixtureScreen(string name, int w, int h, Action applyFixture, Action open, Action close)
+        private IEnumerator CaptureFixtureScreen(string name, int w, int h, Action applyFixture, Action open, Action close, Canvas canvas)
         {
-            Screen.SetResolution(w, h, FullScreenMode.Windowed);
-            yield return null;
-            yield return new WaitForSecondsRealtime(0.15f);   // let the resolution change land
-
             Exception staged = null;
             try
             {
@@ -247,8 +283,9 @@ namespace MaxWorlds.Dev
 
             // MV-441: the shot must be the ONLY high-sorting-order screen up — HomeScreen's own
             // sortingOrder=220 canvas sat over every ui-screens capture uncaught until this ran.
-            // A shot that opens a screen (rig-*) expects exactly that one; a HUD-only shot (the
-            // WEAPONS button states) opens nothing, so it expects zero — the HUD's own canvas is
+            // A shot that opens a screen (rig-*) expects exactly that one (still ScreenSpaceOverlay at
+            // this point — the flip to camera space happens below, after this check); a HUD-only shot
+            // (the WEAPONS button states) opens nothing, so it expects zero — the HUD's own canvas is
             // pinned at exactly 100 (HudController.cs), below this ">100" threshold, by design.
             int expectedOverlays = open != null ? 1 : 0;
             string overlayError = CheckSingleActiveOverlay(expectedOverlays);
@@ -262,13 +299,15 @@ namespace MaxWorlds.Dev
                 yield break;
             }
 
+            ShowCanvasOnCamera(canvas, _captureCam, w, h);
+            yield return null;   // let the canvas rebuild its layout at the new scale factor
+            yield return null;
+
             try
             {
-                var tex = ScreenCapture.CaptureScreenshotAsTexture();
+                var tex = RenderCanvasToTexture(_captureCam, w, h);
                 try
                 {
-                    if (tex.width != w || tex.height != h)
-                        LogWarn($"{name}: captured {tex.width}x{tex.height}, expected {w}x{h} — Screen.SetResolution did not take in this environment");
                     byte[] png = tex.EncodeToPNG();
                     File.WriteAllBytes(Path.Combine(_outDir, name + ".png"), png);
                     TryWriteSecondary(name, png);
@@ -283,6 +322,7 @@ namespace MaxWorlds.Dev
             catch (Exception e) { LogWarn($"{name}: capture failed — {e.Message}"); }
             finally
             {
+                RestoreCanvas();
                 try { close?.Invoke(); } catch (Exception e) { LogWarn($"{name}: close failed — {e.Message}"); }
             }
         }
@@ -292,6 +332,123 @@ namespace MaxWorlds.Dev
             if (_outDir2 == null) return;
             try { File.WriteAllBytes(Path.Combine(_outDir2, name + ".png"), png); }
             catch (Exception e) { LogWarn($"{name}: secondary write to {_outDir2} failed — {e.Message}"); }
+        }
+
+        // --- generic canvas-on-camera capture (MV-444) ------------------------------------------
+        // ScreenSpaceOverlay draws straight to the backbuffer, which does not exist in a batchmode
+        // session with no attached display. Flipping a canvas to ScreenSpace-Camera composites it into
+        // a RenderTexture render instead — the same idiom PressKitDirector.ShowHud uses for the HUD,
+        // generalised here to any self-installing screen's canvas (WeaponsScreen, HudController).
+
+        private Canvas _activeCaptureCanvas;
+        private RenderMode _activeCaptureCanvasPrevMode;
+        private Camera _activeCaptureCanvasPrevWorldCam;
+        private float _activeCaptureCanvasPrevPlaneDistance;
+        private int _activeCaptureCanvasPrevSortingOrder;
+        private float _activeCaptureCanvasPrevScaleFactor;
+        private CanvasScaler _activeCaptureScaler;
+        private bool _activeCaptureScalerWasEnabled;
+
+        /// <summary>Composite <paramref name="canvas"/> into <paramref name="cam"/>'s render at exactly
+        /// the UI scale a <paramref name="w"/>x<paramref name="h"/> screen would produce.
+        ///
+        /// CanvasScaler's own "Scale With Screen Size" always reads the ambient <c>Screen.width</c>/
+        /// <c>Screen.height</c>, not this capture's actual target resolution. Left enabled, CanvasScaler
+        /// would size the UI for the wrong frame entirely. So: disable it for the duration and set
+        /// <c>canvas.scaleFactor</c> ourselves with <see cref="ComputeScaleFactor"/>, which reimplements
+        /// CanvasScaler's own match-width-or-height formula against the explicit (w, h) this shot is
+        /// actually rendering at.
+        ///
+        /// Snapshots render mode, world camera, plane distance and sorting order (MV-444 AC3) even
+        /// though only the first three are actually changed here — restoring all four defensively is
+        /// what keeps a capture from being able to leave a screen mis-parented, the MV-440 failure
+        /// shape.</summary>
+        private void ShowCanvasOnCamera(Canvas canvas, Camera cam, int w, int h)
+        {
+            if (canvas == null || cam == null) return;
+            int ui = LayerMask.NameToLayer("UI");
+            if (ui >= 0) cam.cullingMask |= (1 << ui);   // a camera-space canvas only draws if its layer is rendered
+
+            _activeCaptureCanvas = canvas;
+            _activeCaptureCanvasPrevMode = canvas.renderMode;
+            _activeCaptureCanvasPrevWorldCam = canvas.worldCamera;
+            _activeCaptureCanvasPrevPlaneDistance = canvas.planeDistance;
+            _activeCaptureCanvasPrevSortingOrder = canvas.sortingOrder;
+            _activeCaptureCanvasPrevScaleFactor = canvas.scaleFactor;
+
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = cam;
+            canvas.planeDistance = 1f;
+
+            _activeCaptureScaler = canvas.GetComponent<CanvasScaler>();
+            if (_activeCaptureScaler != null)
+            {
+                _activeCaptureScalerWasEnabled = _activeCaptureScaler.enabled;
+                _activeCaptureScaler.enabled = false;
+                canvas.scaleFactor = ComputeScaleFactor(_activeCaptureScaler, w, h);
+            }
+        }
+
+        /// <summary>Undo <see cref="ShowCanvasOnCamera"/> — safe to call even if nothing is showing.</summary>
+        private void RestoreCanvas()
+        {
+            if (_activeCaptureCanvas == null) return;
+            _activeCaptureCanvas.renderMode = _activeCaptureCanvasPrevMode;
+            _activeCaptureCanvas.worldCamera = _activeCaptureCanvasPrevWorldCam;
+            _activeCaptureCanvas.planeDistance = _activeCaptureCanvasPrevPlaneDistance;
+            _activeCaptureCanvas.sortingOrder = _activeCaptureCanvasPrevSortingOrder;
+            _activeCaptureCanvas.scaleFactor = _activeCaptureCanvasPrevScaleFactor;
+            if (_activeCaptureScaler != null) _activeCaptureScaler.enabled = _activeCaptureScalerWasEnabled;
+            _activeCaptureCanvas = null;
+            _activeCaptureScaler = null;
+        }
+
+        /// <summary>Reimplements <c>CanvasScaler</c>'s "Scale With Screen Size" / match-width-or-height
+        /// math (Unity's own documented log-lerp formula) against an explicit (w, h) instead of
+        /// <c>Screen.width</c>/<c>Screen.height</c>. Public and pure so it's pinned by an EditMode test
+        /// without building a canvas. Expand/Shrink match modes aren't used by any screen today; they
+        /// fall back to the tighter/looser axis respectively, same as CanvasScaler itself.</summary>
+        public static float ComputeScaleFactor(CanvasScaler scaler, int w, int h)
+        {
+            if (scaler.uiScaleMode != CanvasScaler.ScaleMode.ScaleWithScreenSize) return 1f;
+            Vector2 refRes = scaler.referenceResolution;
+            if (scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.Expand)
+                return Mathf.Min(w / refRes.x, h / refRes.y);
+            if (scaler.screenMatchMode == CanvasScaler.ScreenMatchMode.Shrink)
+                return Mathf.Max(w / refRes.x, h / refRes.y);
+            float logW = Mathf.Log(w / refRes.x, 2f);
+            float logH = Mathf.Log(h / refRes.y, 2f);
+            return Mathf.Pow(2f, Mathf.Lerp(logW, logH, scaler.matchWidthOrHeight));
+        }
+
+        /// <summary>Render <paramref name="cam"/> into an RGB PNG-ready texture at exactly
+        /// <paramref name="w"/>x<paramref name="h"/> — a RenderTexture render, never the back buffer, so
+        /// it works with no attached display (MV-444). Caller owns the returned texture.</summary>
+        private Texture2D RenderCanvasToTexture(Camera cam, int w, int h)
+        {
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
+            var prevTarget = cam.targetTexture;
+            var prevActive = RenderTexture.active;
+            float prevAspect = cam.aspect;
+            try
+            {
+                cam.aspect = (float)w / h;
+                cam.targetTexture = rt;
+                cam.Render();
+                RenderTexture.active = rt;
+                tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
+                tex.Apply();
+                return tex;
+            }
+            finally
+            {
+                cam.aspect = prevAspect;
+                cam.targetTexture = prevTarget;
+                RenderTexture.active = prevActive;
+                rt.Release();
+                Destroy(rt);
+            }
         }
 
         /// <summary>Asserts exactly <paramref name="expectedCount"/> <c>ScreenSpaceOverlay</c> canvases
@@ -396,12 +553,9 @@ namespace MaxWorlds.Dev
 
         private void Finish()
         {
-            // "ok" means at least one screenshot actually landed (every shot throwing, as
-            // ScreenCapture.CaptureScreenshotAsTexture did with no attached display when this was
-            // last run locally, see MV-421's fix comment, must fail the job rather than report a
-            // false ok with an empty manifest) AND no assertion — the canvas-overlay check or probe 6
-            // — failed. A shot that "succeeded" over an occluding HomeScreen is exactly the false
-            // green MV-441 exists to close off.
+            // "ok" means at least one screenshot actually landed AND no assertion — the canvas-overlay
+            // check or probe 6 — failed. A shot that "succeeded" over an occluding HomeScreen is
+            // exactly the false green MV-441 exists to close off.
             string status;
             if (_failures.Count > 0)
                 status = $"fail: {_failures.Count} assertion(s) failed — " + string.Join(" | ", _failures);
