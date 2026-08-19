@@ -33,6 +33,16 @@ namespace MaxWorlds.UI
         }
     }
 
+    /// <summary>One capture size the ui-screens harness shoots THE RIG board at (MV-463 Part 1) —
+    /// read from <c>rig_board.json</c>'s own <c>captureAspects</c> list so the harness never hard-codes
+    /// a shot size the game isn't actually played at again.</summary>
+    public readonly struct RigCaptureAspect
+    {
+        public readonly string Name;
+        public readonly int W, H;
+        public RigCaptureAspect(string name, int w, int h) { Name = name; W = w; H = h; }
+    }
+
     /// <summary>One FORGE fusion node — diamond-shaped, out of scope for MV-423 (5/5 gives it a real
     /// state machine); this ticket only has to place it and label it correctly.</summary>
     public sealed class RigFusionLayout
@@ -65,6 +75,7 @@ namespace MaxWorlds.UI
         private static RigCategoryLayout[] s_categories = Array.Empty<RigCategoryLayout>();
         private static RigAbilityLayout[] s_abilities = Array.Empty<RigAbilityLayout>();
         private static RigFusionLayout[] s_fusions = Array.Empty<RigFusionLayout>();
+        private static RigCaptureAspect[] s_captureAspects = Array.Empty<RigCaptureAspect>();
         private static readonly Dictionary<string, string> s_icons = new Dictionary<string, string>();
         private static readonly Dictionary<string, Color> s_colours = new Dictionary<string, Color>();
         private static GeometryWire s_geometry;
@@ -141,6 +152,8 @@ namespace MaxWorlds.UI
             public int partCost;
         }
 
+        [Serializable] private sealed class CaptureAspectWire { public string name; public int w, h; }
+
         [Serializable]
         private sealed class RigBoardUiWire
         {
@@ -149,6 +162,7 @@ namespace MaxWorlds.UI
             public CategoryWire[] categories = Array.Empty<CategoryWire>();
             public AbilityWire[] abilities = Array.Empty<AbilityWire>();
             public FusionWire[] fusions = Array.Empty<FusionWire>();
+            public CaptureAspectWire[] captureAspects = Array.Empty<CaptureAspectWire>();
         }
 
         // ------------------------------------------------------------------ loading
@@ -195,6 +209,12 @@ namespace MaxWorlds.UI
                     fusions.Add(new RigFusionLayout(f.id, f.label, f.parentA, f.parentB, f.hudSlot, f.x, f.y, f.partCost));
             s_fusions = fusions.ToArray();
 
+            var captureAspects = new List<RigCaptureAspect>(wire.captureAspects.Length);
+            foreach (var a in wire.captureAspects)
+                if (a != null && !string.IsNullOrEmpty(a.name) && a.w > 0 && a.h > 0)
+                    captureAspects.Add(new RigCaptureAspect(a.name, a.w, a.h));
+            s_captureAspects = captureAspects.ToArray();
+
             s_colours.Clear();
             if (wire.colours != null)
             {
@@ -224,6 +244,12 @@ namespace MaxWorlds.UI
         public static IReadOnlyList<RigCategoryLayout> Categories { get { EnsureLoaded(); return s_categories; } }
         public static IReadOnlyList<RigAbilityLayout> Abilities { get { EnsureLoaded(); return s_abilities; } }
         public static IReadOnlyList<RigFusionLayout> Fusions { get { EnsureLoaded(); return s_fusions; } }
+
+        /// <summary>MV-463 Part 1: the ui-screens harness's own shot sizes, read from
+        /// <c>rig_board.json</c>'s <c>captureAspects</c> — replaces the hard-coded 1920x1080/1728x1080
+        /// pair so a new aspect (e.g. the phone viewport the game is actually played at) is a data
+        /// change, not a code change.</summary>
+        public static IReadOnlyList<RigCaptureAspect> CaptureAspects { get { EnsureLoaded(); return s_captureAspects; } }
 
         /// <summary>The family id ("pri"/"sec"/...) for a category id ("PRIMARY"/"SECONDARY"/...) — an
         /// ability node only ever carries its parent category's id, not the family key

@@ -126,9 +126,11 @@ namespace MaxWorlds.Dev
 
         // --- THE RIG (MV-421 scope) -------------------------------------------------------------
 
-        /// <summary>Three shots: the 16:9 reference frame (1:1 comparable to MV-423.png), the 1.6:1
-        /// narrowest-desktop-browser frame (does SUPPORT clip?), and a parts=0 variant of the 16:9
-        /// frame (does the amber '+' badge / empty tray render correctly?).</summary>
+        /// <summary>MV-463 Part 1: one shot per <see cref="RigBoardLayout.CaptureAspects"/> entry (the
+        /// data file, not this method, decides which aspects matter — today that's the 16:9 reference
+        /// frame, 1:1 comparable to MV-423.png; the 1.6:1 narrowest-desktop-browser frame, does SUPPORT
+        /// clip?; and the ~2.17:1 phone viewport the game is actually played at), plus a fixed 16:9
+        /// parts=0 variant (does the amber '+' badge / empty tray render correctly?).</summary>
         private IEnumerator CaptureRigBoard()
         {
             var weapons = FindFirstObjectByType<WeaponsScreen>();
@@ -149,8 +151,8 @@ namespace MaxWorlds.Dev
 
             void ScaleBoardTo(int w, int h) => weapons.ApplyBoardScale((float)w / h);
 
-            yield return CaptureFixtureScreen("rig-16x9", 1920, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
-            yield return CaptureFixtureScreen("rig-16x10", 1728, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            foreach (var aspect in RigBoardLayout.CaptureAspects)
+                yield return CaptureFixtureScreen($"rig-{aspect.Name}", aspect.W, aspect.H, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
@@ -357,7 +359,12 @@ namespace MaxWorlds.Dev
                     _shotsWritten++;
                     Log($"wrote {name}.png ({tex.width}x{tex.height})");
 
-                    if (name == "rig-16x9") RunOutsideBackgroundProbe(tex);
+                    if (name == "rig-16x9")
+                    {
+                        RunOutsideBackgroundProbe(tex);
+                        RunConformanceChecks(tex);
+                        BuildContactSheet(tex);
+                    }
                 }
                 finally { Destroy(tex); }
             }
@@ -601,14 +608,7 @@ namespace MaxWorlds.Dev
                 return;
             }
 
-            Color expected = RigBoardLayout.Colour("base");
-            var weapons = FindFirstObjectByType<WeaponsScreen>();
-            if (weapons != null && weapons.ScreenScrim != null)
-            {
-                Color scrim = weapons.ScreenScrim.color;
-                expected = Color.Lerp(expected, new Color(scrim.r, scrim.g, scrim.b, 1f), scrim.a);
-            }
-
+            Color expected = ComputeCompositedBackground(FindFirstObjectByType<WeaponsScreen>());
             Color actual = tex.GetPixel(texX, texY);
             bool pass = ColorsMatch(actual, expected);
             string msg = $"probe6 (outside-background==composited-base): {(pass ? "PASS" : "FAIL")} — expected {ColorHex(expected)}, got {ColorHex(actual)} at tex({texX},{texY})";
@@ -625,6 +625,437 @@ namespace MaxWorlds.Dev
         }
 
         private static string ColorHex(Color c) => "#" + ColorUtility.ToHtmlStringRGB(c);
+
+        /// <summary>colours.base, composited with <see cref="WeaponsScreen.ScreenScrim"/> the same way
+        /// <see cref="RunOutsideBackgroundProbe"/> always has — factored out so
+        /// <see cref="RunConformanceChecks"/> can use the same "what does empty board actually look
+        /// like" reference instead of re-deriving it.</summary>
+        private static Color ComputeCompositedBackground(WeaponsScreen weapons)
+        {
+            Color expected = RigBoardLayout.Colour("base");
+            if (weapons != null && weapons.ScreenScrim != null)
+            {
+                Color scrim = weapons.ScreenScrim.color;
+                expected = Color.Lerp(expected, new Color(scrim.r, scrim.g, scrim.b, 1f), scrim.a);
+            }
+            return expected;
+        }
+
+        // --- MV-463 Part 2: conformance pass -----------------------------------------------------
+        // Reads rig_board.json (via RigBoardLayout) and asserts the just-captured rig-16x9 texture
+        // actually matches it — the harness's own eyes, not just its camera. Runs only against
+        // rig-16x9 for the same reason probe 6 does (see that method's own doc comment): it's the one
+        // shot whose 1920x1080 texture maps 1:1 onto rig_board.json's own canvas coordinates.
+
+        private const float InkTolerance = 0.03f;       // RigBoardConformance.ColorDistance units (sum of |dr|+|dg|+|db|) — the colour-probe hue check (below) found real, hue-distinguishable fill several pixels out that a 0.05 magnitude floor was missing
+        private const float HueProbeTolerance = 0.18f;   // RigBoardConformance.HueDistance units — hue direction, not brightness (see that method's own doc comment)
+
+        private void RunConformanceChecks(Texture2D tex)
+        {
+            var weapons = FindFirstObjectByType<WeaponsScreen>();
+            Color background = ComputeCompositedBackground(weapons);
+            var lines = new System.Collections.Generic.List<string>();
+            int passCount = 0;
+
+            void Emit(string name, bool pass, string detail)
+            {
+                lines.Add(RigBoardConformance.PassFailLine(name, pass, detail));
+                if (pass) passCount++;
+                else _failures.Add($"conformance/{name}: {detail}");
+            }
+
+            // 1. Node position — every category/ability node's own json (x, y) must not read as background.
+            var missing = new System.Collections.Generic.List<string>();
+            int totalNodes = 0;
+            foreach (var cat in RigBoardLayout.Categories) CheckNodePresent(tex, background, cat.Id, cat.X, cat.Y, missing, ref totalNodes);
+            foreach (var ab in RigBoardLayout.Abilities) CheckNodePresent(tex, background, ab.Id, ab.X, ab.Y, missing, ref totalNodes);
+            string firstFive = missing.Count == 0 ? "" : string.Join(", ", missing.GetRange(0, Mathf.Min(5, missing.Count)));
+            Emit("node-position", missing.Count == 0,
+                missing.Count == 0 ? $"{totalNodes}/{totalNodes} nodes present at their json coordinate"
+                                    : $"{missing.Count}/{totalNodes} missing — first 5: {firstFive}");
+
+            // 2. Hexagon orientation — categories only; see CheckHexOrientation's own doc comment for
+            // why ability nodes (most of which have an incoming connector arriving from directly above)
+            // aren't a trustworthy ray-march target the same way.
+            var ratioFails = new System.Collections.Generic.List<string>();
+            int hexChecked = 0;
+            foreach (var cat in RigBoardLayout.Categories)
+            { hexChecked++; CheckHexOrientation(tex, background, cat.Id, cat.X, cat.Y, RigBoardLayout.RadiusCategory, ratioFails); }
+            Emit("hex-orientation", ratioFails.Count == 0,
+                ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
+                                       : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
+
+            // 3. Family contrast — mean luminance of a lit category's own column band vs an unlit one.
+            CheckFamilyContrast(tex, out float contrastRatio, out float litMean, out float unlitMean);
+            Emit("family-contrast", contrastRatio >= 1.5f,
+                $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
+
+            // 4. Glow containment — every currently-lit/owned node's halo must fade out before 1.95r.
+            var glowFails = new System.Collections.Generic.List<string>();
+            int glowChecked = 0;
+            foreach (var cat in RigBoardLayout.Categories)
+            {
+                bool lit = false;
+                foreach (var ab in RigBoardLayout.Abilities) if (ab.Category == cat.Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
+                if (!lit) continue;
+                glowChecked++;
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, RigBoardLayout.RadiusCategory * 1.25f, RigBoardLayout.RadiusCategory * 1.95f, background, InkTolerance);
+                if (frac > 0.25f) glowFails.Add($"{cat.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
+            }
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                if (!RigState.IsOwned(ab.Id)) continue;
+                glowChecked++;
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, RigBoardLayout.RadiusAbility * 1.25f, RigBoardLayout.RadiusAbility * 1.95f, background, InkTolerance);
+                if (frac > 0.25f) glowFails.Add($"{ab.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
+            }
+            Emit("glow-containment", glowFails.Count == 0,
+                glowChecked == 0 ? "no lit/owned node to measure"
+                : glowFails.Count == 0 ? $"{glowChecked}/{glowChecked} owned nodes under 25% annulus ink"
+                                        : $"{glowFails.Count}/{glowChecked} over 25% — {string.Join("; ", glowFails)}");
+
+            // 5. Named colour probes — each family's category fill, the CELLS chip border, the PARTS tray border.
+            var colourFails = new System.Collections.Generic.List<string>();
+            int colourChecked = 0;
+            foreach (var cat in RigBoardLayout.Categories)
+            {
+                colourChecked++;
+                CheckCategoryColour(tex, background, cat, colourFails);
+            }
+            if (weapons != null)
+            {
+                colourChecked += 2;
+                CheckChipBorderColour(tex, weapons.CellsBorder, "CELLS border", RigBoardLayout.Colour("sec"), colourFails);
+                CheckChipBorderColour(tex, weapons.PartsBorder, "PARTS border", RigBoardLayout.Colour("part"), colourFails);
+            }
+            Emit("colour-probes", colourFails.Count == 0,
+                colourFails.Count == 0 ? $"{colourChecked}/{colourChecked} sampled points match rig_board.json"
+                                        : $"{colourFails.Count}/{colourChecked} off — {string.Join("; ", colourFails)}");
+
+            Log($"conformance: {passCount}/5 check families passed");
+            foreach (var l in lines) _manifest.AppendLine(l);
+            WriteConformanceReport(lines);
+        }
+
+        private const int NodePresentHalfBlock = 8;   // a 17x17 neighbourhood — a single centre pixel (or even a 9x9 block) routinely lands in a gap in the icon's own sparse stroke art
+
+        private static void CheckNodePresent(Texture2D tex, Color background, string id, float x, float y,
+            System.Collections.Generic.List<string> missing, ref int total)
+        {
+            total++;
+            if (!RigBoardConformance.BlockHasInk(tex, x, y, NodePresentHalfBlock, background, InkTolerance))
+                missing.Add(id);
+        }
+
+        /// <summary>Categories only — every category's UP/LEFT/RIGHT rays are clean of any tree
+        /// connector (connectors only ever run out of a category downward, toward its own tier1
+        /// children), so the ratio measured here is trustworthy. Deliberately does NOT extend to
+        /// ability nodes: most owned ability nodes have an INCOMING connector arriving from directly
+        /// above (their own parent), which sits squarely in the UP ray's path and inflates the
+        /// measured height — confirmed live running this exact check before it was scoped down to
+        /// categories (several owned abilities read back a suspicious ratio of exactly 1.000, capped at
+        /// this method's own maxDist in every direction). The hex rotation constant is shared by every
+        /// node kind, so 5 categories is full coverage of the actual defect surface, not a sampling
+        /// compromise.</summary>
+        private static void CheckHexOrientation(Texture2D tex, Color background, string id, float cx, float cy, float r,
+            System.Collections.Generic.List<string> fails)
+        {
+            // Stays under geometry.connector.startOffsetCategory (88 at r=72) so an inward ray search
+            // can never mistake a connector's own start pixel for the node's own hex/glow edge.
+            float maxDist = Mathf.Min(r * 1.3f, r + RigBoardLayout.GlowBlurOwned);
+            float top = RigBoardConformance.RayInkDistance(tex, cx, cy, 0f, -1f, maxDist, background, InkTolerance);
+            float left = RigBoardConformance.RayInkDistance(tex, cx, cy, -1f, 0f, maxDist, background, InkTolerance);
+            float right = RigBoardConformance.RayInkDistance(tex, cx, cy, 1f, 0f, maxDist, background, InkTolerance);
+            if (top <= 0f || left <= 0f || right <= 0f) { fails.Add($"{id} (no ink found within {RigBoardConformance.Fmt(maxDist)}px)"); return; }
+
+            float height = 2f * top, width = left + right;
+            float ratio = width / height;
+            if (Mathf.Abs(ratio - 0.866f) > 0.05f) fails.Add($"{id} ratio={RigBoardConformance.Fmt(ratio)} (w={RigBoardConformance.Fmt(width)} h={RigBoardConformance.Fmt(height)})");
+        }
+
+        private static void CheckFamilyContrast(Texture2D tex, out float ratio, out float litMean, out float unlitMean)
+        {
+            var categories = RigBoardLayout.Categories;
+            int n = categories.Count;
+            float yMin = RigBoardLayout.RegionRectY, yMax = yMin + RigBoardLayout.RegionRectH;
+            float spacing = n > 1 ? categories[1].X - categories[0].X : 0f;
+            var litVals = new System.Collections.Generic.List<float>();
+            var unlitVals = new System.Collections.Generic.List<float>();
+
+            for (int i = 0; i < n; i++)
+            {
+                float left = i == 0 ? categories[i].X - spacing * 0.5f : (categories[i - 1].X + categories[i].X) * 0.5f;
+                float right = i == n - 1 ? categories[i].X + spacing * 0.5f : (categories[i].X + categories[i + 1].X) * 0.5f;
+
+                bool lit = false;
+                foreach (var ab in RigBoardLayout.Abilities) if (ab.Category == categories[i].Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
+
+                float mean = RigBoardConformance.MeanLuminance(tex, left, right, yMin, yMax);
+                (lit ? litVals : unlitVals).Add(mean);
+            }
+
+            litMean = Average(litVals);
+            unlitMean = Average(unlitVals);
+            ratio = unlitMean > 0.0001f ? litMean / unlitMean : (litMean > 0.0001f ? 999f : 0f);
+        }
+
+        private static float Average(System.Collections.Generic.List<float> vals)
+        {
+            if (vals.Count == 0) return 0f;
+            float sum = 0f;
+            foreach (var v in vals) sum += v;
+            return sum / vals.Count;
+        }
+
+        /// <summary>Samples a point r*0.7 either side of the category's own centre — inside the fill for
+        /// ANY hex rotation (0.7r sits inside the 0.866r apothem every regular-hexagon rotation
+        /// guarantees as its closest edge distance) and outside the icon's own bounding square
+        /// (iconScaleCategory=1.2 -> half-width 0.6r), so this is deliberately robust to the exact
+        /// pointy-top/flat-top defect MV-462 fixes rather than assuming it's already fixed.
+        ///
+        /// Compares by HUE direction (<see cref="RigBoardConformance.HueDistance"/>), not by predicting
+        /// the exact composited brightness a low-alpha fill produces — this project's Linear colour
+        /// space makes that composited brightness come out several times brighter than a naive
+        /// <see cref="Color.Lerp"/> against colours.base predicts (see that method's own doc comment;
+        /// confirmed live running this exact check against the real capture before switching off
+        /// brightness matching).</summary>
+        private static void CheckCategoryColour(Texture2D tex, Color background, RigCategoryLayout cat,
+            System.Collections.Generic.List<string> fails)
+        {
+            Color family = RigBoardLayout.Colour(cat.Family);
+            float dx = RigBoardLayout.RadiusCategory * 0.7f;
+            Color a1 = RigBoardConformance.GetJsonPixel(tex, cat.X + dx, cat.Y);
+            Color a2 = RigBoardConformance.GetJsonPixel(tex, cat.X - dx, cat.Y);
+            bool pass = RigBoardConformance.HueDistance(a1, family) <= HueProbeTolerance
+                     || RigBoardConformance.HueDistance(a2, family) <= HueProbeTolerance;
+            if (!pass) fails.Add($"{cat.Id} fill expected hue ~{RigBoardConformance.ColorHex(family)} got {RigBoardConformance.ColorHex(a1)}");
+        }
+
+        /// <summary>Samples the middle of a chip border's own left edge (guaranteed to land on the
+        /// stroke, not the hollow centre a naive rect-centre sample would hit) via the same
+        /// world-to-screen-point path every board node's json coordinate is deliberately NOT using —
+        /// the CELLS/PARTS chips have no json (x, y) of their own, so this is the one probe that reads
+        /// the built screen's actual RectTransform instead. Hue comparison, same reasoning as
+        /// <see cref="CheckCategoryColour"/>.</summary>
+        private void CheckChipBorderColour(Texture2D tex, Image border, string label, Color expectedNamed,
+            System.Collections.Generic.List<string> fails)
+        {
+            if (border == null || _captureCam == null) { fails.Add($"{label} (no border image to sample)"); return; }
+            Vector3 world = border.rectTransform.TransformPoint(new Vector3(-border.rectTransform.rect.width * 0.5f, 0f, 0f));
+            Vector2 screenPoint = RectTransformUtility.WorldToScreenPoint(_captureCam, world);
+            int x = Mathf.Clamp(Mathf.RoundToInt(screenPoint.x), 0, tex.width - 1);
+            int y = Mathf.Clamp(Mathf.RoundToInt(screenPoint.y), 0, tex.height - 1);
+            Color actual = tex.GetPixel(x, y);
+            if (RigBoardConformance.HueDistance(actual, expectedNamed) > HueProbeTolerance)
+                fails.Add($"{label} expected hue ~{RigBoardConformance.ColorHex(expectedNamed)} got {RigBoardConformance.ColorHex(actual)}");
+        }
+
+        private void WriteConformanceReport(System.Collections.Generic.List<string> lines)
+        {
+            string text = string.Join("\n", lines) + "\n";
+            const string reportFile = "_uiscreens_report.txt";
+            try { File.WriteAllText(Path.Combine(_outDir, reportFile), text, Encoding.UTF8); }
+            catch (Exception e) { LogWarn($"conformance report write to {_outDir} failed — {e.Message}"); }
+            if (_outDir2 != null)
+            {
+                try { File.WriteAllText(Path.Combine(_outDir2, reportFile), text, Encoding.UTF8); }
+                catch (Exception e) { LogWarn($"conformance report write to {_outDir2} failed — {e.Message}"); }
+            }
+        }
+
+        // --- MV-463 Part 3: design-vs-build contact sheet ----------------------------------------
+        // "Assertions cannot judge whether an icon is well drawn." One image pairing every category
+        // and ability node's own crop from MV-423.png against the same crop from the fresh rig-16x9
+        // capture — the fixture is built to match MV-423.png's own state exactly (28/30 cells, 4
+        // parts), so the two are directly comparable node-for-node.
+
+        private const int ContactCropSize = 260;
+        private const int ContactPairGap = 6;
+        private const int ContactLabelH = 28;
+        private const int ContactPad = 10;
+        private const int ContactCols = 7;
+
+        private static readonly string DesignImagePath = Path.Combine(@"C:\Dev\MaxVsTheWorlds-Images", "MV-423.png");
+
+        private void BuildContactSheet(Texture2D buildTex)
+        {
+            Texture2D designTex = LoadDesignImage();
+            if (designTex == null)
+            {
+                LogWarn($"contact sheet: MV-423.png not found/unreadable at {DesignImagePath} — skipped");
+                return;
+            }
+
+            var nodes = new System.Collections.Generic.List<(string Id, float X, float Y)>();
+            foreach (var cat in RigBoardLayout.Categories) nodes.Add((cat.Id, cat.X, cat.Y));
+            foreach (var ab in RigBoardLayout.Abilities) nodes.Add((ab.Id, ab.X, ab.Y));
+
+            int cols = ContactCols;
+            int rows = Mathf.CeilToInt(nodes.Count / (float)cols);
+            int cellW = ContactCropSize * 2 + ContactPairGap;
+            int cellH = ContactCropSize + ContactLabelH;
+            int sheetW = cols * (cellW + ContactPad) + ContactPad;
+            int sheetH = rows * (cellH + ContactPad) + ContactPad;
+
+            Color32[] designPixels = designTex.GetPixels32();
+            Color32[] buildPixels = buildTex.GetPixels32();
+            var sheet = new Color32[sheetW * sheetH];
+            var sheetBg = new Color32(12, 13, 16, 255);
+            for (int i = 0; i < sheet.Length; i++) sheet[i] = sheetBg;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                int col = i % cols, row = i / cols;
+                int cellX = ContactPad + col * (cellW + ContactPad);
+                int cellY = ContactPad + row * (cellH + ContactPad);
+                var node = nodes[i];
+                int texCx = Mathf.RoundToInt(node.X);   // same json x for both images — canvases are the same 1920x1080 frame
+
+                int designCy = designTex.height - Mathf.RoundToInt(node.Y);
+                PasteCrop(sheet, sheetW, cellX, cellY + ContactLabelH, designPixels, designTex.width, designTex.height, texCx, designCy, ContactCropSize);
+
+                int buildCy = buildTex.height - Mathf.RoundToInt(node.Y);
+                PasteCrop(sheet, sheetW, cellX + ContactCropSize + ContactPairGap, cellY + ContactLabelH, buildPixels, buildTex.width, buildTex.height, texCx, buildCy, ContactCropSize);
+            }
+
+            var sheetTex = new Texture2D(sheetW, sheetH, TextureFormat.RGB24, false);
+            sheetTex.SetPixels32(sheet);
+
+            OverlayContactLabels(sheetTex, nodes, cols, cellW, cellH);
+
+            try
+            {
+                byte[] png = sheetTex.EncodeToPNG();
+                File.WriteAllBytes(Path.Combine(_outDir, "rig-contact-sheet.png"), png);
+                TryWriteSecondary("rig-contact-sheet", png);
+                string line = $"rig-contact-sheet.png ({sheetW}x{sheetH}, {nodes.Count} node pairs)";
+                Log($"wrote {line}");
+                _manifest.AppendLine(line);
+            }
+            catch (Exception e) { LogWarn($"contact sheet: encode/write failed — {e.Message}"); }
+            finally
+            {
+                Destroy(sheetTex);
+                Destroy(designTex);
+            }
+        }
+
+        private static Texture2D LoadDesignImage()
+        {
+            try
+            {
+                if (!File.Exists(DesignImagePath)) return null;
+                byte[] bytes = File.ReadAllBytes(DesignImagePath);
+                var tex = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                if (!tex.LoadImage(bytes)) { Destroy(tex); return null; }
+                return tex;
+            }
+            catch (Exception e) { LogWarn($"contact sheet: failed to load {DesignImagePath} — {e.Message}"); return null; }
+        }
+
+        private static void PasteCrop(Color32[] dst, int dstW, int dstX, int dstY, Color32[] src, int srcW, int srcH,
+            int centerX, int centerY, int size)
+        {
+            int half = size / 2;
+            for (int y = 0; y < size; y++)
+            {
+                int sy = centerY - half + y;
+                if (sy < 0 || sy >= srcH) continue;
+                int dy = dstY + y;
+                for (int x = 0; x < size; x++)
+                {
+                    int sx = centerX - half + x;
+                    if (sx < 0 || sx >= srcW) continue;
+                    dst[dy * dstW + (dstX + x)] = src[sy * srcW + sx];
+                }
+            }
+        }
+
+        /// <summary>Stamps each node's id above its crop pair. A throwaway canvas built and destroyed
+        /// entirely within this method — deliberately NOT routed through <see cref="ShowCanvasOnCamera"/>/
+        /// <see cref="RestoreCanvas"/> (those track exactly one active canvas in instance fields, and
+        /// this runs WHILE the main board capture's own canvas is still active on the same camera,
+        /// mid-<see cref="CaptureFixtureScreen"/> — sharing that single-slot state here would stomp the
+        /// snapshot <see cref="CaptureFixtureScreen"/>'s own <c>finally</c> still needs to restore the
+        /// board canvas afterward). Saves/restores exactly what it touches (culling mask, target
+        /// texture, aspect) by hand instead.</summary>
+        private void OverlayContactLabels(Texture2D sheetTex,
+            System.Collections.Generic.List<(string Id, float X, float Y)> nodes, int cols, int cellW, int cellH)
+        {
+            if (_captureCam == null) return;
+            int sheetW = sheetTex.width, sheetH = sheetTex.height;
+            int uiLayer = LayerMask.NameToLayer("UI");
+
+            var canvasGo = new GameObject("ContactSheetLabels");
+            if (uiLayer >= 0) canvasGo.layer = uiLayer;
+            var canvas = canvasGo.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceCamera;
+            canvas.worldCamera = _captureCam;
+            canvas.planeDistance = 1f;
+
+            for (int i = 0; i < nodes.Count; i++)
+            {
+                int col = i % cols, row = i / cols;
+                int cellX = ContactPad + col * (cellW + ContactPad);
+                int cellY = ContactPad + row * (cellH + ContactPad);
+
+                var textGo = new GameObject(nodes[i].Id, typeof(RectTransform), typeof(Text));
+                if (uiLayer >= 0) textGo.layer = uiLayer;
+                textGo.transform.SetParent(canvasGo.transform, false);
+                var rt = (RectTransform)textGo.transform;
+                rt.anchorMin = new Vector2(0f, 1f);
+                rt.anchorMax = new Vector2(0f, 1f);
+                rt.pivot = new Vector2(0f, 1f);
+                rt.sizeDelta = new Vector2(cellW, ContactLabelH);
+                rt.anchoredPosition = new Vector2(cellX, -cellY);
+
+                var text = textGo.GetComponent<Text>();
+                text.font = HudFont.Get();
+                text.text = nodes[i].Id;
+                text.fontSize = 20;
+                text.fontStyle = FontStyle.Bold;
+                text.color = Color.white;
+                text.alignment = TextAnchor.MiddleLeft;
+                text.raycastTarget = false;
+            }
+
+            var rt2 = new RenderTexture(sheetW, sheetH, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            int prevMask = _captureCam.cullingMask;
+            var prevTarget = _captureCam.targetTexture;
+            float prevAspect = _captureCam.aspect;
+            _captureCam.targetTexture = rt2;
+            _captureCam.aspect = (float)sheetW / sheetH;
+            _captureCam.backgroundColor = Color.black;
+            if (uiLayer >= 0) _captureCam.cullingMask |= (1 << uiLayer);
+
+            // MV-444's own rule for a ScreenSpaceCamera canvas: geometry isn't trustworthy until
+            // Canvas.SendWillRenderCanvases rebuilds it at the new target size. That method's own fix
+            // yielded two frames to let Unity's own update loop get there; this call site can't yield
+            // (it runs synchronously, deep inside CaptureFixtureScreen's own try/catch — CS1626), so it
+            // forces the same rebuild immediately instead of waiting for one.
+            Canvas.ForceUpdateCanvases();
+
+            Texture2D labelsTex = ReadCameraRenderTexture(_captureCam, rt2, sheetW, sheetH);
+
+            _captureCam.cullingMask = prevMask;
+            _captureCam.targetTexture = prevTarget;
+            _captureCam.aspect = prevAspect;
+            rt2.Release();
+            Destroy(rt2);
+            Destroy(canvasGo);
+
+            Color32[] labelPixels = labelsTex.GetPixels32();
+            Color32[] sheetPixels = sheetTex.GetPixels32();
+            int n = Mathf.Min(sheetPixels.Length, labelPixels.Length);
+            for (int i = 0; i < n; i++)
+            {
+                Color32 lp = labelPixels[i];
+                if (lp.r > 24 || lp.g > 24 || lp.b > 24) sheetPixels[i] = lp;   // label text over the sheet's own dark background
+            }
+            sheetTex.SetPixels32(sheetPixels);
+            sheetTex.Apply();
+            Destroy(labelsTex);
+        }
 
         // --- lifecycle / reporting ----------------------------------------------------------------
 
@@ -654,7 +1085,9 @@ namespace MaxWorlds.Dev
             Log($"ui-screens capture complete ({_shotsWritten}/{ExpectedShotCount} shots, {_failures.Count} failure(s))");
         }
 
-        private const int ExpectedShotCount = 7;   // 3 THE RIG (MV-421) + 4 WEAPONS button states (MV-425)
+        // MV-463 Part 1: THE RIG's own shot count is data-driven (RigBoardLayout.CaptureAspects) plus
+        // the fixed noparts variant; WEAPONS button stays at its 4 fixed alert-state shots (MV-425).
+        private static int ExpectedShotCount => RigBoardLayout.CaptureAspects.Count + 1 + 4;
 
         private static void Log(string m) => Debug.Log("[UiScreens] " + m);
         private static void LogWarn(string m) => Debug.LogWarning("[UiScreens] " + m);

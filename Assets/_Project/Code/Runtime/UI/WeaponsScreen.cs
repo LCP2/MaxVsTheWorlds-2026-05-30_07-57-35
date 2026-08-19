@@ -107,9 +107,11 @@ namespace MaxWorlds.UI
 
         private Text _cellsText;
         private Image _cellsChipBg;
+        private Image _cellsBorder;
         private Button _cellsChipButton;
 
         private Image _partsTrayBg;
+        private Image _partsTrayBorder;
         private Text _partsTrayLabel, _partsTraySub;
         private readonly List<Image> _partsSockets = new List<Image>();
         private readonly List<Image> _partsSocketGlows = new List<Image>();
@@ -175,6 +177,14 @@ namespace MaxWorlds.UI
         /// <c>"conn:ab:ID>ID"</c> or <c>"conn:fusion:ID>ID"</c>) — test-only access, same idiom as
         /// <see cref="BoardNode"/>.</summary>
         public Image Connector(string id) => _connectors.TryGetValue(id, out var c) ? c : null;
+
+        /// <summary>MV-463: the CELLS chip's own family-coloured hairline border — test/conformance-only
+        /// access, same idiom as <see cref="CategoryPanelBorder"/>, so the ui-screens conformance pass
+        /// can sample a known full-alpha pixel for its named-colour probe.</summary>
+        public Image CellsBorder => _cellsBorder;
+
+        /// <summary>MV-463: the PARTS tray's own amber border — see <see cref="CellsBorder"/>.</summary>
+        public Image PartsBorder => _partsTrayBorder;
 
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
@@ -1592,6 +1602,7 @@ namespace MaxWorlds.UI
             Stretch(cellsBorder.rectTransform);
             cellsBorder.type = Image.Type.Sliced;
             cellsBorder.raycastTarget = false;
+            _cellsBorder = cellsBorder;
         }
 
         /// <summary>MV-423's replacement for the old spinning-gear PARTS chip: six hex sockets (filled
@@ -1636,6 +1647,7 @@ namespace MaxWorlds.UI
             Stretch(border.rectTransform);
             border.type = Image.Type.Sliced;
             border.raycastTarget = false;
+            _partsTrayBorder = border;
 
             _partsTrayLabel = AddText(tray, 18, PartsColor, TextAnchor.UpperLeft);
             Anchor(_partsTrayLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
