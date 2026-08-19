@@ -35,6 +35,12 @@ namespace MaxWorlds.Arena
         private AreaGate _bossGate;
         private readonly List<(string areaId, MowerHutch hutch)> _sheds = new List<(string, MowerHutch)>(3);
 
+        /// <summary>Destroyed sheds' spawners, keyed by their 1-based area index (MV-456) — fed by
+        /// <see cref="TrackDestroyedShedStream"/> as each shed dies. Never drained: a world is short
+        /// enough that this never grows past a handful of entries.</summary>
+        private readonly List<(int areaIndex, EnemySpawner spawner)> _destroyedShedSpawners =
+            new List<(int, EnemySpawner)>(9);
+
         private WorldConfig _cfg;
         private MapData _map;
         private AreaAccumulationDirector _areaDirector;
@@ -119,21 +125,62 @@ namespace MaxWorlds.Arena
 
         private void Update()
         {
-            if (_supply == null || _sheds.Count == 0) return;
-
-            for (int i = _sheds.Count - 1; i >= 0; i--)
+            if (_supply != null)
             {
-                (string areaId, MowerHutch hutch) = _sheds[i];
-                if (hutch != null && hutch.IsAlive) continue;
-
-                _sheds.RemoveAt(i);
-                _supply.DestroyShed(areaId);
-
-                if (_supply.AllShedsDestroyed && _bossGate != null)
+                for (int i = _sheds.Count - 1; i >= 0; i--)
                 {
-                    _bossGate.Locked = false;
-                    _bossGate.ForceOpen();
+                    (string areaId, MowerHutch hutch) = _sheds[i];
+                    if (hutch != null && hutch.IsAlive) continue;
+
+                    _sheds.RemoveAt(i);
+                    _supply.DestroyShed(areaId);
+                    TrackDestroyedShedStream(areaId, hutch);
+
+                    if (_supply.AllShedsDestroyed && _bossGate != null)
+                    {
+                        _bossGate.Locked = false;
+                        _bossGate.ForceOpen();
+                    }
                 }
+            }
+
+            UpdatePostDestructionStreamGating();
+        }
+
+        /// <summary>Remember a destroyed shed's <see cref="EnemySpawner"/> against its 1-based area
+        /// index (MV-456), so <see cref="UpdatePostDestructionStreamGating"/> can pause/resume its
+        /// post-destruction trickle purely off which area the player is standing in. A no-op if the
+        /// area id doesn't resolve to a combat area index or the factory carries no spawner — neither
+        /// should happen (every shed's area carries one, and RequireComponent guarantees the other).</summary>
+        private void TrackDestroyedShedStream(string areaId, MowerHutch hutch)
+        {
+            if (hutch == null || _cfg == null) return;
+            WorldArea area = _cfg.Area(areaId);
+            if (area == null || area.index <= 0) return;
+            EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
+            if (spawner == null) return;
+            _destroyedShedSpawners.Add((area.index, spawner));
+        }
+
+        /// <summary>The risk MV-456 flags by name: areas are never unloaded, so with several destroyed
+        /// sheds all streaming, the field-wide <see cref="EnemySpawner.GlobalMaxLiveEnemies"/> cap
+        /// could starve spawns in the room the player is actually in. Mitigation: only the destroyed
+        /// shed whose area the player is CURRENTLY, PHYSICALLY standing in keeps streaming; every
+        /// other destroyed shed pauses. Cheap to poll every frame — a world carries at most a handful
+        /// of sheds.</summary>
+        private void UpdatePostDestructionStreamGating()
+        {
+            if (_destroyedShedSpawners.Count == 0 || _map == null) return;
+            EnsurePlayer();
+            if (_player == null) return;
+
+            MapZone zone = _map.ZoneAt(_player.position.x, _player.position.z);
+            int playerArea = zone == null ? 0 : AreaAccumulationDirector.AreaIndexOf(zone.id);
+
+            for (int i = 0; i < _destroyedShedSpawners.Count; i++)
+            {
+                (int areaIndex, EnemySpawner spawner) = _destroyedShedSpawners[i];
+                if (spawner != null) spawner.SetAreaPaused(areaIndex != playerArea);
             }
         }
 
