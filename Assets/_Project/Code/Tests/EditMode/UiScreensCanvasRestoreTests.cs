@@ -88,6 +88,26 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void ShowMovesTheCanvasOntoTheUiLayerAndRestoreReturnsItsOriginalLayer()
+        {
+            // MV-444: the capture camera sits at the scene's default transform, inside the 3D scene, and
+            // must render ONLY the canvas — WeaponsScreen/HudController never put their canvas on a
+            // dedicated layer, so Show moves it onto "UI" (otherwise unused in this project) for the
+            // capture and Restore must put it back, or every subsequent frame renders the canvas on the
+            // wrong layer for every OTHER camera in the scene too.
+            int originalLayer = _canvasGo.layer;
+            int uiLayer = LayerMask.NameToLayer("UI");
+            Assert.That(uiLayer, Is.GreaterThanOrEqualTo(0), "test assumes this project's TagManager still defines a 'UI' layer");
+            Assert.That(originalLayer, Is.Not.EqualTo(uiLayer), "test needs to start off the UI layer to prove Show actually moves it");
+
+            _show.Invoke(_director, new object[] { _canvas, _cam, 1920, 1080 });
+            Assert.That(_canvasGo.layer, Is.EqualTo(uiLayer));
+
+            _restore.Invoke(_director, null);
+            Assert.That(_canvasGo.layer, Is.EqualTo(originalLayer));
+        }
+
+        [Test]
         public void RestoreReEnablesTheCanvasScaler()
         {
             _show.Invoke(_director, new object[] { _canvas, _cam, 1920, 1080 });

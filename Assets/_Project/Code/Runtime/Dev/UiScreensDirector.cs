@@ -134,7 +134,17 @@ namespace MaxWorlds.Dev
             var weapons = FindFirstObjectByType<WeaponsScreen>();
             if (weapons == null) { LogWarn("rig: no WeaponsScreen in the scene"); yield break; }
 
-            var canvas = weapons.GetComponentInChildren<Canvas>(true);
+            // WeaponsScreen self-installs its GameObject in its own RuntimeInitializeOnLoadMethod, but
+            // only builds its Canvas later, in its own Start(). Both directors install at AfterSceneLoad
+            // and Start() their capture coroutine the same frame, so which Start() runs first (and
+            // therefore whether the canvas exists yet) is a same-frame race, not a guarantee — caught
+            // live running MV-444: it lost the race and skipped all 3 rig shots. Give it a few frames.
+            Canvas canvas = null;
+            for (int i = 0; i < 10 && canvas == null; i++)
+            {
+                canvas = weapons.GetComponentInChildren<Canvas>(true);
+                if (canvas == null) yield return null;
+            }
             if (canvas == null) { LogWarn("rig: WeaponsScreen built no canvas"); yield break; }
 
             yield return CaptureFixtureScreen("rig-16x9", 1920, 1080, ApplyRigFixture, weapons.Open, weapons.Close, canvas);
@@ -300,12 +310,27 @@ namespace MaxWorlds.Dev
             }
 
             ShowCanvasOnCamera(canvas, _captureCam, w, h);
-            yield return null;   // let the canvas rebuild its layout at the new scale factor
+
+            // MV-444: a ScreenSpaceCamera canvas's on-screen size is computed from the camera's CURRENT
+            // pixel dimensions the next time Unity rebuilds canvas geometry (Canvas.SendWillRenderCanvases,
+            // driven by the frame yields below) — so the render target must already be assigned BEFORE
+            // those yields, not right before Camera.Render(). Assigning it after the settle frames (the
+            // original shape here) left the canvas sized for whatever the ambient batchmode window
+            // happened to be, so it rendered undersized/letterboxed into this shot's actual w x h texture
+            // — caught live running this exact ticket: every shot showed real content correctly, but
+            // with solid black margins around it instead of filling the frame.
+            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
+            var prevTarget = _captureCam.targetTexture;
+            float prevAspect = _captureCam.aspect;
+            _captureCam.aspect = (float)w / h;
+            _captureCam.targetTexture = rt;
+
+            yield return null;   // let the canvas rebuild its layout at the new scale factor AND target size
             yield return null;
 
             try
             {
-                var tex = RenderCanvasToTexture(_captureCam, w, h);
+                var tex = ReadCameraRenderTexture(_captureCam, rt, w, h);
                 try
                 {
                     byte[] png = tex.EncodeToPNG();
@@ -322,6 +347,10 @@ namespace MaxWorlds.Dev
             catch (Exception e) { LogWarn($"{name}: capture failed — {e.Message}"); }
             finally
             {
+                _captureCam.aspect = prevAspect;
+                _captureCam.targetTexture = prevTarget;
+                rt.Release();
+                Destroy(rt);
                 RestoreCanvas();
                 try { close?.Invoke(); } catch (Exception e) { LogWarn($"{name}: close failed — {e.Message}"); }
             }
@@ -346,6 +375,7 @@ namespace MaxWorlds.Dev
         private float _activeCaptureCanvasPrevPlaneDistance;
         private int _activeCaptureCanvasPrevSortingOrder;
         private float _activeCaptureCanvasPrevScaleFactor;
+        private int _activeCaptureCanvasPrevLayer;
         private CanvasScaler _activeCaptureScaler;
         private bool _activeCaptureScalerWasEnabled;
 
@@ -359,15 +389,13 @@ namespace MaxWorlds.Dev
         /// CanvasScaler's own match-width-or-height formula against the explicit (w, h) this shot is
         /// actually rendering at.
         ///
-        /// Snapshots render mode, world camera, plane distance and sorting order (MV-444 AC3) even
-        /// though only the first three are actually changed here — restoring all four defensively is
+        /// Snapshots render mode, world camera, plane distance, sorting order (MV-444 AC3) and layer
+        /// even though sorting order is not actually changed here — restoring all five defensively is
         /// what keeps a capture from being able to leave a screen mis-parented, the MV-440 failure
         /// shape.</summary>
         private void ShowCanvasOnCamera(Canvas canvas, Camera cam, int w, int h)
         {
             if (canvas == null || cam == null) return;
-            int ui = LayerMask.NameToLayer("UI");
-            if (ui >= 0) cam.cullingMask |= (1 << ui);   // a camera-space canvas only draws if its layer is rendered
 
             _activeCaptureCanvas = canvas;
             _activeCaptureCanvasPrevMode = canvas.renderMode;
@@ -375,6 +403,34 @@ namespace MaxWorlds.Dev
             _activeCaptureCanvasPrevPlaneDistance = canvas.planeDistance;
             _activeCaptureCanvasPrevSortingOrder = canvas.sortingOrder;
             _activeCaptureCanvasPrevScaleFactor = canvas.scaleFactor;
+            _activeCaptureCanvasPrevLayer = canvas.gameObject.layer;
+
+            // MV-444: this capture camera sits at the scene's default transform (world origin), inside
+            // the 3D scene — it must render ONLY the canvas, nothing else, or nearby 3D geometry
+            // Z-fights with (and shows through) the canvas's own opaque backdrop. Culling by the
+            // canvas's EXISTING layer isn't enough: neither WeaponsScreen's nor HudController's canvas
+            // is ever put on a dedicated layer (no GameObject in either Build() sets .layer), so they
+            // sit on layer 0 ("Default") along with the entire 3D world — culling to that layer renders
+            // the world right along with the UI (caught live running this exact ticket: probe6 sampled
+            // #5E442D, real ground/prop colour, instead of the board's own near-black base). Moving the
+            // canvas onto the pre-existing, otherwise-unused "UI" layer (TagManager.asset — never
+            // referenced by anything else in this codebase, confirmed by grep) and culling to exactly
+            // that layer is what actually isolates it. Restored in RestoreCanvas like every other
+            // snapshot here.
+            int ui = LayerMask.NameToLayer("UI");
+            if (ui >= 0)
+            {
+                canvas.gameObject.layer = ui;
+                cam.cullingMask |= (1 << ui);
+            }
+            else
+            {
+                // No "UI" layer in this project's TagManager — fall back to whatever layer the canvas
+                // is already on. Not isolated from the 3D scene if that layer is shared, but still
+                // better than rendering nothing.
+                LogWarn("ShowCanvasOnCamera: no 'UI' layer in TagManager — falling back to the canvas's own layer, capture may show the 3D scene behind it");
+                cam.cullingMask |= (1 << canvas.gameObject.layer);
+            }
 
             canvas.renderMode = RenderMode.ScreenSpaceCamera;
             canvas.worldCamera = cam;
@@ -398,6 +454,7 @@ namespace MaxWorlds.Dev
             _activeCaptureCanvas.planeDistance = _activeCaptureCanvasPrevPlaneDistance;
             _activeCaptureCanvas.sortingOrder = _activeCaptureCanvasPrevSortingOrder;
             _activeCaptureCanvas.scaleFactor = _activeCaptureCanvasPrevScaleFactor;
+            _activeCaptureCanvas.gameObject.layer = _activeCaptureCanvasPrevLayer;
             if (_activeCaptureScaler != null) _activeCaptureScaler.enabled = _activeCaptureScalerWasEnabled;
             _activeCaptureCanvas = null;
             _activeCaptureScaler = null;
@@ -421,34 +478,25 @@ namespace MaxWorlds.Dev
             return Mathf.Pow(2f, Mathf.Lerp(logW, logH, scaler.matchWidthOrHeight));
         }
 
-        /// <summary>Render <paramref name="cam"/> into an RGB PNG-ready texture at exactly
-        /// <paramref name="w"/>x<paramref name="h"/> — a RenderTexture render, never the back buffer, so
-        /// it works with no attached display (MV-444). Caller owns the returned texture.</summary>
-        private Texture2D RenderCanvasToTexture(Camera cam, int w, int h)
+        /// <summary>Render <paramref name="cam"/> (already pointed at <paramref name="rt"/>, sized
+        /// <paramref name="w"/>x<paramref name="h"/>) and read it back into an RGB PNG-ready texture — a
+        /// RenderTexture render, never the back buffer, so it works with no attached display (MV-444).
+        /// Caller owns both the returned texture and <paramref name="rt"/> itself (assigning it early,
+        /// before <see cref="CaptureFixtureScreen"/>'s settle-frame yields, is what makes the canvas
+        /// actually size itself for this render target — see the call site).</summary>
+        private static Texture2D ReadCameraRenderTexture(Camera cam, RenderTexture rt, int w, int h)
         {
-            var rt = new RenderTexture(w, h, 24, RenderTextureFormat.ARGB32, RenderTextureReadWrite.sRGB);
             var tex = new Texture2D(w, h, TextureFormat.RGB24, false);
-            var prevTarget = cam.targetTexture;
             var prevActive = RenderTexture.active;
-            float prevAspect = cam.aspect;
             try
             {
-                cam.aspect = (float)w / h;
-                cam.targetTexture = rt;
                 cam.Render();
                 RenderTexture.active = rt;
                 tex.ReadPixels(new Rect(0, 0, w, h), 0, 0);
                 tex.Apply();
                 return tex;
             }
-            finally
-            {
-                cam.aspect = prevAspect;
-                cam.targetTexture = prevTarget;
-                RenderTexture.active = prevActive;
-                rt.Release();
-                Destroy(rt);
-            }
+            finally { RenderTexture.active = prevActive; }
         }
 
         /// <summary>Asserts exactly <paramref name="expectedCount"/> <c>ScreenSpaceOverlay</c> canvases
@@ -513,11 +561,16 @@ namespace MaxWorlds.Dev
 
         /// <summary>MV-421 pixel probe 6, fixed by MV-441 (it never ran — this is its first
         /// implementation): a point that sits left of the region rect's own <c>padX</c> margin and
-        /// clear of every category/ability node must equal <c>colours.base</c> exactly. This is the
-        /// probe that would have caught the HomeScreen occlusion with nobody looking at a screenshot —
-        /// the panel's colour is nowhere near the board's near-black base. Runs only against
-        /// <c>rig-16x9</c>, the one shot whose 1920x1080 texture maps 1:1 onto rig_board.json's own
-        /// canvas coordinates with no letterbox/scale to account for.</summary>
+        /// clear of every category/ability node must equal <see cref="WeaponsScreen.Background"/>'s
+        /// colours.base <em>as actually composited with <see cref="WeaponsScreen.ScreenScrim"/></em> — not
+        /// raw colours.base, which is what MV-433 shipped before MV-433 itself added that scrim over the
+        /// whole root. Reading raw colours.base here is exactly the kind of check this probe exists to
+        /// replace: a hand-written expectation that quietly stopped matching what actually renders,
+        /// caught live running this exact ticket (rig-16x9's real corner pixel is #000000 — the scrim's
+        /// own colour at 97% alpha over a near-black backdrop rounds an 8-bit channel straight to 0 — not
+        /// the #07080B this probe demanded before the fix). Runs only against <c>rig-16x9</c>, the one
+        /// shot whose 1920x1080 texture maps 1:1 onto rig_board.json's own canvas coordinates with no
+        /// letterbox/scale to account for.</summary>
         private void RunOutsideBackgroundProbe(Texture2D tex)
         {
             const int probeJsonX = 20, probeJsonY = 400;   // rig_board.json coords (y measured from the top)
@@ -525,16 +578,23 @@ namespace MaxWorlds.Dev
             int texY = tex.height - probeJsonY;             // Texture2D is bottom-left origin
             if (texX < 0 || texX >= tex.width || texY < 0 || texY >= tex.height)
             {
-                string skip = "probe6 (outside-background==colours.base): SKIPPED — coordinates fall outside the captured texture";
+                string skip = "probe6 (outside-background==composited-base): SKIPPED — coordinates fall outside the captured texture";
                 LogWarn(skip);
                 _manifest.AppendLine(skip);
                 return;
             }
 
-            Color actual = tex.GetPixel(texX, texY);
             Color expected = RigBoardLayout.Colour("base");
+            var weapons = FindFirstObjectByType<WeaponsScreen>();
+            if (weapons != null && weapons.ScreenScrim != null)
+            {
+                Color scrim = weapons.ScreenScrim.color;
+                expected = Color.Lerp(expected, new Color(scrim.r, scrim.g, scrim.b, 1f), scrim.a);
+            }
+
+            Color actual = tex.GetPixel(texX, texY);
             bool pass = ColorsMatch(actual, expected);
-            string msg = $"probe6 (outside-background==colours.base): {(pass ? "PASS" : "FAIL")} — expected {ColorHex(expected)}, got {ColorHex(actual)} at tex({texX},{texY})";
+            string msg = $"probe6 (outside-background==composited-base): {(pass ? "PASS" : "FAIL")} — expected {ColorHex(expected)}, got {ColorHex(actual)} at tex({texX},{texY})";
             _manifest.AppendLine(msg);
             if (pass) { Log(msg); }
             else { LogWarn(msg); _failures.Add(msg); }
@@ -553,14 +613,17 @@ namespace MaxWorlds.Dev
 
         private void Finish()
         {
-            // "ok" means at least one screenshot actually landed AND no assertion — the canvas-overlay
-            // check or probe 6 — failed. A shot that "succeeded" over an occluding HomeScreen is
-            // exactly the false green MV-441 exists to close off.
+            // "ok" means every expected screenshot landed AND no assertion — the canvas-overlay check
+            // or probe 6 — failed. A shot that "succeeded" over an occluding HomeScreen is exactly the
+            // false green MV-441 exists to close off; a partial run (e.g. rig-16x9 skipped) is exactly
+            // as false a green and must not read "ok" either (MV-444: caught live when a WeaponsScreen
+            // build-order race dropped all 3 rig shots but the marker still said "ok" on the 4 that did
+            // land).
             string status;
             if (_failures.Count > 0)
                 status = $"fail: {_failures.Count} assertion(s) failed — " + string.Join(" | ", _failures);
-            else if (_shotsWritten == 0)
-                status = $"fail: 0 of {ExpectedShotCount} screenshots captured";
+            else if (_shotsWritten < ExpectedShotCount)
+                status = $"fail: {_shotsWritten} of {ExpectedShotCount} screenshots captured";
             else
                 status = "ok";
 
