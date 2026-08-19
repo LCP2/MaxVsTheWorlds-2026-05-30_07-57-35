@@ -40,6 +40,23 @@ echo Unity   : %UNITY_PATH%
 echo Log     : %LOG%
 echo.
 
+REM ----- Unity project-lock guard (MV-465) -------------------------------
+REM   Same exposure as cc-verify.bat: if another Unity instance already holds
+REM   this project, the capture would exit instantly and look like a capture
+REM   failure rather than "nothing ran". Abort distinctly instead. A stale
+REM   lockfile (no live process holding it) must not block forever.
+set "LOCKFILE=%PROJECT%\Temp\UnityLockfile"
+if exist "%LOCKFILE%" (
+  powershell -NoProfile -Command "try { $fs = [System.IO.File]::Open('%LOCKFILE%', 'Open', 'ReadWrite', 'None'); $fs.Close(); exit 0 } catch { exit 1 }"
+  if errorlevel 1 (
+    echo === cc-screens ABORTED - another Unity instance has this project open ===
+    echo     Nothing was captured. This is NOT a capture failure.
+    exit /b 3
+  ) else (
+    echo [cc-screens] stale UnityLockfile found, no live Unity holds it - continuing.
+  )
+)
+
 "%UNITY_PATH%" ^
   -batchmode -projectPath "%PROJECT%" ^
   -executeMethod MaxWorlds.Editor.UiScreensCapture.CaptureAll ^
