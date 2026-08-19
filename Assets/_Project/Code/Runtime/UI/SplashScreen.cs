@@ -16,8 +16,10 @@ namespace MaxWorlds.UI
     /// the ticket) in the safe area for a future title/logo overlay, on every aspect ratio, by
     /// construction rather than by hoping a centred crop happens to miss it.
     ///
-    /// Skips itself under <see cref="PressKitDirector.Armed()"/> — a filming run can't click through
-    /// it and doesn't want a delay before its staged shots, same rationale as HomeScreen.
+    /// Skips itself under <see cref="PressKitDirector.Armed()"/> or
+    /// <see cref="MaxWorlds.Dev.UiScreensDirector.Armed()"/> — a filming or fixed-state UI capture run
+    /// can't click through it and doesn't want a delay (or a sortingOrder=300 canvas sitting over
+    /// everything) before its staged shots, same rationale as HomeScreen (MV-441).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class SplashScreen : MonoBehaviour
@@ -25,7 +27,7 @@ namespace MaxWorlds.UI
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            if (PressKitDirector.Armed()) return;
+            if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed()) return;
             if (FindFirstObjectByType<SplashScreen>() != null) return;
             new GameObject("SplashScreen").AddComponent<SplashScreen>();
         }

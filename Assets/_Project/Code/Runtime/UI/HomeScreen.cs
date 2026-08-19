@@ -26,8 +26,10 @@ namespace MaxWorlds.UI
     /// Code-driven overlay, same idiom as <see cref="ResultScreen"/>/<see cref="UpgradeScreen"/>: its
     /// own canvas above the HUD, built in code, paused via <see cref="Time.timeScale"/> = 0 while a
     /// choice is pending. Skips itself entirely (silently drops into slot 0) when
-    /// <see cref="PressKitDirector.Armed"/> — a filming run has nothing to click the modal with, and the
-    /// captured shots must not open on a frozen pick-a-slot screen (YT-97).
+    /// <see cref="PressKitDirector.Armed"/> or <see cref="MaxWorlds.Dev.UiScreensDirector.Armed"/> — a
+    /// filming or fixed-state UI capture run has nothing to click the modal with, and the captured
+    /// shots must not open on a frozen pick-a-slot screen (YT-97; MV-441 — this screen's own
+    /// sortingOrder=220 canvas was sitting on top of every ui-screens capture uncaught).
     ///
     /// Each occupied slot also carries a RESET control (MV-282) gated by a confirm/cancel dialog —
     /// <see cref="SaveSystem.Delete"/> is the whole reset, since <see cref="SaveSlotData"/> is the only
@@ -86,10 +88,11 @@ namespace MaxWorlds.UI
                 return;
             }
 
-            if (PressKitDirector.Armed())
+            if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed())
             {
-                // Filming has nothing to click the modal with — hand off to slot 0 straight away,
-                // without pausing or showing anything (YT-97).
+                // Filming (press-kit) or a fixed-state UI capture (ui-screens) has nothing to click
+                // the modal with — hand off to slot 0 straight away, without pausing or showing
+                // anything, the same lever PressKitDirector already used (YT-97; MV-441).
                 StartSlot(0, playIntro: false);
                 return;
             }

@@ -1,8 +1,10 @@
 using System;
 using System.Collections;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 using UnityEngine;
+using UnityEngine.UI;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 using MaxWorlds.Pickups;
@@ -34,8 +36,16 @@ namespace MaxWorlds.Dev
     {
         private const string DoneMarker = "_uiscreens_done.txt";
 
+        /// <summary>MV-441 AC4: the Cowork design chat's reachable folder — same directory
+        /// <c>CC_AUTONOMY.md</c> already grants this worker read/write on, no credentials, no CI, no
+        /// <c>ui-screens</c> branch needed. Overwritten in place every run; best-effort (see
+        /// <see cref="TryWriteSecondary"/>) so a CI box with no such drive doesn't fail the whole job.</summary>
+        private const string DesignImagesScreensDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
         private string _outDir;
+        private string _outDir2;
         private readonly StringBuilder _manifest = new StringBuilder();
+        private readonly List<string> _failures = new List<string>();
         private int _shotsWritten;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
@@ -68,7 +78,11 @@ namespace MaxWorlds.Dev
         {
             _outDir = Arg("-uiscreensOut") ?? Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press"));
             Directory.CreateDirectory(_outDir);
-            Log($"ui-screens capture starting → {_outDir}");
+
+            try { Directory.CreateDirectory(DesignImagesScreensDir); _outDir2 = DesignImagesScreensDir; }
+            catch (Exception e) { LogWarn($"secondary output dir unavailable ({DesignImagesScreensDir}): {e.Message}"); _outDir2 = null; }
+
+            Log($"ui-screens capture starting → {_outDir}" + (_outDir2 != null ? $" (+ {_outDir2})" : ""));
 
             yield return CaptureRigBoard();
             yield return CaptureWeaponsButton();
@@ -231,6 +245,23 @@ namespace MaxWorlds.Dev
             yield return null;
             yield return new WaitForSecondsRealtime(0.1f);   // paused (timeScale 0) — real time only
 
+            // MV-441: the shot must be the ONLY high-sorting-order screen up — HomeScreen's own
+            // sortingOrder=220 canvas sat over every ui-screens capture uncaught until this ran.
+            // A shot that opens a screen (rig-*) expects exactly that one; a HUD-only shot (the
+            // WEAPONS button states) opens nothing, so it expects zero — the HUD's own canvas is
+            // pinned at exactly 100 (HudController.cs), below this ">100" threshold, by design.
+            int expectedOverlays = open != null ? 1 : 0;
+            string overlayError = CheckSingleActiveOverlay(expectedOverlays);
+            if (overlayError != null)
+            {
+                string msg = $"{name}: canvas-overlay assertion failed — {overlayError}";
+                LogWarn(msg);
+                _manifest.AppendLine(msg);
+                _failures.Add(msg);
+                try { close?.Invoke(); } catch (Exception e) { LogWarn($"{name}: close failed — {e.Message}"); }
+                yield break;
+            }
+
             try
             {
                 var tex = ScreenCapture.CaptureScreenshotAsTexture();
@@ -238,10 +269,14 @@ namespace MaxWorlds.Dev
                 {
                     if (tex.width != w || tex.height != h)
                         LogWarn($"{name}: captured {tex.width}x{tex.height}, expected {w}x{h} — Screen.SetResolution did not take in this environment");
-                    File.WriteAllBytes(Path.Combine(_outDir, name + ".png"), tex.EncodeToPNG());
+                    byte[] png = tex.EncodeToPNG();
+                    File.WriteAllBytes(Path.Combine(_outDir, name + ".png"), png);
+                    TryWriteSecondary(name, png);
                     _manifest.AppendLine($"{name}.png ({tex.width}x{tex.height})");
                     _shotsWritten++;
                     Log($"wrote {name}.png ({tex.width}x{tex.height})");
+
+                    if (name == "rig-16x9") RunOutsideBackgroundProbe(tex);
                 }
                 finally { Destroy(tex); }
             }
@@ -252,17 +287,137 @@ namespace MaxWorlds.Dev
             }
         }
 
+        private void TryWriteSecondary(string name, byte[] png)
+        {
+            if (_outDir2 == null) return;
+            try { File.WriteAllBytes(Path.Combine(_outDir2, name + ".png"), png); }
+            catch (Exception e) { LogWarn($"{name}: secondary write to {_outDir2} failed — {e.Message}"); }
+        }
+
+        /// <summary>Asserts exactly <paramref name="expectedCount"/> <c>ScreenSpaceOverlay</c> canvases
+        /// above the HUD's own sortingOrder=100 are actually rendering something — the generalised form
+        /// of the HomeScreen check MV-441 asked for, so a future screen with a higher sorting order
+        /// breaks this job loudly instead of silently poisoning the evidence the same way again.
+        ///
+        /// "Rendering something" (<see cref="HasVisibleContent"/>), not merely "GameObject active", is
+        /// the right test: WeaponsScreen/UpgradeScreen/SettingsPanel each self-install their Canvas once
+        /// at boot and represent Close() by <c>SetActive(false)</c> on an inner content root, not by
+        /// deactivating the Canvas GameObject itself — so their Canvas reads <c>isActiveAndEnabled</c>
+        /// forever, open or closed, and a naive active-canvas count found 3 "active" canvases on every
+        /// single shot including the ones that open nothing (caught live running this fix — see the
+        /// MV-441 fix comment). An empty, contentless canvas draws nothing and isn't an occlusion risk;
+        /// only a canvas with an active, non-transparent <see cref="Graphic"/> under it actually paints
+        /// over the frame.
+        ///
+        /// Returns null on success, a named error (every offending canvas + its sortingOrder) on
+        /// failure.</summary>
+        private static string CheckSingleActiveOverlay(int expectedCount)
+        {
+            var canvases = FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            var offenders = new List<string>();
+            foreach (var c in canvases)
+            {
+                if (c.renderMode != RenderMode.ScreenSpaceOverlay) continue;
+                if (c.sortingOrder <= 100) continue;
+                if (!c.isActiveAndEnabled) continue;
+                if (!HasVisibleContent(c)) continue;
+                offenders.Add($"{c.name}(order={c.sortingOrder})");
+            }
+            if (offenders.Count == expectedCount) return null;
+            return $"expected {expectedCount} visibly-rendering ScreenSpaceOverlay canvas(es) with sortingOrder>100, found {offenders.Count} [{string.Join(", ", offenders)}]";
+        }
+
+        /// <summary>A canvas above sortingOrder 100 is only an occlusion risk if something on it
+        /// actually covers a meaningful share of the frame — a full-screen scrim/panel, the HomeScreen
+        /// defect's own shape. <c>SettingsPanel</c> keeps a permanent 96x96 gear button on its own
+        /// sortingOrder=200 canvas (0.4% of a 1920x1080 frame) so it's reachable from any screen; that
+        /// is real, intentional always-on chrome, the same category as the HUD's own excluded
+        /// sortingOrder=100 canvas, not a defect — flagging it was a real false-positive caught live
+        /// running this fix (see the MV-441 fix comment). <c>GetComponentsInChildren</c> with
+        /// <c>includeInactive: false</c> already skips every <see cref="Graphic"/> under an inactive
+        /// ancestor, which is exactly how each self-installing screen represents "closed" — no
+        /// reflection into any screen's private root needed.</summary>
+        private const float OcclusionAreaFraction = 0.10f;   // a modal panel/scrim clears this easily; an icon/badge never does
+
+        private static bool HasVisibleContent(Canvas c)
+        {
+            var canvasRect = c.transform as RectTransform;
+            float canvasArea = canvasRect != null ? canvasRect.rect.width * canvasRect.rect.height : 0f;
+            if (canvasArea <= 0f) return false;
+
+            foreach (var g in c.GetComponentsInChildren<Graphic>(false))
+            {
+                if (!g.enabled || g.color.a <= 0.001f) continue;
+                Rect r = g.rectTransform.rect;
+                if (r.width * r.height >= canvasArea * OcclusionAreaFraction) return true;
+            }
+            return false;
+        }
+
+        /// <summary>MV-421 pixel probe 6, fixed by MV-441 (it never ran — this is its first
+        /// implementation): a point that sits left of the region rect's own <c>padX</c> margin and
+        /// clear of every category/ability node must equal <c>colours.base</c> exactly. This is the
+        /// probe that would have caught the HomeScreen occlusion with nobody looking at a screenshot —
+        /// the panel's colour is nowhere near the board's near-black base. Runs only against
+        /// <c>rig-16x9</c>, the one shot whose 1920x1080 texture maps 1:1 onto rig_board.json's own
+        /// canvas coordinates with no letterbox/scale to account for.</summary>
+        private void RunOutsideBackgroundProbe(Texture2D tex)
+        {
+            const int probeJsonX = 20, probeJsonY = 400;   // rig_board.json coords (y measured from the top)
+            int texX = probeJsonX;
+            int texY = tex.height - probeJsonY;             // Texture2D is bottom-left origin
+            if (texX < 0 || texX >= tex.width || texY < 0 || texY >= tex.height)
+            {
+                string skip = "probe6 (outside-background==colours.base): SKIPPED — coordinates fall outside the captured texture";
+                LogWarn(skip);
+                _manifest.AppendLine(skip);
+                return;
+            }
+
+            Color actual = tex.GetPixel(texX, texY);
+            Color expected = RigBoardLayout.Colour("base");
+            bool pass = ColorsMatch(actual, expected);
+            string msg = $"probe6 (outside-background==colours.base): {(pass ? "PASS" : "FAIL")} — expected {ColorHex(expected)}, got {ColorHex(actual)} at tex({texX},{texY})";
+            _manifest.AppendLine(msg);
+            if (pass) { Log(msg); }
+            else { LogWarn(msg); _failures.Add(msg); }
+        }
+
+        private static bool ColorsMatch(Color a, Color b, float tolerance = 2f / 255f)
+        {
+            return Mathf.Abs(a.r - b.r) <= tolerance
+                && Mathf.Abs(a.g - b.g) <= tolerance
+                && Mathf.Abs(a.b - b.b) <= tolerance;
+        }
+
+        private static string ColorHex(Color c) => "#" + ColorUtility.ToHtmlStringRGB(c);
+
         // --- lifecycle / reporting ----------------------------------------------------------------
 
         private void Finish()
         {
-            // "ok" means at least one screenshot actually landed — every shot throwing (as
+            // "ok" means at least one screenshot actually landed (every shot throwing, as
             // ScreenCapture.CaptureScreenshotAsTexture did with no attached display when this was
-            // last run locally, see MV-421's fix comment) must fail the job, not report a false ok
-            // with an empty manifest.
-            string status = _shotsWritten > 0 ? "ok" : $"fail: 0 of {ExpectedShotCount} screenshots captured";
-            File.WriteAllText(Path.Combine(_outDir, DoneMarker), status + "\n" + _manifest.ToString(), Encoding.UTF8);
-            Log($"ui-screens capture complete ({_shotsWritten}/{ExpectedShotCount} shots)");
+            // last run locally, see MV-421's fix comment, must fail the job rather than report a
+            // false ok with an empty manifest) AND no assertion — the canvas-overlay check or probe 6
+            // — failed. A shot that "succeeded" over an occluding HomeScreen is exactly the false
+            // green MV-441 exists to close off.
+            string status;
+            if (_failures.Count > 0)
+                status = $"fail: {_failures.Count} assertion(s) failed — " + string.Join(" | ", _failures);
+            else if (_shotsWritten == 0)
+                status = $"fail: 0 of {ExpectedShotCount} screenshots captured";
+            else
+                status = "ok";
+
+            string doneText = status + "\n" + _manifest.ToString();
+            File.WriteAllText(Path.Combine(_outDir, DoneMarker), doneText, Encoding.UTF8);
+            if (_outDir2 != null)
+            {
+                try { File.WriteAllText(Path.Combine(_outDir2, DoneMarker), doneText, Encoding.UTF8); }
+                catch (Exception e) { LogWarn($"secondary done-marker write to {_outDir2} failed — {e.Message}"); }
+            }
+            Log($"ui-screens capture complete ({_shotsWritten}/{ExpectedShotCount} shots, {_failures.Count} failure(s))");
         }
 
         private const int ExpectedShotCount = 7;   // 3 THE RIG (MV-421) + 4 WEAPONS button states (MV-425)
