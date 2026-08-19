@@ -183,20 +183,24 @@ namespace MaxWorlds.Tests.EditMode
 
         // ------------------------------------------------------------------ defect 3: unlit family dim
 
-        /// <summary>Run-start state (only PRIMARY lit, <c>RigState.Reset</c>'s own baseline) — MOVE has
-        /// zero owned abilities, so every graphic in its subtree must be dimmed by
-        /// <c>RigBoardLayout.FamilyDimFactor</c> on top of whatever state-specific alpha it already
-        /// carries. Checked via the region panel/border (opacityDark/borderAlphaDark, category-level),
-        /// an ability node's own draftable glow (GlowAlphaDraft, node-level — both of MOVE's abilities,
-        /// m_spd/m_tp, are roots so both are draftable at run start), and a category connector
-        /// (ConnectorAlphaLive, since a draftable child still counts as "live" — connector-level) — one
-        /// representative graphic per level the AC calls out, each backed by a named
-        /// <c>RigBoardLayout</c> constant rather than a duplicated magic literal, so this stays accurate
-        /// if those constants ever move. Must fail on <c>main</c> (no dim applied at all — MOVE would
-        /// read at the same undimmed alpha as PRIMARY).</summary>
+        /// <summary>Run-start state (only PRIMARY lit, <c>RigState.Reset</c>'s own baseline), MOVE's
+        /// category shed-unlocked (MV-457, merged after this test was written — a root is only
+        /// reached/draftable once its own category is unlocked) but still zero owned abilities, so
+        /// every graphic in its subtree must be dimmed by <c>RigBoardLayout.FamilyDimFactor</c> on top
+        /// of whatever state-specific alpha it already carries. Checked via the region panel/border
+        /// (opacityLit/borderAlphaLit — MV-457: a freshly-unlocked family reads at the LIT base opacity
+        /// immediately, before anything is owned; the family dim is what still recedes it — category
+        /// level), an ability node's own draftable glow (GlowAlphaDraft, node-level — both of MOVE's
+        /// abilities, m_spd/m_tp, are roots so both are draftable once unlocked), and a category
+        /// connector (ConnectorAlphaLive, since a draftable child still counts as "live" —
+        /// connector-level) — one representative graphic per level the AC calls out, each backed by a
+        /// named <c>RigBoardLayout</c> constant rather than a duplicated magic literal, so this stays
+        /// accurate if those constants ever move. Must fail on <c>main</c> (no dim applied at all — MOVE
+        /// would read at the same undimmed alpha as PRIMARY).</summary>
         [Test]
         public void UnlitFamilyDimsCategoryAbilityAndConnectorGraphicsByFamilyDimFactor()
         {
+            RigState.UnlockCategory("MOVE");
             OpenScreen();
             float factor = RigBoardLayout.FamilyDimFactor;
             Assert.That(RigState.IsOwned("m_spd"), Is.False, "fixture assumption: MOVE has nothing owned at run start");
@@ -204,8 +208,8 @@ namespace MaxWorlds.Tests.EditMode
 
             var panel = _screen.CategoryPanel("MOVE");
             var border = _screen.CategoryPanelBorder("MOVE");
-            Assert.That(panel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityDark * factor).Within(1e-4f), "MOVE region panel");
-            Assert.That(border.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaDark * factor).Within(1e-4f), "MOVE region border");
+            Assert.That(panel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit * factor).Within(1e-4f), "MOVE region panel");
+            Assert.That(border.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaLit * factor).Within(1e-4f), "MOVE region border");
 
             foreach (var abilityId in new[] { "m_spd", "m_tp" })
             {
@@ -220,15 +224,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>Owning one ability in an otherwise-untouched family must flip the WHOLE family back
-        /// to full strength, not just the one node acquired — SECONDARY's root (<c>s_bal</c>) is reached
-        /// from the start, so <c>RigState.AcquireCap</c> alone (no shed/parent spend needed) is enough to
-        /// light it.</summary>
+        /// to full strength, not just the one node acquired — SECONDARY's root (<c>s_bal</c>) becomes
+        /// reached once its category is shed-unlocked (MV-457, merged after this test was written), so
+        /// <c>RigState.AcquireCap</c> alone (no parent spend needed) is enough to light it from there.</summary>
         [Test]
         public void OwningOneAbilityFlipsTheWholeFamilyBackToFullStrength()
         {
+            RigState.UnlockCategory("SECONDARY");
             OpenScreen();
             var panelBefore = _screen.CategoryPanel("SECONDARY");
-            Assert.That(panelBefore.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityDark * RigBoardLayout.FamilyDimFactor).Within(1e-4f),
+            // MV-457: a shed-unlocked category reads at the LIT base opacity immediately, before
+            // anything is owned — the family dim is what still recedes it, not the region's own base.
+            Assert.That(panelBefore.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit * RigBoardLayout.FamilyDimFactor).Within(1e-4f),
                 "SECONDARY must start dimmed (nothing owned)");
 
             Assert.That(RigState.AcquireCap("s_bal"), Is.True, "s_bal must be a reached, ownable root at run start");

@@ -614,13 +614,16 @@ namespace MaxWorlds.UI
             // MV-457: "lit" now reads the shed's own unlock, not merely "has an owned ability" — a
             // freshly-unlocked family reads lit immediately, before the player has spent anything into it.
             bool lit = RigState.IsCategoryUnlocked(cat.Id);
+            // MV-462 defect 3: the family DIM is its own, older concept — "has an owned ability" — kept
+            // distinct from `lit` above so a shed-unlocked-but-still-empty family still dims correctly.
+            bool familyLit = CategoryHasOwnedAbility(cat.Id);
             Color family = RigBoardLayout.Colour(cat.Family);
             Color ink = RigBoardLayout.Colour("ink");
 
             if (_categoryPanels.TryGetValue(cat.Id, out var panel))
-                panel.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark), lit);
+                panel.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark), familyLit);
             if (_categoryPanelBorders.TryGetValue(cat.Id, out var border))
-                border.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark), lit);
+                border.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark), familyLit);
 
             if (lit)
             {
@@ -636,18 +639,18 @@ namespace MaxWorlds.UI
             }
             else
             {
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.12f), lit);
-                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.55f), lit);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.12f), familyLit);
+                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.55f), familyLit);
                 v.Glow.gameObject.SetActive(false);
                 v.OuterRing.gameObject.SetActive(false);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.85f), lit);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.85f), familyLit);
             }
 
             v.PillText.text = $"{owned}/{total}";
-            v.PillBg.color = DimIfUnlit(PillBackdrop, lit);
-            v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), lit);
-            v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), lit);
-            v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), lit);
+            v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
+            v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), familyLit);
+            v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), familyLit);
+            v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), familyLit);
 
             _ = banked;
         }
