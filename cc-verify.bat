@@ -9,6 +9,10 @@ REM   Pre-reqs:
 REM     - %UNITY_PATH% env var pointing at Unity.exe
 REM       (e.g. C:\Program Files\Unity\Hub\Editor\6000.4.9f1\Editor\Unity.exe)
 REM     - Run from the repo root (C:\dev\MaxVsTheWorlds).
+REM   Every Unity call goes through `start "" /min /wait` on purpose:
+REM   a bare batchmode launch pops a console window that STEALS FOCUS from
+REM   whatever Lee is typing in. /min = SW_SHOWMINNOACTIVE (no activation).
+REM   Keep it. Same rule for any ad-hoc Unity -batchmode run.
 REM ============================================================
 
 setlocal enabledelayedexpansion
@@ -38,9 +42,7 @@ echo.
 
 REM ----- 1. Compile check (open project headless, exit) ----------------------
 echo [1/4] compile check ...
-"%UNITY_PATH%" ^
-  -batchmode -nographics -projectPath "%PROJECT%" -quit ^
-  -logFile "%PROJECT%\Logs\compile.log"
+start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -logFile "%PROJECT%\Logs\compile.log"
 if errorlevel 1 (
   echo        FAIL — see Logs\compile.log
   set "FAIL=1"
@@ -50,11 +52,7 @@ if errorlevel 1 (
 
 REM ----- 2. EditMode tests ----------------------------------------------------
 echo [2/4] EditMode tests ...
-"%UNITY_PATH%" ^
-  -batchmode -nographics -projectPath "%PROJECT%" ^
-  -runTests -testPlatform EditMode ^
-  -testResults "%PROJECT%\Logs\editmode-results.xml" ^
-  -logFile "%PROJECT%\Logs\editmode.log"
+start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%PROJECT%\Logs\editmode-results.xml" -logFile "%PROJECT%\Logs\editmode.log"
 if errorlevel 1 (
   echo        FAIL — see Logs\editmode.log
   set "FAIL=1"
@@ -71,12 +69,7 @@ REM   play-check remains the release gate — see CC_AUTONOMY.md.
 echo [3/4] Windows standalone build (Bootstrap.unity) ...
 if exist "%BUILD%" rmdir /S /Q "%BUILD%"
 mkdir "%BUILD%"
-"%UNITY_PATH%" ^
-  -batchmode -nographics -projectPath "%PROJECT%" -quit ^
-  -buildTarget Win64 ^
-  -executeMethod MaxWorlds.Editor.HeadlessBuild.WindowsBootstrap ^
-  -buildOutput "%BUILD%\MaxVsTheWorlds.exe" ^
-  -logFile "%PROJECT%\Logs\build.log"
+start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -buildTarget Win64 -executeMethod MaxWorlds.Editor.HeadlessBuild.WindowsBootstrap -buildOutput "%BUILD%\MaxVsTheWorlds.exe" -logFile "%PROJECT%\Logs\build.log"
 if errorlevel 1 (
   echo        FAIL — see Logs\build.log
   set "FAIL=1"
