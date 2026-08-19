@@ -212,13 +212,13 @@ namespace MaxWorlds.Tests.EditMode
 
         private static WorldConfig LoadWorld1() => WorldLibrary.Load(WorldLibrary.World1);
 
-        // --- AC1: Arena 1 contains exactly three robots ---------------------------------------------
+        // --- AC1 (superseded by MV-442, Lee's 2026-08-19 redraw): Arena 1 now holds 5 robots --------
 
         [Test]
-        public void World1_Area1HasExactlyThreeRobots()
+        public void World1_Area1HasExactlyFiveRobots()
         {
             DifficultyEngine.Composition area1 = LoadWorld1().SolveComposition(1);
-            Assert.AreEqual(3, area1.TotalCount);
+            Assert.AreEqual(5, area1.TotalCount);
         }
 
         // --- AC2/AC4: Arena 2 does not read as "more Rushers than Arena 1"; escalates via new kinds -
@@ -240,13 +240,15 @@ namespace MaxWorlds.Tests.EditMode
         // --- AC3: at least the three example scenarios exist, differing in kind, not just count -----
 
         [Test]
-        public void World1_RangedPressureScenario_PairsAFewRushersWithAboutFiveGunners()
+        public void World1_RangedPressureScenario_PairsRushersWithAboutFiveGunners()
         {
-            // Area 4, per world1_config.json's authored composition and notes.
+            // Area 4, per world1_config.json's authored composition and notes. MV-442 (Lee's
+            // 2026-08-19 hedge-maze redraw) raised Area 4 from 2 Rusher to 5 — "a couple of Rushers"
+            // is no longer the framing, the maze itself is what makes standing still costly now.
             DifficultyEngine.Composition area4 = LoadWorld1().SolveComposition(4);
 
             Assert.GreaterOrEqual(area4.Gunner, 4, "the ranged-pressure room needs ~5 Gunners");
-            Assert.LessOrEqual(area4.Rusher, 3, "only 'a couple of' Rushers alongside the Gunners");
+            Assert.AreEqual(5, area4.Rusher, "MV-442 authored exactly 5 Rushers for area 4");
         }
 
         [Test]
@@ -275,9 +277,15 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         // --- DECISION: Rushers hard-capped at 10 across the whole (18-area, MV-411) world -----------
+        // MV-442 (Lee's 2026-08-19 a1/a4 redraw) authored more Rushers (14) than fit under the cap
+        // on their own — RusherCap.Apply, driven through AreaAccumulationDirector.FillArea, is what
+        // actually keeps a live run under 10 (proved directly, with a synthetic overflow world, by
+        // RusherCap_ClampsCumulativeRusherAcrossAreas_ThroughTheDirector above). Per MV-442's "Known
+        // and accepted" note, authored totals exceeding a design target is expected and not something
+        // to fix by trimming robots — this test now just pins the authored total as a drift tripwire.
 
         [Test]
-        public void World1_TotalRushersAcrossTheWholeWorld_NeverExceedsTheCap()
+        public void World1_TotalAuthoredRushers_ClampedLiveByTheDirectorNotByAuthoring()
         {
             WorldConfig cfg = LoadWorld1();
 
@@ -285,9 +293,9 @@ namespace MaxWorlds.Tests.EditMode
             for (int area = 1; area <= cfg.dials.areaCount; area++)
                 totalRushers += cfg.SolveComposition(area).Rusher;
 
-            Assert.LessOrEqual(totalRushers, RusherCap.PerLevel,
-                "world1_config.json's authored per-area Rusher counts must sum to no more than the " +
-                "run-wide cap even before AreaAccumulationDirector's own clamp ever has to engage");
+            Assert.AreEqual(14, totalRushers,
+                "world1_config.json's authored Rusher total changed — if it dropped back under " +
+                $"RusherCap.PerLevel ({RusherCap.PerLevel}), update this expectation to match");
         }
 
         // --- AC6: every arena remains completable with the new authored compositions/scenario tag ---
