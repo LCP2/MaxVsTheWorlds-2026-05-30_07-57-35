@@ -85,7 +85,14 @@ namespace MaxWorlds.Factories
             if (_barFill != null) _barFill.fillAmount = Normalized;
         }
 
-        private void Awake()
+        private void Awake() => Build();
+
+        /// <summary>
+        /// Construct the health model, spawner link, cover layer, body tint, bar, core and label.
+        /// Called from Awake; exposed publicly (MV-464) so an EditMode test can invoke it directly —
+        /// Awake never runs as a side effect of AddComponent outside Play mode.
+        /// </summary>
+        public void Build()
         {
             _health = new DestructibleHealth(DevTuning.Or(DevTuning.FactoryHealth, factoryHealth));
             _health.Destroyed += OnDestroyed;
@@ -296,7 +303,14 @@ namespace MaxWorlds.Factories
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
             go.name = "VulnerableCore";
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            if (col != null)
+            {
+                // MV-464: Destroy() is a no-op outside Play mode (logs a console error and never
+                // actually removes the component) — the same collider-strip gap already found and
+                // fixed in WeaponPartArt/MaxPortraitStage. EditMode tests build this via Build()
+                // directly, so this path now runs outside Play mode too.
+                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
+            }
             go.transform.SetParent(transform, false);
             go.transform.localPosition = new Vector3(0f, 0.05f, -0.52f); // on the player-facing face
             go.transform.localScale = new Vector3(0.55f, 0.6f, 0.1f);

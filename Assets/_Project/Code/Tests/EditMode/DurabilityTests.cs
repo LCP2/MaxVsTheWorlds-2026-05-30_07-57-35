@@ -8,12 +8,20 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// The durability defaults and the live-retune the YT-126 sliders drive.
+    ///
+    /// MV-464: <see cref="MovingTheFactorySliderRetunesALiveHutch"/> moved in from a PlayMode
+    /// fixture — <see cref="MowerHutch.Build"/> is called directly instead of relying on Awake,
+    /// which never runs from AddComponent outside Play mode.
     /// </summary>
     public sealed class DurabilityTests
     {
         [SetUp]
         [TearDown]
-        public void Clear() => DevTuning.Reset();
+        public void Clear()
+        {
+            DevTuning.Reset();
+            FactoryCensus.Reset();
+        }
 
         [Test]
         public void FactoryHealthDefaultIsTheRaisedValue()
@@ -24,6 +32,41 @@ namespace MaxWorlds.Tests.EditMode
                 var hutch = go.AddComponent<MowerHutch>();   // RequireComponent brings EnemySpawner
                 Assert.That(hutch.AuthoredMax, Is.EqualTo(915.915f).Within(0.001f),
                     "MV-315: re-baked to 61% of YT-200's 1501.5 (was 350 before that)");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        [Test]
+        public void MovingTheFactorySliderRetunesALiveHutch()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var hutch = go.AddComponent<MowerHutch>();
+                hutch.Build();
+
+                Assert.That(hutch.Normalized, Is.EqualTo(1f).Within(0.001f), "a fresh hutch starts full");
+
+                // Raise the ceiling: the dented amount stays, so the same HP now reads as half.
+                // MV-464: was a literal 700 against a stale "authored 350" assumption (the original
+                // PlayMode fixture's own comment) — MV-315 re-baked the authored default up to
+                // 915.915, so 700 had quietly become a LOWER ceiling than a fresh hutch's current HP,
+                // and this assertion would fail the moment it actually ran. Never caught because
+                // playcheck (PlayMode CI) has been parked since MV-460. Anchored to AuthoredMax now
+                // so a future re-bake can't silently invert this test's meaning again.
+                DevTuning.FactoryHealth = hutch.AuthoredMax * 2f;
+                hutch.RefreshMax();
+                Assert.That(hutch.Normalized, Is.EqualTo(0.5f).Within(0.001f),
+                    "raising factory health mid-session must give headroom, not top it up");
+
+                // Lower it below current: clamps, so the bar never reads past full.
+                DevTuning.FactoryHealth = 200f;
+                hutch.RefreshMax();
+                Assert.That(hutch.Normalized, Is.EqualTo(1f).Within(0.001f),
+                    "lowering the ceiling below current HP must clamp");
             }
             finally
             {

@@ -89,7 +89,14 @@ namespace MaxWorlds.Player
             }
         }
 
-        private void Awake()
+        private void Awake() => Initialize();
+
+        /// <summary>
+        /// Set starting HP and hang the floating status bar. Called from Awake; exposed publicly
+        /// (MV-464) so an EditMode test can invoke it directly — Awake never runs as a side effect
+        /// of AddComponent outside Play mode.
+        /// </summary>
+        public void Initialize()
         {
             _health = Max;
 
