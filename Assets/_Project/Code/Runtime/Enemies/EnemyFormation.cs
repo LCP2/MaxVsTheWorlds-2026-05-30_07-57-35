@@ -39,6 +39,17 @@ namespace MaxWorlds.Enemies
         /// "leaning while walking at him".</summary>
         public const float FlankFullSpreadAt = 11f;
 
+        /// <summary>How far off the direct line a robot may swing approaching a DOORWAY leg
+        /// (MV-449), not the final goal. Narrower than <see cref="Spread"/> because a doorway is
+        /// about a metre wide and taking it at a personal angle walks the robot into the frame —
+        /// this only has to spread the pack out on the approach, not carry it through the gap.</summary>
+        public const float DoorwaySpread = 1.6f;
+
+        /// <summary>Distance at which a doorway approach's fan is fully open (MV-449). Shorter than
+        /// <see cref="FullSpreadAt"/> so the funnel has closed to the mouth well before the robot is
+        /// actually inside the frame, instead of still swinging as it arrives.</summary>
+        public const float DoorwayFullSpreadAt = 6f;
+
         /// <summary>
         /// Whether this robot is one of the pack's flankers (MV-322) — a stable minority (about a
         /// third) that takes the wide <see cref="FlankSpread"/> swing instead of the ordinary fan's
@@ -57,15 +68,26 @@ namespace MaxWorlds.Enemies
         /// </summary>
         public static Vector3 ApproachPoint(Vector3 goal, Vector3 from, int id)
         {
+            bool flank = IsFlanker(id);
+            float spread = flank ? FlankSpread : Spread;
+            float fullSpreadAt = flank ? FlankFullSpreadAt : FullSpreadAt;
+
+            return ApproachPoint(goal, from, id, spread, fullSpreadAt);
+        }
+
+        /// <summary>
+        /// Same fan-and-converge shape as the three-argument overload, but with an explicit
+        /// spread/fullSpreadAt instead of the flanker-aware <see cref="Spread"/>/<see cref="FlankSpread"/>
+        /// pair — for a leg where every robot funnels the same way regardless of flank status, a
+        /// doorway (MV-449) being the case that needed it.
+        /// </summary>
+        public static Vector3 ApproachPoint(Vector3 goal, Vector3 from, int id, float spread, float fullSpreadAt)
+        {
             Vector3 to = goal - from;
             to.y = 0f;
 
             float distance = to.magnitude;
             if (distance < 0.01f) return goal;
-
-            bool flank = IsFlanker(id);
-            float spread = flank ? FlankSpread : Spread;
-            float fullSpreadAt = flank ? FlankFullSpreadAt : FullSpreadAt;
 
             Vector3 side = Vector3.Cross(Vector3.up, to / distance);
             float amount = spread * Bias(id) * Mathf.Clamp01(distance / fullSpreadAt);

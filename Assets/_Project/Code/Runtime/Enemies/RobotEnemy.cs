@@ -658,10 +658,15 @@ namespace MaxWorlds.Enemies
             string routedZoneId = _zoneHysteresis.Resolve(rawZone?.id, dt);
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId);
 
-            // Its own lane, so a pack arrives as a fan rather than a queue. Only on the last leg: a
-            // doorway is a metre wide and taking it at a personal angle just walks into the frame.
+            // Its own lane, so a pack arrives as a fan rather than a queue. The last leg is the
+            // wide, flanker-aware fan onto the real goal; an earlier leg is a doorway, which gets
+            // its own narrower fan (MV-449) — wide enough to break up the queue on approach,
+            // narrow enough (and everyone, flankers included) to still funnel through the gap.
             bool lastLeg = (waypoint - goal).sqrMagnitude < 0.01f;
-            if (lastLeg) waypoint = EnemyFormation.ApproachPoint(goal, transform.position, GetInstanceID());
+            waypoint = lastLeg
+                ? EnemyFormation.ApproachPoint(goal, transform.position, GetInstanceID())
+                : EnemyFormation.ApproachPoint(waypoint, transform.position, GetInstanceID(),
+                    EnemyFormation.DoorwaySpread, EnemyFormation.DoorwayFullSpreadAt);
 
             Vector3 step = waypoint - transform.position;
             step.y = 0f;
