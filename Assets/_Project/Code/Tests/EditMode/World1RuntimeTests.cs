@@ -258,28 +258,28 @@ namespace MaxWorlds.Tests.EditMode
                 "Area 1 must hold 2-3 lowest-tier (Rusher) robots");
         }
 
-        // --- MV-310: the shipped world1_config.json must actually surface Gunner/Bomber/Blinker ---
+        // --- MV-310: the shipped world1_config.json must actually surface Gunner/Launcher/Blinker ---
         // --- in the ambient arena population, not only via factory production. Range widened from ---
         // --- Areas 1-4 to the full 1-8 by MV-365: composition is now authored per area as designed ---
-        // --- scenarios (a Gunner-pressure room, a Bomber centreDenial room, a Blinker set-piece) ---
+        // --- scenarios (a Gunner-pressure room, a Launcher centreDenial room, a Blinker set-piece) ---
         // --- deliberately spread across the whole world rather than clustered early. --------------
 
         [Test]
-        public void World1_GunnerBomberBlinker_AllAppearAcrossTheWorld()
+        public void World1_GunnerLauncherBlinker_AllAppearAcrossTheWorld()
         {
             WorldConfig cfg = LoadWorld1();
 
-            bool sawGunner = false, sawBomber = false, sawBlinker = false;
+            bool sawGunner = false, sawLauncher = false, sawBlinker = false;
             for (int area = 1; area <= 18; area++)
             {
                 DifficultyEngine.Composition composition = cfg.SolveComposition(area);
                 if (composition.Gunner > 0) sawGunner = true;
-                if (composition.Bomber > 0) sawBomber = true;
+                if (composition.Launcher > 0) sawLauncher = true;
                 if (composition.Blinker > 0) sawBlinker = true;
             }
 
             Assert.IsTrue(sawGunner, "Gunner never appears in Areas 1-18");
-            Assert.IsTrue(sawBomber, "Bomber never appears in Areas 1-18");
+            Assert.IsTrue(sawLauncher, "Launcher never appears in Areas 1-18");
             Assert.IsTrue(sawBlinker, "Blinker never appears in Areas 1-18");
         }
 
@@ -373,7 +373,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(gunner, c.gunner, $"area {areaIndex}'s authored Gunner count");
             Assert.AreEqual(0, c.heavy, $"area {areaIndex} must not author Heavy");
             Assert.AreEqual(0, c.brute, $"area {areaIndex} must not author Brute");
-            Assert.AreEqual(0, c.bomber, $"area {areaIndex} must not author Bomber");
+            Assert.AreEqual(0, c.launcher, $"area {areaIndex} must not author Launcher");
             Assert.AreEqual(0, c.blinker, $"area {areaIndex} must not author Blinker");
         }
 

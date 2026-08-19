@@ -13,7 +13,7 @@ namespace MaxWorlds.Arena
     {
         /// <summary>How far a robot will divert toward a Sentinel it hasn't reached yet — beyond this
         /// a distant, off-fight sentinel never steals a robot away from a chase happening somewhere
-        /// else in the arena. Matches <see cref="MaxWorlds.Enemies.EnemyArchetype.Bomber"/>'s own max
+        /// else in the arena. Matches <see cref="MaxWorlds.Enemies.EnemyArchetype.Launcher"/>'s own max
         /// fire range (10 m) — the widest "how far away a robot already treats as a live threat"
         /// number already in the game, rather than inventing a new one.</summary>
         public const float AggroRadius = 10f;

@@ -117,10 +117,10 @@ namespace MaxWorlds.Enemies
         [SerializeField] private int gunnerEvery = 6;
         [Tooltip("No Gunners until this many robots have come out.")]
         [SerializeField] private int firstGunnerAt = 5;
-        [Tooltip("Every Nth robot is a Bomber (homing missile).")]
-        [SerializeField] private int bomberEvery = 8;
-        [Tooltip("No Bombers until this many robots have come out.")]
-        [SerializeField] private int firstBomberAt = 7;
+        [Tooltip("Every Nth robot is a Launcher (homing missile).")]
+        [SerializeField] private int launcherEvery = 8;
+        [Tooltip("No Launchers until this many robots have come out.")]
+        [SerializeField] private int firstLauncherAt = 7;
         [Tooltip("Every Nth robot is a Blinker (teleport-flank).")]
         [SerializeField] private int blinkerEvery = 10;
         [Tooltip("No Blinkers until this many robots have come out.")]
@@ -131,7 +131,7 @@ namespace MaxWorlds.Enemies
         private EnemyMix.MixRates CurrentMixRates => new EnemyMix.MixRates(
             bruiserEvery, firstBruiserAt,
             gunnerEvery, firstGunnerAt,
-            bomberEvery, firstBomberAt,
+            launcherEvery, firstLauncherAt,
             blinkerEvery, firstBlinkerAt);
 
         // --- Death-throes surge (YT-182) — the wreck's last wave. A shed dying shouldn't just go

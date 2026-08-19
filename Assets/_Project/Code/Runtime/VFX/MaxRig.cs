@@ -1,5 +1,4 @@
 using UnityEngine;
-using UnityEngine.Rendering;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
@@ -111,9 +110,6 @@ namespace MaxWorlds.VFX
         /// </summary>
         private static Color HoodieShade => Hoodie * 0.80f;
 
-        /// <summary>The kangaroo pocket, which really is a fold deep enough to go dark.</summary>
-        private static Color HoodieDeep => Hoodie * 0.60f;
-
         /// <summary>Cargo trousers. Dark, and almost colourless on purpose.
         ///
         /// The legs are a third of him and they are the third nobody needs to read. Anything saturated
@@ -126,11 +122,6 @@ namespace MaxWorlds.VFX
 
         /// <summary>Messy brown hair. The single biggest thing a 72° camera sees of him.</summary>
         private static readonly Color Hair = new Color(0.33f, 0.20f, 0.12f);
-
-        /// <summary>The backpack, the tool-belt, the gloves. Worn canvas and leather — dark, so the
-        /// pack reads as a lump on his back rather than as part of the hoodie, and low-saturation, so
-        /// it never argues with the red.</summary>
-        private static readonly Color CanvasTone = new Color(0.29f, 0.25f, 0.20f);
 
         private static readonly Color Rubber = new Color(0.13f, 0.13f, 0.15f);
 
@@ -147,22 +138,11 @@ namespace MaxWorlds.VFX
         /// of it. Get this wrong and the tank is just a blue block.</summary>
         private static readonly Color Water = new Color(0.31f, 0.76f, 0.97f);
 
-        /// <summary>Grip tape, holding a junk-built gadget together. Duct-tape yellow, gone grey.</summary>
-        private static readonly Color Tape = new Color(0.62f, 0.55f, 0.33f);
-
         /// <summary>The goggle lenses, and the one warm glint on him. Amber, because amber is what
         /// workshop safety glass is — and because the only other lit eyes in the yard are the robots'
         /// cold turquoise and the boss's acid green. Nothing that glows on Max may be mistakable for
         /// something that is trying to kill him.</summary>
         private static readonly Color LensGlass = new Color(1f, 0.72f, 0.24f);
-
-        /// <summary>Charms clipped to the pack (GDD §9: "backpack visibly stuffed with charms").</summary>
-        private static readonly Color[] Charms =
-        {
-            new Color(1f, 0.78f, 0.25f),      // brass
-            new Color(0.88f, 0.86f, 0.80f),   // bone
-            new Color(0.75f, 0.18f, 0.20f),   // a red one, because of course he has a red one
-        };
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
@@ -288,24 +268,19 @@ namespace MaxWorlds.VFX
 
         private Transform _body;       // lean pivot, at the ground
         private Transform _torso;      // bob + counter-rotation, at the waist
-        private Transform _head;
         private Transform _hairPivot;
         private Transform _charmPivot;
         private Transform _gun;
-        private Transform _nozzle;                 // the hose sprayer's tip — where the water leaves (YT-134)
         private Transform _armL, _armR;
         private Transform _handL, _handR;
         private readonly Transform[] _hips = new Transform[2];
-        private readonly MeshRenderer[] _lenses = new MeshRenderer[2];
 
-        // Outlined — the masses that make his silhouette.
-        private Material _hoodieMat, _hoodieShadeMat, _trouserMat, _skinMat, _hairMat,
-                         _canvasMat, _rubberMat, _steelMat, _waterMat;
+        /// <summary>The gadget glow (MV-451) — the two emissive parts <see cref="MaxBody.Build"/>
+        /// returns. The only cool light in the whole cast; see <see cref="Water"/>.</summary>
+        private MeshRenderer[] _gadgetGlow;
 
-        // Not outlined — the detail that a five-pixel line would eat. See CharacterMaterial.
-        private Material _hoodieDeepMat, _hoodieTrimMat, _skinTrimMat, _hairTrimMat, _canvasTrimMat,
-                         _rubberTrimMat, _steelTrimMat, _boneMat, _tapeMat, _hoseMat;
-        private Material[] _charmMats;
+        private Material _skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat, _darkMat,
+                         _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat;
         private MaterialPropertyBlock _lensMpb;
 
         private float _stride;
@@ -372,35 +347,17 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void BuildMaterials()
         {
-            _hoodieMat = CharacterMaterial("Max_Hoodie", Hoodie);
-            _hoodieShadeMat = CharacterMaterial("Max_HoodieShade", HoodieShade);
-            _trouserMat = CharacterMaterial("Max_Trousers", Trousers);
             _skinMat = CharacterMaterial("Max_Skin", Skin);
             _hairMat = CharacterMaterial("Max_Hair", Hair);
-            _canvasMat = CharacterMaterial("Max_Canvas", CanvasTone);
-            _rubberMat = CharacterMaterial("Max_Rubber", Rubber);
-            _steelMat = CharacterMaterial("Max_Steel", Steel);
-            _waterMat = CharacterMaterial("Max_Water", Water);
-
-            _hoodieDeepMat = DetailMaterial("Max_HoodieDeep", HoodieDeep);
-            _hoodieTrimMat = DetailMaterial("Max_HoodieTrim", HoodieShade);
-            _skinTrimMat = DetailMaterial("Max_SkinTrim", Skin);
-            _hairTrimMat = DetailMaterial("Max_HairTrim", Hair);
-            _canvasTrimMat = DetailMaterial("Max_CanvasTrim", CanvasTone);
-            _rubberTrimMat = DetailMaterial("Max_RubberTrim", Rubber);
-            _steelTrimMat = DetailMaterial("Max_SteelTrim", Steel);
-            _boneMat = DetailMaterial("Max_Bone", Bone);
-            _tapeMat = DetailMaterial("Max_Tape", Tape);
-            // Garden-hose green, so the inlet at the gadget and the coil on his hip read as one
-            // continuous length of hose he carries on himself (YT-134; self-supplied per WV-239 — no
-            // line runs off him to a tap any more).
-            _hoseMat = DetailMaterial("Max_Hose", new Color(0.24f, 0.55f, 0.30f));
-
-            _charmMats = new Material[Charms.Length];
-            for (int i = 0; i < Charms.Length; i++)
-            {
-                _charmMats[i] = DetailMaterial($"Max_Charm{i}", Charms[i]);
-            }
+            _jacketMat = CharacterMaterial("Max_Jacket", Hoodie);
+            _hoodMat = CharacterMaterial("Max_Hood", HoodieShade);
+            _fabricMat = CharacterMaterial("Max_Fabric", Trousers);
+            _darkMat = CharacterMaterial("Max_Dark", Rubber);
+            _bootMat = CharacterMaterial("Max_Boot", Rubber);
+            _soleMat = CharacterMaterial("Max_Sole", Bone);
+            _metalMat = CharacterMaterial("Max_Metal", Steel);
+            _eyeMat = CharacterMaterial("Max_Eye", Rubber);
+            _goggleMat = CharacterMaterial("Max_Goggle", LensGlass);
         }
 
         /// <summary>
@@ -455,326 +412,40 @@ namespace MaxWorlds.VFX
             return m;
         }
 
-        /// <summary>A part too small to carry a line at all. See <see cref="CharacterMaterial"/>.</summary>
-        private Material DetailMaterial(string name, Color color) =>
-            CharacterMaterial(name, color, outline: false);
-
         // ---------------------------------------------------------------- the kid
 
+        /// <summary>
+        /// MV-451: the body is generated geometry now (<see cref="MaxBody"/>), one fused static mesh
+        /// in place of the thirty-five hand-placed primitives this method used to assemble part by
+        /// part. <see cref="_body"/> (lean) and <see cref="_torso"/> (bob) stay — the whole mesh hangs
+        /// under a "Feet" pivot at the torso's own hip offset, so <c>MaxBody</c>'s "feet at y = 0"
+        /// coordinates land on the ground exactly the way <see cref="RobotBodies"/> does it for the
+        /// robots. Everything the old per-part hierarchy gave the run/aim/secondary-motion code to grab
+        /// — the hip pivots, the gun, the arms, the hair and charm pivots — has nothing left to hang off
+        /// it, so those fields stay null and the (already null-guarded) code that drove them quietly
+        /// stops moving anything visible, exactly as deleting this file was always documented to do.
+        /// </summary>
         private void Build()
         {
             _body = Pivot("Body", transform, Vector3.zero);           // leans, at the ground
             _torso = Pivot("Torso", _body, new Vector3(0f, HipY, 0f)); // bobs, at the waist
 
-            BuildLegs();
-            BuildTorso();
-            BuildPack();
-            BuildHead();
-            BuildGadget();
-            BuildHoseCoil();
-            BuildArms();
-        }
+            var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
+            var palette = new MaxPalette(_skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat,
+                                         _darkMat, _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat);
+            _gadgetGlow = MaxBody.Build(feet, palette);
 
-        /// <summary>
-        /// The legs, and the beat-up high-tops on the end of them.
-        ///
-        /// Each leg hangs off a pivot at the hip and swings around it, so a running cycle is one
-        /// rotation per leg and nothing else. The shoe is parented to the SAME pivot, which is what
-        /// keeps the foot on the end of the leg instead of sliding along the lawn beside it.
-        /// </summary>
-        private void BuildLegs()
-        {
-            for (int i = 0; i < 2; i++)
+            // The gadget glow is the only COOL light in the whole cast, against every robot's warm eye
+            // (see the class doc). Coloured once here, the same way the old goggle lenses were.
+            if (_lensMpb == null) _lensMpb = new MaterialPropertyBlock();
+            for (int i = 0; i < _gadgetGlow.Length; i++)
             {
-                float side = i == 0 ? -1f : 1f;
-                var hip = Pivot($"Hip{(i == 0 ? "L" : "R")}", _torso,
-                                new Vector3(side * HipX, 0f, 0f));   // torso space: the waist is y = 0
-                _hips[i] = hip;
-
-                Part("Leg", hip, PrimitiveType.Cube,
-                     new Vector3(0f, -0.31f, 0f), new Vector3(0.235f, 0.62f, 0.26f), _trouserMat);
-
-                // The cargo pocket. It is 6 cm of geometry and it is the difference between "trousers"
-                // and "cargo trousers" — and it is on the OUTSIDE of the thigh, which is the only part
-                // of a leg a camera at 72° can see past the torso.
-                Part("CargoPocket", hip, PrimitiveType.Cube,
-                     new Vector3(side * 0.135f, -0.24f, 0.015f), new Vector3(0.055f, 0.19f, 0.215f),
-                     _canvasTrimMat);
-
-                // High-tops: a pale sole under a dark upper. Two boxes, and it reads as a trainer
-                // because a trainer IS a pale sole under a dark upper. The shoe carries the outline —
-                // it is a real corner of his silhouette — and the sole, which is 7 cm thick and would
-                // be nothing but line, does not.
-                Part("Sole", hip, PrimitiveType.Cube,
-                     new Vector3(0f, -0.685f, 0.065f), new Vector3(0.265f, 0.075f, 0.40f), _boneMat);
-                Part("Shoe", hip, PrimitiveType.Cube,
-                     new Vector3(0f, -0.595f, 0.04f), new Vector3(0.245f, 0.15f, 0.325f), _rubberMat);
+                var r = _gadgetGlow[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_lensMpb);
+                _lensMpb.SetColor(BaseColorId, Water);
+                r.SetPropertyBlock(_lensMpb);
             }
-        }
-
-        private void BuildTorso()
-        {
-            // HE TAPERS. Two boxes, not one.
-            //
-            // The first cut was a single 60 cm slab from the belt to the neck and it read as a FRIDGE —
-            // which is a problem twice over, because the bruiser is literally a fridge and the one thing
-            // the player must never have to think about is which red box is him. Broad across the chest,
-            // narrow at the waist: that shape is a person, and one box cannot make it.
-            Part("Chest", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.45f, 0f), new Vector3(0.60f, 0.34f, 0.38f), _hoodieMat);
-
-            Part("Waist", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.16f, 0f), new Vector3(0.47f, 0.32f, 0.33f), _hoodieMat);
-
-            // Rounded shoulders, where the sleeves come out. They are spheres because everything else
-            // up here is a box, and a body made entirely of boxes is a robot — the yard already has
-            // twenty of those and they are the things trying to kill him.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Shoulder", _torso, PrimitiveType.Sphere,
-                     new Vector3(side * 0.285f, 0.545f, 0f), new Vector3(0.24f, 0.23f, 0.30f),
-                     _hoodieMat);
-            }
-
-            // The kangaroo pocket. Barely visible from overhead, and it is here for the frames where
-            // the camera catches him side-on — but it costs one box.
-            Part("Kangaroo", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.185f, 0.185f), new Vector3(0.33f, 0.19f, 0.05f), _hoodieDeepMat);
-
-            // THE HOOD — the load-bearing shape on the whole character, and it WRAPS.
-            //
-            // Seen from almost overhead every kid is a head and two shoulders, so the hood is what turns
-            // those shoulders into a HOODIE. It is not a lump behind his neck: it is a collar that comes
-            // up around the back and the sides of his head, so the plan view is a red horseshoe with a
-            // face in the middle of it. That horseshoe is the single most recognisable thing about him
-            // from the only angle this game has, and it is what puts the contrast budget back on the red
-            // where it belongs.
-            Part("Hood", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.60f, -0.235f), new Vector3(0.44f, 0.28f, 0.26f), _hoodieShadeMat,
-                 Quaternion.Euler(22f, 0f, 0f));
-
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                // No outline: a 14 cm collar is four pixels wide at the camera the game is played at,
-                // and a five-pixel line around a four-pixel object is not an object, it is a line.
-                // The hood and the shoulders it sits between carry the edge; this just fills it red.
-                Part("Collar", _torso, PrimitiveType.Cube,
-                     new Vector3(side * 0.19f, 0.60f, -0.10f), new Vector3(0.14f, 0.22f, 0.30f),
-                     _hoodieTrimMat, Quaternion.Euler(0f, 0f, side * -13f));
-            }
-
-            Part("Neck", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.615f, 0.015f), new Vector3(0.145f, 0.11f, 0.145f), _skinTrimMat);
-
-            // The homemade tool-belt: bolts and gizmos (GDD §9). A belt, one heavy pouch, and a spanner
-            // shoved through it at an angle.
-            Part("Belt", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.025f, 0f), new Vector3(0.585f, 0.10f, 0.40f), _canvasTrimMat);
-
-            Part("Pouch", _torso, PrimitiveType.Cube,
-                 new Vector3(0.315f, 0.005f, 0.03f), new Vector3(0.10f, 0.17f, 0.21f), _canvasTrimMat);
-
-            // The spanner, shoved through the belt. It juts out past him on one side only — an
-            // asymmetric lump is worth more to a 30-pixel silhouette than any amount of detail inside
-            // it, and the boss's crooked lamp does the same job. Pale steel and no outline, so what
-            // pokes out of him is a bright fleck rather than a black one.
-            Part("Spanner", _torso, PrimitiveType.Cube,
-                 new Vector3(-0.315f, 0.07f, -0.09f), new Vector3(0.05f, 0.27f, 0.05f), _steelTrimMat,
-                 Quaternion.Euler(20f, 0f, -24f));
-        }
-
-        /// <summary>
-        /// The backpack, and the charms hanging off it.
-        ///
-        /// It is deliberately SMALL. The first instinct is a big pack — it is the most visible thing on
-        /// a character seen from behind and above — and that is exactly the trap: a big dark pack eats
-        /// the red hoodie, which is the colour that says "this is you" in a crowded fight. It is big
-        /// enough to break his outline and no bigger.
-        /// </summary>
-        private void BuildPack()
-        {
-            // Slung LOW, and smaller than it wants to be. Same argument as the head: from overhead a
-            // big dark pack sits right where the camera is looking and eats the red that tells you
-            // which of the things on screen is you. Down at his lower back it breaks his outline —
-            // which is all it was ever for — without competing for the top of him.
-            Part("Pack", _torso, PrimitiveType.Cube,
-                 new Vector3(0f, 0.315f, -0.275f), new Vector3(0.37f, 0.40f, 0.18f), _canvasMat);
-
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Strap", _torso, PrimitiveType.Cube,
-                     new Vector3(side * 0.175f, 0.53f, -0.02f), new Vector3(0.07f, 0.055f, 0.42f),
-                     _canvasTrimMat);
-            }
-
-            // "Backpack visibly stuffed with charms" (GDD §9) — and they swing, because a thing that
-            // hangs off a running kid swings. They are the cheapest personality on the model.
-            _charmPivot = Pivot("Charms", _torso, new Vector3(0f, 0.15f, -0.35f));
-
-            Part("Charm", _charmPivot, PrimitiveType.Sphere,
-                 new Vector3(-0.115f, -0.055f, 0f), Vector3.one * 0.08f, _charmMats[0]);
-            Part("Charm", _charmPivot, PrimitiveType.Cube,
-                 new Vector3(0.015f, -0.10f, 0.005f), Vector3.one * 0.072f, _charmMats[1],
-                 Quaternion.Euler(0f, 22f, 16f));
-            Part("Charm", _charmPivot, PrimitiveType.Sphere,
-                 new Vector3(0.13f, -0.045f, -0.01f), Vector3.one * 0.068f, _charmMats[2]);
-        }
-
-        /// <summary>
-        /// The head, the messy hair, and the goggles pushed up on his forehead.
-        ///
-        /// The hair cap is pushed UP and BACK off a sphere that is centred forward of it, which leaves a
-        /// bare strip of forehead at the front — and that strip is the only real estate this camera
-        /// angle gives you for a face. The goggles go there. Everything else about a face (eyes, mouth,
-        /// the grease smear) is invisible from 72° and is therefore not modelled: the art bible says the
-        /// fixed angle exists precisely to hide fine facial detail, so building it would be paying for
-        /// something nobody can see.
-        /// </summary>
-        private void BuildHead()
-        {
-            _head = Pivot("Head", _torso, new Vector3(0f, 0.66f, 0f));
-
-            // SMALLER THAN IT WANTS TO BE, and this is the one measurement on Max that was decided by
-            // looking at the shipped frame rather than by taste.
-            //
-            // A stylised kid wants a big head. But the camera looks almost straight DOWN at him, so
-            // whatever is on top of Max is most of Max — and what is on top of a head is HAIR, which is
-            // brown, in a yard built out of brown timber and brown soil. The first cut had a 34 cm head
-            // and it turned the player character into a dark brown disc with a red hem: the exact
-            // figure-ground failure YT-86 exists to fix, arriving from the other direction. The old
-            // capsule was a solid slab of hot orange and it was, whatever else was wrong with it,
-            // findable.
-            //
-            // So the head gives ground to the hoodie. At 30 cm against a 60 cm chest and a hood that
-            // wraps it, the plan view is a red mass with a brown dot in the middle of it — which is
-            // both what a hoodie looks like from above and what a readable actor looks like from above.
-            // Readability beats visual richness; the Craft Bible says so in that order.
-            Part("Skull", _head, PrimitiveType.Sphere,
-                 new Vector3(0f, 0.135f, 0.02f), new Vector3(0.30f, 0.30f, 0.29f), _skinMat);
-
-            // The hair is a CAP on the top and back of his head, not a helmet around it — pushed back
-            // far enough to leave a bare strip of forehead at the front, because that strip is the only
-            // real estate this camera angle gives you for a face, and the goggles have to go on it.
-            Part("Hair", _head, PrimitiveType.Sphere,
-                 new Vector3(0f, 0.215f, -0.06f), new Vector3(0.325f, 0.21f, 0.32f), _hairMat);
-
-            // THE GOGGLES, pushed up on his brow (GDD §9) — and pushed up is the whole point. The first
-            // cut put the strap 4 cm above the centre of his face, which is not a brow, it is a
-            // BLINDFOLD: it drew a hard black band straight across his eyes. It sits on the hairline
-            // now, where a kid actually shoves them when he is not using them.
-            Part("Strap", _head, PrimitiveType.Cube,
-                 new Vector3(0f, 0.20f, 0.045f), new Vector3(0.30f, 0.06f, 0.26f), _rubberTrimMat);
-
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                _lenses[i] = BuildLens($"Lens{(i == 0 ? "L" : "R")}",
-                                       new Vector3(side * 0.078f, 0.205f, 0.145f));
-            }
-
-            // Messy. Two tufts, at two different angles, one bigger than the other — hair that matched
-            // would read as a haircut, and this is a kid who has been under a lawnmower all morning.
-            // They lag behind him when he turns (see TickSecondary).
-            _hairPivot = Pivot("Tufts", _head, new Vector3(0f, 0.225f, -0.03f));
-
-            Part("Tuft", _hairPivot, PrimitiveType.Cube,
-                 new Vector3(-0.07f, 0.07f, 0.01f), new Vector3(0.085f, 0.125f, 0.085f), _hairTrimMat,
-                 Quaternion.Euler(11f, 0f, -25f));
-            Part("Tuft", _hairPivot, PrimitiveType.Cube,
-                 new Vector3(0.062f, 0.08f, -0.055f), new Vector3(0.075f, 0.14f, 0.075f), _hairTrimMat,
-                 Quaternion.Euler(-16f, 0f, 18f));
-        }
-
-        /// <summary>
-        /// The Water Blaster. Junk-built, per every line the GDD writes about Max.
-        ///
-        /// A receiver, a barrel, a nozzle, and — the part that makes it read as a WATER gun rather than
-        /// as a gun — a fat transparent-looking tank of water sitting on top of it, in the exact blue
-        /// the stream comes out as. That is the whole silhouette of a Super Soaker and it is legible at
-        /// eight pixels.
-        ///
-        /// The hands are children of this, not of the arms. Weld them to the gadget and they can never
-        /// come off it; the sleeves are then stretched to reach them (<see cref="PoseArm"/>).
-        /// </summary>
-        private void BuildGadget()
-        {
-            _gun = Pivot("Gun", _torso, GunHipPos);
-            _gun.localRotation = Quaternion.Euler(GunHipRot);
-
-            Part("Receiver", _gun, PrimitiveType.Cube,
-                 new Vector3(0f, 0f, 0.03f), new Vector3(0.115f, 0.135f, 0.35f), _steelMat);
-
-            Part("Barrel", _gun, PrimitiveType.Cylinder,
-                 new Vector3(0f, 0.01f, 0.31f), new Vector3(0.08f, 0.16f, 0.08f), _steelMat,
-                 Quaternion.Euler(90f, 0f, 0f));
-
-            _nozzle = Part("Nozzle", _gun, PrimitiveType.Cylinder,
-                 new Vector3(0f, 0.01f, 0.485f), new Vector3(0.105f, 0.02f, 0.105f), _rubberTrimMat,
-                 Quaternion.Euler(90f, 0f, 0f));
-
-            // The tank. Lying along the top of the gun, full of the water that comes out the front.
-            Part("Tank", _gun, PrimitiveType.Cylinder,
-                 new Vector3(0f, 0.12f, -0.04f), new Vector3(0.125f, 0.135f, 0.125f), _waterMat,
-                 Quaternion.Euler(90f, 0f, 0f));
-            Part("Cap", _gun, PrimitiveType.Cylinder,
-                 new Vector3(0f, 0.12f, 0.105f), new Vector3(0.075f, 0.02f, 0.075f), _steelTrimMat,
-                 Quaternion.Euler(90f, 0f, 0f));
-
-            Part("Grip", _gun, PrimitiveType.Cube,
-                 new Vector3(0f, -0.135f, -0.06f), new Vector3(0.08f, 0.16f, 0.10f), _rubberTrimMat,
-                 Quaternion.Euler(20f, 0f, 0f));
-
-            // A wrap of tape where a shop-bought gun would have a foregrip. He built this out of a
-            // pump-action bottle and whatever was on the bench.
-            Part("Tape", _gun, PrimitiveType.Cube,
-                 new Vector3(0f, 0.005f, 0.185f), new Vector3(0.13f, 0.10f, 0.05f), _tapeMat);
-
-            _handR = Part("HandR", _gun, PrimitiveType.Cube,
-                          new Vector3(0f, -0.055f, -0.05f), new Vector3(0.115f, 0.115f, 0.13f),
-                          _rubberTrimMat);
-            _handL = Part("HandL", _gun, PrimitiveType.Cube,
-                          new Vector3(0f, -0.02f, 0.15f), new Vector3(0.115f, 0.115f, 0.14f),
-                          _rubberTrimMat);
-
-            // YT-134 — read it as a HOSE, not a self-contained bottle-gun. A green rubber hose feeds
-            // into the BACK of the sprayer and drops away toward the hip coil (built on the body), so
-            // the eye follows nozzle -> hose -> coil and stops there: a self-supplied loop with nothing
-            // running off him to a tap (WV-239). Two stub segments, angled, so it curves rather than
-            // sticking straight out.
-            Part("HoseInlet", _gun, PrimitiveType.Cylinder,
-                 new Vector3(0f, -0.05f, -0.14f), new Vector3(0.06f, 0.12f, 0.06f), _hoseMat,
-                 Quaternion.Euler(52f, 0f, 0f));
-            Part("HoseDrop", _gun, PrimitiveType.Cylinder,
-                 new Vector3(0f, -0.16f, -0.22f), new Vector3(0.06f, 0.12f, 0.06f), _hoseMat,
-                 Quaternion.Euler(78f, 0f, 0f));
-        }
-
-        /// <summary>A coil of spare hose slung at Max's hip, so the hose reads as carried ON him rather
-        /// than sprouting from his belly (YT-134) — the self-supplied look WV-239 asks for, with
-        /// nothing running off him to a tap. Flattened rings stacked into a loop; parented to the torso
-        /// so it bobs with him.</summary>
-        private void BuildHoseCoil()
-        {
-            var coil = Pivot("HoseCoil", _torso, new Vector3(-0.24f, -0.02f, -0.12f));
-            coil.localRotation = Quaternion.Euler(18f, 0f, 74f);   // hangs on his hip, slightly turned
-            for (int i = 0; i < 3; i++)
-            {
-                Part($"Coil{i}", coil, PrimitiveType.Cylinder,
-                     new Vector3(0f, 0.02f * (i - 1), 0f), new Vector3(0.2f, 0.03f, 0.2f), _hoseMat);
-            }
-        }
-
-        /// <summary>Two sleeves. They have no pose of their own — they are stretched between the
-        /// shoulder and whichever hand is where, every frame. See <see cref="PoseArm"/>.</summary>
-        private void BuildArms()
-        {
-            _armL = Part("ArmL", _torso, PrimitiveType.Cube, Vector3.zero,
-                         new Vector3(SleeveWidth, 0.4f, SleeveWidth), _hoodieShadeMat);
-            _armR = Part("ArmR", _torso, PrimitiveType.Cube, Vector3.zero,
-                         new Vector3(SleeveWidth, 0.4f, SleeveWidth), _hoodieShadeMat);
         }
 
         private static Transform Pivot(string name, Transform parent, Vector3 at)
@@ -783,61 +454,6 @@ namespace MaxWorlds.VFX
             go.transform.SetParent(parent, worldPositionStays: false);
             go.transform.localPosition = at;
             return go.transform;
-        }
-
-        /// <summary>One piece of Max. Given a real material, always — nothing built here may keep a
-        /// primitive's default material, which has no URP subshader and ships MAGENTA (YT-38).</summary>
-        private static Transform Part(string name, Transform parent, PrimitiveType shape, Vector3 at,
-                                      Vector3 scale, Material mat, Quaternion? rot = null)
-        {
-            var go = GameObject.CreatePrimitive(shape);
-            go.name = name;
-            Strip(go);
-
-            go.transform.SetParent(parent, worldPositionStays: false);
-            go.transform.localPosition = at;
-            go.transform.localRotation = rot ?? Quaternion.identity;
-            go.transform.localScale = scale;
-
-            go.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            return go.transform;
-        }
-
-        /// <summary>A goggle lens. Additive and unlit, like the boss's lamps — glass CATCHES light, and
-        /// a painted amber ball on a body that is mostly in its own shadow would just be a brown dot.
-        /// Shared VFX material + a property block, so two lenses cost one material.</summary>
-        private MeshRenderer BuildLens(string name, Vector3 at)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = name;
-            Strip(go);
-
-            go.transform.SetParent(_head, worldPositionStays: false);
-            go.transform.localPosition = at;
-            go.transform.localScale = new Vector3(0.115f, 0.10f, 0.075f);
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
-
-            r.GetPropertyBlock(_lensMpb);
-            _lensMpb.SetColor(BaseColorId, LensGlass);
-            r.SetPropertyBlock(_lensMpb);
-            return r;
-        }
-
-        /// <summary>
-        /// Nothing on Max can be shot or walked into.
-        ///
-        /// His CharacterController is the hitbox and it is gameplay's. An extra collider on the
-        /// backpack would silently eat water that a player aimed past him, and the robots would bump
-        /// into a spanner that gameplay does not believe is there.
-        /// </summary>
-        private static void Strip(GameObject go)
-        {
-            var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
         }
 
         // ---------------------------------------------------------------- running him
@@ -949,6 +565,10 @@ namespace MaxWorlds.VFX
                 pos -= rot * Vector3.forward * (recoil * shudder);
             }
 
+            // MV-451: the gadget is fused into the generated body now, so there is no separate _gun
+            // transform to move — this still computes _aim/pose for AimPose/BarrelHeight (WaterBlaster,
+            // MaxRigTests) and for the recoil shudder above, it just has nothing left to apply to.
+            if (_gun == null) return;
             _gun.localPosition = pos;
             _gun.localRotation = rot;
         }
@@ -1027,15 +647,8 @@ namespace MaxWorlds.VFX
         private void OnDestroy()
         {
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
-            Kill(_hoodieMat); Kill(_hoodieShadeMat); Kill(_trouserMat); Kill(_skinMat);
-            Kill(_hairMat); Kill(_canvasMat); Kill(_rubberMat); Kill(_steelMat); Kill(_waterMat);
-
-            Kill(_hoodieDeepMat); Kill(_hoodieTrimMat); Kill(_skinTrimMat); Kill(_hairTrimMat);
-            Kill(_canvasTrimMat); Kill(_rubberTrimMat); Kill(_steelTrimMat); Kill(_boneMat);
-            Kill(_tapeMat); Kill(_hoseMat);
-
-            if (_charmMats == null) return;
-            for (int i = 0; i < _charmMats.Length; i++) Kill(_charmMats[i]);
+            Kill(_skinMat); Kill(_hairMat); Kill(_jacketMat); Kill(_hoodMat); Kill(_fabricMat);
+            Kill(_darkMat); Kill(_bootMat); Kill(_soleMat); Kill(_metalMat); Kill(_eyeMat); Kill(_goggleMat);
         }
 
         private static void Kill(Material m)

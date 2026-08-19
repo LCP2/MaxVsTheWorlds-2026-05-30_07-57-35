@@ -36,17 +36,17 @@ namespace MaxWorlds.Enemies
             // MV-293's ranged/teleport kinds (MV-310) — solved as their own small budget slice
             // alongside the tank/light split below, not substituted into it.
             public readonly int Gunner;
-            public readonly int Bomber;
+            public readonly int Launcher;
             public readonly int Blinker;
 
             public Composition(int rusher, int bruiser, int heavy, int brute,
-                int gunner = 0, int bomber = 0, int blinker = 0)
+                int gunner = 0, int launcher = 0, int blinker = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
-                Gunner = gunner; Bomber = bomber; Blinker = blinker;
+                Gunner = gunner; Launcher = launcher; Blinker = blinker;
             }
 
-            public int TotalCount => Rusher + Bruiser + Heavy + Brute + Gunner + Bomber + Blinker;
+            public int TotalCount => Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -56,7 +56,7 @@ namespace MaxWorlds.Enemies
             public float TotalThreatValue =>
                 Rusher * ThreatValues.Rusher + Bruiser * ThreatValues.Bruiser +
                 Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute +
-                Gunner * ThreatValues.Gunner + Bomber * ThreatValues.Bomber +
+                Gunner * ThreatValues.Gunner + Launcher * ThreatValues.Launcher +
                 Blinker * ThreatValues.Blinker;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
@@ -88,18 +88,18 @@ namespace MaxWorlds.Enemies
             // original total.
             float specialSharePct = toughness != null ? Mathf.Clamp01(toughness.specialSharePct / 100f) : 0f;
             bool gunnerUnlocked = toughness != null && toughness.GunnerUnlockedAt(areaIndex);
-            bool bomberUnlocked = toughness != null && toughness.BomberUnlockedAt(areaIndex);
+            bool launcherUnlocked = toughness != null && toughness.LauncherUnlockedAt(areaIndex);
             bool blinkerUnlocked = toughness != null && toughness.BlinkerUnlockedAt(areaIndex);
 
             float gunnerBudget = gunnerUnlocked ? budget * specialSharePct : 0f;
-            float bomberBudget = bomberUnlocked ? budget * specialSharePct : 0f;
+            float launcherBudget = launcherUnlocked ? budget * specialSharePct : 0f;
             float blinkerBudget = blinkerUnlocked ? budget * specialSharePct : 0f;
 
             int gunner = gunnerBudget > 0f ? Mathf.RoundToInt(gunnerBudget / ThreatValues.Gunner) : 0;
-            int bomber = bomberBudget > 0f ? Mathf.RoundToInt(bomberBudget / ThreatValues.Bomber) : 0;
+            int launcher = launcherBudget > 0f ? Mathf.RoundToInt(launcherBudget / ThreatValues.Launcher) : 0;
             int blinker = blinkerBudget > 0f ? Mathf.RoundToInt(blinkerBudget / ThreatValues.Blinker) : 0;
 
-            float remaining = Mathf.Max(0f, budget - gunnerBudget - bomberBudget - blinkerBudget);
+            float remaining = Mathf.Max(0f, budget - gunnerBudget - launcherBudget - blinkerBudget);
 
             float tankShare = toughness != null ? toughness.TankShareForArea(areaIndex) : 0f;
             bool heavyUnlocked = toughness != null && toughness.HeavyUnlockedAt(areaIndex);
@@ -130,7 +130,7 @@ namespace MaxWorlds.Enemies
                 rusher = Mathf.RoundToInt(rusherBudget / ThreatValues.Rusher);
             }
 
-            return new Composition(rusher, bruiser, heavy, brute, gunner, bomber, blinker);
+            return new Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker);
         }
     }
 }

@@ -45,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(5, solved.Gunner);
             Assert.AreEqual(0, solved.Heavy);
             Assert.AreEqual(0, solved.Brute);
-            Assert.AreEqual(0, solved.Bomber);
+            Assert.AreEqual(0, solved.Launcher);
             Assert.AreEqual(0, solved.Blinker);
         }
 
@@ -85,7 +85,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void RusherCap_ClampsRusherOnly_WhenOverTheCap()
         {
-            var composition = new DifficultyEngine.Composition(rusher: 8, bruiser: 3, heavy: 1, brute: 0, gunner: 2, bomber: 1, blinker: 1);
+            var composition = new DifficultyEngine.Composition(rusher: 8, bruiser: 3, heavy: 1, brute: 0, gunner: 2, launcher: 1, blinker: 1);
 
             DifficultyEngine.Composition clamped = RusherCap.Apply(composition, alreadyUsed: 6);
 
@@ -93,7 +93,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(3, clamped.Bruiser);
             Assert.AreEqual(1, clamped.Heavy);
             Assert.AreEqual(2, clamped.Gunner);
-            Assert.AreEqual(1, clamped.Bomber);
+            Assert.AreEqual(1, clamped.Launcher);
             Assert.AreEqual(1, clamped.Blinker);
         }
 
@@ -324,11 +324,11 @@ namespace MaxWorlds.Tests.EditMode
             DifficultyEngine.Composition composition = cfg.SolveComposition(5);
 
             Assert.AreEqual("centerDenial", area5.scenario,
-                "the missile-barrage room must be tagged so AreaAccumulationDirector biases Bomber " +
+                "the missile-barrage room must be tagged so AreaAccumulationDirector biases Launcher " +
                 "spawns toward the centre");
-            Assert.Greater(composition.Bomber, 0, "the room needs an actual missile barrage");
-            Assert.Greater(composition.TotalCount - composition.Bomber, 0,
-                "the barrage must be 'surrounded by robots', not Bomber-only");
+            Assert.Greater(composition.Launcher, 0, "the room needs an actual missile barrage");
+            Assert.Greater(composition.TotalCount - composition.Launcher, 0,
+                "the barrage must be 'surrounded by robots', not Launcher-only");
         }
 
         [Test]

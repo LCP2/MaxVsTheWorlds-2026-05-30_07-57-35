@@ -150,6 +150,13 @@ namespace MaxWorlds.VFX
         /// on the body itself, which is what the gameplay always intended and never got.</summary>
         private static readonly Color WarnColor = new Color(1f, 0.35f, 0.12f);
 
+        // MV-451: the generated-mesh robot bodies (RobotBodies) share four materials across the whole
+        // roster — three of them these, identical on every kind, which is what makes seven kinds read
+        // as one family assembled from one shed. Only the kind's own warm hue (above) varies.
+        public static readonly Color RobotCool = new Color(0.184f, 0.490f, 0.565f);
+        public static readonly Color RobotDark = new Color(0.133f, 0.149f, 0.173f);
+        public static readonly Color RobotGold = new Color(0.847f, 0.647f, 0.227f);
+
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 

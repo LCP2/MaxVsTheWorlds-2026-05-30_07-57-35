@@ -108,12 +108,19 @@ namespace MaxWorlds.VFX
         private Transform _model;
         private MeshRenderer[] _eyes;
         private Material _bodyMat;
-        private Material _accentMat;
+        private Material _coolMat;
+        private Material _darkMat;
+        private Material _goldMat;
         private MaterialPropertyBlock _eyeMpb;
 
         private bool _built;
         private Color _tellColor = EyeIdle;
         private float _flash;
+
+        /// <summary>Every rolling part (MV-451) — see <see cref="SpinWheels"/>.</summary>
+        private Transform[] _wheels;
+        private float[] _wheelRadius;
+        private Vector3 _lastPos;
 
         /// <summary>The Gunner's laser (MV-312) — built lazily, and only ever for that one kind; see
         /// <see cref="UpdateBeamVfx"/>.</summary>
@@ -152,6 +159,10 @@ namespace MaxWorlds.VFX
             _flash = 0f;
             _tellColor = EyeIdle;
             ApplyEyes(_tellColor);
+
+            // Reset the odometer, or a pooled robot respawning across the map spins its wheels
+            // through a full revolution on its first frame (MV-451).
+            _lastPos = transform.position;
         }
 
         private void OnDisable() => HudSignals.DamageDealt -= OnDamage;
@@ -185,7 +196,7 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Two materials, both OURS.
+        /// Four materials, all OURS (MV-451).
         ///
         /// Instances of <see cref="MaterialLibrary.Character()"/> — never that material itself, which is
         /// worn by every robot in the yard and by Max and the boss; heating this one robot's chassis on
@@ -194,8 +205,10 @@ namespace MaxWorlds.VFX
         /// material instance KEEPS it, and the whole model heats with one property write.
         ///
         /// The body wears the kind's own colour, straight from <see cref="CharacterSkin"/> so "them" is
-        /// one colour everywhere. The accent is a darker step of it — treads, legs, joints, arms — which
-        /// gives the silhouette some internal shape without ever leaving the kind's hue.
+        /// one colour everywhere — <see cref="RobotSkinDiagnostics"/> (MV-350) reads it off
+        /// <see cref="CurrentBodyColor"/>. Cool, dark and gold are the three materials SHARED across the
+        /// whole roster (identical colour on every kind — see <see cref="CharacterSkin.RobotCool"/> and
+        /// friends), which is what makes seven kinds read as one family built out of one shed.
         /// </summary>
         private void BuildMaterials()
         {
@@ -204,12 +217,10 @@ namespace MaxWorlds.VFX
             CharacterRole role = CharacterSkin.RoleFor(_enemy.Kind);
             Color body = CharacterSkin.BaseColorFor(role);
 
-            // A darker step of the SAME hue (alpha kept at 1 — scaling a Color scales its alpha too, and
-            // an accent at 0.55 alpha would go see-through on a transparent shader variant).
-            Color accent = new Color(body.r * 0.55f, body.g * 0.55f, body.b * 0.55f, 1f);
-
             _bodyMat = NewCharacterMaterial($"Robot_{role}_Body", body);
-            _accentMat = NewCharacterMaterial($"Robot_{role}_Accent", accent);
+            _coolMat = NewCharacterMaterial("Robot_Cool", CharacterSkin.RobotCool);
+            _darkMat = NewCharacterMaterial("Robot_Dark", CharacterSkin.RobotDark);
+            _goldMat = NewCharacterMaterial("Robot_Gold", CharacterSkin.RobotGold);
         }
 
         private static Material NewCharacterMaterial(string name, Color color)
@@ -247,332 +258,19 @@ namespace MaxWorlds.VFX
             feet.SetParent(_model, worldPositionStays: false);
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
-            if (_enemy.Kind == EnemyKind.Bruiser) BuildBruiser(feet);
-            else if (_enemy.Kind == EnemyKind.Gunner) BuildGunner(feet);
-            else if (_enemy.Kind == EnemyKind.Bomber) BuildBomber(feet);
-            else if (_enemy.Kind == EnemyKind.Blinker) BuildBlinker(feet);
-            else BuildRusher(feet);
-        }
+            var body = RobotBodies.Build(_enemy.Kind, feet,
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat));
+            _eyes = body.Eyes;
 
-        /// <summary>
-        /// The rusher: a round pod on two thin splayed legs, leaning forward, a single bright eye out in
-        /// front and a pair of shear-arms reaching ahead. Narrow and leggy — it reads as quick, and it
-        /// reads as NOT the bruiser at a glance.
-        /// </summary>
-        private void BuildRusher(Transform feet)
-        {
-            // Legs — thin, splayed outward, planted feet. The stance is the whole "it runs" read.
-            for (int i = 0; i < 2; i++)
+            _wheels = body.Wheels;
+            _wheelRadius = new float[_wheels.Length];
+            for (int i = 0; i < _wheels.Length; i++)
             {
-                float side = i == 0 ? -1f : 1f;
-                Part("Leg", PrimitiveType.Cylinder, feet,
-                     new Vector3(side * 0.17f, 0.30f, -0.02f), new Vector3(0.11f, 0.30f, 0.13f),
-                     _accentMat, Quaternion.Euler(-8f, 0f, side * 13f));
-                Part("Foot", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.24f, 0.04f, 0.05f), new Vector3(0.16f, 0.08f, 0.30f), _accentMat);
+                var mf = _wheels[i] != null ? _wheels[i].GetComponent<MeshFilter>() : null;
+                _wheelRadius[i] = mf != null && mf.sharedMesh != null
+                    ? mf.sharedMesh.bounds.extents.x
+                    : 0.1f;
             }
-
-            // The pod. A rounded body — everything else on a rusher is thin, so the one round mass is
-            // what makes it a machine with a middle rather than a bundle of sticks.
-            Part("Pod", PrimitiveType.Sphere, feet,
-                 new Vector3(0f, 0.72f, 0f), new Vector3(0.52f, 0.56f, 0.52f), _bodyMat);
-
-            // A hip collar where the legs meet the pod, so the join is not a gap.
-            Part("Hips", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.48f, 0f), new Vector3(0.34f, 0.20f, 0.32f), _accentMat);
-
-            // Head, leaning forward — the lean is the momentum.
-            Part("Head", PrimitiveType.Sphere, feet,
-                 new Vector3(0f, 1.00f, 0.10f), new Vector3(0.36f, 0.32f, 0.38f), _bodyMat,
-                 Quaternion.Euler(18f, 0f, 0f));
-
-            // THE EYE — single, forward, the tell. Big enough to read at gameplay zoom: on a body ~1.3 m
-            // tall drawn at twenty-odd pixels, a 0.2 m lamp is a couple of pixels you can actually find.
-            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 1.02f, 0.30f), 0.20f) };
-
-            // A whip antenna, off to one side — an asymmetric fleck reads on a silhouette where symmetric
-            // detail vanishes.
-            Part("Antenna", PrimitiveType.Cylinder, feet,
-                 new Vector3(0.11f, 1.28f, -0.02f), new Vector3(0.03f, 0.20f, 0.03f), _accentMat,
-                 Quaternion.Euler(0f, 0f, -12f));
-
-            // Shear-arms, reaching ahead. The garden tool that says what this thing is FOR.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Claw", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.27f, 0.74f, 0.18f), new Vector3(0.10f, 0.12f, 0.30f), _accentMat,
-                     Quaternion.Euler(0f, side * -12f, 0f));
-            }
-        }
-
-        /// <summary>
-        /// The bruiser: a wide low chassis on tank treads, a broad two-eyed visor, a lawn-roller drum
-        /// across the front and thick crusher arms. Low, wide, planted — a fridge on treads. Its garden
-        /// motif is the roller (the boss's reel's blunt cousin), and its threat is that it does not stop.
-        /// </summary>
-        private void BuildBruiser(Transform feet)
-        {
-            // Tread skirts — long, low, dark, down the sides. Treads not legs: a heavy thing rolls.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Tread", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.50f, 0.22f, 0f), new Vector3(0.24f, 0.34f, 0.98f), _accentMat);
-            }
-
-            // The chassis. Wide and low — the fridge.
-            Part("Chassis", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.55f, 0f), new Vector3(0.96f, 0.58f, 0.82f), _bodyMat);
-
-            // Heavy shoulder blocks — bulk up top, where the crusher arms hang.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Shoulder", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.34f, 0.98f, -0.06f), new Vector3(0.36f, 0.34f, 0.52f), _bodyMat);
-            }
-
-            // A broad low visor for a head — a face you read two eyes off, not a dome.
-            Part("Visor", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 1.00f, 0.20f), new Vector3(0.52f, 0.30f, 0.38f), _bodyMat,
-                 Quaternion.Euler(12f, 0f, 0f));
-
-            // TWO eyes, wide-set — the heavy stare, and the read that separates it from the rusher's
-            // single cyclops lamp even before you clock that one is a box and the other a pod.
-            _eyes = new MeshRenderer[2];
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                _eyes[i] = Eye("Eye", feet, new Vector3(side * 0.17f, 1.02f, 0.40f), 0.16f);
-            }
-
-            // The lawn-roller drum, slung across the front — the blunt garden weapon. Axle across the
-            // machine, like the boss's reel, so it reads as a thing that flattens what is in front of it.
-            Part("Roller", PrimitiveType.Cylinder, feet,
-                 new Vector3(0f, 0.34f, 0.52f), new Vector3(0.24f, 0.46f, 0.24f), _accentMat,
-                 Quaternion.Euler(0f, 0f, 90f));
-
-            // Crusher arms — thick, forward, heavy.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Arm", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.42f, 0.78f, 0.30f), new Vector3(0.20f, 0.22f, 0.42f), _accentMat);
-            }
-        }
-
-        /// <summary>
-        /// The Gunner (MV-312): a planted sentry turret, not a robot that runs. Where the rusher and
-        /// bruiser are both built from the same "legs carrying a torso" grammar (round pod on splayed
-        /// legs vs. wide chassis on treads), the Gunner shares neither — three short stub feet in a
-        /// tripod ring, a squat drum base, a thin vertical mast, and a flat disc "head" canted down
-        /// like a scope. Tall and narrow where the rusher is round, motionless where the rusher leans
-        /// forward mid-stride: at the fixed ~72° camera it reads as a fixed emplacement, which is what
-        /// it is (EnemyArchetype.Gunner: <see cref="EnemyArchetype.LungeSpeed"/> is 0 — it never moves
-        /// during the shot). This is the ticket's AC1 fix: before it, this method didn't exist and
-        /// every Gunner fell through to <see cref="BuildRusher"/> wearing the rusher's own silhouette.
-        /// </summary>
-        private void BuildGunner(Transform feet)
-        {
-            // Three short, straight support feet in a tripod ring — planted, not splayed for a stride.
-            // A turret does not chase, so nothing here leans forward the way the rusher's legs do.
-            for (int i = 0; i < 3; i++)
-            {
-                float rad = (90f + i * 120f) * Mathf.Deg2Rad;
-                Vector3 pos = new Vector3(Mathf.Sin(rad) * 0.24f, 0.11f, Mathf.Cos(rad) * 0.24f);
-                Part("Strut", PrimitiveType.Cylinder, feet, pos, new Vector3(0.07f, 0.11f, 0.07f), _accentMat);
-            }
-
-            // A low, wide drum the mast rises out of — squat, not the rusher's round leaning pod.
-            Part("Base", PrimitiveType.Cylinder, feet,
-                 new Vector3(0f, 0.28f, 0f), new Vector3(0.40f, 0.09f, 0.40f), _bodyMat);
-
-            // A thin vertical mast — tall for its width, the opposite proportion of the rusher's
-            // round mass. Height over bulk is the whole "sentry, not skitterer" read.
-            Part("Mast", PrimitiveType.Cylinder, feet,
-                 new Vector3(0f, 0.68f, 0f), new Vector3(0.13f, 0.32f, 0.13f), _accentMat);
-
-            // The head — a flat disc housing at the top of the mast, canted down like a scope.
-            // Nothing on the rusher or bruiser is a disc; this is the silhouette's own tell, on top
-            // of the colour tell CharacterSkin already gives the kind (MV-312).
-            Part("Head", PrimitiveType.Cylinder, feet,
-                 new Vector3(0f, 1.06f, 0.02f), new Vector3(0.30f, 0.09f, 0.30f), _bodyMat,
-                 Quaternion.Euler(82f, 0f, 0f));
-
-            // THE EYE — a single big forward lens, doubling as the beam's muzzle (see UpdateBeamVfx).
-            // Bigger than the rusher's running-light: a scope you have to watch, not a spark to notice.
-            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 1.06f, 0.30f), 0.26f) };
-
-            // A stub sensor off the head — the asymmetric fleck every rig here carries.
-            Part("Sensor", PrimitiveType.Cylinder, feet,
-                 new Vector3(0.16f, 1.20f, -0.05f), new Vector3(0.025f, 0.12f, 0.025f), _accentMat,
-                 Quaternion.Euler(0f, 0f, -20f));
-        }
-
-        /// <summary>
-        /// The Bomber (MV-329): a legged skitter-bot like the rusher (it kites at a similar pace), but
-        /// everything above the hips is ordnance rather than garden shears — a squat weapons deck
-        /// carrying a canted twin-tube launcher rack, not a leaning pod with claws. Before this, Bomber
-        /// fell through to <see cref="BuildRusher"/> and wore its shear-arms and round head, which reads
-        /// as "the melee kind" — exactly backwards for the one kind whose whole threat is that it never
-        /// closes to melee at all.
-        /// </summary>
-        private void BuildBomber(Transform feet)
-        {
-            // Legs — the same running-legs grammar as the rusher (a launcher that plants roots can't
-            // hold its standoff range), planted a touch wider to carry the deck above them.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Leg", PrimitiveType.Cylinder, feet,
-                     new Vector3(side * 0.19f, 0.30f, -0.02f), new Vector3(0.11f, 0.30f, 0.13f),
-                     _accentMat, Quaternion.Euler(-6f, 0f, side * 11f));
-                Part("Foot", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.26f, 0.04f, 0.05f), new Vector3(0.16f, 0.08f, 0.30f), _accentMat);
-            }
-
-            // A squat, boxy hull instead of the rusher's round pod — a weapons deck needs a flat top to
-            // carry a rack, not a body shaped to lean forward into a run.
-            Part("Hull", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.56f, 0f), new Vector3(0.48f, 0.32f, 0.50f), _bodyMat);
-
-            Part("Hips", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.42f, 0f), new Vector3(0.34f, 0.16f, 0.32f), _accentMat);
-
-            // A low, wide visor rather than the rusher's leaning head — the same "it aims, it doesn't
-            // charge" idiom the Bruiser's Visor already uses.
-            Part("Visor", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.82f, 0.14f), new Vector3(0.38f, 0.16f, 0.20f), _bodyMat,
-                 Quaternion.Euler(10f, 0f, 0f));
-
-            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 0.84f, 0.26f), 0.18f) };
-
-            // THE LAUNCHER RACK — the tell that says "missile launcher", not "another rusher". Twin
-            // tubes, canted up off the back deck at a lob angle, feeding a magazine slung underneath —
-            // the AC1 fix (MV-329).
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Tube", PrimitiveType.Cylinder, feet,
-                     new Vector3(side * 0.15f, 0.96f, -0.10f), new Vector3(0.09f, 0.34f, 0.09f), _accentMat,
-                     Quaternion.Euler(-28f, 0f, side * 4f));
-            }
-            Part("Magazine", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.78f, -0.16f), new Vector3(0.38f, 0.16f, 0.22f), _bodyMat);
-
-            // An antenna, the same asymmetric fleck every other rig carries.
-            Part("Antenna", PrimitiveType.Cylinder, feet,
-                 new Vector3(-0.12f, 1.10f, -0.08f), new Vector3(0.025f, 0.16f, 0.025f), _accentMat,
-                 Quaternion.Euler(0f, 0f, 14f));
-        }
-
-        /// <summary>
-        /// The Blinker (MV-330): before this it fell through to <see cref="BuildRusher"/> and wore the
-        /// rusher's leaning pod and shear-arms — exactly the wrong read for the one kind whose whole
-        /// threat is that it does not close distance by running at all. Where the rusher is round and
-        /// forward-leaning and the bomber is boxy and squat, the Blinker is faceted and upright: a
-        /// crystalline core built from cubes canted to a diamond profile instead of a sphere, crouched
-        /// on tight, crossed legs instead of the rusher's splayed running stance. It reads as a thing
-        /// coiled to spring sideways through space, not one leaning forward to sprint through the yard.
-        /// </summary>
-        private void BuildBlinker(Transform feet)
-        {
-            // Legs — thin and crossed in tight under the core, not splayed for a stride: this kind
-            // does not cover ground by running, it blinks it.
-            for (int i = 0; i < 2; i++)
-            {
-                float side = i == 0 ? -1f : 1f;
-                Part("Leg", PrimitiveType.Cylinder, feet,
-                     new Vector3(side * 0.10f, 0.28f, 0f), new Vector3(0.09f, 0.28f, 0.09f),
-                     _accentMat, Quaternion.Euler(0f, 0f, side * 22f));
-                Part("Foot", PrimitiveType.Cube, feet,
-                     new Vector3(side * 0.16f, 0.05f, 0.02f), new Vector3(0.14f, 0.10f, 0.20f), _accentMat);
-            }
-
-            // THE CORE — a faceted diamond, not the rusher's round pod: a cube canted 45° on Y reads as
-            // a cut crystal at the fixed top-down angle, which is the tell that says "holding a charge",
-            // not "another rusher".
-            Part("Core", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.66f, 0f), new Vector3(0.40f, 0.46f, 0.40f), _bodyMat,
-                 Quaternion.Euler(0f, 45f, 0f));
-
-            // A collar where the legs meet the core, so the join is not a gap.
-            Part("Hips", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 0.44f, 0f), new Vector3(0.24f, 0.14f, 0.24f), _accentMat);
-
-            // The head — a smaller shard, same diamond grammar as the core, canted forward.
-            Part("Shard", PrimitiveType.Cube, feet,
-                 new Vector3(0f, 1.00f, 0.06f), new Vector3(0.24f, 0.24f, 0.24f), _bodyMat,
-                 Quaternion.Euler(20f, 45f, 0f));
-
-            // THE EYE — single, forward, the tell — same idiom as every other rig.
-            _eyes = new[] { Eye("Eye", feet, new Vector3(0f, 1.00f, 0.24f), 0.18f) };
-
-            // Vents jutting off the core at an angle — where the charge bleeds off before a blink. Two,
-            // asymmetric, the same "fleck" every other rig here carries off its antenna.
-            Part("Vent", PrimitiveType.Cube, feet,
-                 new Vector3(0.20f, 0.74f, -0.10f), new Vector3(0.05f, 0.22f, 0.10f), _accentMat,
-                 Quaternion.Euler(0f, 20f, -20f));
-            Part("Vent", PrimitiveType.Cube, feet,
-                 new Vector3(-0.16f, 0.60f, -0.12f), new Vector3(0.05f, 0.16f, 0.08f), _accentMat,
-                 Quaternion.Euler(0f, -15f, 15f));
-        }
-
-        /// <summary>One part of a robot. Given a real material always, marked <see cref="SelfDrivenTint"/>
-        /// so no director claims it, and stripped of the collider a primitive is born with — gameplay's
-        /// CharacterController is the only hitbox this robot has.</summary>
-        private static Transform Part(string name, PrimitiveType shape, Transform parent, Vector3 at,
-                                      Vector3 scale, Material mat, Quaternion? rot = null)
-        {
-            var go = GameObject.CreatePrimitive(shape);
-            go.name = name;
-            Strip(go);
-            go.AddComponent<SelfDrivenTint>();
-
-            go.transform.SetParent(parent, worldPositionStays: false);
-            go.transform.localPosition = at;
-            go.transform.localRotation = rot ?? Quaternion.identity;
-            go.transform.localScale = scale;
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = mat;
-
-            // No shadows (YT-186): every other rig in the game (Max, the boss) turns this off on
-            // every part it builds — this rig was the one place it got missed. At up to 8-13 parts
-            // per robot and up to 24 robots on the field at once, that is several hundred
-            // shadow-casting mesh renderers the GPU has to draw into the shadow map every frame for
-            // silhouettes the fixed top-down camera reads by shape and eye-colour, not by shadow.
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
-            return go.transform;
-        }
-
-        /// <summary>An eye. Additive and unlit, like the boss's lamps and Max's goggles — an eye is a
-        /// LIGHT, not a painted ball, so it stays bright while the body is in its own shadow. Shared VFX
-        /// material + a property block, so a robot's eyes cost no material of their own.</summary>
-        private MeshRenderer Eye(string name, Transform parent, Vector3 at, float size)
-        {
-            var go = GameObject.CreatePrimitive(PrimitiveType.Sphere);
-            go.name = name;
-            Strip(go);
-            go.AddComponent<SelfDrivenTint>();
-
-            go.transform.SetParent(parent, worldPositionStays: false);
-            go.transform.localPosition = at;
-            go.transform.localScale = Vector3.one * size;
-
-            var r = go.GetComponent<MeshRenderer>();
-            r.sharedMaterial = VfxMaterials.Additive(VfxMaterials.Glow());
-            r.shadowCastingMode = ShadowCastingMode.Off;
-            r.receiveShadows = false;
-            return r;
-        }
-
-        private static void Strip(GameObject go)
-        {
-            var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
         }
 
         // ---------------------------------------------------------------- running it
@@ -586,6 +284,7 @@ namespace MaxWorlds.VFX
             if (!_built || _enemy == null) return;
 
             RideTheRamp();
+            SpinWheels();
             UpdateBeamVfx();
 
             float dt = Time.deltaTime;
@@ -602,7 +301,38 @@ namespace MaxWorlds.VFX
             // stay its own turquoise/violet or it stops reading as its kind. Same trick the boss uses.
             Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f);
             if (_bodyMat != null && _bodyMat.HasProperty(EmissionId)) _bodyMat.SetColor(EmissionId, heat);
-            if (_accentMat != null && _accentMat.HasProperty(EmissionId)) _accentMat.SetColor(EmissionId, heat);
+        }
+
+        /// <summary>
+        /// Spin the wheels (MV-451) — the reason most of the roster now rolls. There is no leg
+        /// animation anywhere in the codebase (this method and <see cref="RideTheRamp"/> are the whole
+        /// of <see cref="LateUpdate"/>'s visual work), so every legged robot used to slide across the
+        /// lawn with rigid limbs. A wheel is one line, correct at any speed, and never needs a foot to
+        /// land in the right place.
+        /// </summary>
+        private void SpinWheels()
+        {
+            if (_wheels == null || _wheels.Length == 0) return;
+
+            Vector3 now = transform.position;
+            Vector3 delta = now - _lastPos;
+            _lastPos = now;
+
+            delta.y = 0f;
+            float distance = delta.magnitude;
+            if (distance < 1e-5f) return;
+
+            // Signed, so reversing (a Gunner backing off its standoff) rolls the wheel backwards
+            // rather than pretending it is still driving forward.
+            float sign = Mathf.Sign(Vector3.Dot(transform.forward, delta));
+
+            for (int i = 0; i < _wheels.Length; i++)
+            {
+                if (_wheels[i] == null) continue;
+                // Rolling without slipping: the contact patch travels exactly as far as the robot does.
+                float degrees = distance / Mathf.Max(_wheelRadius[i], 1e-4f) * Mathf.Rad2Deg * sign;
+                _wheels[i].Rotate(Vector3.up, degrees, Space.Self);   // local Y is the axle
+            }
         }
 
         /// <summary>
@@ -762,7 +492,9 @@ namespace MaxWorlds.VFX
         {
             // Instances, and ours: nothing else points at them.
             if (_bodyMat != null) Destroy(_bodyMat);
-            if (_accentMat != null) Destroy(_accentMat);
+            if (_coolMat != null) Destroy(_coolMat);
+            if (_darkMat != null) Destroy(_darkMat);
+            if (_goldMat != null) Destroy(_goldMat);
         }
     }
 }

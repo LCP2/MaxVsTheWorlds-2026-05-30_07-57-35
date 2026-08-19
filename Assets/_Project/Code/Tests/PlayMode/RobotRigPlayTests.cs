@@ -1,5 +1,5 @@
 using System.Collections;
-using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
@@ -46,6 +46,13 @@ namespace MaxWorlds.Tests.PlayMode
 
         private static Transform Model(GameObject robot) => robot.transform.Find("RobotModel");
 
+        /// <summary>The eye tell's lens renderer(s) (MV-451: parts are generated geometry now, named
+        /// generically "Part" — there is no "Eye" transform to find by name any more), read the same
+        /// way RobotRig itself keeps them, off its private field.</summary>
+        private static MeshRenderer[] Eyes(RobotRig rig) =>
+            (MeshRenderer[])typeof(RobotRig).GetField("_eyes", BindingFlags.NonPublic | BindingFlags.Instance)
+                .GetValue(rig);
+
         private static Bounds ModelBounds(GameObject robot)
         {
             var renderers = Model(robot).GetComponentsInChildren<MeshRenderer>();
@@ -60,21 +67,20 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TheRusherIsASkitterBot_NotACapsule()
         {
             _robot = NewRobot(EnemyKind.Rusher);
-            _robot.AddComponent<RobotRig>();
+            var rig = _robot.AddComponent<RobotRig>();
             yield return null;
 
             var model = Model(_robot);
             Assert.IsNotNull(model, "the rusher never built a model.");
 
+            // MV-451: parts are generated geometry now, named generically "Part" (see CharacterPart) —
+            // there is no "Pod"/"Leg"/"Head"/"Claw" to look up by name any more. Which kind built which
+            // distinctly-sized body is RobotBodySizeTests' claim now (EditMode, runs against every kind).
             var parts = model.GetComponentsInChildren<MeshRenderer>();
             Assert.Greater(parts.Length, 6,
                 "the rusher is barely more than the capsule it replaced. A body you read at a glance " +
                 "needs a silhouette, and a silhouette needs corners.");
-
-            foreach (var required in new[] { "Pod", "Leg", "Head", "Eye", "Claw" })
-                Assert.IsTrue(model.GetComponentsInChildren<Transform>().Any(t => t.name == required),
-                    $"the rusher has no '{required}'. The legs and the shear-arms are what make it a " +
-                    "skittering garden bot rather than a blob.");
+            Assert.Greater(Eyes(rig).Length, 0, "the rusher built no eye tell.");
 
             // The greybox is gone — but its COLLIDERS and controller are not. Gameplay still points at it.
             Assert.IsFalse(_robot.GetComponent<MeshRenderer>().enabled,
@@ -87,16 +93,20 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TheBruiserIsARollerBot_NotACube()
         {
             _robot = NewRobot(EnemyKind.Bruiser);
-            _robot.AddComponent<RobotRig>();
+            var rig = _robot.AddComponent<RobotRig>();
             yield return null;
 
             var model = Model(_robot);
             Assert.IsNotNull(model, "the bruiser never built a model.");
 
-            foreach (var required in new[] { "Chassis", "Tread", "Visor", "Eye", "Roller", "Arm" })
-                Assert.IsTrue(model.GetComponentsInChildren<Transform>().Any(t => t.name == required),
-                    $"the bruiser has no '{required}'. The treads and the roller drum are what make it a " +
-                    "heavy garden machine rather than a violet box.");
+            // MV-451: see TheRusherIsASkitterBot_NotACapsule — no more named parts to look for.
+            var parts = model.GetComponentsInChildren<MeshRenderer>();
+            Assert.Greater(parts.Length, 6,
+                "the bruiser is barely more than the cube it replaced. A body you read at a glance " +
+                "needs a silhouette, and a silhouette needs corners.");
+            Assert.AreEqual(2, Eyes(rig).Length,
+                "the bruiser must keep its two-eye visor — one kind breaking the one-eye rule is what " +
+                "makes the rule legible.");
         }
 
         /// <summary>
@@ -107,7 +117,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator NoPartOfEitherRobotShipsMagenta()
         {
-            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Bomber, EnemyKind.Blinker })
+            foreach (var kind in new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Launcher, EnemyKind.Blinker })
             {
                 var robot = NewRobot(kind);
                 robot.AddComponent<RobotRig>();
@@ -217,32 +227,26 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         /// <summary>
-        /// The Bomber (MV-329): before this it fell through to <see cref="RobotRig.BuildRusher"/> and
-        /// wore the rusher's shear-arms and leaning pod — exactly the wrong read for a kind that never
-        /// closes to melee. It needs its own launcher-rack parts and none of the rusher's melee tells.
+        /// The Launcher (MV-329, MV-451): before MV-329 it fell through to the rusher's build and wore
+        /// its shear-arms and leaning pod. MV-451 generalised the "did this kind fall through to
+        /// another kind's body" claim into RobotBodySizeTests (EditMode, every kind, checked against
+        /// its own archetype height) — that is where a fallthrough regression would be caught now. This
+        /// keeps the PlayMode-only claims: a real model gets built, it has an eye tell, and it does not
+        /// out-size Max.
         /// </summary>
         [UnityTest]
-        public IEnumerator TheBomberIsAMissileLauncher_NotARusher()
+        public IEnumerator TheLauncherIsAMissileLauncher_NotARusher()
         {
-            _robot = NewRobot(EnemyKind.Bomber);
-            _robot.AddComponent<RobotRig>();
+            _robot = NewRobot(EnemyKind.Launcher);
+            var rig = _robot.AddComponent<RobotRig>();
             yield return null;
 
             var model = Model(_robot);
-            Assert.IsNotNull(model, "the Bomber never built a model.");
-
-            var names = model.GetComponentsInChildren<Transform>().Select(t => t.name).ToList();
-
-            foreach (var required in new[] { "Tube", "Magazine", "Hull", "Eye" })
-                Assert.IsTrue(names.Contains(required),
-                    $"the Bomber has no '{required}'. The launcher rack is what makes it read as a " +
-                    "missile launcher rather than another rusher.");
-
-            Assert.IsFalse(names.Contains("Claw"),
-                "the Bomber is still wearing the rusher's shear-arms — it fell through to BuildRusher.");
+            Assert.IsNotNull(model, "the Launcher never built a model.");
+            Assert.Greater(Eyes(rig).Length, 0, "the Launcher built no eye tell.");
 
             Assert.Less(ModelBounds(_robot).size.y, 1.83f,
-                "the Bomber out-sizes Max. A swarm of things bigger than the player reads as a moving " +
+                "the Launcher out-sizes Max. A swarm of things bigger than the player reads as a moving " +
                 "wall, not as enemies (YT-74).");
         }
 
@@ -255,11 +259,10 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TheEyeIsLitAndGold_AtRest()
         {
             _robot = NewRobot(EnemyKind.Rusher);
-            _robot.AddComponent<RobotRig>();
+            var rig = _robot.AddComponent<RobotRig>();
             yield return null;
 
-            var eye = Model(_robot).GetComponentsInChildren<Transform>().First(t => t.name == "Eye")
-                                   .GetComponent<MeshRenderer>();
+            var eye = Eyes(rig)[0];
             var mpb = new MaterialPropertyBlock();
             eye.GetPropertyBlock(mpb);
             Color c = mpb.GetColor("_BaseColor");

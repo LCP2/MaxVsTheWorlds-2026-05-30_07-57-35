@@ -15,10 +15,10 @@ namespace MaxWorlds.Tests.EditMode
         private static readonly EnemyArchetype Heavy = EnemyArchetype.Heavy;
         private static readonly EnemyArchetype Brute = EnemyArchetype.Brute;
         private static readonly EnemyArchetype Gunner = EnemyArchetype.Gunner;
-        private static readonly EnemyArchetype Bomber = EnemyArchetype.Bomber;
+        private static readonly EnemyArchetype Launcher = EnemyArchetype.Launcher;
         private static readonly EnemyArchetype Blinker = EnemyArchetype.Blinker;
         private static readonly EnemyArchetype[] AllArchetypes =
-            { Rusher, Bruiser, Heavy, Brute, Gunner, Bomber, Blinker };
+            { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker };
 
         [Test]
         public void Bruiser_IsSlowerAndTougherThanTheRusher()
@@ -166,17 +166,17 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(EnemyKind.Heavy, EnemyArchetype.Of(EnemyKind.Heavy).Kind);
             Assert.AreEqual(EnemyKind.Brute, EnemyArchetype.Of(EnemyKind.Brute).Kind);
             Assert.AreEqual(EnemyKind.Gunner, EnemyArchetype.Of(EnemyKind.Gunner).Kind);
-            Assert.AreEqual(EnemyKind.Bomber, EnemyArchetype.Of(EnemyKind.Bomber).Kind);
+            Assert.AreEqual(EnemyKind.Launcher, EnemyArchetype.Of(EnemyKind.Launcher).Kind);
             Assert.AreEqual(EnemyKind.Blinker, EnemyArchetype.Of(EnemyKind.Blinker).Kind);
         }
 
-        // --- Archetypes (MV-293): Gunner (ranged laser) / Bomber (homing missile) / Blinker (teleport) ---
+        // --- Archetypes (MV-293): Gunner (ranged laser) / Launcher (homing missile) / Blinker (teleport) ---
 
         [Test]
         public void RangedKinds_KeepTheirDistance_MeleeKindsDoNot()
         {
             Assert.Greater(Gunner.StandoffRange, 0f, "a Gunner that never backs off is just a rusher");
-            Assert.Greater(Bomber.StandoffRange, 0f, "a Bomber that never backs off is just a rusher");
+            Assert.Greater(Launcher.StandoffRange, 0f, "a Launcher that never backs off is just a rusher");
             Assert.LessOrEqual(Blinker.StandoffRange, 0f, "the Blinker closes to melee, it doesn't kite");
 
             foreach (var a in new[] { Rusher, Bruiser, Heavy, Brute })
@@ -187,7 +187,7 @@ namespace MaxWorlds.Tests.EditMode
         public void OnlyTheBlinker_Teleports()
         {
             Assert.Greater(Blinker.TeleportCooldown, 0f);
-            foreach (var a in new[] { Rusher, Bruiser, Heavy, Brute, Gunner, Bomber })
+            foreach (var a in new[] { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher })
                 Assert.LessOrEqual(a.TeleportCooldown, 0f, $"{a.Kind} must not blink — only the Blinker does");
         }
 
@@ -198,11 +198,11 @@ namespace MaxWorlds.Tests.EditMode
             // (RobotEnemy.TickChase's holdsFire check) only makes sense if there is a real gap between
             // "too close to fire" and "too far to fire" for it to retreat INTO.
             Assert.Greater(Gunner.LungeRange, Gunner.StandoffRange, "no room to actually kite in");
-            Assert.Greater(Bomber.LungeRange, Bomber.StandoffRange, "no room to actually kite in");
+            Assert.Greater(Launcher.LungeRange, Launcher.StandoffRange, "no room to actually kite in");
         }
 
         [Test]
-        public void BomberAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
+        public void LauncherAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
         {
             // EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame pins that only the
             // Bruiser survives a full-health rusher's-worth of damage — every small-tier kind must
@@ -212,7 +212,7 @@ namespace MaxWorlds.Tests.EditMode
             // MV-404 (16 Aug 2026, Lee) deliberately exempted the Gunner from this invariant: its
             // health was raised ~50% above the rusher's on purpose, so it no longer belongs in this
             // assertion — see EnemyArchetype.Gunner's doc comment for the reversal.
-            Assert.LessOrEqual(Bomber.MaxHealth, Rusher.MaxHealth);
+            Assert.LessOrEqual(Launcher.MaxHealth, Rusher.MaxHealth);
             Assert.LessOrEqual(Blinker.MaxHealth, Rusher.MaxHealth);
         }
 
@@ -228,7 +228,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void GunnerAndBomber_ReadDifferently_EvenSharingTheRushersSilhouetteFamily()
+        public void GunnerAndLauncher_ReadDifferently_EvenSharingTheRushersSilhouetteFamily()
         {
             // Pillar 4 usually means silhouette; here the behaviour DATA has to diverge instead, since
             // both still share the rusher's small capsule Shape/BodyScale — that field only sizes the
@@ -236,9 +236,9 @@ namespace MaxWorlds.Tests.EditMode
             // The Gunner's actual on-screen model diverged from the rusher's own later (MV-312,
             // RobotRig.BuildGunner) without touching this archetype data at all — the visual silhouette
             // is authored independently of BodyScale, so that fix belongs entirely in RobotRig, not here.
-            Assert.Greater(Bomber.ContactRadius, Gunner.ContactRadius,
-                "the Bomber's splash must read as an AREA, wider than the Gunner's beam");
-            Assert.Greater(Bomber.TelegraphTime, Gunner.TelegraphTime,
+            Assert.Greater(Launcher.ContactRadius, Gunner.ContactRadius,
+                "the Launcher's splash must read as an AREA, wider than the Gunner's beam");
+            Assert.Greater(Launcher.TelegraphTime, Gunner.TelegraphTime,
                 "a lobbed missile should telegraph heavier than a snap-aimed beam");
         }
 
@@ -324,11 +324,11 @@ namespace MaxWorlds.Tests.EditMode
             var rates = new EnemyMix.MixRates(
                 bruiserEvery: 100, firstBruiserAt: 100,     // effectively off, out of the way
                 gunnerEvery: 6, firstGunnerAt: 5,
-                bomberEvery: 8, firstBomberAt: 7,
+                launcherEvery: 8, firstLauncherAt: 7,
                 blinkerEvery: 10, firstBlinkerAt: 9);
 
             Assert.AreEqual(EnemyKind.Gunner, EnemyMix.KindFor(6, rates));
-            Assert.AreEqual(EnemyKind.Bomber, EnemyMix.KindFor(8, rates));
+            Assert.AreEqual(EnemyKind.Launcher, EnemyMix.KindFor(8, rates));
             Assert.AreEqual(EnemyKind.Blinker, EnemyMix.KindFor(10, rates));
             Assert.AreEqual(EnemyKind.Rusher, EnemyMix.KindFor(1, rates), "off-cadence emits stay rusher");
         }
@@ -336,23 +336,23 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MixRates_RarestKindWinsACoincidentSlot()
         {
-            // 40 is divisible by both 8 (the bomber cadence) and 10 (the blinker cadence) — a genuine
+            // 40 is divisible by both 8 (the launcher cadence) and 10 (the blinker cadence) — a genuine
             // collision between two of the new kinds' slots.
             var rates = new EnemyMix.MixRates(
                 bruiserEvery: 4, firstBruiserAt: 3,
                 gunnerEvery: 6, firstGunnerAt: 5,
-                bomberEvery: 8, firstBomberAt: 7,
+                launcherEvery: 8, firstLauncherAt: 7,
                 blinkerEvery: 10, firstBlinkerAt: 9);
 
             Assert.AreEqual(EnemyKind.Blinker, EnemyMix.KindFor(40, rates),
-                "40 is a Bomber AND a Blinker slot — the rarer kind (Blinker) must win");
+                "40 is a Launcher AND a Blinker slot — the rarer kind (Blinker) must win");
         }
 
         [Test]
         public void IsLarge_TreatsTheThreeNewKindsAsLarge_TooLikeBruiserHeavyAndBrute()
         {
             Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Gunner));
-            Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Bomber));
+            Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Launcher));
             Assert.IsTrue(EnemyArchetype.IsLarge(EnemyKind.Blinker));
         }
 
@@ -365,7 +365,7 @@ namespace MaxWorlds.Tests.EditMode
         // same point), so the two invariant tests below exempt the Gunner rather than pin a speed
         // nerf nobody asked for.
         private static readonly EnemyArchetype[] ArchetypesRankedBySpeedVsHealth =
-            { Rusher, Bruiser, Heavy, Brute, Bomber, Blinker };
+            { Rusher, Bruiser, Heavy, Brute, Launcher, Blinker };
 
         [Test]
         public void WeakerArchetypesAreNeverSlowerThanToughterOnes()

@@ -9,7 +9,7 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-447 cause 4: <c>RobotEnemy.TickChase</c>'s old ranged-standoff check
     /// (<c>dist &lt; standoffRange</c>) inverted the movement direction by a full 180 degrees the
-    /// instant <c>dist</c> crossed a single number. A Gunner/Bomber sitting exactly at
+    /// instant <c>dist</c> crossed a single number. A Gunner/Launcher sitting exactly at
     /// <c>standoffRange</c> — which is exactly where it settles, since that's the distance it is
     /// steering to hold — alternated advance/retreat every single tick by construction. Replaced with
     /// a band (<see cref="RobotEnemy"/>'s <c>StandoffBackOffFraction</c>/<c>StandoffCloseInFraction</c>):
@@ -125,29 +125,29 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void InsideTheBand_FacesThePlayerWithoutMoving()
         {
-            float standoff = EnemyArchetype.Bomber.StandoffRange;
-            var bomber = NewEnemy(EnemyArchetype.Bomber, new Vector3(0f, 0f, standoff));
+            float standoff = EnemyArchetype.Launcher.StandoffRange;
+            var launcher = NewEnemy(EnemyArchetype.Launcher, new Vector3(0f, 0f, standoff));
             try
             {
-                GiveSight(bomber);
-                Vector3 before = bomber.transform.position;
+                GiveSight(launcher);
+                Vector3 before = launcher.transform.position;
 
                 // RotateToward caps the turn rate (MV-434), so facing the player from a standing start
                 // takes several ticks — the position must stay put across every one of them, not just
                 // the first, while the facing catches up.
                 for (int i = 0; i < 60; i++)
                 {
-                    InvokeTickChase(bomber, 0.016f);
-                    Assert.AreEqual(before, bomber.transform.position, $"tick {i}: moved while holding in the band");
+                    InvokeTickChase(launcher, 0.016f);
+                    Assert.AreEqual(before, launcher.transform.position, $"tick {i}: moved while holding in the band");
                 }
 
-                Vector3 toPlayer = (_playerGo.transform.position - bomber.transform.position).normalized;
-                Assert.Greater(Vector3.Dot(bomber.transform.forward, toPlayer), 0.9f,
+                Vector3 toPlayer = (_playerGo.transform.position - launcher.transform.position).normalized;
+                Assert.Greater(Vector3.Dot(launcher.transform.forward, toPlayer), 0.9f,
                     "must end up facing the player while holding, not frozen at whatever angle it arrived at");
             }
             finally
             {
-                Object.DestroyImmediate(bomber.gameObject);
+                Object.DestroyImmediate(launcher.gameObject);
             }
         }
     }

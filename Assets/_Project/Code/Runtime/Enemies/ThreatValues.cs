@@ -18,7 +18,7 @@ namespace MaxWorlds.Enemies
         // four above until a real per-type calibration lands — sit between Bruiser and Heavy, since
         // each trades the bruiser's raw melee threat for standoff/mobility pressure instead.
         public const float Gunner = 3.0f;
-        public const float Bomber = 3.6f;
+        public const float Launcher = 3.6f;
         public const float Blinker = 3.3f;
 
         public static float Of(EnemyKind kind) => kind switch
@@ -27,7 +27,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Heavy => Heavy,
             EnemyKind.Brute => Brute,
             EnemyKind.Gunner => Gunner,
-            EnemyKind.Bomber => Bomber,
+            EnemyKind.Launcher => Launcher,
             EnemyKind.Blinker => Blinker,
             _ => Rusher,
         };

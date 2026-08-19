@@ -12,7 +12,7 @@ namespace MaxWorlds.VFX
     /// (<see cref="WaterBalloonAimMesh.LocalPositionOnArc"/>), so what you aimed is what you watch fly.
     ///
     /// Free-flying, not pooled — the same "short-lived, never seen twice, not worth a pool" lifetime
-    /// <see cref="MaxWorlds.Enemies.HomingMissile"/> already uses for the Bomber's own projectile.
+    /// <see cref="MaxWorlds.Enemies.HomingMissile"/> already uses for the Launcher's own projectile.
     /// Owned entirely by the art stream: it carries no gameplay state and makes no gameplay decision —
     /// <see cref="MaxWorlds.Weapons.PlayerAbilities.TryThrowWaterBalloon"/> computes the landing point
     /// and flight time and hands both to <see cref="Fire"/>; this only answers "what does the throw
