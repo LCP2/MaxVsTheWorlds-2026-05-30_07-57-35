@@ -181,6 +181,12 @@ namespace MaxWorlds.Dev
         {
             RigState.Reset();
             PickupWallet.Reset();
+
+            // MV-457: sheds now unlock a whole category, root nodes stay unreached until then — the
+            // reference shot means to show the whole board open (matching MV-423.png's own "every
+            // category lit" reference), not one mid-run's actual shed progression, so force every
+            // category open here rather than threading shed picks through the fixture.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
         }
 
         private static void SpendRigFixtureLevels()

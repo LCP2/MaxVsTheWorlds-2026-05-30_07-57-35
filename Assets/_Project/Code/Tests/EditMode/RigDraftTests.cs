@@ -14,7 +14,14 @@ namespace MaxWorlds.Tests.EditMode
     {
         [SetUp]
         [TearDown]
-        public void Clear() => RigState.Reset();
+        public void Clear()
+        {
+            RigState.Reset();
+            // This suite is about the node-level draw's own mechanics (sampling, exhaustion,
+            // no-repeats), not MV-457's category-lock gate (RigStateTests owns that) — force every
+            // category open so the run-start pool matches this file's own long-standing expectations.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
+        }
 
         [Test]
         public void FreshStateDrawsTheMaxCandidateCount()

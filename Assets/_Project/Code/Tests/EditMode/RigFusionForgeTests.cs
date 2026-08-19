@@ -24,7 +24,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             RigState.Reset();
             RigFusionState.ResetForTests();
-            PickupWallet.Reset();
+            PickupWallet.Reset();   // MV-457: also calls RigState.Reset() — the category unlock below must come AFTER this
+            // This suite is about fusion ELIGIBILITY (ownership-gated), not MV-457's shed/category-lock
+            // gate (RigStateTests owns that) — force every category open so a root id this file drafts
+            // directly stays reached, as it always was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
         }
 
         [TearDown]
@@ -73,16 +77,21 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary><paramref name="rootA"/>/<paramref name="rootB"/> are root (parentless) abilities
         /// of the fusion's own two parent categories, per model.rules — <c>RigState.AcquireCap</c>
-        /// grants them directly with no ancestor chain to walk first.</summary>
+        /// grants them directly with no ancestor chain to walk first. Self-unlocks each root's own
+        /// category before drafting it (MV-457): the caller (<see cref="AFusionCannotBeForgedUntilBothParentCategoriesAreLit_AllFour"/>)
+        /// calls <see cref="RigState.Reset"/> between fusions, which re-locks everything but PRIMARY, so
+        /// this can't rely on a one-time SetUp unlock.</summary>
         private static void AssertIneligibleThenEligibleOnceBothLit(string fusionId, string rootA, string rootB)
         {
             Assert.That(RigFusionState.IsEligible(fusionId), Is.False,
                 $"'{fusionId}' must be ineligible with neither parent category owned beyond the run-start baseline");
 
+            RigState.UnlockCategory(RigBoard.Category(rootA));
             RigState.AcquireCap(rootA);
             Assert.That(RigFusionState.IsEligible(fusionId), Is.False,
                 $"'{fusionId}' must stay ineligible with only ONE parent category lit ({rootA})");
 
+            RigState.UnlockCategory(RigBoard.Category(rootB));
             RigState.AcquireCap(rootB);
             Assert.That(RigFusionState.IsEligible(fusionId), Is.True,
                 $"'{fusionId}' must become eligible once BOTH parent categories are lit ({rootA} + {rootB})");

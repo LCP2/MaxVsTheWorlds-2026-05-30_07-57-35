@@ -20,7 +20,19 @@ namespace MaxWorlds.Tests.EditMode
         public void Clear()
         {
             WeaponSystemState.Reset();
+            UnlockAllCategories();
             DevTuning.Reset();
+        }
+
+        /// <summary>This suite is about the enum-typed compatibility layer over RigState (tracks,
+        /// abilities, Water Balloon tracks), not MV-457's shed/category-lock gate (RigStateTests owns
+        /// that) — force every category open so every ability id this file exercises stays reached, as
+        /// it always was before MV-457. Called after every <c>WeaponSystemState.Reset()</c> in this
+        /// file, including the one inside a test body (MV-435's per-id HUD-signal test re-resets per
+        /// iteration).</summary>
+        private static void UnlockAllCategories()
+        {
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
         }
 
         // ---------------------------------------------------------------- fresh state
@@ -342,6 +354,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (string id in new[] { "m_spd", "m_tp", "s_bal", "e_ff", "u_sen" })
             {
                 WeaponSystemState.Reset();
+                UnlockAllCategories();
                 int fired = 0;
                 System.Action handler = () => fired++;
                 WeaponSystemState.Changed += handler;

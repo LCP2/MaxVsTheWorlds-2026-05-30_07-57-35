@@ -118,6 +118,7 @@ namespace MaxWorlds.Weapons
 
         private static Dictionary<string, RigNodeDef> s_nodes;
         private static string[] s_allIds;
+        private static string[] s_allCategoryIds;
         private static Dictionary<string, RigFusionDef> s_fusions;
         private static RigFusionDef[] s_allFusions;
 
@@ -127,6 +128,7 @@ namespace MaxWorlds.Weapons
 
             s_nodes = new Dictionary<string, RigNodeDef>();
             s_allIds = Array.Empty<string>();
+            s_allCategoryIds = Array.Empty<string>();
             s_fusions = new Dictionary<string, RigFusionDef>();
             s_allFusions = Array.Empty<RigFusionDef>();
 
@@ -160,6 +162,11 @@ namespace MaxWorlds.Weapons
             }
             s_allIds = ids.ToArray();
 
+            var categoryIds = new List<string>(wire.categories.Length);
+            foreach (RigCategoryWire c in wire.categories)
+                if (c != null && !string.IsNullOrEmpty(c.id)) categoryIds.Add(c.id);
+            s_allCategoryIds = categoryIds.ToArray();
+
             var fusions = new List<RigFusionDef>(wire.fusions.Length);
             foreach (RigFusionWire f in wire.fusions)
             {
@@ -175,6 +182,11 @@ namespace MaxWorlds.Weapons
         /// pool a Morphing Module draft may draw from now that every ability shares the same gate
         /// (MV-436).</summary>
         public static IReadOnlyList<string> AllIds { get { EnsureLoaded(); return s_allIds; } }
+
+        /// <summary>Every category id in the JSON's own authored order (<c>PRIMARY, SECONDARY, ENERGY,
+        /// MOVE, SUPPORT</c>) — the full pool <see cref="RigDraft.DrawCandidateCategories"/> draws its
+        /// shed offer from (MV-457).</summary>
+        public static IReadOnlyList<string> AllCategoryIds { get { EnsureLoaded(); return s_allCategoryIds; } }
 
         /// <summary>The most candidates a single Morphing Module draw offers.</summary>
         public static int DraftMaxCandidates => DraftMaxCandidatesConst;

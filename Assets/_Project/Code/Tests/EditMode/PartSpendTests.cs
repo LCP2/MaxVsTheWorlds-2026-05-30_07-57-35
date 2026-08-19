@@ -21,6 +21,10 @@ namespace MaxWorlds.Tests.EditMode
         {
             PickupWallet.Reset();
             WeaponSystemState.Reset();
+            // This suite is about the part-spend gate (owned/unowned, at-cap), not MV-457's
+            // shed/category-lock gate (RigStateTests owns that) — force every category open so a root
+            // ability this file drafts directly stays reached, as it always was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             DevTuning.Reset();
         }
 
