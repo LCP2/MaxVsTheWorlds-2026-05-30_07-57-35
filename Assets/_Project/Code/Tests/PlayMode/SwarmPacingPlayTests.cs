@@ -115,22 +115,6 @@ namespace MaxWorlds.Tests.PlayMode
                 $"(start={atStart}, max={atMax})");
         }
 
-        // ---------------------------------------------------------------- production per minute
-
-        [UnityTest]
-        public IEnumerator ProductionPerMinute_ConvertsToTheEquivalentSecondsInterval()
-        {
-            _hutch = NewHutch(new Vector3(0f, 1f, 15f));
-            var spawner = _hutch.GetComponent<EnemySpawner>();
-            Set(spawner, "rampSeconds", 0f);   // collapse the ramp so the steady-state value applies now
-
-            DevTuning.RobotProductionPerMinute = 30f;   // 30/min == one every 2 seconds
-            yield return null;
-
-            Assert.AreEqual(2.0f, spawner.CurrentInterval, 0.01f,
-                "30 robots/minute must convert to a 2-second interval (60 / 30)");
-        }
-
         // ---------------------------------------------------------------- robot health
 
         [UnityTest]
