@@ -14,7 +14,8 @@ namespace MaxWorlds.UI
     /// <c>rig_board.json</c> (MV-422's canonical model, MV-423's own <see cref="RigBoardLayout"/> for
     /// the geometry/colours/icons that model layer deliberately ignores). Every category, ability and
     /// fusion node is placed at the data file's own pixel coordinates on a fixed 1920x1080 board frame
-    /// — <see cref="RigBoardLayoutTests"/> asserts this exactly, so this class never re-derives a
+    /// — position/size conformance is asserted against the data file by MV-463's PNG-vs-spec harness
+    /// (MV-465 retired the EditMode coordinate assertions), so this class never re-derives a
     /// position; if a layout decision isn't in the JSON, it doesn't belong here.
     ///
     /// Top bar keeps its existing geometry (28/104 inset/height), CLOSE, QUIT TO MENU and the CELLS
@@ -74,7 +75,10 @@ namespace MaxWorlds.UI
         private const int HexSides = 6;
         private const int FusionSides = 4;
         private const float HexRotationDeg = -90f;   // pointy-top: vertex angles 60*i-90
-        private const float FusionRotationDeg = 45f; // MV-433: diamond, not the hex's pointy-top rotation
+        // MV-433: diamond (vertex up/down/left/right), not the hex's pointy-top rotation. MV-462: was 45
+        // to compensate for HudTextures.PolygonEdge's old off-by-half-segment vertex math (fixed there
+        // now) — 0 is what actually puts a vertex at 0/90/180/270 under the corrected formula.
+        private const float FusionRotationDeg = 0f;
         private const float Sqrt3 = 1.7320508f;
         // MV-445 defect 6: was 34 — at that size, 6 sockets (socketsWidth 224px) did not fit the
         // socket row's own available half of BuildPartsTray's old fixed 340px width (154px), so the
@@ -288,8 +292,14 @@ namespace MaxWorlds.UI
                 var v = kv.Value;
                 if (v.OuterRing != null && v.OuterRing.gameObject.activeSelf)
                 {
+                    // MV-462 defect 3: a draftable node in an unlit family must stay dimmed every frame,
+                    // not just at the moment Refresh() ran — Update() drives this pulse independently of
+                    // Refresh(), so without this factor the ring/halo would flash back up to full
+                    // brightness on every tick regardless of the static dim RefreshAbilityNode applied.
+                    float dim = FamilyLitForAbility(kv.Key) ? 1f : RigBoardLayout.FamilyDimFactor;
+
                     var c = v.OuterRing.color;
-                    c.a = pulse;
+                    c.a = pulse * dim;
                     v.OuterRing.color = c;
 
                     // MV-433/MV-443: the draftable node's soft family-tinted halo pulses with the same
@@ -298,7 +308,7 @@ namespace MaxWorlds.UI
                     if (v.Glow != null && v.Glow.gameObject.activeSelf)
                     {
                         var g = v.Glow.color;
-                        g.a = pulse * RigBoardLayout.GlowAlphaDraft;
+                        g.a = pulse * RigBoardLayout.GlowAlphaDraft * dim;
                         v.Glow.color = g;
                     }
                 }
@@ -346,10 +356,14 @@ namespace MaxWorlds.UI
 
         /// <summary>A Morphing Module was collected (MV-424, replacing the old shed → badge → BUILD
         /// ABILITY modal chain): 0 candidates consumes the module with nothing granted, 1 grants it
-        /// directly with no screen, 2-3 opens THE RIG with just those candidates lit on the board —
+        /// directly with no screen, 2(-3) opens THE RIG with just those candidates lit on the board —
         /// numbered, TAKE-labelled — and everything else dimmed. One tap takes it and closes the
-        /// screen; the two left behind simply stay in <see cref="RigState.EligibleCapIds"/> for a
-        /// later module.</summary>
+        /// screen. MV-457: a shed now draws up to 2 locked CATEGORY ids instead of up to 3 ability ids
+        /// — <paramref name="candidateIds"/> takes either shape unchanged, since
+        /// <see cref="GrantDraftCandidate"/> and the board's own <c>_categoryNodes</c>/<c>_abilityNodes</c>
+        /// lookups both key off the same disjoint id namespaces (all-caps category ids vs lowercase
+        /// ability ids). Whichever candidate is left behind simply stays locked/unowned for a later
+        /// module.</summary>
         public void OpenMorphingModuleDraft(string[] candidateIds)
         {
             if (candidateIds == null || candidateIds.Length == 0)
@@ -359,7 +373,7 @@ namespace MaxWorlds.UI
             }
             if (candidateIds.Length == 1)
             {
-                WeaponSystemState.AcquireById(candidateIds[0]);
+                GrantDraftCandidate(candidateIds[0]);
                 return;
             }
 
@@ -392,7 +406,14 @@ namespace MaxWorlds.UI
             int banked = PickupWallet.PartsBanked;
             _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";
 
-            bool capacitySpendable = banked > 0 && PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel;
+            // MV-458: e_cel is no longer part-only — the chip is actionable (and tappable) whenever
+            // either currency could pay for whichever action (unlock/upgrade) e_cel is currently in.
+            bool cellsOwned = RigState.IsOwned("e_cel");
+            bool capacityActionable = cellsOwned
+                ? PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel
+                : RigState.IsCellUnlockable("e_cel");
+            int capacityCostCells = cellsOwned ? CellSpend.UpgradeCostCells : CellSpend.UnlockCostCells;
+            bool capacitySpendable = capacityActionable && (PickupWallet.PowerCells >= capacityCostCells || banked > 0);
             _cellsChipButton.interactable = capacitySpendable;
             // MV-446 defect 1: was tinting the BG PartsColor/amber when a capacity level-up is
             // affordable — against the border/text's own colours.sec cyan (never touched here) that put
@@ -421,19 +442,25 @@ namespace MaxWorlds.UI
             foreach (var ab in RigBoardLayout.Abilities)
             {
                 Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
-                bool draftable = RigState.IsReached(ab.Id) && !RigState.IsOwned(ab.Id);
+                // MV-458: reads the tightened cells-unlock gate, not the looser IsReached the (now
+                // production-dead) ability-level Morphing Module draft pool still uses — a connector
+                // must not glow "live" toward a node the board can't actually let you tap open yet.
+                bool draftable = RigState.IsCellUnlockable(ab.Id) && !RigState.IsOwned(ab.Id);
+                // MV-462 defect 3: a connector is wholly inside one family (both ends share ab.Category),
+                // so it dims exactly like every other graphic in an unlit one.
+                bool familyLit = CategoryHasOwnedAbility(ab.Category);
 
                 if (string.IsNullOrEmpty(ab.Parent))
                 {
                     if (!_connectors.TryGetValue($"conn:cat:{ab.Category}>{ab.Id}", out var img)) continue;
-                    bool live = CategoryHasOwnedAbility(ab.Category) || draftable;
-                    img.color = new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
+                    bool live = familyLit || draftable;
+                    img.color = DimIfUnlit(new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim), familyLit);
                 }
                 else
                 {
                     if (!_connectors.TryGetValue($"conn:ab:{ab.Parent}>{ab.Id}", out var img)) continue;
                     bool live = RigState.IsOwned(ab.Parent);
-                    img.color = new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
+                    img.color = DimIfUnlit(new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim), familyLit);
                 }
             }
 
@@ -457,6 +484,17 @@ namespace MaxWorlds.UI
             return false;
         }
 
+        /// <summary>MV-462 defect 3: is <paramref name="abilityId"/>'s own category lit (≥1 owned
+        /// ability anywhere in it)? <see cref="Update"/>'s per-frame pulse only has the ability id to
+        /// hand (from <c>_abilityNodes</c>'s own key), so this re-derives the category the same way
+        /// <see cref="RefreshAbilityNode"/> does at refresh time.</summary>
+        private static bool FamilyLitForAbility(string abilityId)
+        {
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Id == abilityId) return CategoryHasOwnedAbility(ab.Category);
+            return true;
+        }
+
         /// <summary>Dims the whole board behind a scrim and brings just the candidate nodes back above
         /// it (MV-424) — the design's own "everything else dimmed" (MV-423.png vs MV-424.png). The scrim
         /// also blocks taps to every non-candidate node while a draft is pending, same as the paused
@@ -469,8 +507,10 @@ namespace MaxWorlds.UI
 
             for (int i = 0; i < _draftCandidateIds.Count; i++)
             {
-                if (!_abilityNodes.TryGetValue(_draftCandidateIds[i], out var v)) continue;
-                v.Root.SetAsLastSibling();   // render above the scrim
+                string id = _draftCandidateIds[i];
+                RigNodeVisual v = _abilityNodes.TryGetValue(id, out var abilityVisual) ? abilityVisual
+                    : _categoryNodes.TryGetValue(id, out var categoryVisual) ? categoryVisual : null;
+                v?.Root.SetAsLastSibling();   // render above the scrim
             }
 
             UpdateDraftBandText();
@@ -483,6 +523,17 @@ namespace MaxWorlds.UI
         private void UpdateDraftBandText()
         {
             if (_draftBandTitle == null || _draftCandidateIds.Count == 0) return;
+
+            // MV-457: a shed's own draft now offers CATEGORY ids, not ability ids — RigBoard.Exists
+            // disambiguates the two disjoint id namespaces the same way GrantDraftCandidate does.
+            if (!RigBoard.Exists(_draftCandidateIds[0]))
+            {
+                _draftBandTitle.text = "MORPHING MODULE CAPTURED - CHOOSE A FAMILY";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage
+                _draftBandSubtitle.text = "Unlocks every ability in that family for the rest of the run.";
+                _draftBandReason.text = "The other family stays locked - the next shed offers it again.";
+                return;
+            }
+
             _draftBandTitle.text = "MORPHING MODULE CAPTURED - CHOOSE AN ABILITY";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage
             _draftBandSubtitle.text = "Only capabilities the tree already allows. A shed is the only way to own something new.";
             _draftBandReason.text = DraftReasonLine(_draftCandidateIds[0], _draftCandidateIds.Count - 1);
@@ -553,6 +604,16 @@ namespace MaxWorlds.UI
         private void RefreshCategoryNode(RigCategoryLayout cat, int banked)
         {
             if (!_categoryNodes.TryGetValue(cat.Id, out var v)) return;
+
+            int candidateIndex = _draftActive ? _draftCandidateIds.IndexOf(cat.Id) : -1;
+            if (candidateIndex >= 0)
+            {
+                RefreshCandidateNode(v, RigBoardLayout.Colour(cat.Family), cat.Id, candidateIndex);
+                return;
+            }
+            v.DraftBadge.gameObject.SetActive(false);
+            v.Button.interactable = false;   // MV-457: a category is only ever tappable as a draft candidate
+
             int owned = 0, total = 0;
             foreach (var ab in RigBoardLayout.Abilities)
             {
@@ -560,14 +621,19 @@ namespace MaxWorlds.UI
                 total++;
                 if (RigState.IsOwned(ab.Id)) owned++;
             }
-            bool lit = owned > 0;
+            // MV-457: "lit" now reads the shed's own unlock, not merely "has an owned ability" — a
+            // freshly-unlocked family reads lit immediately, before the player has spent anything into it.
+            bool lit = RigState.IsCategoryUnlocked(cat.Id);
+            // MV-462 defect 3: the family DIM is its own, older concept — "has an owned ability" — kept
+            // distinct from `lit` above so a shed-unlocked-but-still-empty family still dims correctly.
+            bool familyLit = CategoryHasOwnedAbility(cat.Id);
             Color family = RigBoardLayout.Colour(cat.Family);
             Color ink = RigBoardLayout.Colour("ink");
 
             if (_categoryPanels.TryGetValue(cat.Id, out var panel))
-                panel.color = new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark);
+                panel.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark), familyLit);
             if (_categoryPanelBorders.TryGetValue(cat.Id, out var border))
-                border.color = new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark);
+                border.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark), familyLit);
 
             if (lit)
             {
@@ -583,21 +649,29 @@ namespace MaxWorlds.UI
             }
             else
             {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.12f);
-                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.55f);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.12f), familyLit);
+                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.55f), familyLit);
                 v.Glow.gameObject.SetActive(false);
                 v.OuterRing.gameObject.SetActive(false);
-                v.Icon.color = new Color(family.r, family.g, family.b, 0.85f);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.85f), familyLit);
             }
 
             v.PillText.text = $"{owned}/{total}";
-            v.PillBg.color = PillBackdrop;
-            v.PillBorder.color = new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f);
-            v.PillText.color = lit ? family : new Color(family.r, family.g, family.b, 0.7f);
-            v.Label.color = new Color(ink.r, ink.g, ink.b, 0.62f);
+            v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
+            v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), familyLit);
+            v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), familyLit);
+            v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), familyLit);
 
             _ = banked;
         }
+
+        /// <summary>MV-462 defect 3: multiplies <paramref name="c"/>'s alpha by
+        /// <see cref="RigBoardLayout.FamilyDimFactor"/> when <paramref name="lit"/> is false, on top of
+        /// whatever state-specific alpha the caller already chose — an unowned family's locked-node
+        /// treatment (say) gets fainter still, it isn't replaced by a flat dim colour. A no-op when
+        /// <paramref name="lit"/> is true so a lit family's own per-node states are never touched.</summary>
+        private static Color DimIfUnlit(Color c, bool lit) =>
+            lit ? c : new Color(c.r, c.g, c.b, c.a * RigBoardLayout.FamilyDimFactor);
 
         private void RefreshAbilityNode(RigAbilityLayout ab, int banked)
         {
@@ -606,18 +680,21 @@ namespace MaxWorlds.UI
             int candidateIndex = _draftActive ? _draftCandidateIds.IndexOf(ab.Id) : -1;
             if (candidateIndex >= 0)
             {
-                RefreshCandidateNode(v, ab, candidateIndex);
+                RefreshCandidateNode(v, RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category)), ab.Label, candidateIndex);
                 return;
             }
             v.DraftBadge.gameObject.SetActive(false);
 
             bool owned = RigState.IsOwned(ab.Id);
-            bool reached = RigState.IsReached(ab.Id);
-            // Schema 3 (MV-436): every ability is unlocked the same way, so "reached and unowned"
-            // is the one capability state — it used to also require ab.Kind == "cap" back when a
-            // stat could be reached-and-spendable without ever being a draft candidate.
-            bool draftable = reached && !owned;
+            // MV-458: "draftable" now means cell-unlockable — its category open and, for a non-root
+            // node, its parent at level >= 2 (RigState.IsCellUnlockable, tighter than the IsReached the
+            // now production-dead ability-level Morphing Module draft pool still uses).
+            bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
             bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
+            // MV-462 defect 3: owned==true implies this ability's category already has ≥1 owned ability,
+            // so familyLit is always true on the `owned` branch below — DimIfUnlit only ever bites on
+            // the draftable/locked branches, which is exactly the "family with nothing owned" case.
+            bool familyLit = CategoryHasOwnedAbility(ab.Category);
 
             Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
             Color module = RigBoardLayout.Colour("module");
@@ -645,8 +722,8 @@ namespace MaxWorlds.UI
             }
             else if (draftable)
             {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.16f);
-                v.HexOutline.color = module;
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.16f), familyLit);
+                v.HexOutline.color = DimIfUnlit(module, familyLit);
                 // MV-433 item 3, MV-443 defect 5: the dashed-outer-ring halo is now a SOFT FAMILY glow
                 // (was module cyan) — the module tint lives on the border/dot instead so it still reads
                 // "draftable", pulsing in Update() alongside the ring itself. MV-446 defect 2: hex-tight
@@ -655,33 +732,37 @@ namespace MaxWorlds.UI
                 v.Glow.gameObject.SetActive(true);
                 v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurDraft);
                 v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
-                v.Glow.color = new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaDraft);
+                v.Glow.color = DimIfUnlit(new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaDraft), familyLit);
                 // MV-445 defect 4: OuterRing's RGB was never set here — Update()'s pulse only ever
                 // touched its alpha, leaving the dashed ring stuck at Color.clear's (0,0,0) RGB from
                 // BuildNodeShell, i.e. black dashes instead of the module cyan every other draftable
-                // tell uses.
+                // tell uses. MV-462 defect 3: Update() itself applies the family dim to the pulsed alpha
+                // (see its own comment) — the alpha set here is only ever the pre-pulse 0f, nothing to
+                // dim on this line.
                 v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
-                v.CapMarker.color = module;
-                v.PillText.text = "SHED";
-                v.PillBg.color = PillBackdrop;
-                v.PillBorder.color = module;
-                v.PillText.color = module;
+                v.CapMarker.color = DimIfUnlit(module, familyLit);
+                // MV-458: was "SHED" — a shed now only ever unlocks a whole CATEGORY (MV-457), never an
+                // individual node, so a draftable node's own unlock is this cell cost, tapped directly.
+                v.PillText.text = CellSpend.UnlockCostCells.ToString();
+                v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
+                v.PillBorder.color = DimIfUnlit(module, familyLit);
+                v.PillText.color = DimIfUnlit(module, familyLit);
                 v.Label.text = ab.Label;
-                v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f);
-                v.Icon.color = new Color(family.r, family.g, family.b, 0.95f);
+                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f), familyLit);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.95f), familyLit);
             }
             else   // not reached
             {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.035f);
-                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.24f);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), familyLit);
+                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.24f), familyLit);
                 v.Glow.gameObject.SetActive(false);
                 v.PillText.text = "LOCK";
-                v.PillBg.color = PillBackdrop;
-                v.PillBorder.color = new Color(family.r, family.g, family.b, 0.22f);
-                v.PillText.color = new Color(ink.r, ink.g, ink.b, 0.34f);
+                v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
+                v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.22f), familyLit);
+                v.PillText.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.34f), familyLit);
                 v.Label.text = "? ? ?";
-                v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f);
-                v.Icon.color = new Color(family.r, family.g, family.b, 0.40f);
+                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), familyLit);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
             }
 
             v.PartBadge.gameObject.SetActive(spendable);
@@ -754,11 +835,12 @@ namespace MaxWorlds.UI
         /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
         /// glow, numbered 1-3 in a badge above the hex, and <c>TAKE</c> in the level pill in place of
         /// the usual level/SHED/LOCK reading. Always tappable — draft candidates ignore the PARTS bank
-        /// entirely, a different currency from the amber "+" spend.</summary>
-        private void RefreshCandidateNode(RigNodeVisual v, RigAbilityLayout ab, int candidateIndex)
+        /// entirely, a different currency from the amber "+" spend. MV-457: shared by both an ability
+        /// node's own candidate render and a category node's — <paramref name="family"/>/<paramref name="label"/>
+        /// are passed in rather than re-derived from a <see cref="RigAbilityLayout"/>, since a category
+        /// candidate has no such layout to read.</summary>
+        private void RefreshCandidateNode(RigNodeVisual v, Color family, string label, int candidateIndex)
         {
-            Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
-
             v.OuterRing.gameObject.SetActive(false);
             v.CapMarker.gameObject.SetActive(false);
             v.PartBadge.gameObject.SetActive(false);
@@ -771,7 +853,7 @@ namespace MaxWorlds.UI
             v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
             v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);   // MV-424's own stronger draft-candidate glow, unchanged by MV-433/MV-446 (shape/size only)
             v.Icon.color = TextColor;
-            v.Label.text = ab.Label;
+            v.Label.text = label;
             v.Label.color = TextColor;
 
             v.PillText.text = "TAKE";
@@ -786,22 +868,39 @@ namespace MaxWorlds.UI
             v.Button.interactable = true;
         }
 
+        /// <summary>MV-458: cells first, parts as the rare fallback accelerant. An unowned node tries
+        /// <see cref="CellSpend.TryUnlockNode"/> (20 cells, needs its parent at level &gt;= 2); an owned
+        /// one tries <see cref="CellSpend.TryUpgradeNode"/> (10 cells). Either way, a cell spend that
+        /// can't afford/isn't eligible falls back to <see cref="PartSpend.TrySpendOnRigNode"/> — which
+        /// itself still only ever raises an already-owned node (unchanged, MV-436's own gate), so an
+        /// unowned node with insufficient cells and no banked part simply does nothing.</summary>
         private void OnRigNodeTapped(string id)
         {
             if (_draftActive)
             {
                 if (_draftCandidateIds.Contains(id))
                 {
-                    WeaponSystemState.AcquireById(id);
+                    GrantDraftCandidate(id);
                     Close();
                 }
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
             }
             if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
-            PartSpend.TrySpendOnRigNode(id);
+
+            bool spent = RigState.IsOwned(id) ? CellSpend.TryUpgradeNode(id) : CellSpend.TryUnlockNode(id);
+            if (!spent) PartSpend.TrySpendOnRigNode(id);
         }
 
-        private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
+        /// <summary>Grants a single draft candidate, whichever shape it is (MV-457): an ability node id
+        /// (<see cref="RigBoard.Exists"/>) routes through <see cref="WeaponSystemState.AcquireById"/> as
+        /// before; a category id (never a RIG node) unlocks the whole family via
+        /// <see cref="RigState.UnlockCategory"/> instead.</summary>
+        private static bool GrantDraftCandidate(string id) =>
+            RigBoard.Exists(id) ? WeaponSystemState.AcquireById(id) : RigState.UnlockCategory(id);
+
+        /// <summary>MV-458: e_cel is no longer special-cased — tapping the CELLS chip is just a
+        /// convenience shortcut to the exact same tap the e_cel hex node itself accepts.</summary>
+        private void OnCellsChipTapped() => OnRigNodeTapped("e_cel");
 
         /// <summary>MV-433 AC1: <c>colours.base</c>, forced fully opaque — the backdrop is meant to
         /// read as "the game is paused behind it; there is nothing to see through to," not a scrim, so
@@ -894,14 +993,33 @@ namespace MaxWorlds.UI
             _screenRoot.gameObject.SetActive(false);
         }
 
-        /// <summary>MV-433: recomputes and applies the board's scale-to-fit factor from the current
+        /// <summary>MV-433: recomputes and applies the board's scale-to-fit factor from the AMBIENT
         /// screen aspect. Called from <see cref="Build"/> once and from <see cref="Refresh"/> on every
         /// state change so a resize (or a different device) since the last <see cref="Open"/> is picked
-        /// up without needing its own event — cheap enough to just fold into the existing refresh.</summary>
+        /// up without needing its own event — cheap enough to just fold into the existing refresh.
+        ///
+        /// MV-462 defect 2: <c>Screen.width</c>/<c>Screen.height</c> is the ambient display/Game-view
+        /// size, which is NOT the same thing as whatever a caller is actually rendering this canvas into
+        /// — <c>UiScreensDirector</c>'s capture flips the canvas to <c>ScreenSpaceCamera</c> and renders
+        /// into an explicit w x h <c>RenderTexture</c> (already true of <c>ComputeScaleFactor</c>'s own
+        /// CanvasScaler override, for exactly the same reason), so a headless capture at 1920x1080 was
+        /// still reading whatever the ambient batchmode window happened to report, shrinking and
+        /// recentring a board that should have rendered at scale 1. See the explicit-aspect overload
+        /// below, which the capture harness now drives directly.</summary>
         private void ApplyBoardScale()
         {
-            if (_boardScaleRoot == null) return;
             float aspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
+            ApplyBoardScale(aspect);
+        }
+
+        /// <summary>Applies the scale-to-fit factor for an explicit aspect ratio, bypassing the ambient
+        /// <see cref="Screen"/> singleton entirely (MV-462 defect 2) — <c>UiScreensDirector</c> drives
+        /// this with its actual capture-target aspect the same way <see cref="Screen"/>-based
+        /// <c>ComputeScaleFactor</c> already bypasses <c>Screen</c> for the CanvasScaler. Public so both
+        /// the capture harness and an EditMode test can drive it without a real screen/window.</summary>
+        public void ApplyBoardScale(float aspect)
+        {
+            if (_boardScaleRoot == null) return;
             float scale = ComputeBoardScale(aspect);
             _boardScaleRoot.localScale = new Vector3(scale, scale, 1f);
         }
@@ -1042,10 +1160,10 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>The bottom band (MV-424): full width, anchored to the board's own bottom edge so
-        /// its position is pinned in the fixed 1920x1080 board frame regardless of Safe Area —
-        /// <see cref="RigBoardLayoutTests"/>'s own trick for exact-pixel assertions. Deliberately at the
-        /// BOTTOM, not the top: a top banner would cover the category row, and the whole value of
-        /// drafting on the board is seeing the current build while choosing (ticket, non-negotiable).</summary>
+        /// its position is pinned in the fixed 1920x1080 board frame regardless of Safe Area.
+        /// Deliberately at the BOTTOM, not the top: a top banner would cover the category row, and the
+        /// whole value of drafting on the board is seeing the current build while choosing (ticket,
+        /// non-negotiable).</summary>
         private void BuildDraftBand(RectTransform boardRoot)
         {
             const float bandHeight = 170f;
@@ -1184,7 +1302,10 @@ namespace MaxWorlds.UI
 
             shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
             shell.CapMarker.gameObject.SetActive(false);
-            shell.Button.interactable = false;
+            shell.Button.interactable = false;   // MV-457: only tappable while it's a shed draft candidate — see RefreshCategoryNode
+
+            string catId = cat.Id;   // capture by value, not the loop variable
+            shell.Button.onClick.AddListener(() => OnRigNodeTapped(catId));
             return shell;
         }
 

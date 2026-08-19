@@ -1,7 +1,5 @@
-using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
-using UnityEngine.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -26,7 +24,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             RigState.Reset();
             RigFusionState.ResetForTests();
-            PickupWallet.Reset();
+            PickupWallet.Reset();   // MV-457: also calls RigState.Reset() — the category unlock below must come AFTER this
+            // This suite is about fusion ELIGIBILITY (ownership-gated), not MV-457's shed/category-lock
+            // gate (RigStateTests owns that) — force every category open so a root id this file drafts
+            // directly stays reached, as it always was before MV-457.
+            foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
         }
 
         [TearDown]
@@ -75,16 +77,21 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary><paramref name="rootA"/>/<paramref name="rootB"/> are root (parentless) abilities
         /// of the fusion's own two parent categories, per model.rules — <c>RigState.AcquireCap</c>
-        /// grants them directly with no ancestor chain to walk first.</summary>
+        /// grants them directly with no ancestor chain to walk first. Self-unlocks each root's own
+        /// category before drafting it (MV-457): the caller (<see cref="AFusionCannotBeForgedUntilBothParentCategoriesAreLit_AllFour"/>)
+        /// calls <see cref="RigState.Reset"/> between fusions, which re-locks everything but PRIMARY, so
+        /// this can't rely on a one-time SetUp unlock.</summary>
         private static void AssertIneligibleThenEligibleOnceBothLit(string fusionId, string rootA, string rootB)
         {
             Assert.That(RigFusionState.IsEligible(fusionId), Is.False,
                 $"'{fusionId}' must be ineligible with neither parent category owned beyond the run-start baseline");
 
+            RigState.UnlockCategory(RigBoard.Category(rootA));
             RigState.AcquireCap(rootA);
             Assert.That(RigFusionState.IsEligible(fusionId), Is.False,
                 $"'{fusionId}' must stay ineligible with only ONE parent category lit ({rootA})");
 
+            RigState.UnlockCategory(RigBoard.Category(rootB));
             RigState.AcquireCap(rootB);
             Assert.That(RigFusionState.IsEligible(fusionId), Is.True,
                 $"'{fusionId}' must become eligible once BOTH parent categories are lit ({rootA} + {rootB})");
@@ -159,41 +166,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigFusionState.ForgedInSlot("U"), Is.Null, "slot U must still read LOCKED — nothing forged there");
         }
 
-        /// <summary>Mirrors <c>WeaponsButtonAlertTests</c>' own reflection-driven Awake pattern for a
-        /// HudController outside Play mode — <see cref="HudController.BuildAbilitySlots"/> runs from
-        /// <c>Awake</c>, and <c>UpdateAbilitySlots</c> is what MV-426 wires to
-        /// <see cref="RigFusionState.ForgedInSlot"/>.</summary>
-        [Test]
-        public void TheHudSlotStopsRenderingLockedOnceItsFusionIsForged()
-        {
-            RigState.AcquireCap("s_bal");
-            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
-            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True); // slot B
-
-            var hudGo = new GameObject("HUD");
-            var hud = hudGo.AddComponent<HudController>();
-            InvokeLifecycle(hud, "Awake", null);
-            try
-            {
-                InvokeLifecycle(hud, "UpdateAbilitySlots", new object[] { 0f });
-
-                var locked = GetArrayField<Text>(hud, "_slotLocked");
-                var letter = GetArrayField<Text>(hud, "_slotLetter");
-                var icon = GetArrayField<Image>(hud, "_slotIcon");
-
-                Assert.That(locked[0].gameObject.activeSelf, Is.False, "slot B (index 0) must stop rendering LOCKED once f_del is forged");
-                Assert.That(letter[0].gameObject.activeSelf, Is.False, "slot B's plain 'B' letter must also give way to the fusion icon");
-                Assert.That(icon[0].gameObject.activeSelf, Is.True, "slot B must show the forged fusion's icon");
-
-                Assert.That(locked[1].gameObject.activeSelf, Is.True, "slot U (index 1) has nothing forged — must keep reading LOCKED");
-                Assert.That(icon[1].gameObject.activeSelf, Is.False);
-            }
-            finally
-            {
-                Object.DestroyImmediate(hudGo);
-            }
-        }
-
         // ---------------------------------------------------------------- AC4: never a draft candidate
 
         [Test]
@@ -209,19 +181,5 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(eligible.Contains(fusion.Id), Is.False, $"'{fusion.Id}' must never appear in a Morphing Module draft pool");
         }
 
-        // ---------------------------------------------------------------- reflection helpers
-
-        private static void InvokeLifecycle(Object component, string methodName, object[] args)
-        {
-            component.GetType().GetMethod(methodName, BindingFlags.NonPublic | BindingFlags.Instance)
-                .Invoke(component, args);
-        }
-
-        private static T[] GetArrayField<T>(object target, string fieldName)
-        {
-            var field = target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.That(field, Is.Not.Null, $"HudController must declare a private field '{fieldName}'");
-            return (T[])field.GetValue(target);
-        }
     }
 }

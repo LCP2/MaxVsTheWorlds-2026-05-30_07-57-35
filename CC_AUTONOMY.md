@@ -58,9 +58,17 @@ Read the ticket description, the Phase B spec (12058680), and any linked Conflue
 git checkout -b feat/MV-XX-short-slug
 ```
 
-Implement to the AC — and nothing beyond. Greybox + free-kit art only (no AI art until Phase C). Add **EditMode tests only** for any non-trivial logic (movement maths, damage calc, factory spawn/destroy, win/lose).
+Implement to the AC — and nothing beyond. Greybox + free-kit art only (no AI art until Phase C). Add **EditMode tests only** for any non-trivial logic (movement maths, damage calc, factory spawn/destroy, win/lose), subject to the three testing rules below.
 
 **NEVER author a PlayMode test, and never run `cc-verify-playmode.bat`.** Unity PlayMode in batch mode does not stream output and hangs indefinitely. It has now stalled this worker three separate times (MV-299, MV-311, MV-330) and, when enabled in CI on 11 Aug, hung for 4h20m and blocked every deploy for three and a half hours. If a ticket seems to need PlayMode coverage, write the EditMode test you can, note the gap in a Jira comment, and move on. PlayMode is CI's problem, not yours.
+
+## Testing policy (MV-465)
+
+**Rule 1 — one new test per ticket, and it must be proven to fail.** At most one new test per ticket. It must fail on a named base commit, and the fix comment must quote its failure output. If you cannot make it fail before the fix, it is not evidence and should not be written. A ticket that needs two genuinely independent regressions covered is a ticket that should have been two tickets.
+
+**Rule 2 — no EditMode tests for appearance.** Anything about how a screen *looks* — position, size, colour, contrast, glow, spacing, legibility — gets **no EditMode test**. MV-463's conformance harness is the gate for those: it measures the rendered PNG against `rig_board.json` and fails the run on a mismatch. EditMode cannot see a rotated hexagon. It proved that yesterday.
+
+**Rule 3 — presence tests are banned.** A test that asserts a thing *exists* rather than that it is *correct* is not a test. It is satisfiable by a renderer producing garbage in the right place. Assert a measured property or do not assert.
 
 ## Self-verify
 

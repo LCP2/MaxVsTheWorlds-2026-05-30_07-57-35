@@ -24,10 +24,16 @@ namespace MaxWorlds.Weapons
     {
         private static readonly Dictionary<string, int> s_levels = new Dictionary<string, int>();
 
+        /// <summary>Categories a shed has unlocked this run (MV-457) — a root node (no parent) is only
+        /// REACHED once its own category is in here; PRIMARY starts unlocked (whichever category owns
+        /// the run-start ability, today <c>p_dmg</c>) and every other category starts locked, opened
+        /// only by <see cref="UnlockCategory"/>.</summary>
+        private static readonly HashSet<string> s_unlockedCategories = new HashSet<string>();
+
         static RigState() => ResetLevels();
 
-        /// <summary>Fired whenever a node's level changes (a part spend or a draft acquire), or the
-        /// state is reset.</summary>
+        /// <summary>Fired whenever a node's level changes (a part spend or a draft acquire), a category
+        /// unlocks, or the state is reset.</summary>
         public static event Action Changed;
 
         /// <summary>A node's current level, 0 if never touched this run.</summary>
@@ -37,12 +43,49 @@ namespace MaxWorlds.Weapons
         /// "owned".</summary>
         public static bool IsOwned(string id) => Level(id) >= 1;
 
+        /// <summary>True once a shed has unlocked <paramref name="category"/> this run (MV-457).</summary>
+        public static bool IsCategoryUnlocked(string category) => s_unlockedCategories.Contains(category);
+
+        /// <summary>Every category not yet unlocked — the pool a shed's Morphing Module draws its two
+        /// family candidates from (<see cref="RigDraft.DrawCandidateCategories"/>).</summary>
+        public static IEnumerable<string> LockedCategoryIds()
+        {
+            foreach (string category in RigBoard.AllCategoryIds)
+                if (!IsCategoryUnlocked(category)) yield return category;
+        }
+
+        /// <summary>Unlocks <paramref name="category"/> — a shed's Morphing Module draft pick (MV-457).
+        /// Idempotent: unlocking an already-open category is a no-op (false, fires nothing).</summary>
+        public static bool UnlockCategory(string category)
+        {
+            if (string.IsNullOrEmpty(category)) return false;
+            if (!s_unlockedCategories.Add(category)) return false;
+            Changed?.Invoke();
+            return true;
+        }
+
         /// <summary>A node is REACHED when it has no parent, or its parent is at level &gt;= 1
-        /// (model.rules, verbatim).</summary>
+        /// (model.rules) — with MV-457's own addition: a ROOT node also needs its own category
+        /// unlocked. A non-root node's reached-ness still depends only on its immediate parent's level,
+        /// exactly as before — a shed unlocking a category never skips the tree's own parent gating.</summary>
         public static bool IsReached(string id)
         {
             string parent = RigBoard.Parent(id);
-            return string.IsNullOrEmpty(parent) || Level(parent) >= 1;
+            if (string.IsNullOrEmpty(parent)) return IsCategoryUnlocked(RigBoard.Category(id));
+            return Level(parent) >= 1;
+        }
+
+        /// <summary>MV-458: the gate for the CELLS-funded 0-&gt;1 unlock (<see cref="CellSpend.TryUnlockNode"/>)
+        /// — a root node still only needs its own category unlocked, same as <see cref="IsReached"/>,
+        /// but a non-root node now needs its PARENT at level &gt;= 2, tightened from the level &gt;= 1
+        /// <see cref="IsReached"/> uses. <see cref="IsReached"/> itself is untouched: it still gates the
+        /// Morphing Module draft pool (<see cref="EligibleCapIds"/>), which this ticket doesn't touch.
+        /// Since &gt;= 2 implies &gt;= 1, anything cell-unlockable is always also reached.</summary>
+        public static bool IsCellUnlockable(string id)
+        {
+            string parent = RigBoard.Parent(id);
+            if (string.IsNullOrEmpty(parent)) return IsCategoryUnlocked(RigBoard.Category(id));
+            return Level(parent) >= 2;
         }
 
         /// <summary>Spend one part to raise <paramref name="id"/> by a level. A node at level 0 can
@@ -96,8 +139,9 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>Back to a fresh run's baseline: every node at <see cref="RigBoard.StartLevel"/>
-        /// (today, every node 0 except <c>p_dmg</c> at 1). Fires <see cref="Changed"/> so live
-        /// systems re-fit.</summary>
+        /// (today, every node 0 except <c>p_dmg</c> at 1), and only the category that run-start ability
+        /// belongs to (PRIMARY) unlocked — every other category starts locked, opened only by a shed
+        /// (MV-457). Fires <see cref="Changed"/> so live systems re-fit.</summary>
         public static void Reset()
         {
             ResetLevels();
@@ -107,10 +151,15 @@ namespace MaxWorlds.Weapons
         private static void ResetLevels()
         {
             s_levels.Clear();
+            s_unlockedCategories.Clear();
             foreach (string id in RigBoard.AllIds)
             {
                 int start = RigBoard.StartLevel(id);
-                if (start > 0) s_levels[id] = start;
+                if (start > 0)
+                {
+                    s_levels[id] = start;
+                    s_unlockedCategories.Add(RigBoard.Category(id));
+                }
             }
         }
     }

@@ -122,6 +122,7 @@ namespace MaxWorlds.UI
             public float glowBlurOwned, glowAlphaOwned, glowBlurDraft, glowAlphaDraft;
             public float forgeCaptionFontSize, fusionSubFontSize;
             public float partsTraySubFontSizeMin, partsTraySubFontSizeMax;
+            public float familyDimFactor;
         }
 
         [Serializable] private sealed class ColourEntryWire { public string hex; }
@@ -368,6 +369,15 @@ namespace MaxWorlds.UI
         public static float FusionSubFontSize { get { EnsureLoaded(); return s_geometry.fusionSubFontSize > 0f ? s_geometry.fusionSubFontSize : 16f; } }
         public static float PartsTraySubFontSizeMin { get { EnsureLoaded(); return s_geometry.partsTraySubFontSizeMin > 0f ? s_geometry.partsTraySubFontSizeMin : 16f; } }
         public static float PartsTraySubFontSizeMax { get { EnsureLoaded(); return s_geometry.partsTraySubFontSizeMax > 0f ? s_geometry.partsTraySubFontSizeMax : 18f; } }
+
+        // ------------------------------------------------------------------ family dim (MV-462 defect 3)
+
+        /// <summary>An ability family with zero owned abilities recedes as one unit: every graphic under
+        /// it — category node fill/stroke/icon/label/pill, every ability node's fill/stroke/icon/label/
+        /// pill, every connector inside the family, and the region panel — has its alpha multiplied by
+        /// this on top of whatever state-specific alpha it already carries (a locked node's already-faint
+        /// treatment gets fainter still, not replaced).</summary>
+        public static float FamilyDimFactor { get { EnsureLoaded(); return s_geometry.familyDimFactor > 0f ? s_geometry.familyDimFactor : 0.45f; } }
 
         /// <summary>"<c>+r*0.92</c>" / "<c>-r*0.92</c>" — a node-radius multiplier, the connector block's
         /// own offset shape (distinct from <see cref="ResolveOffset"/>'s additive "<c>+r-6</c>" terms).</summary>

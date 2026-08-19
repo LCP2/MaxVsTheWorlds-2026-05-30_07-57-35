@@ -118,16 +118,36 @@ platform :ios do
     # role YT-139's constant played for the flat 0.2.0. CFBundleVersion is left untouched: it stays
     # the auto-incrementing yyMMddHHmm timestamp (BuildStamp.ComposeIosBuildNumber, YT-117) that
     # keeps each upload unique.
-    milestone = 4
-    # A pushed tag `vX.Y.Z` IS the release version — use it verbatim (you control the number).
-    # Otherwise (manual dispatch or a local run) fall back to the auto scheme 0.<milestone>.<run_number>.
-    ref_name = ENV["GITHUB_REF_NAME"].to_s.strip   # tag push → "v0.4.35"; branch dispatch → "main"
-    if ref_name =~ /\Av(\d+\.\d+\.\d+)\z/
+    milestone = 8
+    # MV-414 — version precedence, most explicit first. The old code had only the last two rungs,
+    # which is why shipping a release meant hand-tagging from a shell every single time: a manual
+    # dispatch had no way to state its version and fell straight to the guess, and the guess was a
+    # LOWER number than what was already installed (milestone was still 4 while the game was on
+    # 0.8.x), so TestFlight offered the build as "Open" rather than "Update".
+    #
+    #   1. RELEASE_VERSION — the `version` input on a manual Actions run (ios-testflight.yml).
+    #      This is now the normal path: type the number into the Run-workflow form, no tag needed.
+    #   2. A pushed tag `vX.Y.Z` — the tag IS the version, used verbatim. Still supported.
+    #   3. 0.<milestone>.<run_number> — a GUESS, and only correct while `milestone` is kept in step
+    #      with the real milestone. Keep it in sync with BuildStamp.MilestoneVersion.
+    input_version = ENV["RELEASE_VERSION"].to_s.strip
+    ref_name = ENV["GITHUB_REF_NAME"].to_s.strip   # tag push → "v0.8.1"; branch dispatch → "main"
+    if !input_version.empty?
+      # Fail loudly rather than silently shipping the fallback: a typo'd input that quietly became
+      # 0.8.<run> is exactly the class of bug this ticket is about.
+      unless input_version =~ /\A\d+\.\d+\.\d+\z/
+        UI.user_error!("version input must be X.Y.Z (got #{input_version.inspect}).")
+      end
+      marketing_version = input_version
+    elsif ref_name =~ /\Av(\d+\.\d+\.\d+)\z/
       marketing_version = $1
     else
       run_no = ENV["GITHUB_RUN_NUMBER"].to_s.strip
-      run_no = "0" if run_no.empty?   # a local `fastlane ios beta` with no run number → 0.4.0 floor
+      run_no = "0" if run_no.empty?   # a local `fastlane ios beta` with no run number → 0.8.0 floor
       marketing_version = "0.#{milestone}.#{run_no}"
+      UI.important("No version input and no vX.Y.Z tag — falling back to #{marketing_version}. " \
+                   "If that is not higher than the build already on TestFlight, this will show as " \
+                   "\"Open\" instead of \"Update\" (MV-414).")
     end
     UI.message("Marketing version (CFBundleShortVersionString) → #{marketing_version}")
 

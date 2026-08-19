@@ -9,7 +9,16 @@ name: iOS → TestFlight
 # All Apple credentials come from GitHub Actions secrets — see APPLE_SIGNING_SETUP.md.
 
 on:
-  workflow_dispatch: {}
+  # MV-414: the manual run takes the version as an INPUT. Before this, a dispatch had no way to
+  # say what it was shipping, so it fell through to the 0.<milestone>.<run_number> guess in the
+  # Fastfile - a number LOWER than what was already on TestFlight, which is why every build showed
+  # as "Open" instead of "Update" and why a release meant hand-tagging from a shell every time.
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Marketing version to ship, e.g. 0.8.1. Must be X.Y.Z. Leave blank only if you want the 0.<milestone>.<run number> fallback.'
+        required: false
+        type: string
   push:
     tags: ['v*']
 
@@ -36,7 +45,10 @@ jobs:
         with:
           path: Library
           # iOS-specific key so it never collides with the WebGL job's Library cache.
-          key: Library-iOS-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the exact
+          # key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB cache.
+          # Unity reimports changed assets from a restored Library anyway.
+          key: Library-iOS-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: |
             Library-iOS-
             Library-
@@ -79,6 +91,9 @@ jobs:
     runs-on: macos-15
     env:
       IOS_BUILD_PATH: ${{ github.workspace }}/build/iOS
+      # MV-414: empty on a tag push (the tag is the version) and empty on a blank dispatch
+      # (the Fastfile falls back). Set only when Lee typed a number into the Run-workflow form.
+      RELEASE_VERSION: ${{ inputs.version }}
       # Apple credentials (all from secrets — empty until Lee configures them).
       APP_STORE_CONNECT_ISSUER_ID: ${{ secrets.APP_STORE_CONNECT_ISSUER_ID }}
       APP_STORE_CONNECT_KEY_ID: ${{ secrets.APP_STORE_CONNECT_KEY_ID }}
