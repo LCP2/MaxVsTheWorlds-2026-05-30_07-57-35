@@ -205,69 +205,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a part spend must never also spend cells");
         }
 
-        // ---------------------------------------------------------------- MV-374/MV-422: Cell Storage (e_cel)
-
-        [Test]
-        public void SpendingOnCellCapacityWithNoBankedPartsFails()
-        {
-            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False);
-            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
-        }
-
-        [Test]
-        public void SpendingOnCellCapacityFailsUntilItIsDrafted_MV422()
-        {
-            // e_cel is a RIG cap now — a part can never perform its 0->1 unlock, only a Morphing
-            // Module draft can (RigState.AcquireCap, exercised directly here since the draft
-            // screen/shed-flow wiring is out of this ticket's scope).
-            PickupWallet.AddPart();
-
-            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False,
-                "unowned/locked items can't be upgraded (spec §5) — e_cel hasn't been drafted");
-            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(0));
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "a failed spend must not cost a part");
-        }
-
-        [Test]
-        public void SpendingOnCellCapacityRaisesItsLevelAndConsumesOnePartOnceDrafted()
-        {
-            RigState.AcquireCap("e_cel");
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
-
-            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.True);
-
-            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(2));
-            Assert.That(PickupWallet.Capacity, Is.EqualTo(40));
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "exactly one part must be spent per level");
-        }
-
-        [Test]
-        public void SpendingOnCellCapacityAtItsCapFailsAndDoesNotSpendTheirPart()
-        {
-            RigState.AcquireCap("e_cel");
-            PickupWallet.AddPart();
-            for (int i = 1; i < PickupWallet.PowerCellCapacityMaxLevel; i++)
-            {
-                PickupWallet.AddPart();
-                PartSpend.TrySpendOnCellCapacity();
-            }
-            int banked = PickupWallet.PartsBanked;
-
-            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False, $"only {PickupWallet.PowerCellCapacityMaxLevel} levels exist");
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(banked), "a spend that doesn't level up must not cost a part");
-        }
-
-        [Test]
-        public void BankedPowerCellsCannotSubstituteForPartsOnCellCapacity()
-        {
-            RigState.AcquireCap("e_cel");
-            PickupWallet.AddPowerCell();
-            PickupWallet.AddPowerCell();
-
-            Assert.That(PartSpend.TrySpendOnCellCapacity(), Is.False, "power cells must never buy a capacity upgrade");
-            Assert.That(PickupWallet.PowerCellCapacityLevel, Is.EqualTo(1), "the draft alone grants level 1, no part spent");
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(2), "a rejected upgrade spend must not touch cells");
-        }
+        // ---------------------------------------------------------------- MV-374/MV-422/MV-458: Cell Storage (e_cel)
+        //
+        // MV-458 retired PartSpend.TrySpendOnCellCapacity: e_cel is no longer special-cased for a part
+        // spend — RigState.TrySpendPart("e_cel") (proven generically by RigStateTests) and
+        // PickupWallet.LevelUpCellCapacity (PickupWalletTests) already cover the model layer this
+        // deleted wrapper duplicated. Its new primary currency, cells, is covered by CellSpendTests.
     }
 }

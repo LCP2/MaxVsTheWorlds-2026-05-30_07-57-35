@@ -75,6 +75,19 @@ namespace MaxWorlds.Weapons
             return Level(parent) >= 1;
         }
 
+        /// <summary>MV-458: the gate for the CELLS-funded 0-&gt;1 unlock (<see cref="CellSpend.TryUnlockNode"/>)
+        /// — a root node still only needs its own category unlocked, same as <see cref="IsReached"/>,
+        /// but a non-root node now needs its PARENT at level &gt;= 2, tightened from the level &gt;= 1
+        /// <see cref="IsReached"/> uses. <see cref="IsReached"/> itself is untouched: it still gates the
+        /// Morphing Module draft pool (<see cref="EligibleCapIds"/>), which this ticket doesn't touch.
+        /// Since &gt;= 2 implies &gt;= 1, anything cell-unlockable is always also reached.</summary>
+        public static bool IsCellUnlockable(string id)
+        {
+            string parent = RigBoard.Parent(id);
+            if (string.IsNullOrEmpty(parent)) return IsCategoryUnlocked(RigBoard.Category(id));
+            return Level(parent) >= 2;
+        }
+
         /// <summary>Spend one part to raise <paramref name="id"/> by a level. A node at level 0 can
         /// NEVER be raised this way (model.rules: "parts can never unlock it") — it must go through
         /// <see cref="AcquireCap"/> first. Fails at the node's own <see cref="RigBoard.MaxLevel"/>

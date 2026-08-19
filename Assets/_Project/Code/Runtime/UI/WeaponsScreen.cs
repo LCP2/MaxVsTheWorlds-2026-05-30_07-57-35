@@ -387,7 +387,14 @@ namespace MaxWorlds.UI
             int banked = PickupWallet.PartsBanked;
             _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";
 
-            bool capacitySpendable = banked > 0 && PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel;
+            // MV-458: e_cel is no longer part-only — the chip is actionable (and tappable) whenever
+            // either currency could pay for whichever action (unlock/upgrade) e_cel is currently in.
+            bool cellsOwned = RigState.IsOwned("e_cel");
+            bool capacityActionable = cellsOwned
+                ? PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel
+                : RigState.IsCellUnlockable("e_cel");
+            int capacityCostCells = cellsOwned ? CellSpend.UpgradeCostCells : CellSpend.UnlockCostCells;
+            bool capacitySpendable = capacityActionable && (PickupWallet.PowerCells >= capacityCostCells || banked > 0);
             _cellsChipButton.interactable = capacitySpendable;
             // MV-446 defect 1: was tinting the BG PartsColor/amber when a capacity level-up is
             // affordable — against the border/text's own colours.sec cyan (never touched here) that put
@@ -416,7 +423,10 @@ namespace MaxWorlds.UI
             foreach (var ab in RigBoardLayout.Abilities)
             {
                 Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
-                bool draftable = RigState.IsReached(ab.Id) && !RigState.IsOwned(ab.Id);
+                // MV-458: reads the tightened cells-unlock gate, not the looser IsReached the (now
+                // production-dead) ability-level Morphing Module draft pool still uses — a connector
+                // must not glow "live" toward a node the board can't actually let you tap open yet.
+                bool draftable = RigState.IsCellUnlockable(ab.Id) && !RigState.IsOwned(ab.Id);
 
                 if (string.IsNullOrEmpty(ab.Parent))
                 {
@@ -632,11 +642,10 @@ namespace MaxWorlds.UI
             v.DraftBadge.gameObject.SetActive(false);
 
             bool owned = RigState.IsOwned(ab.Id);
-            bool reached = RigState.IsReached(ab.Id);
-            // Schema 3 (MV-436): every ability is unlocked the same way, so "reached and unowned"
-            // is the one capability state — it used to also require ab.Kind == "cap" back when a
-            // stat could be reached-and-spendable without ever being a draft candidate.
-            bool draftable = reached && !owned;
+            // MV-458: "draftable" now means cell-unlockable — its category open and, for a non-root
+            // node, its parent at level >= 2 (RigState.IsCellUnlockable, tighter than the IsReached the
+            // now production-dead ability-level Morphing Module draft pool still uses).
+            bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
             bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
 
             Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
@@ -682,7 +691,9 @@ namespace MaxWorlds.UI
                 // tell uses.
                 v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
                 v.CapMarker.color = module;
-                v.PillText.text = "SHED";
+                // MV-458: was "SHED" — a shed now only ever unlocks a whole CATEGORY (MV-457), never an
+                // individual node, so a draftable node's own unlock is this cell cost, tapped directly.
+                v.PillText.text = CellSpend.UnlockCostCells.ToString();
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = module;
                 v.PillText.color = module;
@@ -807,6 +818,12 @@ namespace MaxWorlds.UI
             v.Button.interactable = true;
         }
 
+        /// <summary>MV-458: cells first, parts as the rare fallback accelerant. An unowned node tries
+        /// <see cref="CellSpend.TryUnlockNode"/> (20 cells, needs its parent at level &gt;= 2); an owned
+        /// one tries <see cref="CellSpend.TryUpgradeNode"/> (10 cells). Either way, a cell spend that
+        /// can't afford/isn't eligible falls back to <see cref="PartSpend.TrySpendOnRigNode"/> — which
+        /// itself still only ever raises an already-owned node (unchanged, MV-436's own gate), so an
+        /// unowned node with insufficient cells and no banked part simply does nothing.</summary>
         private void OnRigNodeTapped(string id)
         {
             if (_draftActive)
@@ -819,7 +836,9 @@ namespace MaxWorlds.UI
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
             }
             if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
-            PartSpend.TrySpendOnRigNode(id);
+
+            bool spent = RigState.IsOwned(id) ? CellSpend.TryUpgradeNode(id) : CellSpend.TryUnlockNode(id);
+            if (!spent) PartSpend.TrySpendOnRigNode(id);
         }
 
         /// <summary>Grants a single draft candidate, whichever shape it is (MV-457): an ability node id
@@ -829,7 +848,9 @@ namespace MaxWorlds.UI
         private static bool GrantDraftCandidate(string id) =>
             RigBoard.Exists(id) ? WeaponSystemState.AcquireById(id) : RigState.UnlockCategory(id);
 
-        private void OnCellsChipTapped() => PartSpend.TrySpendOnCellCapacity();
+        /// <summary>MV-458: e_cel is no longer special-cased — tapping the CELLS chip is just a
+        /// convenience shortcut to the exact same tap the e_cel hex node itself accepts.</summary>
+        private void OnCellsChipTapped() => OnRigNodeTapped("e_cel");
 
         /// <summary>MV-433 AC1: <c>colours.base</c>, forced fully opaque — the backdrop is meant to
         /// read as "the game is paused behind it; there is nothing to see through to," not a scrim, so

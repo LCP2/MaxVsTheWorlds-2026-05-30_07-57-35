@@ -6,10 +6,13 @@ namespace MaxWorlds.Pickups
 {
     /// <summary>
     /// The player's banked drops (YT-131, recut WV-228). Power cells accumulate into a count the HUD
-    /// shows — a future currency with no gameplay use yet. Parts are now universal upgrade tokens
+    /// shows and (MV-458) are THE RIG board's primary currency — unlocking a new node costs
+    /// <see cref="MaxWorlds.Weapons.CellSpend.UnlockCostCells"/>, raising an owned one costs
+    /// <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostCells"/>. Parts are universal upgrade tokens
     /// (WV-228): a plain banked count, no identity, no auto-install and no draft-pick popup on
-    /// collection — replaces the old dropped-part-decides queue (YT-133/YT-207). Spending one against a
-    /// chosen owned track/ability lives in <see cref="MaxWorlds.Weapons.PartSpend"/>.
+    /// collection — replaces the old dropped-part-decides queue (YT-133/YT-207). MV-458: parts are now
+    /// the rare accelerant rather than the sole currency, still spent one at a time against a chosen
+    /// owned track/ability/node via <see cref="MaxWorlds.Weapons.PartSpend"/>.
     ///
     /// Static because there is exactly one player and the HUD, the pickups, and the weapons area all
     /// need to see the same tally without threading a reference through the scene. Event-driven so the
@@ -17,7 +20,7 @@ namespace MaxWorlds.Pickups
     /// </summary>
     public static class PickupWallet
     {
-        /// <summary>Banked power cells (display-only currency for now).</summary>
+        /// <summary>Banked power cells (MV-458: THE RIG board's primary spendable currency).</summary>
         public static int PowerCells { get; private set; }
 
         /// <summary>Banked parts (WV-228) — universal upgrade tokens, no identity. The HUD's chip shows
@@ -48,7 +51,7 @@ namespace MaxWorlds.Pickups
         /// "owned/spendable from run start" track this replaces).</summary>
         public static int PowerCellCapacityMaxLevel => RigBoard.MaxLevel("e_cel");
 
-        /// <summary>Levels bought via <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnCellCapacity"/>,
+        /// <summary>Levels bought via <see cref="MaxWorlds.Weapons.CellSpend"/>/<see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnRigNode"/>,
         /// 0 (fresh run, unowned) to <see cref="PowerCellCapacityMaxLevel"/> — now a thin read of
         /// <c>e_cel</c>'s live RIG level (MV-422), not separately tracked state.</summary>
         public static int PowerCellCapacityLevel => RigState.Level("e_cel");
@@ -68,12 +71,31 @@ namespace MaxWorlds.Pickups
         /// current count didn't change.</summary>
         public static event Action<int> CapacityChanged;
 
-        /// <summary>Raise Cell Storage (<c>e_cel</c>) by one level, up to <see cref="PowerCellCapacityMaxLevel"/>.
-        /// MV-422: <c>e_cel</c> is a RIG <c>cap</c> — this can only ever raise an ALREADY-OWNED level
-        /// further (RigState.TrySpendPart's own rule); the initial 0-&gt;1 unlock is a Morphing Module
-        /// draft, not a part spend, same as every other cap. Call through
-        /// <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnCellCapacity"/> so a part is only actually
-        /// spent when this succeeds.</summary>
+        private static int s_lastNotifiedCapacity = DefaultCapacity;
+
+        /// <summary>MV-458: e_cel now levels through the same generic RIG spend paths every other node
+        /// uses (<see cref="MaxWorlds.Weapons.CellSpend"/>, <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnRigNode"/>),
+        /// not only through <see cref="LevelUpCellCapacity"/> — so <see cref="CapacityChanged"/> must
+        /// also fire off <c>RigState.Changed</c> directly, or the HUD's capacity readout goes stale the
+        /// instant a generic spend (rather than the old dedicated wrapper) is what moved e_cel.</summary>
+        static PickupWallet() => RigState.Changed += RaiseCapacityChangedIfMoved;
+
+        private static void RaiseCapacityChangedIfMoved()
+        {
+            int cap = Capacity;
+            if (cap == s_lastNotifiedCapacity) return;
+            s_lastNotifiedCapacity = cap;
+            CapacityChanged?.Invoke(cap);
+        }
+
+        /// <summary>Raise Cell Storage (<c>e_cel</c>) by one level, up to <see cref="PowerCellCapacityMaxLevel"/>
+        /// — a direct convenience wrapper kept for callers that only care about e_cel specifically
+        /// (tests, mainly). MV-458: e_cel is no longer special-cased for a live spend — the generic
+        /// <see cref="MaxWorlds.Weapons.CellSpend.TryUpgradeNode"/> and <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnRigNode"/>
+        /// raise e_cel the exact same way every other RIG node levels, by calling
+        /// <c>RigState.TrySpendPart("e_cel")</c> directly rather than through here — which is why
+        /// <see cref="CapacityChanged"/> also listens to <c>RigState.Changed</c> below, not only to
+        /// this method's own explicit fire.</summary>
         public static bool LevelUpCellCapacity()
         {
             if (!RigState.TrySpendPart("e_cel")) return false;

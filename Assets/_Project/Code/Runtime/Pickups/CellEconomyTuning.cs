@@ -3,10 +3,10 @@ using UnityEngine;
 namespace MaxWorlds.Pickups
 {
     /// <summary>
-    /// Authored magnitudes for the drop economy (WV-226). MV-290 retired power cells as fuel/currency
-    /// (abilities are cooldown-gated only, the primary never depletes) — cells still drop and bank as
-    /// a vestigial, display-only counter (their original pre-WV-227 role), so
-    /// <see cref="DefaultCellsPerLargeKill"/> stays live even though nothing spends a cell any more.
+    /// Authored magnitudes for the drop economy (WV-226). MV-290 retired power cells as ability
+    /// fuel (abilities are cooldown-gated only, the primary never depletes); MV-458 gave them a new
+    /// role instead — THE RIG board's primary progression currency (<see cref="MaxWorlds.Weapons.CellSpend"/>),
+    /// not merely a display-only counter any more.
     /// </summary>
     public static class CellEconomyTuning
     {

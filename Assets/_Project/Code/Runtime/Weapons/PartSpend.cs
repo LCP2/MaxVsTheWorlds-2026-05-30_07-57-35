@@ -42,21 +42,6 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
-        /// <summary>Spend one banked part to raise Cell Storage (<c>e_cel</c>) by a level (MV-374,
-        /// relocated onto THE RIG by MV-422). A general player-stat track rather than a weapon one, so
-        /// it levels up directly on <see cref="PickupWallet"/> instead of through
-        /// <see cref="WeaponSystemState"/>. <c>e_cel</c> is a <c>cap</c> — fails until it has been
-        /// taken in a Morphing Module draft, same "unowned/locked items can't be upgraded" rule
-        /// <see cref="TrySpendOnAbility"/> enforces — beyond that, the only way this fails is an empty
-        /// bank or the level cap.</summary>
-        public static bool TrySpendOnCellCapacity()
-        {
-            if (PickupWallet.PartsBanked <= 0) return false;
-            if (!PickupWallet.LevelUpCellCapacity()) return false;
-            PickupWallet.TrySpendPart();
-            return true;
-        }
-
         /// <summary>Spend one banked part directly on a THE RIG node id (MV-423 board), bypassing the
         /// legacy per-enum wrappers above — every one of them already resolves to
         /// <see cref="RigState.TrySpendPart"/> under the hood (MV-422), so a node the board draws by
