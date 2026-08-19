@@ -379,5 +379,80 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(2, route.Count, "an ungated link was excluded by a query about gates");
         }
+
+        // ---------------------------------------------------------------- MV-448: an open gate whose
+        // leaf still blocks part of the doorway
+
+        /// <summary>A two-room map with a single 4 m-wide gated doorway, centred on x=0 (so the hole
+        /// is [-2, 2]) — the fixture every MV-448 leaf-span test below builds on.</summary>
+        private static MapData TwoRoomsWithAGatedDoorway() => new MapData
+        {
+            zones = new[]
+            {
+                new MapZone { id = "a", x = 0f, z = 0f, width = 10f, depth = 10f },
+                new MapZone { id = "b", x = 0f, z = 10f, width = 10f, depth = 10f },
+            },
+            links = new[] { new MapLink { from = "a", to = "b", doorway = 4f, gate = "gate1" } },
+        };
+
+        /// <summary>
+        /// Cause 1 of the ticket, the mouth half: an open gate's leaf is deliberately still solid
+        /// (MV-386), so aiming at the doorway's geometric middle walks a robot straight into it. The
+        /// waypoint has to aim at whatever the leaf does NOT cover instead.
+        /// </summary>
+        [Test]
+        public void AnOpenGateWhoseLeafCoversTheLeftHalf_AimsTheMouthRightOfCentre()
+        {
+            MapData map = TwoRoomsWithAGatedDoorway();
+
+            // The leaf occupies [-2, 0] — the left half of the [-2, 2] hole, the shape an AreaGate's
+            // swing leaves when it clears the right side.
+            Vector2 waypoint = MapRoutes.Waypoint(map, new Vector2(0f, 0f), new Vector2(0f, 10f),
+                gateOpen: _ => true,
+                gateLeafSpan: (id, alongX) => new Span(-2f, 0f));
+
+            Assert.Greater(waypoint.x, 0f,
+                "with the left half of the doorway blocked, the mouth should aim into the clear right " +
+                "half, not the geometric middle the leaf itself is parked across");
+        }
+
+        /// <summary>
+        /// Cause 1's other half: a doorway can be OPEN and still be unusable if the leaf's swung-open
+        /// pose doesn't leave a robot-width of actual gap. <see cref="MapRoutes.MinGateClearance"/> is
+        /// the widest archetype's own diameter (Brute, 1.2 m) — a gap narrower than that has to read
+        /// as impassable even though the gate itself reports open, or a robot gets routed at a gap it
+        /// physically cannot fit through and grinds there exactly as it did against a shut gate.
+        /// </summary>
+        [Test]
+        public void ADoorwayWhoseClearSpanIsUnderMinGateClearance_ReadsImpassable()
+        {
+            MapData map = TwoRoomsWithAGatedDoorway();
+
+            // The leaf covers all but the last metre of the [-2, 2] hole, [-2, 1] — a 1 m gap, under
+            // the 1.2 m MinGateClearance.
+            List<MapZone> route = MapRoutes.Rooms(map, map.Zone("a"), map.Zone("b"),
+                gateOpen: _ => true,
+                gateLeafSpan: (id, alongX) => new Span(-2f, 1f));
+
+            Assert.Less(route.Count, 2,
+                "a gap narrower than a robot's own width read as passable — routing would send a " +
+                "robot at a gap it cannot physically fit through");
+        }
+
+        /// <summary>The width check must not fire on a gap wide enough to actually use — only the
+        /// narrow case is special-cased, or every open gate becomes impassable.</summary>
+        [Test]
+        public void ADoorwayWhoseClearSpanClearsMinGateClearance_StaysPassable()
+        {
+            MapData map = TwoRoomsWithAGatedDoorway();
+
+            // The leaf covers only [-2, 0.5] here, leaving 1.5 m clear — over the 1.2 m minimum.
+            List<MapZone> route = MapRoutes.Rooms(map, map.Zone("a"), map.Zone("b"),
+                gateOpen: _ => true,
+                gateLeafSpan: (id, alongX) => new Span(-2f, 0.5f));
+
+            Assert.AreEqual(2, route.Count,
+                "a clear gap wider than MinGateClearance was rejected as impassable");
+        }
     }
 }

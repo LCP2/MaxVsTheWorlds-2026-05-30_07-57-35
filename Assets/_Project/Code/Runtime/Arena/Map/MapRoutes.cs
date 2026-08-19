@@ -40,6 +40,13 @@ namespace MaxWorlds.Arena
         /// is already in the next room and asking the next question.</summary>
         public const float ThroughDoorway = 1.5f;
 
+        /// <summary>How wide a gap through a gate has to stay for routing to send a robot at it,
+        /// rather than around it (MV-448) — the diameter of the widest archetype's own collision
+        /// footprint (Brute, <c>ColliderRadius</c> 0.6 m, <c>EnemyArchetype.cs</c>), copied here as a
+        /// fixed number rather than a live reference so this class stays the pure room-graph maths its
+        /// own doc comment promises — enemy archetypes are Gameplay's concern, not the map's.</summary>
+        public const float MinGateClearance = 1.2f;
+
         /// <summary>
         /// How many times the room graph has actually been searched. The whole performance claim of
         /// this class is that the answer is "once per level, not once per robot per frame", and this is
@@ -58,8 +65,17 @@ namespace MaxWorlds.Arena
         /// <param name="gateOpen">Reports whether a named gate is open. Null (the default) treats
         /// every link as open, whatever gate it names — the routing this class shipped with, before a
         /// gate could ever be the reason a room is unreachable.</param>
+        /// <param name="gateLeafSpan">Reports the world-space span (along the doorway's hole axis —
+        /// X if the second argument is true, Z otherwise) a gate's own leaf occupies once open, or
+        /// null if nothing occupies it (an ungated link, an unregistered gate, or a gate kind — like
+        /// <see cref="MaxWorlds.Factories.SubZoneGate"/> — that clears its doorway completely rather
+        /// than swinging a still-solid leaf through part of it). A link whose clear remainder is
+        /// narrower than <see cref="MinGateClearance"/> is impassable even though the gate reports
+        /// open (MV-448) — a robot cannot be routed at a gap it cannot physically fit through. Null
+        /// (the default) skips the check entirely, same as not asking about gates at all.</param>
         public static List<MapZone> Rooms(MapData map, MapZone from, MapZone to,
-                                          Func<string, bool> gateOpen = null)
+                                          Func<string, bool> gateOpen = null,
+                                          Func<string, bool, Span?> gateLeafSpan = null)
         {
             Searches++;
 
@@ -77,7 +93,7 @@ namespace MaxWorlds.Arena
 
                 foreach (MapLink link in map.links)
                 {
-                    if (link == null || !Passable(link, gateOpen)) continue;
+                    if (link == null || !Passable(map, link, gateOpen, gateLeafSpan)) continue;
 
                     string next = link.from == here ? link.to
                                 : link.to == here ? link.from
@@ -97,10 +113,40 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>A link the search may cross: one with no gate at all, or one whose gate
-        /// <paramref name="gateOpen"/> reports open. No <paramref name="gateOpen"/> given means every
-        /// link is passable — the caller isn't asking the question, so the answer can't be "no".</summary>
-        private static bool Passable(MapLink link, Func<string, bool> gateOpen) =>
-            gateOpen == null || string.IsNullOrEmpty(link.gate) || gateOpen(link.gate);
+        /// <paramref name="gateOpen"/> reports open AND — if <paramref name="gateLeafSpan"/> says
+        /// something occupies part of the doorway — still leaves at least <see cref="MinGateClearance"/>
+        /// clear (MV-448). No <paramref name="gateOpen"/> given means every link is passable — the
+        /// caller isn't asking the question, so the answer can't be "no".</summary>
+        private static bool Passable(MapData map, MapLink link, Func<string, bool> gateOpen,
+                                     Func<string, bool, Span?> gateLeafSpan)
+        {
+            bool open = gateOpen == null || string.IsNullOrEmpty(link.gate) || gateOpen(link.gate);
+            if (!open) return false;
+            if (gateLeafSpan == null || string.IsNullOrEmpty(link.gate)) return true;
+
+            if (!MapGeometry.Doorway(map, link, out bool alongX, out _, out Span hole)) return true;
+
+            Span? leaf = gateLeafSpan(link.gate, alongX);
+            if (!leaf.HasValue) return true;
+
+            return ClearSpan(hole, leaf.Value).Length >= MinGateClearance;
+        }
+
+        /// <summary>The walkable slice of <paramref name="hole"/> left over once <paramref name="occupied"/>
+        /// (a gate leaf's own footprint) is subtracted from it — the far side from wherever the leaf
+        /// actually overlaps, since a hinge always swings clear from one edge of the doorway rather
+        /// than from its middle (MV-448). Falls back to the whole hole if the leaf doesn't actually
+        /// reach into it.</summary>
+        private static Span ClearSpan(Span hole, Span occupied)
+        {
+            float occMin = Mathf.Max(occupied.Min, hole.Min);
+            float occMax = Mathf.Min(occupied.Max, hole.Max);
+            if (occMax <= occMin) return hole;
+
+            var left = new Span(hole.Min, occMin);
+            var right = new Span(occMax, hole.Max);
+            return left.Length >= right.Length ? left : right;
+        }
 
         /// <summary>
         /// Where to walk NEXT to get from <paramref name="from"/> to <paramref name="goal"/>: the goal
@@ -132,7 +178,8 @@ namespace MaxWorlds.Arena
         /// (<see cref="MaxWorlds.Enemies.ZoneHysteresis"/>) and passes the settled room here instead —
         /// deliberately kept OUT of this class, which stays pure and keeps no clock of its own.</param>
         public static Vector2 Waypoint(MapData map, Vector2 from, Vector2 goal,
-                                       Func<string, bool> gateOpen = null, MapZone hereOverride = null)
+                                       Func<string, bool> gateOpen = null, MapZone hereOverride = null,
+                                       Func<string, bool, Span?> gateLeafSpan = null)
         {
             if (map == null) return goal;
 
@@ -141,7 +188,7 @@ namespace MaxWorlds.Arena
 
             if (here == null || there == null || here.id == there.id) return goal;
 
-            Solve(map, gateOpen);
+            Solve(map, gateOpen, gateLeafSpan);
 
             return _hops.TryGetValue(HopKey(_index[here.id], _index[there.id]), out Vector2 hop)
                 ? hop
@@ -160,7 +207,8 @@ namespace MaxWorlds.Arena
         /// one does, so a room that was unreachable a moment ago is re-solved into the graph the next
         /// time anything asks the way).
         /// </summary>
-        private static void Solve(MapData map, Func<string, bool> gateOpen)
+        private static void Solve(MapData map, Func<string, bool> gateOpen,
+                                  Func<string, bool, Span?> gateLeafSpan)
         {
             if (ReferenceEquals(_solvedFor, map) && _hops != null) return;
 
@@ -179,10 +227,10 @@ namespace MaxWorlds.Arena
                 MapZone from = map.zones[a], to = map.zones[b];
                 if (from == null || to == null || a == b) continue;
 
-                List<MapZone> route = Rooms(map, from, to, gateOpen);
+                List<MapZone> route = Rooms(map, from, to, gateOpen, gateLeafSpan);
                 if (route.Count < 2) continue;   // no way through right now: the caller holds instead
 
-                _hops[HopKey(a, b)] = Mouth(map, route[0], route[1], to.CenterXz);
+                _hops[HopKey(a, b)] = Mouth(map, route[0], route[1], to.CenterXz, gateLeafSpan);
             }
         }
 
@@ -194,6 +242,15 @@ namespace MaxWorlds.Arena
             _index = null;
         }
 
+        /// <summary>Whether routes have already been solved for this exact map object — exposed so
+        /// <see cref="MaxWorlds.Enemies.EnemyNavigation.RegisterGate(string, AreaGate, MapData)"/> can
+        /// assert it is never told about a gate after the level it belongs to has already been routed
+        /// (MV-448's registration-ordering question: a gate registered this late would have been read
+        /// as open by <c>IsGateOpen</c>'s unregistered-default while the table solved, and nothing
+        /// re-solves it afterward). Not something a normal caller should ever need.</summary>
+        internal static bool HasSolvedRoutesFor(MapData map) =>
+            map != null && ReferenceEquals(_solvedFor, map) && _hops != null;
+
         private static MapData _solvedFor;
         private static Dictionary<int, Vector2> _hops;
         private static Dictionary<string, int> _index;
@@ -203,9 +260,12 @@ namespace MaxWorlds.Arena
         private static int HopKey(int from, int to) => (from << 8) | to;
 
         /// <summary>The point to aim at to leave <paramref name="here"/> for <paramref name="next"/>:
-        /// the middle of the doorway they share, pushed through the wall line into the room beyond.
-        /// The goal itself if the two rooms turn out not to share a doorway at all.</summary>
-        private static Vector2 Mouth(MapData map, MapZone here, MapZone next, Vector2 fallback)
+        /// the middle of the doorway they share (or, if a gate's leaf occupies part of it, the middle
+        /// of whatever's left clear — MV-448, so a robot aims at the gap it can actually use rather
+        /// than at a leaf parked across the geometric centre), pushed through the wall line into the
+        /// room beyond. The goal itself if the two rooms turn out not to share a doorway at all.</summary>
+        private static Vector2 Mouth(MapData map, MapZone here, MapZone next, Vector2 fallback,
+                                     Func<string, bool, Span?> gateLeafSpan)
         {
             if (map.links == null) return fallback;
 
@@ -220,9 +280,16 @@ namespace MaxWorlds.Arena
                 if (!MapGeometry.Doorway(map, link, out bool alongX, out float coord, out Span hole))
                     continue;
 
+                Span clear = hole;
+                if (gateLeafSpan != null && !string.IsNullOrEmpty(link.gate))
+                {
+                    Span? leaf = gateLeafSpan(link.gate, alongX);
+                    if (leaf.HasValue) clear = ClearSpan(hole, leaf.Value);
+                }
+
                 // alongX: the wall runs along X at this Z, so the hole is a span of X — and crossing it
                 // means moving in Z. The other way round when it doesn't.
-                Vector2 mouth = alongX ? new Vector2(hole.Mid, coord) : new Vector2(coord, hole.Mid);
+                Vector2 mouth = alongX ? new Vector2(clear.Mid, coord) : new Vector2(coord, clear.Mid);
                 Vector2 across = alongX ? new Vector2(0f, 1f) : new Vector2(1f, 0f);
 
                 float toward = alongX ? next.z - here.z : next.x - here.x;
