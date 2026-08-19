@@ -15,13 +15,17 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class WeaponPartArtGearTests
     {
+        /// <summary>MV-430 pinned the pool at one design (this test used to assert
+        /// <c>Length == 1</c>). MV-454 restores the full ten now that every design carries its own
+        /// colour accent instead of relying on shape alone — see <see cref="WeaponPartArtMachineInternalsPoolTests"/>
+        /// for the coverage that supersedes this. Left as a smoke check that the pool didn't collapse
+        /// back to one by accident.</summary>
         [Test]
-        public void MachineInternalsKeys_HoldsOnlyTheGear()
+        public void MachineInternalsKeys_HoldsAllTenDesigns()
         {
-            Assert.AreEqual(1, WeaponPartArt.MachineInternalsKeys.Length,
-                "ten machine-internals designs read as noise, not variety, at the 72° camera (MV-430).");
-            Assert.AreEqual(WeaponPartArt.Keys.Gear, WeaponPartArt.MachineInternalsKeys[0],
-                "the sole remaining design should be the gear.");
+            Assert.AreEqual(10, WeaponPartArt.MachineInternalsKeys.Length,
+                "the machine-internals pool should hold all ten designs (MV-454 restores MV-430's collapse).");
+            Assert.Contains(WeaponPartArt.Keys.Gear, WeaponPartArt.MachineInternalsKeys);
         }
 
     }

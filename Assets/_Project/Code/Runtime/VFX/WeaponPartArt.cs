@@ -48,6 +48,19 @@ namespace MaxWorlds.VFX
         // Public: MV-429's ground ring for a Part pickup reads this back so the ring agrees with the
         // chrome trim of the machine-internals prop it surrounds.
         public static readonly Color Chrome = new Color(0.80f, 0.83f, 0.88f);
+        // MV-454 — the machine-internals designs' warm salvage accent. Deliberately NOT the exact
+        // literal the ticket suggested (~0.78, 0.58, 0.22): that peak is close enough to the brass
+        // YT-146 already tried and pulled (0.72, 0.55, 0.22) to reproduce the same failure. In
+        // MaterialLibrary.Tinted, a Metal surface's grain highlight is tone * (1 + Contrast), Contrast =
+        // 0.20, so a tone that hot pushes the highlight straight into SunlitAlbedo.Ceiling (0.6).
+        // Clamp() preserves hue — it scales rather than clipping per channel — but clamping the
+        // highlight back down toward the shadow end collapses the grain's contrast to almost nothing,
+        // which is what actually read as "muddy" in YT-146: the brass didn't shift hue, it went flat and
+        // dim. Kept here at a peak (~0.46) that survives the 1.2x highlight multiply with headroom to
+        // spare, so the grain keeps its contrast and the accent reads as bright warm metal rather than
+        // repeating the exact regression YT-146 already shipped and reverted once.
+        public static readonly Color Brass = new Color(0.46f, 0.35f, 0.15f);
+        public static readonly Color Copper = new Color(0.46f, 0.25f, 0.12f);
         // Public: PickupArtDirector reads this back to drive the cell's gentle radiance (MV-304), the
         // same idiom as GlistenColor below.
         public static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
@@ -94,13 +107,27 @@ namespace MaxWorlds.VFX
         /// (WV-237) — one entry per machine-internals design, kept as one array so "how many designs
         /// exist" and "which keys count" can't drift apart.
         ///
-        /// MV-430: collapsed from ten designs to one. At the fixed 72° camera a unit of height projects
-        /// to ~0.31 of a unit on screen, so nine of the ten collapsed to "a small stack on a white
-        /// disc" — the variety cost read clarity and bought nothing, since a part carries no gameplay
-        /// identity anyway (WV-228). The other nine <c>Build*</c> methods below are left in place and
-        /// still reachable through <see cref="Build"/> — this is a one-line change to restore them if
-        /// the tight-slice call ever reverses.</summary>
-        public static readonly string[] MachineInternalsKeys = { Keys.Gear };
+        /// MV-430 collapsed this to one design (<see cref="Keys.Gear"/>), citing the fixed 72° camera
+        /// discarding ~70% of vertical detail and four of the ten (piston, hydraulic ram, coil,
+        /// capacitor bank) collapsing to "a small stack on a white disc". MV-454 restores the full pool:
+        /// that finding was made against the OLD <see cref="Chrome"/> plinth (MV-430's own fix, landed in
+        /// the same commit, already made every plinth dark instead of near-white) and against designs
+        /// that were still uniformly grey/neutral — i.e. shape was the only differentiator, and shape is
+        /// exactly what the 72° camera discards. Colour survives that projection far better than height
+        /// does, so every design below now also carries its own <see cref="Brass"/>/<see cref="Copper"/>
+        /// accent (see each <c>Build*</c> method) — the read is no longer "tell the silhouette apart",
+        /// it's "tell the colour apart", which is a different, and at this camera angle much easier,
+        /// problem than the one MV-430 measured. Also worth the widened pool on its own terms: several of
+        /// the nine had been wearing the exact signature hues MV-431/the five named parts use
+        /// (<see cref="PowerBlue"/> on PowerNozzle, <see cref="HarnessGreen"/> on the harness, etc.) —
+        /// a purely cosmetic loot drop wearing a named upgrade's own colour risked being misread as that
+        /// upgrade, so those accents are now <see cref="Brass"/>/<see cref="Copper"/>/<see cref="ModuleGlow"/>
+        /// instead, which no named part wears.</summary>
+        public static readonly string[] MachineInternalsKeys =
+        {
+            Keys.Gear, Keys.Coil, Keys.CircuitBlock, Keys.Piston, Keys.ValveManifold,
+            Keys.CapacitorBank, Keys.CogCluster, Keys.HydraulicRam, Keys.FuseBlock, Keys.WiringLoom,
+        };
 
         /// <summary>Build a prop by key (see <see cref="Keys"/>). Returns null for an unknown key rather
         /// than throwing, so a gameplay drop table with a typo drops nothing instead of erroring a run.</summary>
@@ -378,9 +405,10 @@ namespace MaxWorlds.VFX
         /// footprint and height, so the ticket's "consistent pickup silhouette" holds even though the
         /// crown on top of each is completely different; each also gets its own <see cref="Glisten"/>
         /// dot(s) so every design shimmers, not just the old power-cell/Hydro-device pair.
-        /// MV-305 draws from these today (<see cref="PickupArtDirector.RollPartArtKey"/>) — only
-        /// <see cref="Keys.Gear"/> is currently in <see cref="MachineInternalsKeys"/> (MV-430), but the
-        /// other nine builders stay reachable by key for when variety returns.</summary>
+        /// MV-305 draws from these today (<see cref="PickupArtDirector.RollPartArtKey"/>) — MV-430
+        /// briefly narrowed <see cref="MachineInternalsKeys"/> to just <see cref="Keys.Gear"/>; MV-454
+        /// restored the full ten now that every design also carries its own colour accent (see
+        /// <see cref="MachineInternalsKeys"/>'s doc for why that changes the 72°-camera calculus).</summary>
         private const float PartPlinthRadius = 0.22f;
         private const float PartPlinthHeight = 0.06f;
 
@@ -408,7 +436,10 @@ namespace MaxWorlds.VFX
         public static GameObject BuildGear(Transform parent = null)
         {
             var root = Root("Gear", parent);
-            Material chrome = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            // MV-454: the hub was Chrome — the file's third neutral tone alongside Steel/DarkSteel, which
+            // is the "grey, grey and grey" this ticket exists to fix. Brass instead, as the design's one
+            // substantial secondary accent; the disc/teeth (the largest mass) stay Steel.
+            Material brass = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
             Material darkSteel = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
             Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
             PartPlinth(root);
@@ -425,7 +456,7 @@ namespace MaxWorlds.VFX
                      new Vector3(0.055f, 0.07f, 0.075f), Quaternion.Euler(0f, a, 0f), body);
             }
             Part(root, "Hub", PrimitiveType.Cylinder, new Vector3(0f, 0.24f, 0f),
-                 new Vector3(0.11f, 0.075f, 0.11f), null, chrome);
+                 new Vector3(0.11f, 0.075f, 0.11f), null, brass);
             // The hub pin (MV-430): gives the gear's top face a readable centre at the 72° camera.
             Part(root, "HubPin", PrimitiveType.Cylinder, new Vector3(0f, 0.26f, 0f),
                  new Vector3(0.05f, 0.07f, 0.05f), null, darkSteel);
@@ -434,32 +465,41 @@ namespace MaxWorlds.VFX
             return root;
         }
 
-        /// <summary>A wound induction coil — stacked rings around a lit core.</summary>
+        /// <summary>A wound induction coil — stacked rings around a lit core. MV-454: was uniformly
+        /// <c>PowerBlue</c> — the exact hue <c>BuildPowerNozzle</c> uses for its own signature colour, so a
+        /// cosmetic drop risked reading as that named upgrade. Now Steel for the majority of the winding
+        /// (the largest mass) with Copper on the two rings nearest the core — coils really are wound
+        /// copper wire, so the accent doubles as the "what is this" read.</summary>
         public static GameObject BuildCoil(Transform parent = null)
         {
             var root = Root("Coil", parent);
-            Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
+            Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Copper);
             PartPlinth(root);
 
             for (int i = 0; i < 5; i++)
             {
                 float y = 0.12f + i * 0.07f;
                 float r = 0.16f - i * 0.008f;
+                Material ringMat = i >= 3 ? accent : wire;   // top two rings (nearest the core) are copper
                 Part(root, $"Ring{i}", PrimitiveType.Cylinder, new Vector3(0f, y, 0f),
-                     new Vector3(r, 0.02f, r), null, wire);
+                     new Vector3(r, 0.02f, r), null, ringMat);
             }
-            Glow(root, "Core", new Vector3(0f, 0.3f, 0f), 0.09f, PowerBlue);
+            Glow(root, "Core", new Vector3(0f, 0.3f, 0f), 0.09f, ModuleGlow);
             Glisten(root, GlistenPrefix + "0", OnCircle(40f, 0.26f, 0.15f), 0.04f);
             Glisten(root, GlistenPrefix + "1", OnCircle(210f, 0.19f, 0.14f), 0.035f);
             return root;
         }
 
-        /// <summary>A circuit block — a board studded with mounted components and a lit trace.</summary>
+        /// <summary>A circuit block — a board studded with mounted components and a lit trace. MV-454:
+        /// the studs and trace glow were <c>BeamCyan</c> — <c>BuildBeamNozzle</c>'s own signature colour.
+        /// Studs are Copper now (a board's mounted pins/contacts are copper in reality too), trace glow
+        /// is <c>ModuleGlow</c>; the board itself stays DarkSteel, the largest mass.</summary>
         public static GameObject BuildCircuitBlock(Transform parent = null)
         {
             var root = Root("CircuitBlock", parent);
             Material board = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            Material trace = MaterialLibrary.Tinted(SurfaceKind.Metal, BeamCyan);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Copper);
             PartPlinth(root);
 
             Part(root, "Board", PrimitiveType.Cube, new Vector3(0f, 0.18f, 0f),
@@ -469,20 +509,25 @@ namespace MaxWorlds.VFX
                 for (int z = -1; z <= 1; z += 2)
                 {
                     Part(root, $"Stud{x}_{z}", PrimitiveType.Cube, new Vector3(x * 0.09f, 0.3f, z * 0.09f),
-                         new Vector3(0.06f, 0.05f, 0.06f), null, trace);
+                         new Vector3(0.06f, 0.05f, 0.06f), null, accent);
                 }
             }
-            Glow(root, "Trace", new Vector3(0f, 0.29f, 0f), 0.05f, BeamCyan);
+            Glow(root, "Trace", new Vector3(0f, 0.29f, 0f), 0.05f, ModuleGlow);
             Glisten(root, GlistenPrefix + "0", new Vector3(0.1f, 0.29f, -0.1f), 0.04f);
             return root;
         }
 
-        /// <summary>A hydraulic piston — a barrel, rod and head, ready to fire.</summary>
+        /// <summary>A hydraulic piston — a barrel, rod and head, ready to fire. MV-454: this design was
+        /// wholly neutral (Chrome trim, DarkSteel housing) — the same "grey, grey and grey" complaint as
+        /// the gear, just with an extra shade of grey. The head is Brass now, the design's one
+        /// substantial accent; the cylinder (the largest mass) stays DarkSteel, the rod keeps its Chrome
+        /// trim.</summary>
         public static GameObject BuildPiston(Transform parent = null)
         {
             var root = Root("Piston", parent);
             Material trim = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
             Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
             PartPlinth(root);
 
             Part(root, "Cylinder", PrimitiveType.Cylinder, new Vector3(0f, 0.22f, 0f),
@@ -490,18 +535,21 @@ namespace MaxWorlds.VFX
             Part(root, "Rod", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
                  new Vector3(0.045f, 0.1f, 0.045f), null, trim);
             Part(root, "Head", PrimitiveType.Cylinder, new Vector3(0f, 0.5f, 0f),
-                 new Vector3(0.1f, 0.03f, 0.1f), null, housing);
+                 new Vector3(0.1f, 0.03f, 0.1f), null, accent);
             Glisten(root, GlistenPrefix + "0", new Vector3(0.08f, 0.42f, 0f), 0.035f);
             Glisten(root, GlistenPrefix + "1", new Vector3(0f, 0.5f, 0.08f), 0.04f);
             return root;
         }
 
-        /// <summary>A valve manifold — a body with radiating pipe nubs and a wheel handle on top.</summary>
+        /// <summary>A valve manifold — a body with radiating pipe nubs and a wheel handle on top.
+        /// MV-454: the wheel was <c>EngineOrange</c> — <c>BuildAccelerationEngine</c>'s own signature
+        /// colour. Copper now (a brass/copper valve wheel is the real-world fixture anyway); the body and
+        /// nubs (the largest mass) stay Steel.</summary>
         public static GameObject BuildValveManifold(Transform parent = null)
         {
             var root = Root("ValveManifold", parent);
             Material pipe = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
-            Material wheel = MaterialLibrary.Tinted(SurfaceKind.Metal, EngineOrange);
+            Material wheel = MaterialLibrary.Tinted(SurfaceKind.Metal, Copper);
             PartPlinth(root);
 
             Part(root, "Body", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f),
@@ -519,38 +567,48 @@ namespace MaxWorlds.VFX
             return root;
         }
 
-        /// <summary>A bank of three capacitor cans, each with a lit terminal cap. Tips glow
-        /// <see cref="PowerBlue"/>, not <see cref="CellCyan"/> (MV-347) — the exact cell colour on a part
-        /// was the "shares the cyan/glow signature" confusion the ticket called out, undercutting the
-        /// bigger footprint's own distinguishing job.</summary>
+        /// <summary>A bank of three capacitor cans, each with a lit terminal cap. MV-454: tips were
+        /// <see cref="PowerBlue"/> (MV-347 moved them off the cell's own <see cref="CellCyan"/>, but
+        /// PowerBlue is <c>BuildPowerNozzle</c>'s signature colour, the same collision this ticket found
+        /// elsewhere in the pool) — now <see cref="ModuleGlow"/>. Cans stay DarkSteel, the largest mass;
+        /// a Brass mounting bracket across their base is the design's substantial accent.</summary>
         public static GameObject BuildCapacitorBank(Transform parent = null)
         {
             var root = Root("CapacitorBank", parent);
             Material can = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
             PartPlinth(root);
 
+            Part(root, "Bracket", PrimitiveType.Cube, new Vector3(0f, 0.08f, 0f),
+                 new Vector3(0.34f, 0.03f, 0.09f), null, accent);
             for (int i = 0; i < 3; i++)
             {
                 float x = (i - 1) * 0.12f;
                 Part(root, $"Can{i}", PrimitiveType.Cylinder, new Vector3(x, 0.2f, 0f),
                      new Vector3(0.07f, 0.18f, 0.07f), null, can);
-                Glow(root, $"Tip{i}", new Vector3(x, 0.38f, 0f), 0.04f, PowerBlue);
+                Glow(root, $"Tip{i}", new Vector3(x, 0.38f, 0f), 0.04f, ModuleGlow);
             }
             Glisten(root, GlistenPrefix + "0", new Vector3(0.12f, 0.14f, 0.07f), 0.035f);
             return root;
         }
 
-        /// <summary>Two small interlocking gears at different heights — a busier cousin of <see cref="BuildGear"/>.</summary>
+        /// <summary>Two small interlocking gears at different heights — a busier cousin of
+        /// <see cref="BuildGear"/>. MV-454: both cogs were uniformly <see cref="HarnessGreen"/> —
+        /// <c>BuildAugmentationHarness</c>'s own signature colour. The larger cog (the majority mass) is
+        /// Steel now; the smaller one is Brass, the design's accent.</summary>
         public static GameObject BuildCogCluster(Transform parent = null)
         {
             var root = Root("CogCluster", parent);
-            Material cog = MaterialLibrary.Tinted(SurfaceKind.Metal, HarnessGreen);
+            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
+            Material[] cogMats = { body, accent };
             PartPlinth(root);
 
             Vector3[] offsets = { new Vector3(0.08f, 0.2f, 0f), new Vector3(-0.09f, 0.3f, 0.04f) };
             float[] radii = { 0.11f, 0.09f };
             for (int i = 0; i < offsets.Length; i++)
             {
+                Material cog = cogMats[i];
                 Part(root, $"Cog{i}", PrimitiveType.Cylinder, offsets[i],
                      new Vector3(radii[i], 0.03f, radii[i]), null, cog);
                 for (int t = 0; t < 5; t++)
@@ -566,12 +624,14 @@ namespace MaxWorlds.VFX
             return root;
         }
 
-        /// <summary>A hydraulic ram — a housing with a fluid-blue ram extended toward a cap.</summary>
+        /// <summary>A hydraulic ram — a housing with an extended ram toward a cap. MV-454: the ram was
+        /// <see cref="PowerBlue"/> — the same signature-colour collision as the coil and capacitor bank.
+        /// Copper now; the housing and cap (the largest mass) stay Steel.</summary>
         public static GameObject BuildHydraulicRam(Transform parent = null)
         {
             var root = Root("HydraulicRam", parent);
             Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
-            Material fluid = MaterialLibrary.Tinted(SurfaceKind.Metal, PowerBlue);
+            Material fluid = MaterialLibrary.Tinted(SurfaceKind.Metal, Copper);
             PartPlinth(root);
 
             Part(root, "Housing", PrimitiveType.Cylinder, new Vector3(0f, 0.16f, 0f),
@@ -585,30 +645,41 @@ namespace MaxWorlds.VFX
             return root;
         }
 
-        /// <summary>A fuse block — three lit fuses of different colours set in a dark housing.</summary>
+        /// <summary>A fuse block — three lit fuses set in a dark housing. MV-454: the three fuses wore
+        /// <see cref="EngineOrange"/>, <see cref="BeamCyan"/> and <see cref="HarnessGreen"/> — all three
+        /// other named parts' own signature colours at once, the worst of the pool's collisions with
+        /// them. All three now glow <see cref="ModuleGlow"/> instead; the block stays DarkSteel, and a
+        /// Brass rail along its front face is the design's substantial accent.</summary>
         public static GameObject BuildFuseBlock(Transform parent = null)
         {
             var root = Root("FuseBlock", parent);
             Material block = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
             PartPlinth(root);
 
             Part(root, "Block", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0f),
                  new Vector3(0.28f, 0.16f, 0.17f), null, block);
-            Color[] fuseColors = { EngineOrange, BeamCyan, HarnessGreen };
+            Part(root, "Rail", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0.087f),
+                 new Vector3(0.28f, 0.02f, 0.02f), null, accent);
             for (int i = 0; i < 3; i++)
             {
                 float x = (i - 1) * 0.1f;
-                Glow(root, $"Fuse{i}", new Vector3(x, 0.28f, 0f), 0.045f, fuseColors[i]);
+                Glow(root, $"Fuse{i}", new Vector3(x, 0.28f, 0f), 0.045f, ModuleGlow);
             }
             Glisten(root, GlistenPrefix + "0", new Vector3(0.13f, 0.14f, 0.09f), 0.035f);
             return root;
         }
 
-        /// <summary>A wiring loom — a connector block with looping cable runs and a lit junction.</summary>
+        /// <summary>A wiring loom — a connector block with looping cable runs and a lit junction. MV-454:
+        /// the whole prop was DarkSteel with a <see cref="BeamCyan"/> junction glow (another named part's
+        /// signature colour). The junction is <see cref="ModuleGlow"/> now; the three loops are Copper —
+        /// wiring is copper wire, so the accent is also the correct read — while the connector block
+        /// (the largest single mass) stays DarkSteel.</summary>
         public static GameObject BuildWiringLoom(Transform parent = null)
         {
             var root = Root("WiringLoom", parent);
             Material wire = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            Material accent = MaterialLibrary.Tinted(SurfaceKind.Metal, Copper);
             PartPlinth(root);
 
             Part(root, "Connector", PrimitiveType.Cube, new Vector3(0f, 0.14f, 0f),
@@ -618,9 +689,9 @@ namespace MaxWorlds.VFX
                 float a = i * 40f - 40f;
                 Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
                 Part(root, $"Loop{i}", PrimitiveType.Cylinder, dir * 0.14f + Vector3.up * 0.24f,
-                     new Vector3(0.03f, 0.1f, 0.03f), Quaternion.Euler(60f, a, 0f), wire);
+                     new Vector3(0.03f, 0.1f, 0.03f), Quaternion.Euler(60f, a, 0f), accent);
             }
-            Glow(root, "Junction", new Vector3(0f, 0.22f, 0f), 0.05f, BeamCyan);
+            Glow(root, "Junction", new Vector3(0f, 0.22f, 0f), 0.05f, ModuleGlow);
             Glisten(root, GlistenPrefix + "0", new Vector3(0f, 0.14f, 0.08f), 0.04f);
             return root;
         }

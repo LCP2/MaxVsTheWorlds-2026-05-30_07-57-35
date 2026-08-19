@@ -92,15 +92,16 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [Test]
-        public void TheMachineInternalsPool_IsCollapsedToTheSingleGearDesign()
+        public void TheMachineInternalsPool_HoldsAllTenDesigns()
         {
-            // WV-237 originally shipped "~10 distinct part designs"; MV-430 collapsed the pool to one —
-            // at the fixed 72° camera nine of the ten read as noise, not variety, and none carried
-            // gameplay identity anyway (WV-228). The other nine builders stay in the catalog, reachable
-            // by key, so restoring variety later is a one-line change to this array.
-            Assert.AreEqual(1, WeaponPartArt.MachineInternalsKeys.Length,
-                "the machine-internals pool should hold only the gear design (MV-430).");
-            Assert.AreEqual(WeaponPartArt.Keys.Gear, WeaponPartArt.MachineInternalsKeys[0]);
+            // WV-237 originally shipped "~10 distinct part designs"; MV-430 collapsed the pool to one,
+            // citing the fixed 72° camera reading nine of the ten as noise rather than variety. MV-454
+            // restores the full ten now that every design also carries its own Brass/Copper colour
+            // accent — colour survives the 72° projection far better than silhouette does, which was the
+            // actual axis MV-430 measured.
+            Assert.AreEqual(10, WeaponPartArt.MachineInternalsKeys.Length,
+                "the machine-internals pool should hold all ten designs (MV-454).");
+            CollectionAssert.Contains(WeaponPartArt.MachineInternalsKeys, WeaponPartArt.Keys.Gear);
         }
 
         [UnityTest]
