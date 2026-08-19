@@ -144,11 +144,17 @@ namespace MaxWorlds.CameraRig
                 radius, newPitchDegrees, verticalFovDegrees, aspect);
         }
 
-        private void Awake()
+        private void Awake() => ApplyDeviceDefault();
+
+        /// <summary>
+        /// Per-device-class default (YT-106): a phone sits closer than the desktop framing this
+        /// field was authored for. Called from Awake, before the first Apply, so the value the
+        /// tuning panel captures as its 100% reference is already the per-device one. Exposed
+        /// publicly (MV-464) so an EditMode test can invoke it directly — Awake never runs as a
+        /// side effect of AddComponent outside Play mode.
+        /// </summary>
+        public void ApplyDeviceDefault()
         {
-            // Per-device-class default (YT-106): a phone sits closer than the desktop framing this
-            // field was authored for. Done here, before the first Apply, so the value the tuning
-            // panel captures as its 100% reference is already the per-device one.
             if (IsPhoneClass) cameraDistance = PhoneDistance;
             Apply();
         }
