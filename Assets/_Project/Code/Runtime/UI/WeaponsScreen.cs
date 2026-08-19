@@ -56,6 +56,11 @@ namespace MaxWorlds.UI
         private static readonly Color SpendDisabled = new Color(1f, 1f, 1f, 0.18f);
         private static readonly Color QuitColor = new Color(0.85f, 0.20f, 0.20f);   // MV-257: destructive-red
 
+        // MV-443: the level pill's dark backdrop (rig_board.json's own #0A0B0F, forced opaque-ish at
+        // 0.94 per the ticket) — every node's pill fills with this regardless of family, so the state
+        // read comes entirely from the pill's border/text colour, not its background.
+        private static readonly Color PillBackdrop = new Color(10f / 255f, 11f / 255f, 15f / 255f, 0.94f);
+
         private const float TopBarHeight = 104f;
         private const float ContentMargin = 28f;
 
@@ -72,7 +77,9 @@ namespace MaxWorlds.UI
         // peak alphas the halo's shared Glow texture is tinted to (module cyan for a draftable
         // capability, family colour for owned/lit) — the halo itself fades to 0 by its own outer edge.
         private const float GlowRadiusMultiplier = 1.30f;
-        private const float GlowAlphaOwned = 0.28f;
+        // MV-443 defect 5: owned raised 0.28 -> 0.55; draftable stays 0.22 but is now family-tinted,
+        // not module cyan (RefreshAbilityNode).
+        private const float GlowAlphaOwned = 0.55f;
         private const float GlowAlphaDraftable = 0.22f;
 
         private Canvas _canvas;
@@ -90,12 +97,15 @@ namespace MaxWorlds.UI
         private Image _partsTrayBg;
         private Text _partsTrayLabel, _partsTraySub;
         private readonly List<Image> _partsSockets = new List<Image>();
+        private readonly List<Image> _partsSocketGlows = new List<Image>();
         private Text _partsOverflowText;
 
         private readonly Dictionary<string, RigNodeVisual> _abilityNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, RigNodeVisual> _categoryNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, RigNodeVisual> _fusionNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, Image> _categoryPanels = new Dictionary<string, Image>();
+        private readonly Dictionary<string, Image> _categoryPanelBorders = new Dictionary<string, Image>();
+        private readonly Dictionary<string, Image> _connectors = new Dictionary<string, Image>();
 
         // ------------------------------------------------------------------ Morphing Module draft (MV-424)
 
@@ -134,6 +144,14 @@ namespace MaxWorlds.UI
         /// <summary>MV-433: a category's tinted backdrop column — test-only access, same idiom as
         /// <see cref="BoardNode"/>.</summary>
         public Image CategoryPanel(string id) => _categoryPanels.TryGetValue(id, out var p) ? p : null;
+
+        /// <summary>MV-443: a category panel's 1.5px family-coloured hairline edge — test-only access.</summary>
+        public Image CategoryPanelBorder(string id) => _categoryPanelBorders.TryGetValue(id, out var p) ? p : null;
+
+        /// <summary>MV-443: one tree connector by its own build-time id (<c>"conn:cat:ID>ID"</c>,
+        /// <c>"conn:ab:ID>ID"</c> or <c>"conn:fusion:ID>ID"</c>) — test-only access, same idiom as
+        /// <see cref="BoardNode"/>.</summary>
+        public Image Connector(string id) => _connectors.TryGetValue(id, out var c) ? c : null;
 
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
@@ -231,9 +249,9 @@ namespace MaxWorlds.UI
                     c.a = pulse;
                     v.OuterRing.color = c;
 
-                    // MV-433: the draftable node's module-cyan halo pulses with the same ring/cadence —
-                    // OuterRing is only ever active in the draftable state, so this never touches the
-                    // owned/lit halo (which stays a flat GlowAlphaOwned, no pulse).
+                    // MV-433/MV-443: the draftable node's soft family-tinted halo pulses with the same
+                    // ring/cadence — OuterRing is only ever active in the draftable state, so this never
+                    // touches the owned/lit halo (which stays a flat GlowAlphaOwned, no pulse).
                     if (v.Glow != null && v.Glow.gameObject.activeSelf)
                     {
                         var g = v.Glow.color;
@@ -341,8 +359,40 @@ namespace MaxWorlds.UI
             foreach (var cat in RigBoardLayout.Categories) RefreshCategoryNode(cat, banked);
             foreach (var ab in RigBoardLayout.Abilities) RefreshAbilityNode(ab, banked);
             foreach (var fusion in RigBoardLayout.Fusions) RefreshFusionNode(fusion, banked);
+            RefreshConnectors();
 
             RefreshMorphingModuleDraft();
+        }
+
+        /// <summary>MV-443: the two live-state connector families (fusion connectors are a static amber
+        /// tint set once at build time and never touched here — see <see cref="BuildConnectors"/>).</summary>
+        private void RefreshConnectors()
+        {
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
+                bool draftable = RigState.IsReached(ab.Id) && !RigState.IsOwned(ab.Id);
+
+                if (string.IsNullOrEmpty(ab.Parent))
+                {
+                    if (!_connectors.TryGetValue($"conn:cat:{ab.Category}>{ab.Id}", out var img)) continue;
+                    bool live = CategoryHasOwnedAbility(ab.Category) || draftable;
+                    img.color = new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
+                }
+                else
+                {
+                    if (!_connectors.TryGetValue($"conn:ab:{ab.Parent}>{ab.Id}", out var img)) continue;
+                    bool live = RigState.IsOwned(ab.Parent);
+                    img.color = new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
+                }
+            }
+        }
+
+        private static bool CategoryHasOwnedAbility(string categoryId)
+        {
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Category == categoryId && RigState.IsOwned(ab.Id)) return true;
+            return false;
         }
 
         /// <summary>Dims the whole board behind a scrim and brings just the candidate nodes back above
@@ -407,7 +457,9 @@ namespace MaxWorlds.UI
             const int socketCount = 6;
             bool any = banked > 0;
             _partsTrayLabel.color = any ? PartsColor : Dim;
-            _partsTraySub.text = any ? "tap a node to fit one" : "none banked";
+            // MV-443 defect 7: "N banked" / "none banked" — was a fixed "tap a node to fit one" that
+            // never reported the actual count.
+            _partsTraySub.text = any ? $"{banked} banked" : "none banked";
             _partsTraySub.color = any ? new Color(TextColor.r, TextColor.g, TextColor.b, 0.7f) : Dim;
             if (!any) _partsTrayBg.color = RowColor;
 
@@ -416,14 +468,26 @@ namespace MaxWorlds.UI
                 bool filled = i < banked;
                 _partsSockets[i].sprite = filled
                     ? PolygonFillSprite(HexSides, Mathf.CeilToInt(PartsSocketSize * Sqrt3 * 0.5f), Mathf.CeilToInt(PartsSocketSize))
-                    : SolidHexOutlineSprite(PartsSocketSize * 0.5f);
-                _partsSockets[i].color = filled ? PartsColor : new Color(1f, 1f, 1f, 0.10f);
+                    : PartsPipOutlineSprite();
+                _partsSockets[i].color = filled ? PartsColor : new Color(PartsColor.r, PartsColor.g, PartsColor.b, 0.40f);
+                _partsSocketGlows[i].gameObject.SetActive(filled);
+                if (filled) _partsSocketGlows[i].color = new Color(PartsColor.r, PartsColor.g, PartsColor.b, 0.35f);
             }
             int overflow = Mathf.Max(0, banked - socketCount);
             _partsOverflowText.gameObject.SetActive(overflow > 0);
             _partsOverflowText.text = $"+{overflow}";
         }
 
+        /// <summary>MV-443 defect 7: an unfilled PARTS pip's own 2px outline — distinct from
+        /// <see cref="SolidHexOutlineSprite"/>'s 4px <c>strokeOwned</c>, which never applied here.</summary>
+        private Sprite PartsPipOutlineSprite() =>
+            HudTextures.PolygonOutline(HexSides, HexRotationDeg,
+                Mathf.CeilToInt(PartsSocketSize * Sqrt3 * 0.5f), Mathf.CeilToInt(PartsSocketSize), 2f);
+
+        /// <summary>MV-443 defect 4: a category is never LOCK/"? ? ?" — it always names itself and its
+        /// own owned/total count. "Lit" (has ≥1 owned ability) still gets the stronger owned-style
+        /// treatment; "dark" gets its own third, always-legible state, never the ability node's locked
+        /// look.</summary>
         private void RefreshCategoryNode(RigCategoryLayout cat, int banked)
         {
             if (!_categoryNodes.TryGetValue(cat.Id, out var v)) return;
@@ -436,20 +500,37 @@ namespace MaxWorlds.UI
             }
             bool lit = owned > 0;
             Color family = RigBoardLayout.Colour(cat.Family);
+            Color ink = RigBoardLayout.Colour("ink");
 
             if (_categoryPanels.TryGetValue(cat.Id, out var panel))
                 panel.color = new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark);
+            if (_categoryPanelBorders.TryGetValue(cat.Id, out var border))
+                border.color = new Color(family.r, family.g, family.b, lit ? 0.16f : 0.06f);
 
-            v.HexFill.color = new Color(family.r, family.g, family.b, lit ? 0.20f : 0.05f);
-            v.HexOutline.color = lit ? family : new Color(family.r, family.g, family.b, 0.35f);
-            v.Glow.gameObject.SetActive(lit);
-            if (lit) v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaOwned);
+            if (lit)
+            {
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
+                v.HexOutline.color = family;
+                v.Glow.gameObject.SetActive(true);
+                v.Glow.color = new Color(family.r, family.g, family.b, 0.55f);
+                v.OuterRing.gameObject.SetActive(true);
+                v.OuterRing.color = new Color(family.r, family.g, family.b, 0.45f);
+                v.Icon.color = ink;
+            }
+            else
+            {
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.12f);
+                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.55f);
+                v.Glow.gameObject.SetActive(false);
+                v.OuterRing.gameObject.SetActive(false);
+                v.Icon.color = new Color(family.r, family.g, family.b, 0.85f);
+            }
 
             v.PillText.text = $"{owned}/{total}";
-            v.PillBg.color = lit ? new Color(family.r, family.g, family.b, 0.30f) : new Color(1f, 1f, 1f, 0.06f);
-            v.PillText.color = lit ? TextColor : Dim;
-            v.Icon.color = lit ? TextColor : Dim;
-            v.Label.color = lit ? TextColor : Dim;
+            v.PillBg.color = PillBackdrop;
+            v.PillBorder.color = new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f);
+            v.PillText.color = lit ? family : new Color(family.r, family.g, family.b, 0.7f);
+            v.Label.color = new Color(ink.r, ink.g, ink.b, 0.62f);
 
             _ = banked;
         }
@@ -475,56 +556,60 @@ namespace MaxWorlds.UI
             bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
 
             Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
-            Color cyan = RigBoardLayout.Colour("sec");
             Color module = RigBoardLayout.Colour("module");
+            Color ink = RigBoardLayout.Colour("ink");
 
             v.OuterRing.gameObject.SetActive(draftable);
             v.CapMarker.gameObject.SetActive(draftable);
-            v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : SolidHexOutlineSprite(v.Radius);
+            v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : owned ? SolidHexOutlineSprite(v.Radius) : LockedHexOutlineSprite(v.Radius);
 
             if (owned)
             {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.20f);
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.30f);
                 v.HexOutline.color = family;
                 v.Glow.gameObject.SetActive(true);
                 v.Glow.rectTransform.sizeDelta = new Vector2(v.Radius * GlowRadiusMultiplier * 2f, v.Radius * GlowRadiusMultiplier * 2f);
                 v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaOwned);
                 v.PillText.text = $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
-                v.PillBg.color = new Color(family.r, family.g, family.b, 0.30f);
-                v.PillText.color = TextColor;
+                v.PillBg.color = PillBackdrop;
+                v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
+                v.PillText.color = family;
                 v.Label.text = ab.Label;
-                v.Label.color = TextColor;
-                v.Icon.color = TextColor;
+                v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.95f);
+                v.Icon.color = ink;
             }
             else if (draftable)
             {
-                v.HexFill.color = new Color(family.r, family.g, family.b, 0.10f);
-                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.8f);
-                // MV-433 item 3: the dashed-outer-ring halo — module cyan, on the ring's own radius
-                // (r + capOuterRingOffset), pulsing in Update() alongside the ring itself.
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.16f);
+                v.HexOutline.color = module;
+                // MV-433 item 3, MV-443 defect 5: the dashed-outer-ring halo is now a SOFT FAMILY glow
+                // (was module cyan) — the module tint lives on the border/dot instead so it still reads
+                // "draftable", pulsing in Update() alongside the ring itself.
                 float ringR = v.Radius + RigBoardLayout.CapOuterRingOffset;
                 v.Glow.gameObject.SetActive(true);
                 v.Glow.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
-                v.Glow.color = new Color(module.r, module.g, module.b, GlowAlphaDraftable);
-                v.CapMarker.color = cyan;
+                v.Glow.color = new Color(family.r, family.g, family.b, GlowAlphaDraftable);
+                v.CapMarker.color = module;
                 v.PillText.text = "SHED";
-                v.PillBg.color = new Color(cyan.r, cyan.g, cyan.b, 0.25f);
-                v.PillText.color = cyan;
+                v.PillBg.color = PillBackdrop;
+                v.PillBorder.color = module;
+                v.PillText.color = module;
                 v.Label.text = ab.Label;
-                v.Label.color = TextColor;
-                v.Icon.color = new Color(family.r, family.g, family.b, 0.9f);
+                v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f);
+                v.Icon.color = new Color(family.r, family.g, family.b, 0.95f);
             }
             else   // not reached
             {
-                v.HexFill.color = new Color(1f, 1f, 1f, 0.02f);
-                v.HexOutline.color = new Color(1f, 1f, 1f, 0.12f);
+                v.HexFill.color = new Color(family.r, family.g, family.b, 0.035f);
+                v.HexOutline.color = new Color(family.r, family.g, family.b, 0.24f);
                 v.Glow.gameObject.SetActive(false);
                 v.PillText.text = "LOCK";
-                v.PillBg.color = new Color(1f, 1f, 1f, 0.05f);
-                v.PillText.color = Dim;
+                v.PillBg.color = PillBackdrop;
+                v.PillBorder.color = new Color(family.r, family.g, family.b, 0.22f);
+                v.PillText.color = new Color(ink.r, ink.g, ink.b, 0.34f);
                 v.Label.text = "? ? ?";
-                v.Label.color = Dim;
-                v.Icon.color = new Color(1f, 1f, 1f, 0.15f);
+                v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f);
+                v.Icon.color = new Color(family.r, family.g, family.b, 0.40f);
             }
 
             v.PartBadge.gameObject.SetActive(spendable);
@@ -546,6 +631,7 @@ namespace MaxWorlds.UI
 
             if (forged)
             {
+                v.HexOutline.sprite = SolidPolygonOutlineSprite(FusionSides, v.Radius);
                 v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.28f);
                 v.HexOutline.color = amber;
                 v.Icon.color = TextColor;
@@ -553,10 +639,12 @@ namespace MaxWorlds.UI
                 v.Label.color = TextColor;
                 v.Sub.text = $"FORGED · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
+                v.Sub.fontSize = 13;
                 v.Button.interactable = false;
             }
             else if (eligible)
             {
+                v.HexOutline.sprite = SolidPolygonOutlineSprite(FusionSides, v.Radius);
                 v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.14f);
                 v.HexOutline.color = amber;
                 v.Icon.color = amber;
@@ -564,19 +652,31 @@ namespace MaxWorlds.UI
                 v.Label.color = TextColor;
                 v.Sub.text = $"{fusion.PartCost} PARTS · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
+                v.Sub.fontSize = 13;
                 v.Button.interactable = banked >= fusion.PartCost;
             }
-            else
+            else   // MV-443 defect 8: locked fusion diamond
             {
-                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.03f);
-                v.HexOutline.color = new Color(1f, 1f, 1f, 0.14f);
-                v.Icon.color = Dim;
+                v.HexOutline.sprite = LockedFusionOutlineSprite(v.Radius);
+                v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.045f);
+                v.HexOutline.color = new Color(amber.r, amber.g, amber.b, 0.26f);
+                v.Icon.color = new Color(amber.r, amber.g, amber.b, 0.40f);
                 v.Label.text = "? ? ?";
                 v.Label.color = Dim;
                 v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
-                v.Sub.color = Dim;
+                var ink = RigBoardLayout.Colour("ink");
+                v.Sub.color = new Color(ink.r, ink.g, ink.b, 0.22f);
+                v.Sub.fontSize = 12;
                 v.Button.interactable = false;
             }
+        }
+
+        /// <summary>MV-443 defect 8: locked fusion diamond border, 2px — distinct from the eligible/
+        /// forged states' shared <see cref="SolidPolygonOutlineSprite"/> (strokeOwned, 4px).</summary>
+        private Sprite LockedFusionOutlineSprite(float r)
+        {
+            float w = r * 2f, h = r * 2f;
+            return HudTextures.PolygonOutline(FusionSides, FusionRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), 2f);
         }
 
         /// <summary>A Morphing Module draft candidate (MV-424): lit in its family colour with a strong
@@ -603,6 +703,7 @@ namespace MaxWorlds.UI
 
             v.PillText.text = "TAKE";
             v.PillBg.color = new Color(DraftBadgeColor.r, DraftBadgeColor.g, DraftBadgeColor.b, 0.30f);
+            v.PillBorder.color = DraftBadgeColor;
             v.PillText.color = DraftBadgeColor;
 
             v.DraftBadge.gameObject.SetActive(true);
@@ -706,6 +807,7 @@ namespace MaxWorlds.UI
             _boardRoot.anchoredPosition = Vector2.zero;
 
             BuildCategoryPanels(_boardRoot);
+            BuildConnectors(_boardRoot);   // MV-443: behind the panels' contents, but above the panel fill
             BuildForgeSection(_boardRoot);
             foreach (var cat in RigBoardLayout.Categories) _categoryNodes[cat.Id] = BuildCategoryNode(_boardRoot, cat);
             foreach (var ab in RigBoardLayout.Abilities) _abilityNodes[ab.Id] = BuildAbilityNode(_boardRoot, ab);
@@ -750,7 +852,8 @@ namespace MaxWorlds.UI
                 float right = i == n - 1 ? categories[i].X + spacing * 0.5f : (categories[i].X + categories[i + 1].X) * 0.5f;
                 float w = right - left;
 
-                var panel = AddImage(boardRoot, HudTextures.RoundedBox(64, Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f)),
+                float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f);
+                var panel = AddImage(boardRoot, HudTextures.RoundedBox(64, cornerFraction),
                     new Color(1f, 1f, 1f, RigBoardLayout.RegionOpacityDark), $"{categories[i].Id} Panel");
                 Anchor(panel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
                 panel.rectTransform.sizeDelta = new Vector2(w, h);
@@ -758,7 +861,95 @@ namespace MaxWorlds.UI
                 panel.type = Image.Type.Sliced;
                 panel.raycastTarget = false;
                 _categoryPanels[categories[i].Id] = panel;
+
+                // MV-443 defect 1: a 1.5px family-coloured hairline so the columns read as an edge
+                // without shouting — same rect as the panel fill, stacked on top.
+                var border = AddImage(boardRoot, HudTextures.RoundedBoxOutline(64, cornerFraction, 1.5f),
+                    Color.clear, $"{categories[i].Id} Panel Border");
+                Anchor(border.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+                border.rectTransform.sizeDelta = new Vector2(w, h);
+                border.rectTransform.anchoredPosition = new Vector2(left, -y);
+                border.type = Image.Type.Sliced;
+                border.raycastTarget = false;
+                _categoryPanelBorders[categories[i].Id] = border;
             }
+        }
+
+        /// <summary>MV-443 defect 2: the tree's connector lines — category-to-parentless-ability,
+        /// parent-ability-to-child-ability, and category-to-fusion — built once here as static cubic-
+        /// bezier strokes (<see cref="HudTextures.BezierStroke"/>); <see cref="RefreshConnectors"/>
+        /// only ever recolours them. Built right after the panels (behind every node, above the panel
+        /// fill) so nothing drawn later needs to know connectors exist.</summary>
+        private void BuildConnectors(RectTransform boardRoot)
+        {
+            float catR = RigBoardLayout.RadiusCategory, abR = RigBoardLayout.RadiusAbility, fuR = RigBoardLayout.RadiusFusion;
+            float bias = RigBoardLayout.ConnectorControlBias, width = RigBoardLayout.ConnectorWidth;
+
+            var categoryById = new Dictionary<string, RigCategoryLayout>();
+            foreach (var cat in RigBoardLayout.Categories) categoryById[cat.Id] = cat;
+            var abilityById = new Dictionary<string, RigAbilityLayout>();
+            foreach (var ab in RigBoardLayout.Abilities) abilityById[ab.Id] = ab;
+
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                var end = new Vector2(ab.X, ab.Y + RigBoardLayout.ConnectorEndOffset(abR));
+                if (string.IsNullOrEmpty(ab.Parent))
+                {
+                    if (!categoryById.TryGetValue(ab.Category, out var cat)) continue;
+                    var start = new Vector2(cat.X, cat.Y + catR + RigBoardLayout.ConnectorStartOffsetCategory);
+                    BuildConnector(boardRoot, $"conn:cat:{cat.Id}>{ab.Id}", start, end, bias, width);
+                }
+                else
+                {
+                    if (!abilityById.TryGetValue(ab.Parent, out var parent)) continue;
+                    var start = new Vector2(parent.X, parent.Y + RigBoardLayout.ConnectorStartOffsetAbility(abR));
+                    BuildConnector(boardRoot, $"conn:ab:{parent.Id}>{ab.Id}", start, end, bias, width);
+                }
+            }
+
+            Color part = RigBoardLayout.Colour("part");
+            float fusionBias = RigBoardLayout.ConnectorFusionControlBias, fusionWidth = RigBoardLayout.ConnectorFusionWidth;
+            foreach (var fusion in RigBoardLayout.Fusions)
+            {
+                var end = new Vector2(fusion.X, fusion.Y + RigBoardLayout.ConnectorEndOffset(fuR));
+                foreach (var parentCategoryId in new[] { fusion.ParentA, fusion.ParentB })
+                {
+                    if (!categoryById.TryGetValue(parentCategoryId, out var cat)) continue;
+                    var start = new Vector2(cat.X, cat.Y + catR + RigBoardLayout.ConnectorStartOffsetCategory);
+                    var img = BuildConnector(boardRoot, $"conn:fusion:{fusion.Id}>{parentCategoryId}", start, end, fusionBias, fusionWidth);
+                    img.color = new Color(part.r, part.g, part.b, RigBoardLayout.ConnectorFusionAlpha);   // static, never refreshed
+                }
+            }
+        }
+
+        /// <summary>One cubic-bezier connector: control points sit on the vertical between
+        /// <paramref name="start"/> and <paramref name="end"/>, at <paramref name="controlBias"/> of the
+        /// gap from each end — a smooth mostly-vertical S-curve regardless of how far apart the two
+        /// points sit on x.</summary>
+        private Image BuildConnector(RectTransform boardRoot, string id, Vector2 start, Vector2 end, float controlBias, float strokeWidth)
+        {
+            float gap = end.y - start.y;
+            var c1 = new Vector2(start.x, start.y + gap * controlBias);
+            var c2 = new Vector2(end.x, start.y + gap * (1f - controlBias));
+
+            float pad = strokeWidth * 0.5f + 2f;
+            float minX = Mathf.Min(Mathf.Min(start.x, c1.x), Mathf.Min(c2.x, end.x)) - pad;
+            float maxX = Mathf.Max(Mathf.Max(start.x, c1.x), Mathf.Max(c2.x, end.x)) + pad;
+            float minY = Mathf.Min(Mathf.Min(start.y, c1.y), Mathf.Min(c2.y, end.y)) - pad;
+            float maxY = Mathf.Max(Mathf.Max(start.y, c1.y), Mathf.Max(c2.y, end.y)) + pad;
+            int w = Mathf.Max(2, Mathf.CeilToInt(maxX - minX));
+            int h = Mathf.Max(2, Mathf.CeilToInt(maxY - minY));
+
+            Vector2 Local(Vector2 p) => new Vector2(p.x - minX, p.y - minY);
+            var sprite = HudTextures.BezierStroke(Local(start), Local(c1), Local(c2), Local(end), strokeWidth, w, h);
+
+            var img = AddImage(boardRoot, sprite, Color.clear, id);
+            Anchor(img.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
+            img.rectTransform.sizeDelta = new Vector2(w, h);
+            img.rectTransform.anchoredPosition = new Vector2(minX, -minY);
+            img.raycastTarget = false;
+            _connectors[id] = img;
+            return img;
         }
 
         /// <summary>The Morphing Module draft's dimming scrim (MV-424) — one full-board rect, built
@@ -841,11 +1032,14 @@ namespace MaxWorlds.UI
             forgeLabel.fontStyle = FontStyle.Bold;
             forgeLabel.text = "FORGE";
 
-            var caption = AddText(boardRoot, 18, Dim, TextAnchor.UpperLeft);
+            // MV-443 defect 8: two short lines under the FORGE label (not one long line beside it,
+            // which used to run under the first diamond) — left of x=380, per MV-442.png.
+            var caption = AddText(boardRoot, 16, Dim, TextAnchor.UpperLeft);
             Anchor(caption.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            caption.rectTransform.anchoredPosition = new Vector2(ContentMargin + 170f, -(dividerY + 24f));
-            caption.rectTransform.sizeDelta = new Vector2(700f, 28f);
-            caption.text = "two lit categories · costs parts, never a shed · lands in the B / U slot";
+            caption.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 58f));
+            caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 44f);
+            caption.lineSpacing = 1.2f;
+            caption.text = "two lit categories · costs parts\nnever a shed · lands in B / U";
 
             foreach (var fusion in RigBoardLayout.Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
         }
@@ -876,6 +1070,7 @@ namespace MaxWorlds.UI
             shell.Sub = sub;
 
             shell.PillBg.gameObject.SetActive(false);   // fusions carry no level pill
+            shell.PillBorder.gameObject.SetActive(false);
             shell.PartBadge.gameObject.SetActive(false);
             shell.OuterRing.gameObject.SetActive(false);
             shell.CapMarker.gameObject.SetActive(false);
@@ -900,8 +1095,15 @@ namespace MaxWorlds.UI
             shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.CategoryLabelOffsetY(r));
             shell.Label.text = cat.Id;
 
-            shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
+            // MV-443 defect 5: a lit category additionally gets a solid outer ring at
+            // capOuterRingOffset — reusing the shared Outer Ring image, but with a SOLID (not dashed)
+            // sprite of its own; RefreshCategoryNode only ever toggles/tints it.
+            float ringR = r + RigBoardLayout.CapOuterRingOffset;
+            shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
+            shell.OuterRing.sprite = HudTextures.Ring(96, 2f);
             shell.OuterRing.gameObject.SetActive(false);
+
+            shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
             shell.CapMarker.gameObject.SetActive(false);
             shell.Button.interactable = false;
             return shell;
@@ -1006,12 +1208,22 @@ namespace MaxWorlds.UI
             partBadge.raycastTarget = false;
 
             float pillW = RigBoardLayout.LevelPillW, pillH = RigBoardLayout.LevelPillH;
-            var pillBg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), RowColor, "Pill");
+            var pillBg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), PillBackdrop, "Pill");
             Anchor(pillBg.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             pillBg.rectTransform.sizeDelta = new Vector2(pillW, pillH);
             pillBg.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LevelPillOffsetY(r));
             pillBg.type = Image.Type.Sliced;
             pillBg.raycastTarget = false;
+
+            // MV-443 defect 3: the level pill's own 2px border — a separate stacked image so its
+            // colour (the state read: family/module/ink) never has to fight the backdrop's fixed
+            // #0A0B0F fill.
+            var pillBorder = AddImage(root, HudTextures.RoundedBoxOutline(32, 0.5f, 2f), Color.clear, "Pill Border");
+            Anchor(pillBorder.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            pillBorder.rectTransform.sizeDelta = new Vector2(pillW, pillH);
+            pillBorder.rectTransform.anchoredPosition = pillBg.rectTransform.anchoredPosition;
+            pillBorder.type = Image.Type.Sliced;
+            pillBorder.raycastTarget = false;
 
             var pillText = AddText(pillBg.rectTransform, Mathf.RoundToInt(RigBoardLayout.LevelPillFontSize), TextColor, TextAnchor.MiddleCenter);
             Stretch(pillText.rectTransform);
@@ -1050,7 +1262,7 @@ namespace MaxWorlds.UI
             {
                 Root = root, Glow = glow, HexFill = fill, HexOutline = outline, Icon = icon,
                 OuterRing = outerRing, CapMarker = capMarker, PartBadge = partBadge,
-                PillBg = pillBg, PillText = pillText, Label = label, Button = button, Radius = r,
+                PillBg = pillBg, PillBorder = pillBorder, PillText = pillText, Label = label, Button = button, Radius = r,
                 DraftBadge = draftBadge, DraftBadgeText = draftBadgeText
             };
             return root;
@@ -1079,13 +1291,21 @@ namespace MaxWorlds.UI
                 RigBoardLayout.StrokeActive, true, 14);
         }
 
+        /// <summary>MV-443 defect 5: a locked ability's hex outline draws at <c>strokeLocked</c> (2px),
+        /// not the owned state's <c>strokeOwned</c> (4px) <see cref="SolidHexOutlineSprite"/> uses.</summary>
+        private Sprite LockedHexOutlineSprite(float r)
+        {
+            float w = r * Sqrt3, h = r * 2f;
+            return HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(w), Mathf.CeilToInt(h), RigBoardLayout.StrokeLocked);
+        }
+
         /// <summary>The refs a built node hands back to <see cref="Refresh"/> — one shared shape for
         /// categories, abilities and fusions so all three can only ever drift apart in DATA (their
         /// json entry), never in code structure.</summary>
         private sealed class RigNodeVisual
         {
             public RectTransform Root;
-            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartBadge, PillBg, DraftBadge;
+            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartBadge, PillBg, PillBorder, DraftBadge;
             public Text PillText, Label, DraftBadgeText;
             public Button Button;
             public float Radius;
@@ -1124,7 +1344,9 @@ namespace MaxWorlds.UI
 
             var subtitle = AddText(bar, 18, Dim, TextAnchor.MiddleLeft);
             Anchor(subtitle.rectTransform, new Vector2(0f, 0.5f), new Vector2(0.34f, 0.5f), new Vector2(0f, 0.5f));
-            subtitle.rectTransform.offsetMin = new Vector2(190f, -30f);
+            // MV-443 defect 7: was 190 — "THE RIG" at 38pt Bold runs past that, colliding with this
+            // subtitle at the design's own scale; pushed right enough to clear it with a real gap.
+            subtitle.rectTransform.offsetMin = new Vector2(230f, -30f);
             subtitle.rectTransform.offsetMax = new Vector2(-12f, 30f);
             subtitle.fontStyle = FontStyle.Bold;
             subtitle.text = "MAX'S WORKBENCH";
@@ -1147,6 +1369,13 @@ namespace MaxWorlds.UI
             _cellsChipButton = _cellsChipBg.gameObject.AddComponent<Button>();
             _cellsChipButton.transition = Selectable.Transition.None;
             _cellsChipButton.onClick.AddListener(OnCellsChipTapped);
+
+            // MV-443 defect 7: a real rounded pill (radius 25) with a 2.5px colours.sec border — was a
+            // flat, borderless chip.
+            var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(50, 0.5f, 2.5f), CellsColor, "Cells Border");
+            Stretch(cellsBorder.rectTransform);
+            cellsBorder.type = Image.Type.Sliced;
+            cellsBorder.raycastTarget = false;
         }
 
         /// <summary>MV-423's replacement for the old spinning-gear PARTS chip: six hex sockets (filled
@@ -1167,6 +1396,13 @@ namespace MaxWorlds.UI
             var inner = AddImage(tray, HudTextures.RoundedBox(32, 0.3f), PanelColor, "Tray Inner");
             Stretch(inner.rectTransform, -2.5f); inner.type = Image.Type.Sliced;
 
+            // MV-443 defect 7: "a bordered box in colours.part" — the tray had a flat fill but no
+            // amber border of its own.
+            var border = AddImage(tray, HudTextures.RoundedBoxOutline(32, 0.3f, 2f), PartsColor, "Tray Border");
+            Stretch(border.rectTransform);
+            border.type = Image.Type.Sliced;
+            border.raycastTarget = false;
+
             _partsTrayLabel = AddText(tray, 18, PartsColor, TextAnchor.UpperLeft);
             Anchor(_partsTrayLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, 1f));
             _partsTrayLabel.rectTransform.offsetMin = new Vector2(14f, -30f);
@@ -1174,10 +1410,16 @@ namespace MaxWorlds.UI
             _partsTrayLabel.fontStyle = FontStyle.Bold;
             _partsTrayLabel.text = "PARTS";
 
+            // MV-443 defect 7: was clipping "...one banked" mid-word — best-fit shrink instead of a
+            // fixed 13pt, same idiom the CELLS chip's own label already uses for a tight box.
             _partsTraySub = AddText(tray, 13, Dim, TextAnchor.LowerLeft);
             Anchor(_partsTraySub.rectTransform, new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(0f, 0f));
             _partsTraySub.rectTransform.offsetMin = new Vector2(14f, 8f);
             _partsTraySub.rectTransform.offsetMax = new Vector2(0f, 30f);
+            _partsTraySub.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _partsTraySub.resizeTextForBestFit = true;
+            _partsTraySub.resizeTextMinSize = 10;
+            _partsTraySub.resizeTextMaxSize = 13;
 
             const int socketCount = 6;
             const float socketGap = 4f;
@@ -1187,12 +1429,25 @@ namespace MaxWorlds.UI
             socketRow.offsetMax = new Vector2(-16f, PartsSocketSize * 0.5f);
 
             _partsSockets.Clear();
+            _partsSocketGlows.Clear();
             for (int i = 0; i < socketCount; i++)
             {
-                var socket = AddImage(socketRow, SolidHexOutlineSprite(PartsSocketSize * 0.5f), new Color(1f, 1f, 1f, 0.1f), $"Socket {i}");
+                var pos = new Vector2(-(socketsWidth - (i + 0.5f) * (PartsSocketSize + socketGap)), 0f);
+
+                // MV-443 defect 7: a filled pip gets a soft glow behind it — built once here, toggled
+                // in RefreshPartsTray, same shared-texture idiom the node halos already use.
+                var glow = AddImage(socketRow, HudTextures.Glow(64), Color.clear, $"Socket {i} Glow");
+                Anchor(glow.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+                glow.rectTransform.sizeDelta = new Vector2(PartsSocketSize * 1.6f, PartsSocketSize * 1.6f);
+                glow.rectTransform.anchoredPosition = pos;
+                glow.raycastTarget = false;
+                glow.gameObject.SetActive(false);
+                _partsSocketGlows.Add(glow);
+
+                var socket = AddImage(socketRow, PartsPipOutlineSprite(), new Color(1f, 1f, 1f, 0.1f), $"Socket {i}");
                 Anchor(socket.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
                 socket.rectTransform.sizeDelta = new Vector2(PartsSocketSize * Sqrt3 * 0.5f, PartsSocketSize);
-                socket.rectTransform.anchoredPosition = new Vector2(-(socketsWidth - (i + 0.5f) * (PartsSocketSize + socketGap)), 0f);
+                socket.rectTransform.anchoredPosition = pos;
                 _partsSockets.Add(socket);
             }
 

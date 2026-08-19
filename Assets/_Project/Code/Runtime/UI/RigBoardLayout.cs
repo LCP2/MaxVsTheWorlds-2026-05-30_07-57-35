@@ -81,6 +81,14 @@ namespace MaxWorlds.UI
         [Serializable] private sealed class CapMarkerOffsetWire { public string dx, dy; }
 
         [Serializable]
+        private sealed class ConnectorWire
+        {
+            public float width, controlBias, startOffsetCategory;
+            public string startOffsetAbility, endOffset;
+            public float alphaLive, alphaDim, fusionWidth, fusionAlpha, fusionControlBias;
+        }
+
+        [Serializable]
         private sealed class GeometryWire
         {
             public RowYWire rowY;
@@ -97,6 +105,7 @@ namespace MaxWorlds.UI
             public RegionRectWire regionRect;
             public ForgeDividerWire forgeDivider;
             public float iconScaleAbility, iconScaleCategory, iconScaleFusion, iconOffsetY;
+            public ConnectorWire connector;
         }
 
         [Serializable] private sealed class ColourEntryWire { public string hex; }
@@ -288,6 +297,33 @@ namespace MaxWorlds.UI
         public static float IconScaleCategory { get { EnsureLoaded(); return s_geometry.iconScaleCategory; } }
         public static float IconScaleFusion { get { EnsureLoaded(); return s_geometry.iconScaleFusion; } }
         public static float IconOffsetY { get { EnsureLoaded(); return s_geometry.iconOffsetY; } }
+
+        // ------------------------------------------------------------------ connector (MV-443)
+
+        public static float ConnectorWidth { get { EnsureLoaded(); return s_geometry.connector?.width ?? 2.6f; } }
+        public static float ConnectorControlBias { get { EnsureLoaded(); return s_geometry.connector?.controlBias ?? 0.55f; } }
+        public static float ConnectorStartOffsetCategory { get { EnsureLoaded(); return s_geometry.connector?.startOffsetCategory ?? 88f; } }
+        public static float ConnectorAlphaLive { get { EnsureLoaded(); return s_geometry.connector?.alphaLive ?? 0.45f; } }
+        public static float ConnectorAlphaDim { get { EnsureLoaded(); return s_geometry.connector?.alphaDim ?? 0.14f; } }
+        public static float ConnectorFusionWidth { get { EnsureLoaded(); return s_geometry.connector?.fusionWidth ?? 2.0f; } }
+        public static float ConnectorFusionAlpha { get { EnsureLoaded(); return s_geometry.connector?.fusionAlpha ?? 0.07f; } }
+        public static float ConnectorFusionControlBias { get { EnsureLoaded(); return s_geometry.connector?.fusionControlBias ?? 0.62f; } }
+
+        /// <summary>"<c>+r*0.92</c>" / "<c>-r*0.92</c>" — a node-radius multiplier, the connector block's
+        /// own offset shape (distinct from <see cref="ResolveOffset"/>'s additive "<c>+r-6</c>" terms).</summary>
+        public static float ConnectorStartOffsetAbility(float r) { EnsureLoaded(); return ResolveMultiplier(s_geometry.connector?.startOffsetAbility, r); }
+        public static float ConnectorEndOffset(float r) { EnsureLoaded(); return ResolveMultiplier(s_geometry.connector?.endOffset, r); }
+
+        private static float ResolveMultiplier(string expr, float r)
+        {
+            if (string.IsNullOrEmpty(expr)) return 0f;
+            var m = MultiplierRegex.Match(expr);
+            if (!m.Success) return 0f;
+            float value = r * float.Parse(m.Groups[2].Value, CultureInfo.InvariantCulture);
+            return m.Groups[1].Value == "-" ? -value : value;
+        }
+
+        private static readonly Regex MultiplierRegex = new Regex(@"([+-])r\*(\d+(?:\.\d+)?)", RegexOptions.Compiled);
 
         /// <summary>Evaluates a tiny signed-term expression like <c>"+r-6"</c> or <c>"-r+15"</c> — the
         /// data file's only way to author an offset relative to a node's own radius without hardcoding
