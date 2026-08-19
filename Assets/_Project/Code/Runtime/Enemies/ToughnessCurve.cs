@@ -33,13 +33,13 @@ namespace MaxWorlds.Enemies
         /// (MV-310). Mirrors <see cref="heavyFromArea"/>'s intro-area idiom.</summary>
         public int gunnerFromArea = 2;
 
-        /// <summary>The area Bomber (homing missile) joins Gunner (MV-310).</summary>
-        public int bomberFromArea = 3;
+        /// <summary>The area Launcher (homing missile) joins Gunner (MV-310).</summary>
+        public int launcherFromArea = 3;
 
-        /// <summary>The area Blinker (teleport-flank) joins Gunner/Bomber (MV-310).</summary>
+        /// <summary>The area Blinker (teleport-flank) joins Gunner/Launcher (MV-310).</summary>
         public int blinkerFromArea = 4;
 
-        /// <summary>The Σ-THV share [0,1×100] each unlocked special kind (Gunner/Bomber/Blinker) draws
+        /// <summary>The Σ-THV share [0,1×100] each unlocked special kind (Gunner/Launcher/Blinker) draws
         /// off an area's total budget once its own intro area is reached — independently of the other
         /// two, so once all three are live they stack, the same "each tier substitutes its own slice"
         /// idiom <see cref="AreaPopulation.ToughSplitForArea"/> uses for Heavy/Brute (MV-310).</summary>
@@ -61,7 +61,7 @@ namespace MaxWorlds.Enemies
         public bool HeavyUnlockedAt(int areaIndex) => areaIndex >= heavyFromArea;
         public bool BruteUnlockedAt(int areaIndex) => areaIndex >= bruteFromArea;
         public bool GunnerUnlockedAt(int areaIndex) => areaIndex >= gunnerFromArea;
-        public bool BomberUnlockedAt(int areaIndex) => areaIndex >= bomberFromArea;
+        public bool LauncherUnlockedAt(int areaIndex) => areaIndex >= launcherFromArea;
         public bool BlinkerUnlockedAt(int areaIndex) => areaIndex >= blinkerFromArea;
     }
 }

@@ -8,7 +8,7 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The Bomber missile's obstruction check (MV-364), plus MV-349's colour and pure fuel-exhausted
+    /// The Launcher missile's obstruction check (MV-364), plus MV-349's colour and pure fuel-exhausted
     /// state transition.
     ///
     /// MV-364: before <see cref="HomingMissile.BlockedByGeometry"/> existed, the missile had no
@@ -108,7 +108,7 @@ namespace MaxWorlds.Tests.EditMode
         public void TheMissileBody_MatchesTheLaunchersOwnBodyColourExactly()
         {
             Color missileBody = HomingMissile.ShaftColorForTests;
-            Color launcherBody = CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Bomber));
+            Color launcherBody = CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Launcher));
 
             Assert.AreEqual(launcherBody, missileBody,
                 "the missile body no longer matches the Launcher's own body colour exactly.");

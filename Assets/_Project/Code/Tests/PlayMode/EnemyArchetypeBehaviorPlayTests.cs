@@ -12,7 +12,7 @@ namespace MaxWorlds.Tests.PlayMode
     /// <summary>
     /// The three new archetypes (MV-293) against real Update() ticks, not just their tuning data —
     /// EnemyArchetypeTests pins the NUMBERS, this proves the numbers actually produce the behaviour
-    /// the ticket asks for: a Gunner that backs off and lands a beam, a Bomber whose missile actually
+    /// the ticket asks for: a Gunner that backs off and lands a beam, a Launcher whose missile actually
     /// reaches the player, a Blinker that closes the gap by cheating instead of walking it.
     /// </summary>
     public sealed class EnemyArchetypeBehaviorPlayTests
@@ -90,25 +90,25 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Bomber_HomingMissileReachesAStationaryTarget()
+        public IEnumerator Launcher_HomingMissileReachesAStationaryTarget()
         {
             var max = NewRealMax(new Vector3(0f, 1f, 6f), out var health); // inside firing range, outside standoff
-            var bomber = NewRobotAt(Vector3.zero, EnemyArchetype.Bomber);
+            var launcher = NewRobotAt(Vector3.zero, EnemyArchetype.Launcher);
 
             // Telegraph (0.7s) + missile flight (6 m at 4.5 m/s ≈ 1.3s) — generous margin.
             yield return new WaitForSeconds(3f);
 
-            Object.Destroy(bomber.gameObject);
+            Object.Destroy(launcher.gameObject);
             Object.Destroy(max);
 
-            Assert.Less(health.Current, health.Max, "the Bomber's missile never reached a stationary target");
+            Assert.Less(health.Current, health.Max, "the Launcher's missile never reached a stationary target");
         }
 
         /// <summary>MV-329 AC2: the missile HomingMissile.Fire spawns has to actually read as ordnance —
         /// a shaft, fins and a warhead band — not the plain sphere "ball" it used to fire, and every
         /// part of it has to carry a real material or it draws magenta in the build (YT-58).</summary>
         [UnityTest]
-        public IEnumerator Bomber_MissileVisualIsAMissile_NotABall()
+        public IEnumerator Launcher_MissileVisualIsAMissile_NotABall()
         {
             var target = NewMaxMarker(new Vector3(0f, 1f, 10f));
             var missile = HomingMissile.Fire(Vector3.zero, target.transform, 4.5f, 22f, 2f);

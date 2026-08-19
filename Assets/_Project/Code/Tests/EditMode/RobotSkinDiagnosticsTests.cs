@@ -85,8 +85,10 @@ namespace MaxWorlds.Tests.EditMode
                     "distinct from the existing spawn/+1s summary line");
 
                 // The rig's own greybox renderer (disabled, but still a MeshRenderer under this root)
-                // plus at least the body parts a bruiser is built from.
-                Assert.That(report, Does.Contain("part=Chassis"),
+                // plus at least the body parts a bruiser is built from. MV-451: parts are generated
+                // geometry now, named generically "Part" (see CharacterPart) rather than "Chassis" —
+                // the material name is what still identifies which part is which in the dump.
+                Assert.That(report, Does.Contain("material=Robot_Bruiser_Body"),
                     "the bruiser's body part must show up in the dump — this is the renderer round 1 " +
                     "could never see past its owning material");
                 Assert.That(report, Does.Contain("selfDrivenTint=True"),

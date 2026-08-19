@@ -467,9 +467,9 @@ namespace MaxWorlds.Enemies
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
 
-            // MV-363: never the centreDenial Bomber barrage — that cluster is meant to read as
+            // MV-363: never the centreDenial Launcher barrage — that cluster is meant to read as
             // visible, denied ground, not a hidden knot.
-            bool concealed = _concealedRemainingThisArea > 0 && kind != EnemyKind.Bomber;
+            bool concealed = _concealedRemainingThisArea > 0 && kind != EnemyKind.Launcher;
             Vector3 position;
 
             if (concealed)
@@ -580,10 +580,10 @@ namespace MaxWorlds.Enemies
                 return true;
             }
 
-            // MV-365: a centreDenial scenario's Bomber-kind spawns bias toward the room's middle
+            // MV-365: a centreDenial scenario's Launcher-kind spawns bias toward the room's middle
             // instead of the usual far-side-from-door band — "a barrage of missiles in the middle,
             // surrounded by robots" is a placement fact, not just a count.
-            if (kind == EnemyKind.Bomber && IsCenterDenialScenario(areaIndex))
+            if (kind == EnemyKind.Launcher && IsCenterDenialScenario(areaIndex))
             {
                 point = RandomPointIn(SpawnBias.CenterBand(zone, EdgeMargin), height);
                 return true;

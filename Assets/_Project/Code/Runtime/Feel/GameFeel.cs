@@ -51,7 +51,7 @@ namespace MaxWorlds.Feel
         [Header("Missile (MV-349/MV-351)")]
         [Tooltip("Trauma per point of damage a missile actually dealt — proportionate feedback per " +
                  "AC2, so a graze and a full hit don't feel the same, and a miss (0 damage) is silent. " +
-                 "MV-351: raised from 0.008 — at a Bomber's 22 damage, the old value only ever reached " +
+                 "MV-351: raised from 0.008 — at a Launcher's 22 damage, the old value only ever reached " +
                  "trauma 0.176, and shake intensity is trauma SQUARED (GameFeelTuning.ShakeAmount), so " +
                  "that was an all-but-invisible 0.013m of camera offset. Lee reported he couldn't feel it.")]
         [SerializeField] private float missileTraumaPerDamage = 0.022f;

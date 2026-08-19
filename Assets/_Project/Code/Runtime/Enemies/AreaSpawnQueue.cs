@@ -92,7 +92,7 @@ namespace MaxWorlds.Enemies
         /// (MV-268's difficulty engine) - the counts are exact, not re-derived from a large/small
         /// split. Rusher/bruiser are interleaved proportionally exactly as <see cref="Fill"/>/
         /// <see cref="FillForArea"/> do; heavy and brute queue after them, heavy first, then Gunner/
-        /// Bomber/Blinker (MV-293/MV-310) - all rare enough that their relative order almost never
+        /// Launcher/Blinker (MV-293/MV-310) - all rare enough that their relative order almost never
         /// matters the way the rusher/bruiser interleave does.</summary>
         public void FillExact(DifficultyEngine.Composition composition, int areaIndex = 0)
         {
@@ -100,7 +100,7 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < composition.Heavy; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Heavy));
             for (int i = 0; i < composition.Brute; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Brute));
             for (int i = 0; i < composition.Gunner; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Gunner));
-            for (int i = 0; i < composition.Bomber; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Bomber));
+            for (int i = 0; i < composition.Launcher; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Launcher));
             for (int i = 0; i < composition.Blinker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Blinker));
         }
 

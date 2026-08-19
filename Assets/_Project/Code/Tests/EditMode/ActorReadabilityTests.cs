@@ -212,7 +212,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>Every role a live robot can actually wear: every <see cref="EnemyKind"/> run
-        /// through the same <see cref="CharacterSkin.RoleFor"/> mapping the game uses (so Bomber and
+        /// through the same <see cref="CharacterSkin.RoleFor"/> mapping the game uses (so Launcher and
         /// Blinker, which currently fall through to <see cref="CharacterRole.Robot"/>, are covered via
         /// that fall-through rather than skipped), plus the boss, which has a role but no EnemyKind.</summary>
         private static CharacterRole[] AllArchetypeRoles()

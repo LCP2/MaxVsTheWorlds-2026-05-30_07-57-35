@@ -89,7 +89,7 @@ namespace MaxWorlds.Enemies
         /// kind that still lunges, which never reads it (see <see cref="TickContactTouch"/>).</summary>
         [SerializeField] private float touchDamage = 0f;
 
-        [Header("Ranged / teleport (MV-293) — Gunner/Bomber/Blinker only, 0 for every melee kind")]
+        [Header("Ranged / teleport (MV-293) — Gunner/Launcher/Blinker only, 0 for every melee kind")]
         [Tooltip("A ranged kind backs off inside this instead of closing — see EnemyArchetype.StandoffRange.")]
         [SerializeField] private float standoffRange = 0f;
         [Tooltip("How often a Blinker may flank-teleport while still out of melee range.")]
@@ -319,7 +319,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Heavy => "HEAVY",
             EnemyKind.Brute => "BRUTE",
             EnemyKind.Gunner => "LASER",   // MV-404: display-only rename, EnemyKind.Gunner unchanged
-            EnemyKind.Bomber => "LAUNCHER",   // MV-405: display-only rename, EnemyKind.Bomber unchanged
+            EnemyKind.Launcher => "LAUNCHER",   // MV-405 renamed the display only; MV-451 renamed the enum to match
             EnemyKind.Blinker => "BLINKER",
             _ => "RUSHER",
         };
@@ -700,7 +700,7 @@ namespace MaxWorlds.Enemies
             // see WallLatch's own doc comment for the limit cycle and same-frame race this replaced.
             dir = _wallLatch.Tick(dir, transform.position, dt, _preferSign);
 
-            // Gunner/Bomber (MV-293): the answer to a ranged kind must never be "walk at it" — inside
+            // Gunner/Launcher (MV-293): the answer to a ranged kind must never be "walk at it" — inside
             // its standoff band it backs off along the same line it was closing on, rather than
             // committing to melee range like everything else in the swarm.
             //
@@ -709,7 +709,7 @@ namespace MaxWorlds.Enemies
             // alternated advance/retreat every frame by construction. Replaced with a band: back off
             // below the inner edge, close in above the outer edge, and inside the band hold position
             // (speed 0, still facing Max via `to`) — no distance now produces a frame-to-frame flip.
-            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Bomber;
+            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Launcher;
             bool inStandoffBand = false;
             bool retreating = false;
             if (ranged && standoffRange > 0f && _sight.HasSight)
@@ -803,7 +803,7 @@ namespace MaxWorlds.Enemies
             kind != EnemyKind.Bruiser && kind != EnemyKind.Heavy && kind != EnemyKind.Brute;
 
         /// <summary>Whether <paramref name="kind"/> is gated by <see cref="LungeTokenPool"/> (MV-428
-        /// Change 2) — only the two kinds that keep the raw dash: Rusher and Blinker. Gunner/Bomber
+        /// Change 2) — only the two kinds that keep the raw dash: Rusher and Blinker. Gunner/Launcher
         /// also reach <see cref="State.Telegraph"/>/<see cref="State.Lunge"/> but are explicitly out
         /// of scope ("they never lunged" — the ticket means never committed a melee dash) and stay
         /// uncapped.</summary>
@@ -885,7 +885,7 @@ namespace MaxWorlds.Enemies
         }
 
         /// <summary>What "commit to the attack" means for this kind (MV-293) — a melee dash for
-        /// everything that closes to contact range, or the Gunner/Bomber's ranged payoff for the two
+        /// everything that closes to contact range, or the Gunner/Launcher's ranged payoff for the two
         /// kinds that don't. Same state, same Telegraph→Lunge→Recover shape; only the middle beat
         /// differs, which is what keeps a second and third ranged kind cheap to add later.</summary>
         private void TickLunge(float dt)
@@ -893,7 +893,7 @@ namespace MaxWorlds.Enemies
             switch (Kind)
             {
                 case EnemyKind.Gunner: TickBeam(dt); break;
-                case EnemyKind.Bomber: TickMissileFire(dt); break;
+                case EnemyKind.Launcher: TickMissileFire(dt); break;
                 default:               TickMeleeLunge(dt); break;
             }
         }
@@ -948,7 +948,7 @@ namespace MaxWorlds.Enemies
             if (_stateTimer >= lungeTime) EnterRecover();
         }
 
-        /// <summary>Bomber's homing missile (MV-293): fired once, on the first tick of the state —
+        /// <summary>Launcher's homing missile (MV-293): fired once, on the first tick of the state —
         /// <see cref="_dealtThisLunge"/> is the same "already acted this cycle" flag the melee lunge
         /// uses to gate its contact damage to a single hit, reused here to gate the launch to one shot.
         /// The rest of the state is just the release beat before Recover.</summary>

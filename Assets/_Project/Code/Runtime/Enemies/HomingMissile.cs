@@ -8,7 +8,7 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Enemies
 {
     /// <summary>
-    /// The Bomber's slow homing missile (MV-293). Free-flying — not pooled, not parented to the
+    /// The Launcher's slow homing missile (MV-293). Free-flying — not pooled, not parented to the
     /// spawner — because it's short-lived and self-destroys on impact or timeout, the same "one and
     /// done" lifetime as the death VFX it plays a similar role to.
     ///
@@ -67,7 +67,7 @@ namespace MaxWorlds.Enemies
         private int _bounceCount;
 
         /// <summary>Launch one missile from <paramref name="origin"/> toward <paramref name="target"/>.
-        /// <paramref name="damage"/>/<paramref name="splashRadius"/> come straight off the Bomber's
+        /// <paramref name="damage"/>/<paramref name="splashRadius"/> come straight off the Launcher's
         /// <see cref="EnemyArchetype.ContactDamage"/>/<see cref="EnemyArchetype.ContactRadius"/> — same
         /// numbers, ranged-attack meaning.</summary>
         public static HomingMissile Fire(Vector3 origin, Transform target, float speed, float damage,
@@ -94,7 +94,7 @@ namespace MaxWorlds.Enemies
         /// blue" actually requires: a literal drifts the moment the archetype's colour is retuned, a
         /// live read cannot. (Supersedes the MV-377 dark rust-copper this used to be — that colour
         /// existed only because the missile had no archetype identity of its own yet.)</summary>
-        private static Color ShaftColor => CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Bomber));
+        private static Color ShaftColor => CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(EnemyKind.Launcher));
 
         /// <summary>Exposes <see cref="ShaftColor"/> for <c>HomingMissileTests</c> (MV-405), same shape
         /// as <see cref="TipColorForTests"/>.</summary>

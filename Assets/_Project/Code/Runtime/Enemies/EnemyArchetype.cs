@@ -2,9 +2,9 @@ using UnityEngine;
 
 namespace MaxWorlds.Enemies
 {
-    // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Bomber/Blinker are new
+    // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Launcher/Blinker are new
     // archetype ROWS, not a renumbering of the existing tiers.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Bomber, Blinker }
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -40,7 +40,7 @@ namespace MaxWorlds.Enemies
         public readonly float RecoverTime;
         public readonly float KnockbackDecay;
 
-        /// <summary>How close a RANGED kind (<see cref="EnemyKind.Gunner"/>/<see cref="EnemyKind.Bomber"/>)
+        /// <summary>How close a RANGED kind (<see cref="EnemyKind.Gunner"/>/<see cref="EnemyKind.Launcher"/>)
         /// tries to stay from Max — inside this it backs off instead of closing, which is the whole
         /// difference between "keeps its distance" and a rusher wearing a different silhouette (MV-293).
         /// Zero for every melee kind: they have nothing to retreat from.</summary>
@@ -187,7 +187,7 @@ namespace MaxWorlds.Enemies
         /// the rusher's band — was 26 (same small-tier health as the rusher's 32), now ~1.5x that
         /// original baseline. This reverses MV-293's "no small/ranged kind may out-tank the rusher"
         /// invariant for the Gunner specifically; see the loosened assertion in
-        /// EnemyArchetypeTests.GunnerAndBomber_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish.
+        /// EnemyArchetypeTests.GunnerAndLauncher_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish.
         /// </summary>
         public static EnemyArchetype Gunner => new EnemyArchetype(
             EnemyKind.Gunner, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
@@ -212,14 +212,14 @@ namespace MaxWorlds.Enemies
         /// flight speed — deliberately slow (<see cref="HomingMissile"/>'s own turn rate is gentle
         /// too), so a player who's watching can outwalk or juke it rather than eat a guaranteed hit.
         /// </summary>
-        public static EnemyArchetype Bomber => new EnemyArchetype(
-            EnemyKind.Bomber, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
+        public static EnemyArchetype Launcher => new EnemyArchetype(
+            EnemyKind.Launcher, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
             colliderHeight: 1.45f, colliderRadius: 0.42f,
             // MV-293: kept BELOW the rusher's 32 HP on purpose — every new small-tier kind stays a
             // one-rusher-shot kill (EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame
-            // pins that only the Bruiser survives a full-health rusher's-worth of damage). A Bomber's
+            // pins that only the Bruiser survives a full-health rusher's-worth of damage). A Launcher's
             // threat is its range, not its ability to soak fire once you close the gap on it.
-            // MV-325: speed must invert with power too — a Bomber has less HP than the rusher, so it
+            // MV-325: speed must invert with power too — a Launcher has less HP than the rusher, so it
             // has to be at least as quick, not slower (was 1.8, below the rusher's 2.04).
             moveSpeed: 2.1f, maxHealth: 30f,
             contactDamage: 22f,   // splash damage
@@ -247,7 +247,7 @@ namespace MaxWorlds.Enemies
             colliderHeight: 1.35f, colliderRadius: 0.4f,
             // MV-325: was 2.4 — faster than the Gunner despite having more HP (26 vs 30), which
             // inverted the "weakest is fastest" rule. Its mobility edge is the teleport, not raw
-            // speed ("Otherwise a rusher"), so it sits with the Bomber just above the rusher.
+            // speed ("Otherwise a rusher"), so it sits with the Launcher just above the rusher.
             moveSpeed: 2.1f, maxHealth: 30f,
             contactDamage: 14f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.5f,
@@ -261,7 +261,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Heavy => Heavy,
             EnemyKind.Brute => Brute,
             EnemyKind.Gunner => Gunner,
-            EnemyKind.Bomber => Bomber,
+            EnemyKind.Launcher => Launcher,
             EnemyKind.Blinker => Blinker,
             _ => Rusher,
         };
@@ -318,17 +318,17 @@ namespace MaxWorlds.Enemies
         {
             public readonly int BruiserEvery, FirstBruiserAt;
             public readonly int GunnerEvery, FirstGunnerAt;
-            public readonly int BomberEvery, FirstBomberAt;
+            public readonly int LauncherEvery, FirstLauncherAt;
             public readonly int BlinkerEvery, FirstBlinkerAt;
 
             public MixRates(int bruiserEvery, int firstBruiserAt,
                 int gunnerEvery, int firstGunnerAt,
-                int bomberEvery, int firstBomberAt,
+                int launcherEvery, int firstLauncherAt,
                 int blinkerEvery, int firstBlinkerAt)
             {
                 BruiserEvery = bruiserEvery; FirstBruiserAt = firstBruiserAt;
                 GunnerEvery = gunnerEvery; FirstGunnerAt = firstGunnerAt;
-                BomberEvery = bomberEvery; FirstBomberAt = firstBomberAt;
+                LauncherEvery = launcherEvery; FirstLauncherAt = firstLauncherAt;
                 BlinkerEvery = blinkerEvery; FirstBlinkerAt = firstBlinkerAt;
             }
         }
@@ -341,7 +341,7 @@ namespace MaxWorlds.Enemies
         public static EnemyKind KindFor(int emitted, in MixRates rates)
         {
             if (Matches(emitted, rates.BlinkerEvery, rates.FirstBlinkerAt)) return EnemyKind.Blinker;
-            if (Matches(emitted, rates.BomberEvery, rates.FirstBomberAt)) return EnemyKind.Bomber;
+            if (Matches(emitted, rates.LauncherEvery, rates.FirstLauncherAt)) return EnemyKind.Launcher;
             if (Matches(emitted, rates.GunnerEvery, rates.FirstGunnerAt)) return EnemyKind.Gunner;
             return KindFor(emitted, rates.BruiserEvery, rates.FirstBruiserAt);
         }

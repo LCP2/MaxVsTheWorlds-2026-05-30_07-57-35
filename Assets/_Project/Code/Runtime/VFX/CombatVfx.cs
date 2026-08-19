@@ -52,7 +52,7 @@ namespace MaxWorlds.VFX
         private static readonly Color MaxTeleportDeep = new Color(0.5f, 0.35f, 0.98f, 1f);
         private static readonly Color MaxTeleportFlashColor = new Color(0.95f, 0.97f, 1f, 1f);
 
-        // The Bomber's missile (MV-349/MV-351): its own hot-orange palette, distinct from the
+        // The Launcher's missile (MV-349/MV-351): its own hot-orange palette, distinct from the
         // factory's fire so a missile hit reads as ITS OWN kind of event rather than a re-skinned
         // factory boom. MV-351: Lee reported the MV-349 version was "way too subtle" on the live
         // build — the flash and blast core now push past the 1.35 bloom threshold (BackyardLook)
@@ -363,7 +363,7 @@ namespace MaxWorlds.VFX
             lifeMin: 0.2f, lifeMax: 0.2f,
             colorA: MaxTeleportFlashColor, colorB: MaxTeleportFlashColor);
 
-        // --- the Bomber's missile (MV-349) ---
+        // --- the Launcher's missile (MV-349) ---
 
         /// <summary>The detonation itself — direct hit or ground impact, they use the same beat. A
         /// flash for the pop, an expanding blast for the punch, dark debris for weight, and a scorch

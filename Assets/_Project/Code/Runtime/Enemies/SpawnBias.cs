@@ -55,7 +55,7 @@ namespace MaxWorlds.Enemies
         public const float CenterBandFraction = 0.22f;
 
         /// <summary>A small rectangle around <paramref name="zone"/>'s centre (MV-365's centreDenial
-        /// scenario, e.g. Bomber-kind spawns) — deliberately NOT the far-side-from-door bias every
+        /// scenario, e.g. Launcher-kind spawns) — deliberately NOT the far-side-from-door bias every
         /// other kind uses, so a scripted missile-barrage cluster reads as "denied ground in the
         /// middle of the room" rather than another far-wall cluster. Sized off the room's shorter
         /// span so it never overflows a small room, and always inset by <paramref name="edgeMargin"/>

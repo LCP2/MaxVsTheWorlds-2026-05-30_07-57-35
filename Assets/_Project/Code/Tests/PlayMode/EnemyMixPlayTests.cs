@@ -5,6 +5,7 @@ using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.PlayMode
 {
@@ -70,15 +71,21 @@ namespace MaxWorlds.Tests.PlayMode
             for (int i = 0; i < 60 && s.LiveCount < 12; i++) yield return null;
         }
 
-        /// <summary>Every live robot's BODY must match its KIND — the pooling invariant.</summary>
+        /// <summary>Every live robot's BODY must match its KIND — the pooling invariant.
+        ///
+        /// MV-451: bodies are generated meshes now (<see cref="MaxWorlds.VFX.RobotBodies"/>), shared
+        /// across every instance of a kind, so a mesh NAME can no longer tell one kind's body from
+        /// another's (they are all "CharacterMesh_..."). The colour <see cref="RobotRig"/> actually
+        /// painted the body is still kind-specific and still catches the pooling bug this test exists
+        /// for: a bruiser recycled into a rusher would be wearing the rusher's colour.</summary>
         private static void AssertBodiesMatchKinds(EnemySpawner s)
         {
             foreach (var e in s.GetComponentsInChildren<RobotEnemy>(false))
             {
-                var mesh = e.GetComponent<MeshFilter>().sharedMesh;
-                bool wearingABox = mesh.name.Contains("Cube");
-                Assert.AreEqual(e.Kind == EnemyKind.Bruiser, wearingABox,
-                    $"a {e.Kind} is wearing the wrong body ({mesh.name})");
+                var rig = e.GetComponent<RobotRig>();
+                var expected = CharacterSkin.BaseColorFor(CharacterSkin.RoleFor(e.Kind));
+                Assert.AreEqual(expected, rig.CurrentBodyColor,
+                    $"a {e.Kind} is wearing the wrong body colour ({rig.CurrentBodyColor})");
             }
         }
 

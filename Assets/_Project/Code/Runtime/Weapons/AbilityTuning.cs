@@ -226,7 +226,7 @@ namespace MaxWorlds.Weapons
         /// <summary>The sentinel's HP at Health (u_hp) Level 0 (not yet leveled) — deliberately BELOW
         /// Max's own 200 max HP ("trades durability for damage", the old Gunner's own baseline): a
         /// couple of Bruiser hits (28 dmg each, <see cref="MaxWorlds.Enemies.EnemyArchetype.Bruiser"/>)
-        /// or a single Bomber splash (<see cref="MaxWorlds.Enemies.EnemyArchetype.Bomber"/>) puts a
+        /// or a single Launcher splash (<see cref="MaxWorlds.Enemies.EnemyArchetype.Launcher"/>) puts a
         /// real dent in it.</summary>
         public const float DefaultSentinelBaseHp = 60f;
 

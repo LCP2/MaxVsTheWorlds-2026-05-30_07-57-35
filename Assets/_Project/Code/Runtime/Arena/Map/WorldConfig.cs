@@ -76,7 +76,7 @@ namespace MaxWorlds.Arena
         public int heavy;
         public int brute;
         public int gunner;
-        public int bomber;
+        public int launcher;
         public int blinker;
 
         /// <summary>True if any kind actually has a count — the real "was this authored" signal.
@@ -86,10 +86,10 @@ namespace MaxWorlds.Arena
         /// their own default constructor rather than staying null when absent) — so a plain
         /// null-check would wrongly treat an un-authored area as "authored: 0 robots everywhere".</summary>
         public bool IsAuthored =>
-            rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || bomber > 0 || blinker > 0;
+            rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 || blinker > 0;
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, bomber, blinker);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker);
     }
 
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
@@ -156,7 +156,7 @@ namespace MaxWorlds.Arena
         /// <summary>A named encounter shape for this area (MV-365) — data only, read by
         /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> to bias WHERE within the room a
         /// particular kind spawns (composition alone only says how many; some scenarios need
-        /// placement too). Currently understood: <c>"centerDenial"</c> — Bomber-kind spawns bias
+        /// placement too). Currently understood: <c>"centerDenial"</c> — Launcher-kind spawns bias
         /// toward the room's centre instead of the usual far-side-from-door band, so its missile
         /// barrage reads as "denied ground in the middle" rather than another far-wall cluster.
         /// Empty/unrecognised values fall back to ordinary placement.</summary>
@@ -251,7 +251,7 @@ namespace MaxWorlds.Arena
         // MV-293's ranged/teleport kinds (MV-310) — same intro-area idiom as heavy/bruteFromArea
         // above, carried losslessly through the JSON round-trip.
         public int gunnerFromArea = 2;
-        public int bomberFromArea = 3;
+        public int launcherFromArea = 3;
         public int blinkerFromArea = 4;
         public float specialSharePct = 12f;
 
@@ -268,7 +268,7 @@ namespace MaxWorlds.Arena
             tankShareAtEnd = DevTuning.Or(DevTuning.WorldTankShareEnd, tankShareEnd),
             lastArea = Mathf.Max(1, lastArea),
             gunnerFromArea = gunnerFromArea,
-            bomberFromArea = bomberFromArea,
+            launcherFromArea = launcherFromArea,
             blinkerFromArea = blinkerFromArea,
             specialSharePct = specialSharePct,
         };
@@ -318,7 +318,7 @@ namespace MaxWorlds.Arena
         // these existed simply omits them, and Thv() below falls back to the engine's flat
         // ThreatValues placeholder rather than reading a missing 0.
         public WorldEnemyTypeEntry gunner;
-        public WorldEnemyTypeEntry bomber;
+        public WorldEnemyTypeEntry launcher;
         public WorldEnemyTypeEntry blinker;
 
         public float Thv(EnemyKind kind)
@@ -329,7 +329,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Heavy => heavy,
                 EnemyKind.Brute => brute,
                 EnemyKind.Gunner => gunner,
-                EnemyKind.Bomber => bomber,
+                EnemyKind.Launcher => launcher,
                 EnemyKind.Blinker => blinker,
                 _ => small,
             };
@@ -342,7 +342,7 @@ namespace MaxWorlds.Arena
         public float WeightedThv(DifficultyEngine.Composition c) =>
             c.Rusher * Thv(EnemyKind.Rusher) + c.Bruiser * Thv(EnemyKind.Bruiser) +
             c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute) +
-            c.Gunner * Thv(EnemyKind.Gunner) + c.Bomber * Thv(EnemyKind.Bomber) +
+            c.Gunner * Thv(EnemyKind.Gunner) + c.Launcher * Thv(EnemyKind.Launcher) +
             c.Blinker * Thv(EnemyKind.Blinker);
     }
 
