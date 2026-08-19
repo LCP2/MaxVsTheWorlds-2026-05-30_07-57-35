@@ -187,8 +187,13 @@ namespace MaxWorlds.Tests.EditMode
             };
         }
 
+        // MV-442 Part 4 (Lee, 2026-08-19 — supersedes the original MV-365 decision this test used to
+        // pin): "an authored composition IS the answer for this area" now holds for the Rusher cap too
+        // — RusherCap only ever trims a DIAL-DERIVED composition. An authored one queues in full no
+        // matter how much of the run-wide cap it or its predecessors have already spent.
+
         [Test]
-        public void RusherCap_ClampsCumulativeRusherAcrossAreas_ThroughTheDirector()
+        public void RusherCap_NeverClampsAnAuthoredArea_EvenWhenTwoOfThemOverflowTheCapCombined_ThroughTheDirector()
         {
             WorldConfig cfg = TwoAreaRusherOverflowWorld();
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
@@ -199,13 +204,72 @@ namespace MaxWorlds.Tests.EditMode
             director.Configure(map, System.Array.Empty<CoverPiece>());
 
             int afterArea1 = director.ActiveCount + director.QueuedCount;
-            Assert.AreEqual(8, afterArea1, "area 1's 8 authored Rushers are all under the 10-per-level cap");
+            Assert.AreEqual(8, afterArea1, "area 1's 8 authored Rushers must queue in full");
 
             director.EnterArea(2);
             int afterArea2 = director.ActiveCount + director.QueuedCount;
-            Assert.AreEqual(RusherCap.PerLevel, afterArea2,
-                "area 2's authored 8 Rushers must clamp to whatever remains of the run-wide cap (2 " +
-                "more, not 8) — the cap is CUMULATIVE across the whole run, not reset per area");
+            Assert.AreEqual(16, afterArea2,
+                "area 2's 8 authored Rushers must ALSO queue in full — even though the combined " +
+                "total (16) overflows the 10-per-level cap, an authored area is never trimmed");
+        }
+
+        [Test]
+        public void RusherCap_StillClampsADialDerivedAreaFollowingAnAuthoredOne_ThroughTheDirector()
+        {
+            WorldConfig cfg = AuthoredThenDerivedWorld();
+
+            // Confirm the test's own setup actually exercises the clamp: area 2's dial-derived solve
+            // must want more Rushers than the cap has left after area 1's authored 8, or a pass here
+            // wouldn't prove anything.
+            DifficultyEngine.Composition unclampedArea2 = cfg.SolveComposition(2);
+            Assert.Greater(unclampedArea2.Rusher, RusherCap.PerLevel - 8,
+                "test setup must want more Rushers than the 2 left under the cap");
+
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
+
+            _directorGo = new GameObject("Area Accumulation");
+            var director = _directorGo.AddComponent<AreaAccumulationDirector>();
+            director.ConfigureWorld(cfg);
+            director.Configure(map, System.Array.Empty<CoverPiece>());
+
+            int afterArea1 = director.ActiveCount + director.QueuedCount;
+            Assert.AreEqual(8, afterArea1,
+                "area 1's 8 authored Rushers must queue in full, still advancing the running Rusher " +
+                "total so a later dial-derived area is capped correctly");
+
+            director.EnterArea(2);
+            int afterArea2 = director.ActiveCount + director.QueuedCount;
+
+            int expectedClampedRusher = Mathf.Min(unclampedArea2.Rusher, RusherCap.PerLevel - 8);
+            int expectedArea2Total = unclampedArea2.TotalCount - unclampedArea2.Rusher + expectedClampedRusher;
+
+            Assert.AreEqual(afterArea1 + expectedArea2Total, afterArea2,
+                "area 2 is dial-derived, not authored — RusherCap must still clamp its Rushers to " +
+                $"whatever remains of the cap ({RusherCap.PerLevel - 8}) given the running total " +
+                "area 1's authored Rushers already advanced it to");
+        }
+
+        [Test]
+        public void RusherCap_Apply_ClampsToWhateverRemainsUnderThePerLevelCap()
+        {
+            var composition = new DifficultyEngine.Composition(rusher: 8, bruiser: 3, heavy: 0, brute: 0);
+            DifficultyEngine.Composition clamped = RusherCap.Apply(composition, alreadyUsed: 6);
+
+            Assert.AreEqual(4, clamped.Rusher, "only 4 Rushers remain under the 10-per-level cap once 6 are already used");
+            Assert.AreEqual(3, clamped.Bruiser, "RusherCap only ever trims Rusher — every other kind passes through untouched");
+        }
+
+        /// <summary>The same shape as <see cref="TwoAreaRusherOverflowWorld"/>, but area 2 carries no
+        /// authored composition (dial-derived) and a high enough <c>baseThreat</c> that its solve wants
+        /// far more Rushers than the 2 left under the cap after area 1's authored 8 — proves
+        /// <see cref="RusherCap"/> still clamps a dial-derived area even immediately after an authored
+        /// one that was never trimmed.</summary>
+        private static WorldConfig AuthoredThenDerivedWorld()
+        {
+            WorldConfig cfg = TwoAreaRusherOverflowWorld();
+            cfg.areas[2].composition = null;
+            cfg.dials.baseThreat = 30f;
+            return cfg;
         }
 
         // ------------------------------------------------------------------- world1_config.json ACs
@@ -276,16 +340,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(area7.Blinker, 4, "the Blinker set-piece needs enough Blinkers to read as built around them");
         }
 
-        // --- DECISION: Rushers hard-capped at 10 across the whole (18-area, MV-411) world -----------
-        // MV-442 (Lee's 2026-08-19 a1/a4 redraw) authored more Rushers (14) than fit under the cap
-        // on their own — RusherCap.Apply, driven through AreaAccumulationDirector.FillArea, is what
-        // actually keeps a live run under 10 (proved directly, with a synthetic overflow world, by
-        // RusherCap_ClampsCumulativeRusherAcrossAreas_ThroughTheDirector above). Per MV-442's "Known
-        // and accepted" note, authored totals exceeding a design target is expected and not something
-        // to fix by trimming robots — this test now just pins the authored total as a drift tripwire.
+        // --- SUPERSEDED DECISION: Rushers were briefly hard-capped at 10 across the whole (18-area, ---
+        // --- MV-411) world, authoring-time and runtime alike. MV-442 Part 4 (Lee, 2026-08-19) --------
+        // withdrew the authoring-time half of that after his a1/a4 redraw pushed world1's authored
+        // total to 14: "I want the exact number of robots that I specify." An authored area (MV-365)
+        // is now NEVER trimmed by RusherCap, at any point — see RusherCap_NeverClampsAnAuthoredArea_
+        // EvenWhenTwoOfThemOverflowTheCapCombined_ThroughTheDirector above, which proves that directly.
+        // RusherCap.Apply / AreaAccumulationDirector.ClampRusherCap still clamp a DIAL-DERIVED
+        // composition (see RusherCap_StillClampsADialDerivedAreaFollowingAnAuthoredOne_ThroughTheDirector
+        // above) — world1_config.json just doesn't have one, every one of its 18 areas is authored.
 
         [Test]
-        public void World1_TotalAuthoredRushers_ClampedLiveByTheDirectorNotByAuthoring()
+        public void World1_AuthoredRusherTotalExceedsThePerLevelCap_AndIsNeverTrimmedForIt()
         {
             WorldConfig cfg = LoadWorld1();
 
