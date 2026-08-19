@@ -29,6 +29,12 @@ namespace MaxWorlds.CameraRig
         public const float MinDistance = 12f;
         public const float MaxDistance = 45f;
 
+        /// <summary>Bounds for the live pitch nudge (MV-450). Not taste — sanity: below the low end
+        /// is nearer side-on than this game has ever been art-directed for, above the high end is
+        /// back to the shipped 72° with no room left to explore.</summary>
+        public const float MinPitch = 45f;
+        public const float MaxPitch = 80f;
+
         /// <summary>The committed distances before MV-276's zoom bump — kept as named baselines so
         /// the "110% zoom" claim is checkable arithmetic instead of a remembered pair of numbers.
         /// MV-315 scaled the desktop baseline itself (25.1 -> 27.108, i.e. 108%) so the derived
@@ -54,7 +60,9 @@ namespace MaxWorlds.CameraRig
         /// <summary>True on a handheld build (iOS/Android/TestFlight, and a mobile WebGL browser).</summary>
         public static bool IsPhoneClass => SimulatePhoneClass ?? Application.isMobilePlatform;
 
-        [Tooltip("Fixed top-down pitch. Load-bearing for the AI-art pipeline — do NOT change (YT-33).")]
+        [Tooltip("Fixed top-down pitch. Load-bearing for the AI-art pipeline — do NOT change this " +
+                 "SERIALIZED default (YT-33). MV-450 adds a dev-only live nudge (SetPitch/NudgePitch) " +
+                 "that changes this at runtime for a session but never rewrites the committed scene/asset value.")]
         [SerializeField] private float pitchDegrees = 72f;
 
         [Tooltip("Distance from the follow target to the camera, in metres. Bigger = more arena " +
@@ -86,6 +94,54 @@ namespace MaxWorlds.CameraRig
         {
             cameraDistance = Mathf.Clamp(metres, MinDistance, MaxDistance);
             Apply();
+        }
+
+        /// <summary>
+        /// Nudge the dev-mode pitch knob (MV-450) by <paramref name="delta"/> degrees.
+        /// </summary>
+        public void NudgePitch(float delta) => SetPitch(pitchDegrees + delta);
+
+        /// <summary>
+        /// Set the pitch directly, clamped to <see cref="MinPitch"/>/<see cref="MaxPitch"/>
+        /// (MV-450's dev-only tuning control — the shipped 72° default and the two
+        /// <c>CameraFramingTests</c> assertions pinning it are untouched, this only lets Lee sweep the
+        /// angle live to judge one by eye before a second ticket bakes it).
+        ///
+        /// Holds the visible ground area constant: at a lower pitch the same distance shows less
+        /// depth, so changing the angle without also moving the camera would make Lee judge pitch and
+        /// zoom at once and be unable to tell which one he's reacting to. <see cref="Camera.main"/>'s
+        /// FOV/aspect feed the same <see cref="TeleportZoomFraming"/> maths
+        /// <see cref="TeleportZoomController"/> already trusts for the same job; with no camera to ask
+        /// (e.g. a bare test rig) the pitch still moves, just without the area correction.
+        /// </summary>
+        public void SetPitch(float degrees)
+        {
+            float newPitch = Mathf.Clamp(degrees, MinPitch, MaxPitch);
+            var cam = Camera.main;
+            if (cam != null && !Mathf.Approximately(newPitch, pitchDegrees))
+            {
+                float targetDistance = DistanceHoldingVisibleArea(
+                    cameraDistance, pitchDegrees, newPitch, cam.fieldOfView, cam.aspect);
+                cameraDistance = Mathf.Clamp(targetDistance, MinDistance, MaxDistance);
+            }
+            pitchDegrees = newPitch;
+            Apply();
+        }
+
+        /// <summary>
+        /// The distance whose <see cref="TeleportZoomFraming.SafeVisibleRadius"/> at
+        /// <paramref name="newPitchDegrees"/> matches what <paramref name="oldDistance"/> showed at
+        /// <paramref name="oldPitchDegrees"/> — the pure maths behind <see cref="SetPitch"/>'s
+        /// area-preserving nudge, exposed standalone so it's testable without a live camera.
+        /// </summary>
+        public static float DistanceHoldingVisibleArea(
+            float oldDistance, float oldPitchDegrees, float newPitchDegrees,
+            float verticalFovDegrees, float aspect)
+        {
+            float radius = TeleportZoomFraming.SafeVisibleRadius(
+                oldDistance, oldPitchDegrees, verticalFovDegrees, aspect);
+            return TeleportZoomFraming.DistanceForVisibleRadius(
+                radius, newPitchDegrees, verticalFovDegrees, aspect);
         }
 
         private void Awake()

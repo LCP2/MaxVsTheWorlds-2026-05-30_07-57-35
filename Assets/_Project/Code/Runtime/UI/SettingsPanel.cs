@@ -238,6 +238,7 @@ namespace MaxWorlds.UI
             var health = FindFirstObjectByType<PlayerHealth>();
 
             float camDefault = rig != null ? rig.Distance : 25.1f / FixedAngleCameraRig.ZoomFactor;
+            float pitchDefault = rig != null ? rig.Pitch : 72f;
             float playerDefault = player != null ? player.AuthoredMoveSpeed : 6f;
             float healthDefault = health != null ? health.AuthoredMax : 100f;
             float robotDefault = EnemyArchetype.Rusher.MoveSpeed;
@@ -253,6 +254,23 @@ namespace MaxWorlds.UI
                     var r = FindFirstObjectByType<FixedAngleCameraRig>();
                     if (r != null) r.SetDistance(v);
                 }, tab: TabFeel);
+
+            // MV-450: dev-only pitch knob, deliberately NOT built for a normal player session — the
+            // shipped 72° is a craft-bible constant, not a feel slider like the ones around it, so the
+            // gate matches DevModeController's live [;/'] keys rather than this panel's usual
+            // always-compiled-in rule (see ShouldShowPitchKnob for why that's still YT-120-safe).
+            if (ShouldShowPitchKnob())
+            {
+                Add("Camera pitch", "deg", FixedAngleCameraRig.MinPitch, FixedAngleCameraRig.MaxPitch,
+                    pitchDefault,
+                    () => DevTuning.Or(DevTuning.CameraPitch, pitchDefault),
+                    v =>
+                    {
+                        DevTuning.CameraPitch = v;
+                        var r = FindFirstObjectByType<FixedAngleCameraRig>();
+                        if (r != null) r.SetPitch(v);
+                    }, tab: TabFeel);
+            }
 
             Add("Max move speed", "m/s", 1f, 15f, playerDefault,
                 () => DevTuning.Or(DevTuning.PlayerMoveSpeed, playerDefault),
@@ -656,6 +674,21 @@ namespace MaxWorlds.UI
             }
             return 60f / 12f;
         }
+
+        /// <summary>
+        /// Whether the dev-only Camera pitch knob (MV-450) belongs in this session's panel — gated on
+        /// <see cref="DevMode.Enabled"/>, unlike every other knob here. The distinction from the
+        /// "always compiled in" rule YT-120 set for the rest of this panel: those are real feel
+        /// settings any session may want; the shipped pitch is a craft-bible constant (YT-33) that
+        /// this ticket explicitly must not turn into a player-facing setting, so it only shows up
+        /// while Lee has deliberately turned dev mode on to go looking for a new number. Gating on the
+        /// runtime <see cref="DevMode"/> flag rather than a build-time define is exactly what YT-120
+        /// replaced the old compile-define mechanism WITH, so this doesn't reopen that hole (YT-119) —
+        /// it's a plain bool read, no ProjectSettings edit, no CI step. A standalone static predicate
+        /// so an EditMode test can assert the gate directly without instantiating the panel's full uGUI
+        /// build, which only ever runs in Play mode.
+        /// </summary>
+        public static bool ShouldShowPitchKnob() => DevMode.Enabled;
 
         private void Add(string name, string unit, float min, float max, float def,
                          Func<float> get, Action<float> set, int tab = 0)
