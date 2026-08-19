@@ -112,6 +112,7 @@ This covers local verifies, CI runs, builds, deploys and test suites alike. It i
 - **Camera is fixed angled top-down at ~72°.** Don't add free-look, orbit, or portrait orientation.
 - **Greybox + free-kit only** until Phase B's exit verdict. AI art is Phase C, after the loop is proven.
 - **Windows standalone is the substitute** for the iPhone smoke build (acceptance per Phase B spec §1 sanctioned deviation). Don't park MV-32 or any Phase B ticket waiting for a Mac — that's a carry-over note, not a present blocker.
+- **Any ticket that changes a UI screen must run `cc-screens.bat` before hand-off** (MV-441) — same shape as `cc-verify.bat`, films THE RIG board and the WEAPONS button alert states, writes PNGs to `docs/press/` and `C:\Dev\MaxVsTheWorlds-Images\_screens\`. The fix comment must name the PNGs it wrote; never describe what a PNG looks like unless you actually opened and read it.
 
 ## Stack-specific notes (Unity 6 LTS)
 
