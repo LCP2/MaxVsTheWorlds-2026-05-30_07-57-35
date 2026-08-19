@@ -279,6 +279,66 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.ContactDamageCooldown, RobotCompositionTuning.DefaultContactCooldown),
                 v => DevTuning.ContactDamageCooldown = v, tab: TabFeel);
 
+            // Force Field shimmer (MV-455) — mirrors ForceFieldShield.shader's Properties block
+            // 1:1 (see that shader's file header for the maths each one feeds), so Lee dials the
+            // provisional defaults by eye rather than this ticket guessing them. Every setter
+            // pushes straight onto any bubble that's already up, so a slider moved mid-tune is
+            // visible immediately rather than only on the next activation.
+            Add("Shield rim power", "x", 0.5f, 8f, 2.4f,
+                () => DevTuning.Or(DevTuning.ForceFieldRimPower, 2.4f),
+                v => { DevTuning.ForceFieldRimPower = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield rim strength", "x", 0f, 6f, 2.6f,
+                () => DevTuning.Or(DevTuning.ForceFieldRimStrength, 2.6f),
+                v => { DevTuning.ForceFieldRimStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield panel scale", "x", 2f, 20f, 7f,
+                () => DevTuning.Or(DevTuning.ForceFieldPanelScale, 7f),
+                v => { DevTuning.ForceFieldPanelScale = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield seam width", "x", 0.02f, 0.5f, 0.1f,
+                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamWidth, 0.1f),
+                v => { DevTuning.ForceFieldPanelSeamWidth = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield seam boost", "x", 0f, 4f, 0.35f,
+                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamBoost, 0.35f),
+                v => { DevTuning.ForceFieldPanelSeamBoost = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield pulse speed", "x", 0f, 4f, 1.2f,
+                () => DevTuning.Or(DevTuning.ForceFieldPulseSpeed, 1.2f),
+                v => { DevTuning.ForceFieldPulseSpeed = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield pulse strength", "x", 0f, 1f, 0.08f,
+                () => DevTuning.Or(DevTuning.ForceFieldPulseStrength, 0.08f),
+                v => { DevTuning.ForceFieldPulseStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shimmer speed", "x", 0f, 2f, 0.35f,
+                () => DevTuning.Or(DevTuning.ForceFieldShimmerBandSpeed, 0.35f),
+                v => { DevTuning.ForceFieldShimmerBandSpeed = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shimmer width", "x", 0.02f, 1f, 0.18f,
+                () => DevTuning.Or(DevTuning.ForceFieldShimmerBandWidth, 0.18f),
+                v => { DevTuning.ForceFieldShimmerBandWidth = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            Add("Shield alpha ceiling", "x", 0f, 1f, 0.35f,
+                () => DevTuning.Or(DevTuning.ForceFieldAlphaCeiling, 0.35f),
+                v => { DevTuning.ForceFieldAlphaCeiling = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
+
+            // The tuning affordance itself: force the bubble up (bypassing acquisition/cooldown/
+            // cost) and keep it up by refilling instead of popping, so the sliders above have
+            // something to preview without needing an actual run.
+            Add("Force field hold", "on/off", 0f, 1f, 0f,
+                () => DevTuning.Or(DevTuning.ForceFieldHoldUp, 0f),
+                v =>
+                {
+                    DevTuning.ForceFieldHoldUp = v;
+                    if (v >= 0.5f)
+                    {
+                        var abilities = FindFirstObjectByType<PlayerAbilities>();
+                        if (abilities != null) abilities.ForceActivateForceFieldForTuning();
+                    }
+                }, tab: TabFeel);
+
             // ---- ARENA tab: the run's structure — Invasion Level pacing, the shed/factory it fights
             // through, the gated-area knobs (WV-234, spec §1/§9), and the World & Difficulty
             // Framework's own dials (below). ----
@@ -612,6 +672,15 @@ namespace MaxWorlds.UI
         {
             var b = FindFirstObjectByType<WaterBlaster>();
             if (b != null) b.RefreshUpgrades();
+        }
+
+        /// <summary>Push the Force Field shimmer sliders (MV-455) onto every bubble currently up —
+        /// the player's own and any Blinkguard leftover — so a slider moved mid-tune is visible
+        /// immediately instead of only on the next activation.</summary>
+        private static void RefreshForceFieldShimmer()
+        {
+            foreach (var bubble in FindObjectsByType<ForceFieldBubble>(FindObjectsSortMode.None))
+                bubble.ApplyShimmerOverrides();
         }
 
         // ------------------------------------------------------------------ widgets

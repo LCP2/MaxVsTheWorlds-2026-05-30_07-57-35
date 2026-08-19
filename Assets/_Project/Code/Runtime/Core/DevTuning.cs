@@ -240,6 +240,47 @@ namespace MaxWorlds.Core
         /// <summary>Outward knockback speed, m/s, the level-3 Force Field pop applies (MV-361).</summary>
         public static float? ForceFieldPopKnockbackSpeed { get; set; }
 
+        // --- Force Field shimmer shader (MV-455) — mirrors ForceFieldShield.shader's own
+        // Properties block 1:1 so the Settings panel's Feel-tab sliders and the shader's compiled-
+        // in defaults never drift apart; see that shader's file header for the maths each one
+        // feeds. ---
+
+        /// <summary>Fresnel exponent for the rim (<c>_RimPower</c>).</summary>
+        public static float? ForceFieldRimPower { get; set; }
+
+        /// <summary>Fresnel rim brightness multiplier (<c>_RimStrength</c>).</summary>
+        public static float? ForceFieldRimStrength { get; set; }
+
+        /// <summary>Hex panels across the dome (<c>_PanelScale</c>).</summary>
+        public static float? ForceFieldPanelScale { get; set; }
+
+        /// <summary>Hex seam thickness, in hex-cell units (<c>_PanelSeamWidth</c>).</summary>
+        public static float? ForceFieldPanelSeamWidth { get; set; }
+
+        /// <summary>How much brighter a seam glows versus the fill (<c>_PanelSeamBoost</c>).</summary>
+        public static float? ForceFieldPanelSeamBoost { get; set; }
+
+        /// <summary>Secondary brightness-breath speed on the seam glow only (<c>_PulseSpeed</c>).</summary>
+        public static float? ForceFieldPulseSpeed { get; set; }
+
+        /// <summary>Secondary brightness-breath strength (<c>_PulseStrength</c>).</summary>
+        public static float? ForceFieldPulseStrength { get; set; }
+
+        /// <summary>Travelling shimmer band's sweeps per second (<c>_ShimmerBandSpeed</c>).</summary>
+        public static float? ForceFieldShimmerBandSpeed { get; set; }
+
+        /// <summary>Travelling shimmer band's width, as a fraction of the sweep axis (<c>_ShimmerBandWidth</c>).</summary>
+        public static float? ForceFieldShimmerBandWidth { get; set; }
+
+        /// <summary>Hard ceiling on the dome's BODY alpha, away from the rim (<c>_AlphaCeiling</c>).</summary>
+        public static float? ForceFieldAlphaCeiling { get; set; }
+
+        /// <summary>Dev-tuning affordance (MV-455), stored 0/1 like <see cref="GateRequiresClear"/>:
+        /// while &gt;= 0.5, an active bubble refills instead of popping when its absorb cap hits
+        /// zero, so Lee can leave the shield raised indefinitely while dialling the sliders above
+        /// instead of re-triggering it after every hit. See <see cref="MaxWorlds.Weapons.PlayerAbilities"/>.</summary>
+        public static float? ForceFieldHoldUp { get; set; }
+
         // --- robot composition/accumulation (WV-234, spec §1-2/§9) — settings only for now, ready
         // for WV-222/223/224 (the gated-arena + robot-accumulation tickets) to spend. ---
 
@@ -364,6 +405,11 @@ namespace MaxWorlds.Core
             ForceFieldCooldownSeconds.HasValue || ForceFieldRadius.HasValue ||
             ForceFieldActivationCost.HasValue || ForceFieldPopDamage.HasValue ||
             ForceFieldPopKnockbackSpeed.HasValue ||
+            ForceFieldRimPower.HasValue || ForceFieldRimStrength.HasValue || ForceFieldPanelScale.HasValue ||
+            ForceFieldPanelSeamWidth.HasValue || ForceFieldPanelSeamBoost.HasValue ||
+            ForceFieldPulseSpeed.HasValue || ForceFieldPulseStrength.HasValue ||
+            ForceFieldShimmerBandSpeed.HasValue || ForceFieldShimmerBandWidth.HasValue ||
+            ForceFieldAlphaCeiling.HasValue || ForceFieldHoldUp.HasValue ||
             StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
@@ -431,6 +477,17 @@ namespace MaxWorlds.Core
             ForceFieldActivationCost = null;
             ForceFieldPopDamage = null;
             ForceFieldPopKnockbackSpeed = null;
+            ForceFieldRimPower = null;
+            ForceFieldRimStrength = null;
+            ForceFieldPanelScale = null;
+            ForceFieldPanelSeamWidth = null;
+            ForceFieldPanelSeamBoost = null;
+            ForceFieldPulseSpeed = null;
+            ForceFieldPulseStrength = null;
+            ForceFieldShimmerBandSpeed = null;
+            ForceFieldShimmerBandWidth = null;
+            ForceFieldAlphaCeiling = null;
+            ForceFieldHoldUp = null;
             StartLargeCount = null;
             StartSmallCount = null;
             AreaGrowthPct = null;
@@ -519,6 +576,17 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(ForceFieldActivationCost), () => ForceFieldActivationCost, v => ForceFieldActivationCost = v),
             (PrefsPrefix + nameof(ForceFieldPopDamage), () => ForceFieldPopDamage, v => ForceFieldPopDamage = v),
             (PrefsPrefix + nameof(ForceFieldPopKnockbackSpeed), () => ForceFieldPopKnockbackSpeed, v => ForceFieldPopKnockbackSpeed = v),
+            (PrefsPrefix + nameof(ForceFieldRimPower), () => ForceFieldRimPower, v => ForceFieldRimPower = v),
+            (PrefsPrefix + nameof(ForceFieldRimStrength), () => ForceFieldRimStrength, v => ForceFieldRimStrength = v),
+            (PrefsPrefix + nameof(ForceFieldPanelScale), () => ForceFieldPanelScale, v => ForceFieldPanelScale = v),
+            (PrefsPrefix + nameof(ForceFieldPanelSeamWidth), () => ForceFieldPanelSeamWidth, v => ForceFieldPanelSeamWidth = v),
+            (PrefsPrefix + nameof(ForceFieldPanelSeamBoost), () => ForceFieldPanelSeamBoost, v => ForceFieldPanelSeamBoost = v),
+            (PrefsPrefix + nameof(ForceFieldPulseSpeed), () => ForceFieldPulseSpeed, v => ForceFieldPulseSpeed = v),
+            (PrefsPrefix + nameof(ForceFieldPulseStrength), () => ForceFieldPulseStrength, v => ForceFieldPulseStrength = v),
+            (PrefsPrefix + nameof(ForceFieldShimmerBandSpeed), () => ForceFieldShimmerBandSpeed, v => ForceFieldShimmerBandSpeed = v),
+            (PrefsPrefix + nameof(ForceFieldShimmerBandWidth), () => ForceFieldShimmerBandWidth, v => ForceFieldShimmerBandWidth = v),
+            (PrefsPrefix + nameof(ForceFieldAlphaCeiling), () => ForceFieldAlphaCeiling, v => ForceFieldAlphaCeiling = v),
+            (PrefsPrefix + nameof(ForceFieldHoldUp), () => ForceFieldHoldUp, v => ForceFieldHoldUp = v),
             (PrefsPrefix + nameof(StartLargeCount), () => StartLargeCount, v => StartLargeCount = v),
             (PrefsPrefix + nameof(StartSmallCount), () => StartSmallCount, v => StartSmallCount = v),
             (PrefsPrefix + nameof(AreaGrowthPct), () => AreaGrowthPct, v => AreaGrowthPct = v),

@@ -388,6 +388,27 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
+        /// <summary>Dev-tuning affordance (MV-455): force the bubble up regardless of acquisition,
+        /// cooldown or power-cell cost, so Lee can leave the shield raised while dialling the
+        /// shimmer sliders in the Settings panel instead of needing to have actually earned Force
+        /// Field this run. Never called from real gameplay — only the panel's "Force field hold"
+        /// toggle. No-op if the bubble is already up.</summary>
+        public void ForceActivateForceFieldForTuning()
+        {
+            if (ForceFieldActive) return;
+
+            int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.ForceField));
+            float baseCap = DevTuning.Or(DevTuning.ForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCap);
+            float perLevel = DevTuning.Or(DevTuning.ForceFieldAbsorbCapPerLevel, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel);
+            _forceFieldAbsorbCap = AbilityTuning.ForceFieldAbsorbCap(level, baseCap, perLevel);
+            _forceFieldAbsorbRemaining = _forceFieldAbsorbCap;
+
+            if (_forceFieldBubble != null) Destroy(_forceFieldBubble.gameObject);
+            var go = new GameObject("Force Field Bubble (tuning)");
+            _forceFieldBubble = go.AddComponent<ForceFieldBubble>();
+            _forceFieldBubble.Init(transform, _cc, ForceFieldRadius);
+        }
+
         /// <summary>Eat as much of an incoming hit as the bubble's remaining budget allows — the single
         /// hook <see cref="MaxWorlds.Player.PlayerHealth.TakeDamage"/> calls before touching HP, so
         /// EVERY damage source (contact lunge, beam tick, missile splash) is absorbed the same way
@@ -400,7 +421,14 @@ namespace MaxWorlds.Weapons
 
             var (absorbed, leaked) = AbilityTuning.ForceFieldAbsorb(incoming, _forceFieldAbsorbRemaining);
             _forceFieldAbsorbRemaining -= absorbed;
-            if (_forceFieldAbsorbRemaining <= 0f) PopForceField();
+            if (_forceFieldAbsorbRemaining <= 0f)
+            {
+                // MV-455 tuning affordance: refill instead of popping while the panel's "Force
+                // field hold" toggle is on, so the shield stays up for the shimmer to be judged
+                // without needing to re-trigger it after every hit.
+                if (DevTuning.Or(DevTuning.ForceFieldHoldUp, 0f) >= 0.5f) _forceFieldAbsorbRemaining = _forceFieldAbsorbCap;
+                else PopForceField();
+            }
             return leaked;
         }
 

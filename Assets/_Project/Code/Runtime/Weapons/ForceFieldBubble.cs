@@ -55,6 +55,18 @@ namespace MaxWorlds.Weapons
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int RimColorId = Shader.PropertyToID("_RimColor");
 
+        // MV-455 shimmer tuning — mirrors ForceFieldShield.shader's Properties block 1:1.
+        private static readonly int RimPowerId = Shader.PropertyToID("_RimPower");
+        private static readonly int RimStrengthId = Shader.PropertyToID("_RimStrength");
+        private static readonly int PanelScaleId = Shader.PropertyToID("_PanelScale");
+        private static readonly int PanelSeamWidthId = Shader.PropertyToID("_PanelSeamWidth");
+        private static readonly int PanelSeamBoostId = Shader.PropertyToID("_PanelSeamBoost");
+        private static readonly int PulseSpeedId = Shader.PropertyToID("_PulseSpeed");
+        private static readonly int PulseStrengthId = Shader.PropertyToID("_PulseStrength");
+        private static readonly int ShimmerBandSpeedId = Shader.PropertyToID("_ShimmerBandSpeed");
+        private static readonly int ShimmerBandWidthId = Shader.PropertyToID("_ShimmerBandWidth");
+        private static readonly int AlphaCeilingId = Shader.PropertyToID("_AlphaCeiling");
+
         private MeshRenderer _visual;
         private MaterialPropertyBlock _mpb;
 
@@ -102,6 +114,7 @@ namespace MaxWorlds.Weapons
             _visual.receiveShadows = false;
             _mpb = new MaterialPropertyBlock();
             SetFraction(1f);
+            ApplyShimmerOverrides();
 
             // Physics.autoSyncTransforms is off project-wide (see GateSolidityTests) — force a sync so
             // a robot's CharacterController.Move on this very frame already sees the new collider.
@@ -116,6 +129,35 @@ namespace MaxWorlds.Weapons
             _mpb.SetColor(BaseColorId, Color.Lerp(EmptyFillColor, FullFillColor, t));
             _mpb.SetColor(RimColorId, Color.Lerp(EmptyRimColor, FullRimColor, t));
             _visual.SetPropertyBlock(_mpb);
+        }
+
+        /// <summary>Pushes the Settings panel's shimmer overrides (MV-455, <see cref="DevTuning"/>)
+        /// onto this bubble's own material — called once from <see cref="Init"/> so a freshly
+        /// summoned bubble starts with whatever Lee has already dialled, and again by
+        /// <c>SettingsPanel</c> whenever a slider moves so an ALREADY-up bubble updates live rather
+        /// than needing to be re-triggered. Every parameter left at null keeps the shader's own
+        /// compiled-in default. No-op against the flat-fill fallback material (it has none of
+        /// these properties; <see cref="Material.SetFloat(int, float)"/> against a missing
+        /// property is a harmless no-op).</summary>
+        public void ApplyShimmerOverrides()
+        {
+            var mat = _visual != null ? _visual.sharedMaterial : null;
+            if (mat == null) return;
+            SetIfOverridden(mat, RimPowerId, DevTuning.ForceFieldRimPower);
+            SetIfOverridden(mat, RimStrengthId, DevTuning.ForceFieldRimStrength);
+            SetIfOverridden(mat, PanelScaleId, DevTuning.ForceFieldPanelScale);
+            SetIfOverridden(mat, PanelSeamWidthId, DevTuning.ForceFieldPanelSeamWidth);
+            SetIfOverridden(mat, PanelSeamBoostId, DevTuning.ForceFieldPanelSeamBoost);
+            SetIfOverridden(mat, PulseSpeedId, DevTuning.ForceFieldPulseSpeed);
+            SetIfOverridden(mat, PulseStrengthId, DevTuning.ForceFieldPulseStrength);
+            SetIfOverridden(mat, ShimmerBandSpeedId, DevTuning.ForceFieldShimmerBandSpeed);
+            SetIfOverridden(mat, ShimmerBandWidthId, DevTuning.ForceFieldShimmerBandWidth);
+            SetIfOverridden(mat, AlphaCeilingId, DevTuning.ForceFieldAlphaCeiling);
+        }
+
+        private static void SetIfOverridden(Material mat, int propertyId, float? value)
+        {
+            if (value.HasValue) mat.SetFloat(propertyId, value.Value);
         }
 
         /// <summary>The shield's material — a real, view-dependent Fresnel rim

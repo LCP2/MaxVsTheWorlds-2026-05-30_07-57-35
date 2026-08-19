@@ -167,6 +167,60 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        /// <summary>MV-455 AC5: the shipped default <c>_AlphaCeiling</c> must sit at or below the
+        /// ~0.35 target set by the DECISION ("no more than ~0.35 composited at any fragment away
+        /// from the rim"), so a future slider tweak in the Editor can't silently re-solidify the
+        /// bubble without this test catching it.</summary>
+        [Test]
+        public void DefaultAlphaCeiling_IsAtOrBelowTheShimmerTarget()
+        {
+            var shader = Shader.Find("MaxWorlds/ForceFieldShield");
+            Assert.IsNotNull(shader, "the shield shader is missing — MV-391's fallback exists for " +
+                                      "runtime robustness, but the Editor build must have the real one");
+
+            var mat = new Material(shader);
+            try
+            {
+                Assert.That(mat.GetFloat("_AlphaCeiling"), Is.LessThanOrEqualTo(0.35f),
+                    "MV-455: the body of the dome must stay well below opaque — a ceiling raised " +
+                    "past ~0.35 re-solidifies the shield the DECISION explicitly rejected");
+            }
+            finally { Object.DestroyImmediate(mat); }
+        }
+
+        /// <summary>MV-455 AC4: the Settings-panel shimmer sliders must actually reach the live
+        /// material — regression guard on <see cref="ForceFieldBubble.ApplyShimmerOverrides"/>'s
+        /// wiring, independent of whatever the panel itself does with the value.</summary>
+        [Test]
+        public void ApplyShimmerOverrides_PushesDevTuningValuesOntoTheLiveMaterial()
+        {
+            var owner = new GameObject("Owner");
+            var ownerCc = owner.AddComponent<CharacterController>();
+            var bubbleGo = new GameObject("Force Field Bubble");
+            var bubble = bubbleGo.AddComponent<ForceFieldBubble>();
+            try
+            {
+                bubble.Init(owner.transform, ownerCc, 1.5f);
+                var mat = bubbleGo.transform.Find("Visual").GetComponent<MeshRenderer>().sharedMaterial;
+
+                DevTuning.ForceFieldAlphaCeiling = 0.21f;
+                DevTuning.ForceFieldShimmerBandSpeed = 0.77f;
+                bubble.ApplyShimmerOverrides();
+
+                Assert.That(mat.GetFloat("_AlphaCeiling"), Is.EqualTo(0.21f).Within(1e-5f),
+                    "a moved 'Shield alpha ceiling' slider never reached the bubble's own material");
+                Assert.That(mat.GetFloat("_ShimmerBandSpeed"), Is.EqualTo(0.77f).Within(1e-5f),
+                    "a moved 'Shimmer speed' slider never reached the bubble's own material");
+            }
+            finally
+            {
+                DevTuning.ForceFieldAlphaCeiling = null;
+                DevTuning.ForceFieldShimmerBandSpeed = null;
+                Object.DestroyImmediate(bubbleGo);
+                Object.DestroyImmediate(owner);
+            }
+        }
+
         private static void RunSurfaceSweep()
         {
             var go = new GameObject("sweep-test-director");

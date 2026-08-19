@@ -18,6 +18,34 @@
 // interiors left close to the plain fill. Seen from any angle — including nearly straight down —
 // the seams trace visible facet lines across the dome, which is what makes it read as a faceted
 // 3D shell rather than a flat tinted disc.
+//
+// MV-455 (Lee, 0.8.3 build review): the shipped result did not honour any of the above — the
+// lattice read as a solid dome, not a shimmer. Four compounding bugs, all fixed in this pass:
+//
+//   1. Cull Off draws both hemispheres of the sphere at one screen pixel, so with
+//      Blend SrcAlpha OneMinusSrcAlpha every fragment's alpha was composited TWICE: the visible
+//      coverage was 1-(1-a)^2, not a. Fixed by emitting the exact per-fragment alpha `e` that
+//      makes the double-blend land back on the INTENDED single-pass value `A`:
+//          1 - (1-e)^2 = A   =>   e = 1 - sqrt(1-A)
+//      (for small A this is ~A/2, i.e. "divide the alpha", but the exact inverse is used below so
+//      it holds at the rim too, where A can approach 1). See `alpha` in Frag().
+//   2. `_PanelSeamBoost` (was 1.3) let the hex seams alone add ~0.78 of alpha across the WHOLE
+//      dome — a lattice, not an edge. Re-tuned to a hint-level default (see Properties) and the
+//      body alpha (fill + seam glow) is now hard-clamped to `_AlphaCeiling` — the rim is exempt
+//      and still adds its own coverage on top, per the "rim/seams ADD, never replace" contract.
+//   3. `color` was an unclamped additive sum that blew past `_RimColor` into flat white wherever
+//      rim+seam exceeded 1. Fixed with a `saturate()` on the glow term before it's added.
+//   4. The old `pulse` term brightened the WHOLE lattice uniformly — a brightness breath, not a
+//      shimmer. A travelling highlight band (`_ShimmerBandSpeed`/`_ShimmerBandWidth`), driven off
+//      `_Time.y` against the sphere's own local Y axis, now carries the "alive" cue instead — the
+//      eye reads motion sweeping the film rather than the whole dome breathing. `pulse` stays as a
+//      much subtler secondary modulator on the seam glow only (Lee's slider, not the shimmer).
+//
+// All of the above are dev-mode Settings-panel sliders (SettingsPanel's Feel tab, MV-455) so Lee
+// dials the final numbers by eye rather than this ticket guessing them — same always-present,
+// ungated pattern as the existing camera-zoom knob (YT-120: the panel is compiled into every
+// build, no #if, no build-time define; see DevTuning/SettingsPanel for why that replaced the old
+// dev-only overlay).
 Shader "MaxWorlds/ForceFieldShield"
 {
     Properties
@@ -33,13 +61,27 @@ Shader "MaxWorlds/ForceFieldShield"
 
         // Hex facet panelling (MV-391 16 Aug DECISION) — panel count across the dome, seam
         // thickness in hex-cell units, and how much brighter a seam glows versus the rim.
+        // _PanelSeamBoost re-tuned down from 1.3 for MV-455 — at 1.3 the seams alone solidified
+        // the whole dome (see the file header maths); this is provisional, Lee's to dial further.
         _PanelScale     ("Panel Scale", Range(2, 20)) = 7
         _PanelSeamWidth ("Panel Seam Width", Range(0.02, 0.5)) = 0.1
-        _PanelSeamBoost ("Panel Seam Boost", Range(0, 4)) = 1.3
+        _PanelSeamBoost ("Panel Seam Boost", Range(0, 4)) = 0.35
 
-        // "Reactive/alive" cue (AC6) — subtle, or Max becomes hard to see inside his own shield.
+        // Secondary "reactive/alive" cue — a much subtler modulator on the seam glow only, kept
+        // small so it never dominates the travelling shimmer band below (MV-455 provisional).
         _PulseSpeed     ("Pulse Speed", Range(0, 4)) = 1.2
-        _PulseStrength  ("Pulse Strength", Range(0, 1)) = 0.15
+        _PulseStrength  ("Pulse Strength", Range(0, 1)) = 0.08
+
+        // The shimmer itself (MV-455): a soft highlight band that sweeps the dome's surface along
+        // its local Y axis over time, looping. Speed is full sweeps/second, Width is the band's
+        // extent as a fraction of the axis (0..1). Provisional defaults, Lee's to dial.
+        _ShimmerBandSpeed ("Shimmer Band Speed", Range(0, 2)) = 0.35
+        _ShimmerBandWidth ("Shimmer Band Width", Range(0.02, 1)) = 0.18
+
+        // Hard ceiling on the BODY alpha (fill + seam glow, before the rim adds its own coverage
+        // on top) — MV-455 AC: "no more than ~0.35 composited at any fragment away from the rim".
+        // Applied pre-compensation, i.e. this is the true composited value Max is seen through.
+        _AlphaCeiling   ("Alpha Ceiling (body)", Range(0, 1)) = 0.35
     }
 
     SubShader
@@ -78,6 +120,9 @@ Shader "MaxWorlds/ForceFieldShield"
                 float  _PanelSeamBoost;
                 float  _PulseSpeed;
                 float  _PulseStrength;
+                float  _ShimmerBandSpeed;
+                float  _ShimmerBandWidth;
+                float  _AlphaCeiling;
             CBUFFER_END
 
             struct Attributes
@@ -178,16 +223,36 @@ Shader "MaxWorlds/ForceFieldShield"
                 float seamXZ = HexSeamFactor(pOS.xz, _PanelSeamWidth);
                 float seam = seamXY * blendW.z + seamYZ * blendW.x + seamXZ * blendW.y;
 
-                // Reactive/alive shimmer (AC6) — modulates the panel glow only, kept small enough
-                // that it never dims the fill/rim enough to hide Max inside the bubble.
+                // Secondary brightness breath (kept small — see Properties) on the seam glow only.
                 float pulse = 1.0 + sin(_Time.y * _PulseSpeed) * _PulseStrength;
                 float panelGlow = seam * _PanelSeamBoost * pulse;
 
-                float3 color = _BaseColor.rgb + _RimColor.rgb * (rim + panelGlow);
-                // The fill alone stays subtle (low, near-constant alpha) so Max reads through the
-                // centre of the bubble; the rim and panel seams ADD coverage on top of that, never
-                // replace it, so the edges/seams brighten without the fill needing to be raised.
-                float alpha = saturate(_BaseColor.a + rim + panelGlow * 0.6);
+                // The shimmer (MV-455, AC3): a soft highlight band that sweeps along the sphere's
+                // own local Y axis over time and loops, so the eye reads motion travelling across
+                // the film rather than the whole dome brightening at once. `nOS` (the normalized
+                // object-space position, already computed above for the triplanar hex blend) is a
+                // stable per-fragment surface coordinate independent of `_PanelScale`.
+                float axisN = saturate(nOS.y * 0.5 + 0.5);
+                float bandPhase = frac(_Time.y * _ShimmerBandSpeed);
+                float bandDist = abs(axisN - bandPhase);
+                bandDist = min(bandDist, 1.0 - bandDist); // wrap so the sweep loops seamlessly
+                float shimmerBand = 1.0 - smoothstep(0.0, max(_ShimmerBandWidth, 1e-4), bandDist);
+
+                // Glow term shared by colour and alpha, clamped once (AC2) so seams/shimmer can
+                // never blow `color` past `_RimColor` into flat white.
+                float glow = saturate(rim + panelGlow + shimmerBand * 0.5);
+                float3 color = _BaseColor.rgb + _RimColor.rgb * glow;
+
+                // Body alpha (fill + seam + shimmer, everything except the rim) is hard-ceilinged
+                // (AC5) so the dome's interior stays "well below opaque" regardless of how the
+                // seam/shimmer sliders are dialled; the rim is exempt and still adds its own
+                // coverage on top, same "rim ADDS, never replaces the fill" contract as before.
+                float bodyAlpha = min(_BaseColor.a + panelGlow * 0.6 + shimmerBand * 0.3, _AlphaCeiling);
+                float singlePassAlpha = saturate(bodyAlpha + rim);
+
+                // Undo the Cull-Off double-composite (see file header maths): emit the alpha that,
+                // blended twice (near + far hemisphere), lands back on `singlePassAlpha`.
+                float alpha = 1.0 - sqrt(saturate(1.0 - singlePassAlpha));
                 return half4(color, alpha);
             }
             ENDHLSL
