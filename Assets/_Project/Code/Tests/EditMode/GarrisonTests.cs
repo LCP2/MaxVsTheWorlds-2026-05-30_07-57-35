@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using NUnit.Framework;
 using MaxWorlds.Arena;
@@ -135,6 +136,53 @@ namespace MaxWorlds.Tests.EditMode
             Vector3[] positions = Garrison.SeedPositions(area, 0);
 
             Assert.IsEmpty(positions);
+        }
+
+        /// <summary>
+        /// MV-459 (redirect, 2026-08-20). Nothing before this checked the garrison's deterministic
+        /// ring against the area's own authored <see cref="WorldArea.cover"/> — so a Bruiser could be
+        /// (and, on the shipped <c>world1_config.json</c>, WAS) seeded dead inside a hedge row across
+        /// ten of world 1's eighteen areas. A robot seeded inside cover is exactly the "stuck on
+        /// geometry" case the ticket names: it silently starves <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>
+        /// for that area, because <c>PickupDirector.IsLastBruiserInArea</c> only ever fires once every
+        /// Bruiser the area holds has actually been reached and killed. This runs against the real
+        /// shipped config (not a fixture) so a future area/cover edit that reintroduces the overlap
+        /// fails here instead of shipping quietly. Exempt from future test-culling passes — MV-465
+        /// already deleted the only guards on two other known defects and both regressed.
+        /// </summary>
+        [Test]
+        public void SeedPositions_World1_EveryGarrisonSeedClearsItsAreasAuthoredCover()
+        {
+            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
+            var violations = new List<string>();
+
+            foreach (WorldArea area in cfg.areas)
+            {
+                int count = Garrison.SeedCount(area.index, cfg);
+                if (count <= 0) continue;
+
+                Vector3[] positions = Garrison.SeedPositions(area, count);
+                for (int i = 0; i < positions.Length; i++)
+                {
+                    var point = new Vector2(positions[i].x, positions[i].z);
+                    foreach (WorldCover c in area.cover)
+                    {
+                        if (c == null) continue;
+
+                        ArenaCover body = new MapEntity
+                        {
+                            x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                        }.ToCover();
+
+                        float clearance = body.DistanceTo(point);
+                        if (clearance < MapValidation.SpawnClearance)
+                            violations.Add($"{area.id} seed#{i} is {clearance:0.###} m from cover '{c.id}' " +
+                                           $"(needs {MapValidation.SpawnClearance} m)");
+                    }
+                }
+            }
+
+            Assert.IsEmpty(violations, string.Join("\n", violations));
         }
     }
 }
