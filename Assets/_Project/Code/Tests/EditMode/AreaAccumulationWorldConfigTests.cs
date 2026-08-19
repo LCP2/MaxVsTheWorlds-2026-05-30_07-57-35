@@ -57,7 +57,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
             DifficultyEngine.Composition area1 = cfg.SolveComposition(1);
-            Assert.AreEqual(1, area1.Bruiser, "area 1 must hold exactly one tank (large robot)");
+            Assert.AreEqual(2, area1.Bruiser, "MV-442: area 1 must hold exactly two tanks (large robots)");
             Assert.That(area1.Rusher, Is.InRange(2, 3), "area 1 must hold 2-3 Rusher");
             Assert.AreEqual(0, area1.Heavy, "Heavy is not unlocked this early");
             Assert.AreEqual(0, area1.Brute, "Brute is not unlocked this early");
@@ -100,7 +100,7 @@ namespace MaxWorlds.Tests.EditMode
 
             DifficultyEngine.Composition area1 = cfg.SolveComposition(1);
             DifficultyEngine.Composition area4 = cfg.SolveComposition(4);
-            Assert.AreEqual(1, area1.Bruiser, "area 1's authored composition holds exactly one Bruiser");
+            Assert.AreEqual(2, area1.Bruiser, "MV-442: area 1's authored composition holds exactly two Bruiser");
             Assert.AreEqual(0, area4.Bruiser, "area 4's authored composition is Rusher+Gunner only");
 
             _directorGo = new GameObject("Area Accumulation");
@@ -111,7 +111,7 @@ namespace MaxWorlds.Tests.EditMode
             director.EnterArea(3);
             director.EnterArea(4);
 
-            Assert.AreEqual(1, director.BruiserCountForArea(1),
+            Assert.AreEqual(2, director.BruiserCountForArea(1),
                 "area 1's Bruiser count must match its solved composition");
             Assert.AreEqual(0, director.BruiserCountForArea(4),
                 "a Bruiser-less area must report exactly zero, not fall back to some other count");

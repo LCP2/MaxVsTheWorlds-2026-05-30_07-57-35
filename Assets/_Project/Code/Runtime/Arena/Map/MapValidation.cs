@@ -44,7 +44,7 @@ namespace MaxWorlds.Arena
 
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
         /// room.</summary>
-        public const float MinFreeChannel = 6f;
+        public const float MinFreeChannel = 3f;
 
         public static bool Validate(MapData map, out string reason)
         {

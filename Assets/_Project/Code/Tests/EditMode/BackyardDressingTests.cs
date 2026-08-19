@@ -74,15 +74,16 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>Named rather than counted: it is the nine shed rooms and the boss clearing — rooms
-        /// spread across World1's 18-area chain (MV-411/MV-437) — that this has to cover.</summary>
+        /// <summary>Named rather than counted: it is the eight shed rooms and the boss clearing —
+        /// rooms spread across World1's 18-area chain (MV-411/MV-437, reverted at Area 1 by
+        /// MV-442) — that this has to cover.</summary>
         [Test]
         public void TheFactoryRoomsAndTheBossClearingAreBothFenced()
         {
             MapData map = Map;
             var set = Set();
 
-            foreach (string id in new[] { "area1", "area3", "area6", "area8", "area9", "area11", "area14", "area15", "area17", "boss" })
+            foreach (string id in new[] { "area3", "area6", "area8", "area9", "area11", "area14", "area15", "area17", "boss" })
             {
                 MapZone zone = map.Zone(id);
                 Assert.IsTrue(
@@ -212,9 +213,9 @@ namespace MaxWorlds.Tests.EditMode
             // line" is no longer a thing to assert. Near THE ROUTE is.
             Assert.Greater(stones.Count, 5, "the path is a few scattered rocks, not a path");
 
-            // MV-437 moved the first shed to Area 1, one gate off the entry stub — the shortest
-            // possible route (spawn, straight into the factory's room) with no intermediate room
-            // between them. 2 points (spawn + factory) is a legitimate route now, not a bug.
+            // MV-442 reverted MV-437's Area 1 shed — the first shed is Area 3 again, so this route
+            // now crosses more than one room, but the >=2 floor stays: a 2-point route (spawn,
+            // straight into the factory's room) would still be legitimate wherever the first shed is.
             Assert.GreaterOrEqual(route.Count, 2, "the route to the factory has no waypoints at all");
 
             foreach (DressingProp s in stones)
@@ -257,7 +258,7 @@ namespace MaxWorlds.Tests.EditMode
             List<Vector2> rings = MapValidation.Kind(Map, EntityKind.Factory)
                                                .Select(f => f.CenterXz).ToList();
 
-            Assert.AreEqual(9, rings.Count, "World1 ships nine sheds (a1/a3/a6/a8/a9/a11/a14/a15/a17)");
+            Assert.AreEqual(8, rings.Count, "World1 ships eight sheds (a3/a6/a8/a9/a11/a14/a15/a17)");
 
             var shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
             Assert.IsNotEmpty(shedProps, "no shed was dressed at all");

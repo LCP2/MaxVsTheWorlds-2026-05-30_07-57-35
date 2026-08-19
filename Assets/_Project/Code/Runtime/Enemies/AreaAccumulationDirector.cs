@@ -329,7 +329,13 @@ namespace MaxWorlds.Enemies
             int totalForArea;
             if (_worldCfg != null)
             {
-                DifficultyEngine.Composition composition = ClampRusherCap(_worldCfg.SolveComposition(areaIndex));
+                // MV-442 (Lee, 2026-08-19): an authored composition (MV-365) is queued exactly as
+                // designed, all seven kinds, never trimmed — RusherCap only ever applies to a
+                // dial-derived solve. _rushersQueuedThisLevel still advances by an authored area's
+                // Rusher count either way, so a later dial-derived area is still capped correctly.
+                DifficultyEngine.Composition solved = _worldCfg.SolveComposition(areaIndex);
+                bool authored = _worldCfg.AreaByIndex(areaIndex)?.composition?.IsAuthored == true;
+                DifficultyEngine.Composition composition = authored ? CountRushers(solved) : ClampRusherCap(solved);
                 _largeCountByArea[areaIndex] = composition.LargeCount;
                 _bruiserCountByArea[areaIndex] = composition.Bruiser;
                 _queue.FillExact(composition, areaIndex);
@@ -419,12 +425,23 @@ namespace MaxWorlds.Enemies
         }
 
         /// <summary>Applies <see cref="RusherCap.Apply"/> against this director's running total, then
-        /// advances that total by however many Rushers actually made it through.</summary>
+        /// advances that total by however many Rushers actually made it through. Only ever called for
+        /// a dial-derived composition (MV-442) — an authored one goes through <see cref="CountRushers"/>
+        /// instead, which advances the same running total without trimming.</summary>
         private DifficultyEngine.Composition ClampRusherCap(DifficultyEngine.Composition composition)
         {
             DifficultyEngine.Composition clamped = RusherCap.Apply(composition, _rushersQueuedThisLevel);
             _rushersQueuedThisLevel += clamped.Rusher;
             return clamped;
+        }
+
+        /// <summary>Advances the running Rusher total by an authored (MV-365) area's exact count,
+        /// untouched — so a later dial-derived area is still capped correctly by
+        /// <see cref="ClampRusherCap"/>, without this area's own count ever being trimmed (MV-442).</summary>
+        private DifficultyEngine.Composition CountRushers(DifficultyEngine.Composition composition)
+        {
+            _rushersQueuedThisLevel += composition.Rusher;
+            return composition;
         }
 
         /// <summary>True if <paramref name="areaIndex"/>'s authored scenario tag (MV-365,
