@@ -154,6 +154,15 @@ namespace MaxWorlds.Dev
             foreach (var aspect in RigBoardLayout.CaptureAspects)
                 yield return CaptureFixtureScreen($"rig-{aspect.Name}", aspect.W, aspect.H, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-470: same node levels as the main fixture, but too few cells to afford EITHER a cell
+            // unlock (20) or an upgrade (10) — evidences the "reads as inert" half of AC1 (a node the
+            // player can't yet afford), which the 28-cell main fixture can never show since 28 covers
+            // every cost on the board.
+            yield return CaptureFixtureScreen("rig-lowcells-16x9", 1920, 1080, ApplyRigFixtureLowCells, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-470: a true run-start board (only PRIMARY unlocked, per RigState.Reset's own baseline)
+            // — every other fixture above forces every category open (ResetRunForFixture), so none of
+            // them can evidence the "family not unlocked" lock reason at all.
+            yield return CaptureFixtureScreen("rig-freshrun-16x9", 1920, 1080, ApplyRigFixtureFreshRun, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -179,6 +188,30 @@ namespace MaxWorlds.Dev
             ResetRunForFixture();
             SpendRigFixtureLevels();
             PickupWallet.SetPowerCells(28);
+        }
+
+        /// <summary>MV-470: the same node levels as <see cref="ApplyRigFixture"/>, but only 5 cells
+        /// banked — below both <see cref="CellSpend.UnlockCostCells"/> (20) and
+        /// <see cref="CellSpend.UpgradeCostCells"/> (10), so every cell-costed node on the board reads
+        /// inert rather than live. The main fixture's 28 cells cover every cost, so it can only ever
+        /// evidence the affordable half of AC1.</summary>
+        public static void ApplyRigFixtureLowCells()
+        {
+            ResetRunForFixture();
+            SpendRigFixtureLevels();
+            PickupWallet.SetPowerCells(5);
+        }
+
+        /// <summary>MV-470: an actual run start — <see cref="RigState.Reset"/>'s own baseline (only
+        /// PRIMARY unlocked, p_dmg at level 1), nothing force-opened. Every other fixture calls
+        /// <see cref="ResetRunForFixture"/>, which deliberately unlocks every category so the reference
+        /// shot matches MV-423.png's "whole board open" spec — but that also means none of them can ever
+        /// show a family-not-unlocked node, the ticket's own first lock reason.</summary>
+        public static void ApplyRigFixtureFreshRun()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PickupWallet.SetPowerCells(15);
         }
 
         private static void ResetRunForFixture()

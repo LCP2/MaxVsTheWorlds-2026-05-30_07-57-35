@@ -1,15 +1,17 @@
-﻿fail: 3 assertion(s) failed — conformance/hex-orientation: 5/5 off-ratio — PRIMARY ratio=1.036 (w=172 h=166); SECONDARY ratio=1.036 (w=172 h=166); ENERGY ratio=1.036 (w=172 h=166); MOVE ratio=1.036 (w=172 h=166); SUPPORT ratio=1.036 (w=172 h=166) | conformance/family-contrast: lit=0.147 unlit=0.104 ratio=1.409 (need >=1.5) | conformance/glow-containment: 12/12 over 25% — PRIMARY 99.165%; ENERGY 99.165%; SUPPORT 99.165%; p_dmg 100%; p_rng 100%; p_flw 100%; e_ff 100%; e_cel 100%; e_cd 100%; u_sen 100%; u_dmg 100%; u_rng 100%
+﻿fail: 2 assertion(s) failed — conformance/hex-orientation: 5/5 off-ratio — PRIMARY ratio=1.036 (w=172 h=166); SECONDARY ratio=1.036 (w=172 h=166); ENERGY ratio=1.036 (w=172 h=166); MOVE ratio=1.036 (w=172 h=166); SUPPORT ratio=1.036 (w=172 h=166) | conformance/glow-containment: 12/12 over 25% — PRIMARY 99.165%; ENERGY 99.165%; SUPPORT 99.165%; p_dmg 100%; p_rng 100%; p_flw 100%; e_ff 100%; e_cel 100%; e_cd 100%; u_sen 100%; u_dmg 100%; u_rng 100%
 rig-16x9.png (1920x1080)
 probe6 (outside-background==composited-base): PASS — expected #000000, got #000000 at tex(20,680)
 PASS node-position: 28/28 nodes present at their json coordinate
 FAIL hex-orientation: 5/5 off-ratio — PRIMARY ratio=1.036 (w=172 h=166); SECONDARY ratio=1.036 (w=172 h=166); ENERGY ratio=1.036 (w=172 h=166); MOVE ratio=1.036 (w=172 h=166); SUPPORT ratio=1.036 (w=172 h=166)
-FAIL family-contrast: lit=0.147 unlit=0.104 ratio=1.409 (need >=1.5)
+PASS family-contrast: lit=0.165 unlit=0.11 ratio=1.505 (need >=1.5)
 FAIL glow-containment: 12/12 over 25% — PRIMARY 99.165%; ENERGY 99.165%; SUPPORT 99.165%; p_dmg 100%; p_rng 100%; p_flw 100%; e_ff 100%; e_cel 100%; e_cd 100%; u_sen 100%; u_dmg 100%; u_rng 100%
 PASS colour-probes: 7/7 sampled points match rig_board.json
 rig-contact-sheet.png (3762x1202, 28 node pairs)
 rig-16x10.png (1728x1080)
 rig-phone.png (2340x1080)
 rig-noparts-16x9.png (1920x1080)
+rig-lowcells-16x9.png (1920x1080)
+rig-freshrun-16x9.png (1920x1080)
 weapons-button-idle.png (1920x1080)
 weapons-button-parts.png (1920x1080)
 weapons-button-module.png (1920x1080)
