@@ -35,7 +35,10 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
+          # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
+          # cache. Unity reimports changed assets from a restored Library anyway.
+          key: Library-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-
       - uses: game-ci/unity-test-runner@v4
         env:
@@ -63,6 +66,14 @@ jobs:
   # ---------------------------------------------------------------------------
   playcheck:
     name: Play-check (PlayMode)
+    # MV-460 / MV-464: PARKED. This job has not completed since the suite outgrew its
+    # timeout - it is cancelled at 20m on every run, which turns every run red and hides
+    # genuine failures (it masked the real red on run #441). It gates nothing, so parking
+    # it loses no signal. The timeout and the comment below stay: un-parking without
+    # fixing the suite reinstates the four-hour hang described there.
+    # Re-enable when MV-464 has moved the ~423 disguised unit tests to EditMode and the
+    # remaining play-check runs in minutes.
+    if: false
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -72,7 +83,10 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
+          # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
+          # cache. Unity reimports changed assets from a restored Library anyway.
+          key: Library-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-
       - uses: game-ci/unity-test-runner@v4
         env:
@@ -99,7 +113,10 @@ jobs:
       - uses: actions/cache@v4
         with:
           path: Library
-          key: Library-${{ hashFiles('Assets/**', 'Packages/**', 'ProjectSettings/**') }}
+          # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
+          # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
+          # cache. Unity reimports changed assets from a restored Library anyway.
+          key: Library-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-
       - uses: game-ci/unity-builder@v4
         env:
