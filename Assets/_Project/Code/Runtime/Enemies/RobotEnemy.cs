@@ -656,7 +656,8 @@ namespace MaxWorlds.Enemies
             // materially different waypoints.
             MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
             string routedZoneId = _zoneHysteresis.Resolve(rawZone?.id, dt);
-            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId);
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
+                UsesGridRoute(Kind));
 
             // Its own lane, so a pack arrives as a fan rather than a queue. The last leg is the
             // wide, flanker-aware fan onto the real goal; an earlier leg is a doorway, which gets
@@ -801,6 +802,15 @@ namespace MaxWorlds.Enemies
         /// and <see cref="TickContactTouch"/>.</summary>
         private static bool LungesAsKind(EnemyKind kind) =>
             kind != EnemyKind.Bruiser && kind != EnemyKind.Heavy && kind != EnemyKind.Brute;
+
+        /// <summary>Whether <paramref name="kind"/> routes around this zone's own cover instead of
+        /// beelining across it (MV-476) — the touch-damage archetypes only: Rusher, Bruiser, Heavy,
+        /// Brute. Gunner and Launcher keep their standoff steering and Blinker keeps its teleport-flank
+        /// steering unchanged — the ticket's scope names all three "ranged" and explicitly excludes
+        /// them, even though Blinker eventually melees once it lands.</summary>
+        private static bool UsesGridRoute(EnemyKind kind) =>
+            kind == EnemyKind.Rusher || kind == EnemyKind.Bruiser
+                                      || kind == EnemyKind.Heavy || kind == EnemyKind.Brute;
 
         /// <summary>Whether <paramref name="kind"/> is gated by <see cref="LungeTokenPool"/> (MV-428
         /// Change 2) — only the two kinds that keep the raw dash: Rusher and Blinker. Gunner/Launcher

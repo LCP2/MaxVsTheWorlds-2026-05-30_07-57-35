@@ -45,6 +45,7 @@ namespace MaxWorlds.Enemies
             _areaGates.Clear();
             _subZoneGates.Clear();
             MapRoutes.Forget();
+            ZoneRouteGrid.Forget();
         }
 
         /// <summary>
@@ -69,7 +70,9 @@ namespace MaxWorlds.Enemies
             AssertNotSolvedYet(gateId, map);
             _areaGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
+            gate.Opened += ZoneRouteGrid.Forget;
             gate.Closed += MapRoutes.Forget;
+            gate.Closed += ZoneRouteGrid.Forget;
         }
 
         /// <summary>Same job as the <see cref="AreaGate"/> overload, for the scene-adopted
@@ -90,6 +93,7 @@ namespace MaxWorlds.Enemies
             AssertNotSolvedYet(gateId, map);
             _subZoneGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
+            gate.Opened += ZoneRouteGrid.Forget;
         }
 
         private static void AssertNotSolvedYet(string gateId, MapData map)
@@ -153,19 +157,33 @@ namespace MaxWorlds.Enemies
         /// <param name="fromZoneId">The room id the caller has already settled on routing from (MV-447
         /// cause 3) — see <see cref="MaxWorlds.Enemies.ZoneHysteresis"/>. Null (the default) falls back
         /// to asking the map directly for whatever room <paramref name="from"/> is in right now.</param>
-        public static Vector3 Waypoint(Vector3 from, Vector3 goal, string fromZoneId = null)
+        /// <param name="useZoneRoute">Route around this zone's own authored cover instead of beelining
+        /// across it (MV-476) — <see cref="ZoneRouteGrid"/> composed behind <see cref="MapRoutes"/>,
+        /// which still answers "which doorway next"; this only changes how a robot gets there WITHIN
+        /// the current room. False (the default, and every ranged/Blinker caller today) is the exact
+        /// beeline behaviour this class always had — the touch-damage archetypes are the only ones
+        /// that opt in (<c>RobotEnemy.UsesGridRoute</c>), because Gunner/Launcher/Blinker are explicitly
+        /// out of this ticket's scope.</param>
+        public static Vector3 Waypoint(Vector3 from, Vector3 goal, string fromZoneId = null,
+                                       bool useZoneRoute = false)
         {
             MapData map = Map;
             if (map == null) return goal;
 
-            MapZone fromZone = fromZoneId != null ? map.Zone(fromZoneId) : null;
+            MapZone hereZone = fromZoneId != null ? map.Zone(fromZoneId) : map.ZoneAt(from.x, from.z);
 
             Vector2 next = MapRoutes.Waypoint(map,
                                               new Vector2(from.x, from.z),
                                               new Vector2(goal.x, goal.z),
                                               IsGateOpen,
-                                              fromZone,
+                                              hereZone,
                                               GateLeafSpan);
+
+            if (useZoneRoute && hereZone != null)
+            {
+                Vector2? step = ZoneRouteGrid.NextStep(map, hereZone, new Vector2(from.x, from.z), next);
+                if (step.HasValue) next = step.Value;
+            }
 
             return new Vector3(next.x, goal.y, next.y);
         }
