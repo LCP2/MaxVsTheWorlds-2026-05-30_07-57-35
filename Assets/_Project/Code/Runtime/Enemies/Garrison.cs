@@ -46,7 +46,8 @@ namespace MaxWorlds.Enemies
         /// <summary>Deterministic, authored-not-random placement for <paramref name="count"/> robots
         /// inside <paramref name="area"/>: an evenly-spaced ring inset from the walls, so the same area
         /// and count always produce the same positions (robots already there, not popping in at random
-        /// each run).</summary>
+        /// each run) — dodged along that same ring, never off it, around any authored cover a slot's
+        /// own angle would otherwise land it inside (MV-459).</summary>
         public static Vector3[] SeedPositions(WorldArea area, int count)
         {
             if (area == null || count <= 0) return Array.Empty<Vector3>();
@@ -57,13 +58,65 @@ namespace MaxWorlds.Enemies
             var positions = new Vector3[count];
             for (int i = 0; i < count; i++)
             {
-                float angle = i * (Mathf.PI * 2f / count);
+                float angle = ClearOfCover(center, radius, i * (Mathf.PI * 2f / count), area.cover);
                 positions[i] = new Vector3(
                     center.x + Mathf.Cos(angle) * radius,
                     0f,
                     center.y + Mathf.Sin(angle) * radius);
             }
             return positions;
+        }
+
+        /// <summary>How far apart, in radians, each cover-dodge attempt tries next, alternating either
+        /// side of a slot's own authored angle — small enough that a hedge row costs a few degrees, not
+        /// a lap of the room.</summary>
+        private const float CoverDodgeStep = 2f * Mathf.Deg2Rad;
+
+        /// <summary>How far <see cref="ClearOfCover"/> will search either side of a slot's own angle
+        /// before giving up and standing at the authored spot anyway — half the ring, so a dodge can
+        /// never cross over and land on the ring's own opposite slot.</summary>
+        private const float MaxCoverDodgeOffset = Mathf.PI;
+
+        /// <summary>The ring angle to actually stand at: <paramref name="baseAngle"/> itself, unless
+        /// that seeds a robot on top of authored cover (MV-459 — nothing before this checked the
+        /// garrison's deterministic ring against the area's own hedge rows, so a Bruiser could be, and
+        /// on the shipped world1_config.json WAS, seeded dead inside a shrub across ten of eighteen
+        /// areas — stuck on geometry, unreachable, silently starving that area's
+        /// <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>). Walks outward from the
+        /// authored angle at the SAME radius, alternating sides, until clear — the radius never
+        /// changes, so a dodged slot stays exactly as inset from the walls as the ring formula always
+        /// promised (and so it never leaves <see cref="WorldArea.Footprint"/>, which the ring's own
+        /// 0.3x-of-the-shorter-side inset already guarantees with room to spare).</summary>
+        private static float ClearOfCover(Vector2 center, float radius, float baseAngle, WorldCover[] cover)
+        {
+            if (cover == null || cover.Length == 0 || IsClearOfCover(center, radius, baseAngle, cover))
+                return baseAngle;
+
+            for (float offset = CoverDodgeStep; offset <= MaxCoverDodgeOffset; offset += CoverDodgeStep)
+            {
+                if (IsClearOfCover(center, radius, baseAngle + offset, cover)) return baseAngle + offset;
+                if (IsClearOfCover(center, radius, baseAngle - offset, cover)) return baseAngle - offset;
+            }
+
+            return baseAngle; // every angle on the ring is fouled - stand at the authored spot anyway
+        }
+
+        private static bool IsClearOfCover(Vector2 center, float radius, float angle, WorldCover[] cover)
+        {
+            var point = new Vector2(center.x + Mathf.Cos(angle) * radius, center.y + Mathf.Sin(angle) * radius);
+
+            foreach (WorldCover c in cover)
+            {
+                if (c == null) continue;
+
+                ArenaCover body = new MapEntity
+                {
+                    x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                }.ToCover();
+
+                if (body.DistanceTo(point) < MapValidation.SpawnClearance) return false;
+            }
+            return true;
         }
     }
 }
