@@ -229,6 +229,24 @@ namespace MaxWorlds.UI
             return 0.5f * t;
         }
 
+        /// <summary>MV-469: every legal spend a board node's own button can currently perform — the
+        /// guard <see cref="Button.interactable"/> is set from. Pure so it's pinned by an EditMode test
+        /// without building a canvas. Pre-fix this only ever checked <see cref="RigState.CanSpendPart"/>
+        /// plus a banked part, so a node was untappable however many cells were banked; the tap handler
+        /// (<c>OnRigNodeTapped</c>) already routed a cell spend correctly for both an owned node
+        /// (<see cref="CellSpend.TryUpgradeNode"/>) and an unowned-but-cell-unlockable one
+        /// (<see cref="CellSpend.TryUnlockNode"/>) — this was the only thing standing between the tap
+        /// and it.</summary>
+        public static bool IsAbilityNodeSpendable(string id, int cellsBanked, int partsBanked)
+        {
+            bool draftable = RigState.IsCellUnlockable(id) && !RigState.IsOwned(id);
+            bool canLevelUp = RigState.CanSpendPart(id); // owned, below max — TryUpgradeNode's own gate
+            bool cellSpendable = (canLevelUp && cellsBanked >= CellSpend.UpgradeCostCells) ||
+                                  (draftable && cellsBanked >= CellSpend.UnlockCostCells);
+            bool partSpendable = canLevelUp && partsBanked > 0;
+            return cellSpendable || partSpendable;
+        }
+
         /// <summary>MV-433: the board's scale-to-fit factor for a given screen aspect ratio (width /
         /// height), under the canvas's own <c>matchWidthOrHeight = 1</c> (match-by-height) rule — pure
         /// so the clamp is pinned by an EditMode test without building a canvas or touching
@@ -690,7 +708,10 @@ namespace MaxWorlds.UI
             // node, its parent at level >= 2 (RigState.IsCellUnlockable, tighter than the IsReached the
             // now production-dead ability-level Morphing Module draft pool still uses).
             bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
-            bool spendable = RigState.CanSpendPart(ab.Id) && banked > 0;
+            // MV-469: PartBadge (the amber "+") stays keyed to the part-spend path alone, unchanged —
+            // Button.interactable covers every legal spend via the shared helper below.
+            bool partSpendable = RigState.CanSpendPart(ab.Id) && banked > 0;
+            bool spendable = IsAbilityNodeSpendable(ab.Id, PickupWallet.PowerCells, banked);
             // MV-462 defect 3: owned==true implies this ability's category already has ≥1 owned ability,
             // so familyLit is always true on the `owned` branch below — DimIfUnlit only ever bites on
             // the draftable/locked branches, which is exactly the "family with nothing owned" case.
@@ -765,7 +786,7 @@ namespace MaxWorlds.UI
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
             }
 
-            v.PartBadge.gameObject.SetActive(spendable);
+            v.PartBadge.gameObject.SetActive(partSpendable);
             v.Button.interactable = spendable;
         }
 
