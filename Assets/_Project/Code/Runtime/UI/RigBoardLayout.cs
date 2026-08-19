@@ -76,16 +76,17 @@ namespace MaxWorlds.UI
         [Serializable] private sealed class PartBadgeOffsetWire { public string dx, dy; }
         [Serializable] private sealed class PartBadgeWire { public float radius; public PartBadgeOffsetWire offset; public float plusStrokeWidth; }
         [Serializable] private sealed class LevelPillWire { public float w, h, radius; public string offsetY; public float fontSize; }
-        [Serializable] private sealed class RegionRectWire { public float y, h, radius, padX, opacityLit, opacityDark; }
+        [Serializable] private sealed class RegionRectWire { public float y, h, radius, padX, opacityLit, opacityDark, borderAlphaLit, borderAlphaDark; }
         [Serializable] private sealed class ForgeDividerWire { public float y; }
         [Serializable] private sealed class CapMarkerOffsetWire { public string dx, dy; }
+        [Serializable] private sealed class LockedFusionWire { public float borderAlpha, iconAlpha; }
 
         [Serializable]
         private sealed class ConnectorWire
         {
             public float width, controlBias, startOffsetCategory;
             public string startOffsetAbility, endOffset;
-            public float alphaLive, alphaDim, fusionWidth, fusionAlpha, fusionControlBias;
+            public float alphaLive, alphaDim, fusionWidth, fusionAlpha, fusionAlphaLocked, fusionControlBias;
         }
 
         [Serializable]
@@ -106,6 +107,7 @@ namespace MaxWorlds.UI
             public ForgeDividerWire forgeDivider;
             public float iconScaleAbility, iconScaleCategory, iconScaleFusion, iconOffsetY;
             public ConnectorWire connector;
+            public LockedFusionWire lockedFusion;
         }
 
         [Serializable] private sealed class ColourEntryWire { public string hex; }
@@ -290,8 +292,10 @@ namespace MaxWorlds.UI
         public static float RegionRectH { get { EnsureLoaded(); return s_geometry.regionRect?.h ?? 706f; } }
         public static float RegionRectRadius { get { EnsureLoaded(); return s_geometry.regionRect?.radius ?? 22f; } }
         public static float RegionRectPadX { get { EnsureLoaded(); return s_geometry.regionRect?.padX ?? 88f; } }
-        public static float RegionOpacityLit { get { EnsureLoaded(); return s_geometry.regionRect?.opacityLit ?? 0.055f; } }
-        public static float RegionOpacityDark { get { EnsureLoaded(); return s_geometry.regionRect?.opacityDark ?? 0.02f; } }
+        public static float RegionOpacityLit { get { EnsureLoaded(); return s_geometry.regionRect?.opacityLit ?? 0.009f; } }
+        public static float RegionOpacityDark { get { EnsureLoaded(); return s_geometry.regionRect?.opacityDark ?? 0.003f; } }
+        public static float RegionBorderAlphaLit { get { EnsureLoaded(); return s_geometry.regionRect?.borderAlphaLit ?? 0.037f; } }
+        public static float RegionBorderAlphaDark { get { EnsureLoaded(); return s_geometry.regionRect?.borderAlphaDark ?? 0.010f; } }
 
         public static float IconScaleAbility { get { EnsureLoaded(); return s_geometry.iconScaleAbility; } }
         public static float IconScaleCategory { get { EnsureLoaded(); return s_geometry.iconScaleCategory; } }
@@ -306,8 +310,14 @@ namespace MaxWorlds.UI
         public static float ConnectorAlphaLive { get { EnsureLoaded(); return s_geometry.connector?.alphaLive ?? 0.45f; } }
         public static float ConnectorAlphaDim { get { EnsureLoaded(); return s_geometry.connector?.alphaDim ?? 0.14f; } }
         public static float ConnectorFusionWidth { get { EnsureLoaded(); return s_geometry.connector?.fusionWidth ?? 2.0f; } }
-        public static float ConnectorFusionAlpha { get { EnsureLoaded(); return s_geometry.connector?.fusionAlpha ?? 0.07f; } }
+        public static float ConnectorFusionAlpha { get { EnsureLoaded(); return s_geometry.connector?.fusionAlpha ?? 0.014f; } }
+        public static float ConnectorFusionAlphaLocked { get { EnsureLoaded(); return s_geometry.connector?.fusionAlphaLocked ?? 0.004f; } }
         public static float ConnectorFusionControlBias { get { EnsureLoaded(); return s_geometry.connector?.fusionControlBias ?? 0.62f; } }
+
+        // ------------------------------------------------------------------ locked fusion diamond (MV-445 defect 5)
+
+        public static float LockedFusionBorderAlpha { get { EnsureLoaded(); return s_geometry.lockedFusion?.borderAlpha ?? 0.031f; } }
+        public static float LockedFusionIconAlpha { get { EnsureLoaded(); return s_geometry.lockedFusion?.iconAlpha ?? 0.057f; } }
 
         /// <summary>"<c>+r*0.92</c>" / "<c>-r*0.92</c>" — a node-radius multiplier, the connector block's
         /// own offset shape (distinct from <see cref="ResolveOffset"/>'s additive "<c>+r-6</c>" terms).</summary>

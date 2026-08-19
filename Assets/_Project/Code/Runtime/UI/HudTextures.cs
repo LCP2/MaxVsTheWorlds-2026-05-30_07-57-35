@@ -202,7 +202,7 @@ namespace MaxWorlds.UI
             for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                float a = PolygonAlpha(x + 0.5f - cx, y + 0.5f - cy, sides, rotationDeg, r, 0f, false, 0);
+                float a = PolygonAlpha(x + 0.5f - cx, y + 0.5f - cy, sides, rotationDeg, r, 0f, false, 0f, 0f);
                 px[y * width + x] = new Color(1, 1, 1, a);
             }
             tex.SetPixels32(px); tex.Apply();
@@ -210,13 +210,17 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Stroked (outline-only) regular polygon — same shape/orientation rules as
-        /// <see cref="Polygon"/>. <paramref name="dashed"/> breaks the perimeter into
-        /// <paramref name="dashCount"/> equal on/off arcs (the "capability, draftable" node state's
-        /// dashed hex).</summary>
+        /// <see cref="Polygon"/>. <paramref name="dashed"/> walks the closed perimeter as one
+        /// continuous arc-length path (carrying phase across vertices, wrapping back to the start)
+        /// and alternates <paramref name="dashLength"/>/<paramref name="gapLength"/> px segments along
+        /// it (MV-445 defect 4) — the "capability, draftable" node state's dashed hex. An earlier
+        /// angle-based dash phase (equal-angle arcs) broke on a hexagon because equal angle steps are
+        /// NOT equal arc-length steps on a polygon's flat edges (they only coincide on a true circle),
+        /// so the dash pattern read as a handful of stray marks instead of an even ring.</summary>
         public static Sprite PolygonOutline(int sides, float rotationDeg, int width, int height,
-            float strokeWidth, bool dashed = false, int dashCount = 18)
+            float strokeWidth, bool dashed = false, float dashLength = 14f, float gapLength = 10f)
         {
-            string key = $"polyO{sides}_{rotationDeg}_{width}_{height}_{strokeWidth}_{dashed}_{dashCount}";
+            string key = $"polyO{sides}_{rotationDeg}_{width}_{height}_{strokeWidth}_{dashed}_{dashLength}_{gapLength}";
             if (s_cache.TryGetValue(key, out var s)) return s;
             var tex = NewTex(width, height);
             var px = new Color32[width * height];
@@ -224,7 +228,7 @@ namespace MaxWorlds.UI
             for (int y = 0; y < height; y++)
             for (int x = 0; x < width; x++)
             {
-                float a = PolygonAlpha(x + 0.5f - cx, y + 0.5f - cy, sides, rotationDeg, r, strokeWidth, dashed, dashCount);
+                float a = PolygonAlpha(x + 0.5f - cx, y + 0.5f - cy, sides, rotationDeg, r, strokeWidth, dashed, dashLength, gapLength);
                 px[y * width + x] = new Color(1, 1, 1, a);
             }
             tex.SetPixels32(px); tex.Apply();
@@ -336,13 +340,22 @@ namespace MaxWorlds.UI
         /// vertices (invisible at the stroke widths THE RIG's nodes use, 2-4px against a 40-72px
         /// radius).</summary>
         private static float PolygonAlpha(float lx, float ly, int sides, float rotationDeg, float r,
-            float strokeWidth, bool dashed, int dashCount)
+            float strokeWidth, bool dashed, float dashLength, float gapLength)
         {
             float segment = 2f * Mathf.PI / sides;
             float rot = rotationDeg * Mathf.Deg2Rad;
             float apothem = r * Mathf.Cos(segment * 0.5f);
             float phi = Mathf.Atan2(ly, lx);
-            float a = Mathf.Repeat(phi - rot - segment * 0.5f, segment) - segment * 0.5f;
+
+            // rawAngle spans the FULL closed loop (0..sides*segment == 0..2*PI); decomposing it into
+            // edgeIndex (which of the `sides` flat edges) + a (this pixel's angular offset from that
+            // edge's own midpoint, -segment/2..+segment/2) reproduces the original single-edge `a` used
+            // for the outline/stroke test, while also exposing edgeIndex for the arc-length dash walk
+            // below — the two must stay in exact lockstep or the dash phase drifts from the edge the
+            // stroke itself is drawn on.
+            float rawAngle = Mathf.Repeat(phi - rot - segment * 0.5f, 2f * Mathf.PI);
+            int edgeIndex = Mathf.Clamp(Mathf.FloorToInt(rawAngle / segment), 0, sides - 1);
+            float a = (rawAngle - edgeIndex * segment) - segment * 0.5f;
             float edge = apothem / Mathf.Cos(a);
             float d = Mathf.Sqrt(lx * lx + ly * ly);
 
@@ -352,8 +365,15 @@ namespace MaxWorlds.UI
 
             if (dashed && alpha > 0f)
             {
-                float t = Mathf.Repeat(phi - rot, 2f * Mathf.PI) / (2f * Mathf.PI);
-                if (((int)(t * dashCount)) % 2 != 0) alpha = 0f;
+                // Tangential distance from THIS edge's own midpoint (-sideLen/2..+sideLen/2), converted
+                // to a running arc-length position from edge 0's start by adding every whole edge already
+                // walked plus half of this one — one continuous path around the closed polygon, dash
+                // phase carried across every vertex, wrapping cleanly back to the start (MV-445 AC).
+                float sideLen = 2f * apothem * Mathf.Tan(segment * 0.5f);
+                float tangential = apothem * Mathf.Tan(a);
+                float arcLen = edgeIndex * sideLen + tangential + sideLen * 0.5f;
+                float period = dashLength + gapLength;
+                if (Mathf.Repeat(arcLen, period) >= dashLength) alpha = 0f;
             }
             return alpha;
         }

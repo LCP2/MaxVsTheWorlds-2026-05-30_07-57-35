@@ -66,12 +66,15 @@
     "categoryLabelOffsetY": "+r+48",
     "categoryLabelFontSize": 21,
     "regionRect": {
+      "$comment": "MV-445 defect 1: opacityLit/Dark (and the two border alphas) are calibrated for Unity's LINEAR colour-space alpha blend + sRGB display encode, NOT a naive 'alpha == on-screen wash strength' reading. A 0.055 alpha wash of a light colour over near-black colours.base renders TRUE-BLACK-DISPLAY-LINEAR at 0.055, which the sRGB encode then shows at ~26% brightness - several times the 5.5% 'barely-there' look the design images (and this value's own original author) intended. These four values are chosen so the DISPLAYED result matches what a naive (design-tool-style) 0.055/0.02/0.16/0.06 sRGB-space blend would have looked like; see WeaponsScreen.cs RefreshCategoryNode's own comment for the derivation.",
       "y": 150,
       "h": 706,
       "radius": 22,
       "padX": 88,
-      "opacityLit": 0.055,
-      "opacityDark": 0.02
+      "opacityLit": 0.009,
+      "opacityDark": 0.003,
+      "borderAlphaLit": 0.037,
+      "borderAlphaDark": 0.010
     },
     "forgeDivider": {
       "y": 866
@@ -81,7 +84,7 @@
     "iconScaleFusion": 0.8,
     "iconOffsetY": -4,
     "connector": {
-      "$comment": "Cubic bezier from a parent node down to each child. Control points sit on the vertical between the two, at controlBias of the gap. MV-442.",
+      "$comment": "Cubic bezier from a parent node down to each child. Control points sit on the vertical between the two, at controlBias of the gap. MV-442. fusionAlpha/fusionAlphaLocked are gamma-calibrated per regionRect's own comment above (naive-blend intent: reachable ~7%, locked ~2.5%) - MV-445 defect 3: fusion connectors are now refreshed live (RefreshConnectors, not just built once) so an unreachable fusion (not both parent categories lit) draws at fusionAlphaLocked, not fusionAlpha.",
       "width": 2.6,
       "controlBias": 0.55,
       "startOffsetCategory": 88,
@@ -90,8 +93,14 @@
       "alphaLive": 0.45,
       "alphaDim": 0.14,
       "fusionWidth": 2.0,
-      "fusionAlpha": 0.07,
+      "fusionAlpha": 0.014,
+      "fusionAlphaLocked": 0.004,
       "fusionControlBias": 0.62
+    },
+    "lockedFusion": {
+      "$comment": "MV-445 defect 5: locked FORGE diamond border/icon weight, halved from the previous hardcoded C# values (strokeOwned-equivalent border alpha 0.26, icon alpha 0.40) and then gamma-calibrated the same way as regionRect above.",
+      "borderAlpha": 0.031,
+      "iconAlpha": 0.057
     }
   },
   "colours": {
