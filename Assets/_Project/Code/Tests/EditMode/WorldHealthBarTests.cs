@@ -116,7 +116,7 @@ namespace MaxWorlds.Tests.EditMode
             Vector3 ground = Vector3.zero;
             Vector3 hairTip = new Vector3(0f, 1.83f, 0f);   // "stands 1.83 m to the tips of his hair" (MaxRig)
 
-            // Standing still: the camera sits dead on him at the fixed pitch (64.88° post-MV-468).
+            // Standing still: the camera sits dead on him at the fixed pitch (60° post-MV-468).
             AimFollowCamera(cam, ground, leadNorth: 0f);
             Refresh(bar);
             AssertBarClearsHead(cam, hairTip, "standing still");
@@ -137,11 +137,11 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>Place the camera exactly as FixedAngleCameraRig + CameraTargetRig would: the fixed
-        /// 64.88° pitch (MV-468), the phone pull-back, and a look-ahead <paramref name="leadNorth"/>
+        /// 60° pitch (MV-468), the phone pull-back, and a look-ahead <paramref name="leadNorth"/>
         /// metres past the subject toward where he is running.</summary>
         private static void AimFollowCamera(Camera cam, Vector3 ground, float leadNorth)
         {
-            const float pitch = 64.88f, distance = 23f;
+            const float pitch = 60f, distance = 23f;
             float rad = pitch * Mathf.Deg2Rad;
             Vector3 offset = new Vector3(0f, distance * Mathf.Sin(rad), -distance * Mathf.Cos(rad));
             Vector3 target = ground + new Vector3(0f, 0f, leadNorth);

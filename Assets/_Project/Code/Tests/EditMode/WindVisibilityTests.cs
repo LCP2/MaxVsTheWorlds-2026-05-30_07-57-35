@@ -32,9 +32,9 @@ namespace MaxWorlds.Tests.EditMode
         /// <summary>Vertical field of view of the Cinemachine lens in Backyard_Slice.</summary>
         private const float FovDegrees = 40f;
 
-        /// <summary>The fixed top-down pitch (YT-33, re-baked 64.88° by MV-468). A horizontal sway is
+        /// <summary>The fixed top-down pitch (YT-33, re-baked 60° by MV-468). A horizontal sway is
         /// seen at this angle, so only its component across the view ray lands on the screen.</summary>
-        private const float PitchDegrees = 64.88f;
+        private const float PitchDegrees = 60f;
 
         private const int DesktopPixels = 1080;   // Lee's screen
         private const int PhonePixels = 750;      // a 6-inch phone in landscape — the non-negotiable
