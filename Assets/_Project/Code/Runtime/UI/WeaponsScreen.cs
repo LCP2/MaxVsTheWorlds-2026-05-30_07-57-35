@@ -85,6 +85,7 @@ namespace MaxWorlds.UI
         private Canvas _canvas;
         private RectTransform _screenRoot;
         private Image _background;
+        private Image _screenScrim;
         private RectTransform _safeRoot;
         private GameObject _root;
         private RectTransform _boardScaleRoot;
@@ -140,6 +141,14 @@ namespace MaxWorlds.UI
         /// <see cref="BoardNode"/>. MV-440: <c>_screenRoot</c> is the single toggle that opens/closes
         /// THE RIG, so the backdrop can never again outlive the screen it belongs to.</summary>
         public Image Background => _background;
+
+        /// <summary>MV-444: the near-opaque (97% alpha) black scrim over the whole root — "blocks taps
+        /// to whatever's underneath while paused," and just as much washes out <see cref="Background"/>'s
+        /// own colours.base tint everywhere it isn't covered by a node or panel. A pixel probe checking
+        /// "outside every node/panel" against raw colours.base ignores this and fails on a perfectly
+        /// correct capture — test-only access, same idiom as <see cref="Background"/>, so that check can
+        /// composite the two instead of assuming the backdrop shows through unblended.</summary>
+        public Image ScreenScrim => _screenScrim;
 
         /// <summary>MV-433: a category's tinted backdrop column — test-only access, same idiom as
         /// <see cref="BoardNode"/>.</summary>
@@ -782,9 +791,9 @@ namespace MaxWorlds.UI
             rootRt.SetParent(_safeRoot, false);
             Stretch(rootRt);
 
-            var scrim = AddImage(rootRt, HudTextures.Solid(), Scrim, "Scrim");
-            Stretch(scrim.rectTransform);
-            scrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
+            _screenScrim = AddImage(rootRt, HudTextures.Solid(), Scrim, "Scrim");
+            Stretch(_screenScrim.rectTransform);
+            _screenScrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
             // MV-433: a scale-to-fit wrapper, pivoted at the board's own centre (960,540) so
             // ComputeBoardScale's shrink is centred rather than pinned to a corner — occupies exactly

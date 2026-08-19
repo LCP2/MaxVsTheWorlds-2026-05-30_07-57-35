@@ -1,0 +1,9 @@
+﻿ok
+rig-16x9.png (1920x1080)
+probe6 (outside-background==composited-base): PASS — expected #000000, got #000000 at tex(20,680)
+rig-16x10.png (1728x1080)
+rig-noparts-16x9.png (1920x1080)
+weapons-button-idle.png (1920x1080)
+weapons-button-parts.png (1920x1080)
+weapons-button-module.png (1920x1080)
+weapons-button-both.png (1920x1080)
