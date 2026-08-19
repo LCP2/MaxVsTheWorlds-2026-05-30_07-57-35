@@ -78,5 +78,68 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(Mathf.Sign(ordinarySide), Mathf.Sign(flankerSide),
                 "widening the swing should not send the robot around the opposite side");
         }
+
+        [Test]
+        public void DoorwayApproach_FansFiveDistinctRobots_AtRange_ThenConvergesUpClose()
+        {
+            // MV-449: at 6m from a doorway mouth, five robots on distinct lanes should spread out
+            // (not queue single-file); at 1m they should all be converging on the mouth itself.
+            Vector3 mouth = new Vector3(0f, 0f, 6f);
+            Vector3 from = Vector3.zero;
+            int[] ids = { 0, 1, 2, 3, 4 }; // lanes -1, -0.5, 0, 0.5, 1 (Bias)
+
+            var farPoints = new Vector3[ids.Length];
+            for (int i = 0; i < ids.Length; i++)
+            {
+                farPoints[i] = EnemyFormation.ApproachPoint(mouth, from, ids[i],
+                    EnemyFormation.DoorwaySpread, EnemyFormation.DoorwayFullSpreadAt);
+            }
+
+            for (int i = 0; i < ids.Length; i++)
+            for (int j = i + 1; j < ids.Length; j++)
+            {
+                if (!Mathf.Approximately(EnemyFormation.Bias(ids[i]), EnemyFormation.Bias(ids[j])))
+                    Assert.Greater(Vector3.Distance(farPoints[i], farPoints[j]), 0.01f,
+                        $"robots {ids[i]} and {ids[j]} should land at distinct approach points");
+            }
+
+            float lateralSpread = 0f;
+            foreach (Vector3 p in farPoints)
+                lateralSpread = Mathf.Max(lateralSpread, Mathf.Abs(Vector3.Dot(p - mouth, Vector3.right)));
+
+            Assert.LessOrEqual(lateralSpread, EnemyFormation.DoorwaySpread,
+                "no robot should swing past DoorwaySpread off the direct line");
+
+            Vector3 nearMouth = new Vector3(0f, 0f, 6f);
+            Vector3 nearFrom = new Vector3(0f, 0f, 5f); // same approach direction, 1m out from the mouth
+            foreach (int id in ids)
+            {
+                Vector3 closePoint = EnemyFormation.ApproachPoint(nearMouth, nearFrom, id,
+                    EnemyFormation.DoorwaySpread, EnemyFormation.DoorwayFullSpreadAt);
+                Assert.Less(Vector3.Distance(closePoint, nearMouth), 0.3f,
+                    $"robot {id} should be within 0.3m of the mouth at 1m out");
+            }
+        }
+
+        [Test]
+        public void DoorwayOverload_UsesGivenSpread_NotTheFlankerAwareDefaults()
+        {
+            // MV-449: at a doorway everyone funnels the same way regardless of IsFlanker — the
+            // doorway overload must not silently fall back to Spread/FlankSpread.
+            Assert.IsTrue(EnemyFormation.IsFlanker(6));
+            Assert.IsFalse(EnemyFormation.IsFlanker(11));
+            Assert.AreEqual(EnemyFormation.Bias(6), EnemyFormation.Bias(11));
+
+            Vector3 goal = new Vector3(0f, 0f, 8f);
+            Vector3 from = Vector3.zero;
+
+            Vector3 flankerDoorway = EnemyFormation.ApproachPoint(goal, from, 6,
+                EnemyFormation.DoorwaySpread, EnemyFormation.DoorwayFullSpreadAt);
+            Vector3 ordinaryDoorway = EnemyFormation.ApproachPoint(goal, from, 11,
+                EnemyFormation.DoorwaySpread, EnemyFormation.DoorwayFullSpreadAt);
+
+            Assert.AreEqual(Vector3.Distance(flankerDoorway, goal), Vector3.Distance(ordinaryDoorway, goal), 0.001f,
+                "a flanker and an ordinary robot on the same lane must swing identically at a doorway");
+        }
     }
 }
