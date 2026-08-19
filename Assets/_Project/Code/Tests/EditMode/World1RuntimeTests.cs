@@ -438,5 +438,37 @@ namespace MaxWorlds.Tests.EditMode
                 $"a4's tightest channel is {narrowest:0.#} m — this must be UNDER the old 6 m floor, " +
                 "or the MinFreeChannel=3 change is not actually load-bearing for this map");
         }
+
+        // --- AC9: a2_h1/a3_h2 were both trimmed by one cell (Lee, 2026-08-19) to clear a doorway and --
+        // --- a shed's spawn ring their raw drawing didn't account for. Computed from the shipped ------
+        // --- config/resolved doorway, not hard-coded, so a future redraw that reintroduces either -----
+        // --- violation fails loudly here instead of at map-load. -------------------------------------
+
+        [Test]
+        public void World1_A2H1ClearsG2SResolvedDoorway_AndA3H2ClearsA3SShedRing()
+        {
+            Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
+
+            MapEntity a2h1 = map.Entity("a2_h1");
+            Assert.IsNotNull(a2h1, "world1_config.json has no cover 'a2_h1'");
+            MapEntity g2 = map.Entity("g2");
+            Assert.IsNotNull(g2, "world1_config.json has no gate 'g2'");
+
+            float doorwayGap = a2h1.ToCover().DistanceTo(g2.CenterXz);
+            Assert.GreaterOrEqual(doorwayGap, MapValidation.DoorwayClearance,
+                $"'a2_h1' sits {doorwayGap:0.##} m from g2's resolved doorway mouth — under the " +
+                $"{MapValidation.DoorwayClearance} m DoorwayClearance floor");
+
+            MapEntity a3h2 = map.Entity("a3_h2");
+            Assert.IsNotNull(a3h2, "world1_config.json has no cover 'a3_h2'");
+            MapEntity a3Shed = map.Entity("a3_shed");
+            Assert.IsNotNull(a3Shed, "world1_config.json has no factory 'a3_shed'");
+
+            float shedGap = a3h2.ToCover().DistanceTo(a3Shed.CenterXz);
+            float shedFloor = MapValidation.SpawnRadius + MapValidation.SpawnClearance;
+            Assert.GreaterOrEqual(shedGap, shedFloor,
+                $"'a3_h2' sits {shedGap:0.##} m from a3's shed spawn ring — under the {shedFloor} m " +
+                "SpawnRadius+SpawnClearance floor");
+        }
     }
 }
