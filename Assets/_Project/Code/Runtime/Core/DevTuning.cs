@@ -31,6 +31,13 @@ namespace MaxWorlds.Core
         /// <summary>Camera pull-back in metres. Shares the knob with the [ / ] nudge keys (YT-82).</summary>
         public static float? CameraDistance { get; set; }
 
+        /// <summary>Camera pitch, degrees (MV-450). Shares the knob with the ; / ' nudge keys. Unlike
+        /// every other knob here, its Settings-panel slider only exists while <see cref="DevMode"/> is
+        /// on (<see cref="MaxWorlds.UI.SettingsPanel.ShouldShowPitchKnob"/>) — the shipped 72° is a
+        /// craft-bible constant, not a player-facing setting, so this is a look-and-read-off tool for
+        /// Lee rather than a real feature like the others.</summary>
+        public static float? CameraPitch { get; set; }
+
         /// <summary>Max's planar move speed, m/s.</summary>
         public static float? PlayerMoveSpeed { get; set; }
 
@@ -377,7 +384,7 @@ namespace MaxWorlds.Core
 
         /// <summary>True if any knob has been moved this session. Used by the panel's readout.</summary>
         public static bool AnyOverride =>
-            CameraDistance.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
+            CameraDistance.HasValue || CameraPitch.HasValue || PlayerMoveSpeed.HasValue || RobotMoveSpeed.HasValue ||
             SpawnInterval.HasValue ||
             BossMoveSpeed.HasValue || PlayerMaxHealth.HasValue ||
             FactoryHealth.HasValue || BossHealth.HasValue ||
@@ -423,6 +430,7 @@ namespace MaxWorlds.Core
         public static void Reset()
         {
             CameraDistance = null;
+            CameraPitch = null;
             PlayerMoveSpeed = null;
             RobotMoveSpeed = null;
             SpawnInterval = null;

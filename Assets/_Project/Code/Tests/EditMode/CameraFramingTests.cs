@@ -171,6 +171,98 @@ namespace MaxWorlds.Tests.EditMode
             finally { Object.DestroyImmediate(go); }
         }
 
+        // --- The dev-only pitch knob (MV-450) -----------------------------------------------------
+
+        [Test]
+        public void ThePitchKnobStartsAtTheShipped72DegreeDefault()
+        {
+            var rig = NewRig(out var go);
+            try { Assert.AreEqual(72f, rig.Pitch, 1e-3); }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void NudgingPitchMovesItByTheGivenDelta()
+        {
+            var rig = NewRig(out var go);
+            try
+            {
+                rig.NudgePitch(-7f);
+                Assert.AreEqual(65f, rig.Pitch, 1e-3);
+                rig.NudgePitch(3f);
+                Assert.AreEqual(68f, rig.Pitch, 1e-3);
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void ThePitchKnobCannotBeSweptPastItsBounds()
+        {
+            var rig = NewRig(out var go);
+            try
+            {
+                rig.NudgePitch(-999f);
+                Assert.AreEqual(FixedAngleCameraRig.MinPitch, rig.Pitch, 1e-3,
+                    "held ; long enough and the camera should stop at the sanity floor, not go past it");
+                rig.NudgePitch(999f);
+                Assert.AreEqual(FixedAngleCameraRig.MaxPitch, rig.Pitch, 1e-3,
+                    "held ' long enough and the camera should stop at the sanity ceiling");
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void SetPitchClampsDirectlyToo()
+        {
+            // Same contract as SetDistance vs Nudge: the slider (SetPitch) and the held keys
+            // (NudgePitch) have to agree on the clamp, or the two ways of dialling this in disagree.
+            var rig = NewRig(out var go);
+            try
+            {
+                rig.SetPitch(10f);
+                Assert.AreEqual(FixedAngleCameraRig.MinPitch, rig.Pitch, 1e-3);
+                rig.SetPitch(200f);
+                Assert.AreEqual(FixedAngleCameraRig.MaxPitch, rig.Pitch, 1e-3);
+            }
+            finally { Object.DestroyImmediate(go); }
+        }
+
+        [Test]
+        public void TheNudgeRangeBracketsTheShippedPitch_SoThereIsRoomToTuneBothWays()
+        {
+            Assert.Less(FixedAngleCameraRig.MinPitch, 72f, "no room to tilt toward side-on");
+            Assert.Greater(FixedAngleCameraRig.MaxPitch, 72f, "no room to go more overhead");
+        }
+
+        /// <summary>
+        /// AC2: changing pitch must not silently zoom the shot too — holding the visible ground area
+        /// constant is the whole point of MV-450's distance recompute, so Lee judges pitch and zoom one
+        /// at a time instead of two variables moving together. Pure maths, no live camera needed — the
+        /// same FOV/aspect <see cref="TeleportZoomController"/> already trusts <c>Camera.main</c> for.
+        /// Fails without the MV-450 area-preserving recompute (a same-distance-different-pitch shot
+        /// visibly shows less ground at 55° than at 72°).
+        /// </summary>
+        [Test]
+        public void PitchChangeHoldsTheVisibleGroundAreaWithin2Percent()
+        {
+            const float fov = 40f;              // FixedAngleCameraRig's shipped Cinemachine lens (GroundAnchorPlayTests)
+            const float aspect = 16f / 9f;
+
+            float baselineDistance = CommittedDistance();
+            float baselineRadius = TeleportZoomFraming.SafeVisibleRadius(baselineDistance, 72f, fov, aspect);
+
+            foreach (float pitch in new[] { 55f, 60f, 65f, 72f })
+            {
+                float distance = FixedAngleCameraRig.DistanceHoldingVisibleArea(
+                    baselineDistance, 72f, pitch, fov, aspect);
+                float achievedRadius = TeleportZoomFraming.SafeVisibleRadius(distance, pitch, fov, aspect);
+
+                float pctError = Mathf.Abs(achievedRadius - baselineRadius) / baselineRadius;
+                Assert.Less(pctError, 0.02f,
+                    $"pitch {pitch}° drifted the visible ground area {pctError:P1} from the 72° baseline");
+            }
+        }
+
         // --- The scene must not silently outrank the code ----------------------------------------
 
         /// <summary>

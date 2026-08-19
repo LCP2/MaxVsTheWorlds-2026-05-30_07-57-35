@@ -24,6 +24,10 @@ namespace MaxWorlds.Dev
     /// It has since picked up a second job (YT-82): it's where the camera framing gets tuned. Hold
     /// <c>[</c> / <c>]</c> to pull the camera in and out live and the overlay reports the distance,
     /// so the framing can be found by eye on the play link rather than guessed at and rebuilt.
+    ///
+    /// MV-450 adds the same live-and-read-off idiom for pitch: hold <c>;</c> / <c>'</c> to sweep the
+    /// angle, the overlay reports it to one decimal. The shipped 72° default doesn't move — this is
+    /// purely so Lee can find the number he wants before a follow-up ticket bakes it in.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class DevModeController : MonoBehaviour
@@ -86,16 +90,31 @@ namespace MaxWorlds.Dev
             if (kb.leftBracketKey.isPressed) NudgeZoom(-ZoomNudgePerSecond * Time.unscaledDeltaTime);
             if (kb.rightBracketKey.isPressed) NudgeZoom(ZoomNudgePerSecond * Time.unscaledDeltaTime);
 
+            // Live pitch (MV-450), same held-not-tapped idiom as the bracket-key zoom, next pair of
+            // keys along. Dev-mode only — the shipped 72° stays put, this is only for Lee to sweep an
+            // angle by eye before a follow-up ticket bakes whatever he lands on.
+            if (kb.semicolonKey.isPressed) NudgePitch(-PitchNudgePerSecond * Time.unscaledDeltaTime);
+            if (kb.quoteKey.isPressed) NudgePitch(PitchNudgePerSecond * Time.unscaledDeltaTime);
+
             ApplySpawnPause();
         }
 
         /// <summary>Metres per second of pull-back while a bracket key is held.</summary>
         private const float ZoomNudgePerSecond = 8f;
 
+        /// <summary>Degrees per second of pitch change while a `;`/`'` key is held.</summary>
+        private const float PitchNudgePerSecond = 10f;
+
         private void NudgeZoom(float delta)
         {
             var rig = FindFirstObjectByType<FixedAngleCameraRig>();
             if (rig != null) rig.Nudge(delta);
+        }
+
+        private void NudgePitch(float delta)
+        {
+            var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+            if (rig != null) rig.NudgePitch(delta);
         }
 
         /// <summary>The spawner is a plain MonoBehaviour, so pausing it needs nothing from the
@@ -127,7 +146,7 @@ namespace MaxWorlds.Dev
             if (!DevMode.Enabled) return;
 
             const float w = 430f;
-            var rect = new Rect(Screen.width - w - 12f, 12f, w, 118f);
+            var rect = new Rect(Screen.width - w - 12f, 12f, w, 140f);
             GUI.color = new Color(1f, 0.9f, 0.3f);
             GUI.Box(rect, "");
             GUI.Label(new Rect(rect.x + 10f, rect.y + 6f, w - 20f, 22f),
@@ -144,7 +163,15 @@ namespace MaxWorlds.Dev
                 : "[ / ] zoom: no camera rig in scene";
             GUI.Label(new Rect(rect.x + 10f, rect.y + 50f, w - 20f, 22f), zoom);
 
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 72f, w - 20f, 22f),
+            // Pitch readout (MV-450) — same deliverable-not-debug-line contract as the zoom readout
+            // above: sweep with ; / ', read the number here, paste it into pitchDegrees once a value
+            // is settled on.
+            string pitch = rig != null
+                ? $"; / ' pitch: {rig.Pitch:0.0}°"
+                : "; / ' pitch: no camera rig in scene";
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 72f, w - 20f, 22f), pitch);
+
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 94f, w - 20f, 22f),
                 "Ctrl+Shift+D to turn off");
         }
     }
