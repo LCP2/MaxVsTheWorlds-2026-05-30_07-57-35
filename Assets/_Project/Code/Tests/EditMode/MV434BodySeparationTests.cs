@@ -234,47 +234,83 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        // ------------------------------------------------------------------ AC6: lungers still land their hit
+        // ------------------------------------------------------------------ AC6: lungers still close the gap
 
+        /// <summary>
+        /// MV-466: the old fixture placed the rusher at <c>(1, 0, 0)</c> — exactly on
+        /// <see cref="EnemyArchetype.Rusher"/>'s <c>ContactRadius</c> (1.0) — and sampled a single
+        /// Lunge tick's hit-count. Starting already on the contact boundary meant the result rode
+        /// entirely on how far the first tick or two happened to move/turn, which is why the same
+        /// commit passed CI runs #440/#443 and failed #441/#442/#444: it wasn't a regression in any
+        /// of those tickets, it was a boolean sampled at a knife-edge.
+        ///
+        /// Fix: start well outside <c>ContactRadius</c> so the Lunge has to close a real gap, then
+        /// run Lunge for its FULL duration (every tick, not one sampled tick) instead of stopping
+        /// partway through. <see cref="RobotEnemy.ClampBodySeparation"/> runs after every Lunge
+        /// tick, so once the dash gets within striking distance the clamp pulls it back out to
+        /// exactly <see cref="EnemyBodySeparation.MinDistance"/> every tick thereafter — a settled
+        /// distance, not a hit-count sampled mid-flight. Asserting on that measured distance is
+        /// immune to the aim wobble that made the old assertion flaky, because it's what the clamp
+        /// converges to regardless of exactly which tick first crosses the contact boundary.
+        ///
+        /// Rusher has no RNG in this path (unlike Blinker's coin-flip flank pick), so the scenario
+        /// is deterministic by construction; the 50-run loop below proves that empirically rather
+        /// than asserting it from reading the code.
+        /// </summary>
         [Test]
-        public void RushersLunge_StillReachesContactRange_AndStillDealsDamage_WithTheClampApplied()
+        public void RushersLunge_ClosesTheGapAndSettlesAtTheClampDistance_Deterministically()
         {
-            var rusher = NewEnemy(EnemyArchetype.Rusher, new Vector3(1f, 0f, 0f));
-            try
-            {
-                GiveSight(rusher);
-                InvokeTickChase(rusher, 0.02f);
-                Assert.AreEqual(RobotEnemy.State.Telegraph, rusher.Current);
+            const float dt = 0.02f;
+            float minDist = MinBodyDistance(EnemyArchetype.Rusher);
+            float? firstSeparation = null;
 
-                // MV-461: tick the wind-up the same way Update() does — one dt at a time, with
-                // _stateTimer accumulating real ticks — instead of jumping _stateTimer straight to
-                // telegraphTime. That old shortcut captured _lungeDir (= transform.forward) after
-                // only ONE capped-rate rotation step (MV-434: 540 deg/s), aimed nowhere near the
-                // player. In real play the full 0.55s wind-up gives ~27 ticks, plenty to converge —
-                // this fixture now gets the same number instead of a single-tick shortcut, so the
-                // dash is aimed the way a real Telegraph always leaves it.
-                const float dt = 0.02f;
-                float elapsed = 0f;
-                while (elapsed < EnemyArchetype.Rusher.TelegraphTime)
+            for (int run = 0; run < 50; run++)
+            {
+                // Well outside ContactRadius (1.0): the dash has to close a genuine gap rather than
+                // begin already touching. Still inside lungeRange (2.2) so Chase commits to
+                // Telegraph on the very first tick, same shape as the rest of this fixture.
+                var rusher = NewEnemy(EnemyArchetype.Rusher, new Vector3(2f, 0f, 0f));
+                try
                 {
-                    elapsed += dt;
-                    SetStateTimer(rusher, elapsed);
-                    InvokeTickTelegraph(rusher, dt);
+                    GiveSight(rusher);
+                    InvokeTickChase(rusher, dt);
+                    Assert.AreEqual(RobotEnemy.State.Telegraph, rusher.Current, $"run {run}: chase must wind up");
+
+                    // MV-461: tick one dt at a time so _lungeDir converges the same way a real
+                    // Telegraph does, instead of jumping _stateTimer straight to telegraphTime.
+                    float elapsed = 0f;
+                    while (elapsed < EnemyArchetype.Rusher.TelegraphTime)
+                    {
+                        elapsed += dt;
+                        SetStateTimer(rusher, elapsed);
+                        InvokeTickTelegraph(rusher, dt);
+                    }
+                    Assert.AreEqual(RobotEnemy.State.Lunge, rusher.Current, $"run {run}: telegraph must commit to the dash");
+
+                    // Run every Lunge tick until it exits the state on its own (EnterRecover),
+                    // exactly the way Update() would — not a single sampled tick.
+                    elapsed = 0f;
+                    while (rusher.Current == RobotEnemy.State.Lunge)
+                    {
+                        elapsed += dt;
+                        SetStateTimer(rusher, elapsed);
+                        InvokeTickLunge(rusher, dt);
+                    }
+
+                    float separation = Vector3.Distance(rusher.transform.position, _player.transform.position);
+                    Assert.AreEqual(minDist, separation, 1e-3f,
+                        $"run {run}: the dash must settle exactly at the body-separation clamp distance " +
+                        $"({minDist:F4}), not drift past it or stall short of it");
+
+                    firstSeparation ??= separation;
+                    Assert.AreEqual(firstSeparation.Value, separation, 1e-6f,
+                        $"run {run}: must reproduce run 0's result ({firstSeparation.Value:F6}) exactly — " +
+                        "this scenario has no randomness in it, so any drift means the fixture isn't deterministic");
                 }
-                Assert.AreEqual(RobotEnemy.State.Lunge, rusher.Current);
-
-                InvokeTickLunge(rusher, dt); // dash, contact check, THEN the clamp
-
-                Assert.AreEqual(1, _player.Hits, "the dash must still land its hit with the clamp now running right after it");
-                Assert.AreEqual(200f - EnemyArchetype.Rusher.ContactDamage, _player.Health, 1e-3f);
-
-                float minDist = MinBodyDistance(EnemyArchetype.Rusher);
-                Assert.GreaterOrEqual(Vector3.Distance(rusher.transform.position, _player.transform.position),
-                    minDist - 1e-3f, "the clamp must still have settled the lunge against Max's body, not inside it");
-            }
-            finally
-            {
-                Object.DestroyImmediate(rusher.gameObject);
+                finally
+                {
+                    Object.DestroyImmediate(rusher.gameObject);
+                }
             }
         }
 
