@@ -1,3 +1,4 @@
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -173,6 +174,39 @@ namespace MaxWorlds.Tests.EditMode
                     float expectedOffset = 0.5f * (shaft.localScale.x + child.localScale.x);
                     Assert.AreEqual(expectedOffset, Mathf.Abs(child.localPosition.x), 1e-4f,
                         "a fin's inner face does not sit on the shaft surface — it floats in a gap instead of being seated.");
+                }
+            }
+            finally
+            {
+                Object.DestroyImmediate(missile.gameObject);
+            }
+        }
+
+        /// <summary>MV-329 AC2 (migrated from PlayMode under MV-464 — <c>HomingMissile.Fire</c> is a
+        /// self-contained static builder with no Awake/OnEnable dependency, so the single settle frame
+        /// the old PlayMode fixture waited on bought nothing): the missile has to actually read as
+        /// ordnance — a shaft, fins and a warhead band — not the plain sphere "ball" it used to fire,
+        /// and every part of it has to carry a real material or it draws magenta in the build
+        /// (YT-58).</summary>
+        [Test]
+        public void TheMissileVisual_ReadsAsOrdnance_NotABall()
+        {
+            HomingMissile missile = HomingMissile.Fire(Vector3.zero, null, speed: 4.5f, damage: 22f,
+                splashRadius: 2f);
+            try
+            {
+                var renderers = missile.GetComponentsInChildren<MeshRenderer>();
+                var names = renderers.Select(r => r.name).ToArray();
+
+                Assert.Contains("Shaft", names, "the missile has no Shaft — it's still a bare primitive.");
+                Assert.Contains("Fin", names, "the missile has no tail fins — it reads as a ball, not ordnance.");
+
+                foreach (var r in renderers)
+                {
+                    Assert.IsNotNull(r.sharedMaterial, $"'{r.name}' has no material — it draws nothing.");
+                    Assert.That(r.sharedMaterial.shader.name,
+                        Does.StartWith("Universal Render Pipeline").Or.StartWith("MaxWorlds").Or.StartWith("Sprites"),
+                        $"'{r.name}' is wearing '{r.sharedMaterial.shader.name}': magenta in the build.");
                 }
             }
             finally
