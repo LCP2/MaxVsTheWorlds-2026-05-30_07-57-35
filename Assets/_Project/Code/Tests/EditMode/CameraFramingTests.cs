@@ -57,13 +57,14 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(2f, CameraFraming.DistanceForAreaScale(1f, 4f), 1e-3);
         }
 
-        // --- The angle is load-bearing and must not move -----------------------------------------
+        // --- The zoom knob must not move the angle ------------------------------------------------
 
         [Test]
         public void PullingBackDoesNotTiltTheCamera()
         {
-            // The ticket's hard constraint: ZOOM ONLY, the ~72° pitch stays exactly as it is. The
-            // height:back ratio IS the pitch, so if it survives the move, the angle did.
+            // The ticket's hard constraint: ZOOM ONLY, the pitch stays exactly as it is (checked here
+            // at an arbitrary fixed angle — the invariant is generic, not tied to the shipped default).
+            // The height:back ratio IS the pitch, so if it survives the move, the angle did.
             float tan = Mathf.Tan(72f * Mathf.Deg2Rad);
             var before = FixedAngleCameraRig.ComputeOffset(CameraFraming.PreviousDistance, 72f);
             var after = FixedAngleCameraRig.ComputeOffset(CommittedDistance(), 72f);
@@ -155,17 +156,17 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheKnobCannotTiltTheCamera_NoMatterHowFarItIsSwept()
         {
-            // The one thing the zoom knob must never be able to do. The pitch is load-bearing for
-            // the AI-art pipeline, and a "zoom" control that quietly tilts is how it would go.
+            // The one thing the zoom knob must never be able to do — a "zoom" control that quietly
+            // tilts the shot is how the angle would drift out from under Lee's framing call.
             var rig = NewRig(out var go);
             try
             {
                 foreach (float delta in new[] { -999f, 4f, 12f, 999f, -7f })
                 {
                     rig.Nudge(delta);
-                    Assert.AreEqual(72f, rig.Pitch, 1e-3, "the zoom knob changed the camera ANGLE");
-                    Assert.AreEqual(72f, go.transform.rotation.eulerAngles.x, 1e-2,
-                        "the rig's actual rotation drifted off 72°");
+                    Assert.AreEqual(64.88f, rig.Pitch, 1e-3, "the zoom knob changed the camera ANGLE");
+                    Assert.AreEqual(64.88f, go.transform.rotation.eulerAngles.x, 1e-2,
+                        "the rig's actual rotation drifted off 64.88°");
                 }
             }
             finally { Object.DestroyImmediate(go); }
@@ -174,10 +175,10 @@ namespace MaxWorlds.Tests.EditMode
         // --- The dev-only pitch knob (MV-450) -----------------------------------------------------
 
         [Test]
-        public void ThePitchKnobStartsAtTheShipped72DegreeDefault()
+        public void ThePitchKnobStartsAtTheShipped64Point88DegreeDefault()
         {
             var rig = NewRig(out var go);
-            try { Assert.AreEqual(72f, rig.Pitch, 1e-3); }
+            try { Assert.AreEqual(64.88f, rig.Pitch, 1e-3); }
             finally { Object.DestroyImmediate(go); }
         }
 
@@ -188,9 +189,9 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 rig.NudgePitch(-7f);
-                Assert.AreEqual(65f, rig.Pitch, 1e-3);
+                Assert.AreEqual(57.88f, rig.Pitch, 1e-3);
                 rig.NudgePitch(3f);
-                Assert.AreEqual(68f, rig.Pitch, 1e-3);
+                Assert.AreEqual(60.88f, rig.Pitch, 1e-3);
             }
             finally { Object.DestroyImmediate(go); }
         }
@@ -230,8 +231,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheNudgeRangeBracketsTheShippedPitch_SoThereIsRoomToTuneBothWays()
         {
-            Assert.Less(FixedAngleCameraRig.MinPitch, 72f, "no room to tilt toward side-on");
-            Assert.Greater(FixedAngleCameraRig.MaxPitch, 72f, "no room to go more overhead");
+            Assert.Less(FixedAngleCameraRig.MinPitch, 64.88f, "no room to tilt toward side-on");
+            Assert.Greater(FixedAngleCameraRig.MaxPitch, 64.88f, "no room to go more overhead");
         }
 
         /// <summary>
@@ -299,10 +300,10 @@ namespace MaxWorlds.Tests.EditMode
             float authoredPitch = rig.Pitch;
             Object.DestroyImmediate(go);
 
-            Assert.AreEqual(72f, authoredPitch, 1e-3,
-                "the code's camera pitch is not 72° — the angle is load-bearing (YT-33/YT-82)");
-            Assert.AreEqual(72f, scenePitch, 1e-3,
-                "the scene's camera pitch is not 72° — the angle is load-bearing (YT-33/YT-82)");
+            Assert.AreEqual(64.88f, authoredPitch, 1e-3,
+                "the code's camera pitch is not 64.88° — the MV-468 shipped default drifted");
+            Assert.AreEqual(64.88f, scenePitch, 1e-3,
+                "the scene's camera pitch is not 64.88° — the MV-468 shipped default drifted");
             Assert.AreEqual(authoredDistance, sceneDistance, 1e-3,
                 $"the scene ships cameraDistance={sceneDistance} but the code authors " +
                 $"{authoredDistance}. The SCENE wins at runtime, so the committed default is a " +

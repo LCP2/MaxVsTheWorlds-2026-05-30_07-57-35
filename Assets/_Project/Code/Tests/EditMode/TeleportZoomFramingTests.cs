@@ -12,7 +12,7 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class TeleportZoomFramingTests
     {
-        private const float ShippingPitch = 72f;
+        private const float ShippingPitch = 64.88f; // MV-468
         private const float ShippingFov = 40f;
         private const float LandscapeAspect = 16f / 9f;
 

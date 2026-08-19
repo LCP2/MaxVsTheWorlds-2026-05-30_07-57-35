@@ -6,7 +6,8 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// The per-device-class camera default (YT-106, re-baked YT-200, retuned MV-276): phones sit at
-    /// 16.1 / 1.1 m, desktop keeps the wider serialized framing (also / 1.1 post-MV-276). This is a
+    /// 16.1 / 1.1 m. Desktop kept the wider serialized framing (also / 1.1 post-MV-276) until MV-468
+    /// re-baked it to Lee's dialled-in 15.81 m, a flat committed value rather than a formula. This is a
     /// default, not a hard override — the dev nudge and the tuning slider still move it — so it only
     /// decides where a fresh session starts on each device.
     ///
@@ -47,8 +48,8 @@ namespace MaxWorlds.Tests.EditMode
         {
             var rig = MakeRig(phone: false);
             Assert.That(rig.Distance,
-                        Is.EqualTo(27.108f / FixedAngleCameraRig.ZoomFactor).Within(0.001f),
-                        "desktop keeps the same relative framing — 10% closer post-MV-276, then MV-315's 108% re-bake");
+                        Is.EqualTo(15.81f).Within(0.001f),
+                        "desktop keeps the committed MV-468 framing — Lee's approved 15.81 m from the MV-450 dev panel");
         }
 
         [Test]

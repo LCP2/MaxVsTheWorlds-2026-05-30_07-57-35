@@ -4,11 +4,12 @@ using Unity.Cinemachine;
 namespace MaxWorlds.CameraRig
 {
     /// <summary>
-    /// Sets the fixed-angle camera's follow distance in code (YT-46). The ~72° top-down pitch
-    /// is load-bearing and stays fixed; this only controls how far back/up the rig sits, driven
-    /// by one tunable <see cref="cameraDistance"/> (metres along the view ray) so the framing is
-    /// easy to nudge without touching the scene. Applied to the <see cref="CinemachineFollow"/>
-    /// offset on Awake, so a fresh clone / the WebGL build always uses the committed value.
+    /// Sets the fixed-angle camera's follow distance and pitch in code (YT-46). The top-down pitch
+    /// is fixed at runtime and only moves via the MV-450 dev knob; this rig otherwise just controls
+    /// how far back/up it sits, driven by one tunable <see cref="cameraDistance"/> (metres along the
+    /// view ray) so the framing is easy to nudge without touching the scene. Applied to the
+    /// <see cref="CinemachineFollow"/> offset on Awake, so a fresh clone / the WebGL build always
+    /// uses the committed value.
     ///
     /// Pulled back from the original ~13.7 m after playtest feedback that it felt too zoomed in, and
     /// again to 25.1 m for YT-82 — the yard was reading as a corridor you were stuck inside rather
@@ -21,6 +22,13 @@ namespace MaxWorlds.CameraRig
     ///
     /// MV-315 re-baked the desktop/WebGL default again, to 108% of the MV-276 number — Lee's
     /// dialled-in tuning-panel value from the 0.6.2 WebGL playtest. Phone is untouched.
+    ///
+    /// MV-468 bakes Lee's MV-450 dev-panel session as the new shipped defaults: pitch 72° → 64.88°,
+    /// and the desktop distance to 15.81 m. The distance is now a flat committed number rather than a
+    /// <see cref="PreZoomDesktopDistance"/>/<see cref="ZoomFactor"/> derivation — that formula recorded
+    /// a percentage re-bake of the previous number, and 15.81 m isn't a percentage of anything, it's
+    /// the value Lee dialled to by eye. The old baseline consts stay untouched so the MV-276/MV-315
+    /// history they document is still checkable arithmetic; only the field's initial value changed.
     /// </summary>
     public sealed class FixedAngleCameraRig : MonoBehaviour
     {
@@ -31,7 +39,7 @@ namespace MaxWorlds.CameraRig
 
         /// <summary>Bounds for the live pitch nudge (MV-450). Not taste — sanity: below the low end
         /// is nearer side-on than this game has ever been art-directed for, above the high end is
-        /// back to the shipped 72° with no room left to explore.</summary>
+        /// back near the pre-MV-468 72° framing with little room left to explore.</summary>
         public const float MinPitch = 45f;
         public const float MaxPitch = 80f;
 
@@ -60,15 +68,18 @@ namespace MaxWorlds.CameraRig
         /// <summary>True on a handheld build (iOS/Android/TestFlight, and a mobile WebGL browser).</summary>
         public static bool IsPhoneClass => SimulatePhoneClass ?? Application.isMobilePlatform;
 
-        [Tooltip("Fixed top-down pitch. Load-bearing for the AI-art pipeline — do NOT change this " +
-                 "SERIALIZED default (YT-33). MV-450 adds a dev-only live nudge (SetPitch/NudgePitch) " +
-                 "that changes this at runtime for a session but never rewrites the committed scene/asset value.")]
-        [SerializeField] private float pitchDegrees = 72f;
+        [Tooltip("Fixed top-down pitch (MV-468: 64.88°, Lee's approved framing from the MV-450 dev " +
+                 "panel). No longer load-bearing for an AI-art pipeline — every character is built " +
+                 "procedurally in code now, so nothing is baked to a fixed shot angle (the old YT-33 " +
+                 "'do not change' note is obsolete). MV-450 adds a dev-only live nudge " +
+                 "(SetPitch/NudgePitch) that changes this at runtime for a session but never rewrites " +
+                 "the committed scene/asset value.")]
+        [SerializeField] private float pitchDegrees = 64.88f;
 
         [Tooltip("Distance from the follow target to the camera, in metres. Bigger = more arena " +
                  "visible around Max. THE zoom knob (YT-82) — nudge it live in dev mode with [ and ], " +
                  "read the number off the dev overlay, then commit it here. Keep the pitch fixed.")]
-        [SerializeField] private float cameraDistance = PreZoomDesktopDistance / ZoomFactor;
+        [SerializeField] private float cameraDistance = 15.81f;
 
         /// <summary>Current pull-back, in metres. Read by the dev overlay so the number Lee dials in
         /// by eye is the number he can paste back into the field above.</summary>
@@ -103,9 +114,9 @@ namespace MaxWorlds.CameraRig
 
         /// <summary>
         /// Set the pitch directly, clamped to <see cref="MinPitch"/>/<see cref="MaxPitch"/>
-        /// (MV-450's dev-only tuning control — the shipped 72° default and the two
-        /// <c>CameraFramingTests</c> assertions pinning it are untouched, this only lets Lee sweep the
-        /// angle live to judge one by eye before a second ticket bakes it).
+        /// (MV-450's dev-only tuning control — it never persists past the session; MV-468 is what
+        /// baked Lee's chosen 64.88° as the shipped default. This only lets Lee sweep the angle live
+        /// to judge one by eye).
         ///
         /// Holds the visible ground area constant: at a lower pitch the same distance shows less
         /// depth, so changing the angle without also moving the camera would make Lee judge pitch and
