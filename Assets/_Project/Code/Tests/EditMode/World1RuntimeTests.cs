@@ -240,8 +240,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(cfg.enemyTypes.brute.thv, cfg.enemyTypes.heavy.thv);
         }
 
-        // --- MV-298: Area 1 is a light opening, not a swarm — 2-3 lowest-tier (Rusher) + exactly ---
-        // --- 1 tank (Bruiser), not the 9-10 robots the pre-MV-298 pacing produced. ---
+        // --- MV-298: Area 1 is a light opening, not a swarm — 2-3 lowest-tier (Rusher) + a couple ---
+        // --- of tanks (Bruiser), not the 9-10 robots the pre-MV-298 pacing produced. MV-442 (Lee's ---
+        // --- 2026-08-19 redraw) raised the tank count from 1 to 2 Bruiser. ---------------------------
 
         [Test]
         public void World1_Area1ComposesToALightOpening_NotASwarm()
@@ -250,7 +251,7 @@ namespace MaxWorlds.Tests.EditMode
 
             DifficultyEngine.Composition composition = cfg.SolveComposition(1);
 
-            Assert.AreEqual(1, composition.Bruiser, "Area 1 must hold exactly one tank (large robot)");
+            Assert.AreEqual(2, composition.Bruiser, "MV-442: Area 1 must hold exactly two tanks (large robots)");
             Assert.AreEqual(0, composition.Heavy, "Heavy is not unlocked this early");
             Assert.AreEqual(0, composition.Brute, "Brute is not unlocked this early");
             Assert.That(composition.Rusher, Is.InRange(2, 3),
@@ -312,7 +313,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(24f, a1.size.d, "a1 must have deepened to 24 m (was 18 m)");
             Assert.IsFalse(a1.hasShed, "MV-442 reverses MV-437: a1 must no longer carry a shed");
             Assert.AreEqual("normal", a1.role, "a1's role must revert to \"normal\"");
-            Assert.IsNull(a1.shed, "a1 must carry no shed object once hasShed is false");
+
+            // Not a null check on a1.shed: JsonUtility materialises a non-null default WorldShed for
+            // EVERY area once any area in the array carries the field (the same round-trip quirk
+            // WorldComposition.IsAuthored documents) — hasShed is the real "does this area have a
+            // shed" signal, which is what WorldMapLoader itself gates the factory build on.
+            Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
+            Assert.IsNull(map.Entity("a1_shed"), "a1 must build no factory entity once its shed is removed");
         }
 
         // --- AC4 -------------------------------------------------------------------------------------
