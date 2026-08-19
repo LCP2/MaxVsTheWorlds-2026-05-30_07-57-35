@@ -536,14 +536,12 @@ namespace MaxWorlds.UI
                 v => DevTuning.PowerCellCapacity = v, tab: TabEconomy);
 
             // Small robots drop nothing at all (WV-226) — only large kills carry loot, paced by
-            // these two knobs.
+            // this knob. Parts no longer have a pacing knob (MV-459): MV-401 replaced the periodic
+            // per-kill-count part drop with DeathRunState.TryGrantAreaPart (one part per area, from
+            // the last Bruiser, once ever), so a "parts per kill" rate has nothing left to drive.
             Add("Cells/large kill", "cells", 0f, 5f, CellEconomyTuning.DefaultCellsPerLargeKill,
                 () => DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill),
                 v => DevTuning.CellsPerLargeKill = v, tab: TabEconomy);
-
-            Add("Parts/large kill", "kills", 1f, 8f, CellEconomyTuning.DefaultPartsPerLargeKills,
-                () => DevTuning.Or(DevTuning.PartsPerLargeKills, CellEconomyTuning.DefaultPartsPerLargeKills),
-                v => DevTuning.PartsPerLargeKills = v, tab: TabEconomy);
 
             Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
                 () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),

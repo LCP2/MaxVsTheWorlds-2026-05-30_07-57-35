@@ -22,11 +22,9 @@ namespace MaxWorlds.Pickups
     ///
     /// Parts drop exactly once per arena, from the last Bruiser destroyed in it (MV-401) — see
     /// <see cref="IsLastBruiserInArea"/>. This replaces MV-183/MV-226/MV-375's periodic
-    /// every-<see cref="CellEconomyTuning.DefaultPartsPerLargeKills"/>-large-kills trigger, which
-    /// could fire more than once inside a populous arena; that mechanic (and its
-    /// <see cref="CellEconomyTuning.PartsForArea"/> curve / <see cref="MaxWorlds.Core.DevTuning.PartsPerLargeKills"/>
-    /// dial) is dead for the part decision now — left in place only because the Settings panel's
-    /// "Parts/large kill" dev slider still reads/writes it (out of this ticket's scope to remove).
+    /// every-N-large-kills trigger, which could fire more than once inside a populous arena; that
+    /// mechanic's tuning (the per-area part curve and its Settings dev slider) was dead code left
+    /// over from the old trigger and has been removed (MV-459).
     ///
     /// Each frame it does the walk-over collection itself: one Max lookup, one pool, a planar distance
     /// test per live pickup. Banking goes through <see cref="PickupWallet"/>; the HUD reacts to that.

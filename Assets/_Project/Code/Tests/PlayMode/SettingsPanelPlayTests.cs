@@ -92,9 +92,10 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var canvas = PanelCanvas();
             var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            Assert.That(sliders.Length, Is.EqualTo(65),
-                "WV-234 restructured the panel into five tabs — Enemies (19), Economy (10), Weapons " +
-                "(15), Arena (14), Feel (7) — 65 total (MV-359 removed the Dash cooldown slider). " +
+            Assert.That(sliders.Length, Is.EqualTo(64),
+                "WV-234 restructured the panel into five tabs — Enemies (19), Economy (9), Weapons " +
+                "(15), Arena (14), Feel (7) — 64 total (MV-359 removed the Dash cooldown slider; " +
+                "MV-459 removed the orphaned Parts/large kill slider). " +
                 "This includes the full v0.5 recut spec §9 " +
                 "list: the gated-arena/robot-composition knobs (settings only until WV-222/223/224) " +
                 "and the ability magnitudes that already had a DevTuning override but no slider to " +
@@ -242,23 +243,6 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(DevTuning.SpawnInterval, Is.Not.Null);
             Assert.That(DevTuning.SpawnInterval.Value, Is.EqualTo(0.5f).Within(0.001f),
                 "moving the Spawn interval slider must drive DevTuning.SpawnInterval");
-        }
-
-        [UnityTest]
-        public IEnumerator ThePartsPerLargeKillSliderDrivesDevTuning()
-        {
-            // WV-226: the large-kill part pacing must actually take effect, live, from the panel.
-            var canvas = PanelCanvas();
-            var sliders = canvas.GetComponentsInChildren<Slider>(true);
-            var pacing = System.Array.Find(sliders, s => s.transform.parent.name == "Parts/large kill");
-            Assert.That(pacing, Is.Not.Null, "no Parts/large kill slider (WV-226)");
-
-            SetSliderToValue(pacing, 6f);
-            yield return null;
-
-            Assert.That(DevTuning.PartsPerLargeKills, Is.Not.Null);
-            Assert.That(DevTuning.PartsPerLargeKills.Value, Is.EqualTo(6f).Within(0.001f),
-                "moving the Parts/large kill slider must drive DevTuning.PartsPerLargeKills");
         }
 
         [UnityTest]

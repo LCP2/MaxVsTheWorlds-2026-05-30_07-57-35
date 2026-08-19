@@ -76,10 +76,6 @@ namespace MaxWorlds.Core
         /// player's window to read the volley and reposition.</summary>
         public static float? BossVolleyWindup { get; set; }
 
-        /// <summary>Large-robot kills between upgrade-part drops (WV-226) — bigger spreads parts
-        /// further across a level. Power cells drop on their own every large kill regardless.</summary>
-        public static float? PartsPerLargeKills { get; set; }
-
         /// <summary>How long the Hydro burst frees Max from the tap, seconds (YT-215) — the "free of
         /// the hose!" prize window, self-supplied and burning power cells the same as before.</summary>
         public static float? HydroBurstSeconds { get; set; }
@@ -390,7 +386,6 @@ namespace MaxWorlds.Core
             FactoryHealth.HasValue || BossHealth.HasValue ||
             BossVolleyInterval.HasValue || BossAddsPerVolley.HasValue || BossMaxAdds.HasValue ||
             BossVolleyWindup.HasValue ||
-            PartsPerLargeKills.HasValue ||
             HydroBurstSeconds.HasValue || HydroBurstCooldown.HasValue || PowerCellCapacity.HasValue ||
             NozzleConeMultiplier.HasValue || PowerNozzleRange.HasValue || RangeExtenderBonus.HasValue ||
             WideBoreConeMultiplier.HasValue || HarnessCapacity.HasValue || AccelSpeed.HasValue ||
@@ -442,7 +437,6 @@ namespace MaxWorlds.Core
             BossAddsPerVolley = null;
             BossMaxAdds = null;
             BossVolleyWindup = null;
-            PartsPerLargeKills = null;
             HydroBurstSeconds = null;
             HydroBurstCooldown = null;
             PowerCellCapacity = null;
@@ -541,7 +535,6 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(BossAddsPerVolley), () => BossAddsPerVolley, v => BossAddsPerVolley = v),
             (PrefsPrefix + nameof(BossMaxAdds), () => BossMaxAdds, v => BossMaxAdds = v),
             (PrefsPrefix + nameof(BossVolleyWindup), () => BossVolleyWindup, v => BossVolleyWindup = v),
-            (PrefsPrefix + nameof(PartsPerLargeKills), () => PartsPerLargeKills, v => PartsPerLargeKills = v),
             (PrefsPrefix + nameof(HydroBurstSeconds), () => HydroBurstSeconds, v => HydroBurstSeconds = v),
             (PrefsPrefix + nameof(HydroBurstCooldown), () => HydroBurstCooldown, v => HydroBurstCooldown = v),
             (PrefsPrefix + nameof(PowerCellCapacity), () => PowerCellCapacity, v => PowerCellCapacity = v),
