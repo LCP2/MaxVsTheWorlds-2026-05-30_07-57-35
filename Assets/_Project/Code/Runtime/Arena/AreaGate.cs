@@ -103,6 +103,14 @@ namespace MaxWorlds.Arena
         /// <summary>Fired once, the instant the gate opens.</summary>
         public event Action Opened;
 
+        /// <summary>Fired the instant this gate is re-shut (MV-448) — <see cref="Reclose"/> is the
+        /// only place <see cref="IsOpen"/> ever goes back to false. Mirrors <see cref="Opened"/> so
+        /// <see cref="MaxWorlds.Enemies.EnemyNavigation.RegisterGate(string, AreaGate, MapData)"/> can
+        /// subscribe the same <see cref="MapRoutes.Forget"/> to it — without this, a route solved
+        /// through this gate while it was open stayed cached forever after an arena reset shut it
+        /// again (MV-427), and every robot kept walking at a doorway that was no longer there.</summary>
+        public event Action Closed;
+
         /// <summary>Refuses ALL damage regardless of source while true — the boss gate's
         /// <c>opensWith: all-sheds-destroyed</c> lock (World &amp; Difficulty Framework, MV-270). Unlike
         /// <see cref="RequiresClear"/>, which only pauses a normal gate until its room clears, a locked
@@ -224,6 +232,8 @@ namespace MaxWorlds.Arena
             // whole swing (MV-386), so restoring the transform is what clears the stale open leaf the
             // ticket calls out, not just re-enabling a collider.
             transform.SetPositionAndRotation(_closedPosition, _closedRotation);
+
+            Closed?.Invoke();
         }
 
         private void Open()
@@ -275,6 +285,46 @@ namespace MaxWorlds.Arena
         {
             if (awayFromPlayer == Vector3.zero) return 1f;
             return Vector3.Dot(awayFromPlayer, forward) > 0f ? -1f : 1f;
+        }
+
+        /// <summary>The leaf's own footprint along the doorway's hole axis once its swing settles at
+        /// its fixed <see cref="HingeSwingDegrees"/> target (MV-448) — an open gate's leaf is
+        /// deliberately never made passable (MV-386), so a routed waypoint has to aim at whatever part
+        /// of the doorway the leaf does NOT cover, and this is what tells it where that is.
+        ///
+        /// Computed from the swing's own known geometry (<see cref="_closedRotation"/>,
+        /// <see cref="_hingePivot"/>, <see cref="_hingeSign"/> — all set by <see cref="StartHingeSwing"/>
+        /// before <see cref="Open"/> ever fires <see cref="Opened"/>), not read off the live, possibly
+        /// still-animating collider — a caller asking the instant the gate opens must get the same
+        /// answer a caller asking half a second later would, since the router re-solves once per open
+        /// and cannot afford to cache a mid-swing snapshot.
+        ///
+        /// World X if <paramref name="alongX"/> (the doorway's hole is a span of X), world Z otherwise
+        /// — the same convention <see cref="MapGeometry.Doorway"/> and <see cref="MapRoutes"/> use
+        /// throughout. Meaningless before the gate has ever opened; callers only ask once
+        /// <see cref="IsOpen"/> is true.</summary>
+        public Span OpenLeafSpan(bool alongX)
+        {
+            float width = transform.localScale.x;
+            float halfDepth = transform.localScale.z * 0.5f;
+
+            Vector3 right = _closedRotation * Vector3.right;
+            Vector3 forwardAxis = _closedRotation * Vector3.forward;
+            Quaternion swing = Quaternion.AngleAxis(_hingeSign * HingeSwingDegrees, Vector3.up);
+
+            float min = float.MaxValue, max = float.MinValue;
+            for (int w = 0; w <= 1; w++)
+            {
+                for (int d = -1; d <= 1; d += 2)
+                {
+                    Vector3 corner = _hingePivot + swing * (right * (w * width) + forwardAxis * (d * halfDepth));
+                    float coord = alongX ? corner.x : corner.z;
+                    if (coord < min) min = coord;
+                    if (coord > max) max = coord;
+                }
+            }
+
+            return new Span(min, max);
         }
 
         private void Update()

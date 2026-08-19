@@ -209,7 +209,7 @@ namespace MaxWorlds.Arena
                             // (MV-364, same reasoning as BuildAreaGate below) — this is what tells
                             // EnemyNavigation which live SubZoneGate a link's "gate" id actually points
                             // to, so a shut one counts as impassable instead of reading as open.
-                            EnemyNavigation.RegisterGate(e.id, gate.GetComponent<SubZoneGate>());
+                            EnemyNavigation.RegisterGate(e.id, gate.GetComponent<SubZoneGate>(), map);
                         }
                         break;
 
@@ -310,7 +310,7 @@ namespace MaxWorlds.Arena
 
             // Robots must not be routed at (and grind on) a gate that is still shut (MV-272) — this is
             // what tells EnemyNavigation which live AreaGate a link's "gate" id actually points to.
-            EnemyNavigation.RegisterGate(e.id, gate);
+            EnemyNavigation.RegisterGate(e.id, gate, map);
 
             // Shut, an area gate blocks sight exactly like the scene-adopted one (YT-107). Cover goes on
             // the gate's THRESHOLD object, not the visible leaf (MV-386): the leaf's own collider no

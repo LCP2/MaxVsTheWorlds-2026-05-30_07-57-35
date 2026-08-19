@@ -51,17 +51,25 @@ namespace MaxWorlds.Enemies
         /// Tell the router about a gate a link names, so a shut one counts as impassable rather than as
         /// an open doorway (MV-272) — <see cref="MapRuntime"/> calls this the moment it builds one.
         ///
-        /// Subscribes <see cref="MapRoutes.Forget"/> to the gate's own <see cref="AreaGate.Opened"/>:
-        /// the instant a gate breaks, every solved route is dropped, so the very next robot that asks
-        /// the way re-solves the graph with this gate now counted open — no polling, no per-frame
-        /// "has anything changed" check, just a routing table that knows to distrust itself the moment
-        /// the level it was solved from actually changes.
+        /// Subscribes <see cref="MapRoutes.Forget"/> to the gate's own <see cref="AreaGate.Opened"/>
+        /// and <see cref="AreaGate.Closed"/>: the instant a gate breaks OR is re-shut (MV-427's arena
+        /// reset calls <see cref="AreaGate.Reclose"/>), every solved route is dropped, so the very next
+        /// robot that asks the way re-solves the graph with this gate's current state — no polling, no
+        /// per-frame "has anything changed" check, just a routing table that knows to distrust itself
+        /// the moment the level it was solved from actually changes.
         /// </summary>
-        public static void RegisterGate(string gateId, AreaGate gate)
+        /// <param name="map">The level this gate belongs to (MV-448) — asserts <paramref name="gate"/>
+        /// isn't being registered after <see cref="MapRoutes"/> has already solved routes for it, which
+        /// would mean this gate was read as open by <see cref="IsGateOpen"/>'s unregistered-default
+        /// while the table solved and never gets a re-solve to correct it. Null (the default) skips the
+        /// check — a bare test fixture with no real map has nothing to assert against.</param>
+        public static void RegisterGate(string gateId, AreaGate gate, MapData map = null)
         {
             if (string.IsNullOrEmpty(gateId) || gate == null) return;
+            AssertNotSolvedYet(gateId, map);
             _areaGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
+            gate.Closed += MapRoutes.Forget;
         }
 
         /// <summary>Same job as the <see cref="AreaGate"/> overload, for the scene-adopted
@@ -69,12 +77,28 @@ namespace MaxWorlds.Enemies
         /// moment it places one. Before this overload existed, a shut <see cref="SubZoneGate"/>'s
         /// link always read as passable to the router (see <see cref="IsGateOpen"/>'s old
         /// unregistered-default), even though the gate was already physically solid — a robot could
-        /// be routed straight at a doorway it could never actually cross.</summary>
-        public static void RegisterGate(string gateId, SubZoneGate gate)
+        /// be routed straight at a doorway it could never actually cross.
+        ///
+        /// No <c>Closed</c> subscription here (MV-448): unlike <see cref="AreaGate"/>,
+        /// <see cref="SubZoneGate"/> has no re-lock path at all — <c>Open</c> is a one-way sink with no
+        /// method that ever sets <see cref="SubZoneGate.IsOpen"/> back to false, so there is nothing to
+        /// subscribe to.</summary>
+        /// <param name="map">Same MV-448 assertion as the <see cref="AreaGate"/> overload.</param>
+        public static void RegisterGate(string gateId, SubZoneGate gate, MapData map = null)
         {
             if (string.IsNullOrEmpty(gateId) || gate == null) return;
+            AssertNotSolvedYet(gateId, map);
             _subZoneGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
+        }
+
+        private static void AssertNotSolvedYet(string gateId, MapData map)
+        {
+            Debug.Assert(!MapRoutes.HasSolvedRoutesFor(map),
+                $"[EnemyNavigation] gate '{gateId}' registered after this level's routes were already " +
+                "solved (MV-448) — a gate registered this late is read as open by IsGateOpen's " +
+                "unregistered-default while the table solves, and nothing re-solves it afterward. " +
+                "Every gate must be registered before anything calls Waypoint.");
         }
 
         /// <summary>Whether the named gate — if this level built or adopted one by that id at all —
@@ -90,6 +114,18 @@ namespace MaxWorlds.Enemies
                 return subZoneGate == null || subZoneGate.Unlocked;
             return true;
         }
+
+        /// <summary>The world-space span an open <see cref="AreaGate"/>'s own leaf still occupies
+        /// across its doorway (MV-448) — <see cref="MapRoutes"/>'s bridge to
+        /// <see cref="AreaGate.OpenLeafSpan"/>, kept here rather than in <see cref="MapRoutes"/> for
+        /// the same reason <see cref="IsGateOpen"/> is: that class stays pure and never touches a live
+        /// GameObject. Null for a <see cref="SubZoneGate"/> (it clears its doorway completely — no
+        /// partial leaf to report) or an unregistered/still-shut gate, both of which mean "nothing
+        /// occupies the doorway" to a caller.</summary>
+        private static Span? GateLeafSpan(string gateId, bool alongX) =>
+            _areaGates.TryGetValue(gateId, out AreaGate gate) && gate != null && gate.IsOpen
+                ? gate.OpenLeafSpan(alongX)
+                : (Span?)null;
 
         /// <summary>The map the robots are navigating, or null if there is no level in the scene.</summary>
         public static MapData Map
@@ -128,7 +164,8 @@ namespace MaxWorlds.Enemies
                                               new Vector2(from.x, from.z),
                                               new Vector2(goal.x, goal.z),
                                               IsGateOpen,
-                                              fromZone);
+                                              fromZone,
+                                              GateLeafSpan);
 
             return new Vector3(next.x, goal.y, next.y);
         }
