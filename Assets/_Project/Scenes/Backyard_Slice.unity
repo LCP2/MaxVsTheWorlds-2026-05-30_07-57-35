@@ -1430,8 +1430,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 4affc334dc5f98d40b1b44484d3be7fb, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.CameraRig.FixedAngleCameraRig
-  pitchDegrees: 72
-  cameraDistance: 24.643636
+  pitchDegrees: 64.88
+  cameraDistance: 15.81
 --- !u!1 &1419767784
 GameObject:
   m_ObjectHideFlags: 0
