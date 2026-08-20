@@ -261,7 +261,7 @@ namespace MaxWorlds.Dev
         {
             while (RigState.Level(id) < target)
             {
-                if (!RigState.TrySpendPart(id))
+                if (!RigState.RaiseLevel(id))
                 {
                     LogWarn($"rig fixture: could not raise {id} to {target} (stuck at {RigState.Level(id)})");
                     break;

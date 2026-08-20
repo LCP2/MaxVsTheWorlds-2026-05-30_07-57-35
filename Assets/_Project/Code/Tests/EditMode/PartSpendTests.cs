@@ -208,7 +208,7 @@ namespace MaxWorlds.Tests.EditMode
         // ---------------------------------------------------------------- MV-374/MV-422/MV-458: Cell Storage (e_cel)
         //
         // MV-458 retired PartSpend.TrySpendOnCellCapacity: e_cel is no longer special-cased for a part
-        // spend — RigState.TrySpendPart("e_cel") (proven generically by RigStateTests) and
+        // spend — RigState.RaiseLevel("e_cel") (proven generically by RigStateTests) and
         // PickupWallet.LevelUpCellCapacity (PickupWalletTests) already cover the model layer this
         // deleted wrapper duplicated. Its new primary currency, cells, is covered by CellSpendTests.
     }

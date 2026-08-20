@@ -256,22 +256,19 @@ namespace MaxWorlds.UI
             return 0.5f * t;
         }
 
-        /// <summary>MV-469: every legal spend a board node's own button can currently perform — the
-        /// guard <see cref="Button.interactable"/> is set from. Pure so it's pinned by an EditMode test
-        /// without building a canvas. Pre-fix this only ever checked <see cref="RigState.CanSpendPart"/>
-        /// plus a banked part, so a node was untappable however many cells were banked; the tap handler
-        /// (<c>OnRigNodeTapped</c>) already routed a cell spend correctly for both an owned node
-        /// (<see cref="CellSpend.TryUpgradeNode"/>) and an unowned-but-cell-unlockable one
-        /// (<see cref="CellSpend.TryUnlockNode"/>) — this was the only thing standing between the tap
-        /// and it.</summary>
+        /// <summary>MV-469/MV-492: every legal spend a board node's own button can currently perform —
+        /// the guard <see cref="Button.interactable"/> is set from. Pure so it's pinned by an EditMode
+        /// test without building a canvas. An owned, below-max node only ever needs cells
+        /// (<see cref="CellSpend.TryUpgradeNode"/>); an unowned, cell-unlockable node needs BOTH cells
+        /// AND a banked part (<see cref="CellSpend.TryUnlockNode"/>) — a part alone can never make a
+        /// node tappable, unlike the retired part-only fallback this replaces.</summary>
         public static bool IsAbilityNodeSpendable(string id, int cellsBanked, int partsBanked)
         {
             bool draftable = RigState.IsCellUnlockable(id) && !RigState.IsOwned(id);
             bool canLevelUp = RigState.CanSpendPart(id); // owned, below max — TryUpgradeNode's own gate
-            bool cellSpendable = (canLevelUp && cellsBanked >= CellSpend.UpgradeCostCells) ||
-                                  (draftable && cellsBanked >= CellSpend.UnlockCostCells);
-            bool partSpendable = canLevelUp && partsBanked > 0;
-            return cellSpendable || partSpendable;
+            if (canLevelUp) return cellsBanked >= CellSpend.UpgradeCostCells;
+            if (draftable) return cellsBanked >= CellSpend.UnlockCostCells && partsBanked >= CellSpend.UnlockCostParts;
+            return false;
         }
 
         /// <summary>MV-433: the board's scale-to-fit factor for a given screen aspect ratio (width /
@@ -714,6 +711,14 @@ namespace MaxWorlds.UI
             HudTextures.PolygonOutline(HexSides, HexRotationDeg,
                 Mathf.CeilToInt(PartsSocketSize * Sqrt3 * 0.5f), Mathf.CeilToInt(PartsSocketSize), 2f);
 
+        /// <summary>MV-492: a board node's part-required slot in its EMPTY/outlined state — the same
+        /// pip shape the PARTS tray's own sockets use (<see cref="PartsPipOutlineSprite"/>), sized to
+        /// the node's own <see cref="RigBoardLayout.PartSlotRadius"/> instead of the tray's fixed
+        /// <see cref="PartsSocketSize"/>.</summary>
+        private Sprite PartSlotOutlineSprite(float slotR) =>
+            HudTextures.PolygonOutline(HexSides, HexRotationDeg,
+                Mathf.CeilToInt(slotR * Sqrt3), Mathf.CeilToInt(slotR * 2f), 2f);
+
         /// <summary>MV-443 defect 4: a category is never LOCK/"? ? ?" — it always names itself and its
         /// own owned/total count. "Lit" (has ≥1 owned ability) still gets the stronger owned-style
         /// treatment; "dark" gets its own third, always-legible state, never the ability node's locked
@@ -815,9 +820,9 @@ namespace MaxWorlds.UI
             bool parentGated = !owned && !draftable && RigState.IsCategoryUnlocked(ab.Category);
             int cellsBanked = PickupWallet.PowerCells;
             bool hasCellCost = draftable || (owned && !maxed);
-            // MV-469: PartBadge (the amber "+") stays keyed to the part-spend path alone, unchanged —
-            // Button.interactable covers every legal spend via the shared helper below.
-            bool partSpendable = RigState.CanSpendPart(ab.Id) && banked > 0;
+            // MV-492: the part slot shows only on the unlock path — the only action a part now gates.
+            // An owned node's upgrade never needs a part, so the slot stays hidden there.
+            bool needsPart = draftable;
             bool spendable = IsAbilityNodeSpendable(ab.Id, cellsBanked, banked);
             // MV-470: whether CELLS alone would pay for this node's action right now — drives the
             // afford-dot (CapMarker) and, via Update(), whether the dashed ring pulses live or sits inert.
@@ -947,7 +952,18 @@ namespace MaxWorlds.UI
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
             }
 
-            v.PartBadge.gameObject.SetActive(partSpendable);
+            // MV-492: FILLED/lit once >= 1 part is banked (the requirement is met), EMPTY/outlined
+            // otherwise — never shown on a node that needs no part (the upgrade branch above).
+            v.PartSlot.gameObject.SetActive(needsPart);
+            if (needsPart)
+            {
+                bool havePart = banked >= CellSpend.UnlockCostParts;
+                float slotR = RigBoardLayout.PartSlotRadius;
+                v.PartSlot.sprite = havePart
+                    ? PolygonFillSprite(HexSides, Mathf.CeilToInt(slotR * Sqrt3), Mathf.CeilToInt(slotR * 2f))
+                    : PartSlotOutlineSprite(slotR);
+                v.PartSlot.color = DimIfUnlit(havePart ? PartsColor : new Color(PartsColor.r, PartsColor.g, PartsColor.b, 0.40f), familyLit);
+            }
             v.Button.interactable = spendable;
         }
 
@@ -1025,7 +1041,7 @@ namespace MaxWorlds.UI
         {
             v.OuterRing.gameObject.SetActive(false);
             v.CapMarker.gameObject.SetActive(false);
-            v.PartBadge.gameObject.SetActive(false);
+            v.PartSlot.gameObject.SetActive(false);
             v.HexOutline.sprite = SolidHexOutlineSprite(v.Radius);
 
             v.HexFill.color = new Color(family.r, family.g, family.b, 0.22f);
@@ -1050,12 +1066,10 @@ namespace MaxWorlds.UI
             v.Button.interactable = true;
         }
 
-        /// <summary>MV-458: cells first, parts as the rare fallback accelerant. An unowned node tries
-        /// <see cref="CellSpend.TryUnlockNode"/> (20 cells, needs its parent at level &gt;= 2); an owned
-        /// one tries <see cref="CellSpend.TryUpgradeNode"/> (10 cells). Either way, a cell spend that
-        /// can't afford/isn't eligible falls back to <see cref="PartSpend.TrySpendOnRigNode"/> — which
-        /// itself still only ever raises an already-owned node (unchanged, MV-436's own gate), so an
-        /// unowned node with insufficient cells and no banked part simply does nothing.</summary>
+        /// <summary>MV-492: an owned node tries <see cref="CellSpend.TryUpgradeNode"/> (10 cells, never
+        /// touches parts); an unowned node tries <see cref="CellSpend.TryUnlockNode"/> (20 cells AND 1
+        /// part together — a part can never buy a level outright, so there is no part-only fallback
+        /// left to try after a cell spend refuses).</summary>
         private void OnRigNodeTapped(string id)
         {
             if (_draftActive)
@@ -1069,8 +1083,8 @@ namespace MaxWorlds.UI
             }
             if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
 
-            bool spent = RigState.IsOwned(id) ? CellSpend.TryUpgradeNode(id) : CellSpend.TryUnlockNode(id);
-            if (!spent) PartSpend.TrySpendOnRigNode(id);
+            if (RigState.IsOwned(id)) CellSpend.TryUpgradeNode(id);
+            else CellSpend.TryUnlockNode(id);
         }
 
         /// <summary>Grants a single draft candidate, whichever shape it is (MV-457): an ability node id
@@ -1642,7 +1656,7 @@ namespace MaxWorlds.UI
 
             shell.PillBg.gameObject.SetActive(false);   // fusions carry no level pill
             shell.PillBorder.gameObject.SetActive(false);
-            shell.PartBadge.gameObject.SetActive(false);
+            shell.PartSlot.gameObject.SetActive(false);
             shell.OuterRing.gameObject.SetActive(false);
             shell.CapMarker.gameObject.SetActive(false);
             shell.Button.interactable = false;   // RefreshFusionNode (MV-426) turns this on once eligible
@@ -1709,7 +1723,7 @@ namespace MaxWorlds.UI
             shell.OuterRing.sprite = HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 2f);
             shell.OuterRing.gameObject.SetActive(false);
 
-            shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
+            shell.PartSlot.gameObject.SetActive(false);   // categories are never spendable
             shell.CapMarker.gameObject.SetActive(false);
             shell.Button.interactable = false;   // MV-457: only tappable while it's a shed draft candidate — see RefreshCategoryNode
 
@@ -1743,18 +1757,15 @@ namespace MaxWorlds.UI
             shell.CapMarker.rectTransform.anchoredPosition = markerOffset;
             shell.CapMarker.sprite = HudTextures.Disc(32);
 
-            float badgeR = RigBoardLayout.PartBadgeRadius;
-            Vector2 badgeOffset = RigBoardLayout.PartBadgeOffset(r);
-            shell.PartBadge.rectTransform.sizeDelta = new Vector2(badgeR * 2f, badgeR * 2f);
-            shell.PartBadge.rectTransform.anchoredPosition = badgeOffset;
-            shell.PartBadge.sprite = HudTextures.Disc(32);
-            shell.PartBadge.color = PartsColor;
-
-            var plus = AddText(shell.PartBadge.rectTransform, 18, PanelColor, TextAnchor.MiddleCenter);
-            Stretch(plus.rectTransform);
-            plus.text = "+";
-            plus.fontStyle = FontStyle.Bold;
-            plus.raycastTarget = false;
+            // MV-492: the part-required slot — top arc of the hex (RigBoardLayout.PartSlotOffset),
+            // replacing the old bottom-corner amber "+" that overlapped the level pill. Sprite/colour
+            // (filled-and-lit vs empty-and-outlined) are state, set every RefreshAbilityNode pass, same
+            // idiom as the PARTS tray's own pips (RefreshPartsTray).
+            float slotR = RigBoardLayout.PartSlotRadius;
+            Vector2 slotOffset = RigBoardLayout.PartSlotOffset(r);
+            shell.PartSlot.rectTransform.sizeDelta = new Vector2(slotR * Sqrt3, slotR * 2f);
+            shell.PartSlot.rectTransform.anchoredPosition = slotOffset;
+            shell.PartSlot.raycastTarget = false;
 
             // MV-470: the accumulation ring — a plain (non-dashed) ring just inside the dashed
             // OuterRing/CapOuterRingOffset radius, revealed by Image.Type.Filled/Radial360 as
@@ -1858,9 +1869,9 @@ namespace MaxWorlds.UI
             Anchor(capMarker.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             capMarker.raycastTarget = false;
 
-            var partBadge = AddImage(root, HudTextures.Disc(32), Color.clear, "Part Badge");
-            Anchor(partBadge.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            partBadge.raycastTarget = false;
+            var partSlot = AddImage(root, HudTextures.Disc(32), Color.clear, "Part Slot");
+            Anchor(partSlot.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            partSlot.raycastTarget = false;
 
             float pillW = LevelPillW, pillH = LevelPillH;
             var pillBg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), PillBackdrop, "Pill");
@@ -1934,7 +1945,7 @@ namespace MaxWorlds.UI
             shell = new RigNodeVisual
             {
                 Root = root, Glow = glow, HexFill = fill, HexOutline = outline, Icon = icon,
-                OuterRing = outerRing, CapMarker = capMarker, PartBadge = partBadge,
+                OuterRing = outerRing, CapMarker = capMarker, PartSlot = partSlot,
                 PillBg = pillBg, PillBorder = pillBorder, PillText = pillText, Label = label, Button = button, Radius = r,
                 DraftBadge = draftBadge, DraftBadgeText = draftBadgeText
             };
@@ -2003,7 +2014,7 @@ namespace MaxWorlds.UI
         private sealed class RigNodeVisual
         {
             public RectTransform Root;
-            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartBadge, PillBg, PillBorder, DraftBadge;
+            public Image Glow, HexFill, HexOutline, Icon, OuterRing, CapMarker, PartSlot, PillBg, PillBorder, DraftBadge;
             public Text PillText, Label, DraftBadgeText;
             public Button Button;
             public float Radius;

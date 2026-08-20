@@ -69,7 +69,7 @@ namespace MaxWorlds.Tests.EditMode
             RigFusionState.Reset();
             try
             {
-                while (RigState.CanSpendPart("p_dmg")) RigState.TrySpendPart("p_dmg");
+                while (RigState.CanSpendPart("p_dmg")) RigState.RaiseLevel("p_dmg");
                 PickupWallet.AddPart();
 
                 var method = typeof(HudController).GetMethod("CurrentWeaponsButtonAlert", BindingFlags.NonPublic | BindingFlags.Static);
