@@ -66,7 +66,7 @@ REM   Capture the raw exit code into a variable rather than testing with
 REM   `if errorlevel N`: errorlevel comparisons treat a negative code (e.g.
 REM   -1073741819 on a Unity access violation) as less than 1, so a hard crash
 REM   silently passed this gate before (MV-483).
-echo [1/5] compile check ...
+echo [1/6] compile check ...
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -logFile "%PROJECT%\Logs\compile.log"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
@@ -83,7 +83,7 @@ REM   the file to be regenerated and its <test-run total="..."> to be nonzero
 REM   (MV-483).
 set "RESULTS=%PROJECT%\Logs\editmode-results.xml"
 if exist "%RESULTS%" del /f /q "%RESULTS%"
-echo [2/5] EditMode tests ...
+echo [2/6] EditMode tests ...
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%RESULTS%" -logFile "%PROJECT%\Logs\editmode.log"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
@@ -116,7 +116,7 @@ REM   MV-259) does NOT run here — Unity batch-mode PlayMode runs don't stream
 REM   output, so an in-session run risks backgrounding and stalling the ticket
 REM   (MV-307). PlayMode coverage belongs in CI (build.yml) instead; the browser
 REM   play-check remains the release gate — see CC_AUTONOMY.md.
-echo [3/5] Windows standalone build (Bootstrap.unity) ...
+echo [3/6] Windows standalone build (Bootstrap.unity) ...
 if exist "%BUILD%" rmdir /S /Q "%BUILD%"
 mkdir "%BUILD%"
 if exist "%PROJECT%\Logs\build.log" del /f /q "%PROJECT%\Logs\build.log"
@@ -130,7 +130,7 @@ if not "%RC%"=="0" (
 )
 
 REM ----- 4. Log assertions ----------------------------------------------------
-echo [4/5] log assertions ...
+echo [4/6] log assertions ...
 if not exist "%PROJECT%\Logs\build.log" (
   echo        FAIL — Logs\build.log missing
   set "FAIL=1"
@@ -160,7 +160,7 @@ REM   matching exit code. Same -batchmode -nographics as every step above, for t
 REM   reason: this project has been stalled by live-window/PlayMode batch runs three times
 REM   (see the PlayMode ban later in this repo's docs) — see PerfCaptureDirector's own doc
 REM   comment for the resulting CPU-vs-GPU frame-cost scope call.
-echo [5/5] frame-time gate ...
+echo [5/6] frame-time gate ...
 set "PERFREPORT=%PROJECT%\Logs\perf-report.txt"
 if exist "%PERFREPORT%" del /f /q "%PERFREPORT%"
 if exist "%PROJECT%\Logs\perf-run.log" del /f /q "%PROJECT%\Logs\perf-run.log"
@@ -174,6 +174,38 @@ if not exist "%PERFREPORT%" (
   for /f "usebackq delims=" %%L in ("%PERFREPORT%") do echo          %%L
   if not "%RC%"=="0" (
     echo        FAIL — see p95_ms / threshold_p95_ms above ^(exit %RC%^) — see Logs\perf-run.log
+    set "FAIL=1"
+  ) else (
+    echo        ok
+  )
+)
+
+REM ----- 6. UI conformance gate (MV-482) ---------------------------------------
+REM   Runs cc-screens.bat, which re-measures THE RIG board against rig_board.json
+REM   and writes docs\press\_uiscreens_report.txt. Delete any stale report first so
+REM   a crashed capture can't be masked by a leftover PASS file from a previous run,
+REM   require the file to be regenerated, then scan every line in every aspect
+REM   section (rig-16x9, rig-phone, rig-ipad-mini, and whatever MV-480-style aspect
+REM   additions land later) for a line beginning FAIL. Line-shaped, not
+REM   count-shaped: no hard-coded check count, no aspect restricted out.
+echo [6/6] UI conformance gate ...
+set "UISCREENS=%PROJECT%\docs\press\_uiscreens_report.txt"
+if exist "%UISCREENS%" del /f /q "%UISCREENS%"
+call "%PROJECT%\cc-screens.bat"
+set "RC=%ERRORLEVEL%"
+if not exist "%UISCREENS%" (
+  echo        FAIL — %UISCREENS% was not regenerated ^(cc-screens exit %RC%^)
+  set "FAIL=1"
+) else (
+  set "UIFAIL=0"
+  for /f "usebackq delims=" %%L in ("%UISCREENS%") do (
+    set "LINE=%%L"
+    if "!LINE:~0,4!"=="FAIL" (
+      echo        !LINE!
+      set "UIFAIL=1"
+    )
+  )
+  if "!UIFAIL!"=="1" (
     set "FAIL=1"
   ) else (
     echo        ok
