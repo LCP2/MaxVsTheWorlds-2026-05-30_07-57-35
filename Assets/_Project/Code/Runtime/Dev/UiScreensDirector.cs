@@ -163,6 +163,16 @@ namespace MaxWorlds.Dev
             // — every other fixture above forces every category open (ResetRunForFixture), so none of
             // them can evidence the "family not unlocked" lock reason at all.
             yield return CaptureFixtureScreen("rig-freshrun-16x9", 1920, 1080, ApplyRigFixtureFreshRun, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-472 (current spec) hand-off verification: the exact three viewport pixel sizes Lee's
+            // ticket comment names (977x458, 852x393 iPhone landscape, 1133x744 iPad mini landscape) —
+            // distinct from RigBoardLayout.CaptureAspects above, which are the fixed reference-aspect
+            // fixtures MV-463's conformance checks run against. These are one-off, name-gated shots (only
+            // "rig-16x9" triggers RunConformanceChecks/BuildContactSheet — see CaptureFixtureScreen)
+            // purely so Lee can eyeball the literal viewport his own device measurements came from.
+            yield return CaptureFixtureScreen("rig-mv472-977x458", 977, 458, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            yield return CaptureFixtureScreen("rig-mv472-852x393", 852, 393, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            yield return CaptureFixtureScreen("rig-mv472-1133x744", 1133, 744, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the

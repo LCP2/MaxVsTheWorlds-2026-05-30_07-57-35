@@ -1254,16 +1254,43 @@ namespace MaxWorlds.UI
             BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
         }
 
-        /// <summary>Standard mode's node parent: a plain full-frame passthrough, a distinct child of
-        /// <see cref="_boardRoot"/> (not _boardRoot itself) purely so <see cref="DestroyBoardContent"/>
-        /// has something of its own to destroy on a mode change without ever touching _boardRoot or any
-        /// of its ancestors.</summary>
+        /// <summary>Standard mode's node parent (MV-472, current spec, defect 3): a masked vertical
+        /// ScrollRect, the same pattern <see cref="BuildPhoneScrollViewport"/> already uses for phone —
+        /// there was previously no mask or scroll here at all, so the FORGE section's own fusion
+        /// sub-caption (the deepest content, node Y 910 + label offset 86 + 22 + half its own 24-tall
+        /// box ≈ y=1030 in the SAME 1920x1080 frame every node's authored (x, y) already assumes) sat
+        /// within ~50px of the 1080 bottom edge with no room for error and no way to reach it if it
+        /// didn't fit — this is what Lee saw clipped on iPad mini. Unlike phone's viewport (offset below
+        /// its own taller top bar), this one spans the FULL boardRoot rect at (0,0) so every existing
+        /// node position — already authored assuming placement directly in the full frame — renders
+        /// exactly where it always has when unscrolled; only content past the fold becomes reachable by
+        /// scrolling instead of invisible. A distinct child of <see cref="_boardRoot"/> (not _boardRoot
+        /// itself) purely so <see cref="DestroyBoardContent"/> has something of its own to destroy on a
+        /// mode change without ever touching _boardRoot or any of its ancestors.</summary>
         private RectTransform BuildStandardBoardContent(RectTransform boardRoot)
         {
-            var host = NewRect("Board Content", boardRoot, Vector2.zero, Vector2.one);
-            Stretch(host);
-            _boardContentHost = host;
-            return host;
+            var viewport = NewRect("Board Viewport", boardRoot, Vector2.zero, Vector2.one);
+            Stretch(viewport);
+            viewport.gameObject.AddComponent<RectMask2D>();
+
+            var content = NewRect("Board Content", viewport, new Vector2(0f, 1f), new Vector2(1f, 1f));
+            content.pivot = new Vector2(0.5f, 1f);
+            content.anchoredPosition = Vector2.zero;
+            float contentHeight = Mathf.Max(RefH, RigBoardLayout.StandardContentHeight);
+            content.sizeDelta = new Vector2(0f, contentHeight);
+
+            var scrollRect = viewport.gameObject.AddComponent<ScrollRect>();
+            scrollRect.viewport = viewport;
+            scrollRect.content = content;
+            scrollRect.horizontal = false;
+            scrollRect.vertical = true;
+            scrollRect.movementType = ScrollRect.MovementType.Clamped;
+            scrollRect.scrollSensitivity = 24f;
+
+            BuildScrollHint(viewport, RefH, contentHeight);
+
+            _boardContentHost = viewport;
+            return content;
         }
 
         /// <summary>Phone mode's node parent: a vertical ScrollRect (MV-472 item 2 — "reflow ... rather
@@ -1309,8 +1336,32 @@ namespace MaxWorlds.UI
             scrollRect.movementType = ScrollRect.MovementType.Clamped;
             scrollRect.scrollSensitivity = 24f;
 
+            BuildScrollHint(viewport, viewportBottom - viewportTop, RigBoardLayout.PhoneContentHeight);
+
             host = viewport;
             return content;
+        }
+
+        /// <summary>MV-472 (current spec, defect 4): a small downward chevron pinned at a scrollable
+        /// viewport's own bottom edge — content running past the fold with nothing on screen signalling
+        /// it scrolls read as broken/clipped to Lee ("I read it as the board being cut off"). Parented to
+        /// <paramref name="viewport"/> itself (a SIBLING of its ScrollRect <c>content</c>, not a child of
+        /// it), so the ScrollRect's own translation of <c>content</c> never moves it and it always reads
+        /// against the viewport's own fixed bottom edge; destroyed for free whenever
+        /// <see cref="DestroyBoardContent"/> tears down <c>_boardContentHost</c> (the viewport, in both
+        /// modes) since it lives inside that same subtree. Built only when there is genuinely something
+        /// below the fold — a board that fits needs no hint, and phone mode's content is always taller
+        /// than its viewport so it always gets one.</summary>
+        private static void BuildScrollHint(RectTransform viewport, float viewportHeight, float contentHeight)
+        {
+            if (contentHeight <= viewportHeight + 0.5f) return;
+
+            var hint = AddImage(viewport, HudTextures.Arrow(64), Dim, "Scroll Hint");
+            Anchor(hint.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            hint.rectTransform.anchoredPosition = new Vector2(0f, 20f);
+            hint.rectTransform.sizeDelta = new Vector2(40f, 24f);
+            hint.rectTransform.localScale = new Vector3(1f, -1f, 1f);   // Arrow() points up; flip to point down ("more below")
+            hint.raycastTarget = false;
         }
 
         /// <summary>Tears down whatever <see cref="BuildBoardContent"/> built last pass — the whole
@@ -1611,9 +1662,30 @@ namespace MaxWorlds.UI
             shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(cat.Icon), catIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(catIconSize, catIconSize);
 
-            shell.Label.fontSize = Mathf.RoundToInt(CategoryLabelFontSize);
             shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.CategoryLabelOffsetY(r));
             shell.Label.text = cat.Id;
+
+            // MV-472 (current spec, defects 1+2): BuildNodeShell's label box/wrap/best-fit above is
+            // sized and configured for an ABILITY label sharing a tight column with siblings — a
+            // category label is one word alone above its hex, with the real column to itself
+            // (cat.ColumnHalfWidth, MV-472's own content-proportional layout data, never consulted here
+            // before). Two bugs shared one root cause (best-fit silently overriding an authored size):
+            //   1. shell.Label.fontSize was set to CategoryLabelFontSize (36 in phone mode) AFTER
+            //      BuildNodeShell already left resizeTextForBestFit=true with resizeTextMaxSize capped
+            //      at the ABILITY size (32) — Unity honours best-fit over a bare fontSize write, so the
+            //      authored 36 never actually rendered; the label was silently capped at 32.
+            //   2. The inherited box (phone: 190px/Wrap) is an ability-column width, not this category's
+            //      own — narrower than "SECONDARY" needs, so it broke mid-word ("SECONDAR"/"Y").
+            // Deriving the box from the real column width and using best-fit (Overflow, never Wrap) to
+            // shrink rather than break fixes both: the box is now wide enough that best-fit lands at
+            // CategoryLabelFontSize (its intended max) in the normal case, and a still-too-long word
+            // shrinks gracefully instead of breaking or spilling into a neighbouring column.
+            float categoryLabelBoxW = Mathf.Max(2f * cat.ColumnHalfWidth - 16f, 120f);
+            shell.Label.rectTransform.sizeDelta = new Vector2(categoryLabelBoxW, _phoneMode ? 60f : 28f);
+            shell.Label.horizontalOverflow = HorizontalWrapMode.Overflow;
+            shell.Label.resizeTextForBestFit = true;
+            shell.Label.resizeTextMinSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.75f));
+            shell.Label.resizeTextMaxSize = Mathf.RoundToInt(CategoryLabelFontSize);
 
             // MV-443 defect 5: a lit category additionally gets a solid outer ring at
             // capOuterRingOffset — reusing the shared Outer Ring image, but with a SOLID (not dashed)
