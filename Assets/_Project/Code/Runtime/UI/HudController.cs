@@ -1548,6 +1548,43 @@ namespace MaxWorlds.UI
                 AddOnScreenStick(_aimJoystickRoot, "<Gamepad>/rightStick", "Aim Touch");
         }
 
+        /// <summary>Half the pad's authored margin either side of the joystick root (MV-502) — kept
+        /// as a named constant so <see cref="JoystickPadLocalSize"/> and the built pad geometry can
+        /// never drift apart.</summary>
+        private const float JoystickPadMargin = 30f;
+
+        /// <summary>The invisible touch pad's own resolved size, canvas-local units (200 joystick-root
+        /// side + 30px margin either edge). Canvas-local units are already resolution-independent —
+        /// <c>RectTransformUtility.ScreenPointToLocalPointInRectangle</c> (what
+        /// <see cref="UnityEngine.InputSystem.OnScreen.OnScreenStick"/> itself uses) converts a
+        /// screen-space drag through the canvas's own live scale factor before comparing it to
+        /// <c>movementRange</c>, so a fixed local-unit value behaves identically on every device and
+        /// aspect. MV-502 AC4 pins this size against Apple's 44pt floor at the smallest supported
+        /// device.</summary>
+        public const float JoystickPadLocalSize = 200f + JoystickPadMargin * 2f;
+
+        /// <summary>MV-502: <see cref="ComputeMovementRange"/> reaches full deflection at this fraction
+        /// of the pad's own resolved half-extent, not the pad's full radius. The old flat 90-unit
+        /// constant needed a drag reaching 90/65 = 69% of the way to the true edge of a pad whose
+        /// resolved half-extent is only 65 units (<see cref="JoystickPadLocalSize"/> / 2) — asking a
+        /// thumb for near-edge precision on an invisible touch target that MV-502's own AC4 shows is
+        /// barely above Apple's 44pt tap-target floor on the smallest supported phone. This fraction
+        /// instead reaches full deflection at a drag comfortably short of the edge.</summary>
+        public const float MovementRangeFractionOfPadHalfExtent = 0.45f;
+
+        /// <summary>MV-502: full-deflection drag distance, canvas-local units — a fraction of the
+        /// pad's own resolved half-extent instead of the flat, ungrounded 90-unit constant
+        /// <c>AddOnScreenStick</c> used before this fix ("tuned on device" per its own stale comment —
+        /// a device pass that never happened). Because both this value and the drag it's compared
+        /// against live in the SAME canvas-local-unit space, the fraction — and so the achieved
+        /// deflection for any given fraction of a thumb's travel across the pad — is identical on
+        /// every device, aspect ratio and resolution by construction, with no live
+        /// <see cref="Canvas"/>/<see cref="Screen"/> dependency (and so no dependency on
+        /// <c>Screen.dpi</c>, which is unreliable on WebGL and several mobile platforms) needed at
+        /// all.</summary>
+        public static float ComputeMovementRange(float padLocalHalfExtent)
+            => padLocalHalfExtent * MovementRangeFractionOfPadHalfExtent;
+
         private static void AddOnScreenStick(RectTransform joystickRoot, string controlPath, string name)
         {
             // Transparent, raycastable pad over the joystick (plus margin for fat fingers). The pad
@@ -1556,7 +1593,8 @@ namespace MaxWorlds.UI
             var rect = (RectTransform)pad.transform;
             rect.SetParent(joystickRoot, false);
             rect.anchorMin = Vector2.zero; rect.anchorMax = Vector2.one;
-            rect.offsetMin = new Vector2(-30f, -30f); rect.offsetMax = new Vector2(30f, 30f);
+            rect.offsetMin = new Vector2(-JoystickPadMargin, -JoystickPadMargin);
+            rect.offsetMax = new Vector2(JoystickPadMargin, JoystickPadMargin);
 
             var img = pad.GetComponent<Image>();
             img.color = new Color(0f, 0f, 0f, 0f); // invisible touch surface
@@ -1564,7 +1602,9 @@ namespace MaxWorlds.UI
 
             var stick = pad.GetComponent<OnScreenStick>();
             stick.controlPath = controlPath;
-            stick.movementRange = 90f; // px drag for full deflection; tuned on device
+            // MV-502: was a flat 90 (canvas-local units, "tuned on device" — a pass that never
+            // happened). Derived from the pad's own resolved half-extent instead.
+            stick.movementRange = ComputeMovementRange(JoystickPadLocalSize * 0.5f);
         }
 
         private static void EnsureEventSystem()
