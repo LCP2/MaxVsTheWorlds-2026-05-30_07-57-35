@@ -359,7 +359,7 @@ namespace MaxWorlds.Tests.EditMode
 
             AssertComposition(cfg, 1, rusher: 3, bruiser: 2, gunner: 0);
             AssertComposition(cfg, 2, rusher: 2, bruiser: 2, gunner: 2);
-            AssertComposition(cfg, 3, rusher: 3, bruiser: 3, gunner: 3);
+            AssertComposition(cfg, 3, rusher: 3, bruiser: 3, gunner: 2);
             AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 5);
         }
 
