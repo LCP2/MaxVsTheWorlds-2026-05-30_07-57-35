@@ -511,6 +511,15 @@ namespace MaxWorlds.UI
         /// deliberately rather than silently clipping the last row.</summary>
         public static float PhoneContentHeight => 1360f;
 
+        /// <summary>MV-472 (current spec, defect 3): the standard-mode scrollable content rect's own
+        /// height. Standard mode's row schedule (rowY.forge, currently 910) plus the FORGE section's own
+        /// fusion sub-caption sits at roughly y=1030 in the 1920x1080 frame — within ~50px of the 1080
+        /// bottom edge, tight enough that it was rendering past the visible canvas on some builds with no
+        /// way to reach it. A pure constant (not derived), same idiom as <see cref="PhoneContentHeight"/>,
+        /// so a future row-schedule tweak has to update it deliberately rather than silently clipping the
+        /// last row again.</summary>
+        public static float StandardContentHeight => 1120f;
+
         /// <summary>MV-463 Part 1: the ui-screens harness's own shot sizes, read from
         /// <c>rig_board.json</c>'s <c>captureAspects</c> — replaces the hard-coded 1920x1080/1728x1080
         /// pair so a new aspect (e.g. the phone viewport the game is actually played at) is a data

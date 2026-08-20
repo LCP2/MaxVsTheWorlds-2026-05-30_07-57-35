@@ -1,5 +1,5 @@
 ﻿PASS node-position: 28/28 nodes present at their json coordinate
 FAIL hex-orientation: 5/5 off-ratio — PRIMARY ratio=1.036 (w=172 h=166); SECONDARY ratio=1.036 (w=172 h=166); ENERGY ratio=1.036 (w=172 h=166); MOVE ratio=1.036 (w=172 h=166); SUPPORT ratio=1.036 (w=172 h=166)
-FAIL family-contrast: lit=0.169 unlit=0.114 ratio=1.485 (need >=1.5)
+FAIL family-contrast: lit=0.169 unlit=0.113 ratio=1.487 (need >=1.5)
 FAIL glow-containment: 12/12 over 25% — PRIMARY 99.165%; ENERGY 99.165%; SUPPORT 99.165%; p_dmg 100%; p_rng 66.204%; p_flw 100%; e_ff 100%; e_cel 100%; e_cd 100%; u_sen 100%; u_dmg 100%; u_rng 100%
 PASS colour-probes: 7/7 sampled points match rig_board.json
