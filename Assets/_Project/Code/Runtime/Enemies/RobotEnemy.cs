@@ -265,6 +265,17 @@ namespace MaxWorlds.Enemies
         /// see <see cref="ZoneHysteresis"/>'s own doc comment for the boundary-flip bug this fixes.</summary>
         private readonly ZoneHysteresis _zoneHysteresis = new ZoneHysteresis();
 
+        /// <summary>Holds this robot to its current route decision for a minimum dwell (MV-477) —
+        /// see <see cref="RouteDwell"/>'s own doc comment for the hedge-specific flip this fixes.
+        /// </summary>
+        private readonly RouteDwell _routeDwell = new RouteDwell();
+
+        /// <summary>The last <see cref="EnemyNavigation.RouteEpoch"/> this robot has seen. A change
+        /// means a gate opened or shut, or the level reset, since the last Chase tick — a genuinely
+        /// new route decision that must not wait out <see cref="_routeDwell"/>'s own clock (MV-477).
+        /// </summary>
+        private int _routeEpoch;
+
         /// <summary>Below this fraction of <see cref="standoffRange"/>, a ranged kind backs off
         /// (MV-447 cause 4). Tuned against <see cref="StandoffCloseInFraction"/> to leave a band wide
         /// enough that ordinary chase jitter can't cross it twice in one tick.</summary>
@@ -403,6 +414,8 @@ namespace MaxWorlds.Enemies
             _wallLatch.Reset();       // a pooled robot doesn't inherit the last one's wall
             _zoneHysteresis.Reset();  // ...nor its idea of which room it was routing from
             _pursuitStall.NoteSightHeld(); // ...nor its idea of how well the last one was doing
+            _routeDwell.Reset();       // ...nor its committed route decision (MV-477)
+            _routeEpoch = EnemyNavigation.RouteEpoch;
             _knockback = Vector3.zero;
             _haltTimer = 0f;
             // A pooled robot must never wake a group it no longer belongs to (MV-363) — the
@@ -694,6 +707,11 @@ namespace MaxWorlds.Enemies
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
                 UsesGridRoute(Kind));
 
+            // MV-477 AC3: the un-fanned route point, so "reached the waypoint" means reached the
+            // actual doorway/goal the level routed at, not wherever EnemyFormation happened to fan this
+            // one robot toward.
+            Vector3 routeWaypoint = waypoint;
+
             // Its own lane, so a pack arrives as a fan rather than a queue. The last leg is the
             // wide, flanker-aware fan onto the real goal; an earlier leg is a doorway, which gets
             // its own narrower fan (MV-449) — wide enough to break up the queue on approach,
@@ -735,6 +753,19 @@ namespace MaxWorlds.Enemies
             // can ever send this robot back into the wall it's already rounding. MV-447 causes 1/2:
             // see WallLatch's own doc comment for the limit cycle and same-frame race this replaced.
             dir = _wallLatch.Tick(dir, transform.position, dt, _preferSign);
+
+            // MV-477: bound how often the route decision itself may flip. None of WallLatch,
+            // ObstacleSteering or ZoneHysteresis above puts a commit window on their combined RESULT,
+            // only on their own inputs — a hedge (collider, but deliberately off the Cover layer,
+            // MV-400) slips through every one of those guards and flips `dir` outright as sight
+            // flickers through the gap. Bypassed the instant this frame is a genuinely new decision
+            // rather than a re-litigation of the current one: the route waypoint was just reached, or
+            // a gate change/level reset invalidated the route since the last tick.
+            int routeEpoch = EnemyNavigation.RouteEpoch;
+            bool routeInvalidated = routeEpoch != _routeEpoch;
+            _routeEpoch = routeEpoch;
+            bool waypointReached = (routeWaypoint - transform.position).sqrMagnitude <= arriveRadius * arriveRadius;
+            dir = _routeDwell.Resolve(dir, dt, forceImmediate: waypointReached || routeInvalidated);
 
             // Gunner/Launcher (MV-293): the answer to a ranged kind must never be "walk at it" — inside
             // its standoff band it backs off along the same line it was closing on, rather than

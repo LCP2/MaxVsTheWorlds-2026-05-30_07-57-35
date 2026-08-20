@@ -33,6 +33,15 @@ namespace MaxWorlds.Enemies
         // reaching for an interface, which would lose that null check across the interface cast.
         private static readonly Dictionary<string, SubZoneGate> _subZoneGates = new Dictionary<string, SubZoneGate>(4);
 
+        /// <summary>Increments every time this level's solved routes are invalidated — a gate opening
+        /// or re-shutting, or a new level replacing this one (<see cref="Reset"/>). MV-477's per-robot
+        /// <see cref="MaxWorlds.Enemies.RouteDwell"/> reads this to know a route decision has genuinely
+        /// changed, rather than waiting out its own dwell for a change the level itself just forced.
+        /// </summary>
+        public static int RouteEpoch { get; private set; }
+
+        private static void BumpRouteEpoch() => RouteEpoch++;
+
         /// <summary>Forget the level — the map, the routes solved through it, and which gates it built.
         /// Both the map and the routes are cached because finding the map means a scene search and
         /// solving the routes means sixty-four searches, and a robot asks the way every frame; a new
@@ -46,6 +55,7 @@ namespace MaxWorlds.Enemies
             _subZoneGates.Clear();
             MapRoutes.Forget();
             ZoneRouteGrid.Forget();
+            RouteEpoch++;
         }
 
         /// <summary>
@@ -71,8 +81,10 @@ namespace MaxWorlds.Enemies
             _areaGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
             gate.Opened += ZoneRouteGrid.Forget;
+            gate.Opened += BumpRouteEpoch;
             gate.Closed += MapRoutes.Forget;
             gate.Closed += ZoneRouteGrid.Forget;
+            gate.Closed += BumpRouteEpoch;
         }
 
         /// <summary>Same job as the <see cref="AreaGate"/> overload, for the scene-adopted
@@ -94,6 +106,7 @@ namespace MaxWorlds.Enemies
             _subZoneGates[gateId] = gate;
             gate.Opened += MapRoutes.Forget;
             gate.Opened += ZoneRouteGrid.Forget;
+            gate.Opened += BumpRouteEpoch;
         }
 
         private static void AssertNotSolvedYet(string gateId, MapData map)
