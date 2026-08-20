@@ -42,19 +42,6 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
-        /// <summary>Spend one banked part directly on a THE RIG node id (MV-423 board), bypassing the
-        /// legacy per-enum wrappers above — every one of them already resolves to
-        /// <see cref="RigState.TrySpendPart"/> under the hood (MV-422), so a node the board draws by
-        /// its own <c>rig_board.json</c> id (e.g. <c>e_mag</c>, which has no legacy enum at all) can
-        /// spend the same way they do.</summary>
-        public static bool TrySpendOnRigNode(string id)
-        {
-            if (PickupWallet.PartsBanked <= 0) return false;
-            if (!RigState.TrySpendPart(id)) return false;
-            PickupWallet.TrySpendPart();
-            return true;
-        }
-
         /// <summary>Forge a FORGE fusion (MV-426): 3 parts, never a shed. Fails cleanly (nothing
         /// spent) below the fusion's own cost, if it's already forged, or if either parent category
         /// isn't lit yet — same "check the sink can accept it BEFORE touching the bank" order every

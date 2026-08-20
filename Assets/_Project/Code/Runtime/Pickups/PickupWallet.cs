@@ -51,8 +51,8 @@ namespace MaxWorlds.Pickups
         /// "owned/spendable from run start" track this replaces).</summary>
         public static int PowerCellCapacityMaxLevel => RigBoard.MaxLevel("e_cel");
 
-        /// <summary>Levels bought via <see cref="MaxWorlds.Weapons.CellSpend"/>/<see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnRigNode"/>,
-        /// 0 (fresh run, unowned) to <see cref="PowerCellCapacityMaxLevel"/> — now a thin read of
+        /// <summary>Levels bought via <see cref="MaxWorlds.Weapons.CellSpend"/>, 0 (fresh run, unowned)
+        /// to <see cref="PowerCellCapacityMaxLevel"/> — now a thin read of
         /// <c>e_cel</c>'s live RIG level (MV-422), not separately tracked state.</summary>
         public static int PowerCellCapacityLevel => RigState.Level("e_cel");
 
@@ -73,9 +73,8 @@ namespace MaxWorlds.Pickups
 
         private static int s_lastNotifiedCapacity = DefaultCapacity;
 
-        /// <summary>MV-458: e_cel now levels through the same generic RIG spend paths every other node
-        /// uses (<see cref="MaxWorlds.Weapons.CellSpend"/>, <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnRigNode"/>),
-        /// not only through <see cref="LevelUpCellCapacity"/> — so <see cref="CapacityChanged"/> must
+        /// <summary>MV-458: e_cel now levels through the same generic <see cref="MaxWorlds.Weapons.CellSpend"/>
+        /// path every other node uses, not only through <see cref="LevelUpCellCapacity"/> — so <see cref="CapacityChanged"/> must
         /// also fire off <c>RigState.Changed</c> directly, or the HUD's capacity readout goes stale the
         /// instant a generic spend (rather than the old dedicated wrapper) is what moved e_cel.</summary>
         static PickupWallet() => RigState.Changed += RaiseCapacityChangedIfMoved;
@@ -91,14 +90,14 @@ namespace MaxWorlds.Pickups
         /// <summary>Raise Cell Storage (<c>e_cel</c>) by one level, up to <see cref="PowerCellCapacityMaxLevel"/>
         /// — a direct convenience wrapper kept for callers that only care about e_cel specifically
         /// (tests, mainly). MV-458: e_cel is no longer special-cased for a live spend — the generic
-        /// <see cref="MaxWorlds.Weapons.CellSpend.TryUpgradeNode"/> and <see cref="MaxWorlds.Weapons.PartSpend.TrySpendOnRigNode"/>
+        /// <see cref="MaxWorlds.Weapons.CellSpend.TryUnlockNode"/>/<see cref="MaxWorlds.Weapons.CellSpend.TryUpgradeNode"/>
         /// raise e_cel the exact same way every other RIG node levels, by calling
-        /// <c>RigState.TrySpendPart("e_cel")</c> directly rather than through here — which is why
+        /// <c>RigState.RaiseLevel("e_cel")</c> directly rather than through here — which is why
         /// <see cref="CapacityChanged"/> also listens to <c>RigState.Changed</c> below, not only to
         /// this method's own explicit fire.</summary>
         public static bool LevelUpCellCapacity()
         {
-            if (!RigState.TrySpendPart("e_cel")) return false;
+            if (!RigState.RaiseLevel("e_cel")) return false;
             CapacityChanged?.Invoke(Capacity);
             return true;
         }

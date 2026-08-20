@@ -105,8 +105,8 @@ namespace MaxWorlds.UI
 
         [Serializable] private sealed class RowYWire { public float category, tier1, tier2, tier3, forge; }
         [Serializable] private sealed class RadiusWire { public float category, ability, fusion; }
-        [Serializable] private sealed class PartBadgeOffsetWire { public string dx, dy; }
-        [Serializable] private sealed class PartBadgeWire { public float radius; public PartBadgeOffsetWire offset; public float plusStrokeWidth; }
+        [Serializable] private sealed class PartSlotOffsetWire { public string dx, dy; }
+        [Serializable] private sealed class PartSlotWire { public float radius; public PartSlotOffsetWire offset; }
         [Serializable] private sealed class LevelPillWire { public float w, h, radius; public string offsetY; public float fontSize; }
         [Serializable] private sealed class RegionRectWire { public float y, h, radius, padX, opacityLit, opacityDark, borderAlphaLit, borderAlphaDark; }
         [Serializable] private sealed class ForgeDividerWire { public float y; }
@@ -129,7 +129,7 @@ namespace MaxWorlds.UI
             public float strokeOwned, strokeActive, strokeLocked;
             public float capOuterRingOffset, capMarkerRadius;
             public CapMarkerOffsetWire capMarkerOffset;
-            public PartBadgeWire partBadge;
+            public PartSlotWire partSlot;
             public LevelPillWire levelPill;
             public string labelOffsetY;
             public float labelFontSize, labelLetterSpacing;
@@ -572,13 +572,15 @@ namespace MaxWorlds.UI
             return o == null ? Vector2.zero : new Vector2(ResolveOffset(o.dx, r), ResolveOffset(o.dy, r));
         }
 
-        public static float PartBadgeRadius { get { EnsureLoaded(); return s_geometry.partBadge?.radius ?? 15f; } }
-        public static float PartBadgePlusStrokeWidth { get { EnsureLoaded(); return s_geometry.partBadge?.plusStrokeWidth ?? 4f; } }
+        /// <summary>MV-492: the part-required indicator's own radius — replaces the old amber "+"
+        /// PartBadge, moved from the bottom corner (where it overlapped the level pill) into the free
+        /// top arc of the hex (see <see cref="PartSlotOffset"/>).</summary>
+        public static float PartSlotRadius { get { EnsureLoaded(); return s_geometry.partSlot?.radius ?? 13f; } }
 
-        public static Vector2 PartBadgeOffset(float r)
+        public static Vector2 PartSlotOffset(float r)
         {
             EnsureLoaded();
-            var o = s_geometry.partBadge?.offset;
+            var o = s_geometry.partSlot?.offset;
             return o == null ? Vector2.zero : new Vector2(ResolveOffset(o.dx, r), ResolveOffset(o.dy, r));
         }
 

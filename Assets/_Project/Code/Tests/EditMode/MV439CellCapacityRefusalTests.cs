@@ -173,7 +173,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 cell.gameObject.SetActive(false);
                 LiveList(_director).Clear();
-                if (level < maxLevel) RigState.TrySpendPart("e_mag");
+                if (level < maxLevel) RigState.RaiseLevel("e_mag");
             }
         }
 

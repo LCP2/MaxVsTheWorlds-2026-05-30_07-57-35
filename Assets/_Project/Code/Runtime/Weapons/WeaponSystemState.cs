@@ -74,7 +74,7 @@ namespace MaxWorlds.Weapons
         /// cap.</summary>
         public static bool LevelUpTrack(WeaponTrackKind kind)
         {
-            if (!RigState.TrySpendPart(MapId(kind))) return false;
+            if (!RigState.RaiseLevel(MapId(kind))) return false;
             Changed?.Invoke();
             return true;
         }
@@ -195,7 +195,7 @@ namespace MaxWorlds.Weapons
         {
             string id = MapId(kind);
             if (id == null) return false;
-            if (!RigState.TrySpendPart(id)) return false;
+            if (!RigState.RaiseLevel(id)) return false;
             Changed?.Invoke();
             return true;
         }
@@ -228,7 +228,7 @@ namespace MaxWorlds.Weapons
         /// node isn't reached yet or is already at its cap.</summary>
         public static bool LevelUpWaterBalloonTrack(WaterBalloonTrackKind kind)
         {
-            if (!RigState.TrySpendPart(MapId(kind))) return false;
+            if (!RigState.RaiseLevel(MapId(kind))) return false;
             Changed?.Invoke();
             return true;
         }

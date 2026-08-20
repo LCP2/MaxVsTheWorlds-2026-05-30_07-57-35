@@ -51,13 +51,13 @@
       "dx": "+r-6",
       "dy": "-r+15"
     },
-    "partBadge": {
-      "radius": 15,
+    "partSlot": {
+      "$comment": "MV-492: replaces the old bottom-corner partBadge '+' — a part is now required (not spent) to unlock, so this reads as a requirement slot, not a spend button, and sits in the hex's free top arc instead of overlapping the level pill.",
+      "radius": 13,
       "offset": {
-        "dx": "-r+6",
-        "dy": "-r+15"
-      },
-      "plusStrokeWidth": 4
+        "dx": "+0",
+        "dy": "+35"
+      }
     },
     "levelPill": {
       "w": 62,

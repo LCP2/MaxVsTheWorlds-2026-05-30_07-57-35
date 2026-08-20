@@ -9,7 +9,7 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// THE RIG's unified node model, schema 3 (MV-436 — retires MV-422's cap/stat split): one gate,
     /// not two. A Morphing Module draft (<see cref="RigState.AcquireCap"/>) is the only way any node
-    /// reaches level 1; <see cref="RigState.TrySpendPart"/> can raise an already-owned node further
+    /// reaches level 1; <see cref="RigState.RaiseLevel"/> can raise an already-owned node further
     /// but can never perform that 0-&gt;1 unlock, for any of the tree's 23 abilities — plus the
     /// run-start baseline and the draft-candidate eligibility pool both derive from.
     /// </summary>
@@ -76,7 +76,7 @@ namespace MaxWorlds.Tests.EditMode
                 Reach(id);
                 Assert.That(RigState.Level(id), Is.EqualTo(0), $"{id} must start at 0 once merely reached");
 
-                bool spent = RigState.TrySpendPart(id);
+                bool spent = RigState.RaiseLevel(id);
 
                 Assert.That(spent, Is.False, $"a part must never unlock '{id}'");
                 Assert.That(RigState.Level(id), Is.EqualTo(0), $"'{id}' must remain unowned after the rejected spend");
@@ -90,7 +90,7 @@ namespace MaxWorlds.Tests.EditMode
             // levels are an ordinary part spend like any other.
             RigState.UnlockCategory("ENERGY");
             RigState.AcquireCap("e_ff");
-            Assert.That(RigState.TrySpendPart("e_ff"), Is.True);
+            Assert.That(RigState.RaiseLevel("e_ff"), Is.True);
             Assert.That(RigState.Level("e_ff"), Is.EqualTo(2));
         }
 
@@ -102,7 +102,7 @@ namespace MaxWorlds.Tests.EditMode
             // p_spr's parent is p_rng, not p_dmg — so at run start (only p_dmg owned) p_spr is NOT
             // yet reached, even though its grandparent is.
             Assert.That(RigState.IsReached("p_spr"), Is.False, "p_spr must not be reached before p_rng is >= 1");
-            Assert.That(RigState.TrySpendPart("p_spr"), Is.False, "an unreached node must not accept a part");
+            Assert.That(RigState.RaiseLevel("p_spr"), Is.False, "an unreached node must not accept a part");
             Assert.That(RigState.Level("p_spr"), Is.EqualTo(0));
 
             Assert.That(RigState.AcquireCap("p_rng"), Is.True, "p_rng's own parent (p_dmg) is already >= 1, so it is a valid draft pick");
@@ -170,8 +170,8 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.CanSpendPart("p_rng"), Is.False, "p_rng is unowned — a part can never unlock it");
             Assert.That(RigState.CanSpendPart("p_flw"), Is.False, "p_flw is unowned — a part can never unlock it");
-            Assert.That(RigState.TrySpendPart("p_rng"), Is.False);
-            Assert.That(RigState.TrySpendPart("p_flw"), Is.False);
+            Assert.That(RigState.RaiseLevel("p_rng"), Is.False);
+            Assert.That(RigState.RaiseLevel("p_flw"), Is.False);
         }
 
         // ---------------------------------------------------------------- deeper caps stay gated behind their parent
@@ -243,7 +243,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.AcquireCap("e_ff");
             Assert.That(RigState.CanSpendPart("e_ff"), Is.True, "a freshly-drafted node below its cap must be spendable");
 
-            while (RigState.Level("p_dmg") < RigBoard.MaxLevel("p_dmg")) RigState.TrySpendPart("p_dmg");
+            while (RigState.Level("p_dmg") < RigBoard.MaxLevel("p_dmg")) RigState.RaiseLevel("p_dmg");
             Assert.That(RigState.CanSpendPart("p_dmg"), Is.False, "must not be spendable once at its max level");
         }
     }

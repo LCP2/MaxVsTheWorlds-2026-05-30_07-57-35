@@ -47,7 +47,7 @@ namespace MaxWorlds.Tests.EditMode
         public void DirectChildAxesAreNotReachedUntilSentinelsIsAcquired()
         {
             Assert.That(RigState.IsReached("u_dmg"), Is.False);
-            Assert.That(RigState.TrySpendPart("u_dmg"), Is.False,
+            Assert.That(RigState.RaiseLevel("u_dmg"), Is.False,
                 "unowned/locked items can't be upgraded (spec §5) — u_sen isn't drafted yet");
         }
 
@@ -80,10 +80,10 @@ namespace MaxWorlds.Tests.EditMode
             RigState.AcquireCap("u_dmg");
             int cap = RigBoard.MaxLevel("u_dmg");
             for (int i = 1; i < cap; i++)
-                Assert.That(RigState.TrySpendPart("u_dmg"), Is.True);
+                Assert.That(RigState.RaiseLevel("u_dmg"), Is.True);
 
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(cap));
-            Assert.That(RigState.TrySpendPart("u_dmg"), Is.False, "already at the cap");
+            Assert.That(RigState.RaiseLevel("u_dmg"), Is.False, "already at the cap");
         }
 
         [Test]

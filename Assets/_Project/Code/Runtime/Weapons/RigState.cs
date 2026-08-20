@@ -11,7 +11,7 @@ namespace MaxWorlds.Weapons
     /// first-class citizen from day one rather than a special case bolted on top.
     ///
     /// One gate, not two (schema 3, MV-436 — retires the old cap/stat split): every node can only
-    /// reach level 1 via <see cref="AcquireCap"/> (a Morphing Module draft) — <see cref="TrySpendPart"/>
+    /// reach level 1 via <see cref="AcquireCap"/> (a Morphing Module draft) — <see cref="RaiseLevel"/>
     /// can raise an already-owned node further, but can never perform the 0-&gt;1 unlock itself.
     /// <see cref="IsReached"/> still gates which unowned nodes a draft may offer; it no longer confers
     /// any spendability of its own now that every node needs a draft regardless.
@@ -88,12 +88,15 @@ namespace MaxWorlds.Weapons
             return Level(parent) >= 2;
         }
 
-        /// <summary>Spend one part to raise <paramref name="id"/> by a level. A node at level 0 can
-        /// NEVER be raised this way (model.rules: "parts can never unlock it") — it must go through
-        /// <see cref="AcquireCap"/> first. Fails at the node's own <see cref="RigBoard.MaxLevel"/>
-        /// either way. Does not touch any currency — the caller (<see cref="PartSpend"/>) only
-        /// actually spends a banked part once this returns true.</summary>
-        public static bool TrySpendPart(string id)
+        /// <summary>Raise <paramref name="id"/> by a level — the currency-agnostic model primitive
+        /// every spend (a part on a legacy track/ability, cells via <see cref="CellSpend.TryUpgradeNode"/>)
+        /// ultimately calls once its own currency check has passed. MV-492: renamed from
+        /// <c>TrySpendPart</c> — that name implied it spent a part itself, which made it look like the
+        /// same path as <see cref="CellSpend"/>'s cell spends when it is really just "raise the level,"
+        /// currency already handled by the caller. A node at level 0 can NEVER be raised this way
+        /// (model.rules: "parts can never unlock it") — it must go through <see cref="AcquireCap"/>
+        /// first. Fails at the node's own <see cref="RigBoard.MaxLevel"/> either way.</summary>
+        public static bool RaiseLevel(string id)
         {
             if (!CanSpendPart(id)) return false;
             s_levels[id] = Level(id) + 1;
@@ -101,10 +104,10 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
-        /// <summary>Would <see cref="TrySpendPart"/> succeed right now, without spending anything? The
-        /// same rule <see cref="TrySpendPart"/> enforces, factored out so THE RIG board (MV-423) can
-        /// show its amber "+" badge on exactly the nodes a part would actually raise, without a
-        /// speculative spend-and-undo.</summary>
+        /// <summary>Would <see cref="RaiseLevel"/> succeed right now, without spending anything? The
+        /// same rule <see cref="RaiseLevel"/> enforces — an owned, below-max node — factored out so
+        /// callers (THE RIG board's own upgrade-eligibility read, legacy part-spend wrappers) never
+        /// have to speculatively spend-and-undo to find out.</summary>
         public static bool CanSpendPart(string id)
         {
             if (!RigBoard.Exists(id)) return false;

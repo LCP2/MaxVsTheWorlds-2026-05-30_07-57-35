@@ -375,7 +375,7 @@ namespace MaxWorlds.UI
             PendingMorphingModule.HasPending);
 
         private static bool AnyPartAlertActionable() =>
-            RigActions.AnyPartActionAffordable(MaxWorlds.Pickups.PickupWallet.PartsBanked) ||
+            RigActions.AnyPartActionAffordable(MaxWorlds.Pickups.PickupWallet.PartsBanked, MaxWorlds.Pickups.PickupWallet.PowerCells) ||
             AbilityCreditBank.Banked > 0;
 
         /// <summary>Pure predicate (MV-358) — pinned by an EditMode test without building a canvas: a
@@ -632,7 +632,7 @@ namespace MaxWorlds.UI
             if (_rigPartCounterRoot != null)
             {
                 if (_rigPartCounterText != null) _rigPartCounterText.text = (partsBanked + creditsBanked).ToString();
-                bool actionable = RigActions.AnyPartActionAffordable(partsBanked) || creditsBanked > 0;
+                bool actionable = RigActions.AnyPartActionAffordable(partsBanked, MaxWorlds.Pickups.PickupWallet.PowerCells) || creditsBanked > 0;
                 SetRigCounterFlash(_rigPartCounterRoot, _rigPartCounterBg, _rigPartCounterGlow, PartColor, actionable);
             }
 
