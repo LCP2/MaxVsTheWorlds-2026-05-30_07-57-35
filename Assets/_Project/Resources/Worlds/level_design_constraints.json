@@ -1,0 +1,14 @@
+{
+  "$schema": "MaxVsTheWorlds/level-design-constraints@1",
+  "note": "MV-487: the numeric constraints governing area layout, checked in so they survive between sessions instead of living only in chat transcripts. Confluence carries the rationale (World & Difficulty Framework, pageId 34439170; World 1 locked spec, pageId 34504706); this file carries the numbers. LevelDesignVerifier reads every value below from this file at runtime — none of them is duplicated as a C# constant.",
+  "minRobotToCoverGapMetres": 2.0,
+  "minShedSeparationMetres": 11.0,
+  "minRoomDimensionMetres": 18.0,
+  "gateAxisAlternation": {
+    "principle": "Reading a world's gates in authored order, consecutive gates must not run along the same wall axis twice in a row: a vertical (N/S) climb must be followed by a horizontal (E/W) jog, and vice versa. This is what produced World 1's locked 'path winds E/N/W/N/E/N/E/N' shape (Confluence pageId 34504706, area-by-area exit-wall sequence for areas 1-8). A run of two or more same-axis gates collapses the map back into a straight corridor, which is the non-corridor engine's whole reason for existing (Confluence pageId 34439170 §7)."
+  },
+  "knownEngineDefects": {
+    "mapValidationCoverReturnsOnFirstViolation": "MapValidation.Cover (Assets/_Project/Code/Runtime/Arena/Map/MapValidation.cs) returns false on the very first cover violation it finds instead of collecting all of them, so a config currently surfaces and fixes one problem per round-trip rather than the whole punch list. Not fixed by MV-487 — noted here so the next person touching MapValidation.Cover knows it is a known gap, not a design choice.",
+    "mapValidationOnlyValidatesCoverEntities": "MapValidation only validates 'cover' entities. Walls and shed dressing are never checked, which is how unauthored geometry can appear in an otherwise-passing room. Not fixed by MV-487."
+  }
+}
