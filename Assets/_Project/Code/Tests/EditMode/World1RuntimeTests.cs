@@ -1,5 +1,7 @@
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 
@@ -469,6 +471,54 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(shedGap, shedFloor,
                 $"'a3_h2' sits {shedGap:0.##} m from a3's shed spawn ring — under the {shedFloor} m " +
                 "SpawnRadius+SpawnClearance floor");
+        }
+
+        // --- MV-500: JsonUtility.FromJson silently drops any composition key that doesn't match a ---
+        // --- WorldComposition field — no error, no warning, the authored robots just never spawn. ---
+        // --- That is exactly how world1_config.json lost 15 robots to a stray "bomber" key (fixed ---
+        // --- for EnemyKind.Bomber -> Launcher by MV-451, 5c6f938, before this ticket landed). This ---
+        // --- reads the raw JSON text directly (bypassing JsonUtility) so a future typo'd or renamed ---
+        // --- enemy key fails the build instead of vanishing. -----------------------------------------
+
+        private static readonly Regex CompositionBlockPattern =
+            new Regex("\"composition\"\\s*:\\s*\\{([^}]*)\\}", RegexOptions.Compiled);
+        private static readonly Regex CompositionKeyPattern =
+            new Regex("\"(\\w+)\"\\s*:", RegexOptions.Compiled);
+        private static readonly HashSet<string> KnownCompositionFields = new HashSet<string>
+        {
+            "rusher", "bruiser", "heavy", "brute", "gunner", "launcher", "blinker"
+        };
+
+        private static bool TryFindUnknownCompositionKey(string json, out string badKey)
+        {
+            foreach (Match block in CompositionBlockPattern.Matches(json))
+            {
+                foreach (Match keyMatch in CompositionKeyPattern.Matches(block.Groups[1].Value))
+                {
+                    string key = keyMatch.Groups[1].Value;
+                    if (!KnownCompositionFields.Contains(key))
+                    {
+                        badKey = key;
+                        return true;
+                    }
+                }
+            }
+
+            badKey = null;
+            return false;
+        }
+
+        [Test]
+        public void World1Config_EveryCompositionKeyMatchesAWorldCompositionField()
+        {
+            TextAsset asset = Resources.Load<TextAsset>($"{WorldLibrary.ResourceRoot}/{WorldLibrary.World1}");
+            Assert.IsNotNull(asset, "world1_config.json resource is missing");
+
+            bool foundUnknownKey = TryFindUnknownCompositionKey(asset.text, out string badKey);
+            Assert.IsFalse(foundUnknownKey,
+                $"composition key '{badKey}' does not match any WorldComposition field (rusher/bruiser/" +
+                "heavy/brute/gunner/launcher/blinker) — JsonUtility silently drops it and its authored " +
+                "robots never spawn (MV-500)");
         }
     }
 }
