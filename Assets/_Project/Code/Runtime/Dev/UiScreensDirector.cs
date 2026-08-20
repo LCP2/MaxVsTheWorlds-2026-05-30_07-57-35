@@ -405,8 +405,17 @@ namespace MaxWorlds.Dev
                     if (name == "rig-16x9")
                     {
                         RunOutsideBackgroundProbe(tex);
-                        RunConformanceChecks(tex);
+                        RunConformanceChecks(tex, "rig-16x9", w, h);
                         BuildContactSheet(tex);
+                    }
+                    // MV-480: the other two captured aspects that matter most to the actual complaints
+                    // (rig-phone, rig-ipad-mini) were captured and never measured — see RunConformanceChecks'
+                    // own doc comment for the coordinate transform this needed. rig-16x10 stays unmeasured
+                    // (this ticket names exactly rig-16x9/rig-phone/rig-ipad-mini; rig-16x10 isn't one of
+                    // the three), same as the mv472/lowcells/freshrun/noparts fixture variants.
+                    else if (name == "rig-phone" || name == "rig-ipad-mini")
+                    {
+                        RunConformanceChecks(tex, name, w, h);
                     }
                 }
                 finally { Destroy(tex); }
@@ -710,10 +719,11 @@ namespace MaxWorlds.Dev
         /// as the node itself, before any connector curve starts (they only begin ~88px below a category
         /// — see <c>connector.startOffsetCategory</c>), so this point is clear of every node and every
         /// connector for every fixture, by construction of the board's own fixed layout.</summary>
-        private static Color SampleCategoryBackground(Texture2D tex, string categoryId)
+        private static Color SampleCategoryBackground(Texture2D tex, IReadOnlyList<RigCategoryLayout> categories, string categoryId,
+            RigBoardConformance.BoardPixelTransform transform)
         {
-            foreach (var cat in RigBoardLayout.Categories)
-                if (cat.Id == categoryId) return RigBoardConformance.GetJsonPixel(tex, cat.X + 110f, cat.Y);
+            foreach (var cat in categories)
+                if (cat.Id == categoryId) return RigBoardConformance.GetJsonPixel(tex, cat.X + 110f, cat.Y, transform);
             return RigBoardLayout.Colour("base");
         }
 
@@ -733,9 +743,9 @@ namespace MaxWorlds.Dev
         /// a neighbouring family's own column (see <see cref="RigBoardConformance.AnnulusInkFraction"/>'s
         /// own doc comment for why that crossing reads as false ink, not real bleed). Falls back to the
         /// whole canvas if the category can't be found, matching every other unbounded caller.</summary>
-        private static void ColumnBounds(string categoryId, out float xMin, out float xMax)
+        private static void ColumnBounds(IReadOnlyList<RigCategoryLayout> categories, string categoryId, out float xMin, out float xMax)
         {
-            foreach (var cat in RigBoardLayout.Categories)
+            foreach (var cat in categories)
                 if (cat.Id == categoryId)
                 {
                     xMin = cat.X - cat.ColumnHalfWidth + ColumnEdgeMargin;
@@ -746,92 +756,152 @@ namespace MaxWorlds.Dev
             xMax = float.PositiveInfinity;
         }
 
-        // --- MV-463 Part 2: conformance pass -----------------------------------------------------
-        // Reads rig_board.json (via RigBoardLayout) and asserts the just-captured rig-16x9 texture
-        // actually matches it — the harness's own eyes, not just its camera. Runs only against
-        // rig-16x9 for the same reason probe 6 does (see that method's own doc comment): it's the one
-        // shot whose 1920x1080 texture maps 1:1 onto rig_board.json's own canvas coordinates.
+        // --- MV-463 Part 2 / MV-480: conformance pass --------------------------------------------
+        // Reads rig_board.json (via RigBoardLayout) and asserts a just-captured texture actually
+        // matches it — the harness's own eyes, not just its camera. MV-480: runs against all three
+        // of rig-16x9, rig-phone and rig-ipad-mini (rig-16x10 and the mv472/lowcells/freshrun/noparts
+        // fixture variants are not in that list — see the call site). Every check below is expressed
+        // purely in rig_board.json's own (unscaled) coordinate space; RigBoardConformance.BoardPixelTransform
+        // is what maps a json coordinate onto THIS capture's actual pixel, so nothing here needs to
+        // know whether it's looking at an identity 1:1 frame (rig-16x9) or a scaled/cropped/offset one.
 
         private const float InkTolerance = 0.03f;       // RigBoardConformance.ColorDistance units (sum of |dr|+|dg|+|db|) — the colour-probe hue check (below) found real, hue-distinguishable fill several pixels out that a 0.05 magnitude floor was missing
         private const float HueProbeTolerance = 0.18f;   // RigBoardConformance.HueDistance units — hue direction, not brightness (see that method's own doc comment)
 
-        private void RunConformanceChecks(Texture2D tex)
+        // MV-480: BuildPhoneScrollViewport's own two constants (WeaponsScreen.cs, private there) —
+        // duplicated here because the harness has no reach into that private method, same idiom the
+        // geometry section of this ticket's own brief already uses. The VIEWPORT (what a static,
+        // scrolled-to-top screenshot can actually show) is shorter than the scrollable CONTENT
+        // (RigBoardLayout.PhoneContentHeight) — see PhoneFoldLimit's own doc comment.
+        private const float PhoneViewportTop = 140f, PhoneViewportBottom = 1050f;
+
+        /// <summary>MV-480: content-local y beyond which a phone-mode node is genuinely below the fold
+        /// of a single scrolled-to-top screenshot — real, RectMask2D-clipped, not rendered in THIS
+        /// capture at all (the player reaches it by scrolling; a static shot never will). The five
+        /// PIXEL-sampling checks (node-position, hex-orientation, glow-containment, colour-probes, and
+        /// glyph-height) must skip a node this affects rather than report a false FAIL for content that
+        /// was never a rendering defect — see each check's own use of this. The geometry-only
+        /// y-bounds-containment check (feature 3) deliberately does NOT use this: it checks against the
+        /// full scrollable content instead, per this ticket's own phone exception.</summary>
+        private const float PhoneFoldLimit = PhoneViewportBottom - PhoneViewportTop;   // 910
+
+        /// <summary>MV-480: builds the json-coordinate-space -> pixel-space mapping this capture's own
+        /// aspect/mode needs (see <see cref="RigBoardConformance.BoardPixelTransform"/>'s own doc
+        /// comment for the affine math) — standard mode (rig-16x9, rig-ipad-mini) scales around the
+        /// board's own centre (960, 540) by <see cref="WeaponsScreen.ComputeBoardScale"/> and crops by
+        /// <see cref="WeaponsScreen.VisibleRefXWindow"/>; phone mode never scales (verified by
+        /// <c>RigBoardChromeTests.EveryTappableHexClearsFortyFourPointsAndEveryGlyphClearsElevenPointsAtThePhoneAspect</c>'s
+        /// own fixture assumption) but offsets y by the scroll viewport's own top
+        /// (<see cref="PhoneViewportTop"/> — see <c>WeaponsScreen.BuildPhoneScrollViewport</c>'s own doc
+        /// comment for why content-local y=0 lands at board-frame y=140, not 0).</summary>
+        private static RigBoardConformance.BoardPixelTransform BuildTransform(float aspect, bool phoneMode, int h)
         {
+            float pxPerRefUnit = h / 1080f;
+            float scale = phoneMode ? 1f : WeaponsScreen.ComputeBoardScale(aspect);
+            float offsetX = phoneMode ? 0f : 960f * (1f - scale);
+            float offsetY = phoneMode ? PhoneViewportTop : 540f * (1f - scale);
+            float windowMinX = WeaponsScreen.VisibleRefXWindow(aspect).MinX;
+            return new RigBoardConformance.BoardPixelTransform(scale, offsetX, offsetY, windowMinX, pxPerRefUnit);
+        }
+
+        private void RunConformanceChecks(Texture2D tex, string aspectName, int w, int h)
+        {
+            float aspect = (float)w / h;
+            bool phoneMode = WeaponsScreen.IsPhoneLayout(aspect);
+            var transform = BuildTransform(aspect, phoneMode, h);
+
+            var categories = phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
+            var abilities = phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
+            var fusions = phoneMode ? RigBoardLayout.PhoneFusions : RigBoardLayout.Fusions;
+            float radiusCategory = phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory;
+            float radiusAbility = phoneMode ? RigBoardLayout.RadiusAbilityPhone : RigBoardLayout.RadiusAbility;
+            float radiusFusion = phoneMode ? RigBoardLayout.RadiusFusionPhone : RigBoardLayout.RadiusFusion;
+            float categoryLabelFontSize = phoneMode ? RigBoardLayout.CategoryLabelFontSizePhone : RigBoardLayout.CategoryLabelFontSize;
+
             var weapons = FindFirstObjectByType<WeaponsScreen>();
             Color background = ComputeCompositedBackground(weapons);
-            var lines = new System.Collections.Generic.List<string>();
-            int passCount = 0;
+            var lines = new List<string>();
+            int passCount = 0, checkCount = 0;
 
             void Emit(string name, bool pass, string detail)
             {
+                checkCount++;
                 lines.Add(RigBoardConformance.PassFailLine(name, pass, detail));
                 if (pass) passCount++;
-                else _failures.Add($"conformance/{name}: {detail}");
+                else _failures.Add($"conformance/{aspectName}/{name}: {detail}");
             }
 
             // 1. Node position — every category/ability node's own json (x, y) must not read as background.
-            var missing = new System.Collections.Generic.List<string>();
-            int totalNodes = 0;
-            foreach (var cat in RigBoardLayout.Categories) CheckNodePresent(tex, SampleCategoryBackground(tex, cat.Id), cat.Id, cat.X, cat.Y, missing, ref totalNodes);
-            foreach (var ab in RigBoardLayout.Abilities) CheckNodePresent(tex, SampleCategoryBackground(tex, ab.Category), ab.Id, ab.X, ab.Y, missing, ref totalNodes);
+            var missing = new List<string>();
+            int totalNodes = 0, positionSkipped = 0;
+            foreach (var cat in categories)
+                CheckNodePresent(tex, SampleCategoryBackground(tex, categories, cat.Id, transform), cat.Id, cat.X, cat.Y, missing, ref totalNodes, transform, skip: false, ref positionSkipped);
+            foreach (var ab in abilities)
+                CheckNodePresent(tex, SampleCategoryBackground(tex, categories, ab.Category, transform), ab.Id, ab.X, ab.Y, missing, ref totalNodes, transform,
+                    skip: phoneMode && (ab.Y + radiusAbility) > PhoneFoldLimit, ref positionSkipped);
             string firstFive = missing.Count == 0 ? "" : string.Join(", ", missing.GetRange(0, Mathf.Min(5, missing.Count)));
+            string foldNote = positionSkipped > 0 ? $" ({positionSkipped} below the fold, skipped)" : "";
             Emit("node-position", missing.Count == 0,
-                missing.Count == 0 ? $"{totalNodes}/{totalNodes} nodes present at their json coordinate"
-                                    : $"{missing.Count}/{totalNodes} missing — first 5: {firstFive}");
+                (missing.Count == 0 ? $"{totalNodes}/{totalNodes} nodes present at their json coordinate"
+                                    : $"{missing.Count}/{totalNodes} missing — first 5: {firstFive}") + foldNote);
 
             // 2. Hexagon orientation — categories only; see CheckHexOrientation's own doc comment for
             // why ability nodes (most of which have an incoming connector arriving from directly above)
-            // aren't a trustworthy ray-march target the same way.
-            var ratioFails = new System.Collections.Generic.List<string>();
+            // aren't a trustworthy ray-march target the same way. Categories sit at the top of every
+            // mode's own row schedule, so the phone fold never actually excludes one — no skip needed.
+            var ratioFails = new List<string>();
             int hexChecked = 0;
-            foreach (var cat in RigBoardLayout.Categories)
-            { hexChecked++; CheckHexOrientation(tex, SampleCategoryBackground(tex, cat.Id), cat.Id, cat.X, cat.Y, RigBoardLayout.RadiusCategory, ratioFails); }
+            foreach (var cat in categories)
+            { hexChecked++; CheckHexOrientation(tex, SampleCategoryBackground(tex, categories, cat.Id, transform), cat.Id, cat.X, cat.Y, radiusCategory, ratioFails, transform); }
             Emit("hex-orientation", ratioFails.Count == 0,
                 ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
                                        : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
 
             // 3. Family contrast — mean luminance of a lit category's own column band vs an unlit one.
-            CheckFamilyContrast(tex, out float contrastRatio, out float litMean, out float unlitMean);
+            CheckFamilyContrast(tex, categories, abilities, transform, out float contrastRatio, out float litMean, out float unlitMean);
             Emit("family-contrast", contrastRatio >= 1.5f,
                 $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
 
             // 4. Glow containment — every currently-lit/owned node's halo must fade out before 1.95r.
-            var glowFails = new System.Collections.Generic.List<string>();
-            int glowChecked = 0;
-            foreach (var cat in RigBoardLayout.Categories)
+            var glowFails = new List<string>();
+            int glowChecked = 0, glowSkipped = 0;
+            foreach (var cat in categories)
             {
                 bool lit = false;
-                foreach (var ab in RigBoardLayout.Abilities) if (ab.Category == cat.Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
+                foreach (var ab in abilities) if (ab.Category == cat.Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
                 if (!lit) continue;
+                if (phoneMode && (cat.Y + radiusCategory * 1.95f) > PhoneFoldLimit) { glowSkipped++; continue; }
                 glowChecked++;
-                Color catBackground = SampleCategoryBackground(tex, cat.Id);
-                ColumnBounds(cat.Id, out float catColumnMin, out float catColumnMax);
-                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, RigBoardLayout.RadiusCategory * 1.25f, RigBoardLayout.RadiusCategory * 1.95f, catBackground, InkTolerance,
-                    xMin: catColumnMin, xMax: catColumnMax);
+                Color catBackground = SampleCategoryBackground(tex, categories, cat.Id, transform);
+                ColumnBounds(categories, cat.Id, out float catColumnMin, out float catColumnMax);
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, radiusCategory * 1.25f, radiusCategory * 1.95f, catBackground, InkTolerance,
+                    xMin: catColumnMin, xMax: catColumnMax, transform: transform);
                 if (frac > 0.25f) glowFails.Add($"{cat.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
-            foreach (var ab in RigBoardLayout.Abilities)
+            foreach (var ab in abilities)
             {
                 if (!RigState.IsOwned(ab.Id)) continue;
+                if (phoneMode && (ab.Y + radiusAbility * 1.95f) > PhoneFoldLimit) { glowSkipped++; continue; }
                 glowChecked++;
-                Color abBackground = SampleCategoryBackground(tex, ab.Category);
-                ColumnBounds(ab.Category, out float abColumnMin, out float abColumnMax);
-                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, RigBoardLayout.RadiusAbility * 1.25f, RigBoardLayout.RadiusAbility * 1.95f, abBackground, InkTolerance,
-                    xMin: abColumnMin, xMax: abColumnMax);
+                Color abBackground = SampleCategoryBackground(tex, categories, ab.Category, transform);
+                ColumnBounds(categories, ab.Category, out float abColumnMin, out float abColumnMax);
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, radiusAbility * 1.25f, radiusAbility * 1.95f, abBackground, InkTolerance,
+                    xMin: abColumnMin, xMax: abColumnMax, transform: transform);
                 if (frac > 0.25f) glowFails.Add($"{ab.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
+            string glowFoldNote = glowSkipped > 0 ? $" ({glowSkipped} below the fold, skipped)" : "";
             Emit("glow-containment", glowFails.Count == 0,
-                glowChecked == 0 ? "no lit/owned node to measure"
+                (glowChecked == 0 ? "no lit/owned node to measure"
                 : glowFails.Count == 0 ? $"{glowChecked}/{glowChecked} owned nodes under 25% annulus ink"
-                                        : $"{glowFails.Count}/{glowChecked} over 25% — {string.Join("; ", glowFails)}");
+                                        : $"{glowFails.Count}/{glowChecked} over 25% — {string.Join("; ", glowFails)}") + glowFoldNote);
 
             // 5. Named colour probes — each family's category fill, the CELLS chip border, the PARTS tray border.
-            var colourFails = new System.Collections.Generic.List<string>();
+            var colourFails = new List<string>();
             int colourChecked = 0;
-            foreach (var cat in RigBoardLayout.Categories)
+            foreach (var cat in categories)
             {
                 colourChecked++;
-                CheckCategoryColour(tex, background, cat, colourFails);
+                CheckCategoryColour(tex, background, cat, radiusCategory, colourFails, transform);
             }
             if (weapons != null)
             {
@@ -843,18 +913,43 @@ namespace MaxWorlds.Dev
                 colourFails.Count == 0 ? $"{colourChecked}/{colourChecked} sampled points match rig_board.json"
                                         : $"{colourFails.Count}/{colourChecked} off — {string.Join("; ", colourFails)}");
 
-            Log($"conformance: {passCount}/5 check families passed");
+            // 6. MV-480: minimum rendered glyph height — every category label's own measured vertical
+            // ink extent against a floor of half its authored font size at this capture's own pixel
+            // scale. See CheckGlyphHeight's own doc comment for the measurement method and why 50%.
+            CheckGlyphHeight(tex, categories, radiusCategory, categoryLabelFontSize, transform, out int glyphChecked, out var glyphFails);
+            Emit("glyph-height", glyphFails.Count == 0,
+                glyphFails.Count == 0 ? $"{glyphChecked}/{glyphChecked} category labels clear {RigBoardConformance.Fmt(categoryLabelFontSize * 0.5f)}px-at-ref floor"
+                                       : $"{glyphFails.Count}/{glyphChecked} under floor — {string.Join("; ", glyphFails)}");
+
+            // 7. MV-480: Y-axis bounds containment — every node (and, unlike the other checks above,
+            // fusions too) must sit within the frame a given mode can actually show: standard mode has
+            // no scroll cushion worth trusting past the visible [0, 1080] frame, so overrun there is
+            // genuine clipping; phone mode's own scrollable CONTENT rect
+            // (RigBoardLayout.PhoneContentHeight) is the right bound instead of the shorter viewport,
+            // since scrolled-out content is reachable, not clipped — the same exception
+            // RigBoardChromeTests' own Y term now encodes. Pure geometry, no pixel sampling — mirrors
+            // that EditMode test's own math for this one capture's aspect instead of every tested one.
+            CheckYBoundsContainment(phoneMode, transform.Scale, categories, abilities, fusions, radiusCategory, radiusAbility, radiusFusion,
+                out int yChecked, out var yFails);
+            float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
+            Emit("y-bounds-containment", yFails.Count == 0,
+                yFails.Count == 0 ? $"{yChecked}/{yChecked} nodes within [0,{RigBoardConformance.Fmt(yMax)}] {(phoneMode ? "scroll content" : "visible frame")}"
+                                   : $"{yFails.Count}/{yChecked} overrun — {string.Join("; ", yFails)}");
+
+            Log($"conformance/{aspectName}: {passCount}/{checkCount} check families passed");
+            _manifest.AppendLine($"-- conformance: {aspectName} ({w}x{h}) --");
             foreach (var l in lines) _manifest.AppendLine(l);
-            WriteConformanceReport(lines);
+            WriteConformanceReport(aspectName, w, h, lines);
         }
 
         private const int NodePresentHalfBlock = 8;   // a 17x17 neighbourhood — a single centre pixel (or even a 9x9 block) routinely lands in a gap in the icon's own sparse stroke art
 
         private static void CheckNodePresent(Texture2D tex, Color background, string id, float x, float y,
-            System.Collections.Generic.List<string> missing, ref int total)
+            List<string> missing, ref int total, RigBoardConformance.BoardPixelTransform transform, bool skip, ref int skipped)
         {
+            if (skip) { skipped++; return; }
             total++;
-            if (!RigBoardConformance.BlockHasInk(tex, x, y, NodePresentHalfBlock, background, InkTolerance))
+            if (!RigBoardConformance.BlockHasInk(tex, x, y, NodePresentHalfBlock, background, InkTolerance, transform))
                 missing.Add(id);
         }
 
@@ -869,14 +964,14 @@ namespace MaxWorlds.Dev
         /// node kind, so 5 categories is full coverage of the actual defect surface, not a sampling
         /// compromise.</summary>
         private static void CheckHexOrientation(Texture2D tex, Color background, string id, float cx, float cy, float r,
-            System.Collections.Generic.List<string> fails)
+            List<string> fails, RigBoardConformance.BoardPixelTransform transform)
         {
             // Stays under geometry.connector.startOffsetCategory (88 at r=72) so an inward ray search
             // can never mistake a connector's own start pixel for the node's own hex/glow edge.
             float maxDist = Mathf.Min(r * 1.3f, r + RigBoardLayout.GlowBlurOwned);
-            float top = RigBoardConformance.RayInkDistance(tex, cx, cy, 0f, -1f, maxDist, background, InkTolerance);
-            float left = RigBoardConformance.RayInkDistance(tex, cx, cy, -1f, 0f, maxDist, background, InkTolerance);
-            float right = RigBoardConformance.RayInkDistance(tex, cx, cy, 1f, 0f, maxDist, background, InkTolerance);
+            float top = RigBoardConformance.RayInkDistance(tex, cx, cy, 0f, -1f, maxDist, background, InkTolerance, transform);
+            float left = RigBoardConformance.RayInkDistance(tex, cx, cy, -1f, 0f, maxDist, background, InkTolerance, transform);
+            float right = RigBoardConformance.RayInkDistance(tex, cx, cy, 1f, 0f, maxDist, background, InkTolerance, transform);
             if (top <= 0f || left <= 0f || right <= 0f) { fails.Add($"{id} (no ink found within {RigBoardConformance.Fmt(maxDist)}px)"); return; }
 
             float height = 2f * top, width = left + right;
@@ -884,13 +979,13 @@ namespace MaxWorlds.Dev
             if (Mathf.Abs(ratio - 0.866f) > 0.05f) fails.Add($"{id} ratio={RigBoardConformance.Fmt(ratio)} (w={RigBoardConformance.Fmt(width)} h={RigBoardConformance.Fmt(height)})");
         }
 
-        private static void CheckFamilyContrast(Texture2D tex, out float ratio, out float litMean, out float unlitMean)
+        private static void CheckFamilyContrast(Texture2D tex, IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities,
+            RigBoardConformance.BoardPixelTransform transform, out float ratio, out float litMean, out float unlitMean)
         {
-            var categories = RigBoardLayout.Categories;
             int n = categories.Count;
             float yMin = RigBoardLayout.RegionRectY, yMax = yMin + RigBoardLayout.RegionRectH;
-            var litVals = new System.Collections.Generic.List<float>();
-            var unlitVals = new System.Collections.Generic.List<float>();
+            var litVals = new List<float>();
+            var unlitVals = new List<float>();
 
             // MV-472: a column's own half-width now varies with its content (RigBoardLayout.ColumnHalfWidth)
             // instead of a uniform 1/5 share, so SUPPORT genuinely carries more clear background around
@@ -908,9 +1003,9 @@ namespace MaxWorlds.Dev
                 float right = Mathf.Min(columnRight, categories[i].X + MaxSampleHalfWidth);
 
                 bool lit = false;
-                foreach (var ab in RigBoardLayout.Abilities) if (ab.Category == categories[i].Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
+                foreach (var ab in abilities) if (ab.Category == categories[i].Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
 
-                float mean = RigBoardConformance.MeanLuminance(tex, left, right, yMin, yMax);
+                float mean = RigBoardConformance.MeanLuminance(tex, left, right, yMin, yMax, transform: transform);
                 (lit ? litVals : unlitVals).Add(mean);
             }
 
@@ -919,7 +1014,7 @@ namespace MaxWorlds.Dev
             ratio = unlitMean > 0.0001f ? litMean / unlitMean : (litMean > 0.0001f ? 999f : 0f);
         }
 
-        private static float Average(System.Collections.Generic.List<float> vals)
+        private static float Average(List<float> vals)
         {
             if (vals.Count == 0) return 0f;
             float sum = 0f;
@@ -939,13 +1034,13 @@ namespace MaxWorlds.Dev
         /// <see cref="Color.Lerp"/> against colours.base predicts (see that method's own doc comment;
         /// confirmed live running this exact check against the real capture before switching off
         /// brightness matching).</summary>
-        private static void CheckCategoryColour(Texture2D tex, Color background, RigCategoryLayout cat,
-            System.Collections.Generic.List<string> fails)
+        private static void CheckCategoryColour(Texture2D tex, Color background, RigCategoryLayout cat, float radiusCategory,
+            List<string> fails, RigBoardConformance.BoardPixelTransform transform)
         {
             Color family = RigBoardLayout.Colour(cat.Family);
-            float dx = RigBoardLayout.RadiusCategory * 0.7f;
-            Color a1 = RigBoardConformance.GetJsonPixel(tex, cat.X + dx, cat.Y);
-            Color a2 = RigBoardConformance.GetJsonPixel(tex, cat.X - dx, cat.Y);
+            float dx = radiusCategory * 0.7f;
+            Color a1 = RigBoardConformance.GetJsonPixel(tex, cat.X + dx, cat.Y, transform);
+            Color a2 = RigBoardConformance.GetJsonPixel(tex, cat.X - dx, cat.Y, transform);
             bool pass = RigBoardConformance.HueDistance(a1, family) <= HueProbeTolerance
                      || RigBoardConformance.HueDistance(a2, family) <= HueProbeTolerance;
             if (!pass) fails.Add($"{cat.Id} fill expected hue ~{RigBoardConformance.ColorHex(family)} got {RigBoardConformance.ColorHex(a1)}");
@@ -955,10 +1050,12 @@ namespace MaxWorlds.Dev
         /// stroke, not the hollow centre a naive rect-centre sample would hit) via the same
         /// world-to-screen-point path every board node's json coordinate is deliberately NOT using —
         /// the CELLS/PARTS chips have no json (x, y) of their own, so this is the one probe that reads
-        /// the built screen's actual RectTransform instead. Hue comparison, same reasoning as
-        /// <see cref="CheckCategoryColour"/>.</summary>
+        /// the built screen's actual RectTransform instead — already correct at every aspect/mode with
+        /// no transform of its own needed, since <c>WorldToScreenPoint</c> reads wherever the chip is
+        /// ACTUALLY built this capture, not a predicted json coordinate. Hue comparison, same reasoning
+        /// as <see cref="CheckCategoryColour"/>.</summary>
         private void CheckChipBorderColour(Texture2D tex, Image border, string label, Color expectedNamed,
-            System.Collections.Generic.List<string> fails)
+            List<string> fails)
         {
             if (border == null || _captureCam == null) { fails.Add($"{label} (no border image to sample)"); return; }
             Vector3 world = border.rectTransform.TransformPoint(new Vector3(-border.rectTransform.rect.width * 0.5f, 0f, 0f));
@@ -970,17 +1067,140 @@ namespace MaxWorlds.Dev
                 fails.Add($"{label} expected hue ~{RigBoardConformance.ColorHex(expectedNamed)} got {RigBoardConformance.ColorHex(actual)}");
         }
 
-        private void WriteConformanceReport(System.Collections.Generic.List<string> lines)
+        /// <summary>MV-480 feature 2: the rendered vertical ink extent of a category label — scans a
+        /// horizontal strip <paramref name="halfWidth"/> either side of the label's own x, row by row
+        /// through <paramref name="maxDistY"/> above/below its own y, and takes the span between the
+        /// first and last row that found any pixel whose HUE matches the label's own known colour
+        /// (<see cref="RigBoardLayout.Colour"/>'s <c>"ink"</c>, MV-480's <paramref name="inkColour"/>).
+        /// Deliberately a bounding-box measurement, not <see cref="RigBoardConformance.RayInkDistance"/>'s
+        /// outside-in single-ray walk — that primitive assumes one contiguous blob (right for a hex halo,
+        /// wrong for text: a single x column routinely lands in the gap between two letters, or inside a
+        /// hollow letter like "O", so a single ray can under-measure a real glyph's own height).
+        ///
+        /// Matching HUE against "differs from background" was tried first and rejected: a category label
+        /// sits directly above where its own tree connector curves down toward its tier1 children (MV-443's
+        /// own startOffsetCategory=88, well inside this scan's own maxDistY reach), and that connector runs
+        /// vertically out of the SAME x the label is centred on — confirmed live running this exact
+        /// ticket's own AC5 demo: shrinking the label's rendered font to 3px still measured a "PASS" glyph
+        /// height, because the connector's own crossing satisfied a bare "any ink in this row" test
+        /// regardless of whether the label itself rendered at all. A connector's ink is always the family
+        /// colour (<see cref="RigBoardLayout.Colour(string)"/> for the category's own family) at low alpha;
+        /// a label's ink is always the "ink" cream/white — hue-matching against the label's OWN known
+        /// colour is what actually isolates it from anything else sharing its vertical band (connector,
+        /// glow, panel tint), the same idiom <see cref="CheckCategoryColour"/> already uses for the fill
+        /// itself.</summary>
+        private static float MeasureVerticalInkExtentPx(Texture2D tex, float centerX, float centerY, float halfWidth, float maxDistY,
+            Color inkColour, float hueTolerance, RigBoardConformance.BoardPixelTransform transform, int stepY = 2, int stepX = 4)
         {
-            string text = string.Join("\n", lines) + "\n";
-            const string reportFile = "_uiscreens_report.txt";
-            try { File.WriteAllText(Path.Combine(_outDir, reportFile), text, Encoding.UTF8); }
-            catch (Exception e) { LogWarn($"conformance report write to {_outDir} failed — {e.Message}"); }
-            if (_outDir2 != null)
+            float minY = float.PositiveInfinity, maxY = float.NegativeInfinity;
+            for (float y = centerY - maxDistY; y <= centerY + maxDistY; y += stepY)
             {
-                try { File.WriteAllText(Path.Combine(_outDir2, reportFile), text, Encoding.UTF8); }
-                catch (Exception e) { LogWarn($"conformance report write to {_outDir2} failed — {e.Message}"); }
+                bool rowHasGlyphInk = false;
+                for (float x = centerX - halfWidth; x <= centerX + halfWidth; x += stepX)
+                {
+                    Color px = RigBoardConformance.GetJsonPixel(tex, x, y, transform);
+                    if (RigBoardConformance.HueDistance(px, inkColour) <= hueTolerance) { rowHasGlyphInk = true; break; }
+                }
+                if (rowHasGlyphInk)
+                {
+                    if (y < minY) minY = y;
+                    if (y > maxY) maxY = y;
+                }
             }
+            if (float.IsPositiveInfinity(minY)) return 0f;
+            return (maxY - minY) * transform.Scale * transform.PixelsPerRefUnit;
+        }
+
+        /// <summary>MV-480 feature 2: every category label (5 — a representative, well-known-position
+        /// sample; see this ticket's own brief for why category labels alone are enough) against a floor
+        /// of 50% of its own authored font size at this capture's pixel scale — conservative enough to
+        /// tolerate antialiasing/line-height without being a rubber floor, and must actually pass at the
+        /// current (correct) rendering, a regression floor rather than a threshold hunt. Phone-fold-skips
+        /// like the other pixel checks, though in practice every category sits at the top of both row
+        /// schedules and never triggers it.</summary>
+        private static void CheckGlyphHeight(Texture2D tex, IReadOnlyList<RigCategoryLayout> categories, float radiusCategory,
+            float categoryLabelFontSize, RigBoardConformance.BoardPixelTransform transform, out int checkedCount, out List<string> fails)
+        {
+            fails = new List<string>();
+            checkedCount = 0;
+            float floorPx = categoryLabelFontSize * 0.5f * transform.Scale * transform.PixelsPerRefUnit;
+            Color inkColour = RigBoardLayout.Colour("ink");
+            foreach (var cat in categories)
+            {
+                float labelY = cat.Y + RigBoardLayout.CategoryLabelOffsetY(radiusCategory);
+                checkedCount++;
+                float halfWidth = Mathf.Min(cat.ColumnHalfWidth - 10f, 140f);
+                float maxDistY = categoryLabelFontSize * 1.2f;
+                float glyphHeightPx = MeasureVerticalInkExtentPx(tex, cat.X, labelY, halfWidth, maxDistY, inkColour, HueProbeTolerance, transform);
+                if (glyphHeightPx < floorPx)
+                    fails.Add($"{cat.Id} {RigBoardConformance.Fmt(glyphHeightPx)}px < {RigBoardConformance.Fmt(floorPx)}px floor");
+            }
+        }
+
+        /// <summary>MV-480 feature 3: the harness's own copy of the Y-axis containment
+        /// <c>RigBoardChromeTests.EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect</c>'s
+        /// own Y term now asserts — deliberately duplicated (not shared code) since one measures resolved
+        /// layout values pre-render (EditMode) and this one is part of the rendered-pixel harness; see
+        /// this ticket's own brief for why both exist. Standard mode's bound is the visible [0, 1080]
+        /// frame; phone mode's is the scrollable CONTENT rect (<see cref="RigBoardLayout.PhoneContentHeight"/>),
+        /// not the shorter viewport — scrolled-out content is reachable, not clipped.</summary>
+        private static void CheckYBoundsContainment(bool phoneMode, float scale,
+            IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities, IReadOnlyList<RigFusionLayout> fusions,
+            float radiusCategory, float radiusAbility, float radiusFusion, out int checkedCount, out List<string> fails)
+        {
+            const float boardCentreY = 540f;
+            float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
+            var localFails = new List<string>();
+            int localChecked = 0;
+
+            void Check(string id, float rawY, float halfExtent)
+            {
+                localChecked++;
+                float top, bottom;
+                if (phoneMode) { top = rawY - halfExtent; bottom = rawY + halfExtent; }
+                else
+                {
+                    float scaledY = boardCentreY + (rawY - boardCentreY) * scale;
+                    float scaledHalf = halfExtent * scale;
+                    top = scaledY - scaledHalf; bottom = scaledY + scaledHalf;
+                }
+                if (top < -0.5f || bottom > yMax + 0.5f)
+                    localFails.Add($"{id} top={RigBoardConformance.Fmt(top)} bottom={RigBoardConformance.Fmt(bottom)}");
+            }
+
+            foreach (var cat in categories) Check(cat.Id, cat.Y, radiusCategory);
+            foreach (var ab in abilities) Check(ab.Id, ab.Y, radiusAbility);
+            foreach (var fu in fusions) Check(fu.Id, fu.Y, radiusFusion);
+
+            checkedCount = localChecked;
+            fails = localFails;
+        }
+
+        /// <summary>MV-480: one growing report file across all three measured aspects instead of the
+        /// old single-aspect overwrite — the first aspect measured this run starts the file fresh, every
+        /// aspect after that appends its own labelled section, so <c>_uiscreens_report.txt</c> shows all
+        /// three per AC1 instead of only ever the last one written.</summary>
+        private readonly HashSet<string> _reportedAspects = new HashSet<string>();
+
+        private void WriteConformanceReport(string aspectName, int w, int h, List<string> lines)
+        {
+            bool firstAspectThisRun = _reportedAspects.Count == 0;
+            _reportedAspects.Add(aspectName);
+            string section = $"== {aspectName} ({w}x{h}) ==\n" + string.Join("\n", lines) + "\n";
+            const string reportFile = "_uiscreens_report.txt";
+            WriteOrAppend(_outDir, reportFile, section, overwrite: firstAspectThisRun);
+            if (_outDir2 != null) WriteOrAppend(_outDir2, reportFile, section, overwrite: firstAspectThisRun);
+        }
+
+        private void WriteOrAppend(string dir, string fileName, string section, bool overwrite)
+        {
+            string path = Path.Combine(dir, fileName);
+            try
+            {
+                if (overwrite) File.WriteAllText(path, section, Encoding.UTF8);
+                else File.AppendAllText(path, section, Encoding.UTF8);
+            }
+            catch (Exception e) { LogWarn($"conformance report write to {dir} failed — {e.Message}"); }
         }
 
         // --- MV-463 Part 3: design-vs-build contact sheet ----------------------------------------

@@ -85,12 +85,26 @@ namespace MaxWorlds.Tests.EditMode
         /// captureAspect on the phone side. <see cref="RigCategoryLayout.ColumnHalfWidth"/> is exactly
         /// the panel's own half-extent (MV-472's content-proportional column layout), so no boundary math
         /// needs re-deriving here the way the old test had to.
+        ///
+        /// MV-480 adds the Y term (X-only before this ticket, so a node could clip off the TOP/BOTTOM of
+        /// the frame with nothing here to catch it — see the FORGE fusion node's own ~y=1030 margin,
+        /// this ticket's own motivating evidence). Standard mode's own bound is the visible [0, 1080]
+        /// board frame: <c>WeaponsScreen.BuildStandardBoardContent</c> masks a little further than that
+        /// (<c>RigBoardLayout.StandardContentHeight</c>=1120) as a defensive buffer nothing on the board
+        /// today actually uses, so 1080 is still the right "did this genuinely overrun" line. Phone mode
+        /// is the deliberate exception this ticket calls out: its own viewport
+        /// (<c>WeaponsScreen.BuildPhoneScrollViewport</c>, board-frame y [140, 1050]) is real content
+        /// clipped shorter than the board frame by design, and a node below that fold is still reachable
+        /// by scrolling — genuinely NOT clipped — so phone mode is checked against the taller scrollable
+        /// CONTENT rect (<see cref="RigBoardLayout.PhoneContentHeight"/>, content-local so no board-centre
+        /// pivot term the way X needs one) instead of the shorter viewport.
         /// </summary>
         [Test]
         public void EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect()
         {
             float[] aspects = { 2340f / 1080f, 2.0f, 16f / 9f, 1.6f, 1.5f, 1.4f, 1078f / 815f };
             const float boardCentreX = 1920f * 0.5f;
+            const float boardCentreY = 1080f * 0.5f;
 
             foreach (float aspect in aspects)
             {
@@ -103,8 +117,9 @@ namespace MaxWorlds.Tests.EditMode
 
                 float scale = WeaponsScreen.ComputeBoardScale(aspect);
                 var window = WeaponsScreen.VisibleRefXWindow(aspect);
+                float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
 
-                void AssertFits(string id, float rawX, float halfExtent)
+                void AssertFitsX(string id, float rawX, float halfExtent)
                 {
                     float scaledX = boardCentreX + (rawX - boardCentreX) * scale;
                     float scaledHalf = halfExtent * scale;
@@ -114,13 +129,36 @@ namespace MaxWorlds.Tests.EditMode
                         $"'{id}' right edge clipped at aspect {aspect} (phoneMode={phoneMode})");
                 }
 
+                void AssertFitsY(string id, float rawY, float halfExtent)
+                {
+                    float top, bottom;
+                    if (phoneMode) { top = rawY - halfExtent; bottom = rawY + halfExtent; }
+                    else
+                    {
+                        float scaledY = boardCentreY + (rawY - boardCentreY) * scale;
+                        float scaledHalf = halfExtent * scale;
+                        top = scaledY - scaledHalf; bottom = scaledY + scaledHalf;
+                    }
+                    Assert.That(top, Is.GreaterThanOrEqualTo(-0.5f),
+                        $"'{id}' top edge clipped at aspect {aspect} (phoneMode={phoneMode})");
+                    Assert.That(bottom, Is.LessThanOrEqualTo(yMax + 0.5f),
+                        $"'{id}' bottom edge clipped at aspect {aspect} (phoneMode={phoneMode})");
+                }
+
+                void AssertFits(string id, float rawX, float rawY, float halfExtent)
+                {
+                    AssertFitsX(id, rawX, halfExtent);
+                    AssertFitsY(id, rawY, halfExtent);
+                }
+
                 foreach (var cat in categories)
                 {
-                    AssertFits(cat.Id, cat.X, phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory);
-                    AssertFits($"{cat.Id} Panel", cat.X, cat.ColumnHalfWidth);
+                    float catR = phoneMode ? RigBoardLayout.RadiusCategoryPhone : RigBoardLayout.RadiusCategory;
+                    AssertFits(cat.Id, cat.X, cat.Y, catR);
+                    AssertFitsX($"{cat.Id} Panel", cat.X, cat.ColumnHalfWidth);
                 }
-                foreach (var ab in abilities) AssertFits(ab.Id, ab.X, abR);
-                foreach (var fu in fusions) AssertFits(fu.Id, fu.X, fuR);
+                foreach (var ab in abilities) AssertFits(ab.Id, ab.X, ab.Y, abR);
+                foreach (var fu in fusions) AssertFits(fu.Id, fu.X, fu.Y, fuR);
             }
         }
     }
