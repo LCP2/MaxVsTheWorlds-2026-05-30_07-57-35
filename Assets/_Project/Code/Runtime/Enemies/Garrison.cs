@@ -47,18 +47,20 @@ namespace MaxWorlds.Enemies
         /// inside <paramref name="area"/>: an evenly-spaced ring inset from the walls, so the same area
         /// and count always produce the same positions (robots already there, not popping in at random
         /// each run) — dodged along that same ring, never off it, around any authored cover a slot's
-        /// own angle would otherwise land it inside (MV-459).</summary>
+        /// own angle would otherwise land it inside (MV-459), and around the area's own shed spawn ring
+        /// if it has one (MV-496).</summary>
         public static Vector3[] SeedPositions(WorldArea area, int count)
         {
             if (area == null || count <= 0) return Array.Empty<Vector3>();
 
             Vector2 center = area.CenterXz;
             float radius = Mathf.Min(area.size.w, area.size.d) * 0.3f;
+            WorldShed shed = area.hasShed ? area.shed : null;
 
             var positions = new Vector3[count];
             for (int i = 0; i < count; i++)
             {
-                float angle = ClearOfCover(center, radius, i * (Mathf.PI * 2f / count), area.cover);
+                float angle = ClearOfCover(center, radius, i * (Mathf.PI * 2f / count), area.cover, shed);
                 positions[i] = new Vector3(
                     center.x + Mathf.Cos(angle) * radius,
                     0f,
@@ -82,40 +84,49 @@ namespace MaxWorlds.Enemies
         /// garrison's deterministic ring against the area's own hedge rows, so a Bruiser could be, and
         /// on the shipped world1_config.json WAS, seeded dead inside a shrub across ten of eighteen
         /// areas — stuck on geometry, unreachable, silently starving that area's
-        /// <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>). Walks outward from the
-        /// authored angle at the SAME radius, alternating sides, until clear — the radius never
-        /// changes, so a dodged slot stays exactly as inset from the walls as the ring formula always
-        /// promised (and so it never leaves <see cref="WorldArea.Footprint"/>, which the ring's own
-        /// 0.3x-of-the-shorter-side inset already guarantees with room to spare).</summary>
-        private static float ClearOfCover(Vector2 center, float radius, float baseAngle, WorldCover[] cover)
+        /// <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>) or inside the area's own shed
+        /// spawn ring (MV-496 — the same "stuck on geometry"/starved-part failure mode, just against a
+        /// different obstacle: on the shipped config a8's seed#8 landed 1.53 m into its shed's 4.3 m
+        /// spawn clearance). Walks outward from the authored angle at the SAME radius, alternating
+        /// sides, until clear of both — the radius never changes, so a dodged slot stays exactly as
+        /// inset from the walls as the ring formula always promised (and so it never leaves
+        /// <see cref="WorldArea.Footprint"/>, which the ring's own 0.3x-of-the-shorter-side inset
+        /// already guarantees with room to spare).</summary>
+        private static float ClearOfCover(Vector2 center, float radius, float baseAngle, WorldCover[] cover, WorldShed shed)
         {
-            if (cover == null || cover.Length == 0 || IsClearOfCover(center, radius, baseAngle, cover))
-                return baseAngle;
+            if (IsClearOfCover(center, radius, baseAngle, cover, shed)) return baseAngle;
 
             for (float offset = CoverDodgeStep; offset <= MaxCoverDodgeOffset; offset += CoverDodgeStep)
             {
-                if (IsClearOfCover(center, radius, baseAngle + offset, cover)) return baseAngle + offset;
-                if (IsClearOfCover(center, radius, baseAngle - offset, cover)) return baseAngle - offset;
+                if (IsClearOfCover(center, radius, baseAngle + offset, cover, shed)) return baseAngle + offset;
+                if (IsClearOfCover(center, radius, baseAngle - offset, cover, shed)) return baseAngle - offset;
             }
 
             return baseAngle; // every angle on the ring is fouled - stand at the authored spot anyway
         }
 
-        private static bool IsClearOfCover(Vector2 center, float radius, float angle, WorldCover[] cover)
+        private static bool IsClearOfCover(Vector2 center, float radius, float angle, WorldCover[] cover, WorldShed shed)
         {
             var point = new Vector2(center.x + Mathf.Cos(angle) * radius, center.y + Mathf.Sin(angle) * radius);
 
-            foreach (WorldCover c in cover)
+            if (cover != null)
             {
-                if (c == null) continue;
-
-                ArenaCover body = new MapEntity
+                foreach (WorldCover c in cover)
                 {
-                    x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
-                }.ToCover();
+                    if (c == null) continue;
 
-                if (body.DistanceTo(point) < MapValidation.SpawnClearance) return false;
+                    ArenaCover body = new MapEntity
+                    {
+                        x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                    }.ToCover();
+
+                    if (body.DistanceTo(point) < MapValidation.SpawnClearance) return false;
+                }
             }
+
+            if (shed != null && Vector2.Distance(point, new Vector2(shed.x, shed.z)) < MapValidation.SpawnRadius + MapValidation.SpawnClearance)
+                return false;
+
             return true;
         }
     }
