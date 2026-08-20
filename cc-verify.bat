@@ -61,23 +61,52 @@ if exist "%LOCKFILE%" (
 )
 
 REM ----- 1. Compile check (open project headless, exit) ----------------------
+REM   Capture the raw exit code into a variable rather than testing with
+REM   `if errorlevel N`: errorlevel comparisons treat a negative code (e.g.
+REM   -1073741819 on a Unity access violation) as less than 1, so a hard crash
+REM   silently passed this gate before (MV-483).
 echo [1/4] compile check ...
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -logFile "%PROJECT%\Logs\compile.log"
-if errorlevel 1 (
-  echo        FAIL — see Logs\compile.log
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+  echo        FAIL ^(exit %RC%^) — see Logs\compile.log
   set "FAIL=1"
 ) else (
   echo        ok
 )
 
 REM ----- 2. EditMode tests ----------------------------------------------------
+REM   Delete any stale results XML first so a broken asmdef that discovers zero
+REM   tests can't be masked by a leftover file from a previous run, then require
+REM   the file to be regenerated and its <test-run total="..."> to be nonzero
+REM   (MV-483).
+set "RESULTS=%PROJECT%\Logs\editmode-results.xml"
+if exist "%RESULTS%" del /f /q "%RESULTS%"
 echo [2/4] EditMode tests ...
-start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%PROJECT%\Logs\editmode-results.xml" -logFile "%PROJECT%\Logs\editmode.log"
-if errorlevel 1 (
-  echo        FAIL — see Logs\editmode.log
+start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%RESULTS%" -logFile "%PROJECT%\Logs\editmode.log"
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+  echo        FAIL ^(exit %RC%^) — see Logs\editmode.log
+  set "FAIL=1"
+) else if not exist "%RESULTS%" (
+  echo        FAIL — %RESULTS% was not written
   set "FAIL=1"
 ) else (
-  echo        ok
+  powershell -NoProfile -Command "try { $x = [xml](Get-Content -LiteralPath '%RESULTS%' -Raw); Write-Output $x.'test-run'.total } catch { Write-Output '-1' }" > "%PROJECT%\Logs\editmode-count.txt"
+  set "TESTCOUNT="
+  set /p TESTCOUNT=<"%PROJECT%\Logs\editmode-count.txt"
+  if "!TESTCOUNT!"=="" (
+    echo        FAIL — could not read total from %RESULTS%
+    set "FAIL=1"
+  ) else if "!TESTCOUNT!"=="0" (
+    echo        FAIL — 0 tests discovered ^(broken asmdef?^)
+    set "FAIL=1"
+  ) else if "!TESTCOUNT:~0,1!"=="-" (
+    echo        FAIL — could not read total from %RESULTS%
+    set "FAIL=1"
+  ) else (
+    echo        ok ^(!TESTCOUNT! tests^)
+  )
 )
 
 REM ----- 3. Windows standalone smoke build -----------------------------------
@@ -89,9 +118,11 @@ REM   play-check remains the release gate — see CC_AUTONOMY.md.
 echo [3/4] Windows standalone build (Bootstrap.unity) ...
 if exist "%BUILD%" rmdir /S /Q "%BUILD%"
 mkdir "%BUILD%"
+if exist "%PROJECT%\Logs\build.log" del /f /q "%PROJECT%\Logs\build.log"
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -buildTarget Win64 -executeMethod MaxWorlds.Editor.HeadlessBuild.WindowsBootstrap -buildOutput "%BUILD%\MaxVsTheWorlds.exe" -logFile "%PROJECT%\Logs\build.log"
-if errorlevel 1 (
-  echo        FAIL — see Logs\build.log
+set "RC=%ERRORLEVEL%"
+if not "%RC%"=="0" (
+  echo        FAIL ^(exit %RC%^) — see Logs\build.log
   set "FAIL=1"
 ) else (
   echo        ok
@@ -99,12 +130,23 @@ if errorlevel 1 (
 
 REM ----- 4. Log assertions ----------------------------------------------------
 echo [4/4] log assertions ...
-findstr /C:"targetFrameRate" "%PROJECT%\Logs\build.log" >nul
-if errorlevel 1 (
-  echo        FAIL — targetFrameRate not referenced in build log
+if not exist "%PROJECT%\Logs\build.log" (
+  echo        FAIL — Logs\build.log missing
   set "FAIL=1"
 ) else (
-  echo        ok
+  findstr /C:"targetFrameRate=60" "%PROJECT%\Logs\build.log" >nul
+  if errorlevel 1 (
+    echo        FAIL — targetFrameRate=60 not found in build log
+    set "FAIL=1"
+  ) else (
+    findstr /C:"VSyncCount=0" "%PROJECT%\Logs\build.log" >nul
+    if errorlevel 1 (
+      echo        FAIL — VSyncCount=0 not found in build log
+      set "FAIL=1"
+    ) else (
+      echo        ok
+    )
+  )
 )
 
 echo.

@@ -58,7 +58,7 @@ namespace MaxWorlds.Editor
             };
 
             // Slice frame config — asserted by cc-verify step 4 (matches Bootstrap.Awake).
-            Debug.Log("[HeadlessBuild] slice config: targetFrameRate=60 vSync=0");
+            Debug.Log("[HeadlessBuild] slice config: targetFrameRate=60 VSyncCount=0");
 
             BuildReport report = BuildPipeline.BuildPlayer(options);
             BuildSummary summary = report.summary;
