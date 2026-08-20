@@ -10,14 +10,14 @@ review, debugging. Releases ship from a **tag push**, never from a chat driving 
 
 ## Folders
 - **Code (this repo):** `C:\Dev\MaxVsTheWorlds` — git remote `LCP2/MaxVsTheWorlds-2026-05-30_07-57-35`. Local disk only; never sync to OneDrive.
-- **Worker infra:** `C:\Dev\MAx CCs` — `run-cc.ps1` + `start-gameplay.bat` / `start-art.bat`, each running its own checkout (`mvtw-gameplay` / `mvtw-art`).
+- **Worker infra:** `C:\Dev\MAx CCs` — `run-cc.ps1` runs a single worker with one checkout, `cc-web`. `start-gameplay.bat` / `start-art.bat` are retired (`.retired`).
 - **Secrets:** GitHub Actions secrets, plus one `ATLASSIAN_API_TOKEN` env var on the dev PC (set once via `setx`). Never in the repo.
 
 ## Parameters
 - Jira: project **YT**.
-- Roles / build-ready labels: **gameplay → `needs-cc`**, **art → `needs-cc-art`**. Human-block `needs-lee`.
+- Build-ready label: **`needs-cc-web`**. Human-block `needs-lee`.
 - Verify / QA: `cc-verify.bat` (and `cc-verify-playmode.bat` for play-mode tests). Read the real exit code; don't proceed on red.
-- Worker contracts: **`CC_AUTONOMY.md`** (gameplay) and **`CC_AUTONOMY_ART.md`** (art).
+- Worker contract: **`CC_AUTONOMY.md`**. (`CC_AUTONOMY_ART.md` is retired.)
 - Deploy: **TestFlight** via Fastlane (`ios-testflight.yml`).
 
 ## Integration branch — MAX uses `main` (by design)
