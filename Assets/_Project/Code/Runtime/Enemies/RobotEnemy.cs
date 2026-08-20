@@ -716,7 +716,13 @@ namespace MaxWorlds.Enemies
             // wide, flanker-aware fan onto the real goal; an earlier leg is a doorway, which gets
             // its own narrower fan (MV-449) — wide enough to break up the queue on approach,
             // narrow enough (and everyone, flankers included) to still funnel through the gap.
-            bool lastLeg = (waypoint - goal).sqrMagnitude < 0.01f;
+            // MV-493: compare rooms, not the waypoint position — with useZoneRoute on, ZoneRouteGrid
+            // may substitute a cell-centre step even on the final leg (cover between here and the
+            // goal, in the goal's own room), and a position comparison against `waypoint` reads that
+            // as "not the last leg" and hands back the narrow doorway fan instead of the wide one.
+            MapZone routedZone = EnemyNavigation.Map?.Zone(routedZoneId);
+            MapZone goalZone = EnemyNavigation.Map?.ZoneAt(goal.x, goal.z);
+            bool lastLeg = routedZone == null || goalZone == null || routedZone.id == goalZone.id;
             waypoint = lastLeg
                 ? EnemyFormation.ApproachPoint(goal, transform.position, GetInstanceID())
                 : EnemyFormation.ApproachPoint(waypoint, transform.position, GetInstanceID(),
