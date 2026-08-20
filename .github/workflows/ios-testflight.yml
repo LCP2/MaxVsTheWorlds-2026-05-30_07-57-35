@@ -186,3 +186,81 @@ jobs:
             cat "$f"
           done || true
           echo "::endgroup::"
+
+  # ---------------------------------------------------------------------------
+  # 3. MV-484: tell Jira which tickets just shipped to TestFlight. Before this,
+  #    ios-testflight.yml had no Jira write-back at all, so nothing in Jira
+  #    ever recorded a TestFlight ship. Comment-only, never transitions status
+  #    (that ladder is unchanged) and can never fail the release — mirrors the
+  #    range logic and soft-fail posture of build.yml's jira-on-staging job.
+  # ---------------------------------------------------------------------------
+  jira-release-comment:
+    name: Comment shipped tickets in Jira
+    needs: [release-ios]
+    if: success()
+    runs-on: ubuntu-latest
+    env:
+      ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+      RELEASE_VERSION: ${{ inputs.version }}
+      CURRENT_SHA: ${{ github.sha }}
+      REF_NAME: ${{ github.ref_name }}
+      REF_TYPE: ${{ github.ref_type }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      RUN_NUMBER: ${{ github.run_number }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Comment shipped tickets in Jira
+        shell: bash
+        run: |
+          set -uo pipefail
+          if [ -z "${ATLASSIAN_API_TOKEN:-}" ]; then
+            echo "::notice::ATLASSIAN_API_TOKEN not set - skipping Jira write-back."
+            exit 0
+          fi
+          BASE=$(jq -r '.jiraBaseUrl' pipeline.config.json)
+          MAIL=$(jq -r '.jiraEmail' pipeline.config.json)
+          PKEY=$(jq -r '.jiraProjectKey' pipeline.config.json)
+
+          # Marketing version: explicit dispatch input, else the pushed tag (vX.Y.Z -> X.Y.Z),
+          # else the Fastfile's own run-number fallback shape (see Fastfile RELEASE_VERSION).
+          if [ -n "${RELEASE_VERSION:-}" ]; then
+            VERSION="$RELEASE_VERSION"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            VERSION="${REF_NAME#v}"
+          else
+            VERSION="run #$RUN_NUMBER fallback version (no tag, no dispatch input - see Fastfile)"
+          fi
+          echo "Marketing version: $VERSION"
+
+          # Previous release point: the most recent other tag reachable from HEAD, mirroring
+          # jira-on-staging's "previous successful deploy" lookup but keyed on release tags
+          # instead of Pages deployments.
+          PREV=$(git tag --sort=-creatordate --merged "$CURRENT_SHA" | grep -Fxv "$REF_NAME" | head -n1)
+          if [ -n "$PREV" ] && git cat-file -e "$PREV^{commit}" 2>/dev/null; then
+            RANGE="$PREV..$CURRENT_SHA"
+          else
+            echo "::notice::No previous release tag resolved - falling back to this push only."
+            RANGE="$CURRENT_SHA~1..$CURRENT_SHA"
+          fi
+          echo "Commit range: $RANGE"
+
+          KEYS=$(git log --format=%s%n%b "$RANGE" | grep -oE "$PKEY-[0-9]+" | sort -u)
+          if [ -z "$KEYS" ]; then
+            echo "::notice::No $PKEY keys in range - nothing to comment."
+            exit 0
+          fi
+
+          for K in $KEYS; do
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Content-Type: application/json" \
+              --data "{\"body\":\"Shipped to TestFlight as $VERSION. Run: $RUN_URL\"}" \
+              "$BASE/rest/api/3/issue/$K/comment")
+            if [ "$CODE" = "201" ]; then
+              echo "$K -> commented ($VERSION)"
+            else
+              echo "::warning::$K comment failed with HTTP $CODE."
+            fi
+          done
+          exit 0
