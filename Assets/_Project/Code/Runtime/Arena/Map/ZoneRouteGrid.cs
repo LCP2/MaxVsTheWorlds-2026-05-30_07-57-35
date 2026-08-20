@@ -57,13 +57,15 @@ namespace MaxWorlds.Arena
         /// <paramref name="from"/> toward <paramref name="target"/> — both read as world XZ (x = world
         /// X, y = world Z, the same convention <see cref="MapRoutes"/> uses). <paramref name="target"/>
         /// need not itself be inside the zone (<see cref="MapRoutes"/> aims a cross-room waypoint
-        /// through the wall into the next room on purpose); it is clamped into the zone first, which
-        /// lands it at the doorway the robot is actually leaving through.
+        /// through the wall into the next room on purpose, MV-493) — it is used UNCLAMPED for the
+        /// line-of-sight check and as the answer itself; it is only clamped into the zone to pick an
+        /// A* goal CELL when the grid solver actually has to route around cover, because a cell index
+        /// has to land inside the grid it indexes. The clamp never reaches the return value.
         ///
-        /// Returns <paramref name="target"/> unchanged, with no grid built at all, when nothing
-        /// authored in this zone stands between the two points — decision #5: a solved path must never
-        /// add a detour on open ground, and a coarse cell-by-cell A* answer would stair-step where a
-        /// straight line is both shorter and correct.
+        /// Returns <paramref name="target"/> unchanged — byte-identical, no clamp, no grid built at all
+        /// — when nothing authored in this zone stands between the two points: decision #5, a solved
+        /// path must never add a detour on open ground, and MV-493's fix on top of it, a robot must
+        /// never be aimed at the wall line it is meant to walk through.
         ///
         /// Returns null when the zone's grid has no route at all between the two points — a sealed
         /// pocket, or a target buried inside inflated cover. The caller falls back to today's direct
@@ -74,15 +76,18 @@ namespace MaxWorlds.Arena
         {
             if (map == null || zone == null) return null;
 
-            Vector3 clamped = zone.Clamp(new Vector3(target.x, 0f, target.y), 0f);
-            var goal = new Vector2(clamped.x, clamped.z);
-
             ZoneGrid grid = GetOrBuild(map, zone);
             if (grid == null) return null;
 
-            if (grid.LineClear(from, goal)) return goal;
+            if (grid.LineClear(from, target)) return target;
 
-            List<Vector2Int> path = grid.FindPath(from, goal);
+            // Only reached when cover is actually in the way: pick the in-zone cell nearest the
+            // doorway mouth (or wherever target actually sits) to route the A* search at — never the
+            // through-doorway target itself, which by construction sits outside this zone.
+            Vector3 clamped = zone.Clamp(new Vector3(target.x, 0f, target.y), 0f);
+            var approach = new Vector2(clamped.x, clamped.z);
+
+            List<Vector2Int> path = grid.FindPath(from, approach);
             if (path == null || path.Count == 0) return null;
 
             Vector2Int stepCell = path.Count > 1 ? path[1] : path[0];
