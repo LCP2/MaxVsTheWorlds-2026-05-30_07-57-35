@@ -3,7 +3,8 @@ REM ============================================================
 REM   cc-verify (MV-game / Unity 6 LTS)
 REM
 REM   Runs after every code change. Exit 0 = pass.
-REM   Target runtime: under 90 s in steady state.
+REM   Target runtime: under 150 s in steady state (steps 1-4 ~90s; step 5 runs the just-built
+REM   standalone player for a real frame-time sample, MV-494).
 REM
 REM   Pre-reqs:
 REM     - %UNITY_PATH% env var pointing at Unity.exe
@@ -65,7 +66,7 @@ REM   Capture the raw exit code into a variable rather than testing with
 REM   `if errorlevel N`: errorlevel comparisons treat a negative code (e.g.
 REM   -1073741819 on a Unity access violation) as less than 1, so a hard crash
 REM   silently passed this gate before (MV-483).
-echo [1/4] compile check ...
+echo [1/5] compile check ...
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -logFile "%PROJECT%\Logs\compile.log"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
@@ -82,7 +83,7 @@ REM   the file to be regenerated and its <test-run total="..."> to be nonzero
 REM   (MV-483).
 set "RESULTS=%PROJECT%\Logs\editmode-results.xml"
 if exist "%RESULTS%" del /f /q "%RESULTS%"
-echo [2/4] EditMode tests ...
+echo [2/5] EditMode tests ...
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -runTests -testPlatform EditMode -testResults "%RESULTS%" -logFile "%PROJECT%\Logs\editmode.log"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
@@ -115,7 +116,7 @@ REM   MV-259) does NOT run here — Unity batch-mode PlayMode runs don't stream
 REM   output, so an in-session run risks backgrounding and stalling the ticket
 REM   (MV-307). PlayMode coverage belongs in CI (build.yml) instead; the browser
 REM   play-check remains the release gate — see CC_AUTONOMY.md.
-echo [3/4] Windows standalone build (Bootstrap.unity) ...
+echo [3/5] Windows standalone build (Bootstrap.unity) ...
 if exist "%BUILD%" rmdir /S /Q "%BUILD%"
 mkdir "%BUILD%"
 if exist "%PROJECT%\Logs\build.log" del /f /q "%PROJECT%\Logs\build.log"
@@ -129,7 +130,7 @@ if not "%RC%"=="0" (
 )
 
 REM ----- 4. Log assertions ----------------------------------------------------
-echo [4/4] log assertions ...
+echo [4/5] log assertions ...
 if not exist "%PROJECT%\Logs\build.log" (
   echo        FAIL — Logs\build.log missing
   set "FAIL=1"
@@ -146,6 +147,36 @@ if not exist "%PROJECT%\Logs\build.log" (
     ) else (
       echo        ok
     )
+  )
+)
+
+REM ----- 5. Real frame-time gate (MV-494) --------------------------------------
+REM   cc-verify's old "60fps" step-4 check only grepped the build log for two settings
+REM   strings — it proved the settings were applied, not that any frame was ever measured
+REM   (MV-494). This launches the standalone player build itself (not the Editor) behind
+REM   -ccperf: MaxWorlds.Dev.PerfCaptureDirector forces the field to populate with robots,
+REM   samples real Update-loop frame times, writes Logs\perf-report.txt, and quits with a
+REM   matching exit code. Same -batchmode -nographics as every step above, for the same
+REM   reason: this project has been stalled by live-window/PlayMode batch runs three times
+REM   (see the PlayMode ban later in this repo's docs) — see PerfCaptureDirector's own doc
+REM   comment for the resulting CPU-vs-GPU frame-cost scope call.
+echo [5/5] frame-time gate ...
+set "PERFREPORT=%PROJECT%\Logs\perf-report.txt"
+if exist "%PERFREPORT%" del /f /q "%PERFREPORT%"
+if exist "%PROJECT%\Logs\perf-run.log" del /f /q "%PROJECT%\Logs\perf-run.log"
+start "" /min /wait "%BUILD%\MaxVsTheWorlds.exe" -batchmode -nographics -ccperf -perfReportPath "%PERFREPORT%" -logFile "%PROJECT%\Logs\perf-run.log"
+set "RC=%ERRORLEVEL%"
+if not exist "%PERFREPORT%" (
+  echo        FAIL — %PERFREPORT% was not regenerated ^(exit %RC%^) — see Logs\perf-run.log
+  set "FAIL=1"
+) else (
+  echo        measured:
+  for /f "usebackq delims=" %%L in ("%PERFREPORT%") do echo          %%L
+  if not "%RC%"=="0" (
+    echo        FAIL — see p95_ms / threshold_p95_ms above ^(exit %RC%^) — see Logs\perf-run.log
+    set "FAIL=1"
+  ) else (
+    echo        ok
   )
 )
 

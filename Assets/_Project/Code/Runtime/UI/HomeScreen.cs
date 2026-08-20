@@ -88,10 +88,13 @@ namespace MaxWorlds.UI
                 return;
             }
 
-            if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed())
+            if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed() ||
+                MaxWorlds.Dev.PerfCaptureDirector.Armed())
             {
-                // Filming (press-kit) or a fixed-state UI capture (ui-screens) has nothing to click
-                // the modal with — hand off to slot 0 straight away, without pausing or showing
+                // Filming (press-kit), a fixed-state UI capture (ui-screens), or an unattended
+                // frame-time sample (MV-494) all have nothing to click the modal with — hand off to
+                // slot 0 straight away, without pausing (Open() below sets Time.timeScale = 0, which
+                // would freeze the very simulation a perf capture exists to measure) or showing
                 // anything, the same lever PressKitDirector already used (YT-97; MV-441).
                 StartSlot(0, playIntro: false);
                 return;
