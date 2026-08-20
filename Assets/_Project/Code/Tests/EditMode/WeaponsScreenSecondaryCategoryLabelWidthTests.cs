@@ -30,6 +30,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             RigFusionState.Reset();
             PickupWallet.Reset();
+            Time.timeScale = 1f;
             _go = new GameObject("WeaponsScreen");
             _screen = _go.AddComponent<WeaponsScreen>();
         }
@@ -42,6 +43,12 @@ namespace MaxWorlds.Tests.EditMode
             RigState.Reset();
             RigFusionState.Reset();
             PickupWallet.Reset();
+            // MV-506: Open() (called below to reach the resolved label width) pauses via Time.timeScale
+            // = 0 and is never Close()d in this suite — destroying the GameObject skips WeaponsScreen's
+            // own restore path, so this must reset it directly or it leaks into whatever test runs
+            // next (and, at the tail of a full batch run, into ProjectSettings/TimeManager.asset itself
+            // — Unity persists the live engine timeScale there on quit).
+            Time.timeScale = 1f;
         }
 
         /// <summary>Resolves the SECONDARY category label's actual box width and wrap behaviour the

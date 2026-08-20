@@ -3,6 +3,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Weapons;
 using MaxWorlds.VFX;
@@ -428,7 +429,7 @@ namespace MaxWorlds.UI
             if (_canvas == null) Build();
 
             _open = true;
-            _prevTimeScale = Time.timeScale;
+            _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;   // freeze the fight while the player reads/spends
 
             Refresh();
@@ -478,7 +479,7 @@ namespace MaxWorlds.UI
             if (!_open)
             {
                 _open = true;
-                _prevTimeScale = Time.timeScale;
+                _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
                 Time.timeScale = 0f;
             }
 

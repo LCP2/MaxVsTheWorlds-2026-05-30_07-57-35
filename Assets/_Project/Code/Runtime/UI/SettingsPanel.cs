@@ -1007,7 +1007,7 @@ namespace MaxWorlds.UI
                 _open = open;
                 if (open)
                 {
-                    _prevTimeScale = Time.timeScale;
+                    _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
                     Time.timeScale = 0f;
                 }
                 else
