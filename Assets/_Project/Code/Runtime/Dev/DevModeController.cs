@@ -3,7 +3,6 @@ using UnityEngine.InputSystem;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
-using MaxWorlds.Player;
 
 namespace MaxWorlds.Dev
 {
@@ -66,19 +65,16 @@ namespace MaxWorlds.Dev
 
         private void Update()
         {
-            CheckTouchActivation();
-
             var kb = Keyboard.current;
-            if (kb != null)
-            {
-                bool chord = (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed) &&
-                             (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed);
+            if (kb == null) return;
 
-                if (chord && kb.dKey.wasPressedThisFrame)
-                {
-                    if (DevMode.Enabled) { DevMode.Reset(); Debug.Log("[DevMode] OFF"); }
-                    else Enable("Ctrl+Shift+D");
-                }
+            bool chord = (kb.leftCtrlKey.isPressed || kb.rightCtrlKey.isPressed) &&
+                         (kb.leftShiftKey.isPressed || kb.rightShiftKey.isPressed);
+
+            if (chord && kb.dKey.wasPressedThisFrame)
+            {
+                if (DevMode.Enabled) { DevMode.Reset(); Debug.Log("[DevMode] OFF"); }
+                else Enable("Ctrl+Shift+D");
             }
 
             if (!DevMode.Enabled) return;
@@ -101,38 +97,6 @@ namespace MaxWorlds.Dev
             if (kb.quoteKey.isPressed) NudgePitch(PitchNudgePerSecond * Time.unscaledDeltaTime);
 
             ApplySpawnPause();
-        }
-
-        /// <summary>MV-502: touch-only devices (TestFlight iOS) have no keyboard, so Ctrl+Shift+D can't
-        /// reach them — tapping this corner region <see cref="TouchActivationTapsNeeded"/> times within
-        /// <see cref="TouchActivationWindowSeconds"/> toggles DevMode instead, so Lee can read the
-        /// on-device stick-deflection overlay (see <see cref="OnGUI"/>) without a rebuild.</summary>
-        private const int TouchActivationTapsNeeded = 5;
-        private const float TouchActivationWindowSeconds = 2f;
-        private const float TouchActivationCornerSize = 120f;
-        private int _touchActivationTapCount;
-        private float _touchActivationWindowEnd;
-
-        private void CheckTouchActivation()
-        {
-            var touchscreen = Touchscreen.current;
-            if (touchscreen == null) return;
-
-            foreach (var touch in touchscreen.touches)
-            {
-                if (!touch.press.wasPressedThisFrame) continue;
-                Vector2 pos = touch.position.ReadValue();
-                if (pos.x > TouchActivationCornerSize || pos.y < Screen.height - TouchActivationCornerSize) continue;
-
-                if (Time.unscaledTime > _touchActivationWindowEnd) _touchActivationTapCount = 0;
-                _touchActivationTapCount++;
-                _touchActivationWindowEnd = Time.unscaledTime + TouchActivationWindowSeconds;
-
-                if (_touchActivationTapCount < TouchActivationTapsNeeded) continue;
-                _touchActivationTapCount = 0;
-                if (DevMode.Enabled) { DevMode.Reset(); Debug.Log("[DevMode] OFF (touch corner tap)"); }
-                else Enable($"{TouchActivationTapsNeeded}x top-left tap");
-            }
         }
 
         /// <summary>Metres per second of pull-back while a bracket key is held.</summary>
@@ -182,7 +146,7 @@ namespace MaxWorlds.Dev
             if (!DevMode.Enabled) return;
 
             const float w = 430f;
-            var rect = new Rect(Screen.width - w - 12f, 12f, w, 162f);
+            var rect = new Rect(Screen.width - w - 12f, 12f, w, 140f);
             GUI.color = new Color(1f, 0.9f, 0.3f);
             GUI.Box(rect, "");
             GUI.Label(new Rect(rect.x + 10f, rect.y + 6f, w - 20f, 22f),
@@ -207,18 +171,8 @@ namespace MaxWorlds.Dev
                 : "; / ' pitch: no camera rig in scene";
             GUI.Label(new Rect(rect.x + 10f, rect.y + 72f, w - 20f, 22f), pitch);
 
-            // MV-502 diagnostic (temporary — see that ticket): the real on-device stick deflection,
-            // read straight off PlayerController rather than guessed at. move/aim reaching ~1.00 at
-            // full thumb travel and aim clearing 0.50 (the fire gate) is the actual measurement Lee's
-            // human-gate AC asks for; a corner 5-tap toggles this on touch-only builds (no keyboard).
-            var pc = FindFirstObjectByType<PlayerController>();
-            string sticks = pc != null
-                ? $"move: {pc.MoveInput.magnitude:0.00}   aim: {pc.AimMagnitude:0.00} (fires >= 0.50)"
-                : "move/aim: no PlayerController in scene";
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 94f, w - 20f, 22f), sticks);
-
-            GUI.Label(new Rect(rect.x + 10f, rect.y + 116f, w - 20f, 22f),
-                "Ctrl+Shift+D or 5x top-left tap to turn off");
+            GUI.Label(new Rect(rect.x + 10f, rect.y + 94f, w - 20f, 22f),
+                "Ctrl+Shift+D to turn off");
         }
     }
 }
