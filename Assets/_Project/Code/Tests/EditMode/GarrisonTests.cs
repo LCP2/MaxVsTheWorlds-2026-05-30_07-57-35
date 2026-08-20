@@ -149,9 +149,15 @@ namespace MaxWorlds.Tests.EditMode
         /// shipped config (not a fixture) so a future area/cover edit that reintroduces the overlap
         /// fails here instead of shipping quietly. Exempt from future test-culling passes — MV-465
         /// already deleted the only guards on two other known defects and both regressed.
+        ///
+        /// MV-496 extended this same scan to the shed's spawn ring: <c>ClearOfCover</c> dodged
+        /// authored <see cref="WorldArea.cover"/> but never checked a garrison seed against its own
+        /// area's shed (<see cref="MapValidation.SpawnRadius"/> + <see cref="MapValidation.SpawnClearance"/>
+        /// from <see cref="WorldArea.shed"/>), so a8's heavy-density ring placed seed #8 dead on the
+        /// shed's spawn point (0 m clearance) on the shipped config. Same exemption as above.
         /// </summary>
         [Test]
-        public void SeedPositions_World1_EveryGarrisonSeedClearsItsAreasAuthoredCover()
+        public void SeedPositions_World1_EveryGarrisonSeedClearsItsAreasAuthoredCoverAndShed()
         {
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
             var violations = new List<string>();
@@ -179,10 +185,48 @@ namespace MaxWorlds.Tests.EditMode
                             violations.Add($"{area.id} seed#{i} is {clearance:0.###} m from cover '{c.id}' " +
                                            $"(needs {MapValidation.SpawnClearance} m)");
                     }
+
+                    if (area.hasShed && area.shed != null)
+                    {
+                        float toShed = Vector2.Distance(point, new Vector2(area.shed.x, area.shed.z));
+                        float needed = MapValidation.SpawnRadius + MapValidation.SpawnClearance;
+                        if (toShed < needed)
+                            violations.Add($"{area.id} seed#{i} is {toShed:0.###} m from its shed " +
+                                           $"(needs {needed} m)");
+                    }
                 }
             }
 
             Assert.IsEmpty(violations, string.Join("\n", violations));
+        }
+
+        /// <summary>MV-496. A fixture, not world1: an area whose shed sits exactly on a ring seed's
+        /// authored angle (so <c>ClearOfCover</c> must dodge it, not merely happen to avoid it), proving
+        /// the shed-avoidance mechanism itself rather than re-proving the cover-dodge MV-459 already
+        /// pinned above. Also checks the shed dodge is deterministic, same as the cover dodge.</summary>
+        [Test]
+        public void SeedPositions_DodgesTheShedsSpawnRing_WhenARingPointWouldLandInsideIt()
+        {
+            var area = new WorldArea
+            {
+                id = "shed-fixture", index = 1, role = "normal", garrisonDensity = "light",
+                origin = new WorldAreaOrigin { x = 0f, z = 0f }, size = new WorldAreaSize { w = 20f, d = 20f },
+                hasShed = true, shed = new WorldShed { x = 10f, z = 16f }, // dead on seed#1's ring angle (90 deg)
+            };
+
+            Vector3[] first = Garrison.SeedPositions(area, 4);
+            Vector3[] second = Garrison.SeedPositions(area, 4);
+
+            CollectionAssert.AreEqual(first, second);
+
+            var shedXz = new Vector2(area.shed.x, area.shed.z);
+            float needed = MapValidation.SpawnRadius + MapValidation.SpawnClearance;
+            foreach (Vector3 p in first)
+            {
+                float toShed = Vector2.Distance(new Vector2(p.x, p.z), shedXz);
+                Assert.GreaterOrEqual(toShed, needed,
+                    $"({p.x}, {p.z}) is {toShed:0.###} m from the shed (needs {needed} m)");
+            }
         }
     }
 }
