@@ -8,7 +8,10 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-454 — the machine-internals pool was collapsed to one grey-on-grey-on-grey design (MV-430).
     /// This restores all ten and gives every one of them a warm Brass/Copper accent so a part on grass
-    /// reads as loot. Pins the two acceptance criteria that carry a testable shape:
+    /// reads as loot. MV-498 collapses <see cref="WeaponPartArt.MachineInternalsKeys"/> back down to
+    /// just <see cref="WeaponPartArt.Keys.Gear"/>, but these two tests below still hold — they iterate
+    /// the pool whatever its size, and Gear still carries its Brass hub accent. Pins the two acceptance
+    /// criteria that carry a testable shape:
     ///
     /// AC2 — every key in <see cref="WeaponPartArt.MachineInternalsKeys"/> builds a real prop (>=3
     /// renderers, no null material).

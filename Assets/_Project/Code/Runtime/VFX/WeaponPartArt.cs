@@ -27,17 +27,20 @@ namespace MaxWorlds.VFX
     {
         // Signature colours — each part owns one, so "which part is that?" is answerable from the colour
         // before you can resolve the shape at game zoom.
-        private static readonly Color BeamCyan = new Color(0.35f, 0.85f, 0.95f);
-        private static readonly Color PowerBlue = new Color(0.20f, 0.42f, 0.85f);
-        private static readonly Color HarnessGreen = new Color(0.28f, 0.62f, 0.34f);
-        private static readonly Color EngineOrange = new Color(0.92f, 0.48f, 0.16f);
-        private static readonly Color Steel = new Color(0.55f, 0.58f, 0.63f);
-        private static readonly Color DarkSteel = new Color(0.24f, 0.26f, 0.30f);
+        // MV-498: these six were private, but AC3's "must not read as any named-upgrade/neutral hue"
+        // check needs a test outside this assembly to compare a built prop's resolved colour against
+        // each of them directly, so they're public now like Brass/Copper/Chrome/CellCyan/ModuleGlow.
+        public static readonly Color BeamCyan = new Color(0.35f, 0.85f, 0.95f);
+        public static readonly Color PowerBlue = new Color(0.20f, 0.42f, 0.85f);
+        public static readonly Color HarnessGreen = new Color(0.28f, 0.62f, 0.34f);
+        public static readonly Color EngineOrange = new Color(0.92f, 0.48f, 0.16f);
+        public static readonly Color Steel = new Color(0.55f, 0.58f, 0.63f);
+        public static readonly Color DarkSteel = new Color(0.24f, 0.26f, 0.30f);
         // The ability module's own colour family (MV-431) — it used to wear DarkSteel + Steel + the cell's
         // own HydroGlow cyan, so at the 72° camera it read as "a slightly larger part" instead of the
         // run-defining drop it is. Public: PickupArtDirector's ground ring already wears ModuleGlow's value
         // (MV-429, ahead of this ticket) so the ring and the prop land on the same red without drifting.
-        private static readonly Color ModuleRed = new Color(0.85f, 0.12f, 0.10f);
+        public static readonly Color ModuleRed = new Color(0.85f, 0.12f, 0.10f);   // MV-498: see above
         public static readonly Color ModuleGlow = new Color(1.00f, 0.24f, 0.08f);
         // Bright cool chrome — the accent/trim on the parts and the power-cell caps. Replaces the old
         // brass (0.72,0.55,0.22): brass is a warm mid-value that the 0.6 sunlit-albedo ceiling
@@ -61,6 +64,14 @@ namespace MaxWorlds.VFX
         // repeating the exact regression YT-146 already shipped and reverted once.
         public static readonly Color Brass = new Color(0.46f, 0.35f, 0.15f);
         public static readonly Color Copper = new Color(0.46f, 0.25f, 0.12f);
+        // MV-498 — the machine-internals Gear's disc-and-teeth colour, replacing neutral Steel. A
+        // saturated golden amber: measured against the actual BAKED texture (MaterialLibrary.Tinted
+        // bakes the tone into an _BaseMap albedo via a Contrast-spread lo/hi blend under
+        // SunlitAlbedo.Clamp — see MaterialLibrary.Build — it never lands in a queryable _BaseColor),
+        // the resolved average comes out at RGB (0.617, 0.479, 0.108), Rec.709 luminance 0.481,
+        // HSV saturation 0.825 — inside the ticket's [0.45, 0.60] luminance / >=0.55 saturation targets
+        // with margin, and >0.05 per channel from every named-upgrade/cell hue and every neutral.
+        public static readonly Color PartGold = new Color(0.80f, 0.62f, 0.14f);
         // Public: PickupArtDirector reads this back to drive the cell's gentle radiance (MV-304), the
         // same idiom as GlistenColor below.
         public static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f);
@@ -107,26 +118,16 @@ namespace MaxWorlds.VFX
         /// (WV-237) — one entry per machine-internals design, kept as one array so "how many designs
         /// exist" and "which keys count" can't drift apart.
         ///
-        /// MV-430 collapsed this to one design (<see cref="Keys.Gear"/>), citing the fixed 72° camera
-        /// discarding ~70% of vertical detail and four of the ten (piston, hydraulic ram, coil,
-        /// capacitor bank) collapsing to "a small stack on a white disc". MV-454 restores the full pool:
-        /// that finding was made against the OLD <see cref="Chrome"/> plinth (MV-430's own fix, landed in
-        /// the same commit, already made every plinth dark instead of near-white) and against designs
-        /// that were still uniformly grey/neutral — i.e. shape was the only differentiator, and shape is
-        /// exactly what the 72° camera discards. Colour survives that projection far better than height
-        /// does, so every design below now also carries its own <see cref="Brass"/>/<see cref="Copper"/>
-        /// accent (see each <c>Build*</c> method) — the read is no longer "tell the silhouette apart",
-        /// it's "tell the colour apart", which is a different, and at this camera angle much easier,
-        /// problem than the one MV-430 measured. Also worth the widened pool on its own terms: several of
-        /// the nine had been wearing the exact signature hues MV-431/the five named parts use
-        /// (<see cref="PowerBlue"/> on PowerNozzle, <see cref="HarnessGreen"/> on the harness, etc.) —
-        /// a purely cosmetic loot drop wearing a named upgrade's own colour risked being misread as that
-        /// upgrade, so those accents are now <see cref="Brass"/>/<see cref="Copper"/>/<see cref="ModuleGlow"/>
-        /// instead, which no named part wears.</summary>
+        /// MV-430 collapsed this to one design (<see cref="Keys.Gear"/>); MV-454 widened it back to all
+        /// ten, reasoning that colour (not just shape) would carry the "tell them apart" job at the 72°
+        /// camera. MV-498 collapses it back to <see cref="Keys.Gear"/> alone — Lee asked for exactly one
+        /// symbol on 2026-08-20 (the widening in MV-454 was reasoning added on top of a colour-only
+        /// request, never itself asked for), which supersedes MV-454's restoration. The other nine
+        /// <c>Build*</c> methods are kept (still reachable by key; several are used by named upgrades),
+        /// only this pool array changes.</summary>
         public static readonly string[] MachineInternalsKeys =
         {
-            Keys.Gear, Keys.Coil, Keys.CircuitBlock, Keys.Piston, Keys.ValveManifold,
-            Keys.CapacitorBank, Keys.CogCluster, Keys.HydraulicRam, Keys.FuseBlock, Keys.WiringLoom,
+            Keys.Gear,
         };
 
         /// <summary>Build a prop by key (see <see cref="Keys"/>). Returns null for an unknown key rather
@@ -405,10 +406,10 @@ namespace MaxWorlds.VFX
         /// footprint and height, so the ticket's "consistent pickup silhouette" holds even though the
         /// crown on top of each is completely different; each also gets its own <see cref="Glisten"/>
         /// dot(s) so every design shimmers, not just the old power-cell/Hydro-device pair.
-        /// MV-305 draws from these today (<see cref="PickupArtDirector.RollPartArtKey"/>) — MV-430
-        /// briefly narrowed <see cref="MachineInternalsKeys"/> to just <see cref="Keys.Gear"/>; MV-454
-        /// restored the full ten now that every design also carries its own colour accent (see
-        /// <see cref="MachineInternalsKeys"/>'s doc for why that changes the 72°-camera calculus).</summary>
+        /// MV-305 draws from these today (<see cref="PickupArtDirector.RollPartArtKey"/>) — see
+        /// <see cref="MachineInternalsKeys"/>'s doc for the pool's history (MV-430 to one design, MV-454
+        /// to all ten, MV-498 back to one). The nine designs not in the current pool stay reachable by
+        /// key and are still used by the five named upgrades.</summary>
         private const float PartPlinthRadius = 0.22f;
         private const float PartPlinthHeight = 0.06f;
 
@@ -436,12 +437,15 @@ namespace MaxWorlds.VFX
         public static GameObject BuildGear(Transform parent = null)
         {
             var root = Root("Gear", parent);
-            // MV-454: the hub was Chrome — the file's third neutral tone alongside Steel/DarkSteel, which
-            // is the "grey, grey and grey" this ticket exists to fix. Brass instead, as the design's one
-            // substantial secondary accent; the disc/teeth (the largest mass) stay Steel.
+            // MV-498: the disc and teeth — the largest mass — were Steel, a near-neutral that read as
+            // grey on the lawn even with a Brass hub accent (the hub is the smallest element, so its
+            // colour couldn't carry the read). PartGold now instead: a saturated golden amber on the
+            // largest mass, so the whole prop reads as coloured, not just its smallest part. The hub
+            // stays Brass — a clear value step down from PartGold — for the "internal structure" accent;
+            // the plinth stays DarkSteel and recessive (MV-430).
             Material brass = MaterialLibrary.Tinted(SurfaceKind.Metal, Brass);
             Material darkSteel = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
-            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, Steel);
+            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, PartGold);
             PartPlinth(root);
 
             Vector3 discScale = new Vector3(0.30f, 0.055f, 0.30f);
