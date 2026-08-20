@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Core;
 using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
@@ -145,7 +146,7 @@ namespace MaxWorlds.UI
             if (_tapCatcher != null) _tapCatcher.SetActive(true);
             _open = true;
             _t = 0f;
-            _prevTimeScale = Time.timeScale;
+            _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;   // freeze the fight; we animate on unscaled time
 
             // "HOSE UPGRADE" / "MOVEMENT UPGRADE" / "DETACH UPGRADE" — labels which of the three
@@ -230,7 +231,7 @@ namespace MaxWorlds.UI
             if (_tapCatcher != null) _tapCatcher.SetActive(true);
             _open = true;
             _t = RevealTime + FitTime;     // nothing is flying in — skip straight to the settled state
-            _prevTimeScale = Time.timeScale;
+            _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;
 
             _title.text = "WEAPONS";
@@ -289,7 +290,7 @@ namespace MaxWorlds.UI
             _statusOnly = false;
             _open = true;
             _t = RevealTime + FitTime;   // no weapon/portrait fly-in for the choice screen
-            _prevTimeScale = Time.timeScale;
+            _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;
 
             _title.text = title;
