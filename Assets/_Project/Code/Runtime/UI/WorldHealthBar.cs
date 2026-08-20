@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Core;
@@ -72,8 +73,15 @@ namespace MaxWorlds.UI
         /// movement angle and rides the look-ahead automatically, instead of being a bigger world
         /// number that would just reappear as the bug at the next steeper frame. Picked to clear his
         /// hair-tips (1.83 m) with visible daylight at the phone zoom without floating the bar off him.
+        ///
+        /// MV-473: retuned 0.45 -> 0.6 for the 60° pitch (was 64.88°/72° when 0.45 was picked). A
+        /// world-up offset's screen-space payoff is ~cos(pitch), so the shallower the pitch the more
+        /// of a character's OWN height lands on screen too — the two effects partly cancel, but not
+        /// exactly, because this term (camera-space, pitch-invariant by construction) does not grow
+        /// with pitch the way the character's silhouette does, so it needs a direct bump to keep the
+        /// same relative daylight above a taller-reading body.
         /// </summary>
-        private const float ScreenClearance = 0.45f;
+        private const float ScreenClearance = 0.6f;
 
         private IHealthReadout _source;
         private Transform _scaleAnchor;
@@ -96,8 +104,21 @@ namespace MaxWorlds.UI
         private string _shownName;
         private bool _alwaysShow;
 
+        /// <summary>Extra world-up metres from the MV-473 de-clutter pass (<see cref="WorldHealthBarDeclutter"/>)
+        /// — zero unless this bar is currently clustered with another showing bar. Added on top of
+        /// <see cref="_heightAboveCentre"/> every frame in <see cref="SyncToBody"/>, never baked into it,
+        /// so it tracks the cluster living or dying without needing its own reset hook.</summary>
+        private float _clutterLift;
+
         /// <summary>Metres above the unit's origin the bar floats. Read back by the layout tests.</summary>
         public float HeightAboveCentre => _heightAboveCentre;
+
+        /// <summary>MV-473: re-anchor the world-up offset after the fact. A pooled robot's
+        /// <see cref="WorldHealthBar.Attach"/> runs in <c>Awake</c>, before the spawner's
+        /// <c>RobotEnemy.Apply</c> stamps the real archetype (same ordering gap the ReadoutName
+        /// re-read in <see cref="Refresh"/> already works around) — so a per-kind height needs a way
+        /// to land after the kind is actually known.</summary>
+        public void SetHeightAboveCentre(float heightAboveCentre) => _heightAboveCentre = heightAboveCentre;
 
         /// <summary>Is the bar currently on screen? Exposed so a test can assert the fade rule
         /// without reading pixels.</summary>
@@ -222,8 +243,16 @@ namespace MaxWorlds.UI
             // pivot's own offset is plain world metres now — no further division by the parent's
             // Y-scale needed (and none of the anchor's local ROTATION is ever touched, which is the
             // part that keeps this shear-free; see the comment in Build()).
-            _pivot.localPosition = new Vector3(0f, _heightAboveCentre, 0f);
+            _pivot.localPosition = new Vector3(0f, _heightAboveCentre + _clutterLift, 0f);
             _canvas.localScale = Vector3.one * WorldBar.CanvasScaleFor(_worldWidth, BarPixelWidth);
+        }
+
+        private void OnEnable() => _active.Add(this);
+
+        private void OnDisable()
+        {
+            _active.Remove(this);
+            _clutterLift = 0f;   // a pooled robot must not come back already lifted from its last cluster
         }
 
         private void LateUpdate()
@@ -232,6 +261,63 @@ namespace MaxWorlds.UI
             SyncToBody();
             Refresh();
         }
+
+        // ------------------------------------------------------------------ MV-473 de-clutter
+
+        /// <summary>Every bar currently attached, showing or not — <see cref="WorldHealthBarDeclutter"/>
+        /// filters to <see cref="Showing"/> itself so this list can stay a flat registry.</summary>
+        private static readonly List<WorldHealthBar> _active = new List<WorldHealthBar>();
+
+        /// <summary>
+        /// MV-473: nudge SHOWING bars apart when several robots cluster (a hedge choke-point, a
+        /// death-surge pile) instead of letting their fixed-height bars stack on top of each other.
+        /// O(n²) over only the currently-showing bars — not every pooled robot in the scene, most of
+        /// which are inactive or off-screen — so the live population cap (~25) bounds it to at most a
+        /// few hundred XZ distance checks a frame. <paramref name="clusterRadius"/>/<paramref name="stackStep"/>
+        /// are passed in rather than hard-coded here so the one call site (<see cref="WorldHealthBarDeclutter"/>)
+        /// is the single place that owns the tuning.
+        ///
+        /// Rank, not a physical shove: each bar counts how many OTHER showing bars within
+        /// <paramref name="clusterRadius"/> have a lower <see cref="Object.GetInstanceID"/>, and lifts
+        /// by that rank × <paramref name="stackStep"/>. Instance ID is stable for the life of a pooled
+        /// GameObject, so two robots standing together stack in a fixed order instead of fighting over
+        /// who goes on top frame to frame — the flicker a mutual "push apart by whoever's closer"
+        /// scheme would produce.
+        /// </summary>
+        internal static void ResolveClutter(float clusterRadius, float stackStep)
+        {
+            // Showing-only, gathered once so the O(n²) pass below never touches a hidden/pooled bar.
+            _showingScratch.Clear();
+            for (int i = 0; i < _active.Count; i++)
+                if (_active[i].Showing) _showingScratch.Add(_active[i]);
+            LastShowingCount = _showingScratch.Count;
+
+            float clusterRadiusSqr = clusterRadius * clusterRadius;
+            for (int i = 0; i < _showingScratch.Count; i++)
+            {
+                var bar = _showingScratch[i];
+                Vector3 pos = bar.transform.position;
+                int rank = 0;
+                for (int j = 0; j < _showingScratch.Count; j++)
+                {
+                    if (i == j) continue;
+                    var other = _showingScratch[j];
+                    Vector3 d = other.transform.position - pos;
+                    d.y = 0f;   // cluster test is planar — two robots stacked in height alone aren't visually crowded
+                    if (d.sqrMagnitude <= clusterRadiusSqr && other.GetInstanceID() < bar.GetInstanceID())
+                        rank++;
+                }
+                bar._clutterLift = rank * stackStep;
+            }
+        }
+
+        private static readonly List<WorldHealthBar> _showingScratch = new List<WorldHealthBar>();
+
+        /// <summary>How many bars the last <see cref="ResolveClutter"/> pass actually compared — the
+        /// real N behind <see cref="WorldHealthBarDeclutter.LastResolveMicroseconds"/>, since
+        /// <c>RobotEnemy.ActiveCount</c> undercounts a pose-held capture rig (a disabled RobotEnemy
+        /// still carries a live, showing bar).</summary>
+        public static int LastShowingCount { get; private set; }
 
         private void Refresh()
         {

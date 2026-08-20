@@ -175,6 +175,11 @@ namespace MaxWorlds.Enemies
         public void Apply(in EnemyArchetype a)
         {
             Kind = a.Kind;
+            // MV-473: Awake() attached the bar against the Rusher default (Apply hasn't run yet — see
+            // that method's own doc comment), so a Heavy/Brute spawned with a Rusher-height anchor
+            // would clip its own head for one frame and then jump. Re-anchor now that the real
+            // archetype (and its real ColliderHeight) is known.
+            _bar?.SetHeightAboveCentre(BarHeightFor(a));
             moveSpeed = a.MoveSpeed;
             maxHealth = a.MaxHealth;
             contactDamage = a.ContactDamage;
@@ -361,12 +366,23 @@ namespace MaxWorlds.Enemies
             // result on device read as "the robots have no life bars" — and a green bar you can see
             // approaching is exactly the read the ticket wants. The shared ramp keeps a healthy
             // robot's bar green and quiet, so a wall of full robots stays calm rather than loud.
-            WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true);
+            //
+            // MV-473's de-clutter pass (WorldHealthBarDeclutter) is what now keeps a pile of these
+            // always-on bars from stacking illegibly — see that class's own doc comment.
+            _bar = WorldHealthBar.Attach(gameObject, this, BarHeightFor(EnemyArchetype.Rusher), BarWidth,
+                                         alwaysShow: true);
         }
 
-        /// <summary>Metres above a robot's origin its bar floats. The origin is the body's centre
-        /// and the tallest archetype is 1.4 m, so this clears every head with room to spare.</summary>
-        private const float BarHeight = 1.15f;
+        private WorldHealthBar _bar;
+
+        /// <summary>Metres above a robot's origin its bar floats — per archetype (MV-473), since a flat
+        /// 1.15 m cleared a Rusher's 1.4 m collider with room to spare but barely cleared a Brute's
+        /// 1.9 m one. <see cref="HeadClearance"/> is the same world-space margin for every kind; the
+        /// actual on-screen daylight above that also depends on <see cref="WorldHealthBar"/>'s
+        /// camera-space <c>ScreenClearance</c>, which is pitch-tuned once, shared by every bar in the
+        /// game rather than duplicated per call site.</summary>
+        private static float BarHeightFor(in EnemyArchetype a) => a.ColliderHeight * 0.5f + HeadClearance;
+        private const float HeadClearance = 0.35f;
         private const float BarWidth = 1.5f;   // YT-136: wider so a flat, short bar still reads at 23 m zoom
 
         private void OnEnable()
