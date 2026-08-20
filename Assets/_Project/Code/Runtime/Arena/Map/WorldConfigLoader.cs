@@ -37,7 +37,15 @@ namespace MaxWorlds.Arena
             cfg.areas ??= Array.Empty<WorldArea>();
             cfg.gates ??= Array.Empty<WorldGate>();
 
-            return Validate(cfg, out reason);
+            if (!Validate(cfg, out reason)) return false;
+
+            // MV-487: a config cannot be accepted unverified against the checked-in level-design
+            // constraints, even though (unlike Validate above) a violation here is logged, not rejected —
+            // see LevelDesignVerifier's own doc comment for why this is a lint, not a second gate.
+            LevelDesignVerifier.LogViolations(cfg);
+
+            reason = null;
+            return true;
         }
 
         public static bool Validate(WorldConfig cfg, out string reason)
