@@ -43,10 +43,13 @@ namespace MaxWorlds.Arena
     }
 
     /// <summary>A shed area's factory position (MV-270) — where <see cref="WorldMapLoader"/> builds the
-    /// <c>MowerHutch</c> that makes <see cref="WorldArea.hasShed"/> real.</summary>
+    /// <c>MowerHutch</c> that makes <see cref="WorldArea.hasShed"/> real. <see cref="id"/> is optional,
+    /// authoring-only reference — <see cref="WorldArea.ShedId"/> is what actually names the built
+    /// entity (MV-475), not this field.</summary>
     [Serializable]
     public sealed class WorldShed
     {
+        public string id;
         public float x;
         public float z;
         public string produces;
@@ -140,6 +143,13 @@ namespace MaxWorlds.Arena
         public float targetThreatBudget;
         public string notes;
         public WorldShed shed;
+
+        /// <summary>Multiple sheds in one area (MV-475) — world 1's level design places up to 7 in a
+        /// single area, which the single <see cref="shed"/> field cannot express. Not read directly by
+        /// anything; call <see cref="Sheds"/> instead, which resolves this against the legacy
+        /// <see cref="shed"/> field so callers never branch on which one a config authored.</summary>
+        public WorldShed[] sheds;
+
         public WorldBoss boss;
 
         /// <summary>Shrubbery/hedge rows authored into this area (MV-318) — obstacles a robot or Max
@@ -169,6 +179,29 @@ namespace MaxWorlds.Arena
 
         public Vector2 CenterXz => new Vector2((XMin + XMax) * 0.5f, (ZMin + ZMax) * 0.5f);
         public Rect Footprint => new Rect(XMin, ZMin, XMax - XMin, ZMax - ZMin);
+
+        /// <summary>This area's sheds, resolved (MV-475): <see cref="sheds"/> when authored, else the
+        /// legacy single <see cref="shed"/> wrapped in a one-element array, else none. Gated on
+        /// <see cref="hasShed"/> exactly as every call site already gated itself before this
+        /// existed — <c>shed</c> alone is not a reliable "was this authored" signal, since JsonUtility
+        /// materialises a non-null default for it on every area the moment ANY area in the config's
+        /// array authors one (same quirk documented on <see cref="WorldComposition.IsAuthored"/>).
+        /// The one place that branches, so no caller has to.</summary>
+        public WorldShed[] Sheds()
+        {
+            if (!hasShed) return Array.Empty<WorldShed>();
+            if (sheds != null && sheds.Length > 0) return sheds;
+            return shed != null ? new[] { shed } : Array.Empty<WorldShed>();
+        }
+
+        /// <summary>The stable, unique entity id for the shed at <paramref name="index"/> of
+        /// <paramref name="count"/> total sheds in this area (MV-475): <c>"{id}_shed"</c> when there is
+        /// exactly one — so a legacy single-shed config's entity id, and every save/test that names it,
+        /// is unchanged — or <c>"{id}_shed{n}"</c> (1-based) when there is more than one. Every caller
+        /// that builds or resolves a shed entity (<see cref="WorldMapLoader"/>, <see cref="WorldRunner"/>,
+        /// <see cref="MaxWorlds.Enemies.SupplyLineNetwork"/>) uses this same rule so their ids never
+        /// disagree.</summary>
+        public string ShedId(int index, int count) => count <= 1 ? $"{id}_shed" : $"{id}_shed{index + 1}";
 
         public bool IsEntryRole => HasRole("entry");
         public bool IsBossRole => HasRole("boss");

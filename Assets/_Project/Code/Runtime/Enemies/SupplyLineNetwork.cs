@@ -18,9 +18,41 @@ namespace MaxWorlds.Enemies
     public sealed class SupplyLineNetwork
     {
         private readonly WorldConfig _cfg;
+
+        /// <summary>Destroyed SHED entity ids (MV-475) — not area ids. Tracking moved from "is this
+        /// area's shed down" to "is this specific shed down" because an area can now carry several.</summary>
         private readonly HashSet<string> _destroyedSheds = new HashSet<string>();
 
-        public SupplyLineNetwork(WorldConfig cfg) => _cfg = cfg ?? throw new ArgumentNullException(nameof(cfg));
+        /// <summary>Every shed entity id this world carries, keyed by its area — built once from
+        /// <see cref="WorldArea.Sheds"/>/<see cref="WorldArea.ShedId"/> so every other method here just
+        /// looks a shed's area up rather than re-deriving the id rule.</summary>
+        private readonly Dictionary<string, List<string>> _areaSheds = new Dictionary<string, List<string>>();
+
+        /// <summary>The reverse of <see cref="_areaSheds"/> — which area a given shed entity id belongs
+        /// to, so <see cref="DestroyShed"/> can take just the shed id (the identity a factory actually
+        /// dies with) and still know which area's line it affects.</summary>
+        private readonly Dictionary<string, string> _shedArea = new Dictionary<string, string>();
+
+        public SupplyLineNetwork(WorldConfig cfg)
+        {
+            _cfg = cfg ?? throw new ArgumentNullException(nameof(cfg));
+
+            foreach (WorldArea a in _cfg.areas)
+            {
+                if (a == null) continue;
+                WorldShed[] sheds = a.Sheds();
+                if (sheds.Length == 0) continue;
+
+                var ids = new List<string>(sheds.Length);
+                for (int i = 0; i < sheds.Length; i++)
+                {
+                    string shedId = a.ShedId(i, sheds.Length);
+                    ids.Add(shedId);
+                    _shedArea[shedId] = a.id;
+                }
+                _areaSheds[a.id] = ids;
+            }
+        }
 
         /// <summary>Fired once, the instant a shed's supply line halts — the hook a future runner wires
         /// to the existing shed-destroyed reward path (<c>HudSignals.FactoryDestroyed</c> already drops
@@ -29,42 +61,52 @@ namespace MaxWorlds.Enemies
         /// drop, just naming the area it happened in).</summary>
         public event Action<string> SupplyLineHalted;
 
-        public bool IsShedArea(string areaId)
+        public bool IsShedArea(string areaId) => _areaSheds.ContainsKey(areaId);
+
+        /// <summary>Is the shed at entity id <paramref name="shedId"/> (not an area id — MV-475)
+        /// destroyed. False for an id that isn't a shed at all.</summary>
+        public bool IsShedDestroyed(string shedId) => _destroyedSheds.Contains(shedId);
+
+        /// <summary>A shed area is supplying while ANY of its sheds still stands (MV-475 — an area with
+        /// several sheds keeps feeding its line until the last one falls). Not a shed area at all is
+        /// never "supplying" — there is no line to halt.</summary>
+        public bool IsSupplying(string areaId)
         {
-            WorldArea a = _cfg.Area(areaId);
-            return a != null && a.hasShed;
+            if (!_areaSheds.TryGetValue(areaId, out List<string> shedIds)) return false;
+            foreach (string shedId in shedIds)
+                if (!_destroyedSheds.Contains(shedId)) return true;
+            return false;
         }
 
-        public bool IsShedDestroyed(string areaId) => _destroyedSheds.Contains(areaId);
-
-        /// <summary>A shed area that is standing (authored with a shed, not yet destroyed) is
-        /// supplying. Not a shed at all is never "supplying" — there is no line to halt.</summary>
-        public bool IsSupplying(string areaId) => IsShedArea(areaId) && !IsShedDestroyed(areaId);
-
-        /// <summary>Report a shed destroyed — halts its line and raises <see cref="SupplyLineHalted"/>.
-        /// A no-op on an area with no shed, or a shed already reported destroyed (idempotent, so a
-        /// duplicate death report never double-fires the event).</summary>
-        public void DestroyShed(string areaId)
+        /// <summary>Report a shed destroyed, by its ENTITY id (MV-475 — a factory dies with a shed id,
+        /// not its area's id, the moment an area can carry more than one). Halts only that one shed;
+        /// raises <see cref="SupplyLineHalted"/>, naming the AREA, only once that area's LAST standing
+        /// shed falls. A no-op on an id that isn't a known shed, or a shed already reported destroyed
+        /// (idempotent, so a duplicate death report never double-fires the event).</summary>
+        public void DestroyShed(string shedId)
         {
-            if (!IsShedArea(areaId) || !_destroyedSheds.Add(areaId)) return;
-            SupplyLineHalted?.Invoke(areaId);
+            if (!_shedArea.TryGetValue(shedId, out string areaId) || !_destroyedSheds.Add(shedId)) return;
+            if (!IsSupplying(areaId)) SupplyLineHalted?.Invoke(areaId);
         }
 
         /// <summary>True once every authored shed in this world has been destroyed — the boss gate's
         /// <c>all-sheds-destroyed</c> condition (<see cref="MapValidation.ValidateWorldConfig"/>'s
         /// boss-gate rule guarantees exactly this string names the gate waiting on it). False for a
         /// world authored with no sheds at all — nothing has been cleared, there was just never
-        /// anything to clear (same convention as <c>FactoryCensus.AllDown</c>).</summary>
+        /// anything to clear (same convention as <c>FactoryCensus.AllDown</c>). Counts every SHED, not
+        /// every shed area (MV-475).</summary>
         public bool AllShedsDestroyed
         {
             get
             {
                 bool anyShed = false;
-                foreach (WorldArea a in _cfg.areas)
+                foreach (List<string> shedIds in _areaSheds.Values)
                 {
-                    if (a == null || !a.hasShed) continue;
-                    anyShed = true;
-                    if (!IsShedDestroyed(a.id)) return false;
+                    foreach (string shedId in shedIds)
+                    {
+                        anyShed = true;
+                        if (!_destroyedSheds.Contains(shedId)) return false;
+                    }
                 }
                 return anyShed;
             }

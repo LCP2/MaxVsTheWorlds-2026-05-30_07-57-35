@@ -42,6 +42,15 @@ namespace MaxWorlds.Arena
         /// a way through.</summary>
         public const float DoorwayClearance = 2f;
 
+        /// <summary>Closest two sheds authored in the SAME area may sit, centre to centre (MV-475) —
+        /// two <see cref="SpawnRadius"/> 3.5 m rings plus <see cref="SpawnClearance"/> 0.8 m each, plus
+        /// a lane between them.</summary>
+        public const float MinShedSeparation = 11f;
+
+        /// <summary>Closest a shed may sit to its own area's walls (MV-475) — room for its spawn ring
+        /// plus clearance without crowding the boundary.</summary>
+        public const float MinShedWallMargin = 6f;
+
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
         /// room.</summary>
         public const float MinFreeChannel = 3f;
@@ -377,6 +386,7 @@ namespace MaxWorlds.Arena
             if (cfg == null) { reason = "the world config is null"; return false; }
 
             return WorldAreas(cfg, out reason)
+                && WorldSheds(cfg, out reason)
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
                 && WorldBossGate(cfg, out reason);
@@ -433,6 +443,50 @@ namespace MaxWorlds.Arena
         private static bool AreasOverlap(WorldArea a, WorldArea b) =>
             a.XMin < b.XMax - Geo.Epsilon && a.XMax > b.XMin + Geo.Epsilon &&
             a.ZMin < b.ZMax - Geo.Epsilon && a.ZMax > b.ZMin + Geo.Epsilon;
+
+        /// <summary>Every shed an area carries (MV-475, <see cref="WorldArea.Sheds"/>) must sit clear of
+        /// its own area's walls, and two sheds in the same area must sit clear of each other — the same
+        /// "nowhere for a robot to spawn on top of something" guarantee the ordinary Cover rules give a
+        /// single shed, extended to a shed's own neighbours now that there can be more than one.
+        ///
+        /// Only applies once an area actually carries MORE THAN ONE shed. A legacy single-shed area
+        /// "behaves exactly as it does today" (AC2) — several shipped areas (e.g. world1's a11, 4.8-5.4 m
+        /// from its walls) predate this rule and were never authored against it, so gating on count is
+        /// what keeps them valid rather than retroactively breaking already-shipped content.</summary>
+        private static bool WorldSheds(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldShed[] sheds = a.Sheds();
+                if (sheds.Length <= 1) continue;
+
+                foreach (WorldShed s in sheds)
+                {
+                    if (s.x - a.XMin < MinShedWallMargin || a.XMax - s.x < MinShedWallMargin ||
+                        s.z - a.ZMin < MinShedWallMargin || a.ZMax - s.z < MinShedWallMargin)
+                    {
+                        reason = $"a shed in area '{a.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
+                                 $"{MinShedWallMargin} m of its area's walls";
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < sheds.Length; i++)
+                for (int j = i + 1; j < sheds.Length; j++)
+                {
+                    float dist = Vector2.Distance(new Vector2(sheds[i].x, sheds[i].z), new Vector2(sheds[j].x, sheds[j].z));
+                    if (dist < MinShedSeparation)
+                    {
+                        reason = $"area '{a.id}' has two sheds {dist:0.#} m apart — under the " +
+                                 $"{MinShedSeparation} m minimum shed separation";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
 
         private static bool WorldGates(WorldConfig cfg, out string reason)
         {

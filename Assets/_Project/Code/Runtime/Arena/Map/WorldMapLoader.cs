@@ -127,20 +127,25 @@ namespace MaxWorlds.Arena
             // A shed area's factory (MV-270, World & Difficulty Framework §6): the same MowerHutch
             // recipe every map's factory already builds through (MapRuntime.BuildFactory) — this is
             // what makes "sheds produce reinforcements" real rather than authored-but-inert data.
+            // MV-475: one entity per authored shed, not per area — an area can carry several.
             foreach (WorldArea a in cfg.areas)
             {
-                if (!a.hasShed || a.shed == null) continue;
-                entities.Add(new MapEntity
+                WorldShed[] sheds = a.Sheds();
+                for (int i = 0; i < sheds.Length; i++)
                 {
-                    id = $"{a.id}_shed",
-                    kind = "factory",
-                    x = a.shed.x,
-                    z = a.shed.z,
-                    width = 3f,
-                    height = 2f,
-                    depth = 3f,
-                    dressing = "shed",
-                });
+                    WorldShed s = sheds[i];
+                    entities.Add(new MapEntity
+                    {
+                        id = a.ShedId(i, sheds.Length),
+                        kind = "factory",
+                        x = s.x,
+                        z = s.z,
+                        width = 3f,
+                        height = 2f,
+                        depth = 3f,
+                        dressing = "shed",
+                    });
+                }
             }
 
             // Shrubbery authored per area (MV-318) — handed straight to the same Cover entity kind

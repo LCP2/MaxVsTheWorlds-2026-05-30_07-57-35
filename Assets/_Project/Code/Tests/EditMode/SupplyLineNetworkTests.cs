@@ -33,10 +33,10 @@ namespace MaxWorlds.Tests.EditMode
             areas = new[]
             {
                 new WorldArea { id = "a1", index = 1, role = "normal" },
-                new WorldArea { id = "a2", index = 2, role = "shed", hasShed = true },
+                new WorldArea { id = "a2", index = 2, role = "shed", hasShed = true, shed = new WorldShed() },
                 new WorldArea { id = "a3", index = 3, role = "normal" },
                 new WorldArea { id = "a4", index = 4, role = "normal" },
-                new WorldArea { id = "a5", index = 5, role = "shed", hasShed = true },
+                new WorldArea { id = "a5", index = 5, role = "shed", hasShed = true, shed = new WorldShed() },
                 new WorldArea { id = "a6", index = 6, role = "normal" },
             },
             gates = new[]
@@ -102,7 +102,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             var net = new SupplyLineNetwork(FixtureWorld());
 
-            net.DestroyShed("a2");
+            net.DestroyShed("a2_shed");
 
             Assert.IsFalse(net.IsSupplying("a2"));
             Assert.IsEmpty(net.Recipients("a2"));
@@ -128,8 +128,8 @@ namespace MaxWorlds.Tests.EditMode
             var firedFor = new List<string>();
             net.SupplyLineHalted += area => firedFor.Add(area);
 
-            net.DestroyShed("a2");
-            net.DestroyShed("a2"); // idempotent — must not double-fire
+            net.DestroyShed("a2_shed");
+            net.DestroyShed("a2_shed"); // idempotent — must not double-fire
 
             CollectionAssert.AreEqual(new[] { "a2" }, firedFor);
         }
@@ -141,10 +141,10 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsFalse(net.AllShedsDestroyed);
 
-            net.DestroyShed("a2");
+            net.DestroyShed("a2_shed");
             Assert.IsFalse(net.AllShedsDestroyed);
 
-            net.DestroyShed("a5");
+            net.DestroyShed("a5_shed");
             Assert.IsTrue(net.AllShedsDestroyed);
         }
 
@@ -156,6 +156,38 @@ namespace MaxWorlds.Tests.EditMode
             var net = new SupplyLineNetwork(cfg);
 
             Assert.IsFalse(net.AllShedsDestroyed);
+        }
+
+        /// <summary>MV-475: an area can now carry several sheds (<see cref="WorldArea.sheds"/>), and
+        /// its line must not halt until the LAST of them falls — the exact bug the old
+        /// area-id-keyed <c>_destroyedSheds</c> could not even express, since one <c>DestroyShed</c>
+        /// call used to take out the whole area in one shot.</summary>
+        [Test]
+        public void IsSupplying_StaysTrueUntilTheLastOfSeveralShedsInOneAreaFalls()
+        {
+            var cfg = new WorldConfig
+            {
+                world = "Test World",
+                areas = new[]
+                {
+                    new WorldArea
+                    {
+                        id = "a7", index = 7, role = "shed", hasShed = true,
+                        sheds = new[] { new WorldShed(), new WorldShed() },
+                    },
+                },
+            };
+            var net = new SupplyLineNetwork(cfg);
+
+            Assert.IsTrue(net.IsSupplying("a7"));
+
+            net.DestroyShed("a7_shed1");
+            Assert.IsTrue(net.IsSupplying("a7"), "one of two sheds down — the area's line must still be up");
+            Assert.IsFalse(net.AllShedsDestroyed);
+
+            net.DestroyShed("a7_shed2");
+            Assert.IsFalse(net.IsSupplying("a7"), "both sheds down — the line must now be halted");
+            Assert.IsTrue(net.AllShedsDestroyed);
         }
     }
 }

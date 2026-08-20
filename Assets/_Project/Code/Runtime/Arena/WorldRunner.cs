@@ -33,7 +33,12 @@ namespace MaxWorlds.Arena
 
         private SupplyLineNetwork _supply;
         private AreaGate _bossGate;
-        private readonly List<(string areaId, MowerHutch hutch)> _sheds = new List<(string, MowerHutch)>(3);
+
+        /// <summary>One entry per BUILT shed (MV-475, not per area — an area can carry several).
+        /// <c>shedId</c> is the entity id <see cref="SupplyLineNetwork"/> tracks destruction against;
+        /// <c>areaId</c> is only needed alongside it for <see cref="TrackDestroyedShedStream"/>.</summary>
+        private readonly List<(string areaId, string shedId, MowerHutch hutch)> _sheds =
+            new List<(string, string, MowerHutch)>(3);
 
         /// <summary>Destroyed sheds' spawners, keyed by their 1-based area index (MV-456) — fed by
         /// <see cref="TrackDestroyedShedStream"/> as each shed dies. Never drained: a world is short
@@ -72,11 +77,15 @@ namespace MaxWorlds.Arena
 
             foreach (WorldArea area in cfg.areas)
             {
-                if (!area.hasShed) continue;
-                if (!build.Actors.TryGetValue($"{area.id}_shed", out GameObject shedGo) || shedGo == null) continue;
+                WorldShed[] sheds = area.Sheds();
+                for (int i = 0; i < sheds.Length; i++)
+                {
+                    string shedId = area.ShedId(i, sheds.Length);
+                    if (!build.Actors.TryGetValue(shedId, out GameObject shedGo) || shedGo == null) continue;
 
-                MowerHutch hutch = shedGo.GetComponent<MowerHutch>();
-                if (hutch != null) _sheds.Add((area.id, hutch));
+                    MowerHutch hutch = shedGo.GetComponent<MowerHutch>();
+                    if (hutch != null) _sheds.Add((area.id, shedId, hutch));
+                }
             }
 
             if (build.Actors.TryGetValue("bg", out GameObject bossGateGo) && bossGateGo != null)
@@ -129,11 +138,11 @@ namespace MaxWorlds.Arena
             {
                 for (int i = _sheds.Count - 1; i >= 0; i--)
                 {
-                    (string areaId, MowerHutch hutch) = _sheds[i];
+                    (string areaId, string shedId, MowerHutch hutch) = _sheds[i];
                     if (hutch != null && hutch.IsAlive) continue;
 
                     _sheds.RemoveAt(i);
-                    _supply.DestroyShed(areaId);
+                    _supply.DestroyShed(shedId);
                     TrackDestroyedShedStream(areaId, hutch);
 
                     if (_supply.AllShedsDestroyed && _bossGate != null)
