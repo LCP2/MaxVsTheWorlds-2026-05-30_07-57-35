@@ -108,6 +108,10 @@ This covers local verifies, CI runs, builds, deploys and test suites alike. It i
 
 **This is not a per-ticket gate for the worker.** The worker's own build has not deployed yet when its turn ends — it can only ever see a previous, unrelated deploy — so checking the live WebGL Pages build as a precondition for finishing *this* ticket is structurally impossible and was the root cause of a push/cancel loop (MV-346). The worker never waits for, watches, or polls a CI run, and never schedules a wakeup to check one. `cc-verify` green locally is the worker's complete gate; the play-check happens later, separately, against the accumulated pile before a TestFlight ship.
 
+## Verifier subagent — judgment before hand-off (MV-486)
+
+`cc-verify.bat` is mechanical; it cannot judge whether the AC were actually met. Before printing `>>> DONE` (or `>>> ALREADY-DONE`), invoke the `verifier` subagent (`.claude/agents/verifier.md`) via the Task tool. Give it the ticket's acceptance criteria plus the fresh artefacts from this run (`Logs/editmode-results.xml`, `docs/press/_uiscreens_report.txt`, the relevant `rig-*.png`, `git diff --stat`) — not your reasoning, not a summary of what you did. Paste its per-criterion PASS/FAIL verdict, with its quoted evidence, into the fix comment. The verifier judges and reports only; it has no edit tools and must never be asked to fix anything it finds wrong. If the Task tool is not usable under the current permission settings, say so plainly in the fix comment and in the hand-off line — do not work around the restriction to invoke it anyway, and do not skip the step silently.
+
 ## Decide
 
 - All AC pass AND no `human-judgment` AC → transition **QA Running**; drop `cc-active`; comment summary + PR link; **do not wait for or check the CI/deploy run** — loop straight to the next ticket. **On Staging** is CI's to set (once the Pages deploy succeeds and the play-check passes) and **In PDN** is the TestFlight ship's to set — the worker never sets either.
