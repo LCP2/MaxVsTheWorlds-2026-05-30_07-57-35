@@ -1669,11 +1669,16 @@ namespace MaxWorlds.UI
             // sized and configured for an ABILITY label sharing a tight column with siblings — a
             // category label is one word alone above its hex, with the real column to itself
             // (cat.ColumnHalfWidth, MV-472's own content-proportional layout data, never consulted here
-            // before). Two bugs shared one root cause (best-fit silently overriding an authored size):
-            //   1. shell.Label.fontSize was set to CategoryLabelFontSize (36 in phone mode) AFTER
-            //      BuildNodeShell already left resizeTextForBestFit=true with resizeTextMaxSize capped
-            //      at the ABILITY size (32) — Unity honours best-fit over a bare fontSize write, so the
-            //      authored 36 never actually rendered; the label was silently capped at 32.
+            // before). Two bugs shared one root cause:
+            //   1. MV-489: MV-472 set resizeTextMinSize/resizeTextMaxSize off CategoryLabelFontSize (36
+            //      in phone mode) but left the base Text.fontSize field at whatever BuildNodeShell had
+            //      already authored it to — the ABILITY size (32) — on the assumption that best-fit
+            //      ignores the bare fontSize field entirely. Verified false by direct measurement
+            //      (TextGenerator.Populate/fontSizeUsedForBestFit, the same call OnPopulateMesh makes):
+            //      Unity's best-fit search is bounded ABOVE by fontSize as well as resizeTextMaxSize, so
+            //      a stale fontSize below the intended cap silently re-imposes it — the label rendered
+            //      at 32 even with resizeTextMaxSize correctly set to 36. fontSize must be kept in sync
+            //      with resizeTextMaxSize, not left at whatever the shared shell happened to author.
             //   2. The inherited box (phone: 190px/Wrap) is an ability-column width, not this category's
             //      own — narrower than "SECONDARY" needs, so it broke mid-word ("SECONDAR"/"Y").
             // Deriving the box from the real column width and using best-fit (Overflow, never Wrap) to
@@ -1686,6 +1691,7 @@ namespace MaxWorlds.UI
             shell.Label.resizeTextForBestFit = true;
             shell.Label.resizeTextMinSize = Mathf.Max(1, Mathf.RoundToInt(CategoryLabelFontSize * 0.75f));
             shell.Label.resizeTextMaxSize = Mathf.RoundToInt(CategoryLabelFontSize);
+            shell.Label.fontSize = shell.Label.resizeTextMaxSize;   // MV-489: keep in lockstep with the cap above — see note 1
 
             // MV-443 defect 5: a lit category additionally gets a solid outer ring at
             // capOuterRingOffset — reusing the shared Outer Ring image, but with a SOLID (not dashed)
