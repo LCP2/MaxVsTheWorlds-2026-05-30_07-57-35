@@ -175,8 +175,8 @@ namespace MaxWorlds.Enemies
 
         /// <summary>
         /// Ranged laser (MV-293), displayed to the player as "LASER" (MV-404: display-only rename,
-        /// this <c>EnemyKind.Gunner</c> identifier is unchanged). Keeps its distance in the 4.5–9 m
-        /// band — inside that it backs off rather than closing, so the answer to a Gunner is never
+        /// this <c>EnemyKind.Gunner</c> identifier is unchanged). Keeps its distance in the 4.5–6.3 m
+        /// band (MV-497: was 4.5–9 m) — inside that it backs off rather than closing, so the answer to a Gunner is never
         /// just "walk at it" the way it is for every melee kind. Aims live while telegraphing, then
         /// commits to a LOCKED beam (the same "no info through the wind-up" rule as a lunge, see
         /// <see cref="RobotEnemy"/>'s Telegraph): stand still after the tell fires and it hits,
@@ -195,7 +195,7 @@ namespace MaxWorlds.Enemies
             moveSpeed: 2.2f, maxHealth: 39f,   // MV-404: 26 -> 39, ~50% harder to kill per Lee's ask
             contactDamage: 18f,   // DPS while the beam holds
             contactRadius: 0.6f,  // beam half-width — wider than Max's 0.5 m radius, still side-steppable
-            lungeRange: 9f,       // max fire range
+            lungeRange: 6.3f,     // max fire range — MV-497: cut 30% from 9m per Lee's ask
             telegraphTime: 0.5f,  // aim wind-up — the dodge window
             lungeSpeed: 0f,       // it never moves during the shot
             lungeTime: 1.1f,      // beam duration

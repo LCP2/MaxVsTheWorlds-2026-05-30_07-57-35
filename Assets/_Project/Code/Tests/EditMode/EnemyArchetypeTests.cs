@@ -202,6 +202,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void Gunner_FireRangeIsCutThirtyPercent_ButStandoffAndLauncherAreUntouched_MV497()
+        {
+            // MV-497 (20 Aug 2026, Lee): the laser fires from too far away — cut lungeRange 9 -> 6.3
+            // (30%). standoffRange stays at 4.5, deliberately narrowing the kite band to 1.8 m rather
+            // than scaling both. Launcher is a lobbed splash, not a laser, and is explicitly untouched.
+            Assert.AreEqual(6.3f, Gunner.LungeRange, 0.001f, "MV-497: fire range must be cut 30% from 9m");
+            Assert.AreEqual(4.5f, Gunner.StandoffRange, 0.001f, "MV-497: standoff must not move");
+            Assert.AreEqual(10f, Launcher.LungeRange, 0.001f, "MV-497: Launcher is out of scope");
+            Assert.AreEqual(5f, Launcher.StandoffRange, 0.001f, "MV-497: Launcher is out of scope");
+        }
+
+        [Test]
         public void LauncherAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
         {
             // EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame pins that only the
