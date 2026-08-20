@@ -193,12 +193,23 @@ jobs:
   #    ever recorded a TestFlight ship. Comment-only, never transitions status
   #    (that ladder is unchanged) and can never fail the release — mirrors the
   #    range logic and soft-fail posture of build.yml's jira-on-staging job.
+  #
+  #    MV-501: a workflow_dispatch ship creates no tag, so the next run's PREV
+  #    lookup below kept resolving to the same old tag and re-commenting on
+  #    everything already shipped — the range grew cumulatively and never
+  #    advanced. The "Tag the shipped commit" step fixes that by writing the
+  #    tag a dispatch never gets. It runs LAST in this job (after the Jira
+  #    comment step, not before) specifically so THIS run's own PREV lookup
+  #    still resolves to the true previous release, not the tag it just
+  #    created at the same commit.
   # ---------------------------------------------------------------------------
   jira-release-comment:
     name: Comment shipped tickets in Jira
     needs: [release-ios]
     if: success()
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # MV-501: needed to push the release tag; read-only everywhere else
     env:
       ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
       RELEASE_VERSION: ${{ inputs.version }}
@@ -211,6 +222,23 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
+
+      - name: Resolve marketing version
+        shell: bash
+        run: |
+          set -uo pipefail
+          # Marketing version: explicit dispatch input, else the pushed tag (vX.Y.Z -> X.Y.Z),
+          # else the Fastfile's own run-number fallback shape (see Fastfile RELEASE_VERSION).
+          if [ -n "${RELEASE_VERSION:-}" ]; then
+            VERSION="$RELEASE_VERSION"
+          elif [ "$REF_TYPE" = "tag" ]; then
+            VERSION="${REF_NAME#v}"
+          else
+            VERSION="run #$RUN_NUMBER fallback version (no tag, no dispatch input - see Fastfile)"
+          fi
+          echo "Marketing version: $VERSION"
+          echo "VERSION=$VERSION" >> "$GITHUB_ENV"
+
       - name: Comment shipped tickets in Jira
         shell: bash
         run: |
@@ -222,17 +250,6 @@ jobs:
           BASE=$(jq -r '.jiraBaseUrl' pipeline.config.json)
           MAIL=$(jq -r '.jiraEmail' pipeline.config.json)
           PKEY=$(jq -r '.jiraProjectKey' pipeline.config.json)
-
-          # Marketing version: explicit dispatch input, else the pushed tag (vX.Y.Z -> X.Y.Z),
-          # else the Fastfile's own run-number fallback shape (see Fastfile RELEASE_VERSION).
-          if [ -n "${RELEASE_VERSION:-}" ]; then
-            VERSION="$RELEASE_VERSION"
-          elif [ "$REF_TYPE" = "tag" ]; then
-            VERSION="${REF_NAME#v}"
-          else
-            VERSION="run #$RUN_NUMBER fallback version (no tag, no dispatch input - see Fastfile)"
-          fi
-          echo "Marketing version: $VERSION"
 
           # Previous release point: the most recent other tag reachable from HEAD, mirroring
           # jira-on-staging's "previous successful deploy" lookup but keyed on release tags
@@ -246,7 +263,37 @@ jobs:
           fi
           echo "Commit range: $RANGE"
 
-          KEYS=$(git log --format=%s%n%b "$RANGE" | grep -oE "$PKEY-[0-9]+" | sort -u)
+          # MV-501: credit a ticket only when a commit's OWN subject line names it (%s, not
+          # %s%n%b — a passing mention in the body no longer counts), and net out any commit
+          # whose own subject is a revert (starts "Revert ", both git-revert's default message
+          # and this repo's manual revert commits use that convention) — a key credited only
+          # by a landing that was subsequently reverted in the same range must not be told it
+          # shipped, because its code isn't in the build. Base extraction, before the revert
+          # netting: git log --format=%s "$RANGE" | grep -oE "$PKEY-[0-9]+" | sort -u
+          declare -A LANDED=() REVERTED=()
+          while IFS= read -r subject; do
+            is_revert=0
+            case "$subject" in
+              Revert\ *) is_revert=1 ;;
+            esac
+            while IFS= read -r key; do
+              [ -z "$key" ] && continue
+              if [ "$is_revert" = "1" ]; then
+                REVERTED["$key"]=$(( ${REVERTED["$key"]:-0} + 1 ))
+              else
+                LANDED["$key"]=$(( ${LANDED["$key"]:-0} + 1 ))
+              fi
+            done < <(grep -oE "$PKEY-[0-9]+" <<< "$subject")
+          done < <(git log --format=%s "$RANGE")
+
+          KEYS_ARR=()
+          for key in "${!LANDED[@]}"; do
+            if [ "${LANDED[$key]}" -gt "${REVERTED[$key]:-0}" ]; then
+              KEYS_ARR+=("$key")
+            fi
+          done
+          KEYS=$(printf '%s\n' "${KEYS_ARR[@]:-}" | sed '/^$/d' | sort -u)
+
           if [ -z "$KEYS" ]; then
             echo "::notice::No $PKEY keys in range - nothing to comment."
             exit 0
@@ -263,4 +310,26 @@ jobs:
               echo "::warning::$K comment failed with HTTP $CODE."
             fi
           done
+          exit 0
+
+      - name: Tag the shipped commit (advances next run's PREV lookup)
+        shell: bash
+        run: |
+          set -uo pipefail
+          TAG="v$VERSION"
+          if git rev-parse -q --verify "refs/tags/$TAG" >/dev/null 2>&1; then
+            echo "::notice::Tag $TAG already exists - skipping (expected on a tag-push release)."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git tag -a "$TAG" -m "Shipped to TestFlight as $VERSION (run $RUN_NUMBER)" "$CURRENT_SHA"; then
+            if git push origin "refs/tags/$TAG"; then
+              echo "Tagged $CURRENT_SHA as $TAG and pushed it."
+            else
+              echo "::warning::git push of tag $TAG failed - next release's PREV lookup may not advance."
+            fi
+          else
+            echo "::warning::git tag $TAG failed - next release's PREV lookup may not advance."
+          fi
           exit 0
