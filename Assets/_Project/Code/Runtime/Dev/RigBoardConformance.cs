@@ -13,14 +13,62 @@ namespace MaxWorlds.Dev
     /// </summary>
     public static class RigBoardConformance
     {
+        /// <summary>MV-480: maps a board-JSON (x, y) — always authored in the SAME unscaled coordinate
+        /// space every node's own <c>rig_board.json</c> entry uses, regardless of which captured aspect
+        /// is being measured — onto the actual pixel a given capture rendered it at. Every existing
+        /// check was written assuming an implicit identity transform (<see cref="Identity"/>), true only
+        /// for <c>rig-16x9</c> where json space and pixel space happen to coincide 1:1. The other two
+        /// captured aspects (<c>rig-ipad-mini</c>, standard-mode geometry scaled by
+        /// <c>WeaponsScreen.ComputeBoardScale</c> and cropped by <c>WeaponsScreen.VisibleRefXWindow</c>;
+        /// <c>rig-phone</c>, phone-mode geometry inside <c>WeaponsScreen.BuildPhoneScrollViewport</c>,
+        /// never scaled but offset by the viewport's own top) need this explicit mapping instead.
+        ///
+        /// The transform is a single affine map per axis — <c>scaled = Offset + json * Scale</c> — built
+        /// once per capture by the caller (<c>UiScreensDirector.RunConformanceChecks</c>) from whichever
+        /// of <c>WeaponsScreen</c>'s own scale-to-fit constants apply to that capture's aspect/mode, then
+        /// reused for every node on the board. Composing two json-space points through the SAME transform
+        /// before differencing them (as every ray/annulus/rect check below already does, by construction)
+        /// reproduces exactly the on-screen pixel distance between them — so no check needs to separately
+        /// premultiply a radius by <see cref="Scale"/>; passing raw, unscaled json-space radii/offsets
+        /// straight through, same as every check already did for <c>rig-16x9</c>, is already correct at
+        /// every aspect once the transform itself is right.</summary>
+        public readonly struct BoardPixelTransform
+        {
+            public readonly float Scale;
+            public readonly float OffsetX;
+            public readonly float OffsetY;
+            public readonly float WindowMinX;
+            public readonly float PixelsPerRefUnit;
+
+            public BoardPixelTransform(float scale, float offsetX, float offsetY, float windowMinX, float pixelsPerRefUnit)
+            {
+                Scale = scale; OffsetX = offsetX; OffsetY = offsetY; WindowMinX = windowMinX; PixelsPerRefUnit = pixelsPerRefUnit;
+            }
+
+            /// <summary>The no-op transform every pre-MV-480 check implicitly assumed: json space IS
+            /// pixel space, 1:1, no crop. Still exactly what <c>rig-16x9</c> needs (scale 1, no window
+            /// crop, 1 pixel per ref unit at 1920x1080) — <see cref="GetJsonPixel"/>'s default when no
+            /// transform is supplied, so every pre-existing call site (all of them <c>rig-16x9</c>-only
+            /// before this ticket) needs no change at all.</summary>
+            public static readonly BoardPixelTransform Identity = new BoardPixelTransform(1f, 0f, 0f, 0f, 1f);
+
+            public float PixelX(float jsonX) => (OffsetX + jsonX * Scale - WindowMinX) * PixelsPerRefUnit;
+            public float PixelY(float jsonY) => (OffsetY + jsonY * Scale) * PixelsPerRefUnit;
+        }
+
         /// <summary>Texture2D is bottom-left origin; rig_board.json's canvas coordinates are top-left,
         /// y-down (the same convention <c>UiScreensDirector</c>'s own pre-existing probe 6 already
         /// uses) — this is the one place that conversion happens so every check above it can just think
-        /// in json coordinates.</summary>
-        public static Color GetJsonPixel(Texture2D tex, float jsonX, float jsonY)
+        /// in json coordinates. <paramref name="transform"/> defaults to <see cref="BoardPixelTransform.Identity"/>
+        /// (MV-480) — see that field's own doc comment for why that's still exactly right for the one
+        /// caller (<c>rig-16x9</c>) that predates it.</summary>
+        public static Color GetJsonPixel(Texture2D tex, float jsonX, float jsonY, BoardPixelTransform? transform = null)
         {
-            int x = Mathf.Clamp(Mathf.RoundToInt(jsonX), 0, tex.width - 1);
-            int y = Mathf.Clamp(tex.height - 1 - Mathf.RoundToInt(jsonY), 0, tex.height - 1);
+            var t = transform ?? BoardPixelTransform.Identity;
+            float px = t.PixelX(jsonX);
+            float py = t.PixelY(jsonY);
+            int x = Mathf.Clamp(Mathf.RoundToInt(px), 0, tex.width - 1);
+            int y = Mathf.Clamp(tex.height - 1 - Mathf.RoundToInt(py), 0, tex.height - 1);
             return tex.GetPixel(x, y);
         }
 
@@ -39,11 +87,11 @@ namespace MaxWorlds.Dev
         /// so searching from the centre is unreliable. Approaching from outside the hex+glow, the first
         /// hit found actually is the edge, regardless of what's transparent closer to the middle.</summary>
         public static float RayInkDistance(Texture2D tex, float cx, float cy, float dx, float dy,
-            float maxDist, Color background, float tolerance)
+            float maxDist, Color background, float tolerance, BoardPixelTransform? transform = null)
         {
             for (float d = maxDist; d >= 1f; d -= 1f)
             {
-                Color px = GetJsonPixel(tex, cx + dx * d, cy + dy * d);
+                Color px = GetJsonPixel(tex, cx + dx * d, cy + dy * d, transform);
                 if (ColorDistance(px, background) > tolerance) return d;
             }
             return 0f;
@@ -55,11 +103,11 @@ namespace MaxWorlds.Dev
         /// art routinely has a transparent gap at its own mathematical centre — so "is a node here at
         /// all" needs a small neighbourhood, not one sample.</summary>
         public static bool BlockHasInk(Texture2D tex, float jsonX, float jsonY, int halfBlock,
-            Color background, float tolerance)
+            Color background, float tolerance, BoardPixelTransform? transform = null)
         {
             for (int dy = -halfBlock; dy <= halfBlock; dy++)
                 for (int dx = -halfBlock; dx <= halfBlock; dx++)
-                    if (ColorDistance(GetJsonPixel(tex, jsonX + dx, jsonY + dy), background) > tolerance)
+                    if (ColorDistance(GetJsonPixel(tex, jsonX + dx, jsonY + dy, transform), background) > tolerance)
                         return true;
             return false;
         }
@@ -68,14 +116,15 @@ namespace MaxWorlds.Dev
         /// [<paramref name="xMin"/>, <paramref name="xMax"/>) x [<paramref name="yMin"/>, <paramref name="yMax"/>),
         /// sampled every <paramref name="step"/> px — a coarse grid is plenty for a column-band mean and
         /// keeps a whole-region scan cheap.</summary>
-        public static float MeanLuminance(Texture2D tex, float xMin, float xMax, float yMin, float yMax, int step = 4)
+        public static float MeanLuminance(Texture2D tex, float xMin, float xMax, float yMin, float yMax, int step = 4,
+            BoardPixelTransform? transform = null)
         {
             double sum = 0;
             int count = 0;
             for (float y = yMin; y < yMax; y += step)
                 for (float x = xMin; x < xMax; x += step)
                 {
-                    Color c = GetJsonPixel(tex, x, y);
+                    Color c = GetJsonPixel(tex, x, y, transform);
                     sum += 0.2126 * c.r + 0.7152 * c.g + 0.0722 * c.b;
                     count++;
                 }
@@ -106,7 +155,7 @@ namespace MaxWorlds.Dev
         /// centre never reaches that boundary and is unaffected by the clamp.</summary>
         public static float AnnulusInkFraction(Texture2D tex, float cx, float cy, float rInner, float rOuter,
             Color background, float tolerance, float sectorCenterDeg = 0f, float sectorHalfWidthDeg = 40f, int step = 3,
-            float xMin = float.NegativeInfinity, float xMax = float.PositiveInfinity)
+            float xMin = float.NegativeInfinity, float xMax = float.PositiveInfinity, BoardPixelTransform? transform = null)
         {
             int hit = 0, total = 0;
             for (float y = -rOuter; y <= rOuter; y += step)
@@ -121,7 +170,7 @@ namespace MaxWorlds.Dev
                     float sampleX = cx + x;
                     if (sampleX < xMin || sampleX > xMax) continue;
                     total++;
-                    if (ColorDistance(GetJsonPixel(tex, sampleX, cy + y), background) > tolerance) hit++;
+                    if (ColorDistance(GetJsonPixel(tex, sampleX, cy + y, transform), background) > tolerance) hit++;
                 }
             return total > 0 ? (float)hit / total : 0f;
         }
