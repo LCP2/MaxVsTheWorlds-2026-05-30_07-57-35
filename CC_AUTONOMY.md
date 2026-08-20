@@ -4,11 +4,11 @@
 
 ## NEVER IDLE — the standing rule (read before anything else)
 
-The moment you finish a ticket (merged / handed off / proposal posted), **immediately pick the next actionable `needs-cc` ticket** (highest priority first, then key ascending) and keep going **without stopping**. Re-check the backlog after every completion.
+The moment you finish a ticket (merged / handed off / proposal posted), **immediately pick the next actionable `needs-cc-web` ticket** (highest priority first, then key ascending) and keep going **without stopping**. Re-check the backlog after every completion.
 
 Only STOP and wait for Lee when one of these is true:
 
-- (a) there are genuinely **no** actionable `needs-cc` tickets left in the backlog,
+- (a) there are genuinely **no** actionable `needs-cc-web` tickets left in the backlog,
 - (b) the only remaining items are `needs-lee` / explicitly blocked on a Lee decision, or
 - (c) you hit a blocker you cannot resolve yourself.
 

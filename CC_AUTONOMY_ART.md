@@ -1,3 +1,5 @@
+> **RETIRED 2026-08-20.** The art stream was merged into the single `cc-web` worker under `CC_AUTONOMY.md`. This file is kept for history only — do not follow it.
+
 # CC Autonomy Contract — ART / TECH-ART STREAM (MAX vs. THE WORLDS)
 
 > Kickoff: `Follow CC_AUTONOMY_ART.md.`
