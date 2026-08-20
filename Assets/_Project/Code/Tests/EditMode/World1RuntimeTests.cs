@@ -415,8 +415,11 @@ namespace MaxWorlds.Tests.EditMode
 
         // --- AC7 -------------------------------------------------------------------------------------
 
+        // MV-490 replaced a4's cover (design pass measured narrowest channel 6.0 m), superseding the
+        // MV-442 geometry this test originally asserted was under the old 6 m floor. The MinFreeChannel=3
+        // floor is still the binding invariant; the "was under 6" historical claim no longer applies.
         [Test]
-        public void World1_Area4TightestChannelPassesAt3AndWouldHaveFailedAt6()
+        public void World1_Area4TightestChannelPassesAt3()
         {
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
@@ -434,9 +437,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.GreaterOrEqual(narrowest, MapValidation.MinFreeChannel,
                 $"a4's tightest channel is {narrowest:0.#} m — fails the current MinFreeChannel " +
                 $"({MapValidation.MinFreeChannel} m)");
-            Assert.Less(narrowest, 6f,
-                $"a4's tightest channel is {narrowest:0.#} m — this must be UNDER the old 6 m floor, " +
-                "or the MinFreeChannel=3 change is not actually load-bearing for this map");
         }
 
         // --- AC9: a2_h1/a3_h2 were both trimmed by one cell (Lee, 2026-08-19) to clear a doorway and --
