@@ -6,6 +6,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Dev;
 using MaxWorlds.Intro;
 using MaxWorlds.Pickups;
+using MaxWorlds.Player;
 using MaxWorlds.Save;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
@@ -129,6 +130,11 @@ namespace MaxWorlds.UI
             if (_root != null) Destroy(_root);
             _confirmRoot = null;   // was a child of _root; already gone
             BootTiming.Mark("controllable");   // YT-216 — a slot was just picked; Max is live and moving
+
+            // MV-503: the CharacterController's state at this exact handoff, unconditionally — whether
+            // or not "rotates but never translates" reproduces this run.
+            var player = FindFirstObjectByType<PlayerController>();
+            if (player != null) player.LogHandoffDiagnostic();
         }
 
         private void Update()

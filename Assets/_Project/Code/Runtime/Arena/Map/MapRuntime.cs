@@ -364,6 +364,16 @@ namespace MaxWorlds.Arena
 
             if (cc != null) cc.enabled = was;
 
+            // MV-503: `was` false means the controller arrived here already disabled, and this restores
+            // it right back to disabled rather than to true — one of the two candidate mechanisms for
+            // "Max rotates but never translates" on a fresh run. Was silent; now on the record. Not a
+            // fix (this ticket is diagnostic-only) — just says when it happens.
+            if (cc != null && !was)
+            {
+                Debug.LogWarning($"[MV-503] MapRuntime.Adopt restored '{e.id}' ({e.kind}) " +
+                                  "CharacterController to disabled — it arrived already disabled.");
+            }
+
             built.Actors[e.id] = actor;
             return actor;
         }
