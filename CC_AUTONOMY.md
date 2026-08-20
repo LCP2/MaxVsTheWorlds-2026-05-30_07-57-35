@@ -76,7 +76,7 @@ Implement to the AC — and nothing beyond. Greybox + free-kit art only (no AI a
 ./cc-verify.bat
 ```
 
-Captures: editor compile, EditMode tests, headless Windows standalone build, log assertion that `targetFrameRate = 60` and `VSyncCount = 0`. Exit 0 = pass.
+Captures: editor compile; EditMode tests, failing if `Logs\editmode-results.xml` is missing after the run or its `<test-run total="...">` is 0; a headless Windows standalone build against a freshly-deleted `Logs\build.log`; and a log assertion that that file contains `targetFrameRate=60` and `VSyncCount=0`. Every Unity invocation's exit code is captured into a variable and compared to `0` explicitly (not `if errorlevel 1`, which treats a negative crash code as passing), so a hard crash fails the gate instead of printing `ok`. Exit 0 = pass.
 
 **Run `cc-verify.bat` synchronously in the foreground and WAIT for it to finish within this turn (use a long bash timeout).** You run in one-shot `-p` mode — there are NO background notifications, so if the build gets backgrounded and you end your turn to "wait for it", the run ends with no commit and the ticket stalls. **This is why MAX tickets have not been completing.** Never pipe `cc-verify` through `| tail`; read its real exit code directly.
 
