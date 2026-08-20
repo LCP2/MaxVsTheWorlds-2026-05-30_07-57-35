@@ -6,6 +6,7 @@ using UnityEngine.InputSystem.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Player;
 using MaxWorlds.Combat;
+using MaxWorlds.Dev;
 using MaxWorlds.Enemies;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
@@ -1000,6 +1001,16 @@ namespace MaxWorlds.UI
                 var t = AddText(slot.rectTransform, 26f, BoneWhite, TextAnchor.MiddleCenter);
                 Stretch(t.rectTransform);
                 t.text = glyphs[i];
+
+                // MV-505: "?" (Help) has no other behaviour yet, and already sits next to the
+                // FPS/build readout in the top-left — the existing touch affordance the ticket asks
+                // the MV-503 overlay to hook into, rather than a new input path.
+                if (glyphs[i] == "?")
+                {
+                    var button = slot.gameObject.AddComponent<Button>();
+                    button.transition = Selectable.Transition.None;
+                    button.onClick.AddListener(Mv503DiagnosticOverlay.ToggleVisible);
+                }
             }
         }
 
