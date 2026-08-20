@@ -20,8 +20,19 @@ namespace MaxWorlds.UI
     public abstract class AbilityJoystickControlBase : MonoBehaviour, IPointerDownHandler, IDragHandler, IPointerUpHandler
     {
         /// <summary>Drag distance, screen px, for the full authored throw/blink distance — matches
-        /// <c>HudController.AddOnScreenStick</c>'s own 90 px movementRange so every stick on screen
-        /// feels the same weight under a thumb.</summary>
+        /// <c>HudController.AddOnScreenStick</c>'s own (pre-MV-502) 90 px movementRange so every stick
+        /// on screen feels the same weight under a thumb.
+        ///
+        /// MV-502 note (deliberately NOT fixed here — see that ticket): this comparison is even more
+        /// resolution-dependent than the bug MV-502 fixed in <c>AddOnScreenStick</c>. <c>OnDrag</c>
+        /// compares <c>eventData.position</c> — a RAW SCREEN-PIXEL delta — directly against this flat
+        /// constant, with no canvas-local conversion at all (OnScreenStick at least normalises through
+        /// <c>RectTransformUtility.ScreenPointToLocalPointInRectangle</c> first). MV-502's own report was
+        /// specifically about the move/aim sticks (<c>PlayerController</c> via <c>OnScreenStick</c>), not
+        /// Water Balloon/Teleport/Sentinel, so fixing this is left to a follow-up rather than widened
+        /// into a "Highest" BLOCKER ticket — it would also mean rebasing
+        /// <c>AbilityJoystickArmDisarmTests</c> and <c>WaterBalloonJoystickControlTests</c>' own
+        /// hardcoded 90px drag arithmetic onto whatever replaces this constant.</summary>
         public const float DragRadiusPixels = 90f;
 
         /// <summary>How far the visual knob itself travels, px — matches the move/aim knobs' own 26 px

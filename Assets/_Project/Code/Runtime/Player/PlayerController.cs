@@ -59,6 +59,12 @@ namespace MaxWorlds.Player
         /// The HUD (YT-30) reads this to light the movement joystick + direction arrow.</summary>
         public Vector2 MoveInput { get; private set; }
 
+        /// <summary>MV-502: raw aim-stick magnitude this frame (post <c>stickDeadzone(min=0.2)</c>
+        /// rescale, pre <see cref="aimActivateThreshold"/> gate) — the number that decides whether
+        /// <see cref="IsAiming"/> trips. <c>DevModeController</c>'s overlay reads this so the real
+        /// on-device deflection is a measured number rather than a guess.</summary>
+        public float AimMagnitude { get; private set; }
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -113,6 +119,7 @@ namespace MaxWorlds.Player
             // Require a deliberate push (magnitude > aimActivate) so resting-stick
             // drift never counts as aiming — this is what gates the gadget's fire.
             Vector3 aimDir = new Vector3(aimInput.x, 0f, aimInput.y);
+            AimMagnitude = aimDir.magnitude;
             IsAiming = aimDir.sqrMagnitude > aimActivateThreshold * aimActivateThreshold;
             if (IsAiming)
             {
