@@ -22,6 +22,21 @@ namespace MaxWorlds.VFX
         }
     }
 
+    /// <summary>What a built body hands back: the gadget glow the rig tints, and the hip pivots the run
+    /// cycle drives (MV-474) — the same Eyes/Wheels split <see cref="RobotBodies.Body"/> already uses,
+    /// so a director never has to hunt geometry down by name.</summary>
+    public readonly struct MaxBodyResult
+    {
+        public readonly MeshRenderer[] GadgetGlow;
+        public readonly Transform[] Hips;
+
+        public MaxBodyResult(MeshRenderer[] gadgetGlow, Transform[] hips)
+        {
+            GadgetGlow = gadgetGlow;
+            Hips = hips;
+        }
+    }
+
     /// <summary>
     /// Max's body, in metres, feet at y = 0 and +Z where he faces. ~1.95 m to the crown.
     ///
@@ -35,18 +50,30 @@ namespace MaxWorlds.VFX
     /// </summary>
     public static class MaxBody
     {
-        /// <summary>Build Max under <paramref name="root"/>. Returns the emissive parts (the gadget
-        /// glow) so the rig can drive them.</summary>
-        public static MeshRenderer[] Build(Transform root, in MaxPalette p)
+        /// <summary>Build Max under <paramref name="root"/> (feet at y = 0 in <paramref name="root"/>'s
+        /// space). <paramref name="hipY"/> is <c>MaxRig.HipY</c> — the waist height the two returned hip
+        /// pivots sit at, so <c>TickRun</c>'s existing stride rotation (MV-474) has something to turn
+        /// again. Returns the gadget glow and the hips so the rig can drive both.</summary>
+        public static MaxBodyResult Build(Transform root, in MaxPalette p, float hipY)
         {
             var eyes = new List<MeshRenderer>(1);
             var wheels = new List<Transform>(0);   // Max walks; nothing on him rolls
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.105f, 0f), new Vector2(0.125f, 0.03f), new Vector2(0.115f, 0.055f) }, 12), p.Sole, new Vector3(-0.115f, 0.015f, 0.035f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Prism(7, 0.108f, 0.082f, 0.13f, 0.3f, 0f), p.Boot, new Vector3(-0.115f, 0.125f, 0.025f), Quaternion.Euler(6f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.075f, 0f), new Vector2(0.088f, 0.02f), new Vector2(0.07f, 0.045f) }, 10), p.Boot, new Vector3(-0.115f, 0.195f, 0.015f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.105f, 0f), new Vector2(0.125f, 0.03f), new Vector2(0.115f, 0.055f) }, 12), p.Sole, new Vector3(0.115f, 0.015f, 0.035f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Prism(7, 0.108f, 0.082f, 0.13f, 0.3f, 0f), p.Boot, new Vector3(0.115f, 0.125f, 0.025f), Quaternion.Euler(6f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.075f, 0f), new Vector2(0.088f, 0.02f), new Vector2(0.07f, 0.045f) }, 10), p.Boot, new Vector3(0.115f, 0.195f, 0.015f), Quaternion.identity, Vector3.one);
+
+            // The two feet hang off hip pivots at waist height (MV-474) instead of straight off `root`,
+            // so TickRun's stride rotation has a hinge to swing them from — the same Eyes/Wheels-style
+            // handback RobotBodies uses for its wheels, just a rotation pivot instead of a spin axle.
+            // Local offsets below are each foot's ORIGINAL root-space position minus the hip's own
+            // position, so at rest (identity hip rotation) every mesh lands exactly where it always did.
+            var hipL = Hip(root, "HipL", new Vector3(-0.115f, hipY, 0f));
+            var hipR = Hip(root, "HipR", new Vector3(0.115f, hipY, 0f));
+            var hips = new[] { hipL, hipR };
+
+            Add(hipL, CharacterMeshes.Lathe(new[] { new Vector2(0.105f, 0f), new Vector2(0.125f, 0.03f), new Vector2(0.115f, 0.055f) }, 12), p.Sole, new Vector3(0f, 0.015f - hipY, 0.035f), Quaternion.identity, Vector3.one);
+            Add(hipL, CharacterMeshes.Prism(7, 0.108f, 0.082f, 0.13f, 0.3f, 0f), p.Boot, new Vector3(0f, 0.125f - hipY, 0.025f), Quaternion.Euler(6f, 0f, 0f), Vector3.one);
+            Add(hipL, CharacterMeshes.Lathe(new[] { new Vector2(0.075f, 0f), new Vector2(0.088f, 0.02f), new Vector2(0.07f, 0.045f) }, 10), p.Boot, new Vector3(0f, 0.195f - hipY, 0.015f), Quaternion.identity, Vector3.one);
+            Add(hipR, CharacterMeshes.Lathe(new[] { new Vector2(0.105f, 0f), new Vector2(0.125f, 0.03f), new Vector2(0.115f, 0.055f) }, 12), p.Sole, new Vector3(0f, 0.015f - hipY, 0.035f), Quaternion.identity, Vector3.one);
+            Add(hipR, CharacterMeshes.Prism(7, 0.108f, 0.082f, 0.13f, 0.3f, 0f), p.Boot, new Vector3(0f, 0.125f - hipY, 0.025f), Quaternion.Euler(6f, 0f, 0f), Vector3.one);
+            Add(hipR, CharacterMeshes.Lathe(new[] { new Vector2(0.075f, 0f), new Vector2(0.088f, 0.02f), new Vector2(0.07f, 0.045f) }, 10), p.Boot, new Vector3(0f, 0.195f - hipY, 0.015f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Beam(0.3003f, 0.052f, 0.062f, 7), p.Skin, new Vector3(-0.12f, 0.35f, 0.005f), Quaternion.Euler(2.699f, -135f, 0f), Vector3.one);
             Add(root, CharacterMeshes.Sphere(12), p.Skin, new Vector3(-0.125f, 0.52f, 0f), Quaternion.identity, new Vector3(0.13f, 0.12f, 0.13f));
             Add(root, CharacterMeshes.Beam(0.3003f, 0.052f, 0.062f, 7), p.Skin, new Vector3(0.12f, 0.35f, 0.005f), Quaternion.Euler(2.699f, 135f, 0f), Vector3.one);
@@ -107,7 +134,17 @@ namespace MaxWorlds.VFX
             eyes.Add(Lens(root, CharacterMeshes.Sphere(14), new Vector3(0.205f, 1.03f, 0.445f), Quaternion.identity, new Vector3(0.055f, 0.055f, 0.038f)));
             Add(root, CharacterMeshes.Prism(6, 0.155f, 0.135f, 0.3f, 0.26f, 0f), p.Fabric, new Vector3(0f, 1.14f, -0.2f), Quaternion.Euler(-8f, 0f, 0f), Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.05f, 0f), new Vector2(0.06f, 0.02f), new Vector2(0.048f, 0.05f) }, 10), p.Dark, new Vector3(0.09f, 1.24f, -0.3f), Quaternion.Euler(80f, 0f, 0f), Vector3.one);
-            return eyes.ToArray();
+            return new MaxBodyResult(eyes.ToArray(), hips);
+        }
+
+        /// <summary>An empty rotation handle — the hinge <see cref="MaxRig.TickRun"/> swings a foot
+        /// from, since nothing in the generated mesh is itself a joint.</summary>
+        private static Transform Hip(Transform root, string name, Vector3 at)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root, worldPositionStays: false);
+            go.transform.localPosition = at;
+            return go.transform;
         }
 
         private static Transform Add(Transform root, Mesh mesh, Material mat,
