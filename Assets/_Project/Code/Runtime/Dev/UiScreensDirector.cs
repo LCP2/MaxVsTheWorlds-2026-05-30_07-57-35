@@ -672,7 +672,9 @@ namespace MaxWorlds.Dev
         /// <summary>colours.base, composited with <see cref="WeaponsScreen.ScreenScrim"/> the same way
         /// <see cref="RunOutsideBackgroundProbe"/> always has — factored out so
         /// <see cref="RunConformanceChecks"/> can use the same "what does empty board actually look
-        /// like" reference instead of re-deriving it.</summary>
+        /// like" reference instead of re-deriving it. Only correct OUTSIDE any category's own region
+        /// panel (which is exactly where probe 6 samples) — see <see cref="SampleCategoryBackground"/>
+        /// for the reference every other check (which samples INSIDE a column) actually needs.</summary>
         private static Color ComputeCompositedBackground(WeaponsScreen weapons)
         {
             Color expected = RigBoardLayout.Colour("base");
@@ -682,6 +684,37 @@ namespace MaxWorlds.Dev
                 expected = Color.Lerp(expected, new Color(scrim.r, scrim.g, scrim.b, 1f), scrim.a);
             }
             return expected;
+        }
+
+        /// <summary>MV-481: every node-shaped check below samples WELL inside its own category's panel,
+        /// which <see cref="WeaponsScreen.RefreshCategoryNode"/> paints with its own family-tinted wash
+        /// (<c>regionRect.opacityLit</c>/<c>opacityDark</c>) on top of colours.base+scrim — a real,
+        /// visible tint (confirmed live: a clear point inside a lit panel reads (10,5,21), not the
+        /// (0,0,0) probe 6 measures just outside every panel), and omitting it from the "expected
+        /// background" was the actual root cause behind MV-481's hex-orientation and glow-containment
+        /// FAILs: every ray/annulus sample landing inside a lit column read as "ink" relative to a
+        /// reference that never accounted for the column's own tint, so a search bounded at a modest px
+        /// cap could never find genuine background and either hit its own bound (hex-orientation) or
+        /// scored near 100% ink (glow-containment) — regardless of how far the glow itself actually
+        /// reached.
+        ///
+        /// This samples the real answer straight from the just-captured texture instead of predicting
+        /// it: a first attempt that recomposited the wash via <c>Color.Lerp</c> (matching how
+        /// <see cref="ComputeCompositedBackground"/> already handles the scrim) produced the exact same
+        /// FAIL numbers as before, byte for byte — this project's Linear-space rendering + the capture
+        /// texture's own sRGB read/write round-trip (see <c>rig_board.json</c>'s own regionRect comment,
+        /// and <see cref="CheckCategoryColour"/>'s doc comment for why brightness prediction already
+        /// lost to this once) makes a predicted composite unreliable here too. 110px right of the node's
+        /// own centre is comfortably past its own ink (glow+outer ring never reach past ~86px at
+        /// RadiusCategory=72) and short of the next column (categories sit >=360px apart); at the SAME y
+        /// as the node itself, before any connector curve starts (they only begin ~88px below a category
+        /// — see <c>connector.startOffsetCategory</c>), so this point is clear of every node and every
+        /// connector for every fixture, by construction of the board's own fixed layout.</summary>
+        private static Color SampleCategoryBackground(Texture2D tex, string categoryId)
+        {
+            foreach (var cat in RigBoardLayout.Categories)
+                if (cat.Id == categoryId) return RigBoardConformance.GetJsonPixel(tex, cat.X + 110f, cat.Y);
+            return RigBoardLayout.Colour("base");
         }
 
         // --- MV-463 Part 2: conformance pass -----------------------------------------------------
@@ -710,8 +743,8 @@ namespace MaxWorlds.Dev
             // 1. Node position — every category/ability node's own json (x, y) must not read as background.
             var missing = new System.Collections.Generic.List<string>();
             int totalNodes = 0;
-            foreach (var cat in RigBoardLayout.Categories) CheckNodePresent(tex, background, cat.Id, cat.X, cat.Y, missing, ref totalNodes);
-            foreach (var ab in RigBoardLayout.Abilities) CheckNodePresent(tex, background, ab.Id, ab.X, ab.Y, missing, ref totalNodes);
+            foreach (var cat in RigBoardLayout.Categories) CheckNodePresent(tex, SampleCategoryBackground(tex, cat.Id), cat.Id, cat.X, cat.Y, missing, ref totalNodes);
+            foreach (var ab in RigBoardLayout.Abilities) CheckNodePresent(tex, SampleCategoryBackground(tex, ab.Category), ab.Id, ab.X, ab.Y, missing, ref totalNodes);
             string firstFive = missing.Count == 0 ? "" : string.Join(", ", missing.GetRange(0, Mathf.Min(5, missing.Count)));
             Emit("node-position", missing.Count == 0,
                 missing.Count == 0 ? $"{totalNodes}/{totalNodes} nodes present at their json coordinate"
@@ -723,7 +756,7 @@ namespace MaxWorlds.Dev
             var ratioFails = new System.Collections.Generic.List<string>();
             int hexChecked = 0;
             foreach (var cat in RigBoardLayout.Categories)
-            { hexChecked++; CheckHexOrientation(tex, background, cat.Id, cat.X, cat.Y, RigBoardLayout.RadiusCategory, ratioFails); }
+            { hexChecked++; CheckHexOrientation(tex, SampleCategoryBackground(tex, cat.Id), cat.Id, cat.X, cat.Y, RigBoardLayout.RadiusCategory, ratioFails); }
             Emit("hex-orientation", ratioFails.Count == 0,
                 ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
                                        : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
@@ -742,14 +775,16 @@ namespace MaxWorlds.Dev
                 foreach (var ab in RigBoardLayout.Abilities) if (ab.Category == cat.Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
                 if (!lit) continue;
                 glowChecked++;
-                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, RigBoardLayout.RadiusCategory * 1.25f, RigBoardLayout.RadiusCategory * 1.95f, background, InkTolerance);
+                Color catBackground = SampleCategoryBackground(tex, cat.Id);
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, RigBoardLayout.RadiusCategory * 1.25f, RigBoardLayout.RadiusCategory * 1.95f, catBackground, InkTolerance);
                 if (frac > 0.25f) glowFails.Add($"{cat.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
             foreach (var ab in RigBoardLayout.Abilities)
             {
                 if (!RigState.IsOwned(ab.Id)) continue;
                 glowChecked++;
-                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, RigBoardLayout.RadiusAbility * 1.25f, RigBoardLayout.RadiusAbility * 1.95f, background, InkTolerance);
+                Color abBackground = SampleCategoryBackground(tex, ab.Category);
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, RigBoardLayout.RadiusAbility * 1.25f, RigBoardLayout.RadiusAbility * 1.95f, abBackground, InkTolerance);
                 if (frac > 0.25f) glowFails.Add($"{ab.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
             Emit("glow-containment", glowFails.Count == 0,

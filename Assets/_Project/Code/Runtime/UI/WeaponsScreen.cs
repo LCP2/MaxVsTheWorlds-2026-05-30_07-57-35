@@ -1690,9 +1690,17 @@ namespace MaxWorlds.UI
             // MV-443 defect 5: a lit category additionally gets a solid outer ring at
             // capOuterRingOffset — reusing the shared Outer Ring image, but with a SOLID (not dashed)
             // sprite of its own; RefreshCategoryNode only ever toggles/tints it.
+            // MV-481: was HudTextures.Ring — a plain circle, sized to a square canvas regardless of the
+            // hex's own r*sqrt(3):2r proportions. At RadiusCategory=72 that circle (radius 81) reaches
+            // further out than the hex-following Glow does in the edge-midpoint direction (apothem+blur
+            // = 76px) while sitting inside it in the vertex direction (r+blur=86px) — an real, visible
+            // "ring doesn't match the hex" defect, and the actual cause of MV-481's hex-orientation FAIL
+            // (confirmed live: the harness's own ray-march read this circle, not the glow, as the node's
+            // outer edge in the left/right direction). Matches HexOutline's own hex-silhouette sizing.
             float ringR = r + RigBoardLayout.CapOuterRingOffset;
-            shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
-            shell.OuterRing.sprite = HudTextures.Ring(96, 2f);
+            float ringW = ringR * Sqrt3, ringH = ringR * 2f;
+            shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringW, ringH);
+            shell.OuterRing.sprite = HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), 2f);
             shell.OuterRing.gameObject.SetActive(false);
 
             shell.PartBadge.gameObject.SetActive(false);   // categories are never spendable
@@ -1714,11 +1722,14 @@ namespace MaxWorlds.UI
             shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
             shell.Icon.rectTransform.sizeDelta = new Vector2(abIconSize, abIconSize);
 
-            // Outer dashed ring (capability draftable) — a circle at r + capOuterRingOffset, independent
-            // of the node's own hex outline so it can toggle without disturbing it.
+            // Outer dashed ring (capability draftable) — a hex at r + capOuterRingOffset, independent
+            // of the node's own hex outline so it can toggle without disturbing it. MV-481: was a plain
+            // circle (HudTextures.Ring) — see the category ring's own comment (BuildCategoryNode) for
+            // why that doesn't match the hex-following glow underneath it.
             float ringR = r + RigBoardLayout.CapOuterRingOffset;
-            shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringR * 2f, ringR * 2f);
-            shell.OuterRing.sprite = HudTextures.Ring(96, RigBoardLayout.StrokeActive, true, 16);
+            float ringW = ringR * Sqrt3, ringH = ringR * 2f;
+            shell.OuterRing.rectTransform.sizeDelta = new Vector2(ringW, ringH);
+            shell.OuterRing.sprite = HudTextures.PolygonOutline(HexSides, HexRotationDeg, Mathf.CeilToInt(ringW), Mathf.CeilToInt(ringH), RigBoardLayout.StrokeActive, true);
 
             float markerR = RigBoardLayout.CapMarkerRadius;
             Vector2 markerOffset = RigBoardLayout.CapMarkerOffset(r);
