@@ -578,11 +578,30 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Nothing: the whole point (AC2) is that a dormant robot does not path toward Max,
         /// does not fire, and does not telegraph its position. The only way out is <see cref="Activate"/>
-        /// — called here the instant this robot's own sight-line opens (ticked unconditionally above,
-        /// same as every other state), or by a groupmate's via <see cref="DormantGroup"/>.</summary>
+        /// — called here the instant <see cref="AmbushWake"/> says both the camera and the sight-line
+        /// agree (ticked unconditionally above, same as every other state), or by a groupmate's via
+        /// <see cref="DormantGroup"/>.
+        ///
+        /// MV-478: sight alone used to be the whole test, but <see cref="MaxWorlds.Arena.LineOfSight"/>
+        /// is symmetric geometry — "this robot can see Max" and "Max can see this robot" are the same
+        /// fact, so a sight-only gate woke every dormant robot the instant the player walked within
+        /// raycast range, whether or not the player had ever looked at it. Requiring the camera
+        /// frustum too is what makes waking mean "the player's own view fell on it".</summary>
         private void TickDormant()
         {
-            if (_sight.HasSight) Activate();
+            if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
+        }
+
+        /// <summary>Whether this robot's body centre sits inside the gameplay camera's frustum right
+        /// now (MV-478). Fails OPEN (true) when no camera can be resolved — headless build, EditMode
+        /// fixture — so a missing camera can never leave a level full of frozen robots (AC8). Same
+        /// frustum-test idiom as <see cref="AreaAccumulationDirector"/>'s own on-screen check.</summary>
+        private bool IsOnScreen()
+        {
+            Camera cam = Camera.main;
+            if (cam == null) return true;
+            Plane[] planes = GeometryUtility.CalculateFrustumPlanes(cam);
+            return GeometryUtility.TestPlanesAABB(planes, new Bounds(transform.position, Vector3.one));
         }
 
         /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
