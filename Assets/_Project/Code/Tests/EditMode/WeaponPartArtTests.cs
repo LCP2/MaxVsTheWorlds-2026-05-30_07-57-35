@@ -111,15 +111,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void TheMachineInternalsPool_HoldsAllTenDesigns()
+        public void TheMachineInternalsPool_HoldsExactlyGear()
         {
-            // WV-237 originally shipped "~10 distinct part designs"; MV-430 collapsed the pool to one,
-            // citing the fixed 72° camera reading nine of the ten as noise rather than variety. MV-454
-            // restores the full ten now that every design also carries its own Brass/Copper colour
-            // accent — colour survives the 72° projection far better than silhouette does, which was the
-            // actual axis MV-430 measured.
-            Assert.AreEqual(10, WeaponPartArt.MachineInternalsKeys.Length,
-                "the machine-internals pool should hold all ten designs (MV-454).");
+            // WV-237 originally shipped "~10 distinct part designs"; MV-430 collapsed the pool to one;
+            // MV-454 restored the full ten, reasoning colour would carry the "tell them apart" job the
+            // 72° camera couldn't. MV-498 collapses it back to one, permanently — Lee decided he wants
+            // exactly one symbol, not a shape-vs-colour argument to keep re-running.
+            Assert.AreEqual(1, WeaponPartArt.MachineInternalsKeys.Length,
+                "the machine-internals pool should hold exactly one design (MV-498).");
             CollectionAssert.Contains(WeaponPartArt.MachineInternalsKeys, WeaponPartArt.Keys.Gear);
         }
 
