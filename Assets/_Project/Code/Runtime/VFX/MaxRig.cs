@@ -420,10 +420,12 @@ namespace MaxWorlds.VFX
         /// part. <see cref="_body"/> (lean) and <see cref="_torso"/> (bob) stay — the whole mesh hangs
         /// under a "Feet" pivot at the torso's own hip offset, so <c>MaxBody</c>'s "feet at y = 0"
         /// coordinates land on the ground exactly the way <see cref="RobotBodies"/> does it for the
-        /// robots. Everything the old per-part hierarchy gave the run/aim/secondary-motion code to grab
-        /// — the hip pivots, the gun, the arms, the hair and charm pivots — has nothing left to hang off
-        /// it, so those fields stay null and the (already null-guarded) code that drove them quietly
-        /// stops moving anything visible, exactly as deleting this file was always documented to do.
+        /// robots. Of the old per-part hierarchy's rig points, the gun, the arms, the hair and charm
+        /// pivots are still gone (flagged for MV-453, which reviewed the static pose and left them so —
+        /// see its ticket comment); <see cref="_hips"/> is not, as of MV-474: <c>MaxBody.Build</c> now
+        /// hands back two hip pivots with the boot geometry hanging off them, so <c>TickRun</c>'s
+        /// stride rotation — which kept writing <c>_hips[i].localRotation</c> the whole time, into a
+        /// null-guarded no-op — has something to turn again.
         /// </summary>
         private void Build()
         {
@@ -433,7 +435,10 @@ namespace MaxWorlds.VFX
             var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
             var palette = new MaxPalette(_skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat,
                                          _darkMat, _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat);
-            _gadgetGlow = MaxBody.Build(feet, palette);
+            var body = MaxBody.Build(feet, palette, HipY);
+            _gadgetGlow = body.GadgetGlow;
+            _hips[0] = body.Hips[0];
+            _hips[1] = body.Hips[1];
 
             // The gadget glow is the only COOL light in the whole cast, against every robot's warm eye
             // (see the class doc). Coloured once here, the same way the old goggle lenses were.
