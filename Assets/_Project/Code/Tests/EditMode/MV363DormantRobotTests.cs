@@ -75,6 +75,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TickDormant_WakesItself_TheMomentItsOwnSightLineOpens()
         {
+            // No camera in this scene (suppressed in SetUp) - MV-478's fail-open rule (AC8) means
+            // "on screen" reads true, so sight alone is enough to wake it here.
             RobotEnemy e = NewEnemy("Enemy");
             try
             {
@@ -85,6 +87,36 @@ namespace MaxWorlds.Tests.EditMode
                     "AC1: dormant ends the moment it has line of sight to Max");
             }
             finally { Object.DestroyImmediate(e.gameObject); }
+        }
+
+        [Test]
+        public void TickDormant_StaysAsleep_WithClearSightButOutsideTheCameraFrustum()
+        {
+            // MV-478's actual bug: LineOfSight is symmetric geometry, so "sight clear" alone woke
+            // every dormant robot the instant the player's OWN raycast to it cleared - whether or not
+            // the player had ever looked at it. This proves the camera-frustum half of the AND is
+            // actually enforced, not just documented.
+            var cameraGo = new GameObject("Main Camera") { tag = "MainCamera" };
+            RobotEnemy e = NewEnemy("Enemy");
+            try
+            {
+                Camera cam = cameraGo.AddComponent<Camera>();
+                cam.transform.position = Vector3.zero;
+                cam.transform.rotation = Quaternion.identity; // looks down +Z
+
+                e.transform.position = new Vector3(0f, 0f, -20f); // behind the camera - outside the frustum
+                e.BeginDormant();
+                e.Sight.Tick(true, Vector3.forward * 5f, 0.1f); // sight-line clear
+                InvokeTickDormant(e);
+
+                Assert.AreEqual(RobotEnemy.State.Dormant, e.Current,
+                    "AC3: a clear sight-line must not wake a robot the camera frustum doesn't cover");
+            }
+            finally
+            {
+                Object.DestroyImmediate(e.gameObject);
+                Object.DestroyImmediate(cameraGo);
+            }
         }
 
         [Test]
@@ -221,12 +253,17 @@ namespace MaxWorlds.Tests.EditMode
         // ------------------------------------------------------------------- AreaAccumulationDirector wiring
 
         private GameObject _directorGo;
+        private Camera[] _suppressedAmbientCameras;
 
         [SetUp]
         public void SetUp()
         {
             DevTuning.Reset();
             RobotEnemy.ResetRegistry();
+            // MV-478: TickDormant now reads Camera.main. See CameraTestUtil - an EditMode run still
+            // has whatever scene the Editor had open at launch loaded, so Camera.main is not reliably
+            // absent just because a given test never created a camera of its own.
+            _suppressedAmbientCameras = CameraTestUtil.SuppressAmbientMainCameras();
         }
 
         [TearDown]
@@ -236,6 +273,7 @@ namespace MaxWorlds.Tests.EditMode
             if (bodies != null) Object.DestroyImmediate(bodies);
             if (_directorGo != null) Object.DestroyImmediate(_directorGo);
 
+            CameraTestUtil.RestoreAmbientMainCameras(_suppressedAmbientCameras);
             RobotEnemy.ResetRegistry();
             DevTuning.Reset();
         }

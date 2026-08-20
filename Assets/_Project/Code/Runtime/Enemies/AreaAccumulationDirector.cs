@@ -395,7 +395,12 @@ namespace MaxWorlds.Enemies
         /// garrison must be guaranteed present regardless of whatever cap/timing state the ambient
         /// top-up queue happens to be in. A no-op without a live world config (no <see cref="WorldArea"/>
         /// to read <c>garrisonDensity</c>/positions from) or when <paramref name="area"/> is null (area
-        /// never filled / unrecognised).</summary>
+        /// never filled / unrecognised).
+        ///
+        /// MV-478: every robot this places starts <see cref="RobotEnemy.BeginDormant"/>, wired into one
+        /// shared <see cref="DormantGroup"/> so the whole ring wakes together (AC1/AC2) — a
+        /// Garrison-seeded knot is meant to read as an ambush the player walks into, not a mob that
+        /// starts running the instant the area loads.</summary>
         private void SeedGarrison(int areaIndex, WorldArea area)
         {
             if (_worldCfg == null || area == null) return;
@@ -404,6 +409,7 @@ namespace MaxWorlds.Enemies
             if (seedCount <= 0) return;
 
             Vector3[] positions = Garrison.SeedPositions(area, seedCount);
+            var group = new DormantGroup();
             for (int i = 0; i < positions.Length; i++)
             {
                 if (!_queue.TryTakeForGarrison(areaIndex, out EnemyKind kind)) break;
@@ -419,6 +425,11 @@ namespace MaxWorlds.Enemies
                 e.transform.rotation = Quaternion.identity;
                 e.gameObject.SetActive(true);
                 _areaByRobot[e] = areaIndex;
+
+                // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
+                // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.
+                e.BeginDormant();
+                group.Add(e);
 
                 LetThePlayerThrough(e.gameObject);
             }
