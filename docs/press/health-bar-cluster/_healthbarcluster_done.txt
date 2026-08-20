@@ -1,0 +1,4 @@
+ok
+cluster.png
+pitch=60.00deg distance=24.284m
+declutter pass at 49 live robots: 284.6 microseconds
