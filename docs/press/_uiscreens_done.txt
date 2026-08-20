@@ -3,7 +3,7 @@ rig-16x9.png (1920x1080)
 probe6 (outside-background==composited-base): PASS — expected #000000, got #000000 at tex(20,680)
 PASS node-position: 28/28 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.161 unlit=0.107 ratio=1.503 (need >=1.5)
+PASS family-contrast: lit=0.161 unlit=0.107 ratio=1.508 (need >=1.5)
 FAIL glow-containment: 4/12 over 25% — p_rng 36.458%; e_cel 43.171%; e_cd 40.046%; u_dmg 50.81%
 PASS colour-probes: 7/7 sampled points match rig_board.json
 rig-contact-sheet.png (3762x1202, 28 node pairs)
