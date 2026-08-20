@@ -25,6 +25,10 @@ namespace MaxWorlds.VFX
         private const float WobbleAmount = 0.12f;
         private const float TrailParticleLifetime = 0.25f;
 
+        /// <summary>MV-508: short motion smear, not a ribbon — see <see cref="BuildMotionTrail"/>.</summary>
+        private const float MotionTrailTime = 0.12f;
+        private const float MotionTrailWidth = 0.14f;
+
         private static readonly Color BodyColor = new Color(0.31f, 0.76f, 0.97f, 0.92f);
         private static readonly Color KnotColor = new Color(0.16f, 0.42f, 0.58f);
 
@@ -35,6 +39,7 @@ namespace MaxWorlds.VFX
         private float _age;
         private Transform _body;
         private ParticleSystem _trail;
+        private TrailRenderer _motionTrail;
 
         /// <summary>Launch a visible balloon from <paramref name="origin"/> toward
         /// <paramref name="landing"/>, arriving after <paramref name="durationSeconds"/> — the same
@@ -61,8 +66,18 @@ namespace MaxWorlds.VFX
             _duration = durationSeconds;
 
             _body = BuildBody(transform);
+            _motionTrail = BuildMotionTrail(transform);
             _trail = BuildTrail();
             ApplyProgress(0f);
+        }
+
+        /// <summary>MV-508 AC2 — same defensive reset as <see cref="MaxWorlds.Enemies.HomingMissile.ClearTrailForRespawn"/>:
+        /// this throw is free-flying and always freshly Instantiated by <see cref="Fire"/> today, but
+        /// if a future pool ever reuses the instance instead, calling this clears whatever trail
+        /// history it still holds so a respawn at a new origin doesn't streak across the arena.</summary>
+        public void ClearTrailForRespawn()
+        {
+            if (_motionTrail != null) _motionTrail.Clear();
         }
 
         /// <summary>World position at fraction <paramref name="t"/> of the flight — the same curve
@@ -151,6 +166,34 @@ namespace MaxWorlds.VFX
             if (knotMat != null) knot.GetComponent<MeshRenderer>().sharedMaterial = knotMat;
 
             return body.transform;
+        }
+
+        /// <summary>MV-508: same "connect one frame's position to the next" fix as
+        /// <see cref="MaxWorlds.Enemies.HomingMissile"/>'s own trail — a fast body with no smear reads
+        /// as strobing rather than a throw. Sourced from <see cref="MaterialLibrary"/> like the body's
+        /// own material, so it participates in the same tint/caching rules; the root already carries
+        /// <see cref="KeepsOwnMaterial"/>, which covers this too. Distinct from <see cref="_trail"/>,
+        /// the existing droplet particle trail — this is the geometric motion smear, that is water
+        /// droplets shedding off the balloon.</summary>
+        private static TrailRenderer BuildMotionTrail(Transform parent)
+        {
+            var trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = MotionTrailTime;
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = MotionTrailWidth;
+            trail.minVertexDistance = 0.03f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, BodyColor);
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(BodyColor, 0f), new GradientColorKey(BodyColor, 1f) },
+                new[] { new GradientAlphaKey(0.8f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
+
+            trail.Clear();
+            return trail;
         }
 
         private ParticleSystem BuildTrail()

@@ -53,6 +53,10 @@ namespace MaxWorlds.Enemies
         private const int MaxBounces = 3;
         private const float GroundY = 0f;
 
+        /// <summary>MV-508: short motion smear, not a ribbon — see <see cref="BuildTrail"/>.</summary>
+        private const float TrailTime = 0.12f;
+        private const float TrailWidth = 0.16f;
+
         private enum FlightState { Flying, Sputtering, Bouncing, Detonated }
 
         private Transform _target;
@@ -65,6 +69,7 @@ namespace MaxWorlds.Enemies
         private FlightState _state;
         private Vector3 _bounceVelocity;
         private int _bounceCount;
+        private TrailRenderer _trail;
 
         /// <summary>Launch one missile from <paramref name="origin"/> toward <paramref name="target"/>.
         /// <paramref name="damage"/>/<paramref name="splashRadius"/> come straight off the Launcher's
@@ -128,6 +133,7 @@ namespace MaxWorlds.Enemies
             // that hit the robots, but on every missile fired rather than only recycled ones. This marks
             // the whole missile as arriving with its materials attached, exactly like imported art.
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
+            BuildTrail(parent);
 
             Material shaftMat = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
             Material tipMat = MaterialLibrary.Tinted(SurfaceKind.Metal, TipColor);
@@ -182,6 +188,32 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>MV-508: a fast object with a hard aliased silhouette and nothing connecting one
+        /// frame's position to the next reads as strobing rather than motion — this is the standard
+        /// fix. Short on purpose (<see cref="TrailTime"/> 0.10-0.15s): a motion smear, not a ribbon.
+        /// Sourced from <see cref="MaterialLibrary"/> like the rest of the missile's own visual, so it
+        /// participates in the same tint/caching rules rather than being a one-off VFX material; the
+        /// root already carries <see cref="KeepsOwnMaterial"/>, which covers this too.</summary>
+        private static void BuildTrail(Transform parent)
+        {
+            var trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = TrailTime;
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = TrailWidth;
+            trail.minVertexDistance = 0.03f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, ShaftColor);
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(ShaftColor, 0f), new GradientColorKey(ShaftColor, 1f) },
+                new[] { new GradientAlphaKey(0.85f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
+
+            trail.Clear();
+        }
+
         private static void Strip(GameObject go)
         {
             var col = go.GetComponent<Collider>();
@@ -200,6 +232,19 @@ namespace MaxWorlds.Enemies
             _speed = speed;
             _damage = damage;
             _splashRadius = splashRadius;
+
+            _trail = GetComponent<TrailRenderer>();
+            ClearTrailForRespawn();
+        }
+
+        /// <summary>MV-508 AC2 — defensive against a future pool reusing this instance instead of
+        /// always Instantiate-ing fresh through <see cref="Fire"/>: clears whatever trail history the
+        /// <see cref="TrailRenderer"/> still holds from wherever it was flying before, so a respawn at
+        /// a new position never drags a streak across the whole arena. Called from <see cref="Init"/>
+        /// so an ordinary fresh spawn always starts clean too.</summary>
+        public void ClearTrailForRespawn()
+        {
+            if (_trail != null) _trail.Clear();
         }
 
         private void Update()
@@ -291,6 +336,10 @@ namespace MaxWorlds.Enemies
             float coast = Mathf.Clamp01(1f - _stateTimer / SputterDuration);
             transform.position += transform.forward * (_speed * coast * dt);
 
+            // MV-508: the trail dying alongside the coast is a free extension of MV-349's "the player
+            // has to be able to tell it's failing" — the smear shrinks as the thrust does.
+            if (_trail != null) _trail.widthMultiplier = TrailWidth * coast;
+
             if (_stateTimer >= SputterDuration) BeginBounce();
         }
 
@@ -303,6 +352,11 @@ namespace MaxWorlds.Enemies
             // straight drop into a first, longest hop.
             _bounceVelocity = transform.forward * (_speed * 0.35f);
             _bounceVelocity.y = 0f;
+
+            // MV-508: no more thrust means no more smear once it starts to fall. Stop emitting new
+            // points rather than Clear()-ing outright — the existing segment still fades out over
+            // TrailTime instead of vanishing mid-frame.
+            if (_trail != null) _trail.emitting = false;
         }
 
         /// <summary>Gravity pulls it down; touching the ground reverses the vertical speed at
