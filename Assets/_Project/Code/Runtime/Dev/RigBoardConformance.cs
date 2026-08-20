@@ -94,9 +94,19 @@ namespace MaxWorlds.Dev
         /// child, up from a parent), so a full-circle annulus double-counts real, intentional connector
         /// ink as glow bleed (confirmed live running this exact ticket: several owned nodes read
         /// ~100% until this was scoped down). Left/right (0/180) dodges that for every node on this
-        /// board — no connector on THE RIG ever leaves a node sideways.</summary>
+        /// board — no connector on THE RIG ever leaves a node sideways.
+        ///
+        /// MV-499: also clamped to [<paramref name="xMin"/>, <paramref name="xMax"/>] in absolute
+        /// json-space x. MV-472 made column width content-driven, so a node sitting near the wide end of
+        /// its own family's spread (its checked annulus reaching outward toward the NEXT family's own
+        /// column) can have rOuter=1.95r cross the column boundary — confirmed live: p_rng/e_cel/e_cd/
+        /// u_dmg (each the outermost sibling in a multi-child spread) read 35-51% ink not from their own
+        /// halo but from sampling straight into the neighbouring family's differently-tinted panel, which
+        /// was never what this check meant to police. Every other sibling closer to its own column's
+        /// centre never reaches that boundary and is unaffected by the clamp.</summary>
         public static float AnnulusInkFraction(Texture2D tex, float cx, float cy, float rInner, float rOuter,
-            Color background, float tolerance, float sectorCenterDeg = 0f, float sectorHalfWidthDeg = 40f, int step = 3)
+            Color background, float tolerance, float sectorCenterDeg = 0f, float sectorHalfWidthDeg = 40f, int step = 3,
+            float xMin = float.NegativeInfinity, float xMax = float.PositiveInfinity)
         {
             int hit = 0, total = 0;
             for (float y = -rOuter; y <= rOuter; y += step)
@@ -108,8 +118,10 @@ namespace MaxWorlds.Dev
                     bool inSector = Mathf.Abs(Mathf.DeltaAngle(sectorCenterDeg, ang)) <= sectorHalfWidthDeg
                                  || Mathf.Abs(Mathf.DeltaAngle(sectorCenterDeg + 180f, ang)) <= sectorHalfWidthDeg;
                     if (!inSector) continue;
+                    float sampleX = cx + x;
+                    if (sampleX < xMin || sampleX > xMax) continue;
                     total++;
-                    if (ColorDistance(GetJsonPixel(tex, cx + x, cy + y), background) > tolerance) hit++;
+                    if (ColorDistance(GetJsonPixel(tex, sampleX, cy + y), background) > tolerance) hit++;
                 }
             return total > 0 ? (float)hit / total : 0f;
         }

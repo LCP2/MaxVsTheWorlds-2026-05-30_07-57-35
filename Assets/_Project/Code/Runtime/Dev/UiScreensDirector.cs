@@ -717,6 +717,35 @@ namespace MaxWorlds.Dev
             return RigBoardLayout.Colour("base");
         }
 
+        // MV-499: inset from the raw column edge before clamping — the panel itself carries a visible
+        // border stroke (regionRect.borderAlphaLit, several times stronger than the fill wash) right at
+        // that edge, which is real, permanent, non-glow ink that belongs to the column, not a glow
+        // bleeding out of it. Landing the clamp exactly on the edge still let that border count as
+        // "ink" for whichever node's own checked radius happened to reach it (confirmed live: u_dmg
+        // dropped from 50.8% to 25.9% once the neighbouring-column crossing was clamped out, but stayed
+        // just over 25% until this margin also cleared its own column's border). 20px clears the border
+        // and its antialiasing with room to spare, and is safe for every column: the narrowest possible
+        // column (a single childless ability) still has ColumnHalfWidth >= RadiusCategory (72).
+        private const float ColumnEdgeMargin = 20f;
+
+        /// <summary>MV-499: a category's own column bounds, inset by <see cref="ColumnEdgeMargin"/> —
+        /// the glow-containment check clamps its annulus sampling to this range so it never crosses into
+        /// a neighbouring family's own column (see <see cref="RigBoardConformance.AnnulusInkFraction"/>'s
+        /// own doc comment for why that crossing reads as false ink, not real bleed). Falls back to the
+        /// whole canvas if the category can't be found, matching every other unbounded caller.</summary>
+        private static void ColumnBounds(string categoryId, out float xMin, out float xMax)
+        {
+            foreach (var cat in RigBoardLayout.Categories)
+                if (cat.Id == categoryId)
+                {
+                    xMin = cat.X - cat.ColumnHalfWidth + ColumnEdgeMargin;
+                    xMax = cat.X + cat.ColumnHalfWidth - ColumnEdgeMargin;
+                    return;
+                }
+            xMin = float.NegativeInfinity;
+            xMax = float.PositiveInfinity;
+        }
+
         // --- MV-463 Part 2: conformance pass -----------------------------------------------------
         // Reads rig_board.json (via RigBoardLayout) and asserts the just-captured rig-16x9 texture
         // actually matches it — the harness's own eyes, not just its camera. Runs only against
@@ -776,7 +805,9 @@ namespace MaxWorlds.Dev
                 if (!lit) continue;
                 glowChecked++;
                 Color catBackground = SampleCategoryBackground(tex, cat.Id);
-                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, RigBoardLayout.RadiusCategory * 1.25f, RigBoardLayout.RadiusCategory * 1.95f, catBackground, InkTolerance);
+                ColumnBounds(cat.Id, out float catColumnMin, out float catColumnMax);
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, cat.X, cat.Y, RigBoardLayout.RadiusCategory * 1.25f, RigBoardLayout.RadiusCategory * 1.95f, catBackground, InkTolerance,
+                    xMin: catColumnMin, xMax: catColumnMax);
                 if (frac > 0.25f) glowFails.Add($"{cat.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
             foreach (var ab in RigBoardLayout.Abilities)
@@ -784,7 +815,9 @@ namespace MaxWorlds.Dev
                 if (!RigState.IsOwned(ab.Id)) continue;
                 glowChecked++;
                 Color abBackground = SampleCategoryBackground(tex, ab.Category);
-                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, RigBoardLayout.RadiusAbility * 1.25f, RigBoardLayout.RadiusAbility * 1.95f, abBackground, InkTolerance);
+                ColumnBounds(ab.Category, out float abColumnMin, out float abColumnMax);
+                float frac = RigBoardConformance.AnnulusInkFraction(tex, ab.X, ab.Y, RigBoardLayout.RadiusAbility * 1.25f, RigBoardLayout.RadiusAbility * 1.95f, abBackground, InkTolerance,
+                    xMin: abColumnMin, xMax: abColumnMax);
                 if (frac > 0.25f) glowFails.Add($"{ab.Id} {RigBoardConformance.Fmt(frac * 100f)}%");
             }
             Emit("glow-containment", glowFails.Count == 0,
