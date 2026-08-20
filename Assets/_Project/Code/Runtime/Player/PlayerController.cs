@@ -189,7 +189,11 @@ namespace MaxWorlds.Player
             Vector3? displacement = null, Vector3? actualDelta = null) =>
             $"[MV-503] {label}: cc.enabled={_cc.enabled} isGrounded={_cc.isGrounded} radius={_cc.radius} " +
             $"height={_cc.height} center={_cc.center} pos={transform.position} moveDir={moveDir} " +
-            $"walkSpeed={WalkSpeed} dt={dt:0.####} displacement={displacement ?? Vector3.zero:F4} " +
-            $"actualDelta={actualDelta ?? Vector3.zero:F4}";
+            $"walkSpeed={WalkSpeed} dt={dt:0.####} " +
+            // MV-504: state this directly rather than by inference from dt — dt==0 is consistent with
+            // both Time.timeScale==0 (the strongest MV-504 candidate) and a genuine stall, and only
+            // timeScale distinguishes them.
+            $"timeScale={Time.timeScale:0.####} unscaledDt={Time.unscaledDeltaTime:0.####} " +
+            $"displacement={displacement ?? Vector3.zero:F4} actualDelta={actualDelta ?? Vector3.zero:F4}";
     }
 }
