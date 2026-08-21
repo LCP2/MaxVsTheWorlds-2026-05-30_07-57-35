@@ -121,8 +121,10 @@ namespace MaxWorlds.Dev
         /// <summary>The middle of the largest <see cref="ZoneKind.Open"/> room on the loaded map, or
         /// null if no map is loaded (falls back to a spot near Max). That is deliberately "the fight
         /// room" (<see cref="MapZone"/>'s own doc comment) rather than any zone at all — an Entry room
-        /// is exactly the dressed, decoration-heavy one this method exists to avoid.</summary>
-        private static Vector3? OpenZoneCenter()
+        /// is exactly the dressed, decoration-heavy one this method exists to avoid. Internal so
+        /// <see cref="MsaaComparisonDirector"/> (MV-507) can frame on the same spot instead of
+        /// duplicating the zone search.</summary>
+        internal static Vector3? OpenZoneCenter()
         {
             var path = FindFirstObjectByType<BackyardPath>();
             if (path == null || path.Map == null || path.Map.zones == null) return null;
@@ -138,8 +140,9 @@ namespace MaxWorlds.Dev
 
         /// <summary>Same greybox recipe as <c>EnemySpawner.CreateInstance</c>'s no-prefab path (that IS
         /// the shipped path — <c>prefab</c> is unset until Phase C art), minus the pooling/parenting this
-        /// one-shot capture doesn't need.</summary>
-        private GameObject BuildRobot(EnemyKind kind, Vector3 at)
+        /// one-shot capture doesn't need. Internal static so <see cref="MsaaComparisonDirector"/>
+        /// (MV-507) builds the exact same body rather than a hand-simplified stand-in.</summary>
+        internal static GameObject BuildRobot(EnemyKind kind, Vector3 at)
         {
             EnemyArchetype a = EnemyArchetype.Of(kind);
             var go = GameObject.CreatePrimitive(a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
