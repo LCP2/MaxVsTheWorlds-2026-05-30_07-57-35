@@ -160,11 +160,37 @@ namespace MaxWorlds.UI
         private bool _draftActive;
         private readonly List<string> _draftCandidateIds = new List<string>();
 
+        // MV-521: the just-unlocked-family reveal that plays in place of closing the screen on a draft
+        // pick — a short, self-terminating glow over the category panel that just lit. Built once per
+        // BuildBoardContent() pass (rebuilt/cleared exactly like _draftScrim) and entirely independent
+        // of the draft chrome above — a reveal can still be playing after _draftActive has gone false.
+        private const float RevealDuration = 0.6f;
+        private RectTransform _revealGlow;
+        private Image _revealGlowImage;
+        private float _revealStartUnscaledTime = float.NegativeInfinity;
+
         private bool _open;
         private float _prevTimeScale = 1f;
 
         /// <summary>Is THE RIG currently up (and the game paused)?</summary>
         public bool IsOpen => _open;
+
+        /// <summary>MV-521: is a Morphing Module draft currently up on the board? — test-only access,
+        /// same idiom as <see cref="IsOpen"/>.</summary>
+        public bool IsDraftActive => _draftActive;
+
+        /// <summary>MV-521: the draft's current candidate ids, in draw order — test-only access, same
+        /// idiom as <see cref="BoardNode"/>.</summary>
+        public IReadOnlyList<string> DraftCandidateIds => _draftCandidateIds;
+
+        /// <summary>MV-521: the screen's own show/hide root — test-only access, same idiom as
+        /// <see cref="Background"/>, so a test can assert directly on what <see cref="Close"/> toggles
+        /// rather than inferring it through a child's own activeInHierarchy.</summary>
+        public GameObject ScreenRoot => _screenRoot != null ? _screenRoot.gameObject : null;
+
+        /// <summary>MV-521: is the just-unlocked-family reveal glow currently showing? — test-only
+        /// access, same idiom as <see cref="IsOpen"/>.</summary>
+        public bool IsRevealActive => _revealGlow != null && _revealGlow.gameObject.activeSelf;
 
         /// <summary>A built node's root RectTransform by its <c>rig_board.json</c> id — the layout
         /// test's only way in, so it never has to guess GameObject names.</summary>
@@ -293,6 +319,36 @@ namespace MaxWorlds.UI
             return baseAlpha * t;
         }
 
+        /// <summary>MV-521: does the just-unlocked-family reveal glow still have time left, given
+        /// <paramref name="elapsedUnscaledSeconds"/> since it started? Pure so it's pinned by an
+        /// EditMode test without needing <see cref="Update"/> to actually tick — EditMode never runs a
+        /// MonoBehaviour's Update(), same reasoning as <see cref="NodeActionPulseAlpha"/>'s own explicit
+        /// time parameter.</summary>
+        public static bool RevealStillActive(float elapsedUnscaledSeconds) => elapsedUnscaledSeconds < RevealDuration;
+
+        /// <summary>Applies the reveal glow's state for a given elapsed unscaled time since it started —
+        /// called every frame from <see cref="Update"/> with the real elapsed time, and callable
+        /// directly (test-only) with a fabricated value, same idiom as <see cref="RevealStillActive"/>,
+        /// so "no reveal object remains active N seconds later" can be asserted without Update() ever
+        /// running.</summary>
+        public void ApplyRevealTiming(float elapsedUnscaledSeconds)
+        {
+            if (_revealGlow == null || !_revealGlow.gameObject.activeSelf) return;
+            if (!RevealStillActive(elapsedUnscaledSeconds))
+            {
+                _revealGlow.gameObject.SetActive(false);
+                return;
+            }
+
+            float t = Mathf.Clamp01(elapsedUnscaledSeconds / RevealDuration);
+            float pulse = Mathf.Sin(t * Mathf.PI);   // rises then fades back to 0 by the end — never lingers at full
+            var c = _revealGlowImage.color;
+            c.a = pulse * 0.65f;
+            _revealGlowImage.color = c;
+            float scale = 1f + 0.08f * pulse;
+            _revealGlow.localScale = new Vector3(scale, scale, 1f);
+        }
+
         /// <summary>MV-433: the board's scale-to-fit factor for a given screen aspect ratio (width /
         /// height), under the canvas's own <c>matchWidthOrHeight = 1</c> (match-by-height) rule — pure
         /// so the clamp is pinned by an EditMode test without building a canvas or touching
@@ -377,6 +433,11 @@ namespace MaxWorlds.UI
                 _lastScreenHeight = Screen.height;
                 ApplyBoardScale();
             }
+
+            // MV-521: the just-unlocked-family reveal — self-terminating, so this only ever does
+            // anything while _revealGlow is actually showing.
+            if (_revealGlow != null && _revealGlow.gameObject.activeSelf)
+                ApplyRevealTiming(Time.unscaledTime - _revealStartUnscaledTime);
 
             // The draftable-capability dashed ring pulses (ticket: "Left to you — the pulse rate on a
             // draftable capability"). Chosen: same family the SUPERCELL glow uses, twice as slow, so the
@@ -474,6 +535,10 @@ namespace MaxWorlds.UI
             _open = false;
             _draftActive = false;
             _draftCandidateIds.Clear();
+            // MV-521: a reveal caught mid-flight by the player closing early must not linger — "do not
+            // leave any persistent state behind" applies just as much to an early exit as to letting it
+            // play out.
+            if (_revealGlow != null) _revealGlow.gameObject.SetActive(false);
             Time.timeScale = _prevTimeScale;
             _screenRoot.gameObject.SetActive(false);
         }
@@ -481,8 +546,10 @@ namespace MaxWorlds.UI
         /// <summary>A Morphing Module was collected (MV-424, replacing the old shed → badge → BUILD
         /// ABILITY modal chain): 0 candidates consumes the module with nothing granted, 1 grants it
         /// directly with no screen, 2(-3) opens THE RIG with just those candidates lit on the board —
-        /// numbered, TAKE-labelled — and everything else dimmed. One tap takes it and closes the
-        /// screen. MV-457: a shed now draws up to 2 locked CATEGORY ids instead of up to 3 ability ids
+        /// numbered, TAKE-labelled — and everything else dimmed. MV-521: one tap takes it and resolves
+        /// the pick IN PLACE (<see cref="ResolveDraftPick"/>) — it no longer closes the screen; the
+        /// player does that themselves once they're done looking at what just unlocked. MV-457: a shed
+        /// now draws up to 2 locked CATEGORY ids instead of up to 3 ability ids
         /// — <paramref name="candidateIds"/> takes either shape unchanged, since
         /// <see cref="GrantDraftCandidate"/> and the board's own <c>_categoryNodes</c>/<c>_abilityNodes</c>
         /// lookups both key off the same disjoint id namespaces (all-caps category ids vs lowercase
@@ -1086,11 +1153,7 @@ namespace MaxWorlds.UI
         {
             if (_draftActive)
             {
-                if (_draftCandidateIds.Contains(id))
-                {
-                    GrantDraftCandidate(id);
-                    Close();
-                }
+                if (_draftCandidateIds.Contains(id)) ResolveDraftPick(id);
                 return;   // the scrim already blocks non-candidate taps; belt-and-suspenders here
             }
             if (RigBoard.FusionExists(id)) { PartSpend.TrySpendOnFusion(id); return; }
@@ -1105,6 +1168,57 @@ namespace MaxWorlds.UI
         /// <see cref="RigState.UnlockCategory"/> instead.</summary>
         private static bool GrantDraftCandidate(string id) =>
             RigBoard.Exists(id) ? WeaponSystemState.AcquireById(id) : RigState.UnlockCategory(id);
+
+        /// <summary>MV-521: resolves a draft pick IN PLACE — the screen used to <see cref="Close"/>
+        /// here, throwing the player back into the fight at exactly the moment there was most new
+        /// material to look at (a category pick unlocks a whole family, MV-457). Now: grant, drop the
+        /// draft state, start the just-unlocked family's reveal, and either chain straight into another
+        /// banked module (<see cref="PendingMorphingModule"/>) or fall back to the board's ordinary
+        /// spendable state — never closing the screen ourselves. The player's own CLOSE/QUIT controls
+        /// are the only things that still dismiss it.</summary>
+        private void ResolveDraftPick(string id)
+        {
+            string categoryId = RigBoard.Exists(id) ? RigBoard.Category(id) : id;
+
+            GrantDraftCandidate(id);
+            _draftActive = false;
+            _draftCandidateIds.Clear();
+
+            StartCategoryReveal(categoryId);
+
+            // OpenMorphingModuleDraft already does exactly "arm the next draft in place" when the screen
+            // is already open (its own !_open guard skips the pause/timescale work) — reusing it here is
+            // what makes chaining work instead of duplicating its 0/1/2+ candidate handling.
+            if (PendingMorphingModule.HasPending) OpenMorphingModuleDraft(PendingMorphingModule.Take());
+
+            Refresh();
+        }
+
+        /// <summary>MV-521: starts the just-unlocked-family reveal over <paramref name="categoryId"/>'s
+        /// own panel — a short, self-terminating glow (<see cref="ApplyRevealTiming"/>) drawing the eye
+        /// to the column that just lit, since staying on the board is only worth it if the player
+        /// actually notices what changed. A no-op if the category has no built panel (nothing to
+        /// highlight).</summary>
+        private void StartCategoryReveal(string categoryId)
+        {
+            if (_revealGlow == null || string.IsNullOrEmpty(categoryId)) return;
+            if (!_categoryPanels.TryGetValue(categoryId, out var panel)) return;
+
+            RectTransform panelRect = panel.rectTransform;
+            _revealGlow.anchorMin = panelRect.anchorMin;
+            _revealGlow.anchorMax = panelRect.anchorMax;
+            _revealGlow.pivot = panelRect.pivot;
+            _revealGlow.sizeDelta = panelRect.sizeDelta;
+            _revealGlow.anchoredPosition = panelRect.anchoredPosition;
+            _revealGlow.SetAsLastSibling();
+            _revealGlow.localScale = Vector3.one;
+
+            Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(categoryId));
+            _revealGlowImage.color = new Color(family.r, family.g, family.b, 0f);
+
+            _revealStartUnscaledTime = Time.unscaledTime;
+            _revealGlow.gameObject.SetActive(true);
+        }
 
         /// <summary>MV-458: e_cel is no longer special-cased — tapping the CELLS chip is just a
         /// convenience shortcut to the exact same tap the e_cel hex node itself accepts.</summary>
@@ -1291,6 +1405,7 @@ namespace MaxWorlds.UI
 
             BuildDraftScrim(_nodeParent);   // MV-424: last board child so it dims everything built above,
             BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
+            BuildRevealGlow(_nodeParent);   // MV-521: built last too, so it renders above the panel it targets
         }
 
         /// <summary>Standard mode's node parent (MV-472, current spec, defect 3): a masked vertical
@@ -1431,6 +1546,9 @@ namespace MaxWorlds.UI
             _draftBandTitle = null;
             _draftBandSubtitle = null;
             _draftBandReason = null;
+            _revealGlow = null;
+            _revealGlowImage = null;
+            _revealStartUnscaledTime = float.NegativeInfinity;
         }
 
         /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
@@ -1613,6 +1731,20 @@ namespace MaxWorlds.UI
             _draftBandReason.rectTransform.anchoredPosition = new Vector2(0f, -100f);
 
             band.gameObject.SetActive(false);
+        }
+
+        /// <summary>MV-521: the just-unlocked-family reveal glow's static shell — one reusable
+        /// soft-edged panel-sized overlay, built inactive and repositioned/retinted over whichever
+        /// category <see cref="StartCategoryReveal"/> targets. Raycast off: unlike the draft scrim, this
+        /// must never block a tap.</summary>
+        private void BuildRevealGlow(RectTransform boardRoot)
+        {
+            var glow = AddImage(boardRoot, HudTextures.RoundedBox(64, 0.08f), Color.clear, "Reveal Glow");
+            glow.type = Image.Type.Sliced;   // the panel it's sized to match is almost never a 64px square
+            glow.raycastTarget = false;
+            glow.gameObject.SetActive(false);
+            _revealGlow = glow.rectTransform;
+            _revealGlowImage = glow;
         }
 
         /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) placed and
