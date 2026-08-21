@@ -303,7 +303,7 @@ jobs:
             CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
               -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Content-Type: application/json" \
               --data "{\"body\":\"Shipped to TestFlight as $VERSION. Run: $RUN_URL\"}" \
-              "$BASE/rest/api/3/issue/$K/comment")
+              "$BASE/rest/api/2/issue/$K/comment")
             if [ "$CODE" = "201" ]; then
               echo "$K -> commented ($VERSION)"
             else
