@@ -294,7 +294,21 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("weapons-button-module", 1920, 1080, ApplyWeaponsButtonModuleFixture, null, null, canvas);
             yield return CaptureFixtureScreen("weapons-button-both", 1920, 1080, ApplyWeaponsButtonBothFixture, null, null, canvas);
 
+            // MV-510 AC A4 (review round 1 superseded AC8's 977x458 with 1920x1080): the
+            // human-judged eyes-on shot, with real (nonzero) numbers on both RIG-mark counters so the
+            // doubled mark, the recessive cell pill and the enlarged parts chip all read at once.
+            yield return CaptureFixtureScreen("hud-mv510-1920x1080", 1920, 1080, ApplyHudMv510Fixture, null, null, canvas);
+
             ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
+        }
+
+        /// <summary>MV-510 AC8 demo state — some parts AND some banked cells, so the human screenshot
+        /// shows both RIG-mark counters with real numbers rather than "0" and "0/20".</summary>
+        public static void ApplyHudMv510Fixture()
+        {
+            ApplyWeaponsButtonIdleFixture();
+            for (int i = 0; i < 3; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 12; i++) PickupWallet.AddPowerCell();
         }
 
         public static void ApplyWeaponsButtonIdleFixture()
@@ -1430,8 +1444,9 @@ namespace MaxWorlds.Dev
         }
 
         // MV-463 Part 1: THE RIG's own shot count is data-driven (RigBoardLayout.CaptureAspects) plus
-        // the fixed noparts variant; WEAPONS button stays at its 4 fixed alert-state shots (MV-425).
-        private static int ExpectedShotCount => RigBoardLayout.CaptureAspects.Count + 1 + 4;
+        // the fixed noparts variant; WEAPONS button stays at its 4 fixed alert-state shots (MV-425)
+        // plus MV-510's own 977x458 human-check shot.
+        private static int ExpectedShotCount => RigBoardLayout.CaptureAspects.Count + 1 + 4 + 1;
 
         private static void Log(string m) => Debug.Log("[UiScreens] " + m);
         private static void LogWarn(string m) => Debug.LogWarning("[UiScreens] " + m);
