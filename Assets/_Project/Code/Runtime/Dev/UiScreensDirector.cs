@@ -177,6 +177,11 @@ namespace MaxWorlds.Dev
             // Supercell grant pushed PowerCells past Capacity — must read as a deliberate bonus, not a
             // clamped/broken number (Change item 5).
             yield return CaptureFixtureScreen("rig-mv519-overcap-16x9", 1920, 1080, ApplyRigFixtureOverCap, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-520 AC6's human-check shot: the exact fixture AC1's EditMode test proves against
+            // (only PRIMARY lit, DAMAGE at level 1, 4 cells banked) — Lee's own screenshot state, so this
+            // capture is directly comparable to it.
+            yield return CaptureFixtureScreen("rig-mv520-16x9", 1920, 1080, ApplyRigFixtureMv520, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -220,6 +225,18 @@ namespace MaxWorlds.Dev
             RigState.Reset();
             PickupWallet.Reset();
             PickupWallet.SetPowerCells(15);
+        }
+
+        /// <summary>MV-520 AC1/AC6: the exact fixture Lee's own screenshot showed and the EditMode test
+        /// (<c>MV520RigCostAlwaysVisibleTests</c>) proves against — <see cref="RigState.Reset"/>'s
+        /// baseline (only PRIMARY unlocked, DAMAGE/p_dmg at level 1) with 4 cells banked, distinct from
+        /// <see cref="ApplyRigFixtureFreshRun"/>'s 15 (an MV-470 choice unrelated to this ticket's own
+        /// numbers) so the capture is directly comparable to the state Lee reported.</summary>
+        public static void ApplyRigFixtureMv520()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PickupWallet.SetPowerCells(4);
         }
 
         /// <summary>MV-519 AC9: the same board state as <see cref="ApplyRigFixture"/>, but landed over
