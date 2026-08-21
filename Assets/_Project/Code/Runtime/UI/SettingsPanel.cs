@@ -382,11 +382,23 @@ namespace MaxWorlds.UI
 
             // YT-210: the run is now a bounded ~6-minute clock. Run length is the authored knob;
             // the rate above derives from it unless explicitly pinned.
-            Add("Run length", "s", 30f, 900f, DifficultyDirector.AuthoredRunLengthSeconds,
+            //
+            // MV-525: the [min,max] used to be flat magic numbers (30/900) that MV-513's re-pace to
+            // 2750f silently outran — the authored default sat above the slider's own ceiling. Deriving
+            // both bounds as a fraction/multiple of the authored value instead means ANY future re-pace
+            // of AuthoredRunLengthSeconds keeps its default inside its own range for free, rather than
+            // relying on someone remembering to also touch this line.
+            float runLengthMin = DifficultyDirector.AuthoredRunLengthSeconds * 0.1f;
+            float runLengthMax = DifficultyDirector.AuthoredRunLengthSeconds * 2f;
+            Add("Run length", "s", runLengthMin, runLengthMax, DifficultyDirector.AuthoredRunLengthSeconds,
                 () => DevTuning.Or(DevTuning.RunLengthSeconds, DifficultyDirector.AuthoredRunLengthSeconds),
                 v => DevTuning.RunLengthSeconds = v, tab: TabArena);
 
-            Add("Shed clock skip", "s", 0f, 300f, DifficultyDirector.AuthoredPerShedBump,
+            // MV-525: same fix as Run length above — AuthoredPerShedBump derives from
+            // AuthoredRunLengthSeconds (see DifficultyDirector), so its slider ceiling must derive from
+            // IT rather than a flat 300f that the same re-pace outran (1571.43s against a 300s cap).
+            float shedSkipMax = DifficultyDirector.AuthoredPerShedBump * 2f;
+            Add("Shed clock skip", "s", 0f, shedSkipMax, DifficultyDirector.AuthoredPerShedBump,
                 () => DevTuning.Or(DevTuning.EscalationPerShedBump, DifficultyDirector.AuthoredPerShedBump),
                 v => DevTuning.EscalationPerShedBump = v, tab: TabArena);
 
