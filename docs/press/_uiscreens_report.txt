@@ -1,7 +1,7 @@
 ﻿== rig-16x9 (1920x1080) ==
 PASS node-position: 28/28 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.177 unlit=0.108 ratio=1.645 (need >=1.5)
+PASS family-contrast: lit=0.177 unlit=0.108 ratio=1.647 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 7/7 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor
@@ -9,7 +9,7 @@ PASS y-bounds-containment: 32/32 nodes within [0,1080] visible frame
 == rig-phone (2340x1080) ==
 PASS node-position: 21/21 nodes present at their json coordinate (7 below the fold, skipped)
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.188 unlit=0.118 ratio=1.595 (need >=1.5)
+PASS family-contrast: lit=0.188 unlit=0.118 ratio=1.591 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 7/7 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 18px-at-ref floor
@@ -17,7 +17,7 @@ PASS y-bounds-containment: 32/32 nodes within [0,1360] scroll content
 == rig-ipad-mini (1078x815) ==
 PASS node-position: 28/28 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.173 unlit=0.103 ratio=1.685 (need >=1.5)
+PASS family-contrast: lit=0.173 unlit=0.103 ratio=1.684 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 7/7 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor

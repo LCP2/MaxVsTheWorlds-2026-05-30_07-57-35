@@ -201,10 +201,15 @@ namespace MaxWorlds.UI
         private float _warningTimer;
         private float _bossIncomingTimer;
 
-        // Robot drops (YT-131): banked power-cell counter.
+        // Robot drops (YT-131): banked power-cell counter. MV-510 moved this readout under THE
+        // WEAPONS button's mark (see BuildPowerCellCounter) and gave it the MV-471 affordability
+        // flash the old bare chip it replaced used to carry — hence _cellCounterRoot/Glow/Bg below,
+        // the same shape UpdateRigCounters already drove for the part counter.
         private Text _cellCount;
         private Image _cellIcon;
         private float _cellPop;              // one-shot scale pop when a cell is banked
+        private RectTransform _cellCounterRoot;
+        private Image _cellCounterGlow, _cellCounterBg;
 
         // The always-available WEAPONS access button (YT-178), redrawn as THE RIG's own hexagonal
         // mark (MV-425, retiring both the old ABILITIES pill and the single-chip corner badge YT-131/
@@ -222,17 +227,15 @@ namespace MaxWorlds.UI
         private Image _moduleBadgeGlow, _moduleBadgeBg;
         private Text _moduleBadgeMark;
 
-        // MV-471: the two always-on counters attached to THE RIG mark itself — replacing the old
+        // MV-471: the always-on parts counter attached to THE RIG mark itself — replacing the old
         // "Parts Badge" that only appeared while a part was banked, regardless of whether that part
-        // could actually buy anything. Both stay visible and flash only off RigActions' own
-        // affordability check, never off "you are holding something".
+        // could actually buy anything. Stays visible and flashes only off RigActions' own
+        // affordability check, never off "you are holding something". Its cell-side twin (the old
+        // bare-number chip below the mark) is gone as of MV-510 — the moved power-cell readout
+        // (_cellCounterRoot et al. above) took its slot and its flash instead.
         private RectTransform _rigPartCounterRoot;
         private Image _rigPartCounterGlow, _rigPartCounterBg;
         private Text _rigPartCounterText;
-
-        private RectTransform _rigCellCounterRoot;
-        private Image _rigCellCounterGlow, _rigCellCounterBg;
-        private Text _rigCellCounterText;
 
         private void Awake()
         {
@@ -259,8 +262,8 @@ namespace MaxWorlds.UI
             BuildInvasionDial();
             BuildBossBar();
             BuildWarning();
-            BuildPowerCellCounter();
             BuildWeaponsButton();
+            BuildPowerCellCounter(); // parents onto _weaponsButtonRoot — must follow BuildWeaponsButton
             BuildWeaponsButtonBadges();
             BuildFloatingLayer();
             if (!SkipTouchControlsForTests) BuildTouchControls();
@@ -334,7 +337,6 @@ namespace MaxWorlds.UI
         {
             if (_cellCount != null) _cellCount.text = $"{total}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
-            if (_rigCellCounterText != null) _rigCellCounterText.text = total.ToString();
         }
 
         /// <summary>MV-374: the reserve's cap itself moved (a Cell Capacity level-up) — the count
@@ -637,12 +639,12 @@ namespace MaxWorlds.UI
                 SetRigCounterFlash(_rigPartCounterRoot, _rigPartCounterBg, _rigPartCounterGlow, PartColor, actionable);
             }
 
-            if (_rigCellCounterRoot != null)
+            if (_cellCounterRoot != null)
             {
-                int cells = MaxWorlds.Pickups.PickupWallet.PowerCells;
-                if (_rigCellCounterText != null) _rigCellCounterText.text = cells.ToString();
-                bool actionable = RigActions.AnyCellActionAffordable(cells);
-                SetRigCounterFlash(_rigCellCounterRoot, _rigCellCounterBg, _rigCellCounterGlow, CellColor, actionable);
+                // Text itself is kept current by OnPowerCells/OnCellCapacity — this only drives the
+                // MV-471 flash the moved readout inherited from the bare chip it replaced.
+                bool actionable = RigActions.AnyCellActionAffordable(MaxWorlds.Pickups.PickupWallet.PowerCells);
+                SetRigCounterFlash(_cellCounterRoot, _cellCounterBg, _cellCounterGlow, CellColor, actionable);
             }
         }
 
@@ -1921,21 +1923,36 @@ namespace MaxWorlds.UI
             _warning.gameObject.SetActive(false);
         }
 
-        /// <summary>The banked power-cell counter (MV-352): a first-class top-band pill with a cyan
-        /// cell icon and a running total. Cells are a resource the player spends, so this reads at a
-        /// glance the way health does — sized and placed in the top readout band, not tucked beside
-        /// another widget. Sits top-center, clear of Utility Icons/Home Button (top-left) and Ability
-        /// Slots/Minimap (top-right). Display-only currency for now — it just has to be visibly
-        /// accumulating as you clear the tough robots.</summary>
+        /// <summary>Gap between THE WEAPONS button's hex mark and the counter chip/readout on either
+        /// side of it (MV-471's original 6f, kept for the parts chip above; MV-510 gives the larger
+        /// cell readout below its own, roomier gap so it doesn't crowd the doubled mark).</summary>
+        private const float RigCounterGap = 6f;
+        private const float CellReadoutGap = 14f;
+
+        /// <summary>The banked power-cell counter (MV-352, moved under THE WEAPONS button's mark by
+        /// MV-510): a pill with a cyan cell icon and a running total. Cells are a resource the player
+        /// spends, so this reads at a glance the way health does. Was its own top-centre band; MV-510
+        /// retired the separate bare-number chip that used to sit under the mark (<see cref="PickupWallet.PowerCells"/>
+        /// was drawn twice) and gave this, the richer icon+total readout, that slot instead — so the
+        /// value now renders in exactly one place. Also now carries the MV-471 affordability flash
+        /// (<see cref="SetRigCounterFlash"/>) the old bare chip carried, via <see cref="_cellCounterBg"/>/
+        /// <see cref="_cellCounterGlow"/>. Must build after <see cref="BuildWeaponsButton"/> — it
+        /// parents onto <see cref="_weaponsButtonRoot"/>.</summary>
         private void BuildPowerCellCounter()
         {
-            var root = NewRect("Power Cells", Root);
-            Anchor(root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            var root = NewRect("Power Cells", _weaponsButtonRoot);
+            Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
             root.sizeDelta = new Vector2(220f, 84f);
-            root.anchoredPosition = new Vector2(0f, -24f); // top band, level with Utility Icons/Home Button
+            root.anchoredPosition = new Vector2(0f, -CellReadoutGap); // directly below the hex mark
+            _cellCounterRoot = root;
 
-            var bg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
-            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced; bg.raycastTarget = false;
+            _cellCounterGlow = AddImage(root, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
+            Stretch(_cellCounterGlow.rectTransform, 6f); // expands beyond the pill as a halo
+            _cellCounterGlow.type = Image.Type.Sliced;
+            _cellCounterGlow.raycastTarget = false;
+
+            _cellCounterBg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
+            Stretch(_cellCounterBg.rectTransform); _cellCounterBg.type = Image.Type.Sliced; _cellCounterBg.raycastTarget = false;
 
             // A purpose-built battery cell (YT-134) — a disc read as "a thing", not "a power cell".
             // The sprite bakes its own cyan/dark, so tint white to render it as authored.
@@ -1957,15 +1974,17 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>Hexagon bounding-box texture size THE WEAPONS button's background/ring/halo sprites
-        /// bake at (MV-425) — independent of the RectTransform's own <see cref="WeaponsButtonSize"/>,
-        /// which is what actually sets the tap target.</summary>
-        private const int WeaponsButtonHexTex = 108;
+        /// bake at (MV-425, doubled MV-510) — independent of the RectTransform's own
+        /// <see cref="WeaponsButtonSize"/>, which is what actually sets the tap target.</summary>
+        private const int WeaponsButtonHexTex = 216;
 
-        /// <summary>MV-425 AC1 (the live bug this ticket fixes): 96px read 42.2pt on the 932x430pt
+        /// <summary>MV-425 AC1 (the live bug that ticket fixed): 96px read 42.2pt on the 932x430pt
         /// 6-inch target (<c>SettingsPanel.Scale6Inch</c>, 0.44) — under Apple's 44pt HIG minimum.
-        /// 108px -&gt; 47.5pt clears it. <c>WeaponsButtonAlertTests</c> (EditMode) pins both the old
-        /// failure and the new pass.</summary>
-        private const float WeaponsButtonSize = 108f;
+        /// 108px -&gt; 47.5pt cleared it. <c>WeaponsButtonAlertTests</c> (EditMode) pins both the old
+        /// failure and that pass. MV-510 doubled it again, 108 -&gt; 216, purely for legibility at a
+        /// glance (Lee, playtest) — the 44pt HIG floor was already cleared, so this doesn't re-litigate
+        /// AC1, it just goes further.</summary>
+        private const float WeaponsButtonSize = 216f;
 
         /// <summary>The always-available WEAPONS button (YT-178, redrawn MV-425): a hexagonal mark —
         /// three linked nodes, a miniature of THE RIG board itself — replacing the old ABILITIES pill
@@ -2038,46 +2057,58 @@ namespace MaxWorlds.UI
             _moduleBadgeMark.fontStyle = FontStyle.Bold;
             _moduleBadgeMark.raycastTarget = false;
 
-            BuildRigCounters();
+            BuildRigPartCounter();
 
             RefreshWeaponsButtonAlert();
         }
 
-        /// <summary>MV-471: PART count above the mark, CELL count below it — both always visible and
-        /// live, replacing the old "Parts Badge" corner chip that only showed up while a part was
-        /// banked. <see cref="UpdateRigCounters"/> drives their text and flash every frame.</summary>
-        private void BuildRigCounters()
+        /// <summary>MV-425's hex-nut-and-bolt glyph for the PART counter (MV-510 item 6 — mirror the
+        /// cell readout's icon-plus-number, so both counters read the same way). Plain geometry via
+        /// <see cref="HudTextures.VectorIcon"/>, the same idiom THE WEAPONS button's own mark uses —
+        /// no font glyph, no committed art.</summary>
+        private const string RigPartGlyphSvg =
+            "<path d=\"M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/>" +
+            "<circle cx=\"0\" cy=\"0\" r=\"3.2\" fill=\"#ICON#\" stroke=\"none\"/>";
+
+        private const float RigPartChipWidth = 104f;
+        private const float RigPartChipHeight = 44f;
+        private const float RigPartTextSize = 34f;
+        private const float RigPartIconSize = 26f;
+
+        /// <summary>MV-471: the always-on PART count above the mark, replacing the old "Parts Badge"
+        /// corner chip that only showed up while a part was banked. <see cref="UpdateRigCounters"/>
+        /// drives its text and flash every frame. MV-510 enlarged the text (18 -&gt; <see cref="RigPartTextSize"/>)
+        /// and gave it its own icon, matching the moved cell readout below the mark; its old cell-side
+        /// twin is gone (that value now lives in the moved readout, see <see cref="BuildPowerCellCounter"/>).</summary>
+        private void BuildRigPartCounter()
         {
-            _rigPartCounterRoot = BuildRigCounter("Rig Part Counter", above: true,
-                out _rigPartCounterGlow, out _rigPartCounterBg, out _rigPartCounterText);
-            _rigCellCounterRoot = BuildRigCounter("Rig Cell Counter", above: false,
-                out _rigCellCounterGlow, out _rigCellCounterBg, out _rigCellCounterText);
-        }
+            var root = NewRect("Rig Part Counter", _weaponsButtonRoot);
+            Anchor(root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f));
+            root.sizeDelta = new Vector2(RigPartChipWidth, RigPartChipHeight);
+            root.anchoredPosition = new Vector2(0f, RigCounterGap);
+            _rigPartCounterRoot = root;
 
-        private RectTransform BuildRigCounter(string name, bool above, out Image glow, out Image bg, out Text text)
-        {
-            var root = NewRect(name, _weaponsButtonRoot);
-            Vector2 anchor = above ? new Vector2(0.5f, 1f) : new Vector2(0.5f, 0f);
-            Vector2 pivot = above ? new Vector2(0.5f, 0f) : new Vector2(0.5f, 1f);
-            Anchor(root, anchor, anchor, pivot);
-            root.sizeDelta = new Vector2(48f, 30f);
-            root.anchoredPosition = new Vector2(0f, above ? 6f : -6f);
+            _rigPartCounterGlow = AddImage(root, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
+            Stretch(_rigPartCounterGlow.rectTransform, 6f); // expands beyond the chip as a halo
+            _rigPartCounterGlow.type = Image.Type.Sliced;
+            _rigPartCounterGlow.raycastTarget = false;
 
-            glow = AddImage(root, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
-            Stretch(glow.rectTransform, 6f); // expands beyond the chip as a halo
-            glow.type = Image.Type.Sliced;
-            glow.raycastTarget = false;
+            _rigPartCounterBg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), PanelColor, "Chip");
+            Stretch(_rigPartCounterBg.rectTransform); _rigPartCounterBg.type = Image.Type.Sliced;
+            _rigPartCounterBg.raycastTarget = false; // the WEAPONS button underneath handles taps
 
-            bg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), PanelColor, "Chip");
-            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
-            bg.raycastTarget = false; // the WEAPONS button underneath handles taps
+            var icon = AddImage(root, HudTextures.VectorIcon(RigPartGlyphSvg, 40), BoneWhite, "Part Icon");
+            Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            icon.rectTransform.sizeDelta = new Vector2(RigPartIconSize, RigPartIconSize);
+            icon.rectTransform.anchoredPosition = new Vector2(8f + RigPartIconSize * 0.5f, 0f);
+            icon.raycastTarget = false;
 
-            text = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
-            Stretch(text.rectTransform);
-            text.fontStyle = FontStyle.Bold;
-            text.raycastTarget = false;
-
-            return root;
+            _rigPartCounterText = AddText(root, RigPartTextSize, BoneWhite, TextAnchor.MiddleRight);
+            Anchor(_rigPartCounterText.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
+            _rigPartCounterText.rectTransform.offsetMin = new Vector2(8f + RigPartIconSize + 4f, 0f);
+            _rigPartCounterText.rectTransform.offsetMax = new Vector2(-8f, 0f);
+            _rigPartCounterText.fontStyle = FontStyle.Bold;
+            _rigPartCounterText.raycastTarget = false;
         }
 
         private RectTransform BuildCornerBadge(string name, Vector2 corner, Vector2 offset, out Image glow, out Image bg)
