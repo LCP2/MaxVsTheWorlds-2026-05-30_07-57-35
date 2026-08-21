@@ -77,12 +77,15 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>Kept fresh every frame, because by the time the kill signal arrives the body is
-        /// already gone.</summary>
+        /// already gone. Reads the registry (MV-531) instead of scanning the scene every frame — same
+        /// idiom <see cref="PickupArtDirector"/> was converted to in MV-527.</summary>
         private void SnapshotLiveEnemies()
         {
             _snapshots.Clear();
-            foreach (var e in FindObjectsByType<RobotEnemy>(FindObjectsSortMode.None))
+            var active = RobotEnemy.Active;
+            for (int i = 0; i < active.Count; i++)
             {
+                var e = active[i];
                 if (!e.IsAlive) continue;
 
                 var filter = e.GetComponentInChildren<MeshFilter>();
