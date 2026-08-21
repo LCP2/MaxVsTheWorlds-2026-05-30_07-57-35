@@ -96,7 +96,35 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsEmpty(offenders,
                 "Update/LateUpdate/FixedUpdate must not call FindObjectsByType/FindFirstObjectByType " +
                 "every frame — that's the MV-527 regression (source-shape check, not a behavioural one). " +
-                "Offenders:\n" + string.Join("\n", offenders));
+                BuildOffendersMessage(offenders));
+        }
+
+        // MV-533: the CI test reporter drops any failure message over 65,534 characters ("Test details
+        // omitted from GitHub UI due to length"), which is exactly what an unbounded offenders list did
+        // once a real regression produced enough hits — the failure ran to completion and asserted
+        // correctly, but the evidence never reached anyone. This caps the message at ~4,000 characters —
+        // total count, first 20 offenders, then a truncation note — without touching what gets scanned
+        // or what gets asserted.
+        private const int MaxOffendersShown = 20;
+
+        private static string BuildOffendersMessage(List<string> offenders)
+        {
+            int shownCount = Math.Min(MaxOffendersShown, offenders.Count);
+            var sb = new System.Text.StringBuilder();
+            sb.Append(offenders.Count).Append(" offender(s) found.");
+            if (shownCount > 0)
+            {
+                sb.Append(" First ").Append(shownCount).Append(":\n");
+                for (int i = 0; i < shownCount; i++)
+                {
+                    if (i > 0) sb.Append('\n');
+                    sb.Append(offenders[i]);
+                }
+                int omitted = offenders.Count - shownCount;
+                if (omitted > 0)
+                    sb.Append("\n… ").Append(omitted).Append(" more offender(s) omitted.");
+            }
+            return sb.ToString();
         }
 
         private static readonly Regex CommentRegex = new Regex(
