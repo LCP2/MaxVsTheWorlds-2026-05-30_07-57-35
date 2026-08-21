@@ -290,10 +290,10 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("weapons-button-module", 1920, 1080, ApplyWeaponsButtonModuleFixture, null, null, canvas);
             yield return CaptureFixtureScreen("weapons-button-both", 1920, 1080, ApplyWeaponsButtonBothFixture, null, null, canvas);
 
-            // MV-510 AC8: the human-judged eyes-on shot at the same 977x458 mobile aspect
-            // rig-mv472-977x458 already uses, with real (nonzero) numbers on both RIG-mark counters
-            // so the doubled mark, the moved cell readout and the enlarged parts chip all read at once.
-            yield return CaptureFixtureScreen("hud-mv510-977x458", 977, 458, ApplyHudMv510Fixture, null, null, canvas);
+            // MV-510 AC A4 (review round 1 superseded AC8's 977x458 with 1920x1080): the
+            // human-judged eyes-on shot, with real (nonzero) numbers on both RIG-mark counters so the
+            // doubled mark, the recessive cell pill and the enlarged parts chip all read at once.
+            yield return CaptureFixtureScreen("hud-mv510-1920x1080", 1920, 1080, ApplyHudMv510Fixture, null, null, canvas);
 
             ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
         }

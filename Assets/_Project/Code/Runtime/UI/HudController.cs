@@ -644,7 +644,7 @@ namespace MaxWorlds.UI
                 // Text itself is kept current by OnPowerCells/OnCellCapacity — this only drives the
                 // MV-471 flash the moved readout inherited from the bare chip it replaced.
                 bool actionable = RigActions.AnyCellActionAffordable(MaxWorlds.Pickups.PickupWallet.PowerCells);
-                SetRigCounterFlash(_cellCounterRoot, _cellCounterBg, _cellCounterGlow, CellColor, actionable);
+                SetRigCounterFlash(_cellCounterRoot, _cellCounterBg, _cellCounterGlow, CellColor, actionable, swapBackground: false);
             }
         }
 
@@ -652,25 +652,30 @@ namespace MaxWorlds.UI
         /// dim-&gt;full pulse <see cref="AnimateBadge"/> already uses for the module badge, in the
         /// given currency's own colour — so "the RIG mark is worth a look" reads the same language
         /// everywhere on this button.</summary>
-        private static void SetRigCounterFlash(RectTransform root, Image bg, Image glow, Color hue, bool actionable)
+        /// <summary>MV-510 review round 1 (AC A2): <paramref name="swapBackground"/> defaults true for
+        /// the parts chip (unchanged behaviour). The cell pill passes false — its background must stay
+        /// PanelColor in every state (idle AND actionable); the cyan "worth a look" cue lives in the
+        /// glow ring and the icon's own baked colour instead, so a saturated slab cannot come back.</summary>
+        private static void SetRigCounterFlash(RectTransform root, Image bg, Image glow, Color hue, bool actionable, bool swapBackground = true)
         {
             if (actionable)
             {
-                AnimateBadge(root, bg, glow, hue, PartAlertFlash(Time.unscaledTime));
+                AnimateBadge(root, bg, glow, hue, PartAlertFlash(Time.unscaledTime), swapBackground);
                 return;
             }
 
-            if (bg != null) bg.color = PanelColor;
+            if (swapBackground && bg != null) bg.color = PanelColor;
             if (glow != null) glow.color = Color.clear;
             root.localScale = Vector3.one;
         }
 
         /// <summary>One corner badge's beat: chip colour swings dim-&gt;full, a scale pop on the beat,
         /// and an outer glow ring swelling/brightening in step — same shape MV-300 built for the single
-        /// chip this replaces, now shared by both.</summary>
-        private static void AnimateBadge(RectTransform root, Image bg, Image glow, Color hue, float t)
+        /// chip this replaces, now shared by both. <paramref name="swapBackground"/> false (MV-510)
+        /// skips the chip-colour swing so the background stays PanelColor throughout.</summary>
+        private static void AnimateBadge(RectTransform root, Image bg, Image glow, Color hue, float t, bool swapBackground = true)
         {
-            if (bg != null)
+            if (swapBackground && bg != null)
             {
                 Color c = hue * (0.32f + 0.68f * t);
                 c.a = 0.55f + 0.45f * t;
@@ -1929,6 +1934,19 @@ namespace MaxWorlds.UI
         private const float RigCounterGap = 6f;
         private const float CellReadoutGap = 14f;
 
+        /// <summary>MV-510 review round 1 (Lee): the pill must never read louder than the hex mark it
+        /// sits under, and must not exceed the mark's own width (<see cref="WeaponsButtonSize"/>, 216).
+        /// 200 leaves a 16px margin (AC A3).</summary>
+        private const float CellCounterWidth = 200f;
+        private const float CellCounterHeight = 60f;
+        private const float CellCounterIconSize = 44f;
+
+        /// <summary>MV-510 review round 1: the cell readout's numerals were the loudest thing on the
+        /// HUD at 40pt. Capped down to sit as a visual peer with the parts count's own cap
+        /// (<see cref="RigPartTextMaxSize"/>), not above it (AC A1).</summary>
+        private const float CellCounterTextMinSize = 20f;
+        private const float CellCounterTextMaxSize = 32f;
+
         /// <summary>The banked power-cell counter (MV-352, moved under THE WEAPONS button's mark by
         /// MV-510): a pill with a cyan cell icon and a running total. Cells are a resource the player
         /// spends, so this reads at a glance the way health does. Was its own top-centre band; MV-510
@@ -1942,7 +1960,7 @@ namespace MaxWorlds.UI
         {
             var root = NewRect("Power Cells", _weaponsButtonRoot);
             Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
-            root.sizeDelta = new Vector2(220f, 84f);
+            root.sizeDelta = new Vector2(CellCounterWidth, CellCounterHeight);
             root.anchoredPosition = new Vector2(0f, -CellReadoutGap); // directly below the hex mark
             _cellCounterRoot = root;
 
@@ -1951,6 +1969,10 @@ namespace MaxWorlds.UI
             _cellCounterGlow.type = Image.Type.Sliced;
             _cellCounterGlow.raycastTarget = false;
 
+            // MV-510 review round 1 (AC A2): the background never leaves PanelColor — it is the same
+            // recessive fill every other HUD panel uses. The idle<->actionable flash used to swap this
+            // to a saturated CellColor mass; now (see SetRigCounterFlash's swapBackground) it only
+            // animates the glow ring above, so cyan stays an accent (also on the icon), never mass.
             _cellCounterBg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
             Stretch(_cellCounterBg.rectTransform); _cellCounterBg.type = Image.Type.Sliced; _cellCounterBg.raycastTarget = false;
 
@@ -1958,18 +1980,18 @@ namespace MaxWorlds.UI
             // The sprite bakes its own cyan/dark, so tint white to render it as authored.
             _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Cell Icon");
             Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            _cellIcon.rectTransform.sizeDelta = new Vector2(60f, 60f);
-            _cellIcon.rectTransform.anchoredPosition = new Vector2(24f, 0f);
+            _cellIcon.rectTransform.sizeDelta = new Vector2(CellCounterIconSize, CellCounterIconSize);
+            _cellIcon.rectTransform.anchoredPosition = new Vector2(8f + CellCounterIconSize * 0.5f, 0f);
             _cellIcon.raycastTarget = false;
 
-            _cellCount = AddText(root, 40f, BoneWhite, TextAnchor.MiddleLeft);
+            _cellCount = AddText(root, CellCounterTextMaxSize, BoneWhite, TextAnchor.MiddleLeft);
             Anchor(_cellCount.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
-            _cellCount.rectTransform.offsetMin = new Vector2(80f, 0f);
-            _cellCount.rectTransform.offsetMax = new Vector2(-14f, 0f);
+            _cellCount.rectTransform.offsetMin = new Vector2(8f + CellCounterIconSize + 8f, 0f);
+            _cellCount.rectTransform.offsetMax = new Vector2(-12f, 0f);
             _cellCount.fontStyle = FontStyle.Bold;
             _cellCount.resizeTextForBestFit = true;
-            _cellCount.resizeTextMinSize = 20;
-            _cellCount.resizeTextMaxSize = 40;
+            _cellCount.resizeTextMinSize = (int)CellCounterTextMinSize;
+            _cellCount.resizeTextMaxSize = (int)CellCounterTextMaxSize;
             _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
         }
 
@@ -2070,16 +2092,21 @@ namespace MaxWorlds.UI
             "<path d=\"M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/>" +
             "<circle cx=\"0\" cy=\"0\" r=\"3.2\" fill=\"#ICON#\" stroke=\"none\"/>";
 
-        private const float RigPartChipWidth = 104f;
-        private const float RigPartChipHeight = 44f;
-        private const float RigPartTextSize = 34f;
+        private const float RigPartChipWidth = 110f;
+        private const float RigPartChipHeight = 48f;
+        private const float RigPartTextMinSize = 20f;
+
+        /// <summary>MV-510 review round 1 (AC A1): kept equal to <see cref="CellCounterTextMaxSize"/>
+        /// so the two resolved best-fit sizes land as peers, not just "close by construction".</summary>
+        private const float RigPartTextMaxSize = CellCounterTextMaxSize;
         private const float RigPartIconSize = 26f;
 
         /// <summary>MV-471: the always-on PART count above the mark, replacing the old "Parts Badge"
         /// corner chip that only showed up while a part was banked. <see cref="UpdateRigCounters"/>
-        /// drives its text and flash every frame. MV-510 enlarged the text (18 -&gt; <see cref="RigPartTextSize"/>)
+        /// drives its text and flash every frame. MV-510 enlarged the text (18 -&gt; <see cref="RigPartTextMaxSize"/>)
         /// and gave it its own icon, matching the moved cell readout below the mark; its old cell-side
-        /// twin is gone (that value now lives in the moved readout, see <see cref="BuildPowerCellCounter"/>).</summary>
+        /// twin is gone (that value now lives in the moved readout, see <see cref="BuildPowerCellCounter"/>).
+        /// Review round 1 also made it best-fit driven, matching the cell readout's own mechanism.</summary>
         private void BuildRigPartCounter()
         {
             var root = NewRect("Rig Part Counter", _weaponsButtonRoot);
@@ -2103,11 +2130,17 @@ namespace MaxWorlds.UI
             icon.rectTransform.anchoredPosition = new Vector2(8f + RigPartIconSize * 0.5f, 0f);
             icon.raycastTarget = false;
 
-            _rigPartCounterText = AddText(root, RigPartTextSize, BoneWhite, TextAnchor.MiddleRight);
+            _rigPartCounterText = AddText(root, RigPartTextMaxSize, BoneWhite, TextAnchor.MiddleRight);
             Anchor(_rigPartCounterText.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
             _rigPartCounterText.rectTransform.offsetMin = new Vector2(8f + RigPartIconSize + 4f, 0f);
             _rigPartCounterText.rectTransform.offsetMax = new Vector2(-8f, 0f);
             _rigPartCounterText.fontStyle = FontStyle.Bold;
+            // MV-510 review round 1 (AC A1): best-fit driven, like the cell readout, so the "roughly
+            // the same optical size" requirement is a resolved-value fact, not two independently
+            // authored constants that happen to match today.
+            _rigPartCounterText.resizeTextForBestFit = true;
+            _rigPartCounterText.resizeTextMinSize = (int)RigPartTextMinSize;
+            _rigPartCounterText.resizeTextMaxSize = (int)RigPartTextMaxSize;
             _rigPartCounterText.raycastTarget = false;
         }
 
