@@ -20,13 +20,5 @@ namespace MaxWorlds.Weapons
                 if (CellSpend.IsCellActionAffordable(id, cellsBanked)) return true;
             return false;
         }
-
-        /// <summary>MV-515: is cashing a Supercell for <see cref="MaxWorlds.Pickups.PickupWallet.SupercellCellValue"/>
-        /// cells actually possible right now — at least one banked AND room in the reserve for the full
-        /// top-up. Pure, mirroring <see cref="AnyCellActionAffordable"/>'s "takes the banked amounts as
-        /// parameters" idiom so it can be pinned by an EditMode test without a live
-        /// <see cref="MaxWorlds.Pickups.PickupWallet"/>.</summary>
-        public static bool AnySupercellActionAffordable(int supercellsBanked, int powerCells, int capacity) =>
-            supercellsBanked > 0 && capacity - powerCells >= MaxWorlds.Pickups.PickupWallet.SupercellCellValue;
     }
 }

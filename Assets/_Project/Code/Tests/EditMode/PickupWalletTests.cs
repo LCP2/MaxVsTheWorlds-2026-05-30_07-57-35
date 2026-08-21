@@ -7,9 +7,9 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// The banked-drops tally behind the HUD counter and the weapons area (YT-131, recut WV-228,
-    /// MV-515): power cells and Supercells both accumulate as a plain count and fire a change event so
-    /// the HUD reacts rather than polls. A Supercell carries no identity — it's a banked 10-cell
-    /// top-up, cashed in explicitly via <see cref="PickupWallet.TryCashSupercell"/>.
+    /// MV-515, recut again MV-519): power cells accumulate as a plain count and fire a change event so
+    /// the HUD reacts rather than polls. A Supercell (<see cref="PickupWallet.AddSupercell"/>) carries
+    /// no identity and is never banked — it grants its cells the instant it's picked up.
     /// </summary>
     public sealed class PickupWalletTests
     {
@@ -49,66 +49,6 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SupercellsAccumulateAsABankedCount()
-        {
-            PickupWallet.AddSupercell();
-            PickupWallet.AddSupercell();
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(2),
-                "each collected Supercell banks as a fungible token (WV-228, MV-515)");
-        }
-
-        [Test]
-        public void CollectingASupercellFiresTheChangeEvent()
-        {
-            int seen = -1;
-            void Handler(int n) => seen = n;
-            PickupWallet.SupercellsChanged += Handler;
-            try
-            {
-                PickupWallet.AddSupercell();
-                Assert.That(seen, Is.EqualTo(1), "the flashing edge icon is raised off this event");
-            }
-            finally { PickupWallet.SupercellsChanged -= Handler; }
-        }
-
-        [Test]
-        public void CashingASupercellAddsTenCellsAndIsANoOpWhenEmpty()
-        {
-            Assert.That(PickupWallet.TryCashSupercell(), Is.False, "there's nothing to cash yet");
-            PickupWallet.AddSupercell();
-            Assert.That(PickupWallet.TryCashSupercell(), Is.True);
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(0), "cashing the only banked Supercell clears it");
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.SupercellCellValue),
-                "cashing must add exactly SupercellCellValue cells");
-            Assert.That(PickupWallet.TryCashSupercell(), Is.False, "and can't be cashed below zero");
-        }
-
-        /// <summary>MV-515 AC3, verbatim: at 5/20 cells cashing succeeds and leaves 15/20 with one
-        /// fewer Supercell; at 15/20 cells (room for only 5 more, short of the full 10-cell top-up) it
-        /// refuses, changing neither cells nor the Supercell count — the same no-waste principle MV-439
-        /// established for cell pickups. Testing policy (MV-465): the one new test this ticket adds,
-        /// proven to fail on 1b5c5892686445ec623abbfe7288329880c6830b (main HEAD before this ticket)
-        /// since neither <see cref="PickupWallet.TryCashSupercell"/> nor
-        /// <see cref="PickupWallet.SupercellCellValue"/> exist there.</summary>
-        [Test]
-        public void CashingASupercellRequiresRoomForTheFullTenCellTopUp_MV515()
-        {
-            PickupWallet.AddSupercell();
-            PickupWallet.SetPowerCells(5);   // capacity 20 by default — room for 10 more
-
-            Assert.That(PickupWallet.TryCashSupercell(), Is.True, "5/20 has room for the full 10-cell top-up");
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(15));
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(0));
-
-            PickupWallet.AddSupercell();
-            // Now at 15/20 — only 5 cells of headroom, short of the full 10-cell top-up.
-            Assert.That(PickupWallet.TryCashSupercell(), Is.False,
-                "MV-515: never partially fill and never silently discard — refuse below a full top-up's worth of room");
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(15), "a refused cash-in must not change the cell count");
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "a refused cash-in must not spend the Supercell");
-        }
-
-        [Test]
         public void PowerCellsCanBeSpent_AndStopAtEmpty()
         {
             PickupWallet.AddPowerCell();
@@ -141,8 +81,12 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity), "a refused add must not change the count");
         }
 
+        /// <summary>MV-519: <see cref="PickupWallet.SetPowerCells"/> no longer clamps to
+        /// <see cref="PickupWallet.Capacity"/> — a save taken while over-cap (a Supercell picked up past
+        /// the reserve's mark) must restore that same over-cap value, not silently destroy it. Floored
+        /// at zero only.</summary>
         [Test]
-        public void SetPowerCellsClampsToCapacityAndFiresChange()
+        public void SetPowerCellsFloorsAtZeroButNoLongerClampsToCapacity()
         {
             int seen = -1;
             void Handler(int n) => seen = n;
@@ -150,21 +94,22 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 PickupWallet.SetPowerCells(PickupWallet.Capacity + 50);
-                Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity),
-                    "a save slot (YT-151) restoring past the cap must clamp, same as AddPowerCell");
-                Assert.That(seen, Is.EqualTo(PickupWallet.Capacity));
+                Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.Capacity + 50),
+                    "MV-519: an over-cap save must restore its real over-cap value, not clamp");
+                Assert.That(seen, Is.EqualTo(PickupWallet.Capacity + 50));
+
+                PickupWallet.SetPowerCells(-5);
+                Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "still floored at zero, never negative");
             }
             finally { PickupWallet.PowerCellsChanged -= Handler; }
         }
 
         [Test]
-        public void ResetClearsBothTallies()
+        public void ResetClearsPowerCells()
         {
             PickupWallet.AddPowerCell();
-            PickupWallet.AddSupercell();
             PickupWallet.Reset();
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(0));
         }
 
         // ---------------------------------------------------------------- MV-374/MV-422: Cell Storage (e_cel)

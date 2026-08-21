@@ -360,8 +360,12 @@ namespace MaxWorlds.Pickups
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
                 default:
-                    PickupWallet.AddSupercell();   // a fungible token now, no identity to bank (WV-228, MV-515)
-                    HudSignals.EmitPickup(p.transform.position, "+1 SUPERCELL", MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
+                    // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
+                    // own burst + "+10" flyup + readout count-up (HudSignals.EmitSupercellCollected) is
+                    // the whole "definite pickup event" the ticket asks for; there is no separate toast.
+                    int cellsBefore = PickupWallet.PowerCells;
+                    PickupWallet.AddSupercell();
+                    HudSignals.EmitSupercellCollected(p.transform.position, cellsBefore, PickupWallet.PowerCells);
                     break;
             }
 

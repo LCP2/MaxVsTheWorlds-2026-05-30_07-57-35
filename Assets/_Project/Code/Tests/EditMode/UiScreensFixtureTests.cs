@@ -70,13 +70,6 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void BanksExactlyFourParts()
-        {
-            UiScreensDirector.ApplyRigFixture();
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
-        }
-
-        [Test]
         public void SetsCellsTo28Of30()
         {
             UiScreensDirector.ApplyRigFixture();
@@ -85,46 +78,35 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void NoPartsVariantMatchesEveryLevelButBanksNoParts()
-        {
-            UiScreensDirector.ApplyRigFixtureNoParts();
-
-            Assert.That(RigState.Level("p_dmg"), Is.EqualTo(4));
-            Assert.That(RigState.Level("u_rng"), Is.EqualTo(1));
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(0));
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(28));
-        }
-
-        [Test]
         public void IsIdempotentAcrossRepeatedCaptures()
         {
-            // The real director calls this once per shot (16x9, 16x10, noparts) in the same play-mode
+            // The real director calls this once per shot (16x9, 16x10, ...) in the same play-mode
             // session — it must reset cleanly every time, not accumulate levels across calls.
             UiScreensDirector.ApplyRigFixture();
             UiScreensDirector.ApplyRigFixture();
 
             Assert.That(RigState.Level("p_dmg"), Is.EqualTo(4));
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(2));
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(28));
         }
 
-        // ---------------------------------------------------------------- MV-425: WEAPONS button fixtures
+        // ---------------------------------------------------------------- MV-425/MV-519: WEAPONS button fixtures
 
         [Test]
         public void WeaponsButtonIdleFixtureLeavesEverythingAtZero()
         {
             UiScreensDirector.ApplyWeaponsButtonIdleFixture();
 
-            Assert.That(HudController.ShouldShowSupercellAlert(PickupWallet.SupercellsBanked, AbilityCreditBank.Banked), Is.False);
+            Assert.That(HudController.ShouldShowSupercellAlert(AbilityCreditBank.Banked), Is.False);
             Assert.That(PendingMorphingModule.HasPending, Is.False);
         }
 
         [Test]
-        public void WeaponsButtonPartsFixtureBanksExactlyFourParts()
+        public void WeaponsButtonPartsFixtureBanksExactlyFourAbilityCredits()
         {
             UiScreensDirector.ApplyWeaponsButtonPartsFixture();
 
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
+            Assert.That(AbilityCreditBank.Banked, Is.EqualTo(4));
             Assert.That(PendingMorphingModule.HasPending, Is.False);
         }
 
@@ -134,19 +116,19 @@ namespace MaxWorlds.Tests.EditMode
             UiScreensDirector.ApplyWeaponsButtonModuleFixture();
 
             Assert.That(PendingMorphingModule.HasPending, Is.True);
-            Assert.That(HudController.ShouldShowSupercellAlert(PickupWallet.SupercellsBanked, AbilityCreditBank.Banked), Is.False);
+            Assert.That(HudController.ShouldShowSupercellAlert(AbilityCreditBank.Banked), Is.False);
         }
 
         [Test]
-        public void WeaponsButtonBothFixtureBanksPartsAndADraftTogether()
+        public void WeaponsButtonBothFixtureBanksCreditsAndADraftTogether()
         {
             UiScreensDirector.ApplyWeaponsButtonBothFixture();
 
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
+            Assert.That(AbilityCreditBank.Banked, Is.EqualTo(4));
             Assert.That(PendingMorphingModule.HasPending, Is.True);
 
             var alert = HudController.ComputeWeaponsButtonAlert(
-                HudController.ShouldShowSupercellAlert(PickupWallet.SupercellsBanked, AbilityCreditBank.Banked),
+                HudController.ShouldShowSupercellAlert(AbilityCreditBank.Banked),
                 PendingMorphingModule.HasPending);
             Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Both));
         }

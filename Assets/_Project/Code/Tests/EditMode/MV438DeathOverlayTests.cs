@@ -236,8 +236,8 @@ namespace MaxWorlds.Tests.EditMode
     }
 
     /// <summary>AC5 — the overlay's copy is a pure function of what the death actually cost, pinned
-    /// without building a canvas (same reasoning <see cref="WeaponsScreen.SupercellsGlowAlpha"/> already
-    /// documents for keeping a visual beat testable).</summary>
+    /// without building a canvas — the same reasoning behind every other pure-function visual test in
+    /// this codebase.</summary>
     public sealed class DeathOverlayCopyTests
     {
         [Test]

@@ -5,13 +5,13 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Pickups
 {
     /// <summary>
-    /// The player's banked drops (YT-131, recut WV-228, MV-515). Power cells accumulate into a count the
-    /// HUD shows and (MV-458) are THE RIG board's primary currency — unlocking a new node costs
-    /// <see cref="MaxWorlds.Weapons.CellSpend.UnlockCostCells"/>, raising an owned one costs
-    /// <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostFor"/> of its current level. MV-515: a Supercell
-    /// is a banked 10-cell top-up (<see cref="SupercellCellValue"/>), no longer an unlock requirement —
-    /// it is a plain banked count, no identity, cashed in explicitly via <see cref="TryCashSupercell"/>
-    /// rather than spent piecemeal against a chosen node.
+    /// The player's banked drops (YT-131, recut WV-228, MV-515, recut again MV-519). Power cells
+    /// accumulate into a count the HUD shows and (MV-458) are THE RIG board's primary currency —
+    /// unlocking a new node costs <see cref="MaxWorlds.Weapons.CellSpend.UnlockCostCells"/>, raising an
+    /// owned one costs <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostFor"/> of its current level.
+    /// MV-519: a Supercell is no longer banked or cashed in — it grants <see cref="SupercellCellValue"/>
+    /// cells the instant it's picked up (<see cref="AddSupercell"/>), even past <see cref="Capacity"/>,
+    /// which MV-515's banked/cash-in model is retired in favour of.
     ///
     /// Static because there is exactly one player and the HUD, the pickups, and the weapons area all
     /// need to see the same tally without threading a reference through the scene. Event-driven so the
@@ -19,22 +19,15 @@ namespace MaxWorlds.Pickups
     /// </summary>
     public static class PickupWallet
     {
-        /// <summary>Banked power cells (MV-458: THE RIG board's primary spendable currency).</summary>
+        /// <summary>Banked power cells (MV-458: THE RIG board's primary spendable currency). MV-519: may
+        /// sit above <see cref="Capacity"/> after a Supercell pickup — see <see cref="AddSupercell"/>.</summary>
         public static int PowerCells { get; private set; }
 
-        /// <summary>Banked Supercells (MV-515, renamed from "parts") — a banked 10-cell top-up, cashed
-        /// in explicitly via <see cref="TryCashSupercell"/>. The RIG top-bar tray shows while > 0.</summary>
-        public static int SupercellsBanked { get; private set; }
-
-        /// <summary>How many cells one cashed Supercell adds (MV-515).</summary>
+        /// <summary>How many cells one collected Supercell grants, instantly, on pickup (MV-519).</summary>
         public const int SupercellCellValue = 10;
 
         /// <summary>Fired when the power-cell count changes. Arg = the new total.</summary>
         public static event Action<int> PowerCellsChanged;
-
-        /// <summary>Fired when the banked-Supercell count changes. Arg = the new count. The HUD raises
-        /// its flashing edge icon off this (YT-131, renamed MV-515); the RIG top-bar tray cashes them.</summary>
-        public static event Action<int> SupercellsChanged;
 
         /// <summary>Max power cells the reserve holds at Cell Storage level 0 (MV-374: dropped from
         /// the old flat 30 — that number now sits at level 1 of 3, see <see cref="PowerCellCapacityPerLevel"/>).
@@ -66,6 +59,11 @@ namespace MaxWorlds.Pickups
         public static int Capacity =>
             Mathf.Max(1, Mathf.RoundToInt(MaxWorlds.Core.DevTuning.Or(
                 MaxWorlds.Core.DevTuning.PowerCellCapacity, BaseCapacity)));
+
+        /// <summary>MV-519: true once a Supercell has pushed <see cref="PowerCells"/> past
+        /// <see cref="Capacity"/> — every cell readout reads this to give the over-cap balance its own
+        /// distinct "bonus" treatment (Change item 5) instead of looking like an unclamped bug.</summary>
+        public static bool IsOverCapacity => PowerCells > Capacity;
 
         /// <summary>Fired when the reserve's capacity itself changes — a level-up (MV-374) — separate
         /// from <see cref="PowerCellsChanged"/>, which fires when the banked COUNT moves. The HUD's
@@ -116,10 +114,12 @@ namespace MaxWorlds.Pickups
         }
 
         /// <summary>Set the banked total directly — a save slot restoring what was on disk (YT-151),
-        /// not a pickup. Clamped to the reserve the same way <see cref="AddPowerCell"/> is.</summary>
+        /// not a pickup. MV-519: floored at zero only, NOT clamped to <see cref="Capacity"/> — a save
+        /// taken while over-cap (a Supercell picked up past the reserve's mark, see
+        /// <see cref="AddSupercell"/>) must restore that same over-cap value, not silently destroy it.</summary>
         public static void SetPowerCells(int count)
         {
-            int clamped = Mathf.Clamp(count, 0, Capacity);
+            int clamped = Mathf.Max(0, count);
             if (clamped == PowerCells) return;
             PowerCells = clamped;
             PowerCellsChanged?.Invoke(PowerCells);
@@ -148,26 +148,16 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
-        /// <summary>Bank one collected Supercell (MV-515) — a fungible token, no identity to carry.</summary>
+        /// <summary>Grant one collected Supercell's cells instantly (MV-519, retiring MV-515's banked/
+        /// cash-in model) — no bank, no cash-in step, no player action. Always adds the FULL
+        /// <see cref="SupercellCellValue"/>, even past <see cref="Capacity"/>: unlike an ordinary cell
+        /// pickup (<see cref="AddPowerCell"/>), a Supercell is never refused and never clamped — it is
+        /// always worth taking. <see cref="PowerCells"/> may sit above <see cref="Capacity"/> afterwards
+        /// until the player spends it back down; that over-cap balance stands, it does not decay.</summary>
         public static void AddSupercell()
         {
-            SupercellsBanked++;
-            SupercellsChanged?.Invoke(SupercellsBanked);
-        }
-
-        /// <summary>Cash in one banked Supercell for <see cref="SupercellCellValue"/> cells (MV-515) —
-        /// requires the reserve to have room for the FULL top-up; never partially fills and never
-        /// silently discards (the same no-waste principle MV-439 established for cell pickups). Refuses
-        /// and changes nothing when there isn't a whole Supercell's worth of room, or nothing banked.</summary>
-        public static bool TryCashSupercell()
-        {
-            if (SupercellsBanked <= 0) return false;
-            if (Capacity - PowerCells < SupercellCellValue) return false;
-            SupercellsBanked--;
             PowerCells += SupercellCellValue;
-            SupercellsChanged?.Invoke(SupercellsBanked);
             PowerCellsChanged?.Invoke(PowerCells);
-            return true;
         }
 
         /// <summary>Wipe the bank (new run / test isolation). Fires the change events so any live HUD
@@ -180,11 +170,9 @@ namespace MaxWorlds.Pickups
         public static void Reset()
         {
             PowerCells = 0;
-            SupercellsBanked = 0;
             RigState.Reset();
             RigFusionState.Reset();
             PowerCellsChanged?.Invoke(0);
-            SupercellsChanged?.Invoke(0);
             CapacityChanged?.Invoke(Capacity);
         }
     }

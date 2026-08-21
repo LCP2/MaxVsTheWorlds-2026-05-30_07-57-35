@@ -18,6 +18,12 @@ namespace MaxWorlds.UI
         /// <summary>A pickup/reward dropped. (worldPos, label, colour)</summary>
         public static event Action<Vector3, string, Color> Pickup;
 
+        /// <summary>A Supercell was collected (MV-519) — grants its cells instantly, no bank/cash-in
+        /// step. (worldPos, cellsBefore, cellsAfter) — HudController drives its self-terminating burst +
+        /// "+10" flyup + readout count-up event off this, since a plain floating toast (see
+        /// <see cref="Pickup"/>) can't carry the readout's own before/after values.</summary>
+        public static event Action<Vector3, int, int> SupercellCollected;
+
         /// <summary>An enemy died — HUD converts to a SPARKS pickup. (worldPos)</summary>
         public static event Action<Vector3> EnemyKilled;
 
@@ -84,6 +90,9 @@ namespace MaxWorlds.UI
 
         public static void EmitPickup(Vector3 worldPos, string label, Color color)
             => Pickup?.Invoke(worldPos, label, color);
+
+        public static void EmitSupercellCollected(Vector3 worldPos, int cellsBefore, int cellsAfter)
+            => SupercellCollected?.Invoke(worldPos, cellsBefore, cellsAfter);
 
         public static void EmitEnemyKilled(Vector3 worldPos)
             => EnemyKilled?.Invoke(worldPos);

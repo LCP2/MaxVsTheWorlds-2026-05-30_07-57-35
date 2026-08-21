@@ -139,7 +139,6 @@ namespace MaxWorlds.UI
             public LockedFusionWire lockedFusion;
             public float glowBlurOwned, glowAlphaOwned, glowBlurDraft, glowAlphaDraft;
             public float forgeCaptionFontSize, fusionSubFontSize;
-            public float supercellTraySubFontSizeMin, supercellTraySubFontSizeMax;
             public float familyDimFactor;
         }
 
@@ -643,13 +642,10 @@ namespace MaxWorlds.UI
 
         /// <summary>16px floor: the smallest size any of THE RIG's small captions may render at on the
         /// 1920x1080 reference canvas (matches <see cref="LabelFontSize"/>, already used at that size for
-        /// every node's own caption) — MV-446 defect 3 found the FORGE caption, fusion sub-captions and
-        /// the SUPERCELL tray's "N banked" line all sitting well under it (10-13px), muddy on a downscaled
-        /// 6-inch screen.</summary>
+        /// every node's own caption) — MV-446 defect 3 found the FORGE caption and fusion sub-captions
+        /// sitting well under it (10-13px), muddy on a downscaled 6-inch screen.</summary>
         public static float ForgeCaptionFontSize { get { EnsureLoaded(); return s_geometry.forgeCaptionFontSize > 0f ? s_geometry.forgeCaptionFontSize : 18f; } }
         public static float FusionSubFontSize { get { EnsureLoaded(); return s_geometry.fusionSubFontSize > 0f ? s_geometry.fusionSubFontSize : 16f; } }
-        public static float SupercellTraySubFontSizeMin { get { EnsureLoaded(); return s_geometry.supercellTraySubFontSizeMin > 0f ? s_geometry.supercellTraySubFontSizeMin : 16f; } }
-        public static float SupercellTraySubFontSizeMax { get { EnsureLoaded(); return s_geometry.supercellTraySubFontSizeMax > 0f ? s_geometry.supercellTraySubFontSizeMax : 18f; } }
 
         // ------------------------------------------------------------------ family dim (MV-462 defect 3)
 
