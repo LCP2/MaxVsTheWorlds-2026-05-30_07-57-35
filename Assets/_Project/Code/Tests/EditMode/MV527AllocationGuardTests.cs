@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using NUnit.Framework;
@@ -104,9 +103,27 @@ namespace MaxWorlds.Tests.EditMode
             @"//[^\n]*|/\*.*?\*/", RegexOptions.Compiled | RegexOptions.Singleline);
 
         /// <summary>Blanks out comments (replacing with spaces, never removing characters) so line
-        /// numbers and match offsets in the caller still line up with the original file.</summary>
+        /// numbers and match offsets in the caller still line up with the original file.
+        ///
+        /// MV-533: the original LINQ pipeline (<c>m.Value.Select(...).ToArray()</c>) allocated a
+        /// substring, an iterator, and a resizable buffer per match. Across ~17,000 comment matches
+        /// in this tree that was ~32s on plain .NET and ~99-420s under Mono/Editor batchmode —
+        /// slow enough to blow the CI test budget outright. This does the identical byte-for-byte
+        /// transform (comment text blanked, newlines preserved) with a single pre-sized array and a
+        /// plain loop reading straight from the source text — no LINQ, no extra substring.</summary>
         private static string StripComments(string text) =>
-            CommentRegex.Replace(text, m => new string(m.Value.Select(c => c == '\n' ? '\n' : ' ').ToArray()));
+            CommentRegex.Replace(text, m =>
+            {
+                int start = m.Index;
+                int length = m.Length;
+                var blanked = new char[length];
+                for (int i = 0; i < length; i++)
+                {
+                    char c = text[start + i];
+                    blanked[i] = c == '\n' ? '\n' : ' ';
+                }
+                return new string(blanked);
+            });
 
         private static int CountLines(string text, int uptoIndex)
         {
