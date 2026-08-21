@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Enemies
 {
@@ -860,10 +861,14 @@ namespace MaxWorlds.Enemies
             return false;
         }
 
+        // MV-527: reused every call instead of the allocating GeometryUtility.CalculateFrustumPlanes(Camera)
+        // overload's fresh Plane[6] — this runs up to MaxPlacementAttempts times per spawn placement.
+        private static readonly Plane[] s_frustumPlanes = new Plane[6];
+
         private static bool IsOnScreen(Camera cam, Vector3 point)
         {
-            Plane[] planes = GeometryUtility.CalculateFrustumPlanes(cam);
-            return GeometryUtility.TestPlanesAABB(planes, new Bounds(point, Vector3.one));
+            GeometryUtility.CalculateFrustumPlanes(cam, s_frustumPlanes);
+            return GeometryUtility.TestPlanesAABB(s_frustumPlanes, new Bounds(point, Vector3.one));
         }
 
         private RobotEnemy Take(EnemyKind kind, in EnemyArchetype archetype)
@@ -904,6 +909,13 @@ namespace MaxWorlds.Enemies
             // MV-350 diagnostic tag — see RobotSpawnSource. Stamped once, here, regardless of which
             // branch above built the instance.
             e.gameObject.AddComponent<RobotSpawnSource>().Mark("AreaAccumulationDirector");
+
+            // MV-527: dressing moved here from RobotRigDirector's per-frame FindObjectsByType<RobotEnemy>
+            // sweep — attached once, here, at the one place a NEW instance is actually built (a pooled
+            // Take() reuses the same GameObject and skips CreateInstance entirely, so this never runs
+            // twice for one robot). See EnemySpawner.CreateInstance's identical comment.
+            e.gameObject.AddComponent<RobotRig>();
+            e.gameObject.AddComponent<RobotSkinDiagnostics>();
 
             e.Apply(a);
             e.Died += OnEnemyDied;

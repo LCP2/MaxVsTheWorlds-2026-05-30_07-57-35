@@ -43,8 +43,22 @@ namespace MaxWorlds.VFX
         // MV-305: per-pickup bookkeeping so a pooled Part pickup rerolls its machine-internals design on
         // every fresh drop rather than wearing whatever it first got forever. Keyed by reference — pooled
         // Pickups are reused, never destroyed, so entries live for the pickup's whole lifetime.
-        private readonly Dictionary<Pickup, bool> _partWasActive = new Dictionary<Pickup, bool>();
+        //
+        // MV-527: used to be repopulated by polling an active/inactive transition every frame for every
+        // Pickup in the scene. Pickup.Registered fires exactly once per placement (fresh drop or pooled
+        // reuse) — the same transition, as an event instead of a diff — so the reroll now happens once,
+        // in OnPickupRegistered, and Update just reads what's already here.
         private readonly Dictionary<Pickup, string> _partArtKey = new Dictionary<Pickup, string>();
+
+        // MV-527: one reusable block instead of `new MaterialPropertyBlock()` per glisten/core pulse per
+        // pickup per frame — same idiom as RobotRig's _eyeMpb. Fine to share across every renderer this
+        // director touches: each use is get-mutate-set, synchronous, single-threaded, and never holds a
+        // reference across two different renderers at once. Built in Awake, not a field initializer —
+        // MaterialPropertyBlock's constructor calls into native code Unity only allows from Awake/Start,
+        // and a field initializer runs earlier than that, as part of the object's construction.
+        private MaterialPropertyBlock _mpb;
+
+        private void Awake() => _mpb = new MaterialPropertyBlock();
 
         /// <summary>The collectible language colour: shared with the HUD part-ready chip so the tell
         /// matches the pickup it points at (YT-147). MV-429 retired the on-ground aura this used to also
@@ -134,9 +148,36 @@ namespace MaxWorlds.VFX
             }
         }
 
+        private void OnEnable() => Pickup.Registered += OnPickupRegistered;
+        private void OnDisable() => Pickup.Registered -= OnPickupRegistered;
+
+        /// <summary>MV-527: the reroll that used to happen inline in <c>Update</c>'s Supercell branch,
+        /// diffed every frame off an active/inactive dictionary — now driven by the placement event
+        /// itself, once. A non-Supercell kind never rerolls (PowerCell/Device always wear the same fixed
+        /// key), so this is a no-op for them.</summary>
+        private void OnPickupRegistered(Pickup pickup)
+        {
+            if (pickup.Kind != PickupKind.Supercell) return;
+            RollNewPartKey(pickup);
+        }
+
+        /// <summary>Picks a fresh machine-internals design, remembers it, and clears out whatever design
+        /// this (possibly pooled) pickup wore last time.</summary>
+        private string RollNewPartKey(Pickup pickup)
+        {
+            string key = WeaponPartArt.MachineInternalsKeys[Random.Range(0, WeaponPartArt.MachineInternalsKeys.Length)];
+            _partArtKey[pickup] = key;
+            DestroyStaleArt(pickup.transform, ArtPrefix + key);
+            return key;
+        }
+
         private void Update()
         {
-            foreach (var pickup in FindObjectsByType<Pickup>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+            // MV-527: Pickup.Active — every currently-placed pickup, self-registered on enable/disable —
+            // instead of a per-frame FindObjectsByType<Pickup>(Include) scan of the whole scene. A pooled,
+            // not-yet-dropped pickup sits inactive and out of this list, so it also stops being spun,
+            // pulsed and re-Find()'d for nothing every frame while it isn't even on the ground.
+            foreach (var pickup in Pickup.Active)
             {
                 // The power cell always wears the same swapped-in prop; a PART wears one of the
                 // machine-internals designs, rerolled per drop in the branch below (MV-305).
@@ -176,9 +217,12 @@ namespace MaxWorlds.VFX
                 }
                 else if (pickup.Kind == PickupKind.Supercell)
                 {
-                    // MV-305: every dropped Supercell wears one of the machine-internals designs — which
-                    // one is rerolled per drop below.
-                    string want = ArtPrefix + RollPartArtKey(pickup);
+                    // MV-305: every dropped Supercell wears one of the machine-internals designs, rerolled
+                    // per drop — MV-527: by OnPickupRegistered when it was placed, not here. Defensive
+                    // fallback if this pickup was somehow never seen registering (should not happen on the
+                    // live path — Pickup.Registered always fires before this frame's Update).
+                    if (!_partArtKey.TryGetValue(pickup, out string key)) key = RollNewPartKey(pickup);
+                    string want = ArtPrefix + key;
                     Transform art = FindArt(pickup.transform, want);
 
                     if (art == null)
@@ -226,25 +270,6 @@ namespace MaxWorlds.VFX
 
                 DressGroundRing(pickup.transform, pickup.Kind);
             }
-        }
-
-        /// <summary>The machine-internals key this PART pickup should wear right now (MV-305). Rerolled
-        /// only on a fresh drop — detected as an inactive→active transition, the same edge
-        /// <c>PickupDirector</c> crosses when it pops a pooled pickup and calls <c>Place</c> — so the
-        /// design a player sees stays put while it sits on the ground and only varies drop to drop.</summary>
-        private string RollPartArtKey(Pickup pickup)
-        {
-            bool activeNow = pickup.gameObject.activeSelf;
-            bool wasActive = _partWasActive.TryGetValue(pickup, out bool prev) && prev;
-            _partWasActive[pickup] = activeNow;
-
-            if (!_partArtKey.TryGetValue(pickup, out string key) || (activeNow && !wasActive))
-            {
-                key = WeaponPartArt.MachineInternalsKeys[Random.Range(0, WeaponPartArt.MachineInternalsKeys.Length)];
-                _partArtKey[pickup] = key;
-                DestroyStaleArt(pickup.transform, ArtPrefix + key);
-            }
-            return key;
         }
 
         /// <summary>Removes any previously-built PartArt: child that isn't <paramref name="keep"/> — the
@@ -312,23 +337,22 @@ namespace MaxWorlds.VFX
         /// between a dim and a bright cyan so it reads as radiating energy rather than a fixed light.
         /// A no-op for any prop without a "Core" child (the Hydro device's own core glow is untouched —
         /// it isn't reached from the PowerCell branch that calls this).</summary>
-        private static void PulseCellCore(Transform art)
+        private void PulseCellCore(Transform art)
         {
             var core = art.Find(CellCoreName);
             if (core == null || !core.TryGetComponent<MeshRenderer>(out var r)) return;
 
             float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
-            var mpb = new MaterialPropertyBlock();
-            r.GetPropertyBlock(mpb);
-            mpb.SetColor(BaseColorId, WeaponPartArt.CellCyan * (CellPulseMin + CellPulseRange * t));
-            r.SetPropertyBlock(mpb);
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetColor(BaseColorId, WeaponPartArt.CellCyan * (CellPulseMin + CellPulseRange * t));
+            r.SetPropertyBlock(_mpb);
         }
 
         /// <summary>Flickers one of a prop's specular glint dots (YT-167, WV-236) in a brief spike-and-fade,
         /// not the aura's slow breathing sine — a sparkle is light catching a facet for an instant, not a
         /// beacon glowing steadily. <paramref name="phase"/> offsets each dot's cycle so, together with the
         /// prop's own spin, its glints twinkle independently rather than flashing in lockstep.</summary>
-        private static void PulseGlisten(Transform art, string childName, float phase)
+        private void PulseGlisten(Transform art, string childName, float phase)
         {
             var glisten = art.Find(childName);
             if (glisten == null || !glisten.TryGetComponent<MeshRenderer>(out var r)) return;
@@ -340,10 +364,9 @@ namespace MaxWorlds.VFX
             float spike = Mathf.Pow(wave, 10f);
             float brightness = 0.15f + 2.4f * spike;
 
-            var mpb = new MaterialPropertyBlock();
-            r.GetPropertyBlock(mpb);
-            mpb.SetColor(BaseColorId, WeaponPartArt.GlistenColor * brightness);
-            r.SetPropertyBlock(mpb);
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetColor(BaseColorId, WeaponPartArt.GlistenColor * brightness);
+            r.SetPropertyBlock(_mpb);
         }
 
         /// <summary>The child wearing exactly <paramref name="wantName"/>, or null.</summary>

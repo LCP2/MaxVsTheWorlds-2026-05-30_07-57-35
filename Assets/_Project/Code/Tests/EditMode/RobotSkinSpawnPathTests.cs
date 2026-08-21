@@ -9,11 +9,11 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-350 — some robots shipped wearing the default/untinted material. MV-310's theory (only one
-    /// of two spawn systems dresses its robots) doesn't hold: <see cref="RobotRigDirector"/>'s sweep
-    /// finds every <see cref="RobotEnemy"/> in the scene by component, not by who created it, so a
-    /// factory robot (<c>EnemySpawner.CreateInstance</c>) and a gated-arena robot
-    /// (<c>AreaAccumulationDirector.CreateInstance</c>) — which build an identical greybox +
-    /// <see cref="RobotEnemy.Apply"/> — go through the exact same <see cref="RobotRig"/>. This proves
+    /// of two spawn systems dresses its robots) doesn't hold: both <c>EnemySpawner.CreateInstance</c>
+    /// and <c>AreaAccumulationDirector.CreateInstance</c> attach a <see cref="RobotRig"/> the instant
+    /// they build a new <see cref="RobotEnemy"/> (MV-527; previously a per-frame sweep found it by
+    /// component instead) — a factory robot and a gated-arena robot, which build an identical greybox +
+    /// <see cref="RobotEnemy.Apply"/>, go through the exact same <see cref="RobotRig"/>. This proves
     /// that invariant directly: build a robot the way each spawner's CreateInstance does, run the one
     /// dressing step every path shares, and check the ACTUAL material assigned on the instance — not
     /// a colour constant, per the ticket's own instruction not to touch those again.
