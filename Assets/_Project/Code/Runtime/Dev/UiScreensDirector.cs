@@ -182,6 +182,20 @@ namespace MaxWorlds.Dev
             // (only PRIMARY lit, DAMAGE at level 1, 4 cells banked) — Lee's own screenshot state, so this
             // capture is directly comparable to it.
             yield return CaptureFixtureScreen("rig-mv520-16x9", 1920, 1080, ApplyRigFixtureMv520, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-521 AC7's human-check shot: THE RIG immediately after a category draft pick resolves —
+            // SECONDARY freshly unlocked (its reveal glow still mid-flight, real time keeps advancing it
+            // even while paused) and the screen still open, ENERGY left behind still dark. The "open"
+            // action both opens the board (consuming the banked draft) AND takes the pick, since
+            // CaptureFixtureScreen has no separate post-open hook — same trick as any capture that needs
+            // more than open+wait before the shot.
+            yield return CaptureFixtureScreen("rig-mv521-reveal-16x9", 1920, 1080, ApplyRigFixtureMv521,
+                () =>
+                {
+                    weapons.Open();
+                    weapons.BoardNode("SECONDARY")?.GetComponentInChildren<Button>().onClick.Invoke();
+                },
+                weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -237,6 +251,18 @@ namespace MaxWorlds.Dev
             RigState.Reset();
             PickupWallet.Reset();
             PickupWallet.SetPowerCells(4);
+        }
+
+        /// <summary>MV-521 AC7: a fresh run (only PRIMARY unlocked) with a 2-candidate CATEGORY Morphing
+        /// Module banked — SECONDARY and ENERGY, both still locked at fixture-apply time. Banked rather
+        /// than opened directly (<see cref="PendingMorphingModule.Set"/>), so the capture's own "open"
+        /// action can drive <see cref="WeaponsScreen.Open"/> exactly as a live pickup would: it consumes
+        /// the bank and arms the draft, then the same action takes the SECONDARY pick immediately after.</summary>
+        public static void ApplyRigFixtureMv521()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PendingMorphingModule.Set(new[] { "SECONDARY", "ENERGY" });
         }
 
         /// <summary>MV-519 AC9: the same board state as <see cref="ApplyRigFixture"/>, but landed over

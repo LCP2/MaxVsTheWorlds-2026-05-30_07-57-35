@@ -100,7 +100,88 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(pool, Does.Contain("e_ff"), "an untaken candidate must go back in the draft pool");
             Assert.That(pool, Does.Contain("m_spd"), "an untaken candidate must go back in the draft pool");
 
-            Assert.That(_screen.IsOpen, Is.False, "taking a candidate must close the draft");
+            // MV-521: taking a pick used to close the screen — now it stays open so the player actually
+            // sees what just unlocked; only CLOSE/QUIT TO MENU dismiss it from here on.
+            Assert.That(_screen.IsOpen, Is.True, "taking a candidate must NOT close the draft (MV-521)");
+            Assert.That(_screen.IsDraftActive, Is.False, "the resolved draft itself must no longer be active");
+        }
+
+        /// <summary>MV-521, one test walking every AC in order (CC_AUTONOMY's own "at most one new test
+        /// per ticket" — this is that one). Proven to fail on cdb-era main (before this ticket): AC1
+        /// failed because <c>OnRigNodeTapped</c> called <c>Close()</c> on a pick, so <c>IsOpen</c> came
+        /// back false instead of true.</summary>
+        [Test]
+        public void TakingADraftPickStaysOpenAndRevealsTheFamily_MV521()
+        {
+            // A fresh run (only the PRIMARY starting category unlocked) so there's a real locked family
+            // for AC2 to reveal — this file's own SetUp unlocks every category, which exists for the
+            // OTHER tests here that are about draft mechanics, not MV-457's category gate.
+            RigState.Reset();
+            PickupWallet.Reset();
+            PendingMorphingModule.Reset();
+            Time.timeScale = 0.4f;   // a distinct paused-FROM speed, so a stray Close() would be visible
+
+            var locked = new System.Collections.Generic.List<string>(RigState.LockedCategoryIds());
+            Assert.That(locked.Count, Is.GreaterThanOrEqualTo(2), "fixture: needs 2+ locked categories to draft between");
+            string revealedCategory = locked[0];
+            string leftBehindCategory = locked[1];
+
+            // ---------------------------------------------------------------- AC1: the pick stays open
+            _screen.OpenMorphingModuleDraft(new[] { revealedCategory, leftBehindCategory });
+            _screen.BoardNode(revealedCategory).GetComponentInChildren<Button>().onClick.Invoke();
+
+            Assert.That(_screen.IsOpen, Is.True, "AC1: taking a pick must not close THE RIG");
+            Assert.That(_screen.ScreenRoot.activeSelf, Is.True, "AC1: the screen root itself must stay active");
+            Assert.That(Time.timeScale, Is.EqualTo(0f), "AC1: the game must stay at the paused value");
+            Assert.That(_screen.IsDraftActive, Is.False, "AC1: the resolved draft must no longer be active");
+            Assert.That(_screen.DraftCandidateIds, Is.Empty, "AC1: no leftover candidates once a draft resolves");
+            Assert.That(RigState.IsCategoryUnlocked(revealedCategory), Is.True, "fixture: the taken category must be granted");
+            Assert.That(RigState.IsCategoryUnlocked(leftBehindCategory), Is.False, "fixture: the untaken category must stay locked");
+            Assert.That(_screen.IsRevealActive, Is.True, "fixture (feeds AC5): a reveal must start when a pick resolves");
+
+            // ---------------------------------------------------------------- AC2: no longer family-locked
+            // The category's own panel border alpha carries BOTH "lit" (RigState.IsCategoryUnlocked,
+            // what this AC is about) and the separate, still-unlit "familyLit" dim (CategoryHasOwnedAbility
+            // — no ability is owned yet, only the category) — so the raw RegionBorderAlphaLit constant
+            // isn't what renders here; the dimmed product of it is. Comparing against the dark reading
+            // (what it would still be if the pick had NOT taken effect) is the value this AC actually cares about.
+            float darkAlpha = RigBoardLayout.RegionBorderAlphaDark * RigBoardLayout.FamilyDimFactor;
+            Assert.That(_screen.CategoryPanelBorder(revealedCategory).color.a, Is.Not.EqualTo(darkAlpha).Within(0.0001f),
+                "AC2: the unlocked category's own panel must no longer render at the dark/family-locked reading");
+            RigAbilityLayout rootAbility = null;
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Category == revealedCategory && string.IsNullOrEmpty(ab.Parent)) { rootAbility = ab; break; }
+            Assert.That(rootAbility, Is.Not.Null, "fixture: the revealed category must have a root ability");
+            Assert.That(_screen.NodeLabel(rootAbility.Id).text, Is.Not.EqualTo("? ? ?"),
+                "AC2: the family's own root ability must show its real name, not the family-locked placeholder");
+
+            // ---------------------------------------------------------------- AC3: a second module chains in place
+            UnlockAllCategories();   // this section is about the CHAIN mechanism, not the category-lock visuals above
+            PendingMorphingModule.Set(new[] { "e_ff", "m_spd" });
+
+            _screen.OpenMorphingModuleDraft(new[] { "s_bal", "u_sen" });
+            _screen.BoardNode("s_bal").GetComponentInChildren<Button>().onClick.Invoke();
+
+            Assert.That(_screen.IsOpen, Is.True, "AC3: chaining into the next module must not close the screen");
+            Assert.That(_screen.IsDraftActive, Is.True, "AC3: the second module must arm a new draft in place");
+            CollectionAssert.AreEquivalent(new[] { "e_ff", "m_spd" }, _screen.DraftCandidateIds,
+                "AC3: the second module's own candidates must be the ones now loaded");
+
+            _screen.BoardNode("e_ff").GetComponentInChildren<Button>().onClick.Invoke();
+            Assert.That(_screen.IsOpen, Is.True, "AC3: taking the second pick must also leave the screen open");
+            Assert.That(_screen.IsDraftActive, Is.False, "AC3: with nothing left pending, the draft itself must clear");
+
+            // ---------------------------------------------------------------- AC4: no re-grant on a second tap
+            int levelAfterGrant = RigState.Level("s_bal");
+            int cellsAfterGrant = PickupWallet.PowerCells;
+            _screen.BoardNode("s_bal").GetComponentInChildren<Button>().onClick.Invoke();   // 2nd tap, draft long over
+            Assert.That(RigState.Level("s_bal"), Is.EqualTo(levelAfterGrant), "AC4: a second tap must not raise the level again");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsAfterGrant), "AC4: a second tap must not touch the wallet either");
+
+            // ---------------------------------------------------------------- AC5: the reveal is gone well before 1.5s
+            Assert.That(_screen.IsRevealActive, Is.True, "fixture: the AC3 picks above must have re-started a reveal");
+            _screen.ApplyRevealTiming(1.5f);
+            Assert.That(_screen.IsRevealActive, Is.False, "AC5: no reveal object may remain active 1.5s after a draft pick");
         }
 
         // ---------------------------------------------------------------- 0 and 1 candidates: no screen
