@@ -2048,6 +2048,10 @@ namespace MaxWorlds.UI
 
         private const float WeaponsButtonRightInset = 8f;
 
+        /// <summary>MV-510 round 2: a hair of buffer past <see cref="WeaponsButtonRightInset"/> so the
+        /// module-captured halo's own antialiasing doesn't touch the exact safe-area edge (AC3).</summary>
+        private const float HaloRightSafetyMargin = 2f;
+
         /// <summary>The always-available WEAPONS button (YT-178, redrawn MV-425): a hexagonal mark —
         /// three linked nodes, a miniature of THE RIG board itself — replacing the old ABILITIES pill
         /// in place (same anchor; the (-28, 120) position MV-425 gave it moved to
@@ -2066,14 +2070,21 @@ namespace MaxWorlds.UI
             // Module-captured halo (double ring, MV-425 spec): behind everything else, only ever active
             // for ModuleCaptured/Both (RefreshWeaponsButtonAlert). Sized as multiples of the button's
             // own radius, same GlowRadiusMultiplier-style idiom THE RIG board's own node glow uses.
+            //
+            // MV-510 round 2: uncapped, the outer ring's own padding (halfSize * 0.42f) bleeds past the
+            // safe area's right edge by a wide margin once the mark sits only WeaponsButtonRightInset
+            // units from it (this was already true at the old 28f inset, by a smaller amount - AC3
+            // requires it actually held, not just eyeballed). The right side alone is capped to the
+            // room the mark's own position leaves; left/top/bottom keep the full authored bloom.
             _weaponsModuleHaloRoot = NewRect("Module Halo", _weaponsButtonRoot);
             Stretch(_weaponsModuleHaloRoot);
             float halfSize = WeaponsButtonSize * 0.5f;
+            float haloRightPad = Mathf.Max(0f, WeaponsButtonRightInset - HaloRightSafetyMargin);
             _weaponsModuleHaloOuter = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Outer");
-            Stretch(_weaponsModuleHaloOuter.rectTransform, halfSize * 0.42f); // r*1.42
+            StretchCapRight(_weaponsModuleHaloOuter.rectTransform, halfSize * 0.42f, haloRightPad); // r*1.42
             _weaponsModuleHaloOuter.raycastTarget = false;
             _weaponsModuleHaloInner = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Inner");
-            Stretch(_weaponsModuleHaloInner.rectTransform, halfSize * 0.24f); // r*1.24
+            StretchCapRight(_weaponsModuleHaloInner.rectTransform, halfSize * 0.24f, haloRightPad); // r*1.24
             _weaponsModuleHaloInner.raycastTarget = false;
             _weaponsModuleHaloRoot.gameObject.SetActive(false);
 
@@ -2260,6 +2271,16 @@ namespace MaxWorlds.UI
             r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one; r.pivot = new Vector2(0.5f, 0.5f);
             r.offsetMin = new Vector2(-padding, -padding);
             r.offsetMax = new Vector2(padding, padding);
+        }
+
+        /// <summary>MV-510 round 2 - <see cref="Stretch"/> with the right-side padding independently
+        /// capped (e.g. so a decorative glow doesn't bleed past a nearby safe-area edge on that one
+        /// side, while still blooming out to <paramref name="padding"/> everywhere else).</summary>
+        private static void StretchCapRight(RectTransform r, float padding, float rightPadding)
+        {
+            r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one; r.pivot = new Vector2(0.5f, 0.5f);
+            r.offsetMin = new Vector2(-padding, -padding);
+            r.offsetMax = new Vector2(Mathf.Min(padding, rightPadding), padding);
         }
 
         private static void Center(RectTransform r, float size)
