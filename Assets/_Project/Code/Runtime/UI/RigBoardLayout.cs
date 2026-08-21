@@ -57,12 +57,12 @@ namespace MaxWorlds.UI
     {
         public readonly string Id, Label, ParentA, ParentB, HudSlot;
         public readonly float X, Y;
-        public readonly int PartCost;
+        public readonly int CellCost;
         public RigFusionLayout(string id, string label, string parentA, string parentB, string hudSlot,
-            float x, float y, int partCost)
+            float x, float y, int cellCost)
         {
             Id = id; Label = label; ParentA = parentA; ParentB = parentB; HudSlot = hudSlot;
-            X = x; Y = y; PartCost = partCost;
+            X = x; Y = y; CellCost = cellCost;
         }
     }
 
@@ -105,8 +105,6 @@ namespace MaxWorlds.UI
 
         [Serializable] private sealed class RowYWire { public float category, tier1, tier2, tier3, forge; }
         [Serializable] private sealed class RadiusWire { public float category, ability, fusion; }
-        [Serializable] private sealed class PartSlotOffsetWire { public string dx, dy; }
-        [Serializable] private sealed class PartSlotWire { public float radius; public PartSlotOffsetWire offset; }
         [Serializable] private sealed class LevelPillWire { public float w, h, radius; public string offsetY; public float fontSize; }
         [Serializable] private sealed class RegionRectWire { public float y, h, radius, padX, opacityLit, opacityDark, borderAlphaLit, borderAlphaDark; }
         [Serializable] private sealed class ForgeDividerWire { public float y; }
@@ -129,7 +127,6 @@ namespace MaxWorlds.UI
             public float strokeOwned, strokeActive, strokeLocked;
             public float capOuterRingOffset, capMarkerRadius;
             public CapMarkerOffsetWire capMarkerOffset;
-            public PartSlotWire partSlot;
             public LevelPillWire levelPill;
             public string labelOffsetY;
             public float labelFontSize, labelLetterSpacing;
@@ -142,7 +139,7 @@ namespace MaxWorlds.UI
             public LockedFusionWire lockedFusion;
             public float glowBlurOwned, glowAlphaOwned, glowBlurDraft, glowAlphaDraft;
             public float forgeCaptionFontSize, fusionSubFontSize;
-            public float partsTraySubFontSizeMin, partsTraySubFontSizeMax;
+            public float supercellTraySubFontSizeMin, supercellTraySubFontSizeMax;
             public float familyDimFactor;
         }
 
@@ -151,7 +148,7 @@ namespace MaxWorlds.UI
         [Serializable]
         private sealed class ColoursWire
         {
-            public ColourEntryWire pri, sec, eng, mov, sup, part, module, ink;
+            public ColourEntryWire pri, sec, eng, mov, sup, supercell, module, ink;
             public ColourEntryWire @base;
         }
 
@@ -170,7 +167,7 @@ namespace MaxWorlds.UI
         {
             public string id, label, parentA, parentB, hudSlot;
             public float x, y;
-            public int partCost;
+            public int cellCost;
         }
 
         [Serializable] private sealed class CaptureAspectWire { public string name; public int w, h; }
@@ -240,7 +237,7 @@ namespace MaxWorlds.UI
                 AddColour("eng", wire.colours.eng);
                 AddColour("mov", wire.colours.mov);
                 AddColour("sup", wire.colours.sup);
-                AddColour("part", wire.colours.part);
+                AddColour("supercell", wire.colours.supercell);
                 AddColour("module", wire.colours.module);
                 AddColour("ink", wire.colours.ink);
                 AddColour("base", wire.colours.@base);
@@ -429,7 +426,7 @@ namespace MaxWorlds.UI
                 var f = rawFusions[i];
                 float x = categoryX.TryGetValue(f.parentA, out var ax) && categoryX.TryGetValue(f.parentB, out var bx)
                     ? (ax + bx) * 0.5f : f.x;
-                fusions[i] = new RigFusionLayout(f.id, f.label, f.parentA, f.parentB, f.hudSlot, x, fusionY, f.partCost);
+                fusions[i] = new RigFusionLayout(f.id, f.label, f.parentA, f.parentB, f.hudSlot, x, fusionY, f.cellCost);
             }
 
             return new ColumnLayoutResult { Categories = categories, Abilities = abilities, Fusions = fusions };
@@ -497,19 +494,38 @@ namespace MaxWorlds.UI
         /// <summary>MV-472: the phone row schedule — generously spaced (vs. the standard rows) to clear
         /// label text under the bigger phone radii without crowding the next tier; the resulting content
         /// height exceeds a single 1080-tall screen, which is exactly why <c>WeaponsScreen</c> wraps
-        /// phone-mode board content in a vertical ScrollRect rather than trying to cram it in.</summary>
-        public static float CategoryYPhone => 250f;
-        public static float Tier1YPhone => 470f;
-        public static float Tier2YPhone => 680f;
-        public static float Tier3YPhone => 890f;
-        public static float ForgeDividerYPhone => 1050f;
-        public static float FusionYPhone => 1180f;
+        /// phone-mode board content in a vertical ScrollRect rather than trying to cram it in.
+        ///
+        /// MV-516: every row here shifted up by a uniform 150 (was 250/470/680/890/1050/1180) — Lee's
+        /// own screenshot showed the whole family block sitting in a dead band below the top bar
+        /// (viewportTop 140 + old CategoryYPhone 250 - RadiusCategoryPhone 72 - topBarBottom 132 = 186 ref
+        /// px of empty space). A uniform shift preserves every row's own relative spacing (label
+        /// clearance, tier gaps, the FORGE section's own margin above <see cref="PhoneContentHeight"/>'s
+        /// floor) while landing the new gap at 36 ref px, under the ticket's 40px cap.</summary>
+        public static float CategoryYPhone => 100f;
+        public static float Tier1YPhone => 320f;
+        public static float Tier2YPhone => 530f;
+        public static float Tier3YPhone => 740f;
+        public static float ForgeDividerYPhone => 900f;
+        public static float FusionYPhone => 1030f;
+
+        /// <summary>MV-516: the tinted region panel's own top, phone equivalent of <see cref="RegionRectY"/>
+        /// — shifted by the SAME -150 delta as the row schedule above. The panel is each family's own
+        /// backdrop column; leaving it at the standard (unshifted) 150 while the category row moved to
+        /// 100 put the category hex's top ABOVE its own panel's top edge, poking out into untinted
+        /// background — caught by <c>cc-screens</c>' own glow-containment check, whose background
+        /// reference sample sits at the category's row (<c>SampleCategoryBackground</c>, <c>cat.Y</c>)
+        /// and read every node's halo as 100% "ink" once that reference point fell outside the panel's
+        /// own tint. Height (<see cref="RegionRectH"/>) is shared, not duplicated — same total span, just
+        /// starting higher, so the panel's own bottom margin shrinks by the same delta the content did.</summary>
+        public static float RegionRectYPhone => 0f;
 
         /// <summary>The scrollable content rect's own height — tall enough to clear
         /// <see cref="FusionYPhone"/> plus the fusion node's own radius and sub-label, with a bottom
         /// margin. A pure constant (not derived) so a future row-schedule tweak has to update it
-        /// deliberately rather than silently clipping the last row.</summary>
-        public static float PhoneContentHeight => 1360f;
+        /// deliberately rather than silently clipping the last row. MV-516: shifted by the same -150 as
+        /// the row schedule above, so the margin below the FORGE section is unchanged.</summary>
+        public static float PhoneContentHeight => 1210f;
 
         /// <summary>MV-472 (current spec, defect 3): the standard-mode scrollable content rect's own
         /// height. Standard mode's row schedule (rowY.forge, currently 910) plus the FORGE section's own
@@ -538,9 +554,9 @@ namespace MaxWorlds.UI
             return null;
         }
 
-        /// <summary>A node family's colour ("pri"/"sec"/"eng"/"mov"/"sup"), or <paramref name="part"/>/
-        /// "module"/"ink"/"base" for the non-category accents. White if the id is unknown (should never
-        /// happen against the real data file).</summary>
+        /// <summary>A node family's colour ("pri"/"sec"/"eng"/"mov"/"sup"), or "supercell"/"module"/
+        /// "ink"/"base" for the non-category accents. White if the id is unknown (should never happen
+        /// against the real data file).</summary>
         public static Color Colour(string id)
         {
             EnsureLoaded();
@@ -569,18 +585,6 @@ namespace MaxWorlds.UI
         {
             EnsureLoaded();
             var o = s_geometry.capMarkerOffset;
-            return o == null ? Vector2.zero : new Vector2(ResolveOffset(o.dx, r), ResolveOffset(o.dy, r));
-        }
-
-        /// <summary>MV-492: the part-required indicator's own radius — replaces the old amber "+"
-        /// PartBadge, moved from the bottom corner (where it overlapped the level pill) into the free
-        /// top arc of the hex (see <see cref="PartSlotOffset"/>).</summary>
-        public static float PartSlotRadius { get { EnsureLoaded(); return s_geometry.partSlot?.radius ?? 13f; } }
-
-        public static Vector2 PartSlotOffset(float r)
-        {
-            EnsureLoaded();
-            var o = s_geometry.partSlot?.offset;
             return o == null ? Vector2.zero : new Vector2(ResolveOffset(o.dx, r), ResolveOffset(o.dy, r));
         }
 
@@ -640,12 +644,12 @@ namespace MaxWorlds.UI
         /// <summary>16px floor: the smallest size any of THE RIG's small captions may render at on the
         /// 1920x1080 reference canvas (matches <see cref="LabelFontSize"/>, already used at that size for
         /// every node's own caption) — MV-446 defect 3 found the FORGE caption, fusion sub-captions and
-        /// the PARTS tray's "N banked" line all sitting well under it (10-13px), muddy on a downscaled
+        /// the SUPERCELL tray's "N banked" line all sitting well under it (10-13px), muddy on a downscaled
         /// 6-inch screen.</summary>
         public static float ForgeCaptionFontSize { get { EnsureLoaded(); return s_geometry.forgeCaptionFontSize > 0f ? s_geometry.forgeCaptionFontSize : 18f; } }
         public static float FusionSubFontSize { get { EnsureLoaded(); return s_geometry.fusionSubFontSize > 0f ? s_geometry.fusionSubFontSize : 16f; } }
-        public static float PartsTraySubFontSizeMin { get { EnsureLoaded(); return s_geometry.partsTraySubFontSizeMin > 0f ? s_geometry.partsTraySubFontSizeMin : 16f; } }
-        public static float PartsTraySubFontSizeMax { get { EnsureLoaded(); return s_geometry.partsTraySubFontSizeMax > 0f ? s_geometry.partsTraySubFontSizeMax : 18f; } }
+        public static float SupercellTraySubFontSizeMin { get { EnsureLoaded(); return s_geometry.supercellTraySubFontSizeMin > 0f ? s_geometry.supercellTraySubFontSizeMin : 16f; } }
+        public static float SupercellTraySubFontSizeMax { get { EnsureLoaded(); return s_geometry.supercellTraySubFontSizeMax > 0f ? s_geometry.supercellTraySubFontSizeMax : 18f; } }
 
         // ------------------------------------------------------------------ family dim (MV-462 defect 3)
 

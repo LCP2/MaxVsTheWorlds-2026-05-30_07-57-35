@@ -64,7 +64,7 @@ namespace MaxWorlds.Tests.PlayMode
         /// does — a tap ANYWHERE, via the screen's tap-catcher — which must install the effect.</summary>
         private IEnumerator PickUpAndConfirm(PartKind kind)
         {
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             Screen.Open(UpgradeCatalog.For(kind));
             yield return null;
 
@@ -209,7 +209,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheTapCatcherCoversTheScreenOnTop_SoATapCantBeEaten()
         {
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             Screen.Open(UpgradeCatalog.For(PartKind.BeamNozzle));
             yield return null;
 

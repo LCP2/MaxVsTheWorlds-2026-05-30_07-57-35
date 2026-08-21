@@ -100,9 +100,10 @@ namespace MaxWorlds.Tests.PlayMode
             UpgradeState.Reset();
             WeaponSystemState.Reset();
             PickupWallet.Reset();
-            PickupWallet.AddPart();
-            Assert.That(PartSpend.TrySpendOnTrack(WeaponTrackKind.DepletionRate), Is.True,
-                "spending a banked part on Depletion Rate should have succeeded");
+            // MV-515: PartSpend.TrySpendOnTrack was deleted (dead — no runtime caller); raise the level
+            // directly through the model layer, same as CellSpend.TryUpgradeNode does in production.
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate), Is.True,
+                "raising Depletion Rate's level should have succeeded");
 
             var upgraded = NewBlaster();
             yield return null;

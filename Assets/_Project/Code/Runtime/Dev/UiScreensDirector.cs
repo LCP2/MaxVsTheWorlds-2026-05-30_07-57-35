@@ -163,6 +163,9 @@ namespace MaxWorlds.Dev
             // — every other fixture above forces every category open (ResetRunForFixture), so none of
             // them can evidence the "family not unlocked" lock reason at all.
             yield return CaptureFixtureScreen("rig-freshrun-16x9", 1920, 1080, ApplyRigFixtureFreshRun, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-515 AC8: the Supercell tray with one still banked (and still cashable) right after a
+            // cash-in — the human-check evidence that TryCashSupercell actually moved both currencies.
+            yield return CaptureFixtureScreen("rig-supercells-16x9", 1920, 1080, ApplyRigFixtureSupercellCashed, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
             // MV-472 (current spec) hand-off verification: the exact three viewport pixel sizes Lee's
             // ticket comment names (977x458, 852x393 iPhone landscape, 1133x744 iPad mini landscape) —
@@ -188,11 +191,12 @@ namespace MaxWorlds.Dev
             ResetRunForFixture();
             SpendRigFixtureLevels();
             PickupWallet.SetPowerCells(28);   // needs e_cel spent to 1 first — Capacity reads RigState
-            for (int i = 0; i < 4; i++) PickupWallet.AddPart();   // parts banked: 4
+            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();   // Supercells banked: 4
         }
 
-        /// <summary>The same board state, minus the 4 banked parts — comparing this against the
-        /// parts=4 shot is how the amber '+' badge and the parts-tray fill state get evidenced.</summary>
+        /// <summary>The same board state, minus the 4 banked Supercells — comparing this against the
+        /// banked=4 shot is how the Supercell tray's fill state gets evidenced (MV-515 retired the old
+        /// per-node amber '+' badge this used to also evidence).</summary>
         public static void ApplyRigFixtureNoParts()
         {
             ResetRunForFixture();
@@ -226,6 +230,22 @@ namespace MaxWorlds.Dev
             RigState.Reset();
             PickupWallet.Reset();
             PickupWallet.SetPowerCells(15);
+        }
+
+        /// <summary>MV-515 AC8's human-check shot: the Supercell tray mid-story — banks TWO Supercells
+        /// with room in the reserve for a top-up, then actually cashes ONE via the same
+        /// <see cref="PickupWallet.TryCashSupercell"/> path the tray's own tap uses — so the captured
+        /// frame shows the tray with one Supercell still banked (and still cashable) AND the cell count
+        /// already carrying the +10 from the cash-in that just happened, not merely a static "some
+        /// banked" state indistinguishable from never having been tapped.</summary>
+        public static void ApplyRigFixtureSupercellCashed()
+        {
+            ResetRunForFixture();
+            SpendRigFixtureLevels();
+            PickupWallet.SetPowerCells(8);   // room for a full 10-cell top-up under the 30 capacity
+            PickupWallet.AddSupercell();
+            PickupWallet.AddSupercell();
+            PickupWallet.TryCashSupercell();   // 2 banked -> 1 banked; 8 cells -> 18 cells
         }
 
         private static void ResetRunForFixture()
@@ -307,7 +327,7 @@ namespace MaxWorlds.Dev
         public static void ApplyHudMv510Fixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 3; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 3; i++) PickupWallet.AddSupercell();
             for (int i = 0; i < 12; i++) PickupWallet.AddPowerCell();
         }
 
@@ -322,7 +342,7 @@ namespace MaxWorlds.Dev
         public static void ApplyWeaponsButtonPartsFixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();
         }
 
         public static void ApplyWeaponsButtonModuleFixture()
@@ -334,7 +354,7 @@ namespace MaxWorlds.Dev
         public static void ApplyWeaponsButtonBothFixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();
             PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
         }
 
@@ -805,19 +825,26 @@ namespace MaxWorlds.Dev
 
         /// <summary>MV-480: builds the json-coordinate-space -> pixel-space mapping this capture's own
         /// aspect/mode needs (see <see cref="RigBoardConformance.BoardPixelTransform"/>'s own doc
-        /// comment for the affine math) — standard mode (rig-16x9, rig-ipad-mini) scales around the
-        /// board's own centre (960, 540) by <see cref="WeaponsScreen.ComputeBoardScale"/> and crops by
+        /// comment for the affine math) — standard mode (rig-16x9, rig-ipad-mini) scales by
+        /// <see cref="WeaponsScreen.ComputeBoardScale"/> and crops by
         /// <see cref="WeaponsScreen.VisibleRefXWindow"/>; phone mode never scales (verified by
         /// <c>RigBoardChromeTests.EveryTappableHexClearsFortyFourPointsAndEveryGlyphClearsElevenPointsAtThePhoneAspect</c>'s
         /// own fixture assumption) but offsets y by the scroll viewport's own top
         /// (<see cref="PhoneViewportTop"/> — see <c>WeaponsScreen.BuildPhoneScrollViewport</c>'s own doc
-        /// comment for why content-local y=0 lands at board-frame y=140, not 0).</summary>
+        /// comment for why content-local y=0 lands at board-frame y=140, not 0).
+        ///
+        /// MV-516: X still scales around the board's own horizontal centre (960) — that half of MV-472's
+        /// fix is untouched. Y no longer does: <c>WeaponsScreen.Build</c>'s <c>_boardScaleRoot</c> pivot
+        /// moved from (0.5, 0.5) to (0.5, 1) (see its own doc comment) so a width-driven shrink stops
+        /// dragging content above the vertical midpoint DOWN toward it — offsetY is 0 here for the same
+        /// reason RigBoardChromeTests' own AssertFitsY now reads <c>rawY * scale</c> instead of a
+        /// centre-relative term.</summary>
         private static RigBoardConformance.BoardPixelTransform BuildTransform(float aspect, bool phoneMode, int h)
         {
             float pxPerRefUnit = h / 1080f;
             float scale = phoneMode ? 1f : WeaponsScreen.ComputeBoardScale(aspect);
             float offsetX = phoneMode ? 0f : 960f * (1f - scale);
-            float offsetY = phoneMode ? PhoneViewportTop : 540f * (1f - scale);
+            float offsetY = phoneMode ? PhoneViewportTop : 0f;
             float windowMinX = WeaponsScreen.VisibleRefXWindow(aspect).MinX;
             return new RigBoardConformance.BoardPixelTransform(scale, offsetX, offsetY, windowMinX, pxPerRefUnit);
         }
@@ -876,7 +903,7 @@ namespace MaxWorlds.Dev
                                        : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
 
             // 3. Family contrast — mean luminance of a lit category's own column band vs an unlit one.
-            CheckFamilyContrast(tex, categories, abilities, transform, out float contrastRatio, out float litMean, out float unlitMean);
+            CheckFamilyContrast(tex, categories, abilities, transform, phoneMode, out float contrastRatio, out float litMean, out float unlitMean);
             Emit("family-contrast", contrastRatio >= 1.5f,
                 $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
 
@@ -913,7 +940,7 @@ namespace MaxWorlds.Dev
                 : glowFails.Count == 0 ? $"{glowChecked}/{glowChecked} owned nodes under 25% annulus ink"
                                         : $"{glowFails.Count}/{glowChecked} over 25% — {string.Join("; ", glowFails)}") + glowFoldNote);
 
-            // 5. Named colour probes — each family's category fill, the CELLS chip border, the PARTS tray border.
+            // 5. Named colour probes — each family's category fill, the CELLS chip border, the SUPERCELL tray border.
             var colourFails = new List<string>();
             int colourChecked = 0;
             foreach (var cat in categories)
@@ -925,7 +952,7 @@ namespace MaxWorlds.Dev
             {
                 colourChecked += 2;
                 CheckChipBorderColour(tex, weapons.CellsBorder, "CELLS border", RigBoardLayout.Colour("sec"), colourFails);
-                CheckChipBorderColour(tex, weapons.PartsBorder, "PARTS border", RigBoardLayout.Colour("part"), colourFails);
+                CheckChipBorderColour(tex, weapons.SupercellsBorder, "SUPERCELL border", RigBoardLayout.Colour("supercell"), colourFails);
             }
             Emit("colour-probes", colourFails.Count == 0,
                 colourFails.Count == 0 ? $"{colourChecked}/{colourChecked} sampled points match rig_board.json"
@@ -998,10 +1025,14 @@ namespace MaxWorlds.Dev
         }
 
         private static void CheckFamilyContrast(Texture2D tex, IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities,
-            RigBoardConformance.BoardPixelTransform transform, out float ratio, out float litMean, out float unlitMean)
+            RigBoardConformance.BoardPixelTransform transform, bool phoneMode, out float ratio, out float litMean, out float unlitMean)
         {
             int n = categories.Count;
-            float yMin = RigBoardLayout.RegionRectY, yMax = yMin + RigBoardLayout.RegionRectH;
+            // MV-516: phone mode's own region panel top shifted with the row schedule (RegionRectYPhone) —
+            // sampling the unshifted standard band here would land partly outside the panel, same class
+            // of bug BuildCategoryPanels itself had (see RigBoardLayout.RegionRectYPhone's own comment).
+            float yMin = phoneMode ? RigBoardLayout.RegionRectYPhone : RigBoardLayout.RegionRectY;
+            float yMax = yMin + RigBoardLayout.RegionRectH;
             var litVals = new List<float>();
             var unlitVals = new List<float>();
 
@@ -1166,11 +1197,12 @@ namespace MaxWorlds.Dev
             IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities, IReadOnlyList<RigFusionLayout> fusions,
             float radiusCategory, float radiusAbility, float radiusFusion, out int checkedCount, out List<string> fails)
         {
-            const float boardCentreY = 540f;
             float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
             var localFails = new List<string>();
             int localChecked = 0;
 
+            // MV-516: standard mode's Y no longer scales around the board's own centre — see
+            // BuildTransform's own doc comment (same boardScaleRoot top-pivot fix).
             void Check(string id, float rawY, float halfExtent)
             {
                 localChecked++;
@@ -1178,7 +1210,7 @@ namespace MaxWorlds.Dev
                 if (phoneMode) { top = rawY - halfExtent; bottom = rawY + halfExtent; }
                 else
                 {
-                    float scaledY = boardCentreY + (rawY - boardCentreY) * scale;
+                    float scaledY = rawY * scale;
                     float scaledHalf = halfExtent * scale;
                     top = scaledY - scaledHalf; bottom = scaledY + scaledHalf;
                 }

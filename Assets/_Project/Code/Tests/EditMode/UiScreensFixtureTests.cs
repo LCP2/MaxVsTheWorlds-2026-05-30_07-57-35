@@ -73,7 +73,7 @@ namespace MaxWorlds.Tests.EditMode
         public void BanksExactlyFourParts()
         {
             UiScreensDirector.ApplyRigFixture();
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
         }
 
         [Test]
@@ -91,7 +91,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.Level("p_dmg"), Is.EqualTo(4));
             Assert.That(RigState.Level("u_rng"), Is.EqualTo(1));
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0));
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(0));
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(28));
         }
 
@@ -105,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.Level("p_dmg"), Is.EqualTo(4));
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(2));
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
         }
 
         // ---------------------------------------------------------------- MV-425: WEAPONS button fixtures
@@ -115,7 +115,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             UiScreensDirector.ApplyWeaponsButtonIdleFixture();
 
-            Assert.That(HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked), Is.False);
+            Assert.That(HudController.ShouldShowSupercellAlert(PickupWallet.SupercellsBanked, AbilityCreditBank.Banked), Is.False);
             Assert.That(PendingMorphingModule.HasPending, Is.False);
         }
 
@@ -124,7 +124,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             UiScreensDirector.ApplyWeaponsButtonPartsFixture();
 
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
             Assert.That(PendingMorphingModule.HasPending, Is.False);
         }
 
@@ -134,7 +134,7 @@ namespace MaxWorlds.Tests.EditMode
             UiScreensDirector.ApplyWeaponsButtonModuleFixture();
 
             Assert.That(PendingMorphingModule.HasPending, Is.True);
-            Assert.That(HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked), Is.False);
+            Assert.That(HudController.ShouldShowSupercellAlert(PickupWallet.SupercellsBanked, AbilityCreditBank.Banked), Is.False);
         }
 
         [Test]
@@ -142,11 +142,11 @@ namespace MaxWorlds.Tests.EditMode
         {
             UiScreensDirector.ApplyWeaponsButtonBothFixture();
 
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(4));
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(4));
             Assert.That(PendingMorphingModule.HasPending, Is.True);
 
             var alert = HudController.ComputeWeaponsButtonAlert(
-                HudController.ShouldShowPartAlert(PickupWallet.PartsBanked, AbilityCreditBank.Banked),
+                HudController.ShouldShowSupercellAlert(PickupWallet.SupercellsBanked, AbilityCreditBank.Banked),
                 PendingMorphingModule.HasPending);
             Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Both));
         }

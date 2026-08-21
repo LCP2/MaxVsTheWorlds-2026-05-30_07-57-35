@@ -55,7 +55,7 @@ namespace MaxWorlds.Tests.PlayMode
 
         private static int PartCount() =>
             Object.FindObjectsByType<Pickup>(FindObjectsSortMode.None)
-                  .Count(p => p.Kind == PickupKind.Part);
+                  .Count(p => p.Kind == PickupKind.Supercell);
 
         [UnityTest]
         public IEnumerator BossDeath_FlingsFourPlusParts_AndHoldsResultsUntilMaxWalksThroughTheDoor()

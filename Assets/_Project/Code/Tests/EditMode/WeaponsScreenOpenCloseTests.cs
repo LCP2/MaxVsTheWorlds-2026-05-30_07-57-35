@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UI;
 using MaxWorlds.Pickups;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
@@ -68,6 +69,20 @@ namespace MaxWorlds.Tests.EditMode
 
             _screen.Close();
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the second Open() must not have overwritten the saved pre-pause speed");
+        }
+
+        /// <summary>MV-515 AC6: THE RIG's own half of "no active user-facing Text says Part/Parts" —
+        /// scans every built Text component's rendered string once the board is actually up, not the
+        /// source. Proven to fail on cdb39c7 (main HEAD before this ticket), whose PARTS tray literally
+        /// set its label text to "PARTS" and its sub-caption to "tap a node to fit one"/"N banked".</summary>
+        [Test]
+        public void OpeningNeverShowsUserFacingPartOrPartsText_MV515()
+        {
+            _screen.Open();
+
+            foreach (var text in _go.GetComponentsInChildren<Text>(true))
+                Assert.That(System.Text.RegularExpressions.Regex.IsMatch(text.text ?? string.Empty, @"\bParts?\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), Is.False,
+                    $"THE RIG Text on '{text.gameObject.name}' still reads \"{text.text}\" — MV-515 renamed the currency to Supercell");
         }
 
     }

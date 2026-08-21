@@ -183,8 +183,8 @@ namespace MaxWorlds.Tests.EditMode
             PickupWallet.SetPowerCells(0);
             Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.PowerCell, 3f, 1f), Is.True,
                 "below capacity, within radius, a power cell must pull");
-            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Part, 3f, 1f), Is.False,
-                "parts are a deliberate walk-over pickup, never magneted");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Supercell, 3f, 1f), Is.False,
+                "Supercells are a deliberate walk-over pickup, never magneted");
 
             FillReserve();
             Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.PowerCell, 3f, 1f), Is.False,

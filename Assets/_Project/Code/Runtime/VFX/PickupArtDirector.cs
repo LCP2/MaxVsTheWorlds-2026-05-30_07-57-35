@@ -174,10 +174,10 @@ namespace MaxWorlds.VFX
                         PulseCellCore(art);
                     }
                 }
-                else if (pickup.Kind == PickupKind.Part)
+                else if (pickup.Kind == PickupKind.Supercell)
                 {
-                    // MV-305: every dropped part wears one of the machine-internals designs — which one
-                    // is rerolled per drop below.
+                    // MV-305: every dropped Supercell wears one of the machine-internals designs — which
+                    // one is rerolled per drop below.
                     string want = ArtPrefix + RollPartArtKey(pickup);
                     Transform art = FindArt(pickup.transform, want);
 

@@ -54,14 +54,16 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(HudController.ShowsModuleBadge(alert), Is.True);
         }
 
-        // ---------------------------------------------------------------- MV-471: alert follows affordability, not "holding"
+        // ---------------------------------------------------------------- MV-471/MV-515: alert follows cashability, not node-spendability
 
-        /// <summary>The live bug this ticket fixes: pre-MV-471, <c>CurrentWeaponsButtonAlert</c> flagged
-        /// "parts to fit" off <c>ShouldShowPartAlert(partsBanked, ...)</c> alone — a held part with
-        /// nowhere to spend it still lit the button. p_dmg is the only node owned at run start; drive it
-        /// to its own cap so nothing anywhere on the board is part-spendable, then bank a part.</summary>
+        /// <summary>MV-471's original bug (a held part with nowhere to spend it still lit the button) no
+        /// longer applies the same way under MV-515: a Supercell is a generic 10-cell top-up now, cashed
+        /// independent of any specific board node's spendability (AC8: "you hold at least one Supercell
+        /// AND there is room for 10 cells"). p_dmg is driven to its own cap (nothing board-spendable) to
+        /// prove the alert now follows CASHABILITY, not node eligibility — the opposite assertion from
+        /// this test's pre-MV-515 shape, which the currency redesign made obsolete.</summary>
         [Test]
-        public void HoldingAPartWithNoLegalSpendDoesNotComputeAPartsToFitAlert()
+        public void HoldingASupercellWithRoomToCashStillFlagsTheAlert_EvenWithNoBoardSpend_MV515()
         {
             PickupWallet.Reset();
             PendingMorphingModule.Reset();
@@ -70,13 +72,13 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 while (RigState.CanSpendPart("p_dmg")) RigState.RaiseLevel("p_dmg");
-                PickupWallet.AddPart();
+                PickupWallet.AddSupercell();
 
                 var method = typeof(HudController).GetMethod("CurrentWeaponsButtonAlert", BindingFlags.NonPublic | BindingFlags.Static);
                 var alert = (HudController.WeaponsButtonAlert)method.Invoke(null, null);
 
-                Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.Idle),
-                    "a banked part with nothing spendable anywhere on the board must not flag PartsToFit");
+                Assert.That(alert, Is.EqualTo(HudController.WeaponsButtonAlert.PartsToFit),
+                    "MV-515: a banked Supercell with room to cash must flag the alert regardless of board spendability");
             }
             finally
             {
@@ -115,13 +117,20 @@ namespace MaxWorlds.Tests.EditMode
                 var partText = partCounter.GetComponentInChildren<Text>();
                 Assert.That(partText.text, Is.EqualTo("0"));
 
-                PickupWallet.AddPart();
-                Assert.That(partText.text, Is.EqualTo("1"), "a banked part must raise the live count");
+                PickupWallet.AddSupercell();
+                Assert.That(partText.text, Is.EqualTo("1"), "a banked Supercell must raise the live count");
                 Assert.That(moduleBadge.gameObject.activeSelf, Is.False);
 
                 PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
                 Assert.That(moduleBadge.gameObject.activeSelf, Is.True, "a banked draft must raise the module badge");
                 Assert.That(partText.text, Is.EqualTo("1"), "the part counter is unaffected by the module badge");
+
+                // MV-515 AC6: the HUD half of "no active user-facing Text says Part/Parts" — scans the
+                // built widget's own rendered strings, not source, so a runtime-composed string can't
+                // slip past a source grep the way AC1/AC5's greps could miss.
+                foreach (var text in hudGo.GetComponentsInChildren<Text>(true))
+                    Assert.That(System.Text.RegularExpressions.Regex.IsMatch(text.text ?? string.Empty, @"\bParts?\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), Is.False,
+                        $"HUD Text on '{text.gameObject.name}' still reads \"{text.text}\" — MV-515 renamed the currency to Supercell");
             }
             finally
             {

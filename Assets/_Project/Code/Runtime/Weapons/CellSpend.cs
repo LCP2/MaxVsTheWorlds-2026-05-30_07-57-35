@@ -5,23 +5,18 @@ namespace MaxWorlds.Weapons
 {
     /// <summary>
     /// Spends banked POWER CELLS on THE RIG board (MV-458) — cells are the primary progression
-    /// currency for both a node's 0-&gt;1 unlock and its further levels. MV-492: unlocking additionally
-    /// needs 1 banked PART — Lee's model, "a part is one piece of the puzzle" for a NEW ability — while
-    /// upgrading an already-owned node stays cells-only. Same "check the sink can accept it BEFORE
-    /// touching the bank" order every other spend in this codebase follows.
+    /// currency for both a node's 0-&gt;1 unlock and its further levels. MV-515: unlocking is cells-only
+    /// again — a Supercell is no longer an unlock requirement, it is a banked 10-cell top-up cashed in
+    /// explicitly (<see cref="MaxWorlds.Pickups.PickupWallet.TryCashSupercell"/>), retiring MV-492's
+    /// two-currency unlock gate. Same "check the sink can accept it BEFORE touching the bank" order
+    /// every other spend in this codebase follows.
     /// </summary>
     public static class CellSpend
     {
         /// <summary>Cost to unlock a new node — its 0-&gt;1 grant — with cells. MV-511: flat, does not
-        /// escalate — unlock breadth is already gated twice over by parts scarcity and the parent
-        /// level &gt;= 2 requirement (<see cref="RigState.IsCellUnlockable"/>).</summary>
+        /// escalate — unlock breadth is already gated by the parent level &gt;= 2 requirement
+        /// (<see cref="RigState.IsCellUnlockable"/>).</summary>
         public const int UnlockCostCells = 10;
-
-        /// <summary>MV-492: the part half of a node's 0-&gt;1 unlock — "a part is one piece of the
-        /// puzzle," never enough on its own (see <see cref="UnlockCostCells"/> for the other half), and
-        /// never sufficient to raise an already-owned node (that's cells-only, see
-        /// <see cref="UpgradeCostFor"/>).</summary>
-        public const int UnlockCostParts = 1;
 
         /// <summary>MV-511: the base cell cost of an upgrade, before the per-level escalation
         /// <see cref="UpgradeCostFor"/> applies. Deliberately not named with the old flat constant's
@@ -45,23 +40,20 @@ namespace MaxWorlds.Weapons
         /// <see cref="MaxWorlds.Pickups.PickupWallet.DefaultCapacity"/> alone.</summary>
         public static int UpgradeCostFor(int level) => UpgradeCostBaseCells * Mathf.Min(level, UpgradeCostEscalationCap);
 
-        /// <summary>Unlock <paramref name="id"/> for <see cref="UnlockCostCells"/> cells AND
-        /// <see cref="UnlockCostParts"/> part. Requires <see cref="RigState.IsCellUnlockable"/> (its
-        /// category unlocked and, for a non-root node, its parent at level &gt;= 2). No special case for
-        /// <c>e_cel</c> or any other node — every RIG node unlocks the same way now. Every precondition
-        /// (both currencies banked, the node eligible) is checked before either currency is touched, so
-        /// a failed unlock never leaves a partial spend behind; both currencies then commit together.
-        /// Grants through <see cref="WeaponSystemState.AcquireById"/> (MV-435 AC5's own sanctioned
-        /// entry point) rather than calling the RIG model layer's own grant primitive directly — that
-        /// would silently skip <see cref="WeaponSystemState.Changed"/> and leave any HUD control gated
-        /// on it stuck stale.</summary>
+        /// <summary>Unlock <paramref name="id"/> for <see cref="UnlockCostCells"/> cells. Requires
+        /// <see cref="RigState.IsCellUnlockable"/> (its category unlocked and, for a non-root node, its
+        /// parent at level &gt;= 2). No special case for <c>e_cel</c> or any other node — every RIG node
+        /// unlocks the same way now. MV-515: cells-only — a Supercell is no longer required to unlock.
+        /// Every precondition (cells banked, the node eligible) is checked before either is touched, so
+        /// a failed unlock never leaves a partial spend behind. Grants through
+        /// <see cref="WeaponSystemState.AcquireById"/> (MV-435 AC5's own sanctioned entry point) rather
+        /// than calling the RIG model layer's own grant primitive directly — that would silently skip
+        /// <see cref="WeaponSystemState.Changed"/> and leave any HUD control gated on it stuck stale.</summary>
         public static bool TryUnlockNode(string id)
         {
-            if (PickupWallet.PartsBanked < UnlockCostParts) return false;
             if (PickupWallet.PowerCells < UnlockCostCells) return false;
             if (!RigState.IsCellUnlockable(id)) return false;
             if (!WeaponSystemState.AcquireById(id)) return false;
-            PickupWallet.TrySpendPart();
             PickupWallet.TrySpendPowerCells(UnlockCostCells);
             return true;
         }
@@ -87,10 +79,9 @@ namespace MaxWorlds.Weapons
         /// <summary>MV-470: the CELLS-only half of a node's affordability — owned checks the upgrade
         /// path, unowned checks the unlock path. Pure, so THE RIG board can drive its per-node "live vs
         /// inert" read (a pulsing ring/badge vs a flat one) without a speculative spend-and-undo, same
-        /// idiom as <see cref="RigState.CanSpendPart"/>. Deliberately narrower than
-        /// <c>WeaponsScreen.IsAbilityNodeSpendable</c> (which, on the unlock path, also requires
-        /// <see cref="UnlockCostParts"/>) — this is only ever asked "would CELLS alone pay for this
-        /// right now."</summary>
+        /// idiom as <see cref="RigState.CanSpendPart"/>. MV-515: this is the same question
+        /// <c>WeaponsScreen.IsAbilityNodeSpendable</c> now asks, since cells are the only currency an
+        /// unlock or upgrade ever needed.</summary>
         public static bool IsCellActionAffordable(string id, int cellsBanked) =>
             RigState.IsOwned(id)
                 ? RigState.CanSpendPart(id) && cellsBanked >= UpgradeCostFor(RigState.Level(id))

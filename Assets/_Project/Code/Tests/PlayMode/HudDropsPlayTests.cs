@@ -108,12 +108,12 @@ namespace MaxWorlds.Tests.PlayMode
         {
             var alert = FindRect("Parts Badge");
 
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             yield return null;
             Assert.That(alert.gameObject.activeSelf, Is.True, "a collected part must raise the badge");
 
             // And it clears once the weapons area spends the part (WV-228).
-            PickupWallet.TrySpendPart();
+            PickupWallet.TryCashSupercell();
             yield return null;
             Assert.That(alert.gameObject.activeSelf, Is.False, "spending the part must clear the badge");
         }
@@ -125,8 +125,8 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheBadgeShowsTheBankedCount()
         {
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
+            PickupWallet.AddSupercell();
             yield return null;
 
             var badge = FindRect("Parts Badge");
@@ -145,7 +145,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheRaisedChipIsTheCollectibleOrange_AndFlashes()
         {
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             yield return null;
 
             var badge = FindRect("Parts Badge");

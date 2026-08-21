@@ -9,13 +9,14 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// THE RIG 5/5 (MV-426) — the FORGE's four fusions. Covers the AC this worker can prove without a
     /// PlayMode test: eligibility gated on both parent categories being lit (independent of banked
-    /// parts, MV-423.png vs -noparts.png), the exact 3-part forge cost failing cleanly at 2, a forged
-    /// fusion occupying its named HUD slot in place of LOCKED, and no Morphing Module draft ever
-    /// offering a fusion id. The four effects' actual gameplay behaviour (DELUGE's arc, BLINKGUARD's
-    /// left-behind bubble, OVERCHARGE's fire-rate double, SKIRMISH's area-survival/teleport-snap) needs
-    /// a live scene to observe end-to-end and is intentionally NOT covered here — see the fix comment
-    /// on MV-426 for the PlayMode gap this project's autonomy contract asks to be noted rather than
-    /// worked around with a forbidden PlayMode test.
+    /// cells, MV-423.png vs -noparts.png), the exact 30-cell forge cost (MV-515: converted from 3
+    /// parts — a Supercell is worth exactly 10 cells) failing cleanly below it, a forged fusion
+    /// occupying its named HUD slot in place of LOCKED, and no Morphing Module draft ever offering a
+    /// fusion id. The four effects' actual gameplay behaviour (DELUGE's arc, BLINKGUARD's left-behind
+    /// bubble, OVERCHARGE's fire-rate double, SKIRMISH's area-survival/teleport-snap) needs a live
+    /// scene to observe end-to-end and is intentionally NOT covered here — see the fix comment on
+    /// MV-426 for the PlayMode gap this project's autonomy contract asks to be noted rather than worked
+    /// around with a forbidden PlayMode test.
     /// </summary>
     public sealed class RigFusionForgeTests
     {
@@ -44,10 +45,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AllFourFusionsAreDefinedWithTheirAuthoredParentsSlotAndCost()
         {
-            AssertFusion("f_del", "PRIMARY", "SECONDARY", "B", 3);
-            AssertFusion("f_bgd", "ENERGY", "MOVE", "B", 3);
-            AssertFusion("f_ovc", "ENERGY", "SUPPORT", "U", 3);
-            AssertFusion("f_skr", "MOVE", "SUPPORT", "U", 3);
+            AssertFusion("f_del", "PRIMARY", "SECONDARY", "B", 30);
+            AssertFusion("f_bgd", "ENERGY", "MOVE", "B", 30);
+            AssertFusion("f_ovc", "ENERGY", "SUPPORT", "U", 30);
+            AssertFusion("f_skr", "MOVE", "SUPPORT", "U", 30);
         }
 
         private static void AssertFusion(string id, string parentA, string parentB, string hudSlot, int cost)
@@ -56,7 +57,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(def.ParentA, Is.EqualTo(parentA));
             Assert.That(def.ParentB, Is.EqualTo(parentB));
             Assert.That(def.HudSlot, Is.EqualTo(hudSlot));
-            Assert.That(def.PartCost, Is.EqualTo(cost));
+            Assert.That(def.CellCost, Is.EqualTo(cost));
         }
 
         // ---------------------------------------------------------------- AC1: both parents must be lit
@@ -98,59 +99,59 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void EligibilityIsIndependentOfBankedParts_ReadyAtZeroBanked()
+        public void EligibilityIsIndependentOfBankedCells_ReadyAtZeroBanked()
         {
-            // MV-423.png vs -noparts.png: OVERCHARGE stays amber/ready with the parts tray dark.
+            // MV-423.png vs -noparts.png: OVERCHARGE stays amber/ready with the cell count irrelevant.
             RigState.AcquireCap("e_ff");
             RigState.AcquireCap("u_sen");
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0));
             Assert.That(RigFusionState.IsEligible("f_ovc"), Is.True,
-                "readiness reads off owned categories only, never the currently-banked part count");
+                "readiness reads off owned categories only, never the currently-banked cell count");
         }
 
-        // ---------------------------------------------------------------- AC2: exact 3-part cost
+        // ---------------------------------------------------------------- AC4 (MV-515): exact 30-cell cost
 
         [Test]
-        public void ForgingDeductsExactlyThreePartsAndFailsCleanlyAtTwo()
+        public void ForgingDeductsExactlyThirtyCellsAndFailsCleanlyBelowIt()
         {
             RigState.AcquireCap("p_dmg"); // already owned at run start, but explicit for clarity
             RigState.AcquireCap("s_bal");
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
+            RigState.AcquireCap("e_cel"); // capacity 30 — room for the fusion's own 30-cell cost
+            PickupWallet.SetPowerCells(29);
 
-            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False, "2 parts must not be enough to forge a 3-part fusion");
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False, "29 cells must not be enough to forge a 30-cell fusion");
             Assert.That(RigFusionState.IsForged("f_del"), Is.False);
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(2), "a failed forge must not spend anything");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(29), "a failed forge must not spend anything");
 
-            PickupWallet.AddPart(); // now 3
-            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True, "3 parts must forge a 3-part fusion");
+            PickupWallet.SetPowerCells(30);
+            Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True, "30 cells must forge a 30-cell fusion");
             Assert.That(RigFusionState.IsForged("f_del"), Is.True);
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "forging must spend exactly the fusion's own cost, not more or less");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "forging must spend exactly the fusion's own cost, not more or less");
         }
 
         [Test]
-        public void ForgingFailsWithoutEligibilityEvenWithEnoughParts()
+        public void ForgingFailsWithoutEligibilityEvenWithEnoughCells()
         {
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
-            PickupWallet.AddPart();
+            RigState.AcquireCap("e_cel"); // capacity 30 — room for the fusion's own 30-cell cost
+            PickupWallet.SetPowerCells(30);
 
             Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False,
-                "3 parts banked is not enough on its own — SECONDARY has never been touched");
+                "30 cells banked is not enough on its own — SECONDARY has never been touched");
             Assert.That(RigFusionState.IsForged("f_del"), Is.False);
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(3), "an ineligible forge attempt must not spend anything");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(30), "an ineligible forge attempt must not spend anything");
         }
 
         [Test]
         public void ForgingTwiceFailsTheSecondTime_AlreadyForged()
         {
             RigState.AcquireCap("s_bal");
-            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            RigState.AcquireCap("e_cel"); // capacity 30 — room for the fusion's own 30-cell cost
+            PickupWallet.SetPowerCells(30);
             Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True);
 
-            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            PickupWallet.SetPowerCells(30);
             Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.False, "an already-forged fusion cannot be forged again");
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(3), "the second, refused attempt must not spend anything");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(30), "the second, refused attempt must not spend anything");
         }
 
         // ---------------------------------------------------------------- AC3: occupies its named HUD slot
@@ -159,7 +160,8 @@ namespace MaxWorlds.Tests.EditMode
         public void AForgedFusionOccupiesItsNamedHudSlot_AndNoOtherFusionClaimsIt()
         {
             RigState.AcquireCap("s_bal");
-            PickupWallet.AddPart(); PickupWallet.AddPart(); PickupWallet.AddPart();
+            RigState.AcquireCap("e_cel"); // capacity 30 — room for the fusion's own 30-cell cost
+            PickupWallet.SetPowerCells(30);
             Assert.That(PartSpend.TrySpendOnFusion("f_del"), Is.True);
 
             Assert.That(RigFusionState.ForgedInSlot("B"), Is.EqualTo("f_del"));
