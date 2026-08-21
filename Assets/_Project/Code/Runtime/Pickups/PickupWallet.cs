@@ -8,7 +8,7 @@ namespace MaxWorlds.Pickups
     /// The player's banked drops (YT-131, recut WV-228). Power cells accumulate into a count the HUD
     /// shows and (MV-458) are THE RIG board's primary currency — unlocking a new node costs
     /// <see cref="MaxWorlds.Weapons.CellSpend.UnlockCostCells"/>, raising an owned one costs
-    /// <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostCells"/>. Parts are universal upgrade tokens
+    /// <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostFor"/> of its current level. Parts are universal upgrade tokens
     /// (WV-228): a plain banked count, no identity, no auto-install and no draft-pick popup on
     /// collection — replaces the old dropped-part-decides queue (YT-133/YT-207). MV-458: parts are now
     /// the rare accelerant rather than the sole currency, still spent one at a time against a chosen
