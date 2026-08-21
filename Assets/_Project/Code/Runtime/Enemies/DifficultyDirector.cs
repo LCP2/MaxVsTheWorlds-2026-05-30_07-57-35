@@ -47,19 +47,36 @@ namespace MaxWorlds.Enemies
 
         /// <summary>How long a run is authored to last, in seconds, with no shed kills: the Invasion
         /// Level's rate is derived from this and <see cref="AuthoredMax"/>, not hand-tuned, so the
-        /// escalation curve and "the run is ~6 minutes" can never quietly drift apart.</summary>
-        public const float AuthoredRunLengthSeconds = 360f;
+        /// escalation curve and "the run is ~N minutes" can never quietly drift apart.
+        ///
+        /// MV-513 re-pace: this was 360s (~6 minutes), authored for the YT-210 single-arena slice and
+        /// never re-baked when world 1 grew to 18 areas — a player moving at Lee's measured ~67s/area
+        /// (337s to reach area 5) hit this ceiling by area 5, with 13 of 18 areas played at the
+        /// permanent Domination cap. See <see cref="AuthoredPerShedBump"/> for the full worked
+        /// arithmetic; this value is 2750s so that, modelled against that pace and the 8-shed
+        /// destruction schedule (areas 3/6/8/9/11/14/15/17), <c>Normalized</c> first reaches 1.0 at
+        /// area 18 and Domination (the top third) first opens at area 13 — see
+        /// <c>DifficultyDirectorTests.EscalationCurve_PacedAcrossFullRun_...</c>.</summary>
+        public const float AuthoredRunLengthSeconds = 2750f;
 
         /// <summary>Seconds the clock SKIPS FORWARD when EVERY factory shed in the run has been
-        /// destroyed — half the authored run length, carried over from the old per-shed level bump's
-        /// own weight (half of a 10-point ceiling). This is the TOTAL budget clearing every source is
-        /// worth, not a flat per-shed number: <see cref="ReportShedDestroyed"/> divides it across
-        /// however many sheds <see cref="FactoryCensus"/> says this run actually has (MV-261). The
-        /// slice was authored with exactly one shed, when "per shed" and "total" were the same
-        /// number; the v0.5 recut's three-shed map is what pulled them apart — undivided, the second
-        /// of three shed kills alone maxed the Invasion Level and woke the boss long before the final
-        /// area, however early in the run that second kill happened to land.</summary>
-        public const float AuthoredPerShedBump = AuthoredRunLengthSeconds * 0.5f;
+        /// destroyed. This is the TOTAL budget clearing every source is worth, not a flat per-shed
+        /// number: <see cref="ReportShedDestroyed"/> divides it across however many sheds
+        /// <see cref="FactoryCensus"/> says this run actually has (MV-261).
+        ///
+        /// MV-513 re-pace: was half the run length (a carry-over from the old per-shed level bump's
+        /// own weight, half of a 10-point ceiling). Naively keeping that 0.5 fraction while raising
+        /// <see cref="AuthoredRunLengthSeconds"/> overshoots — the per-shed budget scales WITH the run
+        /// length, so a bigger run also hands out a bigger skip, and a thorough player (who fells
+        /// sheds on the way through) still arrives at the ceiling far earlier than a full 18-area
+        /// run. Solving for "Normalized hits 1.0 at area 17-18 AND Domination opens at area 12-14",
+        /// against Lee's ~67s/area pace and the 8-shed schedule (areas 3/6/8/9/11/14/15/17), pins the
+        /// fraction at 4/7 (~0.571): with <see cref="AuthoredRunLengthSeconds"/> = 2750s that is
+        /// ~1571.43s total, ~196.4s per shed across the 8. Worked areas (shed destroyed while
+        /// traversing its own area, contributing from the NEXT area onward):
+        /// area 12 → Normalized ≈0.651 (Infestation), area 13 → ≈0.676 (Domination opens),
+        /// area 17 → ≈0.917 (still short), area 18 → ≈1.013 → clamped to 1.0 (ceiling reached).</summary>
+        public const float AuthoredPerShedBump = AuthoredRunLengthSeconds * (4f / 7f);
 
         /// <summary>The rate implied by the authored curve: reach <see cref="AuthoredMax"/> at
         /// <see cref="AuthoredRunLengthSeconds"/> with zero shed kills. Kept as a named default for
