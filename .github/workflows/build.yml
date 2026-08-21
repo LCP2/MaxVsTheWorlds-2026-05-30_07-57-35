@@ -38,8 +38,10 @@ jobs:
           # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
           # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
           # cache. Unity reimports changed assets from a restored Library anyway.
-          key: Library-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
-          restore-keys: Library-
+          # MV-517: key is now scoped per-job (was identical to build's key, so whichever
+          # job saved second found the entry already there and silently skipped saving).
+          key: Library-editmode-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-editmode-
       - uses: game-ci/unity-test-runner@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -100,10 +102,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 2. Build the WebGL player.
+  #     MV-517: no longer needs: test, so the two Unity jobs run in parallel
+  #     instead of paying for test's wall clock twice. deploy below gates on
+  #     both, so nothing untested still reaches Pages.
   # ---------------------------------------------------------------------------
   build:
     name: Build WebGL
-    needs: test
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -116,8 +120,9 @@ jobs:
           # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
           # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
           # cache. Unity reimports changed assets from a restored Library anyway.
-          key: Library-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
-          restore-keys: Library-
+          # MV-517: key is now scoped per-job - see the matching note on test's cache step.
+          key: Library-webgl-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-webgl-
       - uses: game-ci/unity-builder@v4
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
@@ -134,10 +139,12 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # 3. Publish the WebGL build to GitHub Pages -> the "play the latest" link.
+  #     MV-517: now needs both build and test, since build no longer depends
+  #     on test directly.
   # ---------------------------------------------------------------------------
   deploy:
     name: Deploy to Pages
-    needs: build
+    needs: [build, test]
     runs-on: ubuntu-latest
     environment:
       name: github-pages
