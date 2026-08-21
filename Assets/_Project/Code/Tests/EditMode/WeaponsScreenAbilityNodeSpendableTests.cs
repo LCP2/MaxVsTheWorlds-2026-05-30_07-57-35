@@ -29,7 +29,7 @@ namespace MaxWorlds.Tests.EditMode
             // Case 1 — owned, below max, cells cover the upgrade cost, any number of parts banked
             // (irrelevant to an upgrade): the cell-upgrade path MV-458 shipped but never wired to the board.
             Assert.That(RigState.IsOwned("p_dmg"), Is.True, "p_dmg is owned from run start");
-            Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", CellSpend.UpgradeCostCells, 0), Is.True,
+            Assert.That(WeaponsScreen.IsAbilityNodeSpendable("p_dmg", CellSpend.UpgradeCostFor(RigState.Level("p_dmg")), 0), Is.True,
                 "an owned, below-max node with enough cells must be spendable");
 
             // Case 4 — the non-interactable case: p_rng is reached but not yet CELL-unlockable (its

@@ -267,7 +267,7 @@ namespace MaxWorlds.UI
         {
             bool draftable = RigState.IsCellUnlockable(id) && !RigState.IsOwned(id);
             bool canLevelUp = RigState.CanSpendPart(id); // owned, below max — TryUpgradeNode's own gate
-            if (canLevelUp) return cellsBanked >= CellSpend.UpgradeCostCells;
+            if (canLevelUp) return cellsBanked >= CellSpend.UpgradeCostFor(RigState.Level(id));
             if (draftable) return cellsBanked >= CellSpend.UnlockCostCells && partsBanked >= CellSpend.UnlockCostParts;
             return false;
         }
@@ -505,7 +505,7 @@ namespace MaxWorlds.UI
             bool capacityActionable = cellsOwned
                 ? PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel
                 : RigState.IsCellUnlockable("e_cel");
-            int capacityCostCells = cellsOwned ? CellSpend.UpgradeCostCells : CellSpend.UnlockCostCells;
+            int capacityCostCells = cellsOwned ? CellSpend.UpgradeCostFor(RigState.Level("e_cel")) : CellSpend.UnlockCostCells;
             bool capacitySpendable = capacityActionable && (PickupWallet.PowerCells >= capacityCostCells || banked > 0);
             _cellsChipButton.interactable = capacitySpendable;
             // MV-446 defect 1: was tinting the BG PartsColor/amber when a capacity level-up is
