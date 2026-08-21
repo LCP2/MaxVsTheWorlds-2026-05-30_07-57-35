@@ -152,9 +152,10 @@ namespace MaxWorlds.Weapons
         public static float ForceFieldRadius(int level, float baseRadius, float perLevel) =>
             Mathf.Max(0f, baseRadius) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
 
-        /// <summary>Power cells Force Field spends on activation (DECISION #2, MV-361) — fixed, not
-        /// leveled, same reasoning as <see cref="DefaultForceFieldRadius"/>.</summary>
-        public const int DefaultForceFieldActivationCost = 10;
+        /// <summary>Power cells Force Field spends on activation (DECISION #2, MV-361; retuned to
+        /// free by MV-523) — fixed, not leveled, same reasoning as <see cref="DefaultForceFieldRadius"/>.
+        /// </summary>
+        public const int DefaultForceFieldActivationCost = 0;
 
         /// <summary>Damage the level-3 pop deals to everything touching the bubble when it bursts
         /// (DECISION #4: "confirmed in scope", no number pinned) — an authored placeholder until Lee
