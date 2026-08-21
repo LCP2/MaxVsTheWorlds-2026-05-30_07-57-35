@@ -24,24 +24,24 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void UnlockingANodeCostsTwentyCellsAndNeedsItsParentAtLevelTwo()
+        public void UnlockingANodeCostsUnlockCostCellsAndNeedsItsParentAtLevelTwo()
         {
             // p_dmg owns the run-start ability at level 1 (RigBoard.StartLevel) — enough to satisfy the
             // OLD level >= 1 gate but not MV-458's tightened level >= 2 requirement.
-            PickupWallet.SetPowerCells(20);
+            PickupWallet.SetPowerCells(CellSpend.UnlockCostCells);
             PickupWallet.AddPart(); // MV-492: the unlock also needs a banked part — see RigSpendRulesTests
 
             Assert.That(CellSpend.TryUnlockNode("p_rng"), Is.False,
                 "p_dmg is only level 1 — the tightened parent >= 2 gate must reject this");
             Assert.That(RigState.Level("p_rng"), Is.EqualTo(0));
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(20), "a rejected unlock must not spend cells");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(CellSpend.UnlockCostCells), "a rejected unlock must not spend cells");
 
             RigState.RaiseLevel("p_dmg"); // model-layer raise, no currency involved — p_dmg to level 2
 
             Assert.That(CellSpend.TryUnlockNode("p_rng"), Is.True,
                 "p_dmg is now level 2 — the unlock must succeed");
             Assert.That(RigState.Level("p_rng"), Is.EqualTo(1));
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "the unlock must cost exactly 20 cells");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "the unlock must cost exactly UnlockCostCells cells");
         }
     }
 }

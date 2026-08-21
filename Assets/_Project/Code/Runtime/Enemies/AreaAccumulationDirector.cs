@@ -106,6 +106,20 @@ namespace MaxWorlds.Enemies
         /// in <see cref="FillArea"/>; null while <see cref="_concealedRemainingThisArea"/> is 0.</summary>
         private DormantGroup _currentConcealedGroup;
 
+        /// <summary>Robots pre-placed for an area not yet entered (MV-514) — already standing at their
+        /// authored <see cref="Garrison.SeedPositions"/>, dormant, the moment the PREVIOUS area was
+        /// filled (see <see cref="PlacePendingGarrison"/>), awaiting <see cref="ActivateGarrisonFor"/>
+        /// when this area's own gate actually breaks. Keyed by area; an area with none pending (no
+        /// garrisonDensity, or reached without ever being pre-placed - e.g. area 1) has no entry, which
+        /// is exactly what tells <see cref="ActivateGarrisonFor"/> to fall back to the old immediate
+        /// <see cref="SeedGarrison"/> behaviour.</summary>
+        private readonly Dictionary<int, List<RobotEnemy>> _pendingGarrisonByArea = new Dictionary<int, List<RobotEnemy>>();
+
+        /// <summary>Areas whose garrison has already been given its MV-514 head start — guards
+        /// <see cref="PlacePendingGarrison"/> so a given area is only ever pre-placed once, the same
+        /// one-shot guarantee <see cref="_filledAreas"/> gives the rest of an area's population.</summary>
+        private readonly HashSet<int> _garrisonPlacedAreas = new HashSet<int>();
+
         /// <summary>Which area each currently-active robot this director spawned was placed for (MV-417)
         /// — looked up in <see cref="OnEnemyDied"/> so <see cref="AreaSpawnQueue.ReportDestroyed(int)"/>
         /// frees the right area's slot, now that the cap is per-area rather than field-wide. Entries are
@@ -185,6 +199,8 @@ namespace MaxWorlds.Enemies
             _largeCountByArea.Clear();
             _areaByRobot.Clear();
             _consecutivePlacementFailuresByArea.Clear();
+            _pendingGarrisonByArea.Clear();
+            _garrisonPlacedAreas.Clear();
             _rushersQueuedThisLevel = 0;
             CurrentArea = 1;
             _physicalArea = 1;
@@ -324,7 +340,14 @@ namespace MaxWorlds.Enemies
             // empty so a fresh run has a safe beat to orient before meeting a robot (MV-256). Marked
             // filled above so nothing re-queues it later; just never queues anything into it now.
             MapZone zone = _map.Zone($"area{areaIndex}");
-            if (zone != null && zone.Kind == ZoneKind.Entry) return;
+            if (zone != null && zone.Kind == ZoneKind.Entry)
+            {
+                // MV-514: even the empty entry stub gives the NEXT area's garrison its head start —
+                // otherwise the very first gated room (area 2 in world1) would still pop its garrison
+                // in only once its own gate broke, exactly the bug this ticket exists to fix.
+                PlacePendingGarrison(areaIndex + 1);
+                return;
+            }
 
             int totalForArea;
             if (_worldCfg != null)
@@ -368,7 +391,12 @@ namespace MaxWorlds.Enemies
             // from THIS area's own just-queued composition (deducted from what's queued, not added on
             // top of it), so RestoreArea (which re-runs this same method) gets exactly the same
             // guarantee on a post-death re-entry that first entry does.
-            SeedGarrison(areaIndex, _worldCfg?.AreaByIndex(areaIndex));
+            //
+            // MV-514: usually this garrison already exists — placed dormant back when the PREVIOUS
+            // area was filled (see PlacePendingGarrison) — so ActivateGarrisonFor just wakes and
+            // toughens it instead of creating it fresh. Falls back to the original immediate
+            // SeedGarrison when nothing was pre-placed (area 1, or a RestoreArea re-fill).
+            ActivateGarrisonFor(areaIndex, _worldCfg?.AreaByIndex(areaIndex));
 
             // MV-363: a big enough room spares a small knot of robots to start concealed behind
             // cover instead of joining the fight the instant it fills — see Spawn() and
@@ -385,6 +413,123 @@ namespace MaxWorlds.Enemies
             while (_queue.TryReleaseArea(areaIndex, out EnemyKind kind))
             {
                 if (!Spawn(areaIndex, kind)) break;
+            }
+
+            // MV-514: NOW that this area's own composition is solved and queued (and, for a dial-derived
+            // area, this area's own Rusher-cap running total has already advanced) — give the NEXT area's
+            // garrison its head start. Deliberately last, not first: PlacePendingGarrison must never
+            // solve a later area's composition before this one's own has been counted, or the cumulative
+            // Rusher cap would clamp areas out of their true chronological order.
+            PlacePendingGarrison(areaIndex + 1);
+        }
+
+        /// <summary>Gives <paramref name="areaIndex"/>'s garrison a head start the moment the area
+        /// BEFORE it is filled (MV-514): placed and visible right away, at the exact same
+        /// <see cref="Garrison.SeedPositions"/> spots <see cref="ActivateGarrisonFor"/> always used, but
+        /// held <see cref="RobotEnemy.BeginDormant"/> — no movement, no aggro, no firing — and, because
+        /// nothing here touches <see cref="_queue"/>, no contribution to the live-enemy cap either. This
+        /// is the fix: previously a garrison was placed (and toughened) only once THIS area's own gate
+        /// broke, so it visibly popped into existence in a room the player could already see through the
+        /// still-closed gate (Lee, 2026-08-21, reproduced in area 2).
+        ///
+        /// Deliberately does not solve or queue this area's ambient composition (that stays exactly
+        /// where it always was, in <see cref="FillArea"/>, at gate-break time) — only which KINDS the
+        /// garrison's own <see cref="Garrison.SeedCount"/> slots will be, previewed on a throwaway
+        /// <see cref="AreaSpawnQueue"/> using this area's own composition solved read-only (never
+        /// mutating <see cref="_rushersQueuedThisLevel"/>: that must only ever advance once per area,
+        /// which <see cref="FillArea"/> still does, later, for real). Toughness is deliberately NOT
+        /// applied yet — <see cref="ActivateGarrisonFor"/> re-applies it with whatever
+        /// <see cref="DifficultyDirector.ToughnessMultiplier"/> is live at the moment this area's own
+        /// gate actually breaks, not the one in effect back when this merely ran (MV-514's trap: freezing
+        /// it here would silently ease every area after the first as the run escalates).</summary>
+        private void PlacePendingGarrison(int areaIndex)
+        {
+            if (areaIndex <= 0 || !_garrisonPlacedAreas.Add(areaIndex)) return;
+            if (_worldCfg == null) return;   // legacy (no world config) path never garrisons ahead of time
+
+            WorldArea area = _worldCfg.AreaByIndex(areaIndex);
+            if (area == null) return;   // past the world's own end (e.g. the area after the boss room)
+
+            MapZone zone = _map.Zone($"area{areaIndex}");
+            if (zone != null && zone.Kind == ZoneKind.Entry) return;   // the empty lead-in room never garrisons
+
+            int seedCount = Garrison.SeedCount(areaIndex, _worldCfg);
+            if (seedCount <= 0) return;
+
+            DifficultyEngine.Composition solved = _worldCfg.SolveComposition(areaIndex);
+            bool authored = area.composition?.IsAuthored == true;
+            // Read-only preview of the same clamp FillArea will apply for real later — Apply() itself
+            // mutates nothing (see RusherCap's own doc comment), so calling it here is safe; only
+            // ClampRusherCap/CountRushers (which advance _rushersQueuedThisLevel) are ever allowed to
+            // run for a given area more than the one time FillArea does it.
+            DifficultyEngine.Composition preview = authored ? solved : RusherCap.Apply(solved, _rushersQueuedThisLevel);
+
+            var previewQueue = new AreaSpawnQueue(1);
+            previewQueue.FillExact(preview, areaIndex);
+
+            Vector3[] positions = Garrison.SeedPositions(area, seedCount);
+            var pending = new List<RobotEnemy>(positions.Length);
+            for (int i = 0; i < positions.Length; i++)
+            {
+                if (!previewQueue.TryTakeForGarrison(areaIndex, out EnemyKind kind)) break;
+
+                EnemyArchetype archetype = EnemyArchetype.Of(kind)
+                    .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier));
+
+                RobotEnemy e = Take(kind, archetype);
+                Vector3 pos = positions[i];
+                pos.y = archetype.SpawnHeight;
+                e.transform.position = pos;
+                e.transform.rotation = Quaternion.identity;
+                e.gameObject.SetActive(true);
+                _areaByRobot[e] = areaIndex;
+
+                // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
+                // would otherwise stamp this robot back to a fresh Chase state.
+                e.BeginDormant();
+                pending.Add(e);
+
+                LetThePlayerThrough(e.gameObject);
+            }
+
+            if (pending.Count > 0) _pendingGarrisonByArea[areaIndex] = pending;
+        }
+
+        /// <summary>Wakes and toughens <paramref name="areaIndex"/>'s pre-placed garrison (see
+        /// <see cref="PlacePendingGarrison"/>) the moment this area's own gate breaks, using whatever
+        /// <see cref="DifficultyDirector.ToughnessMultiplier"/> is live RIGHT NOW — never the one that
+        /// was live back when the garrison was merely placed (MV-514). Still drains
+        /// <see cref="AreaSpawnQueue.TryTakeForGarrison"/> once per pre-placed member, exactly as the
+        /// immediate-placement path always did, so this area's live-cap accounting stays correct even
+        /// though the robot itself already existed. Falls back to the original <see cref="SeedGarrison"/>
+        /// (solve, place and toughen immediately) when nothing was pre-placed for this area — area 1
+        /// (nothing precedes it) or a post-death <see cref="RestoreArea"/> re-fill.</summary>
+        private void ActivateGarrisonFor(int areaIndex, WorldArea area)
+        {
+            if (!_pendingGarrisonByArea.TryGetValue(areaIndex, out List<RobotEnemy> pending))
+            {
+                SeedGarrison(areaIndex, area);
+                return;
+            }
+            _pendingGarrisonByArea.Remove(areaIndex);
+
+            foreach (RobotEnemy e in pending)
+            {
+                if (!_queue.TryTakeForGarrison(areaIndex, out _)) break;
+
+                if (e == null || !e.IsAlive)
+                {
+                    // Splash/AoE reached a dormant member before this area's gate ever broke - the
+                    // queue slot just drained above must not leak as a permanently phantom "active" one.
+                    _queue.ReportDestroyed(areaIndex);
+                    continue;
+                }
+
+                EnemyArchetype archetype = EnemyArchetype.Of(e.Kind)
+                    .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
+                    .Toughened(DifficultyDirector.ToughnessMultiplier);
+                e.Retoughen(archetype);
+                e.Activate();
             }
         }
 

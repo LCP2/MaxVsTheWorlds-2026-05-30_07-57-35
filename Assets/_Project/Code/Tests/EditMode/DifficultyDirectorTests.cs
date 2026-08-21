@@ -58,12 +58,15 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void LevelAt_ReachesMax_ExactlyAtRunLengthSeconds_WithNoSheds()
         {
+            // MV-513: reads the live authored run length rather than a hardcoded literal, so this
+            // keeps proving the mechanism (Tick exactly RunLengthSeconds -> Level hits Max) without
+            // going stale the next time the authored curve is re-paced.
             DifficultyDirector.Reset();
             DevTuning.EscalationStart = 0f;
             DevTuning.EscalationMax = 10f;
-            DevTuning.RunLengthSeconds = 360f;
+            DevTuning.RunLengthSeconds = DifficultyDirector.AuthoredRunLengthSeconds;
 
-            DifficultyDirector.Tick(360f);
+            DifficultyDirector.Tick(DifficultyDirector.AuthoredRunLengthSeconds);
 
             Assert.AreEqual(10f, DifficultyDirector.Level, 1e-3,
                 "the Invasion Level must hit Max exactly at RunLengthSeconds with no shed kills");
@@ -90,6 +93,75 @@ namespace MaxWorlds.Tests.EditMode
             DevTuning.RunLengthSeconds = 360f;
 
             Assert.AreEqual(10f / 360f, DifficultyDirector.DerivedRatePerSecond, 1e-5);
+        }
+
+        // --- MV-513: re-paced for the 18-area world (was authored for a ~6-minute single-arena
+        // slice and maxed out by area 5) ---
+
+        [Test]
+        public void EscalationCurve_PacedAcrossFullRun_LandsMaxAndDominationInTargetAreas()
+        {
+            // Models a player moving through all 18 areas at Lee's measured pace (area 5 at ~337s,
+            // i.e. ~67.4s/area) and destroying every factory shed on the authored schedule (areas
+            // 3, 6, 8, 9, 11, 14, 15, 17) as they reach it. A shed's skip is modelled as landing from
+            // the NEXT area onward (it is destroyed somewhere while traversing its own area, not
+            // before the area is entered), so the check for area N happens before that area's own
+            // shed (if any) is reported.
+            //
+            // Asserts the AUTHORED defaults — no DevTuning overrides — so this is the arithmetic in
+            // DifficultyDirector.AuthoredRunLengthSeconds/AuthoredPerShedBump actually paying off,
+            // not a hand-rolled formula standing in for it.
+            //
+            // ReportShedDestroyed divides the per-shed budget across FactoryCensus.Total (MV-261),
+            // which falls back to 1 when nothing is registered — a bare EditMode test would otherwise
+            // hand out the WHOLE budget per shed instead of an eighth of it. Register 8 factories, the
+            // world 1 shed count this ticket's arithmetic is modelled against, so the divisor matches.
+            DifficultyDirector.Reset();
+            DevTuning.Reset();
+            FactoryCensus.Reset();
+
+            const float SecondsPerArea = 337f / 5f; // Lee's measured pace (MV-513)
+            const int AreaCount = 18;
+            const int ShedCount = 8;
+            var shedAreas = new System.Collections.Generic.HashSet<int> { 3, 6, 8, 9, 11, 14, 15, 17 };
+            Assert.AreEqual(ShedCount, shedAreas.Count, "test fixture's shed schedule must match ShedCount");
+
+            var hutches = new GameObject[ShedCount];
+            try
+            {
+                for (int i = 0; i < ShedCount; i++)
+                {
+                    hutches[i] = new GameObject($"Hutch {i}");
+                    FactoryCensus.Register(hutches[i].AddComponent<MowerHutch>());
+                }
+                Assert.AreEqual(ShedCount, FactoryCensus.Total, "test fixture must register all 8 sheds");
+
+                int normalizedReachesMaxAtArea = -1;
+                int dominationFirstOpensAtArea = -1;
+
+                for (int area = 1; area <= AreaCount; area++)
+                {
+                    DifficultyDirector.Tick(SecondsPerArea);
+
+                    if (normalizedReachesMaxAtArea < 0 && DifficultyDirector.Normalized >= 1f)
+                        normalizedReachesMaxAtArea = area;
+                    if (dominationFirstOpensAtArea < 0 &&
+                        DifficultyDirector.CurrentStage == DifficultyDirector.Stage.Domination)
+                        dominationFirstOpensAtArea = area;
+
+                    if (shedAreas.Contains(area)) DifficultyDirector.ReportShedDestroyed();
+                }
+
+                Assert.That(normalizedReachesMaxAtArea, Is.InRange(17, 18),
+                    $"Normalized must first reach 1.0 in area 17-18, landed at area {normalizedReachesMaxAtArea}");
+                Assert.That(dominationFirstOpensAtArea, Is.InRange(12, 14),
+                    $"Domination must first open in area 12-14, landed at area {dominationFirstOpensAtArea}");
+            }
+            finally
+            {
+                foreach (var go in hutches) if (go != null) Object.DestroyImmediate(go);
+                FactoryCensus.Reset();
+            }
         }
 
         [Test]

@@ -134,7 +134,8 @@ namespace MaxWorlds.Enemies
             // whatever the rusher/panel default is to stay the slow tank (was 0.925 = half of YT-169's
             // 1.85, then 1.355 = half of MV-289's 2.71, now 1.02 = half of MV-315's 2.04). Flag: if
             // Lee wants ALL robots flat at the rusher's speed, this is the one line to change.
-            moveSpeed: 1.02f, maxHealth: 150f,   // YT-194: 100 -> 150, the same 1.5x as the rusher
+            moveSpeed: 1.02f, maxHealth: 135f,   // MV-512: 150 -> 135, -10% per Lee's play feedback
+            // (was YT-194's 100 -> 150, the same 1.5x as the rusher)
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
