@@ -1,0 +1,279 @@
+name: Deploy (WebGL)
+
+# MV-518: the batched, Jira-gated half of the old build.yml. Fires after every qa.yml
+# run (plus an hourly safety-net schedule and manual dispatch), but only actually builds
+# and publishes when the gate job below decides a deploy is due - nothing still in
+# flight, at least one ticket ready, and main has moved since the last successful
+# deploy. This means one WebGL build per settled batch of tickets instead of one on
+# every single push, which was 81% of run #515's 30m 14s total.
+
+on:
+  workflow_run:
+    workflows: ["QA"]
+    types: [completed]
+  schedule:
+    - cron: '0 * * * *' # safety net in case a workflow_run event is ever missed
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy
+  cancel-in-progress: true # only the newest deploy matters; cancelling a superseded WebGL build is the point
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+  deployments: read
+  checks: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Decide whether a deploy is due. Never builds on an unresolved gate - any
+  #    curl/jq failure below fails closed (should_build=false) rather than open.
+  # ---------------------------------------------------------------------------
+  gate:
+    name: Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      should_build: ${{ steps.decide.outputs.should_build }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Decide whether to build
+        id: decide
+        env:
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          fail_closed() {
+            echo "::warning::$1"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+          if [ -z "${ATLASSIAN_API_TOKEN:-}" ]; then
+            fail_closed "ATLASSIAN_API_TOKEN not set - skipping deploy gate."
+          fi
+          BASE=$(jq -r '.jiraBaseUrl' pipeline.config.json)
+          MAIL=$(jq -r '.jiraEmail' pipeline.config.json)
+          PKEY=$(jq -r '.jiraProjectKey' pipeline.config.json)
+
+          # 1. Status detection: does "QA Passed" exist in the workflow scheme yet?
+          STATUSES=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+            "$BASE/rest/api/3/project/$PKEY/statuses") || fail_closed "status lookup failed"
+          QAPASSED_EXISTS=$(echo "$STATUSES" | jq -r '[.[].statuses[]?.name] | any(. == "QA Passed")')
+          [ -z "$QAPASSED_EXISTS" ] && fail_closed "could not determine whether QA Passed exists"
+
+          # 2. Compute BUSY and READY by JQL, per whether QA Passed exists yet.
+          if [ "$QAPASSED_EXISTS" = "true" ]; then
+            BUSY_JQL="project = $PKEY AND status in (\"Ready for Dev\",\"Developing\",\"QA Running\") AND labels != \"needs-lee\""
+            READY_JQL="project = $PKEY AND status = \"QA Passed\""
+          else
+            BUSY_JQL="project = $PKEY AND status in (\"Ready for Dev\",\"Developing\") AND labels != \"needs-lee\""
+            READY_JQL="project = $PKEY AND status = \"QA Running\""
+          fi
+
+          count_jql() {
+            curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" -G \
+              --data-urlencode "jql=$1" --data-urlencode "maxResults=0" \
+              "$BASE/rest/api/3/search" | jq -r '.total // empty'
+          }
+          BUSY=$(count_jql "$BUSY_JQL") || true
+          [ -z "$BUSY" ] && fail_closed "BUSY count lookup failed"
+          READY=$(count_jql "$READY_JQL") || true
+          [ -z "$READY" ] && fail_closed "READY count lookup failed"
+
+          # 3. Freshness: same deployments API call jira-on-staging uses, most recent
+          #    successful github-pages deployment sha vs. main HEAD.
+          PREV=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/deployments?environment=github-pages&per_page=100" \
+            | jq -r '.[0].sha // empty') || fail_closed "deployment lookup failed"
+          CURRENT_SHA=$(git rev-parse HEAD)
+          if [ -z "$PREV" ] || [ "$PREV" != "$CURRENT_SHA" ]; then
+            FRESH=true
+          else
+            FRESH=false
+          fi
+
+          echo "::notice::QAPASSED_EXISTS=$QAPASSED_EXISTS BUSY=$BUSY READY=$READY FRESH=$FRESH"
+
+          # 4. should_build is true only if BUSY==0 and READY>0 and FRESH.
+          if [ "$BUSY" = "0" ] && [ "$READY" -gt "0" ] && [ "$FRESH" = "true" ]; then
+            echo "::notice::should_build=true (BUSY=$BUSY READY=$READY FRESH=$FRESH)"
+            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::should_build=false (BUSY=$BUSY READY=$READY FRESH=$FRESH)"
+            echo "should_build=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
+  # 2. Build the WebGL player. Only runs when the gate says a deploy is due.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build WebGL
+    needs: [gate]
+    if: needs.gate.outputs.should_build == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
+          # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
+          # cache. Unity reimports changed assets from a restored Library anyway.
+          # MV-517: key is scoped per-job - see the matching note in qa.yml's test job.
+          key: Library-webgl-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-webgl-
+      - uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          targetPlatform: WebGL
+      # GameCI writes the player to build/WebGL/. If the first run 404s on Pages,
+      # the index.html is one level deeper (build/WebGL/WebGL) - adjust path below.
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: build/WebGL/WebGL
+
+  # ---------------------------------------------------------------------------
+  # 3. Publish the WebGL build to GitHub Pages -> the "play the latest" link.
+  # ---------------------------------------------------------------------------
+  deploy:
+    name: Deploy to Pages
+    needs: [build]
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+  # ---------------------------------------------------------------------------
+  # 4. MV-518: tell Jira which tickets just published. No commit-range logic -
+  #    every ticket in the same READY bucket the gate computed is on main, and
+  #    main was just published, so the whole bucket transitions together.
+  #    Never fails the deploy.
+  # ---------------------------------------------------------------------------
+  jira-on-staging:
+    name: Mark deployed tickets On Staging
+    needs: [deploy]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Transition ready tickets to On Staging
+        env:
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+        run: |
+          set -uo pipefail
+          if [ -z "${ATLASSIAN_API_TOKEN:-}" ]; then
+            echo "::notice::ATLASSIAN_API_TOKEN not set - skipping Jira transition."
+            exit 0
+          fi
+          BASE=$(jq -r '.jiraBaseUrl' pipeline.config.json)
+          MAIL=$(jq -r '.jiraEmail' pipeline.config.json)
+          PKEY=$(jq -r '.jiraProjectKey' pipeline.config.json)
+
+          STATUSES=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+            "$BASE/rest/api/3/project/$PKEY/statuses")
+          QAPASSED_EXISTS=$(echo "$STATUSES" | jq -r '[.[].statuses[]?.name] | any(. == "QA Passed")')
+
+          if [ "$QAPASSED_EXISTS" = "true" ]; then
+            READY_JQL="project = $PKEY AND status = \"QA Passed\""
+          else
+            READY_JQL="project = $PKEY AND status = \"QA Running\""
+          fi
+
+          KEYS=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" -G \
+            --data-urlencode "jql=$READY_JQL" --data-urlencode "maxResults=100" --data-urlencode "fields=key" \
+            "$BASE/rest/api/3/search" | jq -r '.issues[]?.key // empty')
+          if [ -z "$KEYS" ]; then
+            echo "::notice::No tickets in the ready bucket - nothing to transition."
+            exit 0
+          fi
+          for K in $KEYS; do
+            TID=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+              "$BASE/rest/api/3/issue/$K/transitions" \
+              | jq -r '[.transitions[] | select(.to.name=="On Staging")][0].id // empty')
+            if [ -z "$TID" ]; then
+              echo "::warning::$K has no On Staging transition - skipped."
+              continue
+            fi
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Content-Type: application/json" \
+              --data "{\"transition\":{\"id\":\"$TID\"}}" \
+              "$BASE/rest/api/3/issue/$K/transitions")
+            if [ "$CODE" = "204" ]; then
+              echo "$K -> On Staging"
+              curl -sS -o /dev/null -X PUT -u "$MAIL:$ATLASSIAN_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data '{"update":{"labels":[{"remove":"cc-active"}]}}' \
+                "$BASE/rest/api/3/issue/$K" || true
+            else
+              echo "::warning::$K transition failed with HTTP $CODE."
+            fi
+          done
+          exit 0
+
+  # ---------------------------------------------------------------------------
+  # 5. MV-309: the boot-and-play check. Runs in parallel and gates NOTHING.
+  #    It reports only. It is deliberately not a dependency of build (a red
+  #    play-check must never stop the site updating) and not a dependency of
+  #    jira-on-staging either.
+  #
+  #    WHY THE TIMEOUT IS LOAD-BEARING: Unity PlayMode in batch mode does not
+  #    stream output and can hang indefinitely. On 11 Aug it ran 4h20m without
+  #    finishing. A run is not "complete" until every job is, so that one hung
+  #    job held the concurrency group for four hours: runs #314-#321 all sat
+  #    pending and were superseded, nothing deployed, and every finished ticket
+  #    stranded in QA Running. Never remove timeout-minutes from this job, and
+  #    never make anything depend on it until that suite is proven to terminate.
+  #
+  #    MV-460 / MV-464: PARKED. This job has not completed since the suite outgrew its
+  #    timeout - it is cancelled at 20m on every run, which turns every run red and hides
+  #    genuine failures (it masked the real red on run #441). It gates nothing, so parking
+  #    it loses no signal. The timeout and the comment above stay: un-parking without
+  #    fixing the suite reinstates the four-hour hang described there.
+  #    Re-enable when MV-464 has moved the ~423 disguised unit tests to EditMode and the
+  #    remaining play-check runs in minutes. MV-518: moved here from build.yml so
+  #    un-parking it later cannot slow the per-ticket qa.yml gate.
+  # ---------------------------------------------------------------------------
+  playcheck:
+    name: Play-check (PlayMode)
+    if: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          key: Library-webgl-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-webgl-
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto
+          testMode: playmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}

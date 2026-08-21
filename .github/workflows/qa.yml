@@ -1,0 +1,129 @@
+name: QA
+
+# MV-518: the fast, per-ticket half of the old build.yml. Every push to main gets its
+# own EditMode test verdict in ~5 minutes instead of waiting behind the WebGL build,
+# which was 81% of run #515's 30m 14s total. The WebGL build+deploy itself moved to
+# deploy.yml, which batches many QA-passed tickets into one publish instead of paying
+# for a full build on every single commit.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+concurrency:
+  group: qa-${{ github.sha }}
+  cancel-in-progress: false # one group per commit - every commit gets its own verdict, never cancelled
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # 1. Compile + run EditMode tests. If this fails, the ticket does not pass QA.
+  # ---------------------------------------------------------------------------
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+      - uses: actions/cache@v4
+        with:
+          path: Library
+          # MV-460: Assets/** deliberately NOT in the key. It changes on every commit, so the
+          # exact key never hit, every run fell back to restore-keys AND uploaded a fresh ~GB
+          # cache. Unity reimports changed assets from a restored Library anyway.
+          # MV-517: key is scoped per-job (was identical to build's key, so whichever job
+          # saved second found the entry already there and silently skipped saving).
+          key: Library-editmode-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
+          restore-keys: Library-editmode-
+      - uses: game-ci/unity-test-runner@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+        with:
+          unityVersion: auto # reads ProjectSettings/ProjectVersion.txt
+          testMode: editmode
+          githubToken: ${{ secrets.GITHUB_TOKEN }}
+
+  # ---------------------------------------------------------------------------
+  # 2. MV-518: tell Jira this ticket passed QA. Ported from build.yml's old
+  #    jira-on-staging job, changing only the target status (QA Passed instead
+  #    of On Staging). If the QA Passed status doesn't exist yet in the Jira
+  #    workflow scheme, the transition lookup below finds nothing and warns -
+  #    it never fails the run and never blocks on needs-lee for that absence.
+  # ---------------------------------------------------------------------------
+  jira-qa-passed:
+    name: Mark tested tickets QA Passed
+    needs: [test]
+    if: success()
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Transition tested tickets to QA Passed
+        env:
+          ATLASSIAN_API_TOKEN: ${{ secrets.ATLASSIAN_API_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CURRENT_SHA: ${{ github.sha }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -uo pipefail
+          if [ -z "${ATLASSIAN_API_TOKEN:-}" ]; then
+            echo "::notice::ATLASSIAN_API_TOKEN not set - skipping Jira transition."
+            exit 0
+          fi
+          BASE=$(jq -r '.jiraBaseUrl' pipeline.config.json)
+          MAIL=$(jq -r '.jiraEmail' pipeline.config.json)
+          PKEY=$(jq -r '.jiraProjectKey' pipeline.config.json)
+          echo "Jira $BASE, project $PKEY"
+          PREV=$(curl -sS -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/$REPO/deployments?environment=github-pages&per_page=100" \
+            | jq -r --arg cur "$CURRENT_SHA" '[.[] | select(.sha != $cur)][0].sha // empty')
+          if [ -n "$PREV" ] && git cat-file -e "$PREV^{commit}" 2>/dev/null; then
+            RANGE="$PREV..$CURRENT_SHA"
+          else
+            echo "::notice::No previous deployment resolved - falling back to this push only."
+            RANGE="$CURRENT_SHA~1..$CURRENT_SHA"
+          fi
+          echo "Commit range: $RANGE"
+          KEYS=$(git log --format=%s%n%b "$RANGE" | grep -oE "$PKEY-[0-9]+" | sort -u)
+          if [ -z "$KEYS" ]; then
+            echo "::notice::No $PKEY keys in range - nothing to transition."
+            exit 0
+          fi
+          for K in $KEYS; do
+            ST=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+              "$BASE/rest/api/3/issue/$K?fields=status" | jq -r '.fields.status.name // empty')
+            if [ "$ST" != "QA Running" ] && [ "$ST" != "Developing" ]; then
+              echo "::notice::$K is $ST - leaving it alone."
+              continue
+            fi
+            TID=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+              "$BASE/rest/api/3/issue/$K/transitions" \
+              | jq -r '[.transitions[] | select(.to.name=="QA Passed")][0].id // empty')
+            if [ -z "$TID" ]; then
+              echo "::warning::$K has no QA Passed transition from $ST - skipped."
+              continue
+            fi
+            CODE=$(curl -sS -o /dev/null -w "%{http_code}" -X POST \
+              -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Content-Type: application/json" \
+              --data "{\"transition\":{\"id\":\"$TID\"}}" \
+              "$BASE/rest/api/3/issue/$K/transitions")
+            if [ "$CODE" = "204" ]; then
+              echo "$K -> QA Passed"
+              curl -sS -o /dev/null -X PUT -u "$MAIL:$ATLASSIAN_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                --data '{"update":{"labels":[{"remove":"cc-active"}]}}' \
+                "$BASE/rest/api/3/issue/$K" || true
+            else
+              echo "::warning::$K transition failed with HTTP $CODE."
+            fi
+          done
+          exit 0
