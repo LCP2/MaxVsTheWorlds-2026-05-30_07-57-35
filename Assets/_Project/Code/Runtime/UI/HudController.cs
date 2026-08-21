@@ -534,7 +534,7 @@ namespace MaxWorlds.UI
             _cellPop = Mathf.Max(0f, _cellPop - dt * 3f);
             if (_cellIcon != null)
             {
-                float s = 1f + 0.35f * _cellPop;
+                float s = 1f + CellIconPopScaleDelta * _cellPop;
                 _cellIcon.rectTransform.localScale = new Vector3(s, s, 1f);
             }
         }
@@ -1938,11 +1938,41 @@ namespace MaxWorlds.UI
         private const float CellReadoutGap = 14f;
 
         /// <summary>MV-510 review round 1 (Lee): the pill must never read louder than the hex mark it
-        /// sits under, and must not exceed the mark's own width (<see cref="WeaponsButtonSize"/>, 216).
-        /// 200 leaves a 16px margin (AC A3).</summary>
-        private const float CellCounterWidth = 200f;
+        /// sits under, and must not exceed the mark's own width (<see cref="WeaponsButtonSize"/>).
+        /// MV-510 round 2 shrank the mark 216 -&gt; 173 (x0.8); this keeps the same x0.8 ratio and
+        /// margin (200 -&gt; 160, still a proportional margin under the mark, AC A3).</summary>
+        private const float CellCounterWidth = 160f;
         private const float CellCounterHeight = 60f;
         private const float CellCounterIconSize = 44f;
+
+        /// <summary>MV-510 round 2 - the cell icon's pop-scale amplitude (<see cref="UpdateDrops"/>
+        /// scales it up to <c>1 + CellIconPopScaleDelta</c> on a bank). Named so the text inset below
+        /// can derive its reserved width from the same number the animation actually uses, instead of
+        /// two independently-authored values that can drift apart - that drift, combined with a pivot
+        /// bug, is what caused the icon/digit overlap this round fixes.</summary>
+        private const float CellIconPopScaleDelta = 0.35f;
+        private const float CellIconMaxPopScale = 1f + CellIconPopScaleDelta;
+
+        /// <summary>Gap from the pill's left edge to the icon, and from the icon to the count text.
+        /// Also used to derive <see cref="CellIconCenterX"/> and <see cref="CellCounterTextLeftInset"/>
+        /// below.</summary>
+        private const float CellIconLeftMargin = 8f;
+        private const float CellIconTextGap = 8f;
+
+        /// <summary>The icon's anchored-position X once its pivot is centred (MV-510 round 2 fix -
+        /// see the pivot note in <see cref="BuildPowerCellCounter"/>): left margin plus half the
+        /// icon's resting size, so the icon's resting left edge lands exactly at
+        /// <see cref="CellIconLeftMargin"/>.</summary>
+        private const float CellIconCenterX = CellIconLeftMargin + CellCounterIconSize * 0.5f;
+
+        /// <summary>MV-510 round 2 - the count text's left inset, derived (not hardcoded) from the
+        /// icon's own geometry so a full pop-scale animation can never reach the digits: the icon's
+        /// centre, plus its half-width at <see cref="CellIconMaxPopScale"/> (the animation's actual
+        /// peak), plus the icon-to-text gap. Replaces the old fixed <c>8 + size + 8</c> inset, which
+        /// assumed a centred pivot the icon didn't actually have (the pivot bug) and, even ignoring
+        /// that bug, left under 1px of clearance against the animated peak.</summary>
+        private const float CellCounterTextLeftInset =
+            CellIconCenterX + CellCounterIconSize * 0.5f * CellIconMaxPopScale + CellIconTextGap;
 
         /// <summary>MV-510 review round 1: the cell readout's numerals were the loudest thing on the
         /// HUD at 40pt. Capped down to sit as a visual peer with the parts count's own cap
@@ -1982,14 +2012,20 @@ namespace MaxWorlds.UI
             // A purpose-built battery cell (YT-134) — a disc read as "a thing", not "a power cell".
             // The sprite bakes its own cyan/dark, so tint white to render it as authored.
             _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Cell Icon");
-            Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
+            // MV-510 round 2 fix: pivot is now centred (was left-edge while the position math assumed
+            // centre), so anchoredPosition.x = CellIconCenterX correctly places the icon's CENTRE, not
+            // its left edge, at that x - this is the pivot bug the overlap defect traced to.
+            Anchor(_cellIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f));
             _cellIcon.rectTransform.sizeDelta = new Vector2(CellCounterIconSize, CellCounterIconSize);
-            _cellIcon.rectTransform.anchoredPosition = new Vector2(8f + CellCounterIconSize * 0.5f, 0f);
+            _cellIcon.rectTransform.anchoredPosition = new Vector2(CellIconCenterX, 0f);
             _cellIcon.raycastTarget = false;
 
             _cellCount = AddText(root, CellCounterTextMaxSize, BoneWhite, TextAnchor.MiddleLeft);
             Anchor(_cellCount.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
-            _cellCount.rectTransform.offsetMin = new Vector2(8f + CellCounterIconSize + 8f, 0f);
+            // MV-510 round 2: reserved width now derived from the icon's own max pop-scale geometry
+            // (CellCounterTextLeftInset) instead of a fixed 8+size+8 that assumed a centred pivot the
+            // icon didn't have and, even once fixed, left under 1px of clearance at full pop.
+            _cellCount.rectTransform.offsetMin = new Vector2(CellCounterTextLeftInset, 0f);
             _cellCount.rectTransform.offsetMax = new Vector2(-12f, 0f);
             _cellCount.fontStyle = FontStyle.Bold;
             _cellCount.resizeTextForBestFit = true;
@@ -2001,19 +2037,28 @@ namespace MaxWorlds.UI
         /// <summary>Hexagon bounding-box texture size THE WEAPONS button's background/ring/halo sprites
         /// bake at (MV-425, doubled MV-510) — independent of the RectTransform's own
         /// <see cref="WeaponsButtonSize"/>, which is what actually sets the tap target.</summary>
-        private const int WeaponsButtonHexTex = 216;
+        private const int WeaponsButtonHexTex = 173;
 
         /// <summary>MV-425 AC1 (the live bug that ticket fixed): 96px read 42.2pt on the 932x430pt
         /// 6-inch target (<c>SettingsPanel.Scale6Inch</c>, 0.44) — under Apple's 44pt HIG minimum.
         /// 108px -&gt; 47.5pt cleared it. <c>WeaponsButtonAlertTests</c> (EditMode) pins both the old
         /// failure and that pass. MV-510 doubled it again, 108 -&gt; 216, purely for legibility at a
         /// glance (Lee, playtest) — the 44pt HIG floor was already cleared, so this doesn't re-litigate
-        /// AC1, it just goes further.</summary>
-        private const float WeaponsButtonSize = 216f;
+        /// AC1, it just goes further. MV-510 round 2 (Lee, 2026-08-21) sized it back down: "Reduce size of
+        /// symbol by 20%." 216 x 0.8 = 172.8, rounded to 173 - still roughly 76pt at Scale6Inch, well
+        /// clear of the 44pt floor, so this doesn't re-litigate AC1 either.</summary>
+        private const float WeaponsButtonSize = 173f;
+
+        private const float WeaponsButtonRightInset = 8f;
+
+        /// <summary>MV-510 round 2: a hair of buffer past <see cref="WeaponsButtonRightInset"/> so the
+        /// module-captured halo's own antialiasing doesn't touch the exact safe-area edge (AC3).</summary>
+        private const float HaloRightSafetyMargin = 2f;
 
         /// <summary>The always-available WEAPONS button (YT-178, redrawn MV-425): a hexagonal mark —
         /// three linked nodes, a miniature of THE RIG board itself — replacing the old ABILITIES pill
-        /// in place (same anchor, same <c>(-28, 120)</c> position). All procedural: hexagons, circles,
+        /// in place (same anchor; the (-28, 120) position MV-425 gave it moved to
+        /// <see cref="WeaponsButtonRightInset"/> in MV-510 round 2). All procedural: hexagons, circles,
         /// strokes, no art asset, no font glyph (<c>HudFont</c> has no coverage for this symbol). The
         /// ring/halo are driven every frame in <see cref="UpdateWeaponsButton"/> off
         /// <see cref="WeaponsButtonAlert"/>; the two corner badges are a separate build,
@@ -2023,19 +2068,26 @@ namespace MaxWorlds.UI
             _weaponsButtonRoot = NewRect("Weapons Button", Root);
             Anchor(_weaponsButtonRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             _weaponsButtonRoot.sizeDelta = new Vector2(WeaponsButtonSize, WeaponsButtonSize);
-            _weaponsButtonRoot.anchoredPosition = new Vector2(-28f, 120f); // right edge, above the aim stick
+            _weaponsButtonRoot.anchoredPosition = new Vector2(-WeaponsButtonRightInset, 120f); // right edge, above the aim stick
 
             // Module-captured halo (double ring, MV-425 spec): behind everything else, only ever active
             // for ModuleCaptured/Both (RefreshWeaponsButtonAlert). Sized as multiples of the button's
             // own radius, same GlowRadiusMultiplier-style idiom THE RIG board's own node glow uses.
+            //
+            // MV-510 round 2: uncapped, the outer ring's own padding (halfSize * 0.42f) bleeds past the
+            // safe area's right edge by a wide margin once the mark sits only WeaponsButtonRightInset
+            // units from it (this was already true at the old 28f inset, by a smaller amount - AC3
+            // requires it actually held, not just eyeballed). The right side alone is capped to the
+            // room the mark's own position leaves; left/top/bottom keep the full authored bloom.
             _weaponsModuleHaloRoot = NewRect("Module Halo", _weaponsButtonRoot);
             Stretch(_weaponsModuleHaloRoot);
             float halfSize = WeaponsButtonSize * 0.5f;
+            float haloRightPad = Mathf.Max(0f, WeaponsButtonRightInset - HaloRightSafetyMargin);
             _weaponsModuleHaloOuter = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Outer");
-            Stretch(_weaponsModuleHaloOuter.rectTransform, halfSize * 0.42f); // r*1.42
+            StretchCapRight(_weaponsModuleHaloOuter.rectTransform, halfSize * 0.42f, haloRightPad); // r*1.42
             _weaponsModuleHaloOuter.raycastTarget = false;
             _weaponsModuleHaloInner = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Inner");
-            Stretch(_weaponsModuleHaloInner.rectTransform, halfSize * 0.24f); // r*1.24
+            StretchCapRight(_weaponsModuleHaloInner.rectTransform, halfSize * 0.24f, haloRightPad); // r*1.24
             _weaponsModuleHaloInner.raycastTarget = false;
             _weaponsModuleHaloRoot.gameObject.SetActive(false);
 
@@ -2222,6 +2274,16 @@ namespace MaxWorlds.UI
             r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one; r.pivot = new Vector2(0.5f, 0.5f);
             r.offsetMin = new Vector2(-padding, -padding);
             r.offsetMax = new Vector2(padding, padding);
+        }
+
+        /// <summary>MV-510 round 2 - <see cref="Stretch"/> with the right-side padding independently
+        /// capped (e.g. so a decorative glow doesn't bleed past a nearby safe-area edge on that one
+        /// side, while still blooming out to <paramref name="padding"/> everywhere else).</summary>
+        private static void StretchCapRight(RectTransform r, float padding, float rightPadding)
+        {
+            r.anchorMin = Vector2.zero; r.anchorMax = Vector2.one; r.pivot = new Vector2(0.5f, 0.5f);
+            r.offsetMin = new Vector2(-padding, -padding);
+            r.offsetMax = new Vector2(Mathf.Min(padding, rightPadding), padding);
         }
 
         private static void Center(RectTransform r, float size)
