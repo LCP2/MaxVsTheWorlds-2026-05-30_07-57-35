@@ -63,33 +63,25 @@ namespace MaxWorlds.Tests.EditMode
 
         private static float Brightness(Color c) => (c.r + c.g + c.b) * c.a;
 
-        // ---------- MV-358: the badge is shared between banked parts and banked ability credits ----------
+        // ---------- MV-358/MV-519: the badge follows banked ability credits alone (a Supercell never banks) ----------
 
         [Test]
         public void TheAlertIsHiddenWhenNothingIsBanked()
         {
-            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 0), Is.False);
+            Assert.That(HudController.ShouldShowSupercellAlert(abilityCreditsBanked: 0), Is.False);
         }
 
         [Test]
-        public void TheAlertShowsForABankedPartAlone()
+        public void TheAlertShowsForABankedAbilityCredit_MV358()
         {
-            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 1, abilityCreditsBanked: 0), Is.True);
+            Assert.That(HudController.ShouldShowSupercellAlert(abilityCreditsBanked: 1), Is.True);
         }
 
         [Test]
-        public void TheAlertShowsForABankedAbilityCreditAlone_MV358()
+        public void TheAlertClearsOnceTheCreditIsSpent_MV358()
         {
-            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 1), Is.True);
-        }
-
-        [Test]
-        public void TheAlertClearsOnlyOnceBothKindsAreFullySpent_MV358()
-        {
-            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 1, abilityCreditsBanked: 1), Is.True);
-            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 1), Is.True,
-                "an ability credit is still banked — the flash must not clear yet");
-            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 0), Is.False,
+            Assert.That(HudController.ShouldShowSupercellAlert(abilityCreditsBanked: 1), Is.True);
+            Assert.That(HudController.ShouldShowSupercellAlert(abilityCreditsBanked: 0), Is.False,
                 "nothing left banked — the flash must clear");
         }
     }

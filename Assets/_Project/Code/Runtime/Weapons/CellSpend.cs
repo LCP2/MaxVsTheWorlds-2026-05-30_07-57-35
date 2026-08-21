@@ -6,10 +6,11 @@ namespace MaxWorlds.Weapons
     /// <summary>
     /// Spends banked POWER CELLS on THE RIG board (MV-458) — cells are the primary progression
     /// currency for both a node's 0-&gt;1 unlock and its further levels. MV-515: unlocking is cells-only
-    /// again — a Supercell is no longer an unlock requirement, it is a banked 10-cell top-up cashed in
-    /// explicitly (<see cref="MaxWorlds.Pickups.PickupWallet.TryCashSupercell"/>), retiring MV-492's
-    /// two-currency unlock gate. Same "check the sink can accept it BEFORE touching the bank" order
-    /// every other spend in this codebase follows.
+    /// again — a Supercell is no longer an unlock requirement; MV-519 went further and retired the
+    /// banked-Supercell concept outright — it grants <see cref="MaxWorlds.Pickups.PickupWallet.SupercellCellValue"/>
+    /// cells the instant it's picked up (<see cref="MaxWorlds.Pickups.PickupWallet.AddSupercell"/>).
+    /// Same "check the sink can accept it BEFORE touching the bank" order every other spend in this
+    /// codebase follows.
     /// </summary>
     public static class CellSpend
     {

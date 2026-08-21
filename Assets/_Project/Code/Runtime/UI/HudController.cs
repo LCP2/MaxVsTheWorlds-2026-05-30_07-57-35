@@ -227,15 +227,17 @@ namespace MaxWorlds.UI
         private Image _moduleBadgeGlow, _moduleBadgeBg;
         private Text _moduleBadgeMark;
 
-        // MV-471: the always-on parts counter attached to THE RIG mark itself — replacing the old
-        // "Parts Badge" that only appeared while a part was banked, regardless of whether that part
-        // could actually buy anything. Stays visible and flashes only off RigActions' own
-        // affordability check, never off "you are holding something". Its cell-side twin (the old
-        // bare-number chip below the mark) is gone as of MV-510 — the moved power-cell readout
-        // (_cellCounterRoot et al. above) took its slot and its flash instead.
-        private RectTransform _rigPartCounterRoot;
-        private Image _rigPartCounterGlow, _rigPartCounterBg;
-        private Text _rigPartCounterText;
+        // MV-519: the Supercell "definite pickup event" — a burst at the pickup point plus a "+10"
+        // that flies to the cell readout, self-terminating (see SupercellPickupEffect). Replaces the
+        // MV-471/MV-515 always-on "Rig Part Counter" chip, which is gone outright (no banked Supercell
+        // tally left to show, no flashing edge icon left on screen between pickups).
+        private RectTransform _supercellFxRoot;
+        private Image _supercellFxBurst;
+        private Text _supercellFxLabel;
+        private bool _supercellFxActive;
+        private float _supercellFxAge;
+        private Vector2 _supercellFxStart, _supercellFxEnd;
+        private int _supercellFxFromCells, _supercellFxToCells;
 
         private void Awake()
         {
@@ -266,6 +268,7 @@ namespace MaxWorlds.UI
             BuildPowerCellCounter(); // parents onto _weaponsButtonRoot — must follow BuildWeaponsButton
             BuildWeaponsButtonBadges();
             BuildFloatingLayer();
+            BuildSupercellFx(); // must follow BuildPowerCellCounter — travels toward _cellCounterRoot
             if (!SkipTouchControlsForTests) BuildTouchControls();
 
             _model.Boss.ActiveChanged += OnBossActiveChanged;
@@ -275,6 +278,7 @@ namespace MaxWorlds.UI
         {
             HudSignals.DamageDealt += OnDamage;
             HudSignals.Pickup += OnPickup;
+            HudSignals.SupercellCollected += OnSupercellCollected;
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryRegistered += OnFactoryRegistered;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
@@ -284,7 +288,6 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated += OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
-            MaxWorlds.Pickups.PickupWallet.SupercellsChanged += OnSupercells;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
             AbilityCreditBank.Changed += OnAbilityCreditsChanged;
@@ -295,6 +298,7 @@ namespace MaxWorlds.UI
         {
             HudSignals.DamageDealt -= OnDamage;
             HudSignals.Pickup -= OnPickup;
+            HudSignals.SupercellCollected -= OnSupercellCollected;
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryRegistered -= OnFactoryRegistered;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
@@ -304,7 +308,6 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated -= OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
-            MaxWorlds.Pickups.PickupWallet.SupercellsChanged -= OnSupercells;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
             AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
@@ -335,7 +338,7 @@ namespace MaxWorlds.UI
 
         private void OnPowerCells(int total)
         {
-            if (_cellCount != null) _cellCount.text = $"{total}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
+            SetCellCountDisplay(total, MaxWorlds.Pickups.PickupWallet.Capacity);
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
         }
 
@@ -343,21 +346,37 @@ namespace MaxWorlds.UI
         /// didn't change, but the "current/max" text still needs to redraw for the new max.</summary>
         private void OnCellCapacity(int capacity)
         {
-            if (_cellCount != null) _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{capacity}";
+            SetCellCountDisplay(MaxWorlds.Pickups.PickupWallet.PowerCells, capacity);
         }
 
-        private void OnSupercells(int banked) => RefreshWeaponsButtonAlert();
+        /// <summary>MV-519 Change item 5: an over-cap balance (a Supercell pushed <paramref name="count"/>
+        /// past <paramref name="capacity"/>) must read as a deliberate bonus, not a bug — tinted the same
+        /// amber a Supercell glows, instead of the readout's usual bone-white. Every place that draws the
+        /// cell readout's text (the ordinary bank/capacity events AND <see cref="UpdateSupercellFx"/>'s
+        /// own count-up/settle) goes through here so the colour can never drift out of sync with the
+        /// number it's tinting.</summary>
+        private void SetCellCountDisplay(int count, int capacity)
+        {
+            if (_cellCount == null) return;
+            _cellCount.text = $"{count}/{capacity}";
+            _cellCount.color = count > capacity ? SupercellColor : BoneWhite;
+        }
 
-        /// <summary>MV-358: a banked shed credit flashes the exact same WEAPONS-button badge a cashable
-        /// Supercell already does — "something is waiting in the Abilities screen", regardless of which
-        /// kind — rather than a separate tell the player has to learn twice.</summary>
+        /// <summary>MV-519: a Supercell now grants its cells instantly — this drives the burst/flyup/
+        /// count-up event, not a banked-count tally (that chip is gone; see the FX fields' own doc
+        /// comment).</summary>
+        private void OnSupercellCollected(Vector3 worldPos, int cellsBefore, int cellsAfter) =>
+            StartSupercellFx(worldPos, cellsBefore, cellsAfter);
+
+        /// <summary>MV-358: a banked shed credit flashes the WEAPONS-button badge — "something is
+        /// waiting in the Abilities screen" — the same way a captured module does.</summary>
         private void OnAbilityCreditsChanged(int banked) => RefreshWeaponsButtonAlert();
 
         /// <summary>MV-425: a Morphing Module draft banked/taken (<see cref="PendingMorphingModule"/>)
         /// flips the button's cyan "module captured" state.</summary>
         private void OnPendingModuleChanged() => RefreshWeaponsButtonAlert();
 
-        /// <summary>The four-state alert this button carries (MV-425): idle, supercell-to-cash (amber),
+        /// <summary>The four-state alert this button carries (MV-425): idle, parts-to-fit (amber),
         /// module-captured (cyan) or both. Immediate toggle of what's shown; the pulse/flash animation
         /// itself runs every frame in <see cref="UpdateWeaponsButton"/>.</summary>
         private void RefreshWeaponsButtonAlert()
@@ -365,28 +384,20 @@ namespace MaxWorlds.UI
             var alert = CurrentWeaponsButtonAlert();
             if (_moduleBadgeRoot != null) _moduleBadgeRoot.gameObject.SetActive(ShowsModuleBadge(alert));
             if (_weaponsModuleHaloRoot != null) _weaponsModuleHaloRoot.gameObject.SetActive(ShowsModuleRing(alert));
-            if (_rigPartCounterText != null)
-                _rigPartCounterText.text = (MaxWorlds.Pickups.PickupWallet.SupercellsBanked + AbilityCreditBank.Banked).ToString();
         }
 
-        /// <summary>MV-471/MV-515: the ring's amber "supercell to cash" state tracks the same "is cashing
-        /// a Supercell actually possible" question as the RIG-mark counter
-        /// (<see cref="RigActions.AnySupercellActionAffordable"/>) instead of "are you merely holding
-        /// one" — a banked ability credit is always immediately spendable (BUILD ABILITY never fails
-        /// while one is banked), so it still counts on its own.</summary>
+        /// <summary>MV-519: the ring's amber "parts to fit" state now tracks banked ability credits
+        /// alone — a Supercell is never banked anymore (<see cref="MaxWorlds.Pickups.PickupWallet.AddSupercell"/>
+        /// grants instantly, nothing left to flag an alert over).</summary>
         private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
-            AnySupercellAlertActionable(),
+            AbilityCreditBank.Banked > 0,
             PendingMorphingModule.HasPending);
 
-        private static bool AnySupercellAlertActionable() =>
-            RigActions.AnySupercellActionAffordable(MaxWorlds.Pickups.PickupWallet.SupercellsBanked,
-                MaxWorlds.Pickups.PickupWallet.PowerCells, MaxWorlds.Pickups.PickupWallet.Capacity) ||
-            AbilityCreditBank.Banked > 0;
-
-        /// <summary>Pure predicate (MV-358) — pinned by an EditMode test without building a canvas: a
-        /// spend is waiting if either kind of banked token is &gt; 0.</summary>
-        public static bool ShouldShowSupercellAlert(int supercellsBanked, int abilityCreditsBanked) =>
-            supercellsBanked > 0 || abilityCreditsBanked > 0;
+        /// <summary>Pure predicate (MV-358, dropped its Supercell half MV-519 — a Supercell is never
+        /// banked anymore) — pinned by an EditMode test without building a canvas: a spend is waiting
+        /// if a shed ability credit is banked.</summary>
+        public static bool ShouldShowSupercellAlert(int abilityCreditsBanked) =>
+            abilityCreditsBanked > 0;
 
         /// <summary>The WEAPONS button's four alert states (MV-425). Amber ("supercell to cash") means
         /// something is spendable and the player chooses when; cyan ("module captured") means the game
@@ -525,6 +536,7 @@ namespace MaxWorlds.UI
             UpdateWarnings(dt);
             UpdateDrops(dt);
             UpdateWeaponsButton();
+            UpdateSupercellFx(Time.unscaledDeltaTime);
             FlushDamageNumbers();
         }
 
@@ -537,6 +549,84 @@ namespace MaxWorlds.UI
                 float s = 1f + CellIconPopScaleDelta * _cellPop;
                 _cellIcon.rectTransform.localScale = new Vector3(s, s, 1f);
             }
+        }
+
+        /// <summary>MV-519: kicks off the Supercell "definite pickup event" — a burst at the pickup
+        /// point plus a "+10" that flies to the cell readout. Projects the pickup's world position into
+        /// <see cref="_supercellFxRoot"/>'s local space via the gameplay camera (same technique
+        /// <see cref="FloatingTextLayer"/> uses for pickup toasts); silently does nothing if that
+        /// projection fails (point behind the camera, no camera at all) rather than start an effect that
+        /// can never reach its destination.</summary>
+        private void StartSupercellFx(Vector3 worldPos, int cellsBefore, int cellsAfter)
+        {
+            if (_supercellFxRoot == null || _cellCounterRoot == null) return;
+            Camera cam = _worldCamera != null ? _worldCamera : Camera.main;
+            if (cam == null) return;
+
+            Vector3 sp = cam.WorldToScreenPoint(worldPos + Vector3.up * 1.6f);
+            if (sp.z < 0f) return; // behind the camera
+            Camera uiCam = _canvas != null && _canvas.renderMode == RenderMode.ScreenSpaceOverlay ? null : cam;
+            if (!RectTransformUtility.ScreenPointToLocalPointInRectangle(_supercellFxRoot, sp, uiCam, out _supercellFxStart))
+                return;
+
+            _supercellFxEnd = _supercellFxRoot.InverseTransformPoint(_cellCounterRoot.position);
+            _supercellFxFromCells = cellsBefore;
+            _supercellFxToCells = cellsAfter;
+            _supercellFxAge = 0f;
+            _supercellFxActive = true;
+            _cellPop = 1f;
+
+            if (_supercellFxBurst != null)
+            {
+                _supercellFxBurst.gameObject.SetActive(true);
+                _supercellFxBurst.rectTransform.anchoredPosition = _supercellFxStart;
+            }
+            if (_supercellFxLabel != null)
+            {
+                _supercellFxLabel.gameObject.SetActive(true);
+                _supercellFxLabel.text = $"+{MaxWorlds.Pickups.PickupWallet.SupercellCellValue}";
+                _supercellFxLabel.rectTransform.anchoredPosition = _supercellFxStart;
+            }
+        }
+
+        /// <summary>Drives the active Supercell pickup event, if any, off the pure curves in
+        /// <see cref="SupercellPickupEffect"/> — self-terminating: once <paramref name="unscaledDt"/>
+        /// has carried <see cref="_supercellFxAge"/> past <see cref="SupercellPickupEffect.Duration"/>,
+        /// the burst and the flyup label both deactivate and the readout settles on the real, final
+        /// <see cref="MaxWorlds.Pickups.PickupWallet.PowerCells"/> total — nothing is left on screen.</summary>
+        private void UpdateSupercellFx(float unscaledDt)
+        {
+            if (!_supercellFxActive) return;
+
+            _supercellFxAge += unscaledDt;
+            if (!SupercellPickupEffect.IsActive(_supercellFxAge))
+            {
+                _supercellFxActive = false;
+                if (_supercellFxBurst != null) _supercellFxBurst.gameObject.SetActive(false);
+                if (_supercellFxLabel != null) _supercellFxLabel.gameObject.SetActive(false);
+                SetCellCountDisplay(MaxWorlds.Pickups.PickupWallet.PowerCells, MaxWorlds.Pickups.PickupWallet.Capacity);
+                return;
+            }
+
+            float age = _supercellFxAge;
+            if (_supercellFxBurst != null)
+            {
+                float s = SupercellPickupEffect.BurstScale(age);
+                _supercellFxBurst.rectTransform.localScale = new Vector3(s, s, 1f);
+                var bc = SupercellColor;
+                bc.a = SupercellPickupEffect.BurstAlpha(age);
+                _supercellFxBurst.color = bc;
+            }
+            if (_supercellFxLabel != null)
+            {
+                _supercellFxLabel.rectTransform.anchoredPosition =
+                    Vector2.Lerp(_supercellFxStart, _supercellFxEnd, SupercellPickupEffect.TravelT(age));
+                var lc = SupercellColor;
+                lc.a = SupercellPickupEffect.LabelAlpha(age);
+                _supercellFxLabel.color = lc;
+            }
+            int liveCount = SupercellPickupEffect.CountAt(_supercellFxFromCells, _supercellFxToCells, age);
+            SetCellCountDisplay(liveCount, MaxWorlds.Pickups.PickupWallet.Capacity);
         }
 
         /// <summary>
@@ -626,22 +716,11 @@ namespace MaxWorlds.UI
             UpdateRigCounters();
         }
 
-        /// <summary>MV-471/MV-515: redraws both always-on RIG-mark counters every frame — live count text
-        /// plus a flash that engages only when <see cref="RigActions"/> says that currency actually buys
-        /// something right now. A banked ability credit is always instantly spendable, so it counts
-        /// toward the SUPERCELL counter's flash the same way it does for the ring, <see cref="AnySupercellAlertActionable"/>.</summary>
+        /// <summary>MV-471 (MV-519 dropped its part-counter half — that chip is gone): redraws the
+        /// always-on cell readout's flash every frame, which engages only when <see cref="RigActions"/>
+        /// says cells actually buy something right now.</summary>
         private void UpdateRigCounters()
         {
-            int supercellsBanked = MaxWorlds.Pickups.PickupWallet.SupercellsBanked;
-            int creditsBanked = AbilityCreditBank.Banked;
-            if (_rigPartCounterRoot != null)
-            {
-                if (_rigPartCounterText != null) _rigPartCounterText.text = (supercellsBanked + creditsBanked).ToString();
-                bool actionable = RigActions.AnySupercellActionAffordable(supercellsBanked,
-                    MaxWorlds.Pickups.PickupWallet.PowerCells, MaxWorlds.Pickups.PickupWallet.Capacity) || creditsBanked > 0;
-                SetRigCounterFlash(_rigPartCounterRoot, _rigPartCounterBg, _rigPartCounterGlow, SupercellColor, actionable);
-            }
-
             if (_cellCounterRoot != null)
             {
                 // Text itself is kept current by OnPowerCells/OnCellCapacity — this only drives the
@@ -1931,10 +2010,9 @@ namespace MaxWorlds.UI
             _warning.gameObject.SetActive(false);
         }
 
-        /// <summary>Gap between THE WEAPONS button's hex mark and the counter chip/readout on either
-        /// side of it (MV-471's original 6f, kept for the parts chip above; MV-510 gives the larger
-        /// cell readout below its own, roomier gap so it doesn't crowd the doubled mark).</summary>
-        private const float RigCounterGap = 6f;
+        /// <summary>Gap between THE WEAPONS button's hex mark and the cell readout below it (MV-510 —
+        /// roomier than the old parts chip's gap so it doesn't crowd the doubled mark; MV-519 removed
+        /// that parts chip outright, leaving this readout the mark's only counter).</summary>
         private const float CellReadoutGap = 14f;
 
         /// <summary>MV-510 review round 1 (Lee): the pill must never read louder than the hex mark it
@@ -1975,8 +2053,8 @@ namespace MaxWorlds.UI
             CellIconCenterX + CellCounterIconSize * 0.5f * CellIconMaxPopScale + CellIconTextGap;
 
         /// <summary>MV-510 review round 1: the cell readout's numerals were the loudest thing on the
-        /// HUD at 40pt. Capped down to sit as a visual peer with the parts count's own cap
-        /// (<see cref="RigPartTextMaxSize"/>), not above it (AC A1).</summary>
+        /// HUD at 40pt. Capped down to a calmer size (AC A1) — MV-519 later removed the parts chip this
+        /// used to sit as a peer with; the cap itself is unchanged.</summary>
         private const float CellCounterTextMinSize = 20f;
         private const float CellCounterTextMaxSize = 32f;
 
@@ -2134,69 +2212,7 @@ namespace MaxWorlds.UI
             _moduleBadgeMark.fontStyle = FontStyle.Bold;
             _moduleBadgeMark.raycastTarget = false;
 
-            BuildRigPartCounter();
-
             RefreshWeaponsButtonAlert();
-        }
-
-        /// <summary>MV-425's hex-nut-and-bolt glyph for the PART counter (MV-510 item 6 — mirror the
-        /// cell readout's icon-plus-number, so both counters read the same way). Plain geometry via
-        /// <see cref="HudTextures.VectorIcon"/>, the same idiom THE WEAPONS button's own mark uses —
-        /// no font glyph, no committed art.</summary>
-        private const string RigPartGlyphSvg =
-            "<path d=\"M0,-11 L9.5,-5.5 L9.5,5.5 L0,11 L-9.5,5.5 L-9.5,-5.5 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/>" +
-            "<circle cx=\"0\" cy=\"0\" r=\"3.2\" fill=\"#ICON#\" stroke=\"none\"/>";
-
-        private const float RigPartChipWidth = 110f;
-        private const float RigPartChipHeight = 48f;
-        private const float RigPartTextMinSize = 20f;
-
-        /// <summary>MV-510 review round 1 (AC A1): kept equal to <see cref="CellCounterTextMaxSize"/>
-        /// so the two resolved best-fit sizes land as peers, not just "close by construction".</summary>
-        private const float RigPartTextMaxSize = CellCounterTextMaxSize;
-        private const float RigPartIconSize = 26f;
-
-        /// <summary>MV-471: the always-on PART count above the mark, replacing the old "Parts Badge"
-        /// corner chip that only showed up while a part was banked. <see cref="UpdateRigCounters"/>
-        /// drives its text and flash every frame. MV-510 enlarged the text (18 -&gt; <see cref="RigPartTextMaxSize"/>)
-        /// and gave it its own icon, matching the moved cell readout below the mark; its old cell-side
-        /// twin is gone (that value now lives in the moved readout, see <see cref="BuildPowerCellCounter"/>).
-        /// Review round 1 also made it best-fit driven, matching the cell readout's own mechanism.</summary>
-        private void BuildRigPartCounter()
-        {
-            var root = NewRect("Rig Part Counter", _weaponsButtonRoot);
-            Anchor(root, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 0f));
-            root.sizeDelta = new Vector2(RigPartChipWidth, RigPartChipHeight);
-            root.anchoredPosition = new Vector2(0f, RigCounterGap);
-            _rigPartCounterRoot = root;
-
-            _rigPartCounterGlow = AddImage(root, HudTextures.RoundedBox(64, 0.5f), Color.clear, "Glow Ring");
-            Stretch(_rigPartCounterGlow.rectTransform, 6f); // expands beyond the chip as a halo
-            _rigPartCounterGlow.type = Image.Type.Sliced;
-            _rigPartCounterGlow.raycastTarget = false;
-
-            _rigPartCounterBg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), PanelColor, "Chip");
-            Stretch(_rigPartCounterBg.rectTransform); _rigPartCounterBg.type = Image.Type.Sliced;
-            _rigPartCounterBg.raycastTarget = false; // the WEAPONS button underneath handles taps
-
-            var icon = AddImage(root, HudTextures.VectorIcon(RigPartGlyphSvg, 40), BoneWhite, "Part Icon");
-            Anchor(icon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
-            icon.rectTransform.sizeDelta = new Vector2(RigPartIconSize, RigPartIconSize);
-            icon.rectTransform.anchoredPosition = new Vector2(8f + RigPartIconSize * 0.5f, 0f);
-            icon.raycastTarget = false;
-
-            _rigPartCounterText = AddText(root, RigPartTextMaxSize, BoneWhite, TextAnchor.MiddleRight);
-            Anchor(_rigPartCounterText.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
-            _rigPartCounterText.rectTransform.offsetMin = new Vector2(8f + RigPartIconSize + 4f, 0f);
-            _rigPartCounterText.rectTransform.offsetMax = new Vector2(-8f, 0f);
-            _rigPartCounterText.fontStyle = FontStyle.Bold;
-            // MV-510 review round 1 (AC A1): best-fit driven, like the cell readout, so the "roughly
-            // the same optical size" requirement is a resolved-value fact, not two independently
-            // authored constants that happen to match today.
-            _rigPartCounterText.resizeTextForBestFit = true;
-            _rigPartCounterText.resizeTextMinSize = (int)RigPartTextMinSize;
-            _rigPartCounterText.resizeTextMaxSize = (int)RigPartTextMaxSize;
-            _rigPartCounterText.raycastTarget = false;
         }
 
         private RectTransform BuildCornerBadge(string name, Vector2 corner, Vector2 offset, out Image glow, out Image bg)
@@ -2227,6 +2243,29 @@ namespace MaxWorlds.UI
             Stretch(rect);
             _floating = go.AddComponent<FloatingTextLayer>();
             _floating.Init(rect, _canvas, _worldCamera);
+        }
+
+        /// <summary>MV-519: a full-stretch layer the Supercell pickup event's burst + "+10" flyup live
+        /// on — parented at <see cref="FullRoot"/>, same as <see cref="_floating"/>, so a world position
+        /// projects into it exactly the same way pickup toasts already do. Both children start inactive;
+        /// <see cref="StartSupercellFx"/> activates them per event.</summary>
+        private void BuildSupercellFx()
+        {
+            var root = NewRect("Supercell FX", FullRoot);
+            Stretch(root);
+            _supercellFxRoot = root;
+
+            _supercellFxBurst = AddImage(root, HudTextures.RoundedBox(64, 0.5f), SupercellColor, "Burst");
+            Anchor(_supercellFxBurst.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _supercellFxBurst.rectTransform.sizeDelta = new Vector2(40f, 40f);
+            _supercellFxBurst.raycastTarget = false;
+            _supercellFxBurst.gameObject.SetActive(false);
+
+            _supercellFxLabel = AddText(root, 30f, SupercellColor, TextAnchor.MiddleCenter);
+            Anchor(_supercellFxLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _supercellFxLabel.rectTransform.sizeDelta = new Vector2(160f, 50f);
+            _supercellFxLabel.fontStyle = FontStyle.Bold;
+            _supercellFxLabel.gameObject.SetActive(false);
         }
 
         // ---------- small UI helpers ----------

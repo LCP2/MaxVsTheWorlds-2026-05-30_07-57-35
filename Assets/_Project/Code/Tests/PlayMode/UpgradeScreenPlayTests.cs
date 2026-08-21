@@ -70,11 +70,12 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator ContinueInstallsThePartAndResumes()
         {
-            // MV-515: this legacy, unreachable screen no longer spends a Supercell on dismiss — a
-            // Supercell is cashed explicitly via THE RIG's tray now, never implied by an upgrade reveal.
+            // MV-515/MV-519: this legacy, unreachable screen never spends cells on dismiss — a
+            // Supercell grants its cells the instant it's picked up now, never implied by an upgrade
+            // reveal, so a cell balance banked before Open() must survive Continue() untouched.
             yield return NewScreen();
             PickupWallet.AddSupercell();
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.SupercellCellValue));
 
             Screen.Open(UpgradePart.Generic);
             yield return null;
@@ -83,7 +84,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(Screen.IsOpen, Is.False, "the screen didn't close");
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the game must resume to its previous speed on dismiss");
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "MV-515: dismissing no longer spends a Supercell");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.SupercellCellValue), "dismissing must not spend cells");
         }
 
         [UnityTest]
@@ -275,15 +276,15 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OpenStatusDoesNotInstallOrSpendAnything()
         {
             yield return NewScreen();
-            PickupWallet.AddSupercell();   // left banked on purpose
+            PickupWallet.AddSupercell();   // banked cells left on the wallet on purpose
 
             Screen.OpenStatus();
             yield return null;
             Screen.Continue();
             yield return null;
 
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1),
-                "opening the weapons area on demand must not spend a banked part");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.SupercellCellValue),
+                "opening the weapons area on demand must not spend banked cells");
             Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False,
                 "opening the weapons area on demand must not install anything");
         }
@@ -338,10 +339,10 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ChoosingACandidateDoesNotSpendABankedSupercell()
+        public IEnumerator ChoosingACandidateDoesNotSpendBankedCells()
         {
-            // MV-515: a Supercell is cashed explicitly via THE RIG's tray now, never implied by
-            // confirming an upgrade choice on this legacy, unreachable screen.
+            // MV-519: a Supercell grants its cells instantly on pickup, never implied by confirming an
+            // upgrade choice on this legacy, unreachable screen.
             yield return NewScreen();
             PickupWallet.AddSupercell();
             Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
@@ -350,7 +351,7 @@ namespace MaxWorlds.Tests.PlayMode
             FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();
             yield return null;
 
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "MV-515: confirming a choice no longer spends a Supercell");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(PickupWallet.SupercellCellValue), "MV-519: confirming a choice must not spend cells");
         }
 
         [UnityTest]

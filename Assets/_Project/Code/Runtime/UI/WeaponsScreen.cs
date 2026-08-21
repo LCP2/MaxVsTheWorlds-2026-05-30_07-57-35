@@ -20,11 +20,12 @@ namespace MaxWorlds.UI
     /// (MV-465 retired the EditMode coordinate assertions), so this class never re-derives a
     /// position; if a layout decision isn't in the JSON, it doesn't belong here.
     ///
-    /// Top bar keeps its existing geometry (28/104 inset/height), CLOSE, QUIT TO MENU and the CELLS
-    /// chip; SUPERCELLS is a tappable six-socket tray (MV-515: cashes one for 10 cells) and PAUSED is
-    /// gone (there's no room and no need — the
-    /// screen's own presence already says the game is paused). Self-installing pause-on-open overlay,
-    /// same idiom as every other full-screen panel (UpgradeScreen/HomeScreen/ResultScreen).
+    /// Top bar keeps its existing geometry (28/104 inset/height), CLOSE and QUIT TO MENU; PAUSED is
+    /// gone (there's no room and no need — the screen's own presence already says the game is paused).
+    /// MV-519: the SUPERCELLS tray is gone too — a Supercell grants its cells the instant it's picked
+    /// up, never banked or cashed here — leaving the CELLS chip as the bar's one, deliberately dominant
+    /// currency readout. Self-installing pause-on-open overlay, same idiom as every other full-screen
+    /// panel (UpgradeScreen/HomeScreen/ResultScreen).
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class WeaponsScreen : MonoBehaviour
@@ -91,11 +92,6 @@ namespace MaxWorlds.UI
         // now) — 0 is what actually puts a vertex at 0/90/180/270 under the corrected formula.
         private const float FusionRotationDeg = 0f;
         private const float Sqrt3 = 1.7320508f;
-        // MV-445 defect 6: was 34 — at that size, 6 sockets (socketsWidth 224px) did not fit the
-        // socket row's own available half of BuildSupercellTray's old fixed 340px width (154px), so the
-        // pips ran past the tray's own edge. Lowered alongside BuildSupercellTray's move to a
-        // content-sized width (see that method's own doc comment).
-        private const float SupercellsSocketSize = 26f;
 
         // MV-433: owned/lit-category halo canvas size as a multiple of the node's own hex bounds.
         // MV-446 defect 2 AC: must not exceed 1.25 (the halo's rect vs. the node radius) — headroom for
@@ -143,14 +139,6 @@ namespace MaxWorlds.UI
         private Image _cellsChipBg;
         private Image _cellsBorder;
         private Button _cellsChipButton;
-
-        private Image _supercellsTrayBg;
-        private Image _supercellsTrayBorder;
-        private Button _supercellsTrayButton;
-        private Text _supercellsTrayLabel, _supercellsTraySub;
-        private readonly List<Image> _supercellsSockets = new List<Image>();
-        private readonly List<Image> _supercellsSocketGlows = new List<Image>();
-        private Text _supercellsOverflowText;
 
         private readonly Dictionary<string, RigNodeVisual> _abilityNodes = new Dictionary<string, RigNodeVisual>();
         private readonly Dictionary<string, RigNodeVisual> _categoryNodes = new Dictionary<string, RigNodeVisual>();
@@ -229,9 +217,6 @@ namespace MaxWorlds.UI
         /// can sample a known full-alpha pixel for its named-colour probe.</summary>
         public Image CellsBorder => _cellsBorder;
 
-        /// <summary>MV-463: the SUPERCELL tray's own amber border — see <see cref="CellsBorder"/>.</summary>
-        public Image SupercellsBorder => _supercellsTrayBorder;
-
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
         /// space regardless of this wrapper's scale) — test-only access to confirm the clamp applied.</summary>
@@ -243,7 +228,6 @@ namespace MaxWorlds.UI
         {
             RigState.Changed += Refresh;
             RigFusionState.Changed += Refresh;
-            PickupWallet.SupercellsChanged += OnSupercellsChanged;
             PickupWallet.PowerCellsChanged += OnCellsChanged;
             PickupWallet.CapacityChanged += OnCellsChanged;
         }
@@ -252,7 +236,6 @@ namespace MaxWorlds.UI
         {
             RigState.Changed -= Refresh;
             RigFusionState.Changed -= Refresh;
-            PickupWallet.SupercellsChanged -= OnSupercellsChanged;
             PickupWallet.PowerCellsChanged -= OnCellsChanged;
             PickupWallet.CapacityChanged -= OnCellsChanged;
         }
@@ -262,18 +245,6 @@ namespace MaxWorlds.UI
             // Never leave the world frozen if we're torn down mid-open (a scene swap, a test).
             if (_open) Time.timeScale = _prevTimeScale;
             if (_canvas != null) Destroy(_canvas.gameObject);
-        }
-
-        /// <summary>The SUPERCELL tray's glow-ring alpha, 0..1 (MV-327, carried over; MV-515: pulses
-        /// only while cashing one is actually possible, not merely while one is banked) — a pure
-        /// function so the beat is pinned by an EditMode test without building a canvas. Zero unless
-        /// <paramref name="cashable"/>; otherwise the same trough/peak sine beat every "something is
-        /// waiting" tell on this HUD uses.</summary>
-        public static float SupercellsGlowAlpha(float unscaledTime, bool cashable)
-        {
-            if (!cashable) return 0f;
-            float t = 0.5f + 0.5f * Mathf.Sin(unscaledTime * 6f);
-            return 0.5f * t;
         }
 
         /// <summary>MV-469/MV-515: every legal spend a board node's own button can currently perform —
@@ -295,7 +266,7 @@ namespace MaxWorlds.UI
         /// alpha <paramref name="baseAlpha"/> already carries — "a node the player can act on RIGHT NOW
         /// pulses slowly and unmistakably ... the hexagon FILL and OUTLINE, not just the thin outer
         /// ring." Pure so the cadence is pinned by an EditMode test without building a canvas or
-        /// advancing <see cref="Time"/>, same idiom as <see cref="SupercellsGlowAlpha"/>. 1 rad/s — a
+        /// advancing <see cref="Time"/>. 1 rad/s — a
         /// third of OuterRing's own 3 rad/s pulse (<see cref="Update"/>) — reads as an invitation, not
         /// an alarm, per the ticket's own "Do not re-raise: whether the pulse should be fast — no, slow,
         /// roughly 1 Hz." <paramref name="spendable"/> MUST be the exact same predicate
@@ -394,15 +365,6 @@ namespace MaxWorlds.UI
                 ApplyBoardScale();
             }
 
-            if (_supercellsTrayBg != null)
-            {
-                bool cashable = CanCashSupercell();
-                var glow = SupercellColor;
-                glow.a = 0.25f + SupercellsGlowAlpha(Time.unscaledTime, cashable);
-                // Only the tray's own outline breathes; a tray with nothing cashable stays flat.
-                if (cashable) _supercellsTrayBg.color = glow;
-            }
-
             // The draftable-capability dashed ring pulses (ticket: "Left to you — the pulse rate on a
             // draftable capability"). Chosen: same family the SUPERCELL glow uses, twice as slow, so the
             // two "something's waiting" tells read as related but distinct.
@@ -466,15 +428,7 @@ namespace MaxWorlds.UI
             _ = dt;
         }
 
-        private void OnSupercellsChanged(int banked) => Refresh();
         private void OnCellsChanged(int cells) => Refresh();
-
-        /// <summary>MV-515: is cashing a Supercell for <see cref="PickupWallet.SupercellCellValue"/>
-        /// cells actually possible right now — at least one banked and room in the reserve for the full
-        /// top-up. Thin instance wrapper over <see cref="RigActions.AnySupercellActionAffordable"/> so
-        /// <see cref="Update"/> and <see cref="RefreshSupercellTray"/> ask the exact same question.</summary>
-        private static bool CanCashSupercell() => RigActions.AnySupercellActionAffordable(
-            PickupWallet.SupercellsBanked, PickupWallet.PowerCells, PickupWallet.Capacity);
 
         /// <summary>Open THE RIG, pausing the game. Ignored if already open. MV-425: if a Morphing
         /// Module draft is banked and waiting (<see cref="PendingMorphingModule"/>), opening here shows
@@ -553,15 +507,20 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ live state
 
-        /// <summary>Redraws the CELLS/SUPERCELLS banks and every node's visual state off
-        /// <see cref="RigState"/> and <see cref="PickupWallet"/> — so a spend, a shed pickup, or a
-        /// draft acquire (once MV-424 lands) while this screen happens to be open reflects immediately.</summary>
+        /// <summary>Redraws the CELLS bank and every node's visual state off <see cref="RigState"/> and
+        /// <see cref="PickupWallet"/> — so a spend, a shed pickup, or a draft acquire (once MV-424 lands)
+        /// while this screen happens to be open reflects immediately. MV-519: cells are now the only
+        /// currency — the old SUPERCELLS tray is gone (a Supercell grants its cells on pickup, never
+        /// banked here) — so this only ever redraws the one chip.</summary>
         private void Refresh()
         {
             if (_root == null) return;
 
-            int banked = PickupWallet.SupercellsBanked;
             _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";
+            // MV-519 Change item 5: an over-cap balance must read as a deliberate bonus, not a bug —
+            // tinted the same amber a Supercell glows, mirroring HudController.SetCellCountDisplay's
+            // treatment of the gameplay HUD's own cell readout, so the two never disagree.
+            _cellsText.color = PickupWallet.IsOverCapacity ? SupercellColor : CellsColor;
 
             // MV-458: e_cel's chip is actionable (and tappable) whenever cells could pay for whichever
             // action (unlock/upgrade) e_cel is currently in. MV-515 dropped the old "or a Supercell is
@@ -580,7 +539,6 @@ namespace MaxWorlds.UI
             // wins over the spend affordance.
             _cellsChipBg.color = RowColor;
 
-            RefreshSupercellTray(banked);
             ApplyBoardScale();
             RefreshBoardState();
         }
@@ -744,51 +702,6 @@ namespace MaxWorlds.UI
                 if (ab.Id == id) return ab.Label;
             return id;
         }
-
-        /// <summary>MV-515: the Supercell tray is THE RIG's cash-in control, not a passive readout —
-        /// tapping it (<see cref="OnSupercellTrayTapped"/>) cashes one Supercell for
-        /// <see cref="PickupWallet.SupercellCellValue"/> cells. With nothing banked, or nothing banked
-        /// AND no room for the full top-up, the tray renders unavailable and names the reason instead
-        /// of merely sitting inert (the ticket's own AC3: "renders as unavailable with the reason
-        /// visible, not merely inert").</summary>
-        private void RefreshSupercellTray(int banked)
-        {
-            const int socketCount = 6;
-            bool any = banked > 0;
-            bool roomForCashIn = PickupWallet.Capacity - PickupWallet.PowerCells >= PickupWallet.SupercellCellValue;
-            bool cashable = any && roomForCashIn;
-
-            _supercellsTrayLabel.color = any ? SupercellColor : Dim;
-            _supercellsTraySub.text = !any ? "none banked"
-                : roomForCashIn ? $"{banked} banked · tap to cash"
-                : $"{banked} banked · no room";
-            _supercellsTraySub.color = cashable ? new Color(TextColor.r, TextColor.g, TextColor.b, 0.7f) : Dim;
-            if (!any) _supercellsTrayBg.color = RowColor;
-
-            for (int i = 0; i < socketCount; i++)
-            {
-                bool filled = i < banked;
-                _supercellsSockets[i].sprite = filled
-                    ? PolygonFillSprite(HexSides, Mathf.CeilToInt(SupercellsSocketSize * Sqrt3 * 0.5f), Mathf.CeilToInt(SupercellsSocketSize))
-                    : SupercellsPipOutlineSprite();
-                _supercellsSockets[i].color = filled ? SupercellColor : new Color(SupercellColor.r, SupercellColor.g, SupercellColor.b, 0.40f);
-                _supercellsSocketGlows[i].gameObject.SetActive(filled);
-                if (filled) _supercellsSocketGlows[i].color = new Color(SupercellColor.r, SupercellColor.g, SupercellColor.b, 0.35f);
-            }
-            int overflow = Mathf.Max(0, banked - socketCount);
-            _supercellsOverflowText.gameObject.SetActive(overflow > 0);
-            _supercellsOverflowText.text = $"+{overflow}";
-
-            _supercellsTrayButton.interactable = cashable;
-        }
-
-        private void OnSupercellTrayTapped() => PickupWallet.TryCashSupercell();
-
-        /// <summary>MV-443 defect 7: an unfilled SUPERCELL pip's own 2px outline — distinct from
-        /// <see cref="SolidHexOutlineSprite"/>'s 4px <c>strokeOwned</c>, which never applied here.</summary>
-        private Sprite SupercellsPipOutlineSprite() =>
-            HudTextures.PolygonOutline(HexSides, HexRotationDeg,
-                Mathf.CeilToInt(SupercellsSocketSize * Sqrt3 * 0.5f), Mathf.CeilToInt(SupercellsSocketSize), 2f);
 
         /// <summary>MV-443 defect 4: a category is never LOCK/"? ? ?" — it always names itself and its
         /// own owned/total count. "Lit" (has ≥1 owned ability) still gets the stronger owned-style
@@ -2145,12 +2058,14 @@ namespace MaxWorlds.UI
             cursor = BuildCloseButton(bar, cursor) - 16f;
             cursor = BuildQuitButton(bar, cursor) - 16f;
 
-            cursor = BuildSupercellTray(bar, cursor) - 16f;
-
-            // MV-433: widened from 170 — "28 / 30 CELLS" at the chip's own min best-fit size (14pt)
-            // was clipping its leading digit against the icon at the old width.
-            const float cellsChipWidth = 190f;
-            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), cellsChipWidth, CellsColor, out _cellsText);
+            // MV-519: cells are the only currency now — the SUPERCELLS tray this used to sit beside is
+            // gone (a Supercell grants its cells on pickup, never banked/cashed here), so the CELLS chip
+            // is amped up to be the dominant element in the bar: bigger box (DominantCellsChipWidth/
+            // Height, up from the old 190x52 shared BuildChip size) and a taller font cap
+            // (DominantCellsChipTextMaxSize, above the 38pt title) so it reads as the number every
+            // decision on the board is measured against, ahead of "THE RIG / MAX'S WORKBENCH".
+            var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), DominantCellsChipWidth, CellsColor, out _cellsText,
+                height: DominantCellsChipHeight, textMaxSize: DominantCellsChipTextMaxSize);
             cellsChip.name = "Cells Chip";
 
             _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
@@ -2160,7 +2075,7 @@ namespace MaxWorlds.UI
 
             // MV-443 defect 7, MV-445 defect 6: a real rounded pill (radius 25, matching BuildChip's own
             // background corner) with a 2.5px colours.sec border — was a flat, borderless chip.
-            float cellsCornerFraction = Mathf.Clamp(25f / (Mathf.Min(cellsChipWidth, 52f) * 0.5f), 0.05f, 0.5f);
+            float cellsCornerFraction = Mathf.Clamp(25f / (Mathf.Min(DominantCellsChipWidth, DominantCellsChipHeight) * 0.5f), 0.05f, 0.5f);
             var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(32, cellsCornerFraction, 2.5f), CellsColor, "Cells Border");
             Stretch(cellsBorder.rectTransform);
             cellsBorder.type = Image.Type.Sliced;
@@ -2168,113 +2083,13 @@ namespace MaxWorlds.UI
             _cellsBorder = cellsBorder;
         }
 
-        /// <summary>MV-423's replacement for the old spinning-gear PARTS chip: six hex sockets (filled
-        /// amber up to the banked count, a <c>+N</c> overflow past six). MV-515: the tray is now a
-        /// tappable control, not a passive readout — tapping it cashes one Supercell
-        /// (<see cref="OnSupercellTrayTapped"/>); see <see cref="RefreshSupercellTray"/> for its
-        /// captions and unavailable-with-a-reason states.
-        ///
-        /// MV-445 defect 6: width is now computed from actual content (label column + socket row +
-        /// paddings) instead of a hardcoded 340 — at that fixed width the socket row's old 50%-of-tray
-        /// anchor gave the six pips only 154px to share (170 half-width minus a 16px pad) against the
-        /// 224px <see cref="SupercellsSocketSize"/>(34) actually needed, so they overran the row's own
-        /// bounds. Both the label column and the socket row are now fixed-size blocks pinned to their
-        /// own edge, so the tray's width is simply their sum — it can never again under-provision one
-        /// side chasing a magic total.</summary>
-        private float BuildSupercellTray(RectTransform bar, float rightEdge)
-        {
-            const int socketCount = 6;
-            const float socketGap = 4f;
-            const float leftColumnWidth = 100f;
-            const float midGap = 14f;
-            const float rightPad = 16f;
-            float socketsWidth = socketCount * SupercellsSocketSize + (socketCount - 1) * socketGap;
-            float width = leftColumnWidth + midGap + socketsWidth + rightPad;
-
-            var tray = NewRect("Supercell Tray", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            tray.pivot = new Vector2(1f, 0.5f);
-            // MV-446 defect 3: grown from 68 -> 76 to give the sub-label's raised font floor (below)
-            // headroom for a two-line wrap without crowding the "SUPERCELLS" label above it.
-            tray.sizeDelta = new Vector2(width, 76f);
-            tray.anchoredPosition = new Vector2(rightEdge, 0f);
-
-            var bg = AddImage(tray, HudTextures.RoundedBox(32, 0.3f), RowColor, "Tray BG");
-            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
-            _supercellsTrayBg = bg;
-            // MV-515: the tray itself is the cash-in control — the BG's own raycastable Image is what
-            // the Button attaches to, same idiom as the CELLS chip (_cellsChipBg.gameObject.AddComponent<Button>()).
-            _supercellsTrayButton = bg.gameObject.AddComponent<Button>();
-            _supercellsTrayButton.transition = Selectable.Transition.None;
-            _supercellsTrayButton.onClick.AddListener(OnSupercellTrayTapped);
-
-            var inner = AddImage(tray, HudTextures.RoundedBox(32, 0.3f), PanelColor, "Tray Inner");
-            Stretch(inner.rectTransform, -2.5f); inner.type = Image.Type.Sliced;
-
-            // MV-443 defect 7: "a bordered box in colours.supercell" — the tray had a flat fill but no
-            // amber border of its own.
-            var border = AddImage(tray, HudTextures.RoundedBoxOutline(32, 0.3f, 2f), SupercellColor, "Tray Border");
-            Stretch(border.rectTransform);
-            border.type = Image.Type.Sliced;
-            border.raycastTarget = false;
-            _supercellsTrayBorder = border;
-
-            _supercellsTrayLabel = AddText(tray, 18, SupercellColor, TextAnchor.UpperLeft);
-            Anchor(_supercellsTrayLabel.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
-            _supercellsTrayLabel.rectTransform.anchoredPosition = new Vector2(14f, -6f);
-            _supercellsTrayLabel.rectTransform.sizeDelta = new Vector2(leftColumnWidth - 14f, 24f);
-            _supercellsTrayLabel.fontStyle = FontStyle.Bold;
-            _supercellsTrayLabel.text = "SUPERCELLS";
-
-            // MV-443 defect 7: was clipping "...one banked" mid-word — best-fit shrink instead of a
-            // fixed 13pt, same idiom the CELLS chip's own label already uses for a tight box. MV-446
-            // defect 3: min/max raised off rig_board.json — the old 10-13pt range shrank well under the
-            // 16px readability floor for anything longer than "0 banked"; box height grown to match.
-            _supercellsTraySub = AddText(tray, Mathf.RoundToInt(RigBoardLayout.SupercellTraySubFontSizeMax), Dim, TextAnchor.LowerLeft);
-            Anchor(_supercellsTraySub.rectTransform, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0f, 0f));
-            _supercellsTraySub.rectTransform.anchoredPosition = new Vector2(14f, 8f);
-            _supercellsTraySub.rectTransform.sizeDelta = new Vector2(leftColumnWidth - 14f, 30f);
-            _supercellsTraySub.horizontalOverflow = HorizontalWrapMode.Wrap;
-            _supercellsTraySub.resizeTextForBestFit = true;
-            _supercellsTraySub.resizeTextMinSize = Mathf.RoundToInt(RigBoardLayout.SupercellTraySubFontSizeMin);
-            _supercellsTraySub.resizeTextMaxSize = Mathf.RoundToInt(RigBoardLayout.SupercellTraySubFontSizeMax);
-
-            var socketRow = NewRect("Sockets", tray, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            socketRow.pivot = new Vector2(1f, 0.5f);
-            socketRow.sizeDelta = new Vector2(socketsWidth, SupercellsSocketSize);
-            socketRow.anchoredPosition = new Vector2(-rightPad, 0f);
-
-            _supercellsSockets.Clear();
-            _supercellsSocketGlows.Clear();
-            for (int i = 0; i < socketCount; i++)
-            {
-                var pos = new Vector2(-(socketsWidth - (i + 0.5f) * (SupercellsSocketSize + socketGap)), 0f);
-
-                // MV-443 defect 7: a filled pip gets a soft glow behind it — built once here, toggled
-                // in RefreshSupercellTray, same shared-texture idiom the node halos already use.
-                var glow = AddImage(socketRow, HudTextures.Glow(64), Color.clear, $"Socket {i} Glow");
-                Anchor(glow.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-                glow.rectTransform.sizeDelta = new Vector2(SupercellsSocketSize * 1.6f, SupercellsSocketSize * 1.6f);
-                glow.rectTransform.anchoredPosition = pos;
-                glow.raycastTarget = false;
-                glow.gameObject.SetActive(false);
-                _supercellsSocketGlows.Add(glow);
-
-                var socket = AddImage(socketRow, SupercellsPipOutlineSprite(), new Color(1f, 1f, 1f, 0.1f), $"Socket {i}");
-                Anchor(socket.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-                socket.rectTransform.sizeDelta = new Vector2(SupercellsSocketSize * Sqrt3 * 0.5f, SupercellsSocketSize);
-                socket.rectTransform.anchoredPosition = pos;
-                _supercellsSockets.Add(socket);
-            }
-
-            _supercellsOverflowText = AddText(socketRow, 14, SupercellColor, TextAnchor.MiddleRight);
-            Anchor(_supercellsOverflowText.rectTransform, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            _supercellsOverflowText.rectTransform.sizeDelta = new Vector2(50f, 30f);
-            _supercellsOverflowText.rectTransform.anchoredPosition = new Vector2(6f, 0f);
-            _supercellsOverflowText.fontStyle = FontStyle.Bold;
-            _supercellsOverflowText.gameObject.SetActive(false);
-
-            return rightEdge - width;
-        }
+        /// <summary>MV-519 AC9: wide/tall enough that a typical cell count best-fits near its own
+        /// <see cref="DominantCellsChipTextMaxSize"/> — comfortably clearing the 38pt "THE RIG" title,
+        /// the bar's previous loudest element, so the chip reads as dominant by resolved size, not just
+        /// by construction.</summary>
+        private const float DominantCellsChipWidth = 280f;
+        private const float DominantCellsChipHeight = 76f;
+        private const float DominantCellsChipTextMaxSize = 48f;
 
         /// <summary>A dismiss pill pinned at <paramref name="rightEdge"/> from the bar's right edge.</summary>
         private float BuildCloseButton(RectTransform bar, float rightEdge)
@@ -2332,29 +2147,31 @@ namespace MaxWorlds.UI
         /// neither design image carries one, "0 / 20 CELLS" reads on its own — and switched the
         /// background to a true stadium radius (25, matching the ticket's own spec against this chip's
         /// fixed 52px height) over a dark fill, not the lighter RowColor every other row uses.</summary>
+        /// <summary><paramref name="height"/>/<paramref name="textMaxSize"/> default to the original
+        /// 52px/24pt chip (MV-519 gives the CELLS chip its own larger override, see
+        /// <see cref="DominantCellsChipWidth"/>).</summary>
         private RectTransform BuildChip(RectTransform bar, Vector2 offset, float width, Color accent,
-            out Text label)
+            out Text label, float height = 52f, float textMaxSize = 24f)
         {
-            const float h = 52f;
             const float radius = 25f;
-            float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(width, h) * 0.5f), 0.05f, 0.5f);
+            float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(width, height) * 0.5f), 0.05f, 0.5f);
 
             var chip = NewRect("Chip", bar, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
             chip.pivot = new Vector2(1f, 0.5f);
-            chip.sizeDelta = new Vector2(width, h);
+            chip.sizeDelta = new Vector2(width, height);
             chip.anchoredPosition = offset;
 
             var bg = AddImage(chip, HudTextures.RoundedBox(32, cornerFraction), PanelColor, "BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
 
-            label = AddText(chip, 24, accent, TextAnchor.MiddleCenter);
+            label = AddText(chip, (int)textMaxSize, accent, TextAnchor.MiddleCenter);
             Stretch(label.rectTransform);
             label.rectTransform.offsetMin = new Vector2(14f, -20f);
             label.rectTransform.offsetMax = new Vector2(-14f, 20f);
             label.fontStyle = FontStyle.Bold;
             label.resizeTextForBestFit = true;
             label.resizeTextMinSize = 14;
-            label.resizeTextMaxSize = 24;
+            label.resizeTextMaxSize = (int)textMaxSize;
             return chip;
         }
 

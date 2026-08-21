@@ -153,7 +153,6 @@ namespace MaxWorlds.Dev
 
             foreach (var aspect in RigBoardLayout.CaptureAspects)
                 yield return CaptureFixtureScreen($"rig-{aspect.Name}", aspect.W, aspect.H, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
-            yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             // MV-470/MV-511: same node levels as the main fixture, but too few cells to afford EITHER a
             // cell unlock (10) or the cheapest upgrade (5, level 1) — evidences the "reads as inert" half
             // of AC1 (a node the player can't yet afford), which the 28-cell main fixture can never show
@@ -163,9 +162,6 @@ namespace MaxWorlds.Dev
             // — every other fixture above forces every category open (ResetRunForFixture), so none of
             // them can evidence the "family not unlocked" lock reason at all.
             yield return CaptureFixtureScreen("rig-freshrun-16x9", 1920, 1080, ApplyRigFixtureFreshRun, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
-            // MV-515 AC8: the Supercell tray with one still banked (and still cashable) right after a
-            // cash-in — the human-check evidence that TryCashSupercell actually moved both currencies.
-            yield return CaptureFixtureScreen("rig-supercells-16x9", 1920, 1080, ApplyRigFixtureSupercellCashed, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
             // MV-472 (current spec) hand-off verification: the exact three viewport pixel sizes Lee's
             // ticket comment names (977x458, 852x393 iPhone landscape, 1133x744 iPad mini landscape) —
@@ -176,6 +172,11 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("rig-mv472-977x458", 977, 458, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-mv472-852x393", 852, 393, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-mv472-1133x744", 1133, 744, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-519 AC9's human-check shot: the CELLS chip reading an over-cap balance (22/20) after a
+            // Supercell grant pushed PowerCells past Capacity — must read as a deliberate bonus, not a
+            // clamped/broken number (Change item 5).
+            yield return CaptureFixtureScreen("rig-mv519-overcap-16x9", 1920, 1080, ApplyRigFixtureOverCap, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -191,17 +192,6 @@ namespace MaxWorlds.Dev
             ResetRunForFixture();
             SpendRigFixtureLevels();
             PickupWallet.SetPowerCells(28);   // needs e_cel spent to 1 first — Capacity reads RigState
-            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();   // Supercells banked: 4
-        }
-
-        /// <summary>The same board state, minus the 4 banked Supercells — comparing this against the
-        /// banked=4 shot is how the Supercell tray's fill state gets evidenced (MV-515 retired the old
-        /// per-node amber '+' badge this used to also evidence).</summary>
-        public static void ApplyRigFixtureNoParts()
-        {
-            ResetRunForFixture();
-            SpendRigFixtureLevels();
-            PickupWallet.SetPowerCells(28);
         }
 
         /// <summary>MV-470: the same node levels as <see cref="ApplyRigFixture"/>, but only 4 cells
@@ -232,20 +222,17 @@ namespace MaxWorlds.Dev
             PickupWallet.SetPowerCells(15);
         }
 
-        /// <summary>MV-515 AC8's human-check shot: the Supercell tray mid-story — banks TWO Supercells
-        /// with room in the reserve for a top-up, then actually cashes ONE via the same
-        /// <see cref="PickupWallet.TryCashSupercell"/> path the tray's own tap uses — so the captured
-        /// frame shows the tray with one Supercell still banked (and still cashable) AND the cell count
-        /// already carrying the +10 from the cash-in that just happened, not merely a static "some
-        /// banked" state indistinguishable from never having been tapped.</summary>
-        public static void ApplyRigFixtureSupercellCashed()
+        /// <summary>MV-519 AC9: the same board state as <see cref="ApplyRigFixture"/>, but landed over
+        /// capacity via an actual <see cref="PickupWallet.AddSupercell"/> grant (25 -&gt; 35/30, the same
+        /// 30-cell cap <see cref="ApplyRigFixture"/> itself lands on once <see cref="SpendRigFixtureLevels"/>
+        /// has raised e_cel) — not just <c>SetPowerCells(35)</c> — so the captured chip is exactly what a
+        /// real over-cap pickup leaves behind.</summary>
+        public static void ApplyRigFixtureOverCap()
         {
             ResetRunForFixture();
             SpendRigFixtureLevels();
-            PickupWallet.SetPowerCells(8);   // room for a full 10-cell top-up under the 30 capacity
+            PickupWallet.SetPowerCells(25);
             PickupWallet.AddSupercell();
-            PickupWallet.AddSupercell();
-            PickupWallet.TryCashSupercell();   // 2 banked -> 1 banked; 8 cells -> 18 cells
         }
 
         private static void ResetRunForFixture()
@@ -314,20 +301,39 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("weapons-button-module", 1920, 1080, ApplyWeaponsButtonModuleFixture, null, null, canvas);
             yield return CaptureFixtureScreen("weapons-button-both", 1920, 1080, ApplyWeaponsButtonBothFixture, null, null, canvas);
 
-            // MV-510 AC A4 (review round 1 superseded AC8's 977x458 with 1920x1080): the
-            // human-judged eyes-on shot, with real (nonzero) numbers on both RIG-mark counters so the
-            // doubled mark, the recessive cell pill and the enlarged parts chip all read at once.
+            // MV-510 AC A4 (review round 1 superseded AC8's 977x458 with 1920x1080), MV-519 dropped the
+            // parts chip this used to also demo: the human-judged eyes-on shot of the cell readout with
+            // a real (nonzero) number, "0/20" would never show.
             yield return CaptureFixtureScreen("hud-mv510-1920x1080", 1920, 1080, ApplyHudMv510Fixture, null, null, canvas);
+
+            // MV-519 AC9's other human-check shot: a gameplay frame mid-pickup-event — the burst still
+            // expanding and the "+10" still mid-flight toward the cell readout. CaptureFixtureScreen's
+            // own settle wait (two frames + ~0.1s realtime, unscaled since nothing here pauses timeScale)
+            // is what lands the shot mid-beat rather than at t=0 or after the ~0.6s event has already
+            // self-terminated.
+            yield return CaptureFixtureScreen("hud-mv519-pickup-1920x1080", 1920, 1080, ApplySupercellPickupFixture, null, null, canvas);
 
             ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
         }
 
-        /// <summary>MV-510 AC8 demo state — some parts AND some banked cells, so the human screenshot
-        /// shows both RIG-mark counters with real numbers rather than "0" and "0/20".</summary>
+        /// <summary>MV-519 AC9: fires the real <see cref="HudSignals.SupercellCollected"/> signal at
+        /// Max's live position (falls back to the origin if no Player-tagged object exists in this
+        /// capture scene) so <see cref="HudController.StartSupercellFx"/> runs the exact same projection
+        /// a live pickup does, not a synthetic stand-in.</summary>
+        public static void ApplySupercellPickupFixture()
+        {
+            ApplyWeaponsButtonIdleFixture();
+            PickupWallet.SetPowerCells(12);
+            var player = GameObject.FindGameObjectWithTag("Player");
+            Vector3 pos = player != null ? player.transform.position : Vector3.zero;
+            HudSignals.EmitSupercellCollected(pos, 12, 22);
+        }
+
+        /// <summary>MV-510 AC8 demo state, MV-519 dropped its banked-parts half: some banked cells so
+        /// the human screenshot shows the readout with a real number rather than "0/20".</summary>
         public static void ApplyHudMv510Fixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 3; i++) PickupWallet.AddSupercell();
             for (int i = 0; i < 12; i++) PickupWallet.AddPowerCell();
         }
 
@@ -338,11 +344,13 @@ namespace MaxWorlds.Dev
             PendingMorphingModule.Reset();
         }
 
-        /// <summary>4 parts banked — matches the "4" badge in MV-425.png.</summary>
+        /// <summary>4 ability credits banked — matches the "4" badge in MV-425.png. MV-519: a Supercell
+        /// no longer banks or flags this alert, so a shed ability credit (<see cref="AbilityCreditBank"/>)
+        /// is the only thing left that can drive the "parts to fit" state this fixture demos.</summary>
         public static void ApplyWeaponsButtonPartsFixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();
+            for (int i = 0; i < 4; i++) AbilityCreditBank.Bank();
         }
 
         public static void ApplyWeaponsButtonModuleFixture()
@@ -354,7 +362,7 @@ namespace MaxWorlds.Dev
         public static void ApplyWeaponsButtonBothFixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();
+            for (int i = 0; i < 4; i++) AbilityCreditBank.Bank();
             PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
         }
 
@@ -950,9 +958,8 @@ namespace MaxWorlds.Dev
             }
             if (weapons != null)
             {
-                colourChecked += 2;
+                colourChecked += 1;
                 CheckChipBorderColour(tex, weapons.CellsBorder, "CELLS border", RigBoardLayout.Colour("sec"), colourFails);
-                CheckChipBorderColour(tex, weapons.SupercellsBorder, "SUPERCELL border", RigBoardLayout.Colour("supercell"), colourFails);
             }
             Emit("colour-probes", colourFails.Count == 0,
                 colourFails.Count == 0 ? $"{colourChecked}/{colourChecked} sampled points match rig_board.json"

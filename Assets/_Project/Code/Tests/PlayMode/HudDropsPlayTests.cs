@@ -104,18 +104,16 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator PickingUpAPartRaisesTheFlashingChip()
+        public IEnumerator PickingUpASupercellGrantsCellsInstantly()
         {
-            var alert = FindRect("Parts Badge");
-
+            // MV-519: retired the "Parts Badge"-era flow this test used to exercise (bank a Supercell,
+            // then spend it via the since-removed PickupWallet.TryCashSupercell) — a Supercell now
+            // grants its cells the instant it's collected, no bank, no separate spend step.
+            int before = PickupWallet.PowerCells;
             PickupWallet.AddSupercell();
             yield return null;
-            Assert.That(alert.gameObject.activeSelf, Is.True, "a collected part must raise the badge");
-
-            // And it clears once the weapons area spends the part (WV-228).
-            PickupWallet.TryCashSupercell();
-            yield return null;
-            Assert.That(alert.gameObject.activeSelf, Is.False, "spending the part must clear the badge");
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(before + PickupWallet.SupercellCellValue),
+                "a collected Supercell must grant its cells immediately");
         }
 
         /// <summary>

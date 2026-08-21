@@ -123,9 +123,8 @@ namespace MaxWorlds.Tests.PlayMode
             _max.transform.position = Vector3.zero;   // walk onto the pile
             yield return null;   // director's Update does the walk-over check
 
-            Assert.That(PickupWallet.PowerCells, Is.GreaterThan(0),
-                "walking onto the drop must bank power cells — walk-over collection, no button");
-            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "and pick up the part");
+            Assert.That(PickupWallet.PowerCells, Is.GreaterThanOrEqualTo(PickupWallet.SupercellCellValue),
+                "walking onto the drop must bank power cells and the Supercell's instant +10 (MV-519) — walk-over collection, no button");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(0), "collected cells must leave the ground");
         }
 
