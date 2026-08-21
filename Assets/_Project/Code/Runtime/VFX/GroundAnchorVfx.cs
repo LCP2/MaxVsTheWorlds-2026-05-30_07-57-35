@@ -33,6 +33,33 @@ namespace MaxWorlds.VFX
     /// Perf: rings are pooled and re-used frame to frame, share one material per texture, and are
     /// tinted through a MaterialPropertyBlock — a full arena of 30 actors is 60 quads and two draw
     /// setups, which is the same bargain <see cref="TelegraphVfx"/> already makes.
+    ///
+    /// DISCOVERY (MV-532): this used to be a per-frame <c>FindObjectsByType&lt;CharacterController&gt;</c>
+    /// scan — a fresh, GC-allocating scene-wide array every frame, the MV-527 regression shape. MV-527
+    /// itself evaluated and reverted a registry keyed to the three known actor types (Max, the boss,
+    /// <c>RobotEnemy</c>) after finding that <c>GroundAnchorPlayTests.cs</c> proves a genuinely
+    /// type-agnostic contract — a synthetic <c>FakeActor</c>, wired to nothing, still gets anchored.
+    /// A self-registering component would reinstate exactly that trap: it has to be added at every
+    /// actor's construction site, so <c>FakeActor</c> — which registers nothing and cannot be edited to
+    /// (MV-532 forbids touching that test) — would silently stop being anchored, which is precisely the
+    /// "next actor type ships with no shadow" failure this system exists to prevent.
+    ///
+    /// So discovery moved to <see cref="Physics.OverlapSphereNonAlloc"/> against a reused static buffer
+    /// — the exact non-allocating pattern <see cref="MaxWorlds.Combat.WaterBlaster"/>,
+    /// <see cref="MaxWorlds.Arena.Sentinel"/> and <see cref="MaxWorlds.Weapons.PlayerAbilities"/> already
+    /// use to find <see cref="IDamageable"/> targets, and already proven in this codebase to report a
+    /// <c>CharacterController</c> (that comment thread notes a greybox robot's <c>CharacterController</c>
+    /// and its primitive collider are reported as two
+    /// separate hits). It costs one array walk of whatever overlaps a generous sphere, not a scan of
+    /// every loaded object of the type, and it needs zero wiring at any actor's creation site — any
+    /// <c>CharacterController</c> + <see cref="IDamageable"/>, anywhere, is found the same way FindObjectsByType
+    /// found it, which is what keeps <c>FakeActor</c> and AC3's hypothetical new actor type working.
+    ///
+    /// The trade: <see cref="ScanRadius"/> and <see cref="s_hits"/>'s length bound what this can see,
+    /// where <c>FindObjectsByType</c> had no such bound. Phase B is one Backyard sub-zone path — both
+    /// constants carry generous headroom over that scale. If a later phase's world genuinely exceeds a
+    /// 1 km span or a couple hundred colliders live inside it at once, widen them here rather than
+    /// re-adding a scene-wide scan.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class GroundAnchorVfx : MonoBehaviour
@@ -43,6 +70,14 @@ namespace MaxWorlds.VFX
             if (FindFirstObjectByType<GroundAnchorVfx>() != null) return;
             new GameObject("GroundAnchorVFX").AddComponent<GroundAnchorVfx>();
         }
+
+        /// <summary>Comfortably beyond a single Backyard sub-zone path; see the class doc comment.</summary>
+        private const float ScanRadius = 1000f;
+
+        // Reused every frame, never reallocated — the buffer PlayerAbilities/Sentinel/WaterBlaster
+        // already reuse for the same kind of OverlapSphereNonAlloc call. Sized well past the
+        // documented ~30-actor arena to leave room for walls/cover/props sharing the query.
+        private static readonly Collider[] s_hits = new Collider[256];
 
         private readonly List<GroundRing> _shadows = new List<GroundRing>(32);
         private readonly List<GroundRing> _rings = new List<GroundRing>(32);
@@ -59,8 +94,12 @@ namespace MaxWorlds.VFX
             // Enumerating concrete types instead — robot, boss, Max — is how the next actor gets
             // added and silently ships with no shadow. Team decides the colour, so a new hostile is
             // orange the day it exists, without anyone remembering to come back here.
-            foreach (var cc in FindObjectsByType<CharacterController>(FindObjectsSortMode.None))
+            int count = Physics.OverlapSphereNonAlloc(
+                Vector3.zero, ScanRadius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
             {
+                if (!(s_hits[i] is CharacterController cc)) continue;
                 if (!cc.TryGetComponent<IDamageable>(out var actor) || !actor.IsAlive) continue;
 
                 float footprint = GroundAnchorTuning.FootprintRadius(cc);

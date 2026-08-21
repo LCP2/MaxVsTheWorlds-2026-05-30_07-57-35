@@ -44,23 +44,23 @@ namespace MaxWorlds.Tests.EditMode
         /// a null-check cache" — the two GameFeel/AmbienceVfx entries below are the latter, not a
         /// violation, just outside what a source-shape test can prove on its own.
         ///
-        /// GroundAnchorVfx.cs: its per-frame <c>FindObjectsByType&lt;CharacterController&gt;</c> scan was
-        /// evaluated for this ticket and reverted after <c>GroundAnchorPlayTests.cs</c> (6 PlayMode
+        /// GroundAnchorVfx.cs (MV-527's entry here): its per-frame <c>FindObjectsByType&lt;CharacterController&gt;</c>
+        /// scan was evaluated for MV-527 and reverted after <c>GroundAnchorPlayTests.cs</c> (6 PlayMode
         /// tests) turned out to pin a load-bearing, documented contract — ANY actor with a
         /// CharacterController + IDamageable gets anchored, with zero per-type wiring, proven against a
-        /// synthetic FakeActor type that is neither RobotEnemy, PlayerHealth nor BigBermudaBoss. A
-        /// registry-based rewrite silently breaks that guarantee for any future actor type that doesn't
-        /// happen to be one of the three this worker could safely special-case, and CC_AUTONOMY.md
-        /// forbids running the PlayMode suite that would have caught it. Left as-is rather than risking
-        /// an undetectable regression; a follow-up ticket owns converting it properly (e.g. a generic
-        /// self-registering actor component), verified against the existing PlayMode suite.
+        /// synthetic FakeActor type that is neither RobotEnemy, PlayerHealth nor BigBermudaBoss. MV-532
+        /// converted it off the per-frame scan — to a reused-buffer <c>Physics.OverlapSphereNonAlloc</c>
+        /// query rather than a registry, because a registry needs a component added at every actor's
+        /// construction site, which is exactly the per-type wiring FakeActor proves must not be
+        /// required. It no longer calls FindObjectsByType/FindFirstObjectByType in a per-frame path, so
+        /// it no longer needs this exemption; kept off the list.
         ///
         /// GameFeel.cs / AmbienceVfx.cs: pre-existing (not touched by MV-527), and already the pattern
         /// this ticket asks for — <c>if (_field == null) _field = FindFirstObjectByType&lt;T&gt;();</c>,
         /// a one-time cached singleton lookup, not a per-frame scan. Allowlisted because a text scan
         /// can't see the guard; not a regression to fix.
         /// </summary>
-        private static readonly string[] Allowlist = { "GroundAnchorVfx.cs", "GameFeel.cs", "AmbienceVfx.cs" };
+        private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs" };
 
         [Test]
         public void NoUpdateMethodInRuntime_CallsFindObjectsByType_WithoutCaching()
