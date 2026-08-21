@@ -593,6 +593,23 @@ namespace MaxWorlds.Enemies
             FaceAndMove(to.normalized, EffectiveMoveSpeed * emergeSpeedScale, dt);
         }
 
+        /// <summary>Rebases this robot's health/damage to a fresh archetype (MV-514) WITHOUT the reset
+        /// <see cref="Apply"/> always does — no state change, no position change, nothing else touched.
+        /// For a pre-placed garrison member sitting <see cref="State.Dormant"/> since before its area's
+        /// gate broke, whatever <see cref="DifficultyDirector.ToughnessMultiplier"/> was live back at
+        /// placement time is stale by the time it wakes; this lets the caller re-stamp it with the
+        /// multiplier live right now, immediately before <see cref="Activate"/>, without reverting it to
+        /// a fresh Chase state the way <see cref="Apply"/>'s own <see cref="ResetState"/> call would.
+        /// Full health, not a fraction carried over — a dormant robot has never been in a fight yet, so
+        /// there is no damage to preserve.</summary>
+        public void Retoughen(in EnemyArchetype a)
+        {
+            maxHealth = a.MaxHealth;
+            contactDamage = a.ContactDamage;
+            touchDamage = a.TouchDamage;
+            _health = maxHealth;
+        }
+
         /// <summary>Puts this robot to sleep behind cover (MV-363): world-present and rendered from
         /// the moment it's placed — never spawned later at the moment a gate opens — but not yet
         /// chasing, firing or telegraphing. Called by the spawner right after placement, in place of
