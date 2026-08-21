@@ -217,6 +217,19 @@ namespace MaxWorlds.UI
         /// can sample a known full-alpha pixel for its named-colour probe.</summary>
         public Image CellsBorder => _cellsBorder;
 
+        /// <summary>MV-520: an ability node's own cost-tag text — test-only access, same idiom as
+        /// <see cref="CategoryPanel"/>, so a resolved-value test can assert the built Text component
+        /// directly rather than guessing GameObject names among a node's several Text children.</summary>
+        public Text NodeCostText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.CostText : null;
+
+        /// <summary>MV-520: an ability node's own cost-tag glyph — test-only access, same idiom as
+        /// <see cref="NodeCostText"/>.</summary>
+        public Image NodeCostIcon(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.CostIcon : null;
+
+        /// <summary>MV-520: an ability node's own name label — test-only access, so a test can confirm
+        /// the "? ? ?" name-hidden placeholder never coincides with a spendable cost.</summary>
+        public Text NodeLabel(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Label : null;
+
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
         /// space regardless of this wrapper's scale) — test-only access to confirm the clamp applied.</summary>
@@ -801,7 +814,13 @@ namespace MaxWorlds.UI
             // connector-line tell.
             bool parentGated = !owned && !draftable && RigState.IsCategoryUnlocked(ab.Category);
             int cellsBanked = PickupWallet.PowerCells;
-            bool hasCellCost = draftable || (owned && !maxed);
+            // MV-520: the live ring/progress read stays scoped to a node you can actually act on right
+            // now (draftable, or owned-and-below-max) — unchanged from before this ticket.
+            bool hasLiveCellAction = draftable || (owned && !maxed);
+            // MV-520: the PRICE, unlike the ring, is never gated — every node that will ever cost cells
+            // shows one, including family-locked and parent-gated nodes. Only owned-and-maxed has
+            // nothing left to buy.
+            bool hasCostToShow = !(owned && maxed);
             bool spendable = IsAbilityNodeSpendable(ab.Id, cellsBanked);
             // MV-470: whether CELLS alone would pay for this node's action right now — drives the
             // afford-dot (CapMarker) and, via Update(), whether the dashed ring pulses live or sits inert.
@@ -820,27 +839,39 @@ namespace MaxWorlds.UI
             // player sitting on affordable cells sees the same "something's waiting" tell everywhere one
             // applies. CapMarker's own presence (rather than a flat colour) IS the "affordable now" read;
             // Update() only ever pulses it while cellAffordable stays true.
-            v.OuterRing.gameObject.SetActive(draftable || (owned && !maxed));
+            v.OuterRing.gameObject.SetActive(hasLiveCellAction);
             v.CapMarker.gameObject.SetActive(cellAffordable);
             v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : owned ? SolidHexOutlineSprite(v.Radius) : LockedHexOutlineSprite(v.Radius);
 
-            // MV-470: the progress ring + cost tag are shared by both cell-costed branches (draftable's
-            // unlock, owned-and-below-max's upgrade) — accumulation and legible cost read the same way
-            // regardless of which side of "owned" the node is on.
-            if (hasCellCost)
+            // MV-470: the progress ring stays scoped to a live cell action — accumulation only means
+            // something for a node you can currently act on.
+            if (hasLiveCellAction)
             {
                 v.ProgressRing.gameObject.SetActive(true);
                 v.ProgressRing.fillAmount = CellSpend.CellCostProgress01(ab.Id, cellsBanked);
                 v.ProgressRing.color = DimIfUnlit(new Color(module.r, module.g, module.b, 0.9f), familyLit);
-                v.CostIcon.gameObject.SetActive(true);
-                v.CostIcon.color = DimIfUnlit(module, familyLit);
-                v.CostText.gameObject.SetActive(true);
-                v.CostText.text = CellSpend.CurrentCellCost(ab.Id).ToString();
-                v.CostText.color = DimIfUnlit(module, familyLit);
             }
             else
             {
                 v.ProgressRing.gameObject.SetActive(false);
+            }
+
+            // MV-520: the cost tag itself is always on for anything that will ever cost cells — gating
+            // changes how a node LOOKS (LOCK pill, dimmed hex), never whether its price is legible. The
+            // glyph tells unlock and upgrade apart without reading the number; the colour is exempt from
+            // DimIfUnlit, same idiom MV-516 used for the level pill (:863) — a price the player can't
+            // yet act on still has to stay legible.
+            if (hasCostToShow)
+            {
+                v.CostIcon.gameObject.SetActive(true);
+                v.CostIcon.sprite = owned ? WeaponHudIcons.UpgradeGlyph() : WeaponHudIcons.UnlockGlyph();
+                v.CostIcon.color = module;
+                v.CostText.gameObject.SetActive(true);
+                v.CostText.text = CellSpend.PotentialCellCost(ab.Id).ToString();
+                v.CostText.color = module;
+            }
+            else
+            {
                 v.CostIcon.gameObject.SetActive(false);
                 v.CostText.gameObject.SetActive(false);
             }

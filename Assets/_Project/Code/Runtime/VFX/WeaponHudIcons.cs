@@ -173,6 +173,107 @@ namespace MaxWorlds.VFX
             return sprite;
         }
 
+        /// <summary>MV-520: the "open this" glyph for an unlock cost tag — a keyhole (circle over a
+        /// tapering triangle), the universal lock ideogram, distinct at a glance from
+        /// <see cref="UpgradeGlyph"/>'s raise-arrow without reading the number. Drawn solid white so the
+        /// caller's own <c>Image.color</c> tint (module cyan, dimmed or not) is the only colour source —
+        /// same idiom every other node-shell graphic on the board uses.</summary>
+        public static Sprite UnlockGlyph(int size = 32)
+        {
+            const string key = "unlockglyph";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];
+
+            // MV-520 fix: Texture2D pixel row 0 is the BOTTOM of the rendered sprite (same
+            // bottom-left-origin convention PowerCell's own "top = cy + h*0.5" relies on) — so the
+            // circle (the keyhole's ring) sits at the LARGER y, the tapering triangle hangs below it
+            // toward the SMALLER y, matching a real keyhole rather than rendering upside down.
+            float cx = size * 0.5f;
+            float holeR = size * 0.20f;
+            float holeCy = size * 0.68f;
+            float triTop = holeCy - holeR * 0.35f;
+            float triBottom = size * 0.18f;
+            float triHalfWidthTop = holeR * 0.75f;
+            float triHalfWidthBottom = size * 0.10f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+                    bool onCircle = (fx - cx) * (fx - cx) + (fy - holeCy) * (fy - holeCy) <= holeR * holeR;
+
+                    bool onTriangle = false;
+                    if (fy >= triBottom && fy <= triTop)
+                    {
+                        float t = (fy - triBottom) / (triTop - triBottom);
+                        float halfW = Mathf.Lerp(triHalfWidthBottom, triHalfWidthTop, t);
+                        onTriangle = Mathf.Abs(fx - cx) <= halfW;
+                    }
+
+                    if (onCircle || onTriangle) px[y * size + x] = Color.white;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>MV-520: the "raise this" glyph for an upgrade cost tag — an upward chevron over a
+        /// stem, reading as an ascend arrow. Distinct at a glance from <see cref="UnlockGlyph"/>'s
+        /// keyhole. Solid white, tinted by the caller exactly as <see cref="UnlockGlyph"/> is.</summary>
+        public static Sprite UpgradeGlyph(int size = 32)
+        {
+            const string key = "upgradeglyph";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];
+
+            // MV-520 fix: same bottom-left-origin correction as UnlockGlyph — the apex (the point of
+            // the "raise" arrow) sits at the LARGER y (the rendered top), the stem hangs below it
+            // toward the SMALLER y (the rendered bottom), so the arrow actually points up.
+            float cx = size * 0.5f;
+            float apexY = size * 0.84f, capBaseY = size * 0.44f;
+            float capHalfWidthBase = size * 0.30f;
+            float stemTop = capBaseY, stemBottom = size * 0.16f;
+            float stemHalfWidth = size * 0.11f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+
+                    bool onCap = false;
+                    if (fy >= capBaseY && fy <= apexY)
+                    {
+                        float t = (fy - capBaseY) / (apexY - capBaseY);
+                        float halfW = Mathf.Lerp(capHalfWidthBase, 0f, t);
+                        onCap = Mathf.Abs(fx - cx) <= halfW;
+                    }
+                    bool onStem = fy >= stemBottom && fy <= stemTop && Mathf.Abs(fx - cx) <= stemHalfWidth;
+
+                    if (onCap || onStem) px[y * size + x] = Color.white;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
         private static Color Fade(Color c, float alpha) => new Color(c.r, c.g, c.b, alpha);
 
         // --- helpers (inlined so this class stands alone) ---

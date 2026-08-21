@@ -107,5 +107,17 @@ namespace MaxWorlds.Weapons
                 return RigState.CanSpendPart(id) ? UpgradeCostFor(RigState.Level(id)) : 0;
             return RigState.IsCellUnlockable(id) ? UnlockCostCells : 0;
         }
+
+        /// <summary>MV-520: what <paramref name="id"/> will cost whether or not it is actionable right
+        /// now — unlike <see cref="CurrentCellCost"/>, this ignores <see cref="RigState.IsCellUnlockable"/>
+        /// entirely, so a node gated by family lock or the parent level &gt;= 2 rule still tells the
+        /// player its price instead of hiding it. Gating changes how a node LOOKS, never whether its
+        /// price is legible. Still 0 for owned-and-maxed — there is truly nothing left to buy.</summary>
+        public static int PotentialCellCost(string id)
+        {
+            if (RigState.IsOwned(id))
+                return RigState.CanSpendPart(id) ? UpgradeCostFor(RigState.Level(id)) : 0;
+            return UnlockCostCells;
+        }
     }
 }
