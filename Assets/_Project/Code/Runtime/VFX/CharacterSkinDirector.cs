@@ -13,10 +13,19 @@ namespace MaxWorlds.VFX
     /// Finds every character body and gives it a <see cref="CharacterSkin"/> (YT-61), then routes
     /// damage events to the body that took them.
     ///
-    /// It scans every frame, not on a timer. That matters: enemies are pooled and a robot is created
-    /// and activated on the SAME frame, so a once-a-second sweep left it wearing Unity's magenta
-    /// default material while it charged at you. The scan is cheap — a handful of bodies — and being
-    /// a frame late is invisible where being a second late is not.
+    /// MV-527: used to re-scan every <see cref="MeshRenderer"/> in the scene every frame, including
+    /// inactive ones. In practice that swept nothing worth the cost: a robot's parts all carry
+    /// <see cref="SelfDrivenTint"/> the instant <see cref="RobotRig"/> builds them (in
+    /// <see cref="MaxWorlds.Enemies.RobotEnemy.Awake"/>, before this director could ever see them
+    /// undressed), and Max's and the boss's real bodies (<c>MaxRig</c>, <c>BigBermudaRig</c>) sit
+    /// outside their owner's <see cref="IDamageable"/> hierarchy specifically to dodge this director
+    /// (see those classes' own doc comments) — so the only things this ever actually dressed were the
+    /// disabled greybox placeholders and the <see cref="MowerHutch"/>/<see cref="AreaGate"/> structure
+    /// bodies, all of which are built exactly once, synchronously, during the scene's Awake wave
+    /// (<c>BackyardPath.Awake</c> → <c>MapRuntime.Build</c>) and never rebuilt afterward. One sweep in
+    /// <see cref="Start"/> — guaranteed by Unity to run after every object's Awake has already fired —
+    /// dresses everything a continuous per-frame poll ever caught, at a one-time cost instead of a
+    /// forever one.
     ///
     /// Reads state and signals; writes nothing back to gameplay.
     /// </summary>
@@ -37,16 +46,17 @@ namespace MaxWorlds.VFX
         private void OnEnable() => HudSignals.DamageDealt += OnDamage;
         private void OnDisable() => HudSignals.DamageDealt -= OnDamage;
 
-        private void Update() => DressCharacters();
+        // MV-527: Start, not Update — see the class doc comment for why one sweep is enough.
+        private void Start() => DressCharacters();
 
         /// <summary>
-        /// Include INACTIVE objects: pooled enemies sit deactivated between lives, and catching them
-        /// there means they are already skinned the moment they are switched on.
+        /// Active objects only (MV-527): nothing this sweep still dresses is ever pooled/deactivated at
+        /// scene-build time (see class doc comment), so there's no tan-robot-style case here to guard
+        /// against by including inactive renderers.
         /// </summary>
         private void DressCharacters()
         {
-            foreach (var r in FindObjectsByType<MeshRenderer>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
             {
                 if (r.GetComponent<CharacterSkin>() != null) continue;
 

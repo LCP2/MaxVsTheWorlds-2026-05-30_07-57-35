@@ -28,10 +28,22 @@ namespace MaxWorlds.VFX
     /// time Big Bermuda charges. That is the magenta QA kept reporting and I kept failing to
     /// reproduce — I was never fighting the boss.
     ///
-    /// Rather than patch each spawn site (three today, and the next one will be forgotten), this
-    /// sweeps continuously: anything undressed gets a real material within a frame of appearing. The
-    /// sweep is cheap — a handful of renderers — and it closes the whole class of bug, including the
-    /// ones nobody has written yet.
+    /// Rather than patch each spawn site by hand, this used to sweep continuously — anything undressed
+    /// got a real material within a frame of appearing. MV-527: that generality was mostly theoretical.
+    /// Everything the sweep excludes (<see cref="SurfaceSkinned"/>, <see cref="CharacterSkin"/>,
+    /// <see cref="SelfDrivenTint"/>, anything under an <see cref="IDamageable"/>, <see cref="GroundRing"/>,
+    /// anything under <see cref="KeepsOwnMaterial"/>) covers every character body and every
+    /// runtime-spawned VFX prop already in this codebase — <see cref="DamageZone"/>'s own visual, for
+    /// instance, is a <see cref="GroundRing"/> built with a real material at creation (see that class's
+    /// own doc comment), so it was never actually reachable here despite once being the reason this
+    /// class exists. What's left is world SCENERY built once, synchronously, while the map assembles
+    /// (<c>BackyardPath.Awake</c> → <c>MapRuntime.Build</c>) — cover pieces, backdrop, dressing, the
+    /// home shed. One sweep in <see cref="Start"/>, guaranteed by Unity to run after every object's
+    /// Awake has already fired this scene, catches all of it at a one-time cost instead of a per-frame
+    /// one. A future spawn site that creates a raw, unmaterialled primitive DURING gameplay (after this
+    /// sweep has already run) needs to dress itself explicitly — the way <c>Pickup</c> and every
+    /// character rig in this file's own exclusion list already do — rather than relying on this class
+    /// to find it.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class RuntimeSurfaceDirector : MonoBehaviour
@@ -43,12 +55,12 @@ namespace MaxWorlds.VFX
             new GameObject("RuntimeSurfaces").AddComponent<RuntimeSurfaceDirector>();
         }
 
-        private void Update() => Sweep();
+        // MV-527: Start, not Update — see the class doc comment for why one sweep is enough.
+        private void Start() => Sweep();
 
         private void Sweep()
         {
-            foreach (var r in FindObjectsByType<MeshRenderer>(
-                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            foreach (var r in FindObjectsByType<MeshRenderer>(FindObjectsSortMode.None))
             {
                 if (r.GetComponent<SurfaceSkinned>() != null) continue;   // done already
                 if (r.GetComponent<CharacterSkin>() != null) continue;    // a body; CharacterSkinDirector owns it

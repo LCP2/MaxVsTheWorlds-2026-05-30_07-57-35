@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
@@ -38,6 +39,36 @@ namespace MaxWorlds.Pickups
 
         private Transform _spin;
         private float _baseY = FloatHeight;
+
+        // MV-527: PickupArtDirector used to find every currently-placed pickup with a per-frame
+        // FindObjectsByType<Pickup>(Include) scan — same idiom RobotEnemy._active already replaces for
+        // enemies. A pickup only needs animating (spin/glisten/ring pulse) while it's actually placed on
+        // the ground, so this registry IS exactly the set PickupArtDirector's Update should walk.
+        private static readonly List<Pickup> _active = new List<Pickup>(16);
+
+        /// <summary>Every currently-PLACED pickup — walked by <c>PickupArtDirector</c> instead of a
+        /// scene-wide scan (MV-527).</summary>
+        public static IReadOnlyList<Pickup> Active => _active;
+
+        /// <summary>Fires exactly once per placement — a fresh drop (<see cref="Create"/> then
+        /// immediately <see cref="Place"/>, both inside the same call) or a pooled reuse (<see cref="Place"/>
+        /// alone, after <c>PickupDirector.Collect</c> deactivated it). <c>PickupArtDirector</c> listens
+        /// for this instead of polling an active/inactive transition itself every frame (MV-527) — same
+        /// null-safe static-event idiom as <c>DropSignals</c>/<c>HudSignals</c>.</summary>
+        public static event System.Action<Pickup> Registered;
+
+        /// <summary>Test isolation only (mirrors <c>RobotEnemy.ResetRegistry</c>) — a fixture that
+        /// builds and destroys pickups without going through <see cref="OnDisable"/> would otherwise
+        /// leak stale entries into the next test.</summary>
+        public static void ResetRegistry() => _active.Clear();
+
+        private void OnEnable()
+        {
+            _active.Add(this);
+            Registered?.Invoke(this);
+        }
+
+        private void OnDisable() => _active.Remove(this);
 
         /// <summary>Build a pooled pickup of the given kind (its visual never changes, so the director
         /// pools per kind and reuses it as-is).</summary>

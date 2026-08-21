@@ -8,34 +8,62 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-454 AC4 — <see cref="PickupArtDirector.RollPartArtKey"/> has to keep handing back the same key
-    /// for a pickup that's just sitting on the ground, and only reroll on a fresh drop (an
-    /// inactive→active transition) — now meaningfully testable with ten keys in the pool instead of one.
-    /// Driven by reflection since <c>RollPartArtKey</c> is a private instance method with no other
-    /// surface to exercise it through outside Play Mode (same idiom as <see cref="PickupArtDirectorScaleTests"/>).
+    /// MV-454 AC4 — the Supercell art key has to keep handing back the same design for a pickup that's
+    /// just sitting on the ground, and only reroll on a fresh drop — now meaningfully testable with ten
+    /// keys in the pool instead of one.
+    ///
+    /// MV-527: the reroll used to be driven by polling an active/inactive transition inside
+    /// <c>RollPartArtKey</c>, invoked every frame from <c>Update</c>. It's now driven once per placement
+    /// by <c>Pickup.Registered</c> (<c>PickupArtDirector.OnPickupRegistered</c>), which stores the result
+    /// in the private <c>_partArtKey</c> dictionary read by <c>Update</c>. These tests now drive that
+    /// same event instead of the old method, and read the key back off the dictionary — same invariant,
+    /// exercised through the new mechanism. Driven by reflection since both are private with no other
+    /// surface to exercise them through outside Play Mode (same idiom as <see cref="PickupArtDirectorScaleTests"/>).
     /// </summary>
     public sealed class PickupArtDirectorRollPartArtKeyTests
     {
-        private static string InvokeRoll(PickupArtDirector director, Pickup pickup)
+        private static void InvokeRegistered(PickupArtDirector director, Pickup pickup)
         {
-            var method = typeof(PickupArtDirector).GetMethod("RollPartArtKey",
+            var method = typeof(PickupArtDirector).GetMethod("OnPickupRegistered",
                 BindingFlags.NonPublic | BindingFlags.Instance);
-            Assert.IsNotNull(method, "PickupArtDirector.RollPartArtKey went missing");
-            return (string)method.Invoke(director, new object[] { pickup });
+            Assert.IsNotNull(method, "PickupArtDirector.OnPickupRegistered went missing");
+            method.Invoke(director, new object[] { pickup });
         }
 
-        private static Pickup BarePickup() => new GameObject("Pickup(Test)").AddComponent<Pickup>();
+        private static string ReadKey(PickupArtDirector director, Pickup pickup)
+        {
+            var field = typeof(PickupArtDirector).GetField("_partArtKey",
+                BindingFlags.NonPublic | BindingFlags.Instance);
+            Assert.IsNotNull(field, "PickupArtDirector._partArtKey went missing");
+            var dict = (Dictionary<Pickup, string>)field.GetValue(director);
+            Assert.IsTrue(dict.TryGetValue(pickup, out string key), "the pickup was never assigned a key");
+            return key;
+        }
+
+        /// <summary>A bare Supercell pickup — <c>OnPickupRegistered</c> only rerolls a Part design for
+        /// <see cref="PickupKind.Supercell"/> (PowerCell/Device always wear a fixed key), and
+        /// <see cref="Pickup.Kind"/> has a private setter only <see cref="Pickup.Create"/> normally
+        /// reaches, which this skips (its greybox build calls a delayed <c>Destroy</c> illegal outside
+        /// Play mode — same reason <see cref="PickupArtDirectorScaleTests"/> does the same thing).</summary>
+        private static Pickup BarePickup()
+        {
+            var pickup = new GameObject("Pickup(Test)").AddComponent<Pickup>();
+            typeof(Pickup).GetProperty("Kind", BindingFlags.Public | BindingFlags.Instance)
+                .SetValue(pickup, PickupKind.Supercell);
+            return pickup;
+        }
 
         [Test]
-        public void RollPartArtKey_ReturnsTheSameKey_AcrossRepeatedCallsWithNoFreshDrop()
+        public void PartArtKey_StaysTheSame_AcrossRepeatedUpdatesWithNoFreshDrop()
         {
             var director = new GameObject("PickupArtDirector(Test)").AddComponent<PickupArtDirector>();
             var pickup = BarePickup();
             pickup.gameObject.SetActive(true);
 
-            string first = InvokeRoll(director, pickup);
-            string second = InvokeRoll(director, pickup);
-            string third = InvokeRoll(director, pickup);
+            InvokeRegistered(director, pickup);   // one placement — the only reroll
+            string first = ReadKey(director, pickup);
+            string second = ReadKey(director, pickup);
+            string third = ReadKey(director, pickup);
 
             Assert.AreEqual(first, second, "the key should stay stable while the pickup sits on the ground.");
             Assert.AreEqual(first, third, "the key should stay stable while the pickup sits on the ground.");
@@ -45,7 +73,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RollPartArtKey_ReturnsMoreThanOneDistinctKey_Over50FreshDrops()
+        public void PartArtKey_ReturnsMoreThanOneDistinctKey_Over50FreshDrops()
         {
             var director = new GameObject("PickupArtDirector(Test)").AddComponent<PickupArtDirector>();
             var pickup = BarePickup();
@@ -57,10 +85,8 @@ namespace MaxWorlds.Tests.EditMode
             var seen = new HashSet<string>();
             for (int i = 0; i < 50; i++)
             {
-                pickup.gameObject.SetActive(false);
-                InvokeRoll(director, pickup);               // records the inactive edge, no reroll
-                pickup.gameObject.SetActive(true);
-                seen.Add(InvokeRoll(director, pickup));      // inactive -> active: a fresh drop, rerolls
+                InvokeRegistered(director, pickup);   // one call == one fresh drop, unambiguously
+                seen.Add(ReadKey(director, pickup));
             }
 
             Assert.Greater(seen.Count, 1,

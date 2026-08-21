@@ -65,10 +65,13 @@ namespace MaxWorlds.VFX
     /// <see cref="HudSignals.DamageDealt"/> signal the HUD already raises. Delete this file and the game
     /// plays identically — the robots just go back to being a capsule and a cube.
     ///
-    /// One rig PER robot, attached and pooled with it by <see cref="RobotRigDirector"/>. A robot is
-    /// pooled by kind (a dead bruiser never comes back as a rusher — YT-66), so the body a rig builds is
-    /// the body that GameObject wears for its whole life: the model is built once and reused, never
-    /// rebuilt on respawn.
+    /// One rig PER robot, attached once by the spawner that BUILDS it (<c>EnemySpawner.CreateInstance</c>
+    /// / <c>AreaAccumulationDirector.CreateInstance</c> — MV-527; previously a per-frame
+    /// <c>RobotRigDirector</c> sweep found and attached it by scanning the scene for any RobotEnemy
+    /// missing one). A pooled reuse never runs CreateInstance again, so this still only ever happens
+    /// once per GameObject. A robot is pooled by kind (a dead bruiser never comes back as a rusher —
+    /// YT-66), so the body a rig builds is the body that GameObject wears for its whole life: the model
+    /// is built once and reused, never rebuilt on respawn.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class RobotRig : MonoBehaviour

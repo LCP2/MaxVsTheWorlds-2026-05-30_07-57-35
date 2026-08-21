@@ -638,6 +638,13 @@ namespace MaxWorlds.Enemies
             if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
         }
 
+        /// <summary>Reused every call (MV-527) — <see cref="GeometryUtility.CalculateFrustumPlanes(Camera)"/>
+        /// allocates a fresh <c>Plane[6]</c> every time it's called, and this runs once per DORMANT
+        /// robot per frame (<see cref="TickDormant"/>); MV-514 doubled the dormant population, which is
+        /// what turned this from a rounding error into GC hitching. The non-allocating overload writes
+        /// into this buffer instead.</summary>
+        private static readonly Plane[] s_frustumPlanes = new Plane[6];
+
         /// <summary>Whether this robot's body centre sits inside the gameplay camera's frustum right
         /// now (MV-478). Fails OPEN (true) when no camera can be resolved — headless build, EditMode
         /// fixture — so a missing camera can never leave a level full of frozen robots (AC8). Same
@@ -646,8 +653,8 @@ namespace MaxWorlds.Enemies
         {
             Camera cam = Camera.main;
             if (cam == null) return true;
-            Plane[] planes = GeometryUtility.CalculateFrustumPlanes(cam);
-            return GeometryUtility.TestPlanesAABB(planes, new Bounds(transform.position, Vector3.one));
+            GeometryUtility.CalculateFrustumPlanes(cam, s_frustumPlanes);
+            return GeometryUtility.TestPlanesAABB(s_frustumPlanes, new Bounds(transform.position, Vector3.one));
         }
 
         /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
