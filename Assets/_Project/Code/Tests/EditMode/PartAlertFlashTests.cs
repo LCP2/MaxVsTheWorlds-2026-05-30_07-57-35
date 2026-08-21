@@ -68,28 +68,28 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheAlertIsHiddenWhenNothingIsBanked()
         {
-            Assert.That(HudController.ShouldShowPartAlert(partsBanked: 0, abilityCreditsBanked: 0), Is.False);
+            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 0), Is.False);
         }
 
         [Test]
         public void TheAlertShowsForABankedPartAlone()
         {
-            Assert.That(HudController.ShouldShowPartAlert(partsBanked: 1, abilityCreditsBanked: 0), Is.True);
+            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 1, abilityCreditsBanked: 0), Is.True);
         }
 
         [Test]
         public void TheAlertShowsForABankedAbilityCreditAlone_MV358()
         {
-            Assert.That(HudController.ShouldShowPartAlert(partsBanked: 0, abilityCreditsBanked: 1), Is.True);
+            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 1), Is.True);
         }
 
         [Test]
         public void TheAlertClearsOnlyOnceBothKindsAreFullySpent_MV358()
         {
-            Assert.That(HudController.ShouldShowPartAlert(partsBanked: 1, abilityCreditsBanked: 1), Is.True);
-            Assert.That(HudController.ShouldShowPartAlert(partsBanked: 0, abilityCreditsBanked: 1), Is.True,
+            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 1, abilityCreditsBanked: 1), Is.True);
+            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 1), Is.True,
                 "an ability credit is still banked — the flash must not clear yet");
-            Assert.That(HudController.ShouldShowPartAlert(partsBanked: 0, abilityCreditsBanked: 0), Is.False,
+            Assert.That(HudController.ShouldShowSupercellAlert(supercellsBanked: 0, abilityCreditsBanked: 0), Is.False,
                 "nothing left banked — the flash must clear");
         }
     }

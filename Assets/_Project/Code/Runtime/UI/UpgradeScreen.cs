@@ -3,7 +3,6 @@ using UnityEngine.EventSystems;
 using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Core;
-using MaxWorlds.Pickups;
 using MaxWorlds.Upgrades;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
@@ -275,7 +274,6 @@ namespace MaxWorlds.UI
                 PartKind chosen = picked[index];
                 UpgradeState.Install(chosen);
                 CommitToLiveWeapon();
-                MaxWorlds.Pickups.PickupWallet.TrySpendPart();
             });
         }
 
@@ -374,7 +372,6 @@ namespace MaxWorlds.UI
             {
                 UpgradeState.Install(_part.Kind);   // stack the effect; the weapon/player read it live
                 CommitToLiveWeapon();               // and re-fit the live weapon on the spot (YT-141)
-                PickupWallet.TrySpendPart();
             }
             _root.SetActive(false);
         }

@@ -10,11 +10,11 @@ namespace MaxWorlds.Weapons
     ///
     /// Eligibility (<see cref="IsEligible"/>) reads as "both parent categories lit" — at least one
     /// OWNED ability in each, exactly the design board's own amber/faint rule — and is deliberately
-    /// independent of the currently-banked part count (MV-423.png vs -noparts.png: OVERCHARGE stays
-    /// amber/ready at zero parts banked; only the tap itself needs the parts). Spending the
-    /// <see cref="RigFusionDef.PartCost"/> parts themselves is <see cref="PartSpend.TrySpendOnFusion"/>'s
-    /// job, same "check the sink can accept it BEFORE touching the bank" shape <see cref="RigState.RaiseLevel"/>
-    /// already uses.
+    /// independent of the currently-banked cell count (MV-423.png vs -noparts.png: OVERCHARGE stays
+    /// amber/ready at zero cells banked; only the tap itself needs the cells). Spending the
+    /// <see cref="RigFusionDef.CellCost"/> cells themselves is <see cref="PartSpend.TrySpendOnFusion"/>'s
+    /// job (MV-515: converted from parts), same "check the sink can accept it BEFORE touching the bank"
+    /// shape <see cref="RigState.RaiseLevel"/> already uses.
     /// </summary>
     public static class RigFusionState
     {

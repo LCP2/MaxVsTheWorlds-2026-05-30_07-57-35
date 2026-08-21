@@ -98,16 +98,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(0));
         }
 
-        // ---------------------------------------------------------------- PartSpend
-
-        [Test]
-        public void PartSpendOnAbilityFailsWithNoBankedPartEvenOnceAcquired()
-        {
-            WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            Assert.That(PartSpend.TrySpendOnAbility(AbilityKind.Sentinels), Is.False,
-                "Sentinels itself is a cap 1 boolean unlock, already at its max once drafted");
-        }
-
         // ---------------------------------------------------------------- AbilityTuning math
 
         [Test]

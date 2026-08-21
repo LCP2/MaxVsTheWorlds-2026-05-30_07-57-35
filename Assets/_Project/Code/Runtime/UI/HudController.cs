@@ -60,11 +60,11 @@ namespace MaxWorlds.UI
         /// primary's own blue, since the turret is meant to read as Max's own tech ("a hose pipe on a
         /// stick").</summary>
         private static readonly Color SentinelColor = new Color(0.45f, 0.65f, 0.85f);
-        // The part-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell and
-        // the pickup it points at read as ONE language. Sourced from the constant the aura uses, not a
-        // matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
+        // The Supercell-ready chip shares the on-ground collectible aura's colour (YT-147): the HUD tell
+        // and the pickup it points at read as ONE language. Sourced from the constant the aura uses, not
+        // a matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
         // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
-        private static readonly Color PartColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
+        private static readonly Color SupercellColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
         /// <summary>The WEAPONS button's idle-state ring (MV-425) — "deliberately recessive... it
         /// should disappear mid-fight," a thin cool grey rather than any of the amber/cyan alert hues.</summary>
         private static readonly Color WeaponsButtonIdleRingColor = new Color(0.55f, 0.58f, 0.62f, 1f);
@@ -284,7 +284,7 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated += OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
-            MaxWorlds.Pickups.PickupWallet.PartsChanged += OnParts;
+            MaxWorlds.Pickups.PickupWallet.SupercellsChanged += OnSupercells;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
             AbilityCreditBank.Changed += OnAbilityCreditsChanged;
@@ -304,7 +304,7 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated -= OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
-            MaxWorlds.Pickups.PickupWallet.PartsChanged -= OnParts;
+            MaxWorlds.Pickups.PickupWallet.SupercellsChanged -= OnSupercells;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
             AbilityCreditBank.Changed -= OnAbilityCreditsChanged;
@@ -346,18 +346,18 @@ namespace MaxWorlds.UI
             if (_cellCount != null) _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{capacity}";
         }
 
-        private void OnParts(int banked) => RefreshWeaponsButtonAlert();
+        private void OnSupercells(int banked) => RefreshWeaponsButtonAlert();
 
-        /// <summary>MV-358: a banked shed credit flashes the exact same WEAPONS-button badge a banked
-        /// part already does — "something is waiting in the Abilities screen", regardless of which kind
-        /// — rather than a separate tell the player has to learn twice.</summary>
+        /// <summary>MV-358: a banked shed credit flashes the exact same WEAPONS-button badge a cashable
+        /// Supercell already does — "something is waiting in the Abilities screen", regardless of which
+        /// kind — rather than a separate tell the player has to learn twice.</summary>
         private void OnAbilityCreditsChanged(int banked) => RefreshWeaponsButtonAlert();
 
         /// <summary>MV-425: a Morphing Module draft banked/taken (<see cref="PendingMorphingModule"/>)
         /// flips the button's cyan "module captured" state.</summary>
         private void OnPendingModuleChanged() => RefreshWeaponsButtonAlert();
 
-        /// <summary>The four-state alert this button carries (MV-425): idle, parts-to-fit (amber),
+        /// <summary>The four-state alert this button carries (MV-425): idle, supercell-to-cash (amber),
         /// module-captured (cyan) or both. Immediate toggle of what's shown; the pulse/flash animation
         /// itself runs every frame in <see cref="UpdateWeaponsButton"/>.</summary>
         private void RefreshWeaponsButtonAlert()
@@ -366,27 +366,29 @@ namespace MaxWorlds.UI
             if (_moduleBadgeRoot != null) _moduleBadgeRoot.gameObject.SetActive(ShowsModuleBadge(alert));
             if (_weaponsModuleHaloRoot != null) _weaponsModuleHaloRoot.gameObject.SetActive(ShowsModuleRing(alert));
             if (_rigPartCounterText != null)
-                _rigPartCounterText.text = (MaxWorlds.Pickups.PickupWallet.PartsBanked + AbilityCreditBank.Banked).ToString();
+                _rigPartCounterText.text = (MaxWorlds.Pickups.PickupWallet.SupercellsBanked + AbilityCreditBank.Banked).ToString();
         }
 
-        /// <summary>MV-471: the ring's amber "parts to fit" state now tracks the same "is a part spend
-        /// actually possible" question as the new PART counter (<see cref="RigActions.AnyPartActionAffordable"/>)
-        /// instead of "are you merely holding one" — a banked ability credit is always immediately
-        /// spendable (BUILD ABILITY never fails while one is banked), so it still counts on its own.</summary>
+        /// <summary>MV-471/MV-515: the ring's amber "supercell to cash" state tracks the same "is cashing
+        /// a Supercell actually possible" question as the RIG-mark counter
+        /// (<see cref="RigActions.AnySupercellActionAffordable"/>) instead of "are you merely holding
+        /// one" — a banked ability credit is always immediately spendable (BUILD ABILITY never fails
+        /// while one is banked), so it still counts on its own.</summary>
         private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
-            AnyPartAlertActionable(),
+            AnySupercellAlertActionable(),
             PendingMorphingModule.HasPending);
 
-        private static bool AnyPartAlertActionable() =>
-            RigActions.AnyPartActionAffordable(MaxWorlds.Pickups.PickupWallet.PartsBanked, MaxWorlds.Pickups.PickupWallet.PowerCells) ||
+        private static bool AnySupercellAlertActionable() =>
+            RigActions.AnySupercellActionAffordable(MaxWorlds.Pickups.PickupWallet.SupercellsBanked,
+                MaxWorlds.Pickups.PickupWallet.PowerCells, MaxWorlds.Pickups.PickupWallet.Capacity) ||
             AbilityCreditBank.Banked > 0;
 
         /// <summary>Pure predicate (MV-358) — pinned by an EditMode test without building a canvas: a
         /// spend is waiting if either kind of banked token is &gt; 0.</summary>
-        public static bool ShouldShowPartAlert(int partsBanked, int abilityCreditsBanked) =>
-            partsBanked > 0 || abilityCreditsBanked > 0;
+        public static bool ShouldShowSupercellAlert(int supercellsBanked, int abilityCreditsBanked) =>
+            supercellsBanked > 0 || abilityCreditsBanked > 0;
 
-        /// <summary>The WEAPONS button's four alert states (MV-425). Amber ("parts to fit") means
+        /// <summary>The WEAPONS button's four alert states (MV-425). Amber ("supercell to cash") means
         /// something is spendable and the player chooses when; cyan ("module captured") means the game
         /// is waiting on a decision the player hasn't made — they never share a colour, and cyan always
         /// wins the ring.</summary>
@@ -414,7 +416,7 @@ namespace MaxWorlds.UI
         /// constant that data file's own colours block has asked for since MV-423
         /// (<c>"constant": "NEW - add HudController.ModuleColor"</c>). Read live off
         /// <see cref="RigBoardLayout"/> rather than a second hand-copied hex, the same "source, not a
-        /// matched copy" idiom <see cref="PartColor"/> already follows.</summary>
+        /// matched copy" idiom <see cref="SupercellColor"/> already follows.</summary>
         public static Color ModuleColor => RigBoardLayout.Colour("module");
 
         /// <summary>The ring/mark stroke colour for each state — module cyan sourced from
@@ -422,7 +424,7 @@ namespace MaxWorlds.UI
         /// never drift apart.</summary>
         public static Color WeaponsButtonRingColor(WeaponsButtonAlert alert) =>
             ShowsModuleRing(alert) ? ModuleColor
-            : alert == WeaponsButtonAlert.PartsToFit ? PartColor
+            : alert == WeaponsButtonAlert.PartsToFit ? SupercellColor
             : WeaponsButtonIdleRingColor;
 
         /// <summary>Tapping the WEAPONS button (YT-178) opens the weapons area to show Max's current
@@ -549,14 +551,14 @@ namespace MaxWorlds.UI
         /// <summary>
         /// The parts badge's colour at flash amount <paramref name="t"/>: the shared collectible orange
         /// swung dim-&gt;full so it reads as an active beacon, not a static badge (YT-147). The hue is
-        /// <see cref="PartColor"/> — the same orange the on-ground pickup glows — so the two never drift
+        /// <see cref="SupercellColor"/> — the same orange the on-ground pickup glows — so the two never drift
         /// and neither is the forbidden yellow.
         /// </summary>
         public static Color PartAlertColor(float t)
         {
             t = Mathf.Clamp01(t);
             // MV-300: a deeper trough so the beat reads as a strong pulse, not a gentle wobble.
-            Color c = PartColor * (0.32f + 0.68f * t);   // dim -> full orange
+            Color c = SupercellColor * (0.32f + 0.68f * t);   // dim -> full orange
             c.a = 0.55f + 0.45f * t;
             return c;
         }
@@ -624,19 +626,20 @@ namespace MaxWorlds.UI
             UpdateRigCounters();
         }
 
-        /// <summary>MV-471: redraws both always-on RIG-mark counters every frame — live count text plus
-        /// a flash that engages only when <see cref="RigActions"/> says that currency actually buys
+        /// <summary>MV-471/MV-515: redraws both always-on RIG-mark counters every frame — live count text
+        /// plus a flash that engages only when <see cref="RigActions"/> says that currency actually buys
         /// something right now. A banked ability credit is always instantly spendable, so it counts
-        /// toward the PART counter's flash the same way it does for the ring, <see cref="AnyPartAlertActionable"/>.</summary>
+        /// toward the SUPERCELL counter's flash the same way it does for the ring, <see cref="AnySupercellAlertActionable"/>.</summary>
         private void UpdateRigCounters()
         {
-            int partsBanked = MaxWorlds.Pickups.PickupWallet.PartsBanked;
+            int supercellsBanked = MaxWorlds.Pickups.PickupWallet.SupercellsBanked;
             int creditsBanked = AbilityCreditBank.Banked;
             if (_rigPartCounterRoot != null)
             {
-                if (_rigPartCounterText != null) _rigPartCounterText.text = (partsBanked + creditsBanked).ToString();
-                bool actionable = RigActions.AnyPartActionAffordable(partsBanked, MaxWorlds.Pickups.PickupWallet.PowerCells) || creditsBanked > 0;
-                SetRigCounterFlash(_rigPartCounterRoot, _rigPartCounterBg, _rigPartCounterGlow, PartColor, actionable);
+                if (_rigPartCounterText != null) _rigPartCounterText.text = (supercellsBanked + creditsBanked).ToString();
+                bool actionable = RigActions.AnySupercellActionAffordable(supercellsBanked,
+                    MaxWorlds.Pickups.PickupWallet.PowerCells, MaxWorlds.Pickups.PickupWallet.Capacity) || creditsBanked > 0;
+                SetRigCounterFlash(_rigPartCounterRoot, _rigPartCounterBg, _rigPartCounterGlow, SupercellColor, actionable);
             }
 
             if (_cellCounterRoot != null)
@@ -2156,7 +2159,7 @@ namespace MaxWorlds.UI
             glow.type = Image.Type.Sliced;
             glow.raycastTarget = false;
 
-            bg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), PartColor, "Chip");
+            bg = AddImage(root, HudTextures.RoundedBox(48, 0.5f), SupercellColor, "Chip");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
             bg.raycastTarget = false;  // the WEAPONS button underneath handles taps
 

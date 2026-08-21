@@ -5,25 +5,26 @@ using MaxWorlds.UI;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// MV-327: the Abilities screen's PARTS chip grew a pulsing glow ring so a banked, spendable part
-    /// reads as prominent at a glance, same as the overworld's own part-alert badge. Pure function, so
-    /// the beat and the "only when actionable" gate are pinned without building a canvas.
+    /// MV-327: the Abilities screen's SUPERCELL tray grew a pulsing glow ring so a cashable Supercell
+    /// reads as prominent at a glance, same as the overworld's own part-alert badge. MV-515: the gate
+    /// is now "cashing one is actually possible" (<c>cashable</c>), not merely "one is banked". Pure
+    /// function, so the beat and the actionability gate are pinned without building a canvas.
     /// </summary>
     public sealed class WeaponsScreenPartsGlowTests
     {
         [Test]
-        public void StaysOffWithNothingBanked()
+        public void StaysOffWhenNotCashable()
         {
             for (float ti = 0f; ti < 4f; ti += 0.3f)
-                Assert.That(WeaponsScreen.PartsGlowAlpha(ti, 0), Is.EqualTo(0f),
-                    $"the glow must stay off with nothing banked, at t={ti:0.00}");
+                Assert.That(WeaponsScreen.SupercellsGlowAlpha(ti, cashable: false), Is.EqualTo(0f),
+                    $"the glow must stay off while cashing is not possible, at t={ti:0.00}");
         }
 
         [Test]
-        public void PulsesOnceAPartIsBanked()
+        public void PulsesOnceCashingIsPossible()
         {
-            float dim = WeaponsScreen.PartsGlowAlpha(0f, 1);
-            float bright = WeaponsScreen.PartsGlowAlpha(Mathf.PI / 12f, 1); // quarter period: sin peaks here
+            float dim = WeaponsScreen.SupercellsGlowAlpha(0f, cashable: true);
+            float bright = WeaponsScreen.SupercellsGlowAlpha(Mathf.PI / 12f, cashable: true); // quarter period: sin peaks here
             Assert.That(bright, Is.GreaterThan(dim), "the glow barely changes — that reads as static, not a pulse");
         }
 
@@ -32,7 +33,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             for (float ti = 0f; ti < 4f; ti += 0.05f)
             {
-                float v = WeaponsScreen.PartsGlowAlpha(ti, 3);
+                float v = WeaponsScreen.SupercellsGlowAlpha(ti, cashable: true);
                 Assert.That(v, Is.InRange(0f, 1f), $"glow alpha left 0..1 at t={ti:0.00} (v={v:0.00})");
             }
         }

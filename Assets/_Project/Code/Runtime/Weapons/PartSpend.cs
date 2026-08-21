@@ -3,55 +3,24 @@ using MaxWorlds.Pickups;
 namespace MaxWorlds.Weapons
 {
     /// <summary>
-    /// Spends one banked part on a chosen owned track or ability (WV-228) — the glue between
-    /// <see cref="PickupWallet"/>'s fungible token count and <see cref="WeaponSystemState"/>'s
-    /// level-up primitives. A part is only actually spent when the level-up succeeds: an unowned
-    /// ability or a track/ability already at its cap ("unowned/locked items can't be upgraded", spec
-    /// §5) leaves the bank untouched.
+    /// Forges a FORGE fusion by spending banked cells (MV-426; MV-515 converted the cost from parts to
+    /// cells — a Supercell is worth exactly <see cref="PickupWallet.SupercellCellValue"/> cells, so a
+    /// fusion's cost is simply expressed in the one currency that remains). MV-515 also retired this
+    /// class's other per-track and per-ability spend methods — dead code with no runtime caller once
+    /// THE RIG board replaced the legacy per-track/ability part spend.
     /// </summary>
     public static class PartSpend
     {
-        /// <summary>Spend one banked part to raise an RCDA track by a level. Every track is owned from
-        /// run start, so the only way this fails is an empty bank or the track's own cap.</summary>
-        public static bool TrySpendOnTrack(WeaponTrackKind kind)
-        {
-            if (PickupWallet.PartsBanked <= 0) return false;
-            if (!WeaponSystemState.LevelUpTrack(kind)) return false;
-            PickupWallet.TrySpendPart();
-            return true;
-        }
-
-        /// <summary>Spend one banked part to raise an OWNED ability by a level. Fails without spending
-        /// if the ability hasn't been acquired yet (WV-229) or is already at its cap.</summary>
-        public static bool TrySpendOnAbility(AbilityKind kind)
-        {
-            if (PickupWallet.PartsBanked <= 0) return false;
-            if (!WeaponSystemState.LevelUpAbility(kind)) return false;
-            PickupWallet.TrySpendPart();
-            return true;
-        }
-
-        /// <summary>Spend one banked part to raise a Water Balloon track by a level (MV-370). Every
-        /// track is owned from run start, same as an RCDA track, so the only way this fails is an
-        /// empty bank or the track's own cap.</summary>
-        public static bool TrySpendOnWaterBalloonTrack(WaterBalloonTrackKind kind)
-        {
-            if (PickupWallet.PartsBanked <= 0) return false;
-            if (!WeaponSystemState.LevelUpWaterBalloonTrack(kind)) return false;
-            PickupWallet.TrySpendPart();
-            return true;
-        }
-
-        /// <summary>Forge a FORGE fusion (MV-426): 3 parts, never a shed. Fails cleanly (nothing
-        /// spent) below the fusion's own cost, if it's already forged, or if either parent category
-        /// isn't lit yet — same "check the sink can accept it BEFORE touching the bank" order every
-        /// other spend above follows.</summary>
+        /// <summary>Forge a FORGE fusion (MV-426, cost converted to cells by MV-515). Fails cleanly
+        /// (nothing spent) below the fusion's own cost, if it's already forged, or if either parent
+        /// category isn't lit yet — same "check the sink can accept it BEFORE touching the bank" order
+        /// every other spend in this codebase follows.</summary>
         public static bool TrySpendOnFusion(string fusionId)
         {
             if (!RigBoard.TryGetFusion(fusionId, out var def)) return false;
-            if (PickupWallet.PartsBanked < def.PartCost) return false;
+            if (PickupWallet.PowerCells < def.CellCost) return false;
             if (!RigFusionState.TryForge(fusionId)) return false;
-            PickupWallet.TrySpendParts(def.PartCost);
+            PickupWallet.TrySpendPowerCells(def.CellCost);
             return true;
         }
     }

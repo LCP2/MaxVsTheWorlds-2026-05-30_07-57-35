@@ -18,12 +18,12 @@
     { "name": "ipad-mini", "w": 1078, "h": 815 }
   ],
   "model": {
-    "$comment": "Two currencies, one gate. A MORPHING MODULE (dropped by a shed) UNLOCKS an ability at level 1. PARTS raise the level of an ability you already own. Parts can NEVER unlock. MV-457: a shed's own draft now offers a locked CATEGORY, not a single ability - see rules below.",
+    "$comment": "MV-515: one currency (cells) for every node action. A MORPHING MODULE (dropped by a shed) UNLOCKS an ability at level 1 for cells; the same cells raise an owned ability's level. SUPERCELLS are a banked 10-cell top-up, cashed in explicitly - no longer an unlock requirement. MV-457: a shed's own draft offers a locked CATEGORY, not a single ability - see rules below.",
     "rules": [
       "A category must be UNLOCKED (by a shed's Morphing Module) before any of its abilities can be reached at all - a root ability (no parent) is only reached once its own category is unlocked.",
-      "Destroying a shed offers a random choice of 2 still-locked categories; picking one unlocks that whole category. 1 locked category left is granted outright, no choice shown. 0 left falls back to a part plus a bigger cell cache.",
-      "Once a category is unlocked, every ability is still taken individually - there is no parts-unlockable tier for an ability itself; the 'stat' kind from schema 2 no longer exists.",
-      "Parts raise an OWNED ability from its current level toward maxLevel. Parts spent on an unowned ability are impossible, not merely disallowed.",
+      "Destroying a shed offers a random choice of 2 still-locked categories; picking one unlocks that whole category. 1 locked category left is granted outright, no choice shown. 0 left falls back to a Supercell plus a bigger cell cache.",
+      "Once a category is unlocked, every ability is still taken individually - there is no cells-unlockable tier for an ability itself; the 'stat' kind from schema 2 no longer exists.",
+      "Cells raise an OWNED ability from its current level toward maxLevel. Cells spent on an unowned ability are impossible, not merely disallowed.",
       "A non-root node is REACHED when its parent is at level >= 1, same as always.",
       "Run start: p_dmg (RCDA DAMAGE) is owned at level 1, and PRIMARY is the only unlocked category. Every other ability is level 0, unowned, and unreached until its own category opens."
     ]
@@ -50,14 +50,6 @@
     "capMarkerOffset": {
       "dx": "+r-6",
       "dy": "-r+15"
-    },
-    "partSlot": {
-      "$comment": "MV-492: replaces the old bottom-corner partBadge '+' — a part is now required (not spent) to unlock, so this reads as a requirement slot, not a spend button, and sits in the hex's free top arc instead of overlapping the level pill.",
-      "radius": 13,
-      "offset": {
-        "dx": "+0",
-        "dy": "+35"
-      }
     },
     "levelPill": {
       "w": 62,
@@ -115,9 +107,9 @@
     "$comment_glow": "MV-446 defect 2: the owned/draftable node halo is now HudTextures.PolygonGlow (follows the hexagon's own silhouette, fading over glowBlur* px beyond its edge) instead of a plain circle sized to the node's square bounding box - the old shape both spilled past a hexagon's narrower width and read as a lens flare. glowAlphaOwned was 0.55 pre-MV-446 (MV-443 raised it from 0.28); lowered slightly alongside the shape fix since a hex-tight halo reads brighter than the same alpha did as a diffuse circle.",
     "forgeCaptionFontSize": 18,
     "fusionSubFontSize": 16,
-    "partsTraySubFontSizeMin": 16,
-    "partsTraySubFontSizeMax": 18,
-    "$comment_smallType": "MV-446 defect 3: floor of 16px (matches labelFontSize, already used at that size for every node's own caption) - the FORGE caption, fusion sub-captions and PARTS tray 'N banked' line were rendering as small as 10-13px, muddy on a downscaled 6-inch screen.",
+    "supercellTraySubFontSizeMin": 16,
+    "supercellTraySubFontSizeMax": 18,
+    "$comment_smallType": "MV-446 defect 3: floor of 16px (matches labelFontSize, already used at that size for every node's own caption) - the FORGE caption, fusion sub-captions and SUPERCELL tray 'N banked' line were rendering as small as 10-13px, muddy on a downscaled 6-inch screen.",
     "familyDimFactor": 0.39,
     "$comment_familyDim": "MV-462 defect 3: an ability family with zero owned abilities must recede as one unit - every graphic under it (category node fill/stroke/icon/label/pill, every ability node + label + pill, every connector inside the family, the region panel) has its alpha multiplied by this factor on top of whatever state-specific alpha it already carries. MV-481: was 0.45 - measured too weak to clear the family-contrast conformance floor (>=1.5, was landing at 1.487, then 1.498 at 0.42 - still short); a family that owns nothing should recede more clearly against one that does, so tightening this reads as the dim doing its stated job better, not a threshold change."
   },
@@ -143,9 +135,9 @@
       "hex": "#B8945F",
       "constant": "HudController.WallSentinelColor"
     },
-    "part": {
+    "supercell": {
       "hex": "#FFB84A",
-      "constant": "WeaponsScreen parts amber"
+      "constant": "WeaponsScreen supercells amber"
     },
     "module": {
       "hex": "#7FE3FF",
@@ -478,7 +470,7 @@
       "parentA": "PRIMARY",
       "parentB": "SECONDARY",
       "hudSlot": "B",
-      "partCost": 3
+      "cellCost": 30
     },
     {
       "id": "f_bgd",
@@ -488,7 +480,7 @@
       "parentA": "ENERGY",
       "parentB": "MOVE",
       "hudSlot": "B",
-      "partCost": 3
+      "cellCost": 30
     },
     {
       "id": "f_ovc",
@@ -498,7 +490,7 @@
       "parentA": "ENERGY",
       "parentB": "SUPPORT",
       "hudSlot": "U",
-      "partCost": 3
+      "cellCost": 30
     },
     {
       "id": "f_skr",
@@ -508,7 +500,7 @@
       "parentA": "MOVE",
       "parentB": "SUPPORT",
       "hudSlot": "U",
-      "partCost": 3
+      "cellCost": 30
     }
   ],
   "icons": {

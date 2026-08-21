@@ -57,7 +57,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OpeningPausesTheGameAndShowsThePart()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
 
             Screen.Open(UpgradePart.Generic);
             yield return null;
@@ -68,11 +68,13 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ContinueSpendsTheBankedPartAndResumes()
+        public IEnumerator ContinueInstallsThePartAndResumes()
         {
+            // MV-515: this legacy, unreachable screen no longer spends a Supercell on dismiss — a
+            // Supercell is cashed explicitly via THE RIG's tray now, never implied by an upgrade reveal.
             yield return NewScreen();
-            PickupWallet.AddPart();
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1));
+            PickupWallet.AddSupercell();
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1));
 
             Screen.Open(UpgradePart.Generic);
             yield return null;
@@ -81,14 +83,14 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(Screen.IsOpen, Is.False, "the screen didn't close");
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the game must resume to its previous speed on dismiss");
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "dismissing must spend the banked part");
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "MV-515: dismissing no longer spends a Supercell");
         }
 
         [UnityTest]
         public IEnumerator ItRestoresWhateverTimescaleItPausedFrom()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
 
             Time.timeScale = 0.5f;   // e.g. a slow-mo beat
             Screen.Open(UpgradePart.Generic);
@@ -273,14 +275,14 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator OpenStatusDoesNotInstallOrSpendAnything()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();   // left banked on purpose
+            PickupWallet.AddSupercell();   // left banked on purpose
 
             Screen.OpenStatus();
             yield return null;
             Screen.Continue();
             yield return null;
 
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1),
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1),
                 "opening the weapons area on demand must not spend a banked part");
             Assert.That(UpgradeState.IsInstalled(PartKind.BeamNozzle), Is.False,
                 "opening the weapons area on demand must not install anything");
@@ -320,7 +322,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator TappingACardInstallsExactlyThatPartAndResumes()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             var candidates = new[] { PartKind.BeamNozzle, PartKind.PowerNozzle, PartKind.WideBore };
 
             Screen.OpenChoice(candidates);
@@ -336,26 +338,26 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ChoosingACandidateSpendsOneBankedPart()
+        public IEnumerator ChoosingACandidateDoesNotSpendABankedSupercell()
         {
-            // WV-228: parts are fungible tokens now — any confirmed choice spends the next banked part,
-            // there's no more per-kind matching against which candidate was "actually collected".
+            // MV-515: a Supercell is cashed explicitly via THE RIG's tray now, never implied by
+            // confirming an upgrade choice on this legacy, unreachable screen.
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
             yield return null;
 
             FindButtonNamed(_screenGo, "Choice Card 0").onClick.Invoke();
             yield return null;
 
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(0), "confirming a choice must spend a banked part");
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "MV-515: confirming a choice no longer spends a Supercell");
         }
 
         [UnityTest]
         public IEnumerator TappingTheScrimDuringAChoiceDoesNotInstallOrClose()
         {
             yield return NewScreen();
-            PickupWallet.AddPart();
+            PickupWallet.AddSupercell();
             Screen.OpenChoice(new[] { PartKind.BeamNozzle, PartKind.PowerNozzle });
             yield return null;
 
