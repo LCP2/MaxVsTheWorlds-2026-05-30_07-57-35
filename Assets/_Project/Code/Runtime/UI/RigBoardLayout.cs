@@ -494,19 +494,38 @@ namespace MaxWorlds.UI
         /// <summary>MV-472: the phone row schedule — generously spaced (vs. the standard rows) to clear
         /// label text under the bigger phone radii without crowding the next tier; the resulting content
         /// height exceeds a single 1080-tall screen, which is exactly why <c>WeaponsScreen</c> wraps
-        /// phone-mode board content in a vertical ScrollRect rather than trying to cram it in.</summary>
-        public static float CategoryYPhone => 250f;
-        public static float Tier1YPhone => 470f;
-        public static float Tier2YPhone => 680f;
-        public static float Tier3YPhone => 890f;
-        public static float ForgeDividerYPhone => 1050f;
-        public static float FusionYPhone => 1180f;
+        /// phone-mode board content in a vertical ScrollRect rather than trying to cram it in.
+        ///
+        /// MV-516: every row here shifted up by a uniform 150 (was 250/470/680/890/1050/1180) — Lee's
+        /// own screenshot showed the whole family block sitting in a dead band below the top bar
+        /// (viewportTop 140 + old CategoryYPhone 250 - RadiusCategoryPhone 72 - topBarBottom 132 = 186 ref
+        /// px of empty space). A uniform shift preserves every row's own relative spacing (label
+        /// clearance, tier gaps, the FORGE section's own margin above <see cref="PhoneContentHeight"/>'s
+        /// floor) while landing the new gap at 36 ref px, under the ticket's 40px cap.</summary>
+        public static float CategoryYPhone => 100f;
+        public static float Tier1YPhone => 320f;
+        public static float Tier2YPhone => 530f;
+        public static float Tier3YPhone => 740f;
+        public static float ForgeDividerYPhone => 900f;
+        public static float FusionYPhone => 1030f;
+
+        /// <summary>MV-516: the tinted region panel's own top, phone equivalent of <see cref="RegionRectY"/>
+        /// — shifted by the SAME -150 delta as the row schedule above. The panel is each family's own
+        /// backdrop column; leaving it at the standard (unshifted) 150 while the category row moved to
+        /// 100 put the category hex's top ABOVE its own panel's top edge, poking out into untinted
+        /// background — caught by <c>cc-screens</c>' own glow-containment check, whose background
+        /// reference sample sits at the category's row (<c>SampleCategoryBackground</c>, <c>cat.Y</c>)
+        /// and read every node's halo as 100% "ink" once that reference point fell outside the panel's
+        /// own tint. Height (<see cref="RegionRectH"/>) is shared, not duplicated — same total span, just
+        /// starting higher, so the panel's own bottom margin shrinks by the same delta the content did.</summary>
+        public static float RegionRectYPhone => 0f;
 
         /// <summary>The scrollable content rect's own height — tall enough to clear
         /// <see cref="FusionYPhone"/> plus the fusion node's own radius and sub-label, with a bottom
         /// margin. A pure constant (not derived) so a future row-schedule tweak has to update it
-        /// deliberately rather than silently clipping the last row.</summary>
-        public static float PhoneContentHeight => 1360f;
+        /// deliberately rather than silently clipping the last row. MV-516: shifted by the same -150 as
+        /// the row schedule above, so the margin below the FORGE section is unchanged.</summary>
+        public static float PhoneContentHeight => 1210f;
 
         /// <summary>MV-472 (current spec, defect 3): the standard-mode scrollable content rect's own
         /// height. Standard mode's row schedule (rowY.forge, currently 910) plus the FORGE section's own
