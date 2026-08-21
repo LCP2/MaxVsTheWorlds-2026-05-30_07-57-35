@@ -154,10 +154,10 @@ namespace MaxWorlds.Dev
             foreach (var aspect in RigBoardLayout.CaptureAspects)
                 yield return CaptureFixtureScreen($"rig-{aspect.Name}", aspect.W, aspect.H, ApplyRigFixture, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("rig-noparts-16x9", 1920, 1080, ApplyRigFixtureNoParts, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
-            // MV-470: same node levels as the main fixture, but too few cells to afford EITHER a cell
-            // unlock (20) or an upgrade (10) — evidences the "reads as inert" half of AC1 (a node the
-            // player can't yet afford), which the 28-cell main fixture can never show since 28 covers
-            // every cost on the board.
+            // MV-470/MV-511: same node levels as the main fixture, but too few cells to afford EITHER a
+            // cell unlock (10) or the cheapest upgrade (5, level 1) — evidences the "reads as inert" half
+            // of AC1 (a node the player can't yet afford), which the 28-cell main fixture can never show
+            // since 28 covers every cost on the board.
             yield return CaptureFixtureScreen("rig-lowcells-16x9", 1920, 1080, ApplyRigFixtureLowCells, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             // MV-470: a true run-start board (only PRIMARY unlocked, per RigState.Reset's own baseline)
             // — every other fixture above forces every category open (ResetRunForFixture), so none of
@@ -200,16 +200,20 @@ namespace MaxWorlds.Dev
             PickupWallet.SetPowerCells(28);
         }
 
-        /// <summary>MV-470: the same node levels as <see cref="ApplyRigFixture"/>, but only 5 cells
-        /// banked — below both <see cref="CellSpend.UnlockCostCells"/> (20) and
-        /// <see cref="CellSpend.UpgradeCostCells"/> (10), so every cell-costed node on the board reads
-        /// inert rather than live. The main fixture's 28 cells cover every cost, so it can only ever
-        /// evidence the affordable half of AC1.</summary>
+        /// <summary>MV-470: the same node levels as <see cref="ApplyRigFixture"/>, but only 4 cells
+        /// banked — below both <see cref="CellSpend.UnlockCostCells"/> (10) and the cheapest possible
+        /// <see cref="CellSpend.UpgradeCostFor"/> (level 1, 5 cells), so every cell-costed node on the
+        /// board reads inert rather than live. MV-511 dropped the fixed 5-cell value this used to bank —
+        /// that used to sit safely below the old flat 10-cell upgrade cost, but now equals the new level-1
+        /// upgrade cost exactly, which would make e_cel/u_sen/u_rng (each owned at level 1 by
+        /// <see cref="SpendRigFixtureLevels"/>) read affordable and break this fixture's own purpose. The
+        /// main fixture's 28 cells cover every cost, so it can only ever evidence the affordable half of
+        /// AC1.</summary>
         public static void ApplyRigFixtureLowCells()
         {
             ResetRunForFixture();
             SpendRigFixtureLevels();
-            PickupWallet.SetPowerCells(5);
+            PickupWallet.SetPowerCells(4);
         }
 
         /// <summary>MV-470: an actual run start — <see cref="RigState.Reset"/>'s own baseline (only

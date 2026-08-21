@@ -226,5 +226,40 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(expectRunDry, HomingMissile.HasRunDry(age, fuelBudget: 6f),
                 $"age {age}s against a 6s fuel budget should give HasRunDry = {expectRunDry}");
         }
+
+        // ---------------------------------------------------------------- MV-508: motion trail
+
+        /// <summary>MV-508's own change list calls this out by name as "the single most likely defect
+        /// in this ticket": a pooled projectile respawning across the map draws a trail across the
+        /// entire arena on its first frame unless the trail is cleared on reuse. Simulated here rather
+        /// than through a live pool (there isn't one yet for this free-flying projectile) by manually
+        /// seeding a prior trail history and asserting the defensive reset actually clears it.</summary>
+        [Test]
+        public void ASimulatedPooledRespawn_ClearsTheOldTrailInsteadOfStreakingAcrossTheArena()
+        {
+            HomingMissile missile = HomingMissile.Fire(Vector3.zero, null, speed: 4f, damage: 1f,
+                splashRadius: 1f);
+            try
+            {
+                var trail = missile.GetComponent<TrailRenderer>();
+                Assert.IsNotNull(trail, "the missile has no TrailRenderer to test — MV-508's trail was never built.");
+
+                trail.AddPosition(Vector3.zero);
+                trail.AddPosition(new Vector3(0f, 0f, 40f));
+                Assert.Greater(trail.positionCount, 1,
+                    "test setup didn't actually establish a prior trail to clear");
+
+                missile.transform.position = new Vector3(200f, 0f, -150f);
+                missile.ClearTrailForRespawn();
+
+                Assert.LessOrEqual(trail.positionCount, 1,
+                    "a simulated pooled respawn left the old trail's points behind — reusing this " +
+                    "instance at a new position would streak a line across the whole arena.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(missile.gameObject);
+            }
+        }
     }
 }
