@@ -74,6 +74,10 @@ namespace MaxWorlds.UI
         // read comes entirely from the pill's border/text colour, not its background.
         private static readonly Color PillBackdrop = new Color(10f / 255f, 11f / 255f, 15f / 255f, 0.94f);
 
+        /// <summary>MV-516: test-only read of <see cref="PillBackdrop"/> — a contrast-ratio test needs
+        /// the REAL backdrop colour the pill actually renders against, not a hand-copied duplicate.</summary>
+        public static Color PillBackdropColor => PillBackdrop;
+
         private const float TopBarHeight = 104f;
         private const float ContentMargin = 28f;
 
@@ -104,6 +108,7 @@ namespace MaxWorlds.UI
         private const float GlowRadiusMultiplier = 1.15f;
 
         private Canvas _canvas;
+        private RectTransform _topBar;
         private RectTransform _screenRoot;
         private Image _background;
         private Image _screenScrim;
@@ -181,6 +186,17 @@ namespace MaxWorlds.UI
             var t = _nodeParent.Find(id);
             return t != null ? (RectTransform)t : null;
         }
+
+        /// <summary>MV-516: the root Canvas — test-only access, same idiom as <see cref="BoardNode"/>, so
+        /// a gap-measurement test can pin <c>scaleFactor</c> to a known value (bypassing CanvasScaler's
+        /// own ambient-<see cref="Screen"/> read, the same reason <see cref="UiScreensDirector"/>'s own
+        /// capture harness does the exact same override) before reading <see cref="RectTransform.GetWorldCorners"/>.</summary>
+        public Canvas RootCanvas => _canvas;
+
+        /// <summary>MV-516: the top bar's own root rect — test-only access, so a gap test can read its
+        /// REAL built bottom edge via <see cref="RectTransform.GetWorldCorners"/> rather than asserting
+        /// the authored <see cref="TopBarHeight"/>/<see cref="ContentMargin"/> constants directly.</summary>
+        public RectTransform TopBar => _topBar;
 
         /// <summary>MV-433: the full-canvas opaque backdrop, first child of <see cref="_screenRoot"/>
         /// (drawn behind the Safe Area, the top bar and the board) — test-only access, same idiom as
@@ -275,6 +291,24 @@ namespace MaxWorlds.UI
             return false;
         }
 
+        /// <summary>MV-516: the ability node hex FILL/OUTLINE's own alpha, given the base (state-set)
+        /// alpha <paramref name="baseAlpha"/> already carries — "a node the player can act on RIGHT NOW
+        /// pulses slowly and unmistakably ... the hexagon FILL and OUTLINE, not just the thin outer
+        /// ring." Pure so the cadence is pinned by an EditMode test without building a canvas or
+        /// advancing <see cref="Time"/>, same idiom as <see cref="SupercellsGlowAlpha"/>. 1 rad/s — a
+        /// third of OuterRing's own 3 rad/s pulse (<see cref="Update"/>) — reads as an invitation, not
+        /// an alarm, per the ticket's own "Do not re-raise: whether the pulse should be fast — no, slow,
+        /// roughly 1 Hz." <paramref name="spendable"/> MUST be the exact same predicate
+        /// <see cref="IsAbilityNodeSpendable"/> drives <c>Button.interactable</c> from — a node that
+        /// pulses and then refuses the tap is the bug this ticket exists to kill, so nothing here may
+        /// ever compute affordability its own, looser way.</summary>
+        public static float NodeActionPulseAlpha(float unscaledTime, float baseAlpha, bool spendable)
+        {
+            if (!spendable) return baseAlpha;
+            float t = 0.55f + 0.45f * Mathf.Sin(unscaledTime * 1f);
+            return baseAlpha * t;
+        }
+
         /// <summary>MV-433: the board's scale-to-fit factor for a given screen aspect ratio (width /
         /// height), under the canvas's own <c>matchWidthOrHeight = 1</c> (match-by-height) rule — pure
         /// so the clamp is pinned by an EditMode test without building a canvas or touching
@@ -339,6 +373,7 @@ namespace MaxWorlds.UI
         private float FusionSubFontSize => _phoneMode ? RigBoardLayout.FusionSubFontSizePhone : RigBoardLayout.FusionSubFontSize;
         private float ForgeCaptionFontSize => _phoneMode ? RigBoardLayout.ForgeCaptionFontSizePhone : RigBoardLayout.ForgeCaptionFontSize;
         private float ForgeDividerY => _phoneMode ? RigBoardLayout.ForgeDividerYPhone : RigBoardLayout.ForgeDividerY;
+        private float RegionRectY => _phoneMode ? RigBoardLayout.RegionRectYPhone : RigBoardLayout.RegionRectY;
 
         private int _lastScreenWidth, _lastScreenHeight;
 
@@ -380,6 +415,13 @@ namespace MaxWorlds.UI
             foreach (var kv in _abilityNodes)
             {
                 var v = kv.Value;
+                // MV-516: ONE predicate drives every "you can act on this right now" tell — the ring,
+                // the hex body, AND (in RefreshAbilityNode) Button.interactable. MV-470's own
+                // CellSpend.IsCellActionAffordable read cells alone; IsAbilityNodeSpendable is the exact
+                // gate the button itself is set from, so a node can never again pulse/invite a tap it
+                // then refuses.
+                bool spendable = IsAbilityNodeSpendable(kv.Key, cellsBanked);
+
                 if (v.OuterRing != null && v.OuterRing.gameObject.activeSelf)
                 {
                     // MV-462 defect 3: a draftable node in an unlit family must stay dimmed every frame,
@@ -387,11 +429,7 @@ namespace MaxWorlds.UI
                     // Refresh(), so without this factor the ring/halo would flash back up to full
                     // brightness on every tick regardless of the static dim RefreshAbilityNode applied.
                     float dim = FamilyLitForAbility(kv.Key) ? 1f : RigBoardLayout.FamilyDimFactor;
-                    // MV-470: OuterRing is now also active on an owned-and-upgradeable node, not just a
-                    // draftable one — gate the animated pulse on real cell affordability either way, so
-                    // "can afford right now" reads live and "can't yet" reads inert, per AC1.
-                    bool affordable = CellSpend.IsCellActionAffordable(kv.Key, cellsBanked);
-                    float baseAlpha = affordable ? pulse : InertRingAlpha;
+                    float baseAlpha = spendable ? pulse : InertRingAlpha;
 
                     var c = v.OuterRing.color;
                     c.a = baseAlpha * dim;
@@ -407,6 +445,22 @@ namespace MaxWorlds.UI
                         g.a = baseAlpha * RigBoardLayout.GlowAlphaDraft * dim;
                         v.Glow.color = g;
                     }
+                }
+
+                // MV-516 item 2: the hex FILL/OUTLINE — not just the thin ring — is what has to carry
+                // "you can act on this right now." NodeActionPulseAlpha is a no-op (returns baseAlpha
+                // unchanged) when !spendable, so an inert node's hex never animates.
+                if (v.HexFill != null)
+                {
+                    var fc = v.HexFill.color;
+                    fc.a = NodeActionPulseAlpha(Time.unscaledTime, v.FillBaseAlpha, spendable);
+                    v.HexFill.color = fc;
+                }
+                if (v.HexOutline != null)
+                {
+                    var oc = v.HexOutline.color;
+                    oc.a = NodeActionPulseAlpha(Time.unscaledTime, v.OutlineBaseAlpha, spendable);
+                    v.HexOutline.color = oc;
                 }
             }
             _ = dt;
@@ -889,7 +943,11 @@ namespace MaxWorlds.UI
                 v.PillText.text = $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
-                v.PillText.color = family;
+                // MV-516 item 4: a mid-saturation family hue on PillBackdrop's near-black read as
+                // "too faint to see" (Lee, 2000x900 screenshot). Ink (near-white/bone) on that same
+                // backdrop clears WCAG's 4.5:1 floor at every family hue, unconditionally — the family
+                // identity stays on the border, which never had a legibility job to do.
+                v.PillText.color = ink;
                 v.Label.text = ab.Label;
                 v.Label.color = new Color(TextColor.r, TextColor.g, TextColor.b, 0.95f);
                 v.Icon.color = ink;
@@ -963,6 +1021,12 @@ namespace MaxWorlds.UI
                 v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), familyLit);
                 v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
             }
+
+            // MV-516: the base (pre-pulse) alpha Update() pulses the hex FILL/OUTLINE around — captured
+            // after every branch above has set its own final colour, so this always matches whichever
+            // state just rendered, never a stale value from a prior Refresh().
+            v.FillBaseAlpha = v.HexFill.color.a;
+            v.OutlineBaseAlpha = v.HexOutline.color.a;
 
             v.Button.interactable = spendable;
         }
@@ -1062,6 +1126,11 @@ namespace MaxWorlds.UI
             v.DraftBadge.color = DraftBadgeColor;
             v.DraftBadgeText.text = (candidateIndex + 1).ToString();
 
+            // MV-516: a draft candidate's own base alpha, so a stale value from a pre-draft Refresh()
+            // never leaks into Update()'s pulse if this node is ever iterated there.
+            v.FillBaseAlpha = v.HexFill.color.a;
+            v.OutlineBaseAlpha = v.HexOutline.color.a;
+
             v.Button.interactable = true;
         }
 
@@ -1153,8 +1222,7 @@ namespace MaxWorlds.UI
             Stretch(_screenScrim.rectTransform);
             _screenScrim.raycastTarget = true;   // blocks taps to whatever's underneath while paused
 
-            // MV-433: a scale-to-fit wrapper, pivoted at the board's own centre so ComputeBoardScale's
-            // shrink is centred rather than pinned to a corner.
+            // MV-433: a scale-to-fit wrapper.
             //
             // MV-472: anchor is (0.5, 1)-(0.5, 1) — a PROPORTIONAL horizontal-centre point on rootRt's
             // own actual width — not the (0, 1)-(0, 1) top-left point anchor this used to be. That
@@ -1169,10 +1237,24 @@ namespace MaxWorlds.UI
             // rendered) couldn't have caught it, only a real capture could. A proportional anchor point
             // is always at 50% of whatever rootRt's actual width is, so this now holds at every aspect,
             // not just 16:9 — the exact fix VisibleRefXWindow's formula was already assuming existed.
+            //
+            // MV-516: pivot's Y is 1 (top), not the 0.5 (centre) MV-433 originally gave it. A CENTRE
+            // pivot shrinks top-of-frame content DOWNWARD as scale drops below 1 (every ref-y above the
+            // 540 midpoint moves toward it) — harmless for X (that's the whole point of the horizontal
+            // centring above) but for Y it fights the very fix this ticket makes: at iPad mini's aspect
+            // (scale ~0.744) a centre pivot pushed the category row's own screen position DOWN by ~80
+            // ref px versus its unscaled position, opening a ~124px dead band under the top bar where
+            // rig_board.json's rowY.category=230 alone only produces 26px at 16:9. Nothing NEEDS Y to
+            // shrink toward a centre at all — CanvasScaler's own match-by-height mode already maps 1080
+            // ref px to the full screen height losslessly at every aspect; the boardScaleRoot's uniform
+            // scale exists purely to squeeze WIDTH at a narrower-than-16:9 aspect. A top pivot means
+            // shrinking pulls content toward the frame's own top instead of its centre — the vertical
+            // gap now only ever SHRINKS as aspect narrows (verified: -14px, i.e. a hair of overlap, not
+            // 124px of empty space, at iPad mini), never grows the dead band the ticket exists to fix.
             _boardScaleRoot = NewRect("Board Scale Root", rootRt, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
-            _boardScaleRoot.pivot = new Vector2(0.5f, 0.5f);
+            _boardScaleRoot.pivot = new Vector2(0.5f, 1f);
             _boardScaleRoot.sizeDelta = new Vector2(RefW, RefH);
-            _boardScaleRoot.anchoredPosition = new Vector2(0f, -RefH * 0.5f);
+            _boardScaleRoot.anchoredPosition = Vector2.zero;
 
             // MV-423: the board is a fixed 1920x1080 frame (top-left anchored/pivoted) so every node's
             // json (x,y) maps 1:1 onto anchoredPosition — RigBoardLayoutTests asserts that mapping
@@ -1417,7 +1499,7 @@ namespace MaxWorlds.UI
             var categories = Categories;
             int n = categories.Count;
             if (n == 0) return;
-            float y = RigBoardLayout.RegionRectY, h = RigBoardLayout.RegionRectH, radius = RigBoardLayout.RegionRectRadius;
+            float y = RegionRectY, h = RigBoardLayout.RegionRectH, radius = RigBoardLayout.RegionRectRadius;
 
             for (int i = 0; i < n; i++)
             {
@@ -2002,6 +2084,13 @@ namespace MaxWorlds.UI
             public Button Button;
             public float Radius;
 
+            /// <summary>MV-516: the hex FILL/OUTLINE alpha <see cref="WeaponsScreen.RefreshAbilityNode"/>
+            /// (or <see cref="WeaponsScreen.RefreshCandidateNode"/>) most recently set for this node's
+            /// current state — <see cref="WeaponsScreen.Update"/> reads these as the pulse's OWN peak
+            /// rather than re-deriving the state's alpha itself, so the animated tell can never drift
+            /// out of sync with whatever RefreshAbilityNode's own branch decided this state looks like.</summary>
+            public float FillBaseAlpha, OutlineBaseAlpha;
+
             /// <summary>Fusion nodes only (MV-426): the sub-label beneath the name — parent category
             /// names while unforgeable, "<c>N CELLS · SLOT B</c>" once eligible (MV-515: was parts),
             /// "<c>FORGED · SLOT B</c>" once forged. Null for category/ability nodes.</summary>
@@ -2021,6 +2110,7 @@ namespace MaxWorlds.UI
         private void BuildTopBar(RectTransform parent)
         {
             var bar = NewRect("Top Bar", parent, new Vector2(0f, 1f), new Vector2(1f, 1f));
+            _topBar = bar;
             bar.pivot = new Vector2(0.5f, 1f);
             bar.sizeDelta = new Vector2(-2f * ContentMargin, TopBarHeight);
             bar.anchoredPosition = new Vector2(0f, -ContentMargin);

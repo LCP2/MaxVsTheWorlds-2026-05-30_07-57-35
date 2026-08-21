@@ -825,19 +825,26 @@ namespace MaxWorlds.Dev
 
         /// <summary>MV-480: builds the json-coordinate-space -> pixel-space mapping this capture's own
         /// aspect/mode needs (see <see cref="RigBoardConformance.BoardPixelTransform"/>'s own doc
-        /// comment for the affine math) — standard mode (rig-16x9, rig-ipad-mini) scales around the
-        /// board's own centre (960, 540) by <see cref="WeaponsScreen.ComputeBoardScale"/> and crops by
+        /// comment for the affine math) — standard mode (rig-16x9, rig-ipad-mini) scales by
+        /// <see cref="WeaponsScreen.ComputeBoardScale"/> and crops by
         /// <see cref="WeaponsScreen.VisibleRefXWindow"/>; phone mode never scales (verified by
         /// <c>RigBoardChromeTests.EveryTappableHexClearsFortyFourPointsAndEveryGlyphClearsElevenPointsAtThePhoneAspect</c>'s
         /// own fixture assumption) but offsets y by the scroll viewport's own top
         /// (<see cref="PhoneViewportTop"/> — see <c>WeaponsScreen.BuildPhoneScrollViewport</c>'s own doc
-        /// comment for why content-local y=0 lands at board-frame y=140, not 0).</summary>
+        /// comment for why content-local y=0 lands at board-frame y=140, not 0).
+        ///
+        /// MV-516: X still scales around the board's own horizontal centre (960) — that half of MV-472's
+        /// fix is untouched. Y no longer does: <c>WeaponsScreen.Build</c>'s <c>_boardScaleRoot</c> pivot
+        /// moved from (0.5, 0.5) to (0.5, 1) (see its own doc comment) so a width-driven shrink stops
+        /// dragging content above the vertical midpoint DOWN toward it — offsetY is 0 here for the same
+        /// reason RigBoardChromeTests' own AssertFitsY now reads <c>rawY * scale</c> instead of a
+        /// centre-relative term.</summary>
         private static RigBoardConformance.BoardPixelTransform BuildTransform(float aspect, bool phoneMode, int h)
         {
             float pxPerRefUnit = h / 1080f;
             float scale = phoneMode ? 1f : WeaponsScreen.ComputeBoardScale(aspect);
             float offsetX = phoneMode ? 0f : 960f * (1f - scale);
-            float offsetY = phoneMode ? PhoneViewportTop : 540f * (1f - scale);
+            float offsetY = phoneMode ? PhoneViewportTop : 0f;
             float windowMinX = WeaponsScreen.VisibleRefXWindow(aspect).MinX;
             return new RigBoardConformance.BoardPixelTransform(scale, offsetX, offsetY, windowMinX, pxPerRefUnit);
         }
@@ -896,7 +903,7 @@ namespace MaxWorlds.Dev
                                        : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
 
             // 3. Family contrast — mean luminance of a lit category's own column band vs an unlit one.
-            CheckFamilyContrast(tex, categories, abilities, transform, out float contrastRatio, out float litMean, out float unlitMean);
+            CheckFamilyContrast(tex, categories, abilities, transform, phoneMode, out float contrastRatio, out float litMean, out float unlitMean);
             Emit("family-contrast", contrastRatio >= 1.5f,
                 $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
 
@@ -1018,10 +1025,14 @@ namespace MaxWorlds.Dev
         }
 
         private static void CheckFamilyContrast(Texture2D tex, IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities,
-            RigBoardConformance.BoardPixelTransform transform, out float ratio, out float litMean, out float unlitMean)
+            RigBoardConformance.BoardPixelTransform transform, bool phoneMode, out float ratio, out float litMean, out float unlitMean)
         {
             int n = categories.Count;
-            float yMin = RigBoardLayout.RegionRectY, yMax = yMin + RigBoardLayout.RegionRectH;
+            // MV-516: phone mode's own region panel top shifted with the row schedule (RegionRectYPhone) —
+            // sampling the unshifted standard band here would land partly outside the panel, same class
+            // of bug BuildCategoryPanels itself had (see RigBoardLayout.RegionRectYPhone's own comment).
+            float yMin = phoneMode ? RigBoardLayout.RegionRectYPhone : RigBoardLayout.RegionRectY;
+            float yMax = yMin + RigBoardLayout.RegionRectH;
             var litVals = new List<float>();
             var unlitVals = new List<float>();
 
@@ -1186,11 +1197,12 @@ namespace MaxWorlds.Dev
             IReadOnlyList<RigCategoryLayout> categories, IReadOnlyList<RigAbilityLayout> abilities, IReadOnlyList<RigFusionLayout> fusions,
             float radiusCategory, float radiusAbility, float radiusFusion, out int checkedCount, out List<string> fails)
         {
-            const float boardCentreY = 540f;
             float yMax = phoneMode ? RigBoardLayout.PhoneContentHeight : 1080f;
             var localFails = new List<string>();
             int localChecked = 0;
 
+            // MV-516: standard mode's Y no longer scales around the board's own centre — see
+            // BuildTransform's own doc comment (same boardScaleRoot top-pivot fix).
             void Check(string id, float rawY, float halfExtent)
             {
                 localChecked++;
@@ -1198,7 +1210,7 @@ namespace MaxWorlds.Dev
                 if (phoneMode) { top = rawY - halfExtent; bottom = rawY + halfExtent; }
                 else
                 {
-                    float scaledY = boardCentreY + (rawY - boardCentreY) * scale;
+                    float scaledY = rawY * scale;
                     float scaledHalf = halfExtent * scale;
                     top = scaledY - scaledHalf; bottom = scaledY + scaledHalf;
                 }

@@ -104,7 +104,6 @@ namespace MaxWorlds.Tests.EditMode
         {
             float[] aspects = { 2340f / 1080f, 2.0f, 16f / 9f, 1.6f, 1.5f, 1.4f, 1078f / 815f };
             const float boardCentreX = 1920f * 0.5f;
-            const float boardCentreY = 1080f * 0.5f;
 
             foreach (float aspect in aspects)
             {
@@ -131,11 +130,17 @@ namespace MaxWorlds.Tests.EditMode
 
                 void AssertFitsY(string id, float rawY, float halfExtent)
                 {
+                    // MV-516: standard mode's Y no longer scales from the board's own vertical CENTRE —
+                    // WeaponsScreen.Build's boardScaleRoot pivot moved to the TOP (see its own doc
+                    // comment) so a narrower-than-16:9 aspect's width squeeze stops dragging content
+                    // above the midpoint DOWN toward it (the dead-band bug this ticket fixes). Phone mode
+                    // was already unscaled Y (its own boardScale is always 1); standard mode now matches
+                    // that same top-anchored formula whenever scale < 1.
                     float top, bottom;
                     if (phoneMode) { top = rawY - halfExtent; bottom = rawY + halfExtent; }
                     else
                     {
-                        float scaledY = boardCentreY + (rawY - boardCentreY) * scale;
+                        float scaledY = rawY * scale;
                         float scaledHalf = halfExtent * scale;
                         top = scaledY - scaledHalf; bottom = scaledY + scaledHalf;
                     }
