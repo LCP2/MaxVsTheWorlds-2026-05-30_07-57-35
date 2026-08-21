@@ -9,9 +9,8 @@ namespace MaxWorlds.Tests.EditMode
     /// <see cref="CellSpend.UnlockCostCells"/> cells and requires its parent at level &gt;= 2
     /// (<see cref="RigState.IsCellUnlockable"/>, tightened from the level &gt;= 1 gate
     /// <see cref="RigState.IsReached"/> still uses for the unrelated, production-dead ability-level
-    /// Morphing Module draft pool). MV-492 additionally requires a banked part for the unlock — this
-    /// suite's own success case now banks one too, so the parent-level->=2 gate it proves stays
-    /// current; <see cref="RigSpendRulesTests"/> owns the two-currency rule itself.
+    /// Morphing Module draft pool). MV-515 retired MV-492's two-currency unlock gate — cells alone
+    /// unlock again.
     /// </summary>
     public sealed class CellSpendTests
     {
@@ -29,7 +28,6 @@ namespace MaxWorlds.Tests.EditMode
             // p_dmg owns the run-start ability at level 1 (RigBoard.StartLevel) — enough to satisfy the
             // OLD level >= 1 gate but not MV-458's tightened level >= 2 requirement.
             PickupWallet.SetPowerCells(CellSpend.UnlockCostCells);
-            PickupWallet.AddPart(); // MV-492: the unlock also needs a banked part — see RigSpendRulesTests
 
             Assert.That(CellSpend.TryUnlockNode("p_rng"), Is.False,
                 "p_dmg is only level 1 — the tightened parent >= 2 gate must reject this");

@@ -30,25 +30,26 @@ namespace MaxWorlds.Weapons
     }
 
     /// <summary>One FORGE fusion's model-layer shape (MV-426, 5/5) — id, its two parent category ids,
-    /// which HUD slot ("B"/"U") it occupies once forged, and its part cost. The layout twin,
-    /// <see cref="MaxWorlds.UI.RigFusionLayout"/>, carries the same fields plus x/y/label for drawing;
-    /// kept separate so <see cref="RigFusionState"/> (gameplay gating) never has to reach into the UI
-    /// assembly for data it needs regardless of whether the board is even open.</summary>
+    /// which HUD slot ("B"/"U") it occupies once forged, and its cell cost (MV-515: converted from
+    /// parts — a Supercell is worth exactly 10 cells, so a fusion's old 3-part cost is now 30 cells).
+    /// The layout twin, <see cref="MaxWorlds.UI.RigFusionLayout"/>, carries the same fields plus
+    /// x/y/label for drawing; kept separate so <see cref="RigFusionState"/> (gameplay gating) never has
+    /// to reach into the UI assembly for data it needs regardless of whether the board is even open.</summary>
     public sealed class RigFusionDef
     {
         public readonly string Id;
         public readonly string ParentA;
         public readonly string ParentB;
         public readonly string HudSlot;
-        public readonly int PartCost;
+        public readonly int CellCost;
 
-        public RigFusionDef(string id, string parentA, string parentB, string hudSlot, int partCost)
+        public RigFusionDef(string id, string parentA, string parentB, string hudSlot, int cellCost)
         {
             Id = id;
             ParentA = parentA;
             ParentB = parentB;
             HudSlot = hudSlot;
-            PartCost = partCost;
+            CellCost = cellCost;
         }
     }
 
@@ -84,7 +85,7 @@ namespace MaxWorlds.Weapons
         public string parentA;
         public string parentB;
         public string hudSlot;
-        public int partCost;
+        public int cellCost;
     }
 
     [Serializable]
@@ -171,7 +172,7 @@ namespace MaxWorlds.Weapons
             foreach (RigFusionWire f in wire.fusions)
             {
                 if (f == null || string.IsNullOrEmpty(f.id)) continue;
-                var def = new RigFusionDef(f.id, f.parentA, f.parentB, f.hudSlot, f.partCost);
+                var def = new RigFusionDef(f.id, f.parentA, f.parentB, f.hudSlot, f.cellCost);
                 s_fusions[f.id] = def;
                 fusions.Add(def);
             }

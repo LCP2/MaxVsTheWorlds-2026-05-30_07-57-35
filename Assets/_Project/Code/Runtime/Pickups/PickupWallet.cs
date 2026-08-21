@@ -5,14 +5,13 @@ using MaxWorlds.Weapons;
 namespace MaxWorlds.Pickups
 {
     /// <summary>
-    /// The player's banked drops (YT-131, recut WV-228). Power cells accumulate into a count the HUD
-    /// shows and (MV-458) are THE RIG board's primary currency — unlocking a new node costs
+    /// The player's banked drops (YT-131, recut WV-228, MV-515). Power cells accumulate into a count the
+    /// HUD shows and (MV-458) are THE RIG board's primary currency — unlocking a new node costs
     /// <see cref="MaxWorlds.Weapons.CellSpend.UnlockCostCells"/>, raising an owned one costs
-    /// <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostFor"/> of its current level. Parts are universal upgrade tokens
-    /// (WV-228): a plain banked count, no identity, no auto-install and no draft-pick popup on
-    /// collection — replaces the old dropped-part-decides queue (YT-133/YT-207). MV-458: parts are now
-    /// the rare accelerant rather than the sole currency, still spent one at a time against a chosen
-    /// owned track/ability/node via <see cref="MaxWorlds.Weapons.PartSpend"/>.
+    /// <see cref="MaxWorlds.Weapons.CellSpend.UpgradeCostFor"/> of its current level. MV-515: a Supercell
+    /// is a banked 10-cell top-up (<see cref="SupercellCellValue"/>), no longer an unlock requirement —
+    /// it is a plain banked count, no identity, cashed in explicitly via <see cref="TryCashSupercell"/>
+    /// rather than spent piecemeal against a chosen node.
     ///
     /// Static because there is exactly one player and the HUD, the pickups, and the weapons area all
     /// need to see the same tally without threading a reference through the scene. Event-driven so the
@@ -23,16 +22,19 @@ namespace MaxWorlds.Pickups
         /// <summary>Banked power cells (MV-458: THE RIG board's primary spendable currency).</summary>
         public static int PowerCells { get; private set; }
 
-        /// <summary>Banked parts (WV-228) — universal upgrade tokens, no identity. The HUD's chip shows
-        /// while > 0; the weapons area spends them one at a time against a chosen owned track/ability.</summary>
-        public static int PartsBanked { get; private set; }
+        /// <summary>Banked Supercells (MV-515, renamed from "parts") — a banked 10-cell top-up, cashed
+        /// in explicitly via <see cref="TryCashSupercell"/>. The RIG top-bar tray shows while > 0.</summary>
+        public static int SupercellsBanked { get; private set; }
+
+        /// <summary>How many cells one cashed Supercell adds (MV-515).</summary>
+        public const int SupercellCellValue = 10;
 
         /// <summary>Fired when the power-cell count changes. Arg = the new total.</summary>
         public static event Action<int> PowerCellsChanged;
 
-        /// <summary>Fired when the banked-parts count changes. Arg = the new count. The HUD raises its
-        /// flashing edge icon off this (YT-131); the weapons area spends them (WV-228).</summary>
-        public static event Action<int> PartsChanged;
+        /// <summary>Fired when the banked-Supercell count changes. Arg = the new count. The HUD raises
+        /// its flashing edge icon off this (YT-131, renamed MV-515); the RIG top-bar tray cashes them.</summary>
+        public static event Action<int> SupercellsChanged;
 
         /// <summary>Max power cells the reserve holds at Cell Storage level 0 (MV-374: dropped from
         /// the old flat 30 — that number now sits at level 1 of 3, see <see cref="PowerCellCapacityPerLevel"/>).
@@ -146,34 +148,25 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
-        /// <summary>Bank one collected part (WV-228) — a fungible token, no identity to carry.</summary>
-        public static void AddPart()
+        /// <summary>Bank one collected Supercell (MV-515) — a fungible token, no identity to carry.</summary>
+        public static void AddSupercell()
         {
-            PartsBanked++;
-            PartsChanged?.Invoke(PartsBanked);
+            SupercellsBanked++;
+            SupercellsChanged?.Invoke(SupercellsBanked);
         }
 
-        /// <summary>Consume one banked part (WV-228) — the weapons area calls this once a spend on a
-        /// chosen owned track/ability actually raises its level. No-op with nothing banked. Returns
-        /// true if one was actually spent.</summary>
-        public static bool TrySpendPart()
+        /// <summary>Cash in one banked Supercell for <see cref="SupercellCellValue"/> cells (MV-515) —
+        /// requires the reserve to have room for the FULL top-up; never partially fills and never
+        /// silently discards (the same no-waste principle MV-439 established for cell pickups). Refuses
+        /// and changes nothing when there isn't a whole Supercell's worth of room, or nothing banked.</summary>
+        public static bool TryCashSupercell()
         {
-            if (PartsBanked <= 0) return false;
-            PartsBanked--;
-            PartsChanged?.Invoke(PartsBanked);
-            return true;
-        }
-
-        /// <summary>Spend several banked parts atomically for a single fusion forge (MV-426) — a
-        /// FORGE tap either affords its whole 3-part cost or doesn't spend at all, same
-        /// all-or-nothing shape <see cref="TrySpendPowerCells"/> already uses for a Water Balloon
-        /// throw.</summary>
-        public static bool TrySpendParts(int amount)
-        {
-            if (amount <= 0) return true;
-            if (PartsBanked < amount) return false;
-            PartsBanked -= amount;
-            PartsChanged?.Invoke(PartsBanked);
+            if (SupercellsBanked <= 0) return false;
+            if (Capacity - PowerCells < SupercellCellValue) return false;
+            SupercellsBanked--;
+            PowerCells += SupercellCellValue;
+            SupercellsChanged?.Invoke(SupercellsBanked);
+            PowerCellsChanged?.Invoke(PowerCells);
             return true;
         }
 
@@ -187,11 +180,11 @@ namespace MaxWorlds.Pickups
         public static void Reset()
         {
             PowerCells = 0;
-            PartsBanked = 0;
+            SupercellsBanked = 0;
             RigState.Reset();
             RigFusionState.Reset();
             PowerCellsChanged?.Invoke(0);
-            PartsChanged?.Invoke(0);
+            SupercellsChanged?.Invoke(0);
             CapacityChanged?.Invoke(Capacity);
         }
     }

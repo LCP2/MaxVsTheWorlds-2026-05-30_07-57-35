@@ -159,7 +159,7 @@ namespace MaxWorlds.Bosses
             for (int i = 0; i < n; i++)
             {
                 PartKind kind = UpgradeCatalog.AllKinds[i % UpgradeCatalog.AllKinds.Length];
-                Pickup p = Pickup.Create(PickupKind.Part);
+                Pickup p = Pickup.Create(PickupKind.Supercell);
                 p.Part = kind;
                 p.transform.SetParent(transform, worldPositionStays: false);
                 p.transform.position = origin;
@@ -192,7 +192,7 @@ namespace MaxWorlds.Bosses
                 float dz = f.Pickup.transform.position.z - m.z;
                 if (dx * dx + dz * dz > r2) continue;
 
-                PickupWallet.AddPart();   // a fungible token now, no identity to bank (WV-228)
+                PickupWallet.AddSupercell();   // a fungible token now, no identity to bank (WV-228, MV-515)
                 UpgradePart part = UpgradeCatalog.For(f.Pickup.Part);
                 HudSignals.EmitPickup(f.Pickup.transform.position, part.Name, part.Accent);
 

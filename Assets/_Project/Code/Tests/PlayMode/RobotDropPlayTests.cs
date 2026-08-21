@@ -70,7 +70,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             int expectedCells = Mathf.RoundToInt(CellEconomyTuning.DefaultCellsPerLargeKill);
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(1), "a large kill must drop exactly one part");
+            Assert.That(LivePickups(PickupKind.Supercell), Is.EqualTo(1), "a large kill must drop exactly one part");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(expectedCells),
                 $"a large kill must drop {expectedCells} power cell(s)");
         }
@@ -88,7 +88,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             int expectedCells = Mathf.RoundToInt(CellEconomyTuning.DefaultCellsPerLargeKill) * 2;
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(0),
+            Assert.That(LivePickups(PickupKind.Supercell), Is.EqualTo(0),
                 "only a Bruiser kill triggers a part (MV-401) — heavy and brute kills must never drop one");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(expectedCells),
                 "heavy and brute kills must drop power cells the same as a bruiser kill");
@@ -103,7 +103,7 @@ namespace MaxWorlds.Tests.PlayMode
             DropSignals.EmitRobotDied(new Vector3(5f, 0f, 5f), EnemyKind.Rusher);
             yield return null;
 
-            Assert.That(LivePickups(PickupKind.Part) + LivePickups(PickupKind.PowerCell), Is.EqualTo(0),
+            Assert.That(LivePickups(PickupKind.Supercell) + LivePickups(PickupKind.PowerCell), Is.EqualTo(0),
                 "the small robot tier must never drop a part or a power cell");
         }
 
@@ -125,7 +125,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             Assert.That(PickupWallet.PowerCells, Is.GreaterThan(0),
                 "walking onto the drop must bank power cells — walk-over collection, no button");
-            Assert.That(PickupWallet.PartsBanked, Is.EqualTo(1), "and pick up the part");
+            Assert.That(PickupWallet.SupercellsBanked, Is.EqualTo(1), "and pick up the part");
             Assert.That(LivePickups(PickupKind.PowerCell), Is.EqualTo(0), "collected cells must leave the ground");
         }
 
@@ -167,7 +167,7 @@ namespace MaxWorlds.Tests.PlayMode
                 DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
             yield return null;
 
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(3),
+            Assert.That(LivePickups(PickupKind.Supercell), Is.EqualTo(3),
                 "every Bruiser kill drops its own part — no pacing interval gates it anymore");
         }
 
@@ -185,7 +185,7 @@ namespace MaxWorlds.Tests.PlayMode
                 DropSignals.EmitRobotDied(new Vector3(i * 3f, 0f, 0f), EnemyKind.Bruiser);
             yield return null;
 
-            Assert.That(LivePickups(PickupKind.Part), Is.EqualTo(total + 5),
+            Assert.That(LivePickups(PickupKind.Supercell), Is.EqualTo(total + 5),
                 "a part must drop on every paced kill, with no cap once the old catalog's kinds are exhausted");
         }
     }

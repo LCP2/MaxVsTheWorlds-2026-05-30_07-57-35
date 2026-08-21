@@ -21,26 +21,12 @@ namespace MaxWorlds.Weapons
             return false;
         }
 
-        /// <summary>MV-492: a part alone no longer raises anything — an unlock now needs
-        /// <see cref="CellSpend.UnlockCostParts"/> part AND <see cref="CellSpend.UnlockCostCells"/>
-        /// cells together, so "a part action is affordable" means an unlockable-and-unowned node exists
-        /// AND both currencies are banked enough to unlock it, OR <paramref name="partsBanked"/> parts
-        /// would forge at least one eligible fusion (fusions are still parts-only, unchanged).</summary>
-        public static bool AnyPartActionAffordable(int partsBanked, int cellsBanked)
-        {
-            if (partsBanked >= CellSpend.UnlockCostParts && cellsBanked >= CellSpend.UnlockCostCells)
-            {
-                foreach (string id in RigBoard.AllIds)
-                    if (RigState.IsCellUnlockable(id) && !RigState.IsOwned(id)) return true;
-            }
-
-            if (partsBanked <= 0) return false;
-
-            foreach (var fusion in RigBoard.Fusions)
-                if (!RigFusionState.IsForged(fusion.Id) && RigFusionState.IsEligible(fusion.Id) && partsBanked >= fusion.PartCost)
-                    return true;
-
-            return false;
-        }
+        /// <summary>MV-515: is cashing a Supercell for <see cref="MaxWorlds.Pickups.PickupWallet.SupercellCellValue"/>
+        /// cells actually possible right now — at least one banked AND room in the reserve for the full
+        /// top-up. Pure, mirroring <see cref="AnyCellActionAffordable"/>'s "takes the banked amounts as
+        /// parameters" idiom so it can be pinned by an EditMode test without a live
+        /// <see cref="MaxWorlds.Pickups.PickupWallet"/>.</summary>
+        public static bool AnySupercellActionAffordable(int supercellsBanked, int powerCells, int capacity) =>
+            supercellsBanked > 0 && capacity - powerCells >= MaxWorlds.Pickups.PickupWallet.SupercellCellValue;
     }
 }

@@ -51,11 +51,13 @@ namespace MaxWorlds.Tests.PlayMode
 
         private WaterBlaster Blaster => _max.GetComponent<WaterBlaster>();
 
+        // MV-515: PartSpend.TrySpendOnTrack was deleted (dead — no runtime caller). This suite is about
+        // a track's LEVEL visibly changing the weapon, not the currency that raises it, so raise the
+        // level directly through the model layer, same as CellSpend.TryUpgradeNode does in production.
         private static void SpendOnTrack(WeaponTrackKind kind)
         {
-            PickupWallet.AddPart();
-            bool spent = PartSpend.TrySpendOnTrack(kind);
-            Assert.That(spent, Is.True, $"spending a banked part on {kind} should have succeeded");
+            bool raised = WeaponSystemState.LevelUpTrack(kind);
+            Assert.That(raised, Is.True, $"raising {kind}'s level should have succeeded");
         }
 
         [UnityTest]

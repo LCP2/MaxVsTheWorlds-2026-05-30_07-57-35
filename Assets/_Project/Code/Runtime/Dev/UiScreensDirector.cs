@@ -163,6 +163,9 @@ namespace MaxWorlds.Dev
             // — every other fixture above forces every category open (ResetRunForFixture), so none of
             // them can evidence the "family not unlocked" lock reason at all.
             yield return CaptureFixtureScreen("rig-freshrun-16x9", 1920, 1080, ApplyRigFixtureFreshRun, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            // MV-515 AC8: the Supercell tray with one still banked (and still cashable) right after a
+            // cash-in — the human-check evidence that TryCashSupercell actually moved both currencies.
+            yield return CaptureFixtureScreen("rig-supercells-16x9", 1920, 1080, ApplyRigFixtureSupercellCashed, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
             // MV-472 (current spec) hand-off verification: the exact three viewport pixel sizes Lee's
             // ticket comment names (977x458, 852x393 iPhone landscape, 1133x744 iPad mini landscape) —
@@ -188,11 +191,12 @@ namespace MaxWorlds.Dev
             ResetRunForFixture();
             SpendRigFixtureLevels();
             PickupWallet.SetPowerCells(28);   // needs e_cel spent to 1 first — Capacity reads RigState
-            for (int i = 0; i < 4; i++) PickupWallet.AddPart();   // parts banked: 4
+            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();   // Supercells banked: 4
         }
 
-        /// <summary>The same board state, minus the 4 banked parts — comparing this against the
-        /// parts=4 shot is how the amber '+' badge and the parts-tray fill state get evidenced.</summary>
+        /// <summary>The same board state, minus the 4 banked Supercells — comparing this against the
+        /// banked=4 shot is how the Supercell tray's fill state gets evidenced (MV-515 retired the old
+        /// per-node amber '+' badge this used to also evidence).</summary>
         public static void ApplyRigFixtureNoParts()
         {
             ResetRunForFixture();
@@ -226,6 +230,22 @@ namespace MaxWorlds.Dev
             RigState.Reset();
             PickupWallet.Reset();
             PickupWallet.SetPowerCells(15);
+        }
+
+        /// <summary>MV-515 AC8's human-check shot: the Supercell tray mid-story — banks TWO Supercells
+        /// with room in the reserve for a top-up, then actually cashes ONE via the same
+        /// <see cref="PickupWallet.TryCashSupercell"/> path the tray's own tap uses — so the captured
+        /// frame shows the tray with one Supercell still banked (and still cashable) AND the cell count
+        /// already carrying the +10 from the cash-in that just happened, not merely a static "some
+        /// banked" state indistinguishable from never having been tapped.</summary>
+        public static void ApplyRigFixtureSupercellCashed()
+        {
+            ResetRunForFixture();
+            SpendRigFixtureLevels();
+            PickupWallet.SetPowerCells(8);   // room for a full 10-cell top-up under the 30 capacity
+            PickupWallet.AddSupercell();
+            PickupWallet.AddSupercell();
+            PickupWallet.TryCashSupercell();   // 2 banked -> 1 banked; 8 cells -> 18 cells
         }
 
         private static void ResetRunForFixture()
@@ -307,7 +327,7 @@ namespace MaxWorlds.Dev
         public static void ApplyHudMv510Fixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 3; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 3; i++) PickupWallet.AddSupercell();
             for (int i = 0; i < 12; i++) PickupWallet.AddPowerCell();
         }
 
@@ -322,7 +342,7 @@ namespace MaxWorlds.Dev
         public static void ApplyWeaponsButtonPartsFixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();
         }
 
         public static void ApplyWeaponsButtonModuleFixture()
@@ -334,7 +354,7 @@ namespace MaxWorlds.Dev
         public static void ApplyWeaponsButtonBothFixture()
         {
             ApplyWeaponsButtonIdleFixture();
-            for (int i = 0; i < 4; i++) PickupWallet.AddPart();
+            for (int i = 0; i < 4; i++) PickupWallet.AddSupercell();
             PendingMorphingModule.Set(new[] { "s_bal", "e_ff", "m_spd" });
         }
 
@@ -913,7 +933,7 @@ namespace MaxWorlds.Dev
                 : glowFails.Count == 0 ? $"{glowChecked}/{glowChecked} owned nodes under 25% annulus ink"
                                         : $"{glowFails.Count}/{glowChecked} over 25% — {string.Join("; ", glowFails)}") + glowFoldNote);
 
-            // 5. Named colour probes — each family's category fill, the CELLS chip border, the PARTS tray border.
+            // 5. Named colour probes — each family's category fill, the CELLS chip border, the SUPERCELL tray border.
             var colourFails = new List<string>();
             int colourChecked = 0;
             foreach (var cat in categories)
@@ -925,7 +945,7 @@ namespace MaxWorlds.Dev
             {
                 colourChecked += 2;
                 CheckChipBorderColour(tex, weapons.CellsBorder, "CELLS border", RigBoardLayout.Colour("sec"), colourFails);
-                CheckChipBorderColour(tex, weapons.PartsBorder, "PARTS border", RigBoardLayout.Colour("part"), colourFails);
+                CheckChipBorderColour(tex, weapons.SupercellsBorder, "SUPERCELL border", RigBoardLayout.Colour("supercell"), colourFails);
             }
             Emit("colour-probes", colourFails.Count == 0,
                 colourFails.Count == 0 ? $"{colourChecked}/{colourChecked} sampled points match rig_board.json"

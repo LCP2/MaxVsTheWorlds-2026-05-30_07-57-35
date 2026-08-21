@@ -39,7 +39,7 @@ namespace MaxWorlds.Tests.PlayMode
 
         private Pickup MakePart(PartKind kind)
         {
-            var p = Pickup.Create(PickupKind.Part);
+            var p = Pickup.Create(PickupKind.Supercell);
             p.Part = kind;
             p.gameObject.SetActive(true);
             _pickups.Add(p.gameObject);

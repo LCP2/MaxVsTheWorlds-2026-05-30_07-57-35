@@ -74,7 +74,7 @@ namespace MaxWorlds.Pickups
         /// on every <see cref="Collect"/> call inside the radius would cause.</summary>
         private readonly HashSet<Pickup> _reserveFullTold = new HashSet<Pickup>();
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
-        private readonly Stack<Pickup> _partPool = new Stack<Pickup>(8);
+        private readonly Stack<Pickup> _supercellPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
         private Transform _max;
         private int _largeKills;
@@ -125,14 +125,14 @@ namespace MaxWorlds.Pickups
                 SpawnDrop(PickupKind.PowerCell, pos + off);
             }
 
-            // MV-401: exactly one part per arena, from the last Bruiser destroyed in it — not every
+            // MV-401: exactly one Supercell per arena, from the last Bruiser destroyed in it — not every
             // large kind, and not a periodic count (see IsLastBruiserInArea). MV-427: granted at most
             // once EVER, even across a death that wipes and respawns this same area's robots — without
-            // DeathRunState's flag, a restored area's fresh last Bruiser would mint another part and
+            // DeathRunState's flag, a restored area's fresh last Bruiser would mint another Supercell and
             // suicide-farming would be the optimal strategy.
             if (kind == EnemyKind.Bruiser && IsLastBruiserInArea()
                 && MaxWorlds.Arena.DeathRunState.TryGrantAreaPart(ResolveCurrentArea()))
-                SpawnDrop(PickupKind.Part, pos, DecorativeKind());
+                SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
         }
 
         /// <summary>How many cells drop for the large kill just reported (MV-375). Prefers the
@@ -233,8 +233,8 @@ namespace MaxWorlds.Pickups
         /// <see cref="PickupKind.Device"/> pickup — no pause, no screen, the fight isn't interrupted; the
         /// credit itself only banks once Max walks over it (<see cref="Collect"/>), same as any other
         /// drop. MV-457: a shed unlocks a whole ability FAMILY now, not a single node — once every
-        /// category is unlocked there is nothing left to open, so it falls back to a part + a cell cache
-        /// instead — the reward the shed no longer has a use for the family pool to give.</summary>
+        /// category is unlocked there is nothing left to open, so it falls back to a Supercell + a cell
+        /// cache instead — the reward the shed no longer has a use for the family pool to give.</summary>
         private void OnFactoryDestroyed(Vector3 pos)
         {
             bool anyLocked = false;
@@ -242,7 +242,7 @@ namespace MaxWorlds.Pickups
 
             if (!anyLocked)
             {
-                SpawnDrop(PickupKind.Part, pos, DecorativeKind());
+                SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
                 for (int i = 0; i < ShedCellCacheAmount; i++)
                 {
                     float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
@@ -260,7 +260,7 @@ namespace MaxWorlds.Pickups
         {
             Stack<Pickup> pool = kind switch
             {
-                PickupKind.Part => _partPool,
+                PickupKind.Supercell => _supercellPool,
                 PickupKind.Device => _devicePool,
                 _ => _cellPool,
             };
@@ -360,8 +360,8 @@ namespace MaxWorlds.Pickups
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
                 default:
-                    PickupWallet.AddPart();   // a fungible token now, no identity to bank (WV-228)
-                    HudSignals.EmitPickup(p.transform.position, "+1 PART", MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
+                    PickupWallet.AddSupercell();   // a fungible token now, no identity to bank (WV-228, MV-515)
+                    HudSignals.EmitPickup(p.transform.position, "+1 SUPERCELL", MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
             }
 
@@ -370,7 +370,7 @@ namespace MaxWorlds.Pickups
             _live.RemoveAt(index);
             Stack<Pickup> pool = p.Kind switch
             {
-                PickupKind.Part => _partPool,
+                PickupKind.Supercell => _supercellPool,
                 PickupKind.Device => _devicePool,
                 _ => _cellPool,
             };
