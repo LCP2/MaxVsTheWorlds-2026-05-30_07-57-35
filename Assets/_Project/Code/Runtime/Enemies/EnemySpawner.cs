@@ -513,6 +513,11 @@ namespace MaxWorlds.Enemies
             // branch above built the instance.
             e.gameObject.AddComponent<RobotSpawnSource>().Mark($"EnemySpawner@{gameObject.name}");
 
+            e.Apply(a);                 // stats/Kind — MUST land before RobotRig attaches (MV-535):
+                                         // RobotRig.Awake() reads _enemy.Kind synchronously to build its
+                                         // body, so attaching it before Apply() builds every robot as
+                                         // the default Kind (Rusher).
+
             // MV-527: dressing moved here from RobotRigDirector's per-frame FindObjectsByType<RobotEnemy>
             // sweep — attached once, here, at the one place a NEW instance is actually built (a pooled
             // Take() reuses the same GameObject and skips CreateInstance entirely, so this never runs
@@ -521,8 +526,6 @@ namespace MaxWorlds.Enemies
             // (MV-350) is no longer needed — nothing can render before CreateInstance returns.
             e.gameObject.AddComponent<RobotRig>();
             e.gameObject.AddComponent<RobotSkinDiagnostics>();
-
-            e.Apply(a);                 // stats — after Awake, which seeded the defaults
             e.Died += OnEnemyDied;
             e.gameObject.SetActive(false);
             return e;
