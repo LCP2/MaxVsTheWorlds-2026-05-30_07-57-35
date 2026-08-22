@@ -25,6 +25,11 @@ namespace MaxWorlds.Core
         private float _lastLogAt;
         private GUIStyle _fpsStyle;
 
+        /// <summary>The single FpsMeter instance Bootstrap ticks every frame — exposed so other
+        /// diagnostics (MV-503/MV-505's overlay, MV-537's perf figures) read the same measurement
+        /// rather than sampling a second, possibly-disagreeing one.</summary>
+        public static FpsMeter ActiveMeter { get; private set; }
+
         private void Awake()
         {
             // First line in the log, so a browser console immediately answers "which build is this?"
@@ -33,6 +38,8 @@ namespace MaxWorlds.Core
             // YT-216's cold-launch reference point — everything downstream (Home shown, controllable)
             // diffs against this to verify time-to-fun on device from the log alone.
             BootTiming.Mark("bootstrap-awake");
+
+            ActiveMeter = _meter;
 
             QualitySettings.vSyncCount = 0;
 
@@ -62,8 +69,12 @@ namespace MaxWorlds.Core
 
             // Frame time as well as rate: at a genuinely bad frame rate the millisecond figure is
             // what tells you whether you're looking at a stall or a throttle.
-            float ms = _meter.Fps > 0f ? 1000f / _meter.Fps : 0f;
-            Debug.Log($"[FPS] {_meter.Fps:0.0} fps  ({ms:0.0} ms/frame)");
+            Debug.Log($"[FPS] {_meter.Fps:0.0} fps  ({_meter.FrameMs:0.0} ms/frame)");
+        }
+
+        private void OnDestroy()
+        {
+            if (ActiveMeter == _meter) ActiveMeter = null;
         }
 
         /// <summary>Real players only ever see the iOS TestFlight/App Store build — the WebGL Pages

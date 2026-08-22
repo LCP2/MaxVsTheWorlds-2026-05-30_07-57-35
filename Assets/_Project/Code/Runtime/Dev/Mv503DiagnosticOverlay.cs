@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.Dev
 {
@@ -10,6 +11,10 @@ namespace MaxWorlds.Dev
     /// no browser console. A pure log consumer: it only listens to
     /// <see cref="Application.logMessageReceived"/> for lines that already start with the
     /// <c>[MV-503]</c> prefix, so nothing about the diagnostics themselves changes.
+    ///
+    /// MV-537 extends it with live performance figures (fps, frame time, worst-frame-in-5s, a short
+    /// history, the build stamp) — the same sanctioned "hidden by default, present on TestFlight"
+    /// surface, so a photo of it is self-identifying and doesn't need Xcode/Console.app to read.
     /// </summary>
     [DisallowMultipleComponent]
     public sealed class Mv503DiagnosticOverlay : MonoBehaviour
@@ -17,14 +22,83 @@ namespace MaxWorlds.Dev
         private const string Prefix = "[MV-503]";
         private const int Capacity = 8;
 
+        /// <summary>Perf lines rebuild at most this often while open — a glance-rate readout, not a
+        /// per-frame one, so reading it never distorts the measurement it's showing (MV-537).</summary>
+        private const float PerfRefreshSeconds = 0.25f;
+
         private static Mv503DiagnosticOverlay _instance;
 
         private readonly List<string> _lines = new List<string>(Capacity);
         private bool _visible;
         private GUIStyle _textStyle;
 
+        private FpsMeter _perfMeter;
+        private string _buildStamp;
+        private string _cachedPerfLine;
+        private float _perfBuiltAt = float.NegativeInfinity;
+
         public IReadOnlyList<string> Lines => _lines;
         public bool Visible => _visible;
+
+        /// <summary>Resolved perf figures for one instant — MV-537 AC1. A plain data carrier so a test
+        /// can assert the numbers directly instead of parsing the drawn text.</summary>
+        public readonly struct PerfSnapshot
+        {
+            public readonly float Fps;
+            public readonly float FrameMs;
+            public readonly float WorstFrameMs;
+            public readonly string BuildStamp;
+
+            public PerfSnapshot(float fps, float frameMs, float worstFrameMs, string buildStamp)
+            {
+                Fps = fps;
+                FrameMs = frameMs;
+                WorstFrameMs = worstFrameMs;
+                BuildStamp = buildStamp;
+            }
+        }
+
+        /// <summary>Wires the perf figures to a specific meter/build-stamp pair. Tests call this
+        /// directly with a hand-driven <see cref="FpsMeter"/>; the live game leaves it unset and
+        /// <see cref="ResolvePerfMeterIfNeeded"/> pulls <see cref="Bootstrap.ActiveMeter"/> lazily on
+        /// first open instead — Bootstrap's own Awake runs before this overlay's
+        /// [RuntimeInitializeOnLoadMethod] installs it, so wiring at Awake time the other way round
+        /// would read a not-yet-installed overlay.</summary>
+        public void SetPerfSource(FpsMeter meter, string buildStamp)
+        {
+            _perfMeter = meter;
+            _buildStamp = buildStamp;
+        }
+
+        private void ResolvePerfMeterIfNeeded()
+        {
+            if (_perfMeter != null) return;
+            var meter = Bootstrap.ActiveMeter;
+            if (meter == null) return;
+            _perfMeter = meter;
+            _buildStamp = Application.version;
+        }
+
+        /// <summary>Pure derivation from an <see cref="FpsMeter"/> — MV-537 AC1: the same meter
+        /// Bootstrap ticks every frame, never a second measurement path.</summary>
+        public static PerfSnapshot BuildPerfSnapshot(FpsMeter meter, string buildStamp) =>
+            meter == null ? default : new PerfSnapshot(meter.Fps, meter.FrameMs, meter.WorstFrameMs, buildStamp ?? "");
+
+        private static string FormatPerfLine(PerfSnapshot perf, float[] historyMs)
+        {
+            var history = new System.Text.StringBuilder();
+            if (historyMs != null)
+            {
+                for (int i = 0; i < historyMs.Length; i++)
+                {
+                    if (i > 0) history.Append('/');
+                    history.Append(historyMs[i].ToString("0"));
+                }
+            }
+
+            return $"[MV-537] {perf.Fps:0.0} fps  ({perf.FrameMs:0.0} ms/frame)  worst {perf.WorstFrameMs:0.0} ms/5s" +
+                   $"  hist {history} ms  build {perf.BuildStamp}";
+        }
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
@@ -61,12 +135,29 @@ namespace MaxWorlds.Dev
 
         /// <summary>The text OnGUI would draw — null while hidden, so no line joining/formatting work
         /// happens at all until a tap makes the overlay visible.</summary>
-        public string BuildOverlayText()
+        public string BuildOverlayText() => BuildOverlayText(Time.realtimeSinceStartup);
+
+        /// <summary>Same as the no-arg overload, with the clock injected — MV-537 tests drive this
+        /// with a fixed <paramref name="now"/> instead of the real one, same idiom as
+        /// <see cref="FpsMeter.Tick"/>.</summary>
+        public string BuildOverlayText(float now)
         {
             if (!_visible) return null;
-            return _lines.Count == 0
+
+            ResolvePerfMeterIfNeeded();
+
+            if (_perfMeter != null && now - _perfBuiltAt >= PerfRefreshSeconds)
+            {
+                var perf = BuildPerfSnapshot(_perfMeter, _buildStamp);
+                _cachedPerfLine = FormatPerfLine(perf, _perfMeter.SnapshotHistoryOldestFirstMs());
+                _perfBuiltAt = now;
+            }
+
+            string diagBlock = _lines.Count == 0
                 ? "[MV-503] no diagnostic lines captured yet"
                 : string.Join("\n", _lines);
+
+            return _cachedPerfLine == null ? diagBlock : _cachedPerfLine + "\n" + diagBlock;
         }
 
         private void OnGUI()

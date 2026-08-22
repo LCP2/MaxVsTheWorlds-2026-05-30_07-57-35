@@ -74,5 +74,39 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsFalse(meter.HasReading,
                 "with no reading yet it must say so — printing '0 fps' is a lie the UI then repeats");
         }
+
+        /// <summary>MV-537 AC3 — a run averaging a healthy fps with one long spike is a different
+        /// problem from a steady slow one, and only the worst-frame figure tells them apart. Drives a
+        /// steady 60fps stream, injects one 250ms stall, confirms WorstFrameMs tracks it, then keeps
+        /// ticking steady frames past the trailing window until the spike's bucket ages out.</summary>
+        [Test]
+        public void WorstFrameMs_TracksASpikeAndDecaysOutOfTheWindow()
+        {
+            var meter = new FpsMeter(0.5f);
+
+            float t = 0f;
+            meter.Tick(t);
+            for (int i = 0; i < 10; i++)
+            {
+                t += 1f / 60f;
+                meter.Tick(t);
+            }
+            Assert.That(meter.WorstFrameMs, Is.LessThan(30f),
+                "a steady 60fps run must not already read as a spike");
+
+            t += 0.25f; // one 250ms stall
+            meter.Tick(t);
+            Assert.That(meter.WorstFrameMs, Is.GreaterThanOrEqualTo(240f),
+                "the worst-frame figure must track the spike that just happened");
+
+            // More than the ~5-second trailing window of steady frames — the spike's bucket must age out.
+            for (int i = 0; i < 6 * 60; i++)
+            {
+                t += 1f / 60f;
+                meter.Tick(t);
+            }
+            Assert.That(meter.WorstFrameMs, Is.LessThan(30f),
+                "the spike must decay out of the trailing window once enough steady time has passed");
+        }
     }
 }
