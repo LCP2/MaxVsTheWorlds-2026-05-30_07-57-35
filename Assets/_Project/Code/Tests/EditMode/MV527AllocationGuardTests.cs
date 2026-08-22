@@ -74,11 +74,22 @@ namespace MaxWorlds.Tests.EditMode
                 string fileName = Path.GetFileName(path);
                 if (Array.IndexOf(Allowlist, fileName) >= 0) continue;
 
+                string rawText = File.ReadAllText(path);
+
+                // MV-533: StripComments' regex scan over ~17,000 comment matches in this tree is what
+                // blew CI's per-test budget (~410-420s there vs ~100s locally). Most of the 266 files
+                // contain neither call at all, so a cheap substring pre-check on the RAW text (before
+                // stripping) skips them outright. This can't change which files end up flagged: strip
+                // only blanks comment characters to spaces, it never adds characters, so if the target
+                // strings are absent from the raw text they cannot appear in the stripped code either.
+                if (!rawText.Contains("FindObjectsByType") && !rawText.Contains("FindFirstObjectByType"))
+                    continue;
+
                 // Strip comments first — several of this ticket's own fix-site comments explain what
                 // USED to be a per-frame FindObjectsByType call, in prose, right inside the very Update
                 // method that no longer makes it. A text scan that didn't strip comments would flag its
                 // own explanation as the bug.
-                string text = StripComments(File.ReadAllText(path));
+                string text = StripComments(rawText);
                 foreach (Match m in MethodSig.Matches(text))
                 {
                     string body = m.Groups["body"].Value == "=>"
