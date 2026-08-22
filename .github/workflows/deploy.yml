@@ -80,7 +80,7 @@ jobs:
           count_jql() {
             curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" -G \
               --data-urlencode "jql=$1" --data-urlencode "maxResults=0" \
-              "$BASE/rest/api/3/search" | jq -r '.total // empty'
+              "$BASE/rest/api/3/search/jql" | jq -r '.total // empty'
           }
           BUSY=$(count_jql "$BUSY_JQL") || true
           [ -z "$BUSY" ] && fail_closed "BUSY count lookup failed"
@@ -201,7 +201,7 @@ jobs:
 
           KEYS=$(curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" -G \
             --data-urlencode "jql=$READY_JQL" --data-urlencode "maxResults=100" --data-urlencode "fields=key" \
-            "$BASE/rest/api/3/search" | jq -r '.issues[]?.key // empty')
+            "$BASE/rest/api/3/search/jql" | jq -r '.issues[]?.key // empty')
           if [ -z "$KEYS" ]; then
             echo "::notice::No tickets in the ready bucket - nothing to transition."
             exit 0
