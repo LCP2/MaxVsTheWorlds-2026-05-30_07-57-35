@@ -78,9 +78,10 @@ jobs:
           fi
 
           count_jql() {
-            curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" -G \
-              --data-urlencode "jql=$1" --data-urlencode "maxResults=0" \
-              "$BASE/rest/api/3/search/jql" | jq -r '.total // empty'
+            curl -sS -u "$MAIL:$ATLASSIAN_API_TOKEN" -H "Accept: application/json" \
+              -H "Content-Type: application/json" -X POST \
+              --data "$(jq -n --arg jql "$1" '{jql:$jql}')" \
+              "$BASE/rest/api/3/search/approximate-count" | jq -r '.count // empty'
           }
           BUSY=$(count_jql "$BUSY_JQL") || true
           [ -z "$BUSY" ] && fail_closed "BUSY count lookup failed"
