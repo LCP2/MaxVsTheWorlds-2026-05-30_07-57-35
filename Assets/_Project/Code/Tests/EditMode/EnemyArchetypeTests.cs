@@ -25,7 +25,9 @@ namespace MaxWorlds.Tests.EditMode
         public void Bruiser_IsSlowerAndTougherThanTheRusher()
         {
             Assert.Less(Bruiser.MoveSpeed, Rusher.MoveSpeed * 0.75f, "the bruiser must read as SLOW");
-            Assert.Greater(Bruiser.MaxHealth, Rusher.MaxHealth * 3f, "the bruiser must soak fire");
+            // MV-540: cut from 135 to 68 dropped the margin from 4.2x to 2.1x Rusher; per Lee's
+            // 2026-08-25 decision the floor relaxes to >= 2x, not the invariant itself.
+            Assert.GreaterOrEqual(Bruiser.MaxHealth, Rusher.MaxHealth * 2f, "the bruiser must soak fire");
             Assert.Greater(Bruiser.ContactDamage, Rusher.ContactDamage * 2f, "…and hit hard for it");
         }
 
@@ -133,7 +135,8 @@ namespace MaxWorlds.Tests.EditMode
         {
             // It's allowed to be chunkier than a rusher, but its danger has to come from soaking
             // fire and hitting hard — not from being big enough to block a doorway.
-            Assert.Greater(Bruiser.MaxHealth, Rusher.MaxHealth * 3f);
+            // MV-540: floor relaxed from 3x to 2x Rusher (68 vs 32 = 2.1x) per Lee's 2026-08-25 decision.
+            Assert.GreaterOrEqual(Bruiser.MaxHealth, Rusher.MaxHealth * 2f);
             Assert.LessOrEqual(Bruiser.ColliderRadius, EnemyArchetype.PlayerRadius * 1.2f);
         }
 

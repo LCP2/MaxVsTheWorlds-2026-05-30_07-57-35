@@ -240,6 +240,9 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(cfg.enemyTypes.large.thv, cfg.enemyTypes.small.thv);
             Assert.Greater(cfg.enemyTypes.heavy.thv, cfg.enemyTypes.large.thv);
             Assert.Greater(cfg.enemyTypes.brute.thv, cfg.enemyTypes.heavy.thv);
+            // MV-540: Bruiser health cut 135 -> 68 re-derives large.thv the same way MV-512 did
+            // (2.81 -> 1.41, scaled proportionally to the health change).
+            Assert.AreEqual(1.41f, cfg.enemyTypes.large.thv, 0.01f, "MV-540: large.thv must be re-derived for the Bruiser health cut");
         }
 
         // --- MV-298: Area 1 is a light opening, not a swarm — 2-3 lowest-tier (Rusher) + a couple ---
