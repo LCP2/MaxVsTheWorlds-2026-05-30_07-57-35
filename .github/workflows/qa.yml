@@ -62,7 +62,7 @@ jobs:
   jira-qa-passed:
     name: Mark tested tickets QA Passed
     needs: [test]
-    if: success()
+    if: success() && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
