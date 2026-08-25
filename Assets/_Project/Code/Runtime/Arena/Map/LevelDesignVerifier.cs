@@ -123,11 +123,18 @@ namespace MaxWorlds.Arena
             }
         }
 
+        /// <summary>Every authored shed, not just the first in an area (MV-541: an area can carry
+        /// several via <see cref="WorldArea.Sheds"/>) — flattened to (area id, shed) pairs so this
+        /// lint sees every shed the same way <see cref="MapValidation.WorldSheds"/> already does.</summary>
         private static void VerifyShedSeparation(WorldConfig cfg, LevelDesignConstraints constraints, List<string> violations)
         {
-            var sheds = new List<WorldArea>();
+            var sheds = new List<(string areaId, WorldShed shed)>();
             foreach (WorldArea a in cfg.areas)
-                if (a != null && a.hasShed && a.shed != null) sheds.Add(a);
+            {
+                if (a == null || !a.hasShed) continue;
+                foreach (WorldShed s in a.Sheds())
+                    if (s != null) sheds.Add((a.id, s));
+            }
 
             for (int i = 0; i < sheds.Count; i++)
             for (int j = i + 1; j < sheds.Count; j++)
@@ -139,7 +146,7 @@ namespace MaxWorlds.Arena
                 if (dist < constraints.minShedSeparationMetres)
                 {
                     violations.Add(
-                        $"sheds in area '{sheds[i].id}' and area '{sheds[j].id}' are {dist:0.#} m apart — " +
+                        $"sheds in area '{sheds[i].areaId}' and area '{sheds[j].areaId}' are {dist:0.#} m apart — " +
                         $"under the {constraints.minShedSeparationMetres:0.#} m minimum shed separation");
                 }
             }

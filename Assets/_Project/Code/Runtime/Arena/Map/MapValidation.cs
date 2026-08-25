@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
 {
@@ -50,6 +51,14 @@ namespace MaxWorlds.Arena
         /// <summary>Closest a shed may sit to its own area's walls (MV-475) — room for its spawn ring
         /// plus clearance without crowding the boundary.</summary>
         public const float MinShedWallMargin = 6f;
+
+        /// <summary>Closest two bosses authored in the SAME area may sit, centre to centre (MV-561) —
+        /// room enough for a fight with two Big Bermudas to not have them standing on top of each
+        /// other.</summary>
+        public const float MinBossSeparation = 10f;
+
+        /// <summary>Closest a boss may sit to its own area's walls (MV-561).</summary>
+        public const float MinBossWallMargin = 6f;
 
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
         /// room.</summary>
@@ -381,16 +390,157 @@ namespace MaxWorlds.Arena
         // openings" rather than merely "the numbers were self-consistent".
         // ---------------------------------------------------------------------------------------
 
+        /// <summary>Closest an authored garrison entry (MV-559) may sit to a piece of cover — a robot
+        /// authored inside a hedge is a content bug that should fail the build, not ship.</summary>
+        public const float MinGarrisonCoverGap = 1f;
+
         public static bool ValidateWorldConfig(WorldConfig cfg, out string reason)
         {
             if (cfg == null) { reason = "the world config is null"; return false; }
 
             return WorldAreas(cfg, out reason)
                 && WorldSheds(cfg, out reason)
+                && WorldBosses(cfg, out reason)
+                && WorldGarrison(cfg, out reason)
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
                 && WorldBossGate(cfg, out reason);
         }
+
+        /// <summary>Every boss an area carries (MV-561, <see cref="WorldArea.Bosses"/>) must sit clear of
+        /// its own area's walls, and two bosses in the same area must sit clear of each other — same
+        /// reasoning as <see cref="WorldSheds"/>, one area over.
+        ///
+        /// Only applies once an area actually carries MORE THAN ONE boss. A legacy single-boss area
+        /// "behaves exactly as it does today" (AC3) — world1's compost clearing predates this rule and
+        /// was never authored against it, so gating on count is what keeps it valid rather than
+        /// retroactively breaking already-shipped content.</summary>
+        private static bool WorldBosses(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldBoss[] bosses = a.Bosses();
+                if (bosses.Length <= 1) continue;
+
+                foreach (WorldBoss b in bosses)
+                {
+                    if (b.x - a.XMin < MinBossWallMargin || a.XMax - b.x < MinBossWallMargin ||
+                        b.z - a.ZMin < MinBossWallMargin || a.ZMax - b.z < MinBossWallMargin)
+                    {
+                        reason = $"a boss in area '{a.id}' at ({b.x:0.#}, {b.z:0.#}) is within " +
+                                 $"{MinBossWallMargin} m of its area's walls";
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < bosses.Length; i++)
+                for (int j = i + 1; j < bosses.Length; j++)
+                {
+                    float dist = Vector2.Distance(new Vector2(bosses[i].x, bosses[i].z), new Vector2(bosses[j].x, bosses[j].z));
+                    if (dist < MinBossSeparation)
+                    {
+                        reason = $"area '{a.id}' has two bosses {dist:0.#} m apart — under the " +
+                                 $"{MinBossSeparation} m minimum boss separation";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>Every authored garrison entry (MV-559, <see cref="WorldArea.garrison"/>) must sit
+        /// inside its own area, clear of cover and clear of every shed — the same "nowhere for a robot
+        /// to spawn on top of something" guarantee <see cref="WorldSheds"/> gives a shed's own
+        /// neighbours, extended to a designer's own placed robots — and an area must not author more of
+        /// a kind than its solved composition actually has, or a garrison slot would have nothing to
+        /// draw from.</summary>
+        private static bool WorldGarrison(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldGarrisonEntry[] garrison = a.garrison;
+                if (garrison == null || garrison.Length == 0) continue;
+
+                var countByKind = new Dictionary<EnemyKind, int>();
+
+                foreach (WorldGarrisonEntry entry in garrison)
+                {
+                    if (entry == null) { reason = $"area '{a.id}' has a null garrison entry"; return false; }
+
+                    var point = new Vector2(entry.x, entry.z);
+
+                    if (!a.Footprint.Contains(point))
+                    {
+                        reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is outside the area";
+                        return false;
+                    }
+
+                    foreach (WorldCover c in a.cover)
+                    {
+                        if (c == null) continue;
+
+                        ArenaCover body = new MapEntity
+                        {
+                            x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                        }.ToCover();
+
+                        if (body.DistanceTo(point) < MinGarrisonCoverGap)
+                        {
+                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
+                                     $"{MinGarrisonCoverGap} m of cover '{c.id}'";
+                            return false;
+                        }
+                    }
+
+                    foreach (WorldShed s in a.Sheds())
+                    {
+                        float toShed = Vector2.Distance(point, new Vector2(s.x, s.z));
+                        if (toShed < SpawnRadius + SpawnClearance)
+                        {
+                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
+                                     $"{SpawnRadius + SpawnClearance:0.#} m of a shed";
+                            return false;
+                        }
+                    }
+
+                    if (!EnemyKindNames.TryParse(entry.kind, out EnemyKind kind))
+                    {
+                        reason = $"area '{a.id}': garrison entry has an unrecognised kind '{entry.kind}'";
+                        return false;
+                    }
+                    countByKind[kind] = countByKind.TryGetValue(kind, out int existing) ? existing + 1 : 1;
+                }
+
+                DifficultyEngine.Composition solved = cfg.SolveComposition(a.index);
+                foreach (KeyValuePair<EnemyKind, int> kv in countByKind)
+                {
+                    int authoredCount = CompositionCount(solved, kv.Key);
+                    if (kv.Value > authoredCount)
+                    {
+                        reason = $"area '{a.id}': garrison authors {kv.Value} {kv.Key}(s) but composition only has {authoredCount}";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        private static int CompositionCount(DifficultyEngine.Composition c, EnemyKind kind) => kind switch
+        {
+            EnemyKind.Rusher => c.Rusher,
+            EnemyKind.Bruiser => c.Bruiser,
+            EnemyKind.Heavy => c.Heavy,
+            EnemyKind.Brute => c.Brute,
+            EnemyKind.Gunner => c.Gunner,
+            EnemyKind.Launcher => c.Launcher,
+            EnemyKind.Blinker => c.Blinker,
+            EnemyKind.Bolter => c.Bolter,
+            _ => 0,
+        };
 
         private static bool WorldAreas(WorldConfig cfg, out string reason)
         {
@@ -618,13 +768,25 @@ namespace MaxWorlds.Arena
             return true;
         }
 
-        /// <summary>The boss area must sit behind its gate — every gate touching it has to require
-        /// every shed down first (spec rule (c)). A boss you can walk in on before the sheds fall is
-        /// the one bug this framework exists to make structurally impossible, not just balanced away.</summary>
+        /// <summary>Boss-role gate conditions accepted on the way IN (spec rule (c), widened MV-560 for
+        /// mid-run bosses): the final boss still uses <see cref="AllShedsDestroyedCondition"/> — every
+        /// shed in the whole world — while a boss partway through a run uses
+        /// <see cref="ShedsDestroyedBeforeCondition"/> — every shed in an area the player could actually
+        /// have reached by then. Either is accepted here; which one a given boss should author is a
+        /// design choice this validator does not second-guess.</summary>
+        private const string AllShedsDestroyedCondition = "all-sheds-destroyed";
+        private const string ShedsDestroyedBeforeCondition = "sheds-destroyed-before";
+
+        /// <summary>The boss area must sit behind its gate — every gate INTO it has to require a shed
+        /// condition first (spec rule (c)). A boss you can walk in on before the sheds fall is the one
+        /// bug this framework exists to make structurally impossible, not just balanced away.
+        ///
+        /// A gate OUT of the boss area is deliberately exempt (MV-560): the final boss has none (its
+        /// only gate is the entry), but a MID-RUN boss's exit gate touches the boss area too, and
+        /// requiring a shed condition on it would lock the player in the boss room forever once they
+        /// have walked through — that gate opens on ordinary combat like any other.</summary>
         private static bool WorldBossGate(WorldConfig cfg, out string reason)
         {
-            const string requiredCondition = "all-sheds-destroyed";
-
             foreach (WorldArea a in cfg.areas)
             {
                 if (!a.IsBossRole) continue;
@@ -637,10 +799,17 @@ namespace MaxWorlds.Arena
                     if (!touches) continue;
 
                     hasGate = true;
-                    if (!string.Equals(g.opensWith, requiredCondition, StringComparison.OrdinalIgnoreCase))
+                    if (g.to.area != a.id) continue; // a gate OUT of the boss area — not checked
+
+                    bool validCondition =
+                        string.Equals(g.opensWith, AllShedsDestroyedCondition, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(g.opensWith, ShedsDestroyedBeforeCondition, StringComparison.OrdinalIgnoreCase);
+
+                    if (!validCondition)
                     {
                         reason = $"boss area '{a.id}' is opened by gate '{g.id}' with opensWith='{g.opensWith}' " +
-                                 $"— it must be '{requiredCondition}' so the boss sits behind every shed";
+                                 $"— it must be '{AllShedsDestroyedCondition}' or '{ShedsDestroyedBeforeCondition}' " +
+                                 "so the boss sits behind every shed";
                         return false;
                     }
                 }

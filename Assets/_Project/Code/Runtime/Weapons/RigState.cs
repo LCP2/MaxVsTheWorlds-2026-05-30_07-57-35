@@ -157,6 +157,36 @@ namespace MaxWorlds.Weapons
             Changed?.Invoke();
         }
 
+        /// <summary>Every node currently at a non-zero level, id to level (MV-557: a mid-run resume
+        /// checkpoint snapshot). Returns a fresh copy; the caller owns it and mutating it has no
+        /// effect on live state.</summary>
+        public static IReadOnlyDictionary<string, int> SnapshotLevels() => new Dictionary<string, int>(s_levels);
+
+        /// <summary>Every category unlocked this run (MV-557: a mid-run resume checkpoint snapshot).
+        /// Returns a fresh copy; the caller owns it.</summary>
+        public static IReadOnlyCollection<string> SnapshotUnlockedCategories() =>
+            new List<string>(s_unlockedCategories);
+
+        /// <summary>Overwrite the whole tree from a captured checkpoint (MV-557: a mid-run resume
+        /// restore, not a draft/spend) — replaces levels and unlocked categories wholesale rather than
+        /// merging, since a restore always starts from <see cref="Reset"/>'s baseline in practice. Fires
+        /// <see cref="Changed"/> once so live systems (e.g. <see cref="MaxWorlds.Pickups.PickupWallet"/>'s
+        /// capacity readout) re-fit.</summary>
+        public static void RestoreSnapshot(IReadOnlyDictionary<string, int> levels, IEnumerable<string> unlockedCategories)
+        {
+            s_levels.Clear();
+            if (levels != null)
+                foreach (KeyValuePair<string, int> kv in levels)
+                    s_levels[kv.Key] = kv.Value;
+
+            s_unlockedCategories.Clear();
+            if (unlockedCategories != null)
+                foreach (string category in unlockedCategories)
+                    s_unlockedCategories.Add(category);
+
+            Changed?.Invoke();
+        }
+
         private static void ResetLevels()
         {
             s_levels.Clear();

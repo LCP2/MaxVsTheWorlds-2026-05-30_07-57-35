@@ -16,7 +16,7 @@
   },
   "enemyTypes": {
     "small": { "thv": 1.2 },
-    "large": { "thv": 2.81 },
+    "large": { "thv": 1.41 },
     "heavy": { "thv": 5.38 },
     "brute": { "thv": 8.53 }
   },

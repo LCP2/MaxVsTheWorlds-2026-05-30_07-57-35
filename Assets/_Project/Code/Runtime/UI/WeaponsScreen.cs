@@ -53,9 +53,18 @@ namespace MaxWorlds.UI
         /// board scale 1.0 always (phone's aspect is wider than 16:9, never narrower, so this floor never
         /// touches it). See
         /// <c>RigBoardChromeTests.EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect</c>.
-        /// Below the floor (aspects narrower than iPad mini's own), a little edge crop is still accepted
-        /// (see <see cref="VisibleRefXWindow"/>) — this ticket's own required coverage stops at iPad mini
-        /// and iPhone, not an unbounded narrower hypothetical.</summary>
+        /// Below the floor (aspects narrower than iPad mini's own — never phone mode, whose aspect is
+        /// always wider than 16:9), a little edge crop is still accepted (see
+        /// <see cref="VisibleRefXWindow"/>) — required coverage stops at iPad mini and iPhone, not an
+        /// unbounded narrower hypothetical.
+        ///
+        /// MV-549: nothing crops at either of those two supported aspects any more, on any device. iPhone
+        /// used to be the exception — a real notch/Dynamic Island narrows the actual safe window below
+        /// what this floor and <see cref="VisibleRefXWindow"/> (both full-canvas-only) ever knew about,
+        /// so THE RIG's outer columns could still run past the safe area despite already being correctly
+        /// centred on it. <see cref="ComputePhoneFitScale"/> closes that gap for phone mode specifically
+        /// (standard mode, including iPad mini, was never affected — its insets are negligible and
+        /// symmetric).</summary>
         private const float BoardScaleFloor = 0.70f;
 
         private static readonly Color Scrim = new Color(0f, 0f, 0f, 0.97f);
@@ -216,6 +225,11 @@ namespace MaxWorlds.UI
         /// REAL built bottom edge via <see cref="RectTransform.GetWorldCorners"/> rather than asserting
         /// the authored <see cref="TopBarHeight"/>/<see cref="ContentMargin"/> constants directly.</summary>
         public RectTransform TopBar => _topBar;
+
+        /// <summary>MV-549: the Safe Area rect itself — test-only access, so a crop test can compare a
+        /// node's real built <see cref="RectTransform.GetWorldCorners"/> against the ACTUAL safe rect
+        /// (post <see cref="SafeArea"/> inset) instead of re-deriving it from <see cref="Screen"/>.</summary>
+        public RectTransform SafeRoot => _safeRoot;
 
         /// <summary>MV-433: the full-canvas opaque backdrop, first child of <see cref="_screenRoot"/>
         /// (drawn behind the Safe Area, the top bar and the board) — test-only access, same idiom as
@@ -421,6 +435,44 @@ namespace MaxWorlds.UI
         /// Pure so it's pinned by an EditMode test without building a canvas — same idiom as
         /// <see cref="ComputeBoardScale"/>.</summary>
         public static bool IsPhoneLayout(float aspect) => aspect >= PhoneAspectThreshold;
+
+        /// <summary>MV-549: half the total ref-px span phone mode's own category panels actually occupy,
+        /// centred on the board's own x=960 midpoint — the same envelope
+        /// <c>RigBoardChromeTests.EveryNodeAndRegionPanelFitsInsideTheVisibleWindowAtEveryTestedAspect</c>
+        /// already checks against a window, computed here instead of hard-coding
+        /// <c>RigBoardLayout.PhoneTargetWidth</c> so this tracks that constant (or any future column
+        /// re-tuning) without needing its own update.</summary>
+        private static float PhoneContentHalfWidth()
+        {
+            const float centreX = RefW * 0.5f;
+            float half = 0f;
+            foreach (var cat in RigBoardLayout.PhoneCategories)
+                half = Mathf.Max(half, Mathf.Abs(cat.X - centreX) + cat.ColumnHalfWidth);
+            return half;
+        }
+
+        /// <summary>MV-549: phone mode never runs <see cref="VisibleRefXWindow"/>'s crop maths (that's
+        /// standard/tablet mode only — see this file's own class doc history) and never shrinks via
+        /// <see cref="ComputeBoardScale"/> either (a phone aspect is always wider than 16:9). Both of
+        /// those assume the board's available width is the FULL screen; a real notch/Dynamic Island
+        /// narrows the actual SAFE window below that without phone mode ever finding out, which is what
+        /// let THE RIG's outer columns run past the safe area on iPhone despite already being correctly
+        /// CENTRED on it (<c>_boardScaleRoot</c>'s own anchor already does that part right). This is the
+        /// missing other half: shrink — by the smallest amount that closes the gap, never more — only
+        /// when the actual safe window is narrower than the content's own fixed-width envelope. On every
+        /// device with room to spare (<paramref name="safeAreaWidthFraction"/> at or near 1, true of
+        /// every EditMode test that never simulates a notch, and most real phones) this returns exactly
+        /// 1f, so <see cref="BoardScale"/> is unchanged from before this ticket. Pure and aspect-driven
+        /// (not read off <c>_safeRoot</c>'s own rendered rect) so it's pinned without a live canvas, same
+        /// idiom as <see cref="ComputeBoardScale"/>.</summary>
+        public static float ComputePhoneFitScale(float aspect, float safeAreaWidthFraction)
+        {
+            if (aspect <= 0f || safeAreaWidthFraction <= 0f) return 1f;
+            float safeRefWidth = RefH * aspect * safeAreaWidthFraction;
+            float neededWidth = PhoneContentHalfWidth() * 2f;
+            if (neededWidth <= 0f) return 1f;
+            return Mathf.Min(1f, safeRefWidth / neededWidth);
+        }
 
         private IReadOnlyList<RigCategoryLayout> Categories => _phoneMode ? RigBoardLayout.PhoneCategories : RigBoardLayout.Categories;
         private IReadOnlyList<RigAbilityLayout> Abilities => _phoneMode ? RigBoardLayout.PhoneAbilities : RigBoardLayout.Abilities;
@@ -1427,6 +1479,7 @@ namespace MaxWorlds.UI
             }
 
             float scale = ComputeBoardScale(aspect);
+            if (_phoneMode) scale *= ComputePhoneFitScale(aspect, SafeArea.CurrentSafeWidthFraction());
             _boardScaleRoot.localScale = new Vector3(scale, scale, 1f);
         }
 

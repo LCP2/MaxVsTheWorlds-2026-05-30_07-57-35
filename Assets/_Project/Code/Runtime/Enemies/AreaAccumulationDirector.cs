@@ -468,17 +468,17 @@ namespace MaxWorlds.Enemies
             var previewQueue = new AreaSpawnQueue(1);
             previewQueue.FillExact(preview, areaIndex);
 
-            Vector3[] positions = Garrison.SeedPositions(area, seedCount);
-            var pending = new List<RobotEnemy>(positions.Length);
-            for (int i = 0; i < positions.Length; i++)
+            Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount);
+            var pending = new List<RobotEnemy>(slots.Length);
+            for (int i = 0; i < slots.Length; i++)
             {
-                if (!previewQueue.TryTakeForGarrison(areaIndex, out EnemyKind kind)) break;
+                if (!previewQueue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
 
                 EnemyArchetype archetype = EnemyArchetype.Of(kind)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier));
 
                 RobotEnemy e = Take(kind, archetype);
-                Vector3 pos = positions[i];
+                Vector3 pos = slots[i].Position;
                 pos.y = archetype.SpawnHeight;
                 e.transform.position = pos;
                 e.transform.rotation = Quaternion.identity;
@@ -554,18 +554,18 @@ namespace MaxWorlds.Enemies
             int seedCount = Garrison.SeedCount(areaIndex, _worldCfg);
             if (seedCount <= 0) return;
 
-            Vector3[] positions = Garrison.SeedPositions(area, seedCount);
+            Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount);
             var group = new DormantGroup();
-            for (int i = 0; i < positions.Length; i++)
+            for (int i = 0; i < slots.Length; i++)
             {
-                if (!_queue.TryTakeForGarrison(areaIndex, out EnemyKind kind)) break;
+                if (!_queue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
 
                 EnemyArchetype archetype = EnemyArchetype.Of(kind)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
 
                 RobotEnemy e = Take(kind, archetype);
-                Vector3 pos = positions[i];
+                Vector3 pos = slots[i].Position;
                 pos.y = archetype.SpawnHeight;
                 e.transform.position = pos;
                 e.transform.rotation = Quaternion.identity;

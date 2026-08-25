@@ -32,6 +32,11 @@ namespace MaxWorlds.UI
     /// shots must not open on a frozen pick-a-slot screen (YT-97; MV-441 — this screen's own
     /// sortingOrder=220 canvas was sitting on top of every ui-screens capture uncaught).
     ///
+    /// PLAY also triggers <see cref="IntroCinematic"/> (YT-155/156) on a derived true-first-launch
+    /// (MV-550): <see cref="ShouldPlayIntroOnFirstLaunch"/> is true only when every save slot is empty
+    /// and no capture director is armed. The gate is derived from <see cref="SaveSystem"/>'s live slot
+    /// state every call, never persisted — see that method's doc.
+    ///
     /// Each occupied slot also carries a RESET control (MV-282) gated by a confirm/cancel dialog —
     /// <see cref="SaveSystem.Delete"/> is the whole reset, since <see cref="SaveSlotData"/> is the only
     /// thing that survives between runs today; Bolts/Vault/Workbench state is still session-only and
@@ -122,14 +127,19 @@ namespace MaxWorlds.UI
             Time.timeScale = 0f;
         }
 
-        private void Close()
+        /// <param name="cinematicStarted">MV-550: true when this pick just triggered
+        /// <see cref="IntroCinematic"/> — in that case control is NOT yet with the player (the
+        /// cinematic holds it for ~25s), so the "controllable" mark belongs to
+        /// <see cref="IntroCinematic"/>'s own handoff, not here.</param>
+        private void Close(bool cinematicStarted = false)
         {
             _open = false;
             Time.timeScale = _prevTimeScale;
             if (_maxStage != null) _maxStage.Hide();
             if (_root != null) Destroy(_root);
             _confirmRoot = null;   // was a child of _root; already gone
-            BootTiming.Mark("controllable");   // YT-216 — a slot was just picked; Max is live and moving
+            // YT-216 — a slot was just picked; on the no-cinematic path Max is live and moving right now.
+            if (!cinematicStarted) BootTiming.Mark("controllable");
 
             // MV-503: the CharacterController's state at this exact handoff, unconditionally — whether
             // or not "rotates but never translates" reproduces this run.
@@ -156,8 +166,10 @@ namespace MaxWorlds.UI
 
         /// <summary>Picking a profile: create it if this is the first time (YT-218 — its identity
         /// and personal best, seeded once, never reset by a later play), then drop the player into a
-        /// fresh run. There is no mid-run state to restore — no resume, no overwrite.</summary>
-        private void StartSlot(int slot, bool playIntro)
+        /// fresh run. There is no mid-run state to restore — no resume, no overwrite. Returns true if
+        /// this pick started <see cref="IntroCinematic"/> (MV-550) — the caller uses that to decide who
+        /// marks <c>BootTiming</c>'s "controllable".</summary>
+        private bool StartSlot(int slot, bool playIntro)
         {
             SaveSystem.ActiveSlot = slot;
             SaveSystem.EnsureProfile(slot);
@@ -176,13 +188,35 @@ namespace MaxWorlds.UI
             // otherwise a profile that died in Area 3 last run would find Area 3's part permanently
             // ungrantable on its next, unrelated run.
             MaxWorlds.Arena.DeathRunState.Reset();
-            if (playIntro) IntroCinematic.TryPlay();
+            // force: true — MV-550's derived first-launch gate (or a manual IntroCinematic.Enabled
+            // override, see ShouldPlayIntroOnFirstLaunch's caller) decides playIntro; TryPlay must not
+            // re-apply its own Enabled check on top of that decision.
+            return playIntro && IntroCinematic.TryPlay(force: true);
+        }
+
+        /// <summary>MV-550's derived first-launch gate: true only when every save slot is empty
+        /// (never played on this device) AND no capture director is armed — a filming or fixed-state
+        /// run must never wait on the ~25s sequence. Reads <see cref="SaveSystem"/>'s live slot state
+        /// on every call; nothing here is persisted or cached, so a wiped device reads as first-launch
+        /// again — deliberate, per MV-550 (no <c>SeenIntro</c> flag).</summary>
+        public static bool ShouldPlayIntroOnFirstLaunch()
+        {
+            if (PressKitDirector.Armed() || MaxWorlds.Dev.UiScreensDirector.Armed() ||
+                MaxWorlds.Dev.PerfCaptureDirector.Armed())
+                return false;
+
+            for (int i = 0; i < SaveSystem.SlotCount; i++)
+                if (SaveSystem.Load(i).HasData) return false;
+            return true;
         }
 
         private void OnPlay(int slot)
         {
-            StartSlot(slot, playIntro: true);
-            Close();
+            // Enabled stays a manual override on top of the derived gate (AC3) — a dev/test can still
+            // force the cinematic on a device that already has save data.
+            bool playIntro = IntroCinematic.Enabled || ShouldPlayIntroOnFirstLaunch();
+            bool introStarted = StartSlot(slot, playIntro);
+            Close(introStarted);
         }
 
         /// <summary>RESET tapped on an occupied slot (MV-282) — asks for confirmation before wiping

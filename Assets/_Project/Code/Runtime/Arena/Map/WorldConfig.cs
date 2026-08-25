@@ -55,6 +55,17 @@ namespace MaxWorlds.Arena
         public string produces;
     }
 
+    /// <summary>One authored, exact robot placement (MV-559) — a designer's "this Blinker stands
+    /// here" override for <see cref="MaxWorlds.Enemies.Garrison.SeedPositions"/>'s otherwise-even
+    /// ring. <see cref="kind"/> is the same lowercase key set <see cref="WorldComposition"/> uses.</summary>
+    [Serializable]
+    public sealed class WorldGarrisonEntry
+    {
+        public string kind;
+        public float x;
+        public float z;
+    }
+
     /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
     [Serializable]
     public sealed class WorldBoss
@@ -154,6 +165,13 @@ namespace MaxWorlds.Arena
 
         public WorldBoss boss;
 
+        /// <summary>Multiple bosses in one area (MV-561) — world 1 v4 puts two in a20 and three in a30,
+        /// which the single <see cref="boss"/> field cannot express. Not read directly by anything; call
+        /// <see cref="Bosses"/> instead, which resolves this against the legacy <see cref="boss"/> field
+        /// so callers never branch on which one a config authored — same shape as <see cref="sheds"/>
+        /// vs <see cref="shed"/> (MV-475).</summary>
+        public WorldBoss[] bosses;
+
         /// <summary>Shrubbery/hedge rows authored into this area (MV-318) — obstacles a robot or Max
         /// must go around, not through, but never enough of them to seal a path (the ordinary Cover
         /// invariants in <see cref="MapValidation"/> enforce that, same as they always have). Optional
@@ -164,6 +182,12 @@ namespace MaxWorlds.Arena
         /// fall back to the dial-derived budget solve" (<see cref="WorldConfig.SolveComposition"/>).
         /// Most Phase B areas carry one; nothing requires every area to.</summary>
         public WorldComposition composition;
+
+        /// <summary>Authored, exact garrison placements (MV-559) — when non-empty,
+        /// <see cref="MaxWorlds.Enemies.Garrison.SeedPositions"/> places these first, in authored order,
+        /// each at its authored <c>kind</c>, and only fills any remaining seed slots from the ring.
+        /// Optional; most areas carry none and behave exactly as before.</summary>
+        public WorldGarrisonEntry[] garrison = Array.Empty<WorldGarrisonEntry>();
 
         /// <summary>A named encounter shape for this area (MV-365) — data only, read by
         /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> to bias WHERE within the room a
@@ -204,6 +228,29 @@ namespace MaxWorlds.Arena
         /// <see cref="MaxWorlds.Enemies.SupplyLineNetwork"/>) uses this same rule so their ids never
         /// disagree.</summary>
         public string ShedId(int index, int count) => count <= 1 ? $"{id}_shed" : $"{id}_shed{index + 1}";
+
+        /// <summary>This area's bosses, resolved (MV-561): <see cref="bosses"/> when authored, else the
+        /// legacy single <see cref="boss"/> wrapped in a one-element array, else none. <see cref="boss"/>
+        /// is a nested <c>[Serializable]</c> field, so JsonUtility default-constructs it even when the
+        /// JSON never authors a "boss" object at all (the same quirk <see cref="WorldComposition.IsAuthored"/>
+        /// documents) — an unauthored one reads back as (0,0), not null, so it is only treated as real
+        /// once it carries a non-origin position. The one place that branches, so
+        /// <see cref="WorldMapLoader"/> doesn't have to.</summary>
+        public WorldBoss[] Bosses()
+        {
+            if (bosses != null && bosses.Length > 0) return bosses;
+            return boss != null && (boss.x != 0f || boss.z != 0f) ? new[] { boss } : Array.Empty<WorldBoss>();
+        }
+
+        /// <summary>The entity id for the boss at <paramref name="index"/> of <paramref name="count"/>
+        /// resolved bosses in this area (MV-561): <paramref name="b"/>'s own authored <see cref="WorldBoss.id"/>
+        /// when it has one — so <c>world1_config.json</c>'s "big_bermuda" keeps meaning exactly what it
+        /// always has, unchanged — or <c>"{id}_boss"</c> (single) / <c>"{id}_boss{n}"</c> (multiple),
+        /// 1-based, when it doesn't. Unlike <see cref="ShedId"/>, a boss's authored id is real content
+        /// (a fight needs a name), not an authoring-only reference, so it takes priority over the
+        /// fallback rather than being ignored by it.</summary>
+        public string BossId(WorldBoss b, int index, int count) =>
+            !string.IsNullOrEmpty(b?.id) ? b.id : (count <= 1 ? $"{id}_boss" : $"{id}_boss{index + 1}");
 
         public bool IsEntryRole => HasRole("entry");
         public bool IsBossRole => HasRole("boss");

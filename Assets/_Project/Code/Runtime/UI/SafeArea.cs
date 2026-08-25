@@ -69,6 +69,20 @@ namespace MaxWorlds.UI
             return Screen.safeArea;
         }
 
+        /// <summary>MV-549: the safe area's width as a fraction of the full screen width (1.0 when
+        /// there's no horizontal inset at all) — <see cref="WeaponsScreen"/>'s phone-mode fit scale reads
+        /// this directly rather than <c>_safeRoot</c>'s own rendered rect, since that rect only reflects
+        /// this fraction correctly once <see cref="Apply"/> has actually run (never true under the
+        /// EditMode test runner — see that call site's own comment) and is otherwise contaminated by
+        /// whatever the ambient/test canvas size happens to be. Honours the same
+        /// <see cref="SimulatedSafeArea"/>/<see cref="SimulatedScreenSize"/> seam as <see cref="Apply"/>.</summary>
+        public static float CurrentSafeWidthFraction()
+        {
+            Rect safe = CurrentSafeArea(out Vector2 screen);
+            if (screen.x <= 0f) return 1f;
+            return Mathf.Clamp01(safe.width / screen.x);
+        }
+
         /// <summary>
         /// Converts a pixel-space safe area into anchor fractions inside a full-screen parent.
         /// Pure and deterministic so it can be asserted in EditMode. Degenerate inputs

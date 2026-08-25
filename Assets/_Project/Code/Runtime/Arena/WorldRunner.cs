@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -33,6 +34,16 @@ namespace MaxWorlds.Arena
 
         private SupplyLineNetwork _supply;
         private AreaGate _bossGate;
+
+        /// <summary>Every OTHER gate authored with <c>opensWith: sheds-destroyed-before</c> (MV-560) —
+        /// a mid-run boss's entry gate, which <see cref="_bossGate"/> above does not cover since that
+        /// field is only ever the fixed <c>"bg"</c> actor id the FINAL boss's gate builds under. Locked
+        /// at <see cref="Configure"/> exactly like <see cref="_bossGate"/> is, and force-opened the same
+        /// way once its own condition — every shed strictly before the area it opens into — is met.
+        /// <c>toAreaIndex</c> is that boundary <see cref="WorldArea.index"/>, what
+        /// <see cref="SupplyLineNetwork.ShedsDestroyedBefore"/> checks against.</summary>
+        private readonly List<(AreaGate gate, int toAreaIndex)> _shedsBeforeGates =
+            new List<(AreaGate, int)>(2);
 
         /// <summary>One entry per BUILT shed (MV-475, not per area — an area can carry several).
         /// <c>shedId</c> is the entity id <see cref="SupplyLineNetwork"/> tracks destruction against;
@@ -98,6 +109,29 @@ namespace MaxWorlds.Arena
             // is a content bug for the world config to fix, not something this runner should paper over.
             if (_bossGate != null) _bossGate.Locked = true;
 
+            // MV-560: every OTHER gate authored with sheds-destroyed-before — a mid-run boss's entry,
+            // which the fixed "bg" lookup above never finds. Same lock-until-condition-met shape as the
+            // final boss gate, just resolved generically off the gate's own opensWith/to-area instead
+            // of a hardcoded id.
+            if (cfg.gates != null)
+            {
+                foreach (WorldGate g in cfg.gates)
+                {
+                    if (g?.id == null || g.id == "bg") continue;
+                    if (!string.Equals(g.opensWith, "sheds-destroyed-before", StringComparison.OrdinalIgnoreCase)) continue;
+                    if (!build.Actors.TryGetValue(g.id, out GameObject gateGo) || gateGo == null) continue;
+
+                    AreaGate gate = gateGo.GetComponent<AreaGate>();
+                    if (gate == null) continue;
+
+                    WorldArea toArea = cfg.Area(g.to?.area);
+                    if (toArea == null) continue;
+
+                    gate.Locked = true;
+                    _shedsBeforeGates.Add((gate, toArea.index));
+                }
+            }
+
             BuildGateIntoAreaMap(build);
 
             _playerHealth = FindFirstObjectByType<PlayerHealth>();
@@ -149,6 +183,19 @@ namespace MaxWorlds.Arena
                     {
                         _bossGate.Locked = false;
                         _bossGate.ForceOpen();
+                    }
+
+                    // MV-560: a shed just fell, so it's the moment any mid-run boss's own condition
+                    // could newly be met — same event-driven check as the final boss gate above, just
+                    // per-gate against its own boundary area index instead of the whole world.
+                    for (int j = _shedsBeforeGates.Count - 1; j >= 0; j--)
+                    {
+                        (AreaGate gate, int toAreaIndex) = _shedsBeforeGates[j];
+                        if (!_supply.ShedsDestroyedBefore(toAreaIndex)) continue;
+
+                        gate.Locked = false;
+                        gate.ForceOpen();
+                        _shedsBeforeGates.RemoveAt(j);
                     }
                 }
             }

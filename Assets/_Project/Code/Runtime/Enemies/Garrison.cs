@@ -43,24 +43,74 @@ namespace MaxWorlds.Enemies
             return Mathf.RoundToInt(total * DensityShare(area.garrisonDensity));
         }
 
-        /// <summary>Deterministic, authored-not-random placement for <paramref name="count"/> robots
-        /// inside <paramref name="area"/>: an evenly-spaced ring inset from the walls, so the same area
-        /// and count always produce the same positions (robots already there, not popping in at random
-        /// each run) — dodged along that same ring, never off it, around any authored cover a slot's
-        /// own angle would otherwise land it inside (MV-459), and around the area's own shed spawn ring
-        /// if it has one (MV-496).</summary>
+        /// <summary>One garrison seed slot: where to stand, and which kind to stand there —
+        /// <see langword="null"/> <see cref="Kind"/> means "any", the ring's original behaviour, where
+        /// the caller takes whatever the spawn queue hands back next (MV-559).</summary>
+        public readonly struct Seed
+        {
+            public readonly Vector3 Position;
+            public readonly EnemyKind? Kind;
+            public Seed(Vector3 position, EnemyKind? kind) { Position = position; Kind = kind; }
+        }
+
+        /// <summary>Deterministic, authored-not-random placement for <paramref name="count"/> garrison
+        /// slots in <paramref name="area"/> (MV-559): <see cref="WorldArea.garrison"/>'s authored
+        /// entries fill the first slots, in authored order, each carrying its own authored kind; any
+        /// slots beyond that — all of them, when nothing is authored — fill from the same evenly-spaced
+        /// ring <see cref="SeedPositions"/> always used, each with no kind preference. An area that
+        /// authors more entries than <paramref name="count"/> only uses the first <paramref name="count"/>
+        /// of them.</summary>
+        public static Seed[] SeedSlots(WorldArea area, int count)
+        {
+            if (area == null || count <= 0) return Array.Empty<Seed>();
+
+            WorldGarrisonEntry[] authored = area.garrison ?? Array.Empty<WorldGarrisonEntry>();
+            int authoredUsed = Mathf.Min(authored.Length, count);
+            int remaining = count - authoredUsed;
+
+            var slots = new Seed[count];
+            for (int i = 0; i < authoredUsed; i++)
+            {
+                WorldGarrisonEntry entry = authored[i];
+                EnemyKind? kind = EnemyKindNames.TryParse(entry.kind, out EnemyKind k) ? k : (EnemyKind?)null;
+                slots[i] = new Seed(new Vector3(entry.x, 0f, entry.z), kind);
+            }
+
+            if (remaining > 0)
+            {
+                Vector3[] ring = RingPositions(area, remaining);
+                for (int i = 0; i < remaining; i++)
+                    slots[authoredUsed + i] = new Seed(ring[i], null);
+            }
+
+            return slots;
+        }
+
+        /// <summary>Just the positions from <see cref="SeedSlots"/> — every existing caller that only
+        /// cares where a garrison stands, not what kind, keeps working unchanged.</summary>
         public static Vector3[] SeedPositions(WorldArea area, int count)
         {
-            if (area == null || count <= 0) return Array.Empty<Vector3>();
+            Seed[] slots = SeedSlots(area, count);
+            var positions = new Vector3[slots.Length];
+            for (int i = 0; i < slots.Length; i++) positions[i] = slots[i].Position;
+            return positions;
+        }
 
+        /// <summary>The evenly-spaced ring inset from the walls, so the same area and count always
+        /// produce the same positions (robots already there, not popping in at random each run) —
+        /// dodged along that same ring, never off it, around any authored cover a slot's own angle
+        /// would otherwise land it inside (MV-459), and around EVERY shed in the area's own spawn ring,
+        /// not just the first (MV-496, extended to N sheds by MV-541).</summary>
+        private static Vector3[] RingPositions(WorldArea area, int count)
+        {
             Vector2 center = area.CenterXz;
             float radius = Mathf.Min(area.size.w, area.size.d) * 0.3f;
-            WorldShed shed = area.hasShed ? area.shed : null;
+            WorldShed[] sheds = area.Sheds();
 
             var positions = new Vector3[count];
             for (int i = 0; i < count; i++)
             {
-                float angle = ClearOfCover(center, radius, i * (Mathf.PI * 2f / count), area.cover, shed);
+                float angle = ClearOfCover(center, radius, i * (Mathf.PI * 2f / count), area.cover, sheds);
                 positions[i] = new Vector3(
                     center.x + Mathf.Cos(angle) * radius,
                     0f,
@@ -84,28 +134,28 @@ namespace MaxWorlds.Enemies
         /// garrison's deterministic ring against the area's own hedge rows, so a Bruiser could be, and
         /// on the shipped world1_config.json WAS, seeded dead inside a shrub across ten of eighteen
         /// areas — stuck on geometry, unreachable, silently starving that area's
-        /// <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>) or inside the area's own shed
-        /// spawn ring (MV-496 — the same "stuck on geometry"/starved-part failure mode, just against a
-        /// different obstacle: on the shipped config a8's seed#8 landed 1.53 m into its shed's 4.3 m
-        /// spawn clearance). Walks outward from the authored angle at the SAME radius, alternating
-        /// sides, until clear of both — the radius never changes, so a dodged slot stays exactly as
-        /// inset from the walls as the ring formula always promised (and so it never leaves
+        /// <see cref="MaxWorlds.Arena.DeathRunState.TryGrantAreaPart"/>) or inside one of the area's own
+        /// shed spawn rings (MV-496 — the same "stuck on geometry"/starved-part failure mode, just
+        /// against a different obstacle: on the shipped config a8's seed#8 landed 1.53 m into its
+        /// shed's 4.3 m spawn clearance). Walks outward from the authored angle at the SAME radius,
+        /// alternating sides, until clear of both — the radius never changes, so a dodged slot stays
+        /// exactly as inset from the walls as the ring formula always promised (and so it never leaves
         /// <see cref="WorldArea.Footprint"/>, which the ring's own 0.3x-of-the-shorter-side inset
         /// already guarantees with room to spare).</summary>
-        private static float ClearOfCover(Vector2 center, float radius, float baseAngle, WorldCover[] cover, WorldShed shed)
+        private static float ClearOfCover(Vector2 center, float radius, float baseAngle, WorldCover[] cover, WorldShed[] sheds)
         {
-            if (IsClearOfCover(center, radius, baseAngle, cover, shed)) return baseAngle;
+            if (IsClearOfCover(center, radius, baseAngle, cover, sheds)) return baseAngle;
 
             for (float offset = CoverDodgeStep; offset <= MaxCoverDodgeOffset; offset += CoverDodgeStep)
             {
-                if (IsClearOfCover(center, radius, baseAngle + offset, cover, shed)) return baseAngle + offset;
-                if (IsClearOfCover(center, radius, baseAngle - offset, cover, shed)) return baseAngle - offset;
+                if (IsClearOfCover(center, radius, baseAngle + offset, cover, sheds)) return baseAngle + offset;
+                if (IsClearOfCover(center, radius, baseAngle - offset, cover, sheds)) return baseAngle - offset;
             }
 
             return baseAngle; // every angle on the ring is fouled - stand at the authored spot anyway
         }
 
-        private static bool IsClearOfCover(Vector2 center, float radius, float angle, WorldCover[] cover, WorldShed shed)
+        private static bool IsClearOfCover(Vector2 center, float radius, float angle, WorldCover[] cover, WorldShed[] sheds)
         {
             var point = new Vector2(center.x + Mathf.Cos(angle) * radius, center.y + Mathf.Sin(angle) * radius);
 
@@ -124,8 +174,15 @@ namespace MaxWorlds.Enemies
                 }
             }
 
-            if (shed != null && Vector2.Distance(point, new Vector2(shed.x, shed.z)) < MapValidation.SpawnRadius + MapValidation.SpawnClearance)
-                return false;
+            if (sheds != null)
+            {
+                foreach (WorldShed shed in sheds)
+                {
+                    if (shed == null) continue;
+                    if (Vector2.Distance(point, new Vector2(shed.x, shed.z)) < MapValidation.SpawnRadius + MapValidation.SpawnClearance)
+                        return false;
+                }
+            }
 
             return true;
         }

@@ -15,6 +15,9 @@ namespace MaxWorlds.Arena
 
         /// <summary>The factories this map built, in the order it authored them.</summary>
         public readonly List<MowerHutch> Factories = new List<MowerHutch>(2);
+
+        /// <summary>The bosses this map built (MV-561), in the order it authored them.</summary>
+        public readonly List<BigBermudaBoss> Bosses = new List<BigBermudaBoss>(2);
     }
 
     /// <summary>
@@ -30,15 +33,16 @@ namespace MaxWorlds.Arena
     ///
     /// Two kinds of actor, and the difference is exactly the one the level cares about:
     ///
-    ///   * The ONE-OF actors — Max, the gate, the boss — are ADOPTED. The scene owns one of each and
-    ///     the map moves and wires it.
+    ///   * The ONE-OF actors — Max, the gate — are ADOPTED. The scene owns one of each and the map
+    ///     moves and wires it.
     ///
-    ///   * FACTORIES ARE BUILT (YT-92). A level can have as many as it likes, so there is nothing for
-    ///     the scene to own one of, and the hand-placed hutch it used to own stands down. This is not
-    ///     just plumbing for a second factory: the scene's copy of the hutch had been quietly carrying
-    ///     a body colour from three tickets ago, overriding the code's, which is precisely the failure
-    ///     mode the code-driven-scenes rule exists to stop. Built factories cannot disagree with each
-    ///     other or with the code, because there is only one recipe.
+    ///   * FACTORIES ARE BUILT (YT-92), and so is the BOSS (MV-561). A level can have as many of
+    ///     either as it likes, so there is nothing for the scene to own one of, and the hand-placed
+    ///     hutch (and boss) it used to own stand down. This is not just plumbing for a second factory:
+    ///     the scene's copy of the hutch had been quietly carrying a body colour from three tickets
+    ///     ago, overriding the code's, which is precisely the failure mode the code-driven-scenes rule
+    ///     exists to stop. Built factories (and bosses) cannot disagree with each other or with the
+    ///     code, because there is only one recipe each.
     ///
     /// Only shapes are set here. The stylised look is applied automatically by the rendering layer
     /// (flat → ground, tall → wall, short → prop), so nothing here touches a material — and so nothing
@@ -58,6 +62,11 @@ namespace MaxWorlds.Arena
             // order of two Awakes in one scene load is nobody's to promise).
             RetireSceneFactories();
             FactoryCensus.Reset();
+
+            // MV-561: the scene's hand-placed Big Bermuda (Stage27BossScaffold) stands down the same
+            // way the hutch does above — the map builds its own boss(es) now, so a scene copy is not a
+            // spare, it is an extra boss standing in the wrong place with no area of its own.
+            RetireSceneBosses();
 
             // MV-542: same reasoning, one level up — a level loaded a second time must count its own
             // bosses, not the previous level's (or the previous test's) ghosts.
@@ -170,8 +179,9 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>Put the actors where the map says they stand: adopt the one-of ones, build the
-        /// factories. An adopted actor's Y is left alone — the map authors a floor plan, not heights —
-        /// while a built one gets a Y from its own body, so it can never be authored half-buried.</summary>
+        /// factories and bosses. An adopted actor's Y is left alone — the map authors a floor plan, not
+        /// heights — while a built one gets a Y from its own body, so it can never be authored
+        /// half-buried.</summary>
         private static void PlaceActors(MapData map, Transform root, MapBuild built)
         {
             foreach (MapEntity e in map.entities)
@@ -218,7 +228,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Boss:
-                        MarkDiscoverable(Adopt(e, built, Find<BigBermudaBoss>()));
+                        built.Bosses.Add(BuildBoss(e, root, built));
                         break;
                 }
             }
@@ -268,6 +278,28 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return hutch;
+        }
+
+        /// <summary>
+        /// Big Bermuda, from data (MV-561) — same recipe <see cref="Stage27BossScaffold"/> used to hand-
+        /// place once, now built per entity so an area can carry as many as it authors. The stray
+        /// BoxCollider <c>CreatePrimitive</c> leaves behind is stripped before <c>AddComponent</c>,
+        /// exactly as the scaffold always did — <see cref="BigBermudaBoss"/>'s required
+        /// CharacterController is the sole physical shape a boss carries (MV-410), and Unity does not
+        /// support both on one GameObject.
+        /// </summary>
+        private static BigBermudaBoss BuildBoss(MapEntity e, Transform root, MapBuild built)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+
+            var stray = body.GetComponent<BoxCollider>();
+            if (stray != null) Object.DestroyImmediate(stray);
+
+            MarkDiscoverable(body);
+            var boss = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
+
+            built.Actors[e.id] = body;
+            return boss;
         }
 
         /// <summary>
@@ -344,6 +376,22 @@ namespace MaxWorlds.Arena
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (hutch != null) hutch.gameObject.SetActive(false);
+            }
+        }
+
+        /// <summary>The hand-placed Big Bermuda <see cref="Stage27BossScaffold"/> used to leave in
+        /// <c>Backyard_Slice.unity</c> stands down (MV-561), same reasoning and same shape as
+        /// <see cref="RetireSceneFactories"/> one level up: the map owns the boss(es) now, and a scene
+        /// copy is not a spare boss, it is an extra one standing in the wrong room with no area of its
+        /// own. Inactive rather than destroyed, and BEFORE anything else runs, for the same reason —
+        /// deactivating an object whose Awake has not fired yet means it never registers with
+        /// <see cref="BossCensus"/> or wakes on <see cref="FactoryCensus"/>'s cleared signal.</summary>
+        private static void RetireSceneBosses()
+        {
+            foreach (var boss in Object.FindObjectsByType<BigBermudaBoss>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (boss != null) boss.gameObject.SetActive(false);
             }
         }
 
