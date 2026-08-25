@@ -172,31 +172,47 @@ namespace MaxWorlds.Arena
                 }
             }
 
-            // The boss, adopted into place the same way the old corridor engine's compost clearing
-            // did (MV-270) — without this entity MapRuntime has nowhere to move BigBermudaBoss to.
+            // The boss(es), built the same way MV-542 anticipated a 2+ boss fight would need
+            // (BigBermudaBoss.FitColliderToRenderedBody's own comment). MV-561: one entity per
+            // resolved boss (WorldArea.Bosses()), not one per area — an area can carry several.
             foreach (WorldArea a in cfg.areas)
             {
                 if (!a.IsBossRole) continue;
 
-                // WorldBoss is a nested [Serializable] class — JsonUtility default-constructs it even
-                // when the JSON never authors a "boss" object (the same reason hasShed exists as an
-                // explicit flag rather than a shed != null check), so an unauthored boss reads back as
-                // (0,0), not null. Falling back to the area's own centre for that case is a sane
-                // default, and keeps a boss-role area with no authored boss position out of whatever
-                // zone happens to sit at the world origin.
-                Vector2 center = a.CenterXz;
-                bool authored = a.boss != null && (a.boss.x != 0f || a.boss.z != 0f);
-
-                entities.Add(new MapEntity
+                WorldBoss[] bosses = a.Bosses();
+                if (bosses.Length == 0)
                 {
-                    id = authored && !string.IsNullOrEmpty(a.boss.id) ? a.boss.id : "big_bermuda",
-                    kind = "boss",
-                    x = authored ? a.boss.x : center.x,
-                    z = authored ? a.boss.z : center.y,
-                    width = authored ? (a.boss.size?.w ?? 3.5f) : 3.5f,
-                    height = 3f,
-                    depth = authored ? (a.boss.size?.d ?? 3.5f) : 3.5f,
-                });
+                    // A boss-role area with no authored boss position at all still needs one entity so
+                    // MapRuntime has something to build — falling back to the area's own centre keeps it
+                    // out of whatever zone happens to sit at the world origin.
+                    Vector2 center = a.CenterXz;
+                    entities.Add(new MapEntity
+                    {
+                        id = a.BossId(null, 0, 1),
+                        kind = "boss",
+                        x = center.x,
+                        z = center.y,
+                        width = 3.5f,
+                        height = 3f,
+                        depth = 3.5f,
+                    });
+                    continue;
+                }
+
+                for (int i = 0; i < bosses.Length; i++)
+                {
+                    WorldBoss b = bosses[i];
+                    entities.Add(new MapEntity
+                    {
+                        id = a.BossId(b, i, bosses.Length),
+                        kind = "boss",
+                        x = b.x,
+                        z = b.z,
+                        width = b.size?.w ?? 3.5f,
+                        height = 3f,
+                        depth = b.size?.d ?? 3.5f,
+                    });
+                }
             }
 
             map = new MapData

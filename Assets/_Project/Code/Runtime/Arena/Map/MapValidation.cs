@@ -52,6 +52,14 @@ namespace MaxWorlds.Arena
         /// plus clearance without crowding the boundary.</summary>
         public const float MinShedWallMargin = 6f;
 
+        /// <summary>Closest two bosses authored in the SAME area may sit, centre to centre (MV-561) —
+        /// room enough for a fight with two Big Bermudas to not have them standing on top of each
+        /// other.</summary>
+        public const float MinBossSeparation = 10f;
+
+        /// <summary>Closest a boss may sit to its own area's walls (MV-561).</summary>
+        public const float MinBossWallMargin = 6f;
+
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
         /// room.</summary>
         public const float MinFreeChannel = 3f;
@@ -392,10 +400,54 @@ namespace MaxWorlds.Arena
 
             return WorldAreas(cfg, out reason)
                 && WorldSheds(cfg, out reason)
+                && WorldBosses(cfg, out reason)
                 && WorldGarrison(cfg, out reason)
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
                 && WorldBossGate(cfg, out reason);
+        }
+
+        /// <summary>Every boss an area carries (MV-561, <see cref="WorldArea.Bosses"/>) must sit clear of
+        /// its own area's walls, and two bosses in the same area must sit clear of each other — same
+        /// reasoning as <see cref="WorldSheds"/>, one area over.
+        ///
+        /// Only applies once an area actually carries MORE THAN ONE boss. A legacy single-boss area
+        /// "behaves exactly as it does today" (AC3) — world1's compost clearing predates this rule and
+        /// was never authored against it, so gating on count is what keeps it valid rather than
+        /// retroactively breaking already-shipped content.</summary>
+        private static bool WorldBosses(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldBoss[] bosses = a.Bosses();
+                if (bosses.Length <= 1) continue;
+
+                foreach (WorldBoss b in bosses)
+                {
+                    if (b.x - a.XMin < MinBossWallMargin || a.XMax - b.x < MinBossWallMargin ||
+                        b.z - a.ZMin < MinBossWallMargin || a.ZMax - b.z < MinBossWallMargin)
+                    {
+                        reason = $"a boss in area '{a.id}' at ({b.x:0.#}, {b.z:0.#}) is within " +
+                                 $"{MinBossWallMargin} m of its area's walls";
+                        return false;
+                    }
+                }
+
+                for (int i = 0; i < bosses.Length; i++)
+                for (int j = i + 1; j < bosses.Length; j++)
+                {
+                    float dist = Vector2.Distance(new Vector2(bosses[i].x, bosses[i].z), new Vector2(bosses[j].x, bosses[j].z));
+                    if (dist < MinBossSeparation)
+                    {
+                        reason = $"area '{a.id}' has two bosses {dist:0.#} m apart — under the " +
+                                 $"{MinBossSeparation} m minimum boss separation";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
         }
 
         /// <summary>Every authored garrison entry (MV-559, <see cref="WorldArea.garrison"/>) must sit
