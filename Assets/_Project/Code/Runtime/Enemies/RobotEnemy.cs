@@ -337,6 +337,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Gunner => "LASER",   // MV-404: display-only rename, EnemyKind.Gunner unchanged
             EnemyKind.Launcher => "LAUNCHER",   // MV-405 renamed the display only; MV-451 renamed the enum to match
             EnemyKind.Blinker => "BLINKER",
+            EnemyKind.Bolter => "BOLTER",
             _ => "RUSHER",
         };
 
@@ -806,7 +807,7 @@ namespace MaxWorlds.Enemies
             // alternated advance/retreat every frame by construction. Replaced with a band: back off
             // below the inner edge, close in above the outer edge, and inside the band hold position
             // (speed 0, still facing Max via `to`) — no distance now produces a frame-to-frame flip.
-            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Launcher;
+            bool ranged = Kind == EnemyKind.Gunner || Kind == EnemyKind.Launcher || Kind == EnemyKind.Bolter;
             bool inStandoffBand = false;
             bool retreating = false;
             if (ranged && standoffRange > 0f && _sight.HasSight)
@@ -1000,6 +1001,7 @@ namespace MaxWorlds.Enemies
             {
                 case EnemyKind.Gunner: TickBeam(dt); break;
                 case EnemyKind.Launcher: TickMissileFire(dt); break;
+                case EnemyKind.Bolter: TickBolt(dt); break;
                 default:               TickMeleeLunge(dt); break;
             }
         }
@@ -1065,6 +1067,24 @@ namespace MaxWorlds.Enemies
                 _dealtThisLunge = true;
                 if (target != null)
                     HomingMissile.Fire(transform.position, target, lungeSpeed, contactDamage, contactRadius);
+            }
+
+            if (_stateTimer >= lungeTime) EnterRecover();
+        }
+
+        /// <summary>Bolter's straight-line bolt (MV-539): fired once, on the first tick of the state —
+        /// the same "already acted this cycle" gate <see cref="TickMissileFire"/> uses to gate its own
+        /// launch to one shot. Aimed at <see cref="_playerTarget"/>, not <see cref="target"/> — a Bolter
+        /// fires at Max's own position even while mid-Sentinel-engagement, since <see cref="BolterBolt"/>
+        /// only ever damages a <see cref="MaxWorlds.Player.PlayerHealth"/> receiver regardless of what it
+        /// was aimed at.</summary>
+        private void TickBolt(float dt)
+        {
+            if (!_dealtThisLunge)
+            {
+                _dealtThisLunge = true;
+                if (_playerTarget != null)
+                    BolterBolt.Fire(transform.position, _playerTarget, lungeSpeed, lungeRange, contactRadius);
             }
 
             if (_stateTimer >= lungeTime) EnterRecover();

@@ -82,7 +82,7 @@ namespace MaxWorlds.Bosses
         {
             if (_health == null) return;
             _health.Retune(DevTuning.Or(DevTuning.BossHealth, BossTuning.Health));
-            HudSignals.EmitBossHealth(_health.Normalized);
+            BossCensus.ReportHealth(this, _health.Current, _health.Max);
         }
 
         // --- read-only fight state, for the art layer (YT-90) ---
@@ -117,6 +117,7 @@ namespace MaxWorlds.Bosses
         {
             _cc = GetComponent<CharacterController>();
             _renderer = GetComponent<Renderer>();
+            FitColliderToRenderedBody();
             _mpb = new MaterialPropertyBlock();
             _health = new DestructibleHealth(DevTuning.Or(DevTuning.BossHealth, BossTuning.Health));
             _health.Destroyed += OnDeath;
@@ -139,6 +140,27 @@ namespace MaxWorlds.Bosses
         // Invasion Level, sheds standing or not. MV-279 removed it — on the real 3-shed map that
         // ceiling could be reached before all 3 sheds actually fell, which read as the boss erupting
         // while its own gate was still locked. FactoryCensus.Cleared is the only wake left.
+        /// <summary>Size the CharacterController to the primitive cube <see cref="Stage27BossScaffold"/>
+        /// actually renders (MV-542). <c>RequireComponent</c> hands the boss Unity's stock capsule
+        /// defaults (height 2, radius 0.5, centred on the pivot), which have no authored relationship
+        /// to this transform's scale or to the mesh at all — they only ever matched the render by the
+        /// coincidence that a fresh CharacterController's defaults happen to equal a unit cube's own
+        /// half-extents. Reading the mesh's own LOCAL bounds and writing them back as the collider's
+        /// center/radius/height makes that relationship explicit and scale-independent — this holds at
+        /// whatever scale a future second boss (MV-542's multi-boss capability) is placed at, not just
+        /// today's authored number.</summary>
+        private void FitColliderToRenderedBody()
+        {
+            if (_cc == null) return;
+            MeshFilter mf = GetComponent<MeshFilter>();
+            if (mf == null || mf.sharedMesh == null) return;
+
+            Bounds local = mf.sharedMesh.bounds;
+            _cc.center = local.center;
+            _cc.height = local.size.y;
+            _cc.radius = Mathf.Max(local.extents.x, local.extents.z);
+        }
+
         private void OnEnable() => FactoryCensus.Cleared += OnFactoriesCleared;
         private void OnDisable() => FactoryCensus.Cleared -= OnFactoriesCleared;
 
@@ -157,8 +179,9 @@ namespace MaxWorlds.Bosses
         {
             _phase = Phase.Intro;
             _introTimer = introTime;
-            HudSignals.EmitBossEngaged(BossName, 2); // 2 phases -> HUD bar shows the 50% segment
-            HudSignals.EmitBossHealth(1f);
+            // 2 phases -> HUD bar shows the 50% segment. MV-542: routed through BossCensus so a 2+
+            // boss fight engages the bar once and shows the COMBINED health, not a per-boss re-engage.
+            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max);
         }
 
         private void Update()
@@ -365,6 +388,12 @@ namespace MaxWorlds.Bosses
             // The adds root is ours and outlives nothing — tear it (and every add under it) down with the
             // boss so a torn-down fight leaves no robots pathing after a player who is gone.
             if (_addsRoot != null) Destroy(_addsRoot.gameObject);
+
+            // MV-542: belt-and-braces against a boss outliving its level as a dead reference in
+            // BossCensus's static list (same reasoning as FactoryCensus.Forget) -- a proper death
+            // already called BossCensus.ReportDefeated, and Forget on an already-removed boss is a
+            // no-op, so this only matters for a scene torn down mid-fight.
+            BossCensus.Forget(this);
         }
 
         private void OnEnterPhase(BossAction action)
@@ -446,15 +475,15 @@ namespace MaxWorlds.Bosses
             if (!DamageRules.Applies(info.Attacker, Team)) return;
             HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);
             _health.TakeDamage(info.Amount);
-            HudSignals.EmitBossHealth(_health.Normalized);
+            BossCensus.ReportHealth(this, _health.Current, _health.Max);
             SetTell(Color.white); // brief hit flash; next phase tick restores
         }
 
         private void OnDeath()
         {
             _phase = Phase.Dead;
-            HudSignals.EmitBossHealth(0f);
-            HudSignals.EmitBossDefeated();
+            // MV-542: waits for every living boss, not just this one — see BossCensus.
+            BossCensus.ReportDefeated(this);
             HudSignals.EmitPickup(transform.position + Vector3.up * 2.5f, "RARE SHARD", new Color(0.5f, 0.85f, 1f));
             // The death spectacle hangs off the BossDefeated signal (BossSpectacle, YT-55).
             gameObject.SetActive(false);

@@ -25,9 +25,11 @@ namespace MaxWorlds.Editor
                 var boss = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 boss.name = "Big Bermuda";
                 boss.transform.position = new Vector3(0f, 2f, 26f); // past the gate (z=18)
-                // MV-410: halved from (3.5, 3, 3.5) — full size couldn't fit through a gate opening
-                // sized for Max/robots even once wall collision was fixed.
-                boss.transform.localScale = new Vector3(1.75f, 1.5f, 1.75f);
+                // MV-542: halved again from (1.75, 1.5, 1.75) (which was itself MV-410's halving of
+                // (3.5, 3, 3.5)) — still too big for a fight that now has to fit 2+ bosses in the
+                // same arena. BigBermudaBoss.Awake fits the CharacterController to this cube at
+                // whatever scale it ends up placed at, so this number alone is safe to retune again.
+                boss.transform.localScale = new Vector3(0.875f, 0.75f, 0.875f);
                 Tint(boss, new Color(0.35f, 0.45f, 0.30f));
 
                 // MV-410: CreatePrimitive adds a BoxCollider, and RequireComponent below adds a

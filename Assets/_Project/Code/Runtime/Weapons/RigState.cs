@@ -80,12 +80,18 @@ namespace MaxWorlds.Weapons
         /// but a non-root node now needs its PARENT at level &gt;= 2, tightened from the level &gt;= 1
         /// <see cref="IsReached"/> uses. <see cref="IsReached"/> itself is untouched: it still gates the
         /// Morphing Module draft pool (<see cref="EligibleCapIds"/>), which this ticket doesn't touch.
-        /// Since &gt;= 2 implies &gt;= 1, anything cell-unlockable is always also reached.</summary>
+        /// Since &gt;= 2 implies &gt;= 1, anything cell-unlockable is always also reached.
+        ///
+        /// MV-530: the gate is <c>Level(parent) &gt;= min(2, parent's own MaxLevel)</c>, not a bare
+        /// &gt;= 2 — three roots (<c>s_bal</c>, <c>u_sen</c>, <c>s_aut</c>) cap at <c>maxLevel: 1</c>,
+        /// so a bare &gt;= 2 made their six children permanently unreachable. A parent that is fully
+        /// maxed always satisfies the gate now, whatever its cap; a parent whose cap is &gt;= 2 still
+        /// needs the full two levels, preserving MV-458's depth-before-breadth intent.</summary>
         public static bool IsCellUnlockable(string id)
         {
             string parent = RigBoard.Parent(id);
             if (string.IsNullOrEmpty(parent)) return IsCategoryUnlocked(RigBoard.Category(id));
-            return Level(parent) >= 2;
+            return Level(parent) >= Math.Min(2, RigBoard.MaxLevel(parent));
         }
 
         /// <summary>Raise <paramref name="id"/> by a level — the currency-agnostic model primitive

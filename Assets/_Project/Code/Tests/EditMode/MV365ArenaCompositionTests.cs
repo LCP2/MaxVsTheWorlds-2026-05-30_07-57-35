@@ -49,6 +49,32 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0, solved.Blinker);
         }
 
+        /// <summary>MV-539 AC3 — the "bolter" composition key resolves all the way through
+        /// <see cref="WorldComposition"/> → <see cref="DifficultyEngine.Composition"/> rather than being
+        /// silently dropped the way an unknown key would be (MV-500's "bomber" incident).</summary>
+        [Test]
+        public void SolveComposition_ResolvesAnAuthoredBolterCount()
+        {
+            var cfg = new WorldConfig
+            {
+                dials = new WorldDials { areaCount = 1, baseThreat = 999f, threatGrowth = 5f, pacingRhythm = new[] { 1f } },
+                areas = new[]
+                {
+                    new WorldArea
+                    {
+                        id = "a1", index = 1, role = "normal",
+                        composition = new WorldComposition { rusher = 2, bolter = 5 },
+                    },
+                },
+            };
+
+            DifficultyEngine.Composition solved = cfg.SolveComposition(1);
+
+            Assert.AreEqual(2, solved.Rusher);
+            Assert.AreEqual(5, solved.Bolter,
+                "the 'bolter' composition key did not resolve through to the engine composition");
+        }
+
         [Test]
         public void SolveComposition_FallsBackToTheDialSolver_WhenNoCompositionIsAuthored()
         {
