@@ -12,7 +12,11 @@ namespace MaxWorlds.Tests.EditMode
     {
         [SetUp]
         [TearDown]
-        public void ClearOverrides() => DevTuning.Reset();
+        public void ClearOverrides()
+        {
+            DevTuning.Reset();
+            BossCensus.Reset();
+        }
 
         // ---- MV-410: wall clipping / scale / speed / spawn-rate fix ----
 
@@ -74,6 +78,70 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(BossTuning.MoveSpeed * 4f, DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed), 1e-4f,
                 "a moved Boss move speed slider must reach the same expression the boss's Reposition reads live");
+        }
+
+        // ---- MV-542: 2+ boss fights — combined HUD health, victory gated on the LAST death ----
+
+        /// <summary>AC2. The old single-boss code called <c>HudSignals.EmitBossHealth</c> and
+        /// <c>EmitBossDefeated</c> off each boss's OWN death — fine for one boss, but with two it
+        /// means a last-write-wins HUD bar and a fight that ends the moment either boss falls, not
+        /// both. <see cref="BossCensus"/> (new this ticket — it doesn't exist before MV-542, so this
+        /// can't be run red against the old code, only reasoned about it: reading BigBermudaBoss's own
+        /// pre-542 Wake/TakeDamage/OnDeath shows exactly that per-instance-only signal pattern) fixes
+        /// that: the bar shows the COMBINED (sum current / sum max) fraction, and BossDefeated — the
+        /// signal BossVictoryPayoff, the exit door and results all wait on — fires only once every
+        /// boss reports in. Exercises BossCensus directly rather than driving BigBermudaBoss's own
+        /// Intro/Fight phase machine, which only advances on Update; EditMode tests cannot tick the
+        /// player loop, but the census logic itself does not need a boss to be mid-fight.</summary>
+        [Test]
+        public void BossCensus_CombinesHealthAndGatesDefeatOnTheLastBoss()
+        {
+            GameObject go1 = NewBossHandle();
+            GameObject go2 = NewBossHandle();
+            var boss1 = go1.GetComponent<BigBermudaBoss>();
+            var boss2 = go2.GetComponent<BigBermudaBoss>();
+
+            float lastHealth = -1f;
+            int defeatedCount = 0;
+            System.Action<float> onHealth = h => lastHealth = h;
+            System.Action onDefeated = () => defeatedCount++;
+
+            HudSignals.BossHealthChanged += onHealth;
+            HudSignals.BossDefeated += onDefeated;
+            try
+            {
+                BossCensus.Register(boss1, "BIG BERMUDA", 2, current: 100f, max: 100f);
+                BossCensus.Register(boss2, "BIG BERMUDA", 2, current: 100f, max: 100f);
+                Assert.AreEqual(1f, lastHealth, 1e-4f, "two full-health bosses must combine to a full bar");
+
+                BossCensus.ReportHealth(boss1, current: 0f, max: 100f); // boss1 fully drained, still standing
+                Assert.AreEqual(0.5f, lastHealth, 1e-4f,
+                    "one drained boss + one full boss must average to a half bar, not last-write-wins");
+                Assert.AreEqual(0, defeatedCount, "must not defeat while a boss is still standing");
+
+                BossCensus.ReportDefeated(boss1);
+                Assert.AreEqual(0, defeatedCount, "the FIRST boss dying must not fire BossDefeated -- boss2 is still up");
+                Assert.AreEqual(1f, lastHealth, 1e-4f, "combined bar must now read boss2's health alone");
+
+                BossCensus.ReportDefeated(boss2);
+                Assert.AreEqual(1, defeatedCount, "BossDefeated must fire once the LAST boss dies");
+            }
+            finally
+            {
+                HudSignals.BossHealthChanged -= onHealth;
+                HudSignals.BossDefeated -= onDefeated;
+                Object.DestroyImmediate(go1);
+                Object.DestroyImmediate(go2);
+            }
+        }
+
+        private static GameObject NewBossHandle()
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            var stray = go.GetComponent<BoxCollider>();
+            if (stray != null) Object.DestroyImmediate(stray);
+            go.AddComponent<BigBermudaBoss>();
+            return go;
         }
 
         // ---- BigBermudaBrain ----
