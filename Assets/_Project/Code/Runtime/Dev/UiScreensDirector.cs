@@ -202,6 +202,13 @@ namespace MaxWorlds.Dev
             // read as unlockable. s_spl/s_lob (BALLOON's) and u_dmg/u_rng/u_hp (SENTINEL's) must now show
             // as available, not stuck behind LOCK forever.
             yield return CaptureFixtureScreen("rig-mv530-16x9", 1920, 1080, ApplyRigFixtureMv530, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-538 AC8's two human-check shots: Part 1 (a freshly unlocked family must render at full
+            // strength, not the old ownership-gated dim) and Part 2 (the progress ring's new empty track
+            // reads as a meter, not a stray arc). Named without the "rig-"/"-16x9" convention because
+            // AC8 names these two exact files — see ApplyRigFixtureMv538Unlocked/Progress's own docs.
+            yield return CaptureFixtureScreen("MV-538-unlocked", 1920, 1080, ApplyRigFixtureMv538Unlocked, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            yield return CaptureFixtureScreen("MV-538-progress", 1920, 1080, ApplyRigFixtureMv538Progress, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -300,6 +307,30 @@ namespace MaxWorlds.Dev
             RigState.AcquireCap("s_bal");
             RigState.AcquireCap("u_sen");
             PickupWallet.SetPowerCells(20);
+        }
+
+        /// <summary>MV-538 AC8 shot 1: SECONDARY freshly unlocked via its shed, zero abilities owned in
+        /// it yet, with cells banked past its root's <see cref="CellSpend.UnlockCostCells"/> (10) — the
+        /// exact defect state the ticket fixes. PRIMARY sits alongside at <see cref="RigState.Reset"/>'s
+        /// own baseline (already owning p_dmg at level 1), so the shot is a direct side-by-side: post-fix
+        /// SECONDARY must render at the same strength as PRIMARY, not the old 39%-alpha ownership dim.</summary>
+        public static void ApplyRigFixtureMv538Unlocked()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            RigState.UnlockCategory("SECONDARY");
+            PickupWallet.SetPowerCells(15);
+        }
+
+        /// <summary>MV-538 AC8 shot 2: p_dmg (owned, level 1 from <see cref="RigState.Reset"/>'s own
+        /// baseline) with 2 of its 5-cell <see cref="CellSpend.UpgradeCostFor"/>(1) banked — a genuine
+        /// partial fill, neither empty nor full, so the new <c>ProgressTrack</c> (Part 2) is visibly
+        /// "part of a whole" behind the arc rather than a bare stray fill.</summary>
+        public static void ApplyRigFixtureMv538Progress()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PickupWallet.SetPowerCells(2);
         }
 
         private static void ResetRunForFixture()
