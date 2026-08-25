@@ -17,8 +17,9 @@ namespace MaxWorlds.Tests.EditMode
         private static readonly EnemyArchetype Gunner = EnemyArchetype.Gunner;
         private static readonly EnemyArchetype Launcher = EnemyArchetype.Launcher;
         private static readonly EnemyArchetype Blinker = EnemyArchetype.Blinker;
+        private static readonly EnemyArchetype Bolter = EnemyArchetype.Bolter;
         private static readonly EnemyArchetype[] AllArchetypes =
-            { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker };
+            { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter };
 
         [Test]
         public void Bruiser_IsSlowerAndTougherThanTheRusher()
@@ -168,6 +169,18 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(EnemyKind.Gunner, EnemyArchetype.Of(EnemyKind.Gunner).Kind);
             Assert.AreEqual(EnemyKind.Launcher, EnemyArchetype.Of(EnemyKind.Launcher).Kind);
             Assert.AreEqual(EnemyKind.Blinker, EnemyArchetype.Of(EnemyKind.Blinker).Kind);
+            Assert.AreEqual(EnemyKind.Bolter, EnemyArchetype.Of(EnemyKind.Bolter).Kind);   // MV-539 AC3
+        }
+
+        /// <summary>MV-539 AC2 — same small-tier "one-rusher-shot kill" invariant Launcher/Blinker pin
+        /// below (<see cref="LauncherAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish"/>):
+        /// <see cref="MaxWorlds.Tests.PlayMode.EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame"/>
+        /// pins the live-game half — a full-health rusher's-worth of damage kills every small-tier kind
+        /// but the Bruiser.</summary>
+        [Test]
+        public void Bolter_IsNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
+        {
+            Assert.LessOrEqual(Bolter.MaxHealth, Rusher.MaxHealth);
         }
 
         // --- Archetypes (MV-293): Gunner (ranged laser) / Launcher (homing missile) / Blinker (teleport) ---

@@ -39,14 +39,22 @@ namespace MaxWorlds.Enemies
             public readonly int Launcher;
             public readonly int Blinker;
 
+            /// <summary>MV-539: the fourth ranged kind — authored-composition only for now (no dial
+            /// unlocks it the way <see cref="ToughnessCurve.GunnerUnlockedAt"/> and its siblings do for
+            /// the other three), so <see cref="SolveComposition"/> below never produces a non-zero
+            /// count on its own; this only ever carries what an authored <c>WorldComposition</c> gave
+            /// it (<see cref="MaxWorlds.Arena.WorldComposition.ToEngineComposition"/>).</summary>
+            public readonly int Bolter;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
-                int gunner = 0, int launcher = 0, int blinker = 0)
+                int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
-                Gunner = gunner; Launcher = launcher; Blinker = blinker;
+                Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter;
             }
 
-            public int TotalCount => Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker;
+            public int TotalCount =>
+                Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -57,7 +65,7 @@ namespace MaxWorlds.Enemies
                 Rusher * ThreatValues.Rusher + Bruiser * ThreatValues.Bruiser +
                 Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute +
                 Gunner * ThreatValues.Gunner + Launcher * ThreatValues.Launcher +
-                Blinker * ThreatValues.Blinker;
+                Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

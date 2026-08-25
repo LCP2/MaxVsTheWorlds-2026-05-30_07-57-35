@@ -81,6 +81,7 @@ namespace MaxWorlds.Arena
         public int gunner;
         public int launcher;
         public int blinker;
+        public int bolter; // MV-539: the fourth ranged/special kind, authored-composition only for now
 
         /// <summary>True if any kind actually has a count — the real "was this authored" signal.
         /// <c>JsonUtility</c> materialises a non-null <see cref="WorldComposition"/> for every area
@@ -89,10 +90,11 @@ namespace MaxWorlds.Arena
         /// their own default constructor rather than staying null when absent) — so a plain
         /// null-check would wrongly treat an un-authored area as "authored: 0 robots everywhere".</summary>
         public bool IsAuthored =>
-            rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 || blinker > 0;
+            rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 ||
+            blinker > 0 || bolter > 0;
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter);
     }
 
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
@@ -354,6 +356,10 @@ namespace MaxWorlds.Arena
         public WorldEnemyTypeEntry launcher;
         public WorldEnemyTypeEntry blinker;
 
+        // MV-539: optional in the JSON, same "a world authored before this existed simply omits it"
+        // fallback as gunner/launcher/blinker above.
+        public WorldEnemyTypeEntry bolter;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -364,6 +370,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Gunner => gunner,
                 EnemyKind.Launcher => launcher,
                 EnemyKind.Blinker => blinker,
+                EnemyKind.Bolter => bolter,
                 _ => small,
             };
             return e != null ? e.thv : ThreatValues.Of(kind);
@@ -376,7 +383,7 @@ namespace MaxWorlds.Arena
             c.Rusher * Thv(EnemyKind.Rusher) + c.Bruiser * Thv(EnemyKind.Bruiser) +
             c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute) +
             c.Gunner * Thv(EnemyKind.Gunner) + c.Launcher * Thv(EnemyKind.Launcher) +
-            c.Blinker * Thv(EnemyKind.Blinker);
+            c.Blinker * Thv(EnemyKind.Blinker) + c.Bolter * Thv(EnemyKind.Bolter);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170
