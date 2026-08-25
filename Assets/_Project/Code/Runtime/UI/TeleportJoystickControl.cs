@@ -1,6 +1,9 @@
+using System.Collections;
 using UnityEngine;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
@@ -83,10 +86,25 @@ namespace MaxWorlds.UI
             HudSignals.EmitTeleportAimStarted(CurrentMaxDistance());
         }
 
+        /// <summary>Seconds the landing circle stays up, still tinted refusal red, after a release
+        /// that landed on an illegal destination — MV-544 item 4: "a rejected release does not feel
+        /// like a dropped input". Every legal release still hides instantly, unchanged.</summary>
+        private const float RefusalFlashSeconds = 0.15f;
+
         protected override void HideAimVisuals()
         {
-            if (_circleGo != null) _circleGo.SetActive(false);
+            if (_circleGo != null)
+            {
+                if (_lastLandingIllegal && Application.isPlaying) StartCoroutine(FlashRefusalThenHide());
+                else _circleGo.SetActive(false);
+            }
             HudSignals.EmitTeleportAimEnded();
+        }
+
+        private IEnumerator FlashRefusalThenHide()
+        {
+            yield return new WaitForSeconds(RefusalFlashSeconds);
+            if (_circleGo != null) _circleGo.SetActive(false);
         }
 
         private void EnsureVisuals()
@@ -119,6 +137,11 @@ namespace MaxWorlds.UI
             return AbilityTuning.TeleportDistance(level, baseDistance, perLevel);
         }
 
+        /// <summary>True for the landing point <see cref="RebuildAimVisual"/> most recently computed —
+        /// MV-544: read at aim time every frame, driving both the marker's refusal-red tint and
+        /// whether release briefly flashes it before hiding.</summary>
+        private bool _lastLandingIllegal;
+
         /// <summary>Rebuilds the landing reticle for the current drag — distance previews toward the
         /// ability's REAL blink distance at the current level, scaled by how far the drag has come, so
         /// the picture never promises a blink further than the ability actually goes. Also tints the
@@ -135,7 +158,12 @@ namespace MaxWorlds.UI
                 new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
             _circleGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.BuildLandingCircle(LandingRadius);
 
-            ApplyArmedTint(_circleGo, IsArmed, AbilityReady);
+            // MV-544: the same reachability test TryTeleport commits with, so the preview never
+            // promises (or refuses) a destination the actual blink would disagree with.
+            _lastLandingIllegal = !PlayerAbilities.IsLegalTeleportDestination(
+                EnemyNavigation.Map, _origin.position, landing, EnemyNavigation.IsGateOpen);
+
+            ApplyArmedTint(_circleGo, IsArmed, AbilityReady, _lastLandingIllegal);
         }
     }
 }

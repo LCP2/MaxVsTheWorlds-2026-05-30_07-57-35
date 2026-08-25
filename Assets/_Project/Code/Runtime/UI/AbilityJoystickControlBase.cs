@@ -204,6 +204,13 @@ namespace MaxWorlds.UI
 
         private static MaterialPropertyBlock s_tintBlock;
 
+        private static readonly Color NotReadyTint = new Color(1f, 0.3f, 0.25f, 0.35f);
+
+        /// <summary>MV-544: Teleport's illegal-destination refusal red — a fully-saturated red at a
+        /// higher alpha than <see cref="NotReadyTint"/>'s dim reddish wash, so "you cannot go there"
+        /// never reads as merely "on cooldown".</summary>
+        private static readonly Color IllegalDestinationTint = new Color(1f, 0.05f, 0.05f, 0.7f);
+
         /// <summary>Tints a world-space aim-mesh renderer to match the armed/ready state (MV-372 AC5,
         /// MV-381) — full bright white when armed, dimmed white when merely owned-and-ready, and a dim
         /// red wash when <paramref name="ready"/> is false (on cooldown or no cell banked) so a press in
@@ -214,17 +221,21 @@ namespace MaxWorlds.UI
         /// instance (<see cref="MaxWorlds.VFX.VfxMaterials.AlphaBlend"/>) — going through a
         /// <see cref="MaterialPropertyBlock"/> tints only this renderer's draw call rather than every
         /// renderer sharing that material (which <c>renderer.material</c> would also do, on top of
-        /// instantiating and leaking a new material every edit-mode call).</summary>
-        protected static void ApplyArmedTint(GameObject meshGo, bool armed, bool ready = true)
+        /// instantiating and leaking a new material every edit-mode call). MV-544: <paramref name="illegal"/>
+        /// overrides everything else with <see cref="IllegalDestinationTint"/> — a refusal always reads
+        /// as a refusal, whatever the armed/ready state underneath it.</summary>
+        protected static void ApplyArmedTint(GameObject meshGo, bool armed, bool ready = true, bool illegal = false)
         {
             if (meshGo == null) return;
             var renderer = meshGo.GetComponent<MeshRenderer>();
             if (renderer == null) return;
 
             s_tintBlock ??= new MaterialPropertyBlock();
-            Color tint = ready
-                ? new Color(1f, 1f, 1f, armed ? 1f : 0.4f)
-                : new Color(1f, 0.3f, 0.25f, 0.35f);
+            Color tint = illegal
+                ? IllegalDestinationTint
+                : ready
+                    ? new Color(1f, 1f, 1f, armed ? 1f : 0.4f)
+                    : NotReadyTint;
             renderer.GetPropertyBlock(s_tintBlock);
             s_tintBlock.SetColor("_BaseColor", tint);
             s_tintBlock.SetColor("_Color", tint);

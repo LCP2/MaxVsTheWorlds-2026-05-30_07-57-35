@@ -268,8 +268,6 @@ namespace MaxWorlds.Weapons
             Vector3 aimed = new Vector3(aimDirection.x, 0f, aimDirection.z);
             Vector3 dir = aimed.sqrMagnitude > 1e-4f ? aimed.normalized : transform.forward;
 
-            _teleportCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
-
             int level = WeaponSystemState.AbilityLevel(AbilityKind.Teleport);
             float baseDistance = DevTuning.Or(DevTuning.TeleportBaseDistance, AbilityTuning.DefaultTeleportBaseDistance);
             float perLevel = DevTuning.Or(DevTuning.TeleportDistancePerLevel, AbilityTuning.DefaultTeleportDistancePerLevel);
@@ -287,6 +285,16 @@ namespace MaxWorlds.Weapons
                     target = AbilityTuning.SkirmishSnapPoint(nearest.transform.position, from,
                         AbilityTuning.DefaultSkirmishSnapStandoff);
             }
+
+            // MV-544: a landing point in a DIFFERENT area that is not yet reachable through open
+            // gates is a hard refusal — no move, no cooldown, no teleported signal. Checked BEFORE
+            // the cooldown spend below (moved up from after it) so a rejected blink costs the player
+            // nothing. A same-area landing, or one outside every authored zone, is never illegal here
+            // — those still fall through to the normal collision-respecting move beneath.
+            if (!IsLegalTeleportDestination(EnemyNavigation.Map, from, target, EnemyNavigation.IsGateOpen))
+                return false;
+
+            _teleportCooldown = WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport);
 
             Vector3 offset = target - from;
 
@@ -357,6 +365,27 @@ namespace MaxWorlds.Weapons
             MapZone here = map.ZoneAt(from.x, from.z);
             MapZone there = map.ZoneAt(to.x, to.z);
             if (here == null || there == null || here.id == there.id) return false;
+
+            return MapRoutes.Rooms(map, here, there, gateOpen).Count > 0;
+        }
+
+        /// <summary>MV-544: true UNLESS <paramref name="to"/> lands in a DIFFERENT area than
+        /// <paramref name="from"/> that <see cref="CanWarpAcrossAreas"/> says is not reachable through
+        /// open gates yet — the one destination Teleport must refuse outright rather than sliding Max
+        /// part-way with <see cref="CharacterController.Move"/>. A landing inside Max's own current
+        /// room, outside every authored zone, or with no map loaded at all is always legal here: none
+        /// of those are "an area Max can't teleport to" (Lee's actual complaint) — they already fall
+        /// back to the ordinary collision-respecting move in <see cref="TryTeleport"/> and never bypass
+        /// collision. Shared between <see cref="TryTeleport"/>'s commit-time refusal and
+        /// <see cref="MaxWorlds.UI.TeleportJoystickControl.RebuildAimVisual"/>'s aim-time preview so
+        /// both agree on exactly the same set of illegal destinations.</summary>
+        public static bool IsLegalTeleportDestination(MapData map, Vector3 from, Vector3 to, Func<string, bool> gateOpen)
+        {
+            if (map == null) return true;
+
+            MapZone here = map.ZoneAt(from.x, from.z);
+            MapZone there = map.ZoneAt(to.x, to.z);
+            if (here == null || there == null || here.id == there.id) return true;
 
             return MapRoutes.Rooms(map, here, there, gateOpen).Count > 0;
         }
