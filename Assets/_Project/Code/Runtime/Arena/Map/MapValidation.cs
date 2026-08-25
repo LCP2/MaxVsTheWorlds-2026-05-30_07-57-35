@@ -716,13 +716,25 @@ namespace MaxWorlds.Arena
             return true;
         }
 
-        /// <summary>The boss area must sit behind its gate — every gate touching it has to require
-        /// every shed down first (spec rule (c)). A boss you can walk in on before the sheds fall is
-        /// the one bug this framework exists to make structurally impossible, not just balanced away.</summary>
+        /// <summary>Boss-role gate conditions accepted on the way IN (spec rule (c), widened MV-560 for
+        /// mid-run bosses): the final boss still uses <see cref="AllShedsDestroyedCondition"/> — every
+        /// shed in the whole world — while a boss partway through a run uses
+        /// <see cref="ShedsDestroyedBeforeCondition"/> — every shed in an area the player could actually
+        /// have reached by then. Either is accepted here; which one a given boss should author is a
+        /// design choice this validator does not second-guess.</summary>
+        private const string AllShedsDestroyedCondition = "all-sheds-destroyed";
+        private const string ShedsDestroyedBeforeCondition = "sheds-destroyed-before";
+
+        /// <summary>The boss area must sit behind its gate — every gate INTO it has to require a shed
+        /// condition first (spec rule (c)). A boss you can walk in on before the sheds fall is the one
+        /// bug this framework exists to make structurally impossible, not just balanced away.
+        ///
+        /// A gate OUT of the boss area is deliberately exempt (MV-560): the final boss has none (its
+        /// only gate is the entry), but a MID-RUN boss's exit gate touches the boss area too, and
+        /// requiring a shed condition on it would lock the player in the boss room forever once they
+        /// have walked through — that gate opens on ordinary combat like any other.</summary>
         private static bool WorldBossGate(WorldConfig cfg, out string reason)
         {
-            const string requiredCondition = "all-sheds-destroyed";
-
             foreach (WorldArea a in cfg.areas)
             {
                 if (!a.IsBossRole) continue;
@@ -735,10 +747,17 @@ namespace MaxWorlds.Arena
                     if (!touches) continue;
 
                     hasGate = true;
-                    if (!string.Equals(g.opensWith, requiredCondition, StringComparison.OrdinalIgnoreCase))
+                    if (g.to.area != a.id) continue; // a gate OUT of the boss area — not checked
+
+                    bool validCondition =
+                        string.Equals(g.opensWith, AllShedsDestroyedCondition, StringComparison.OrdinalIgnoreCase) ||
+                        string.Equals(g.opensWith, ShedsDestroyedBeforeCondition, StringComparison.OrdinalIgnoreCase);
+
+                    if (!validCondition)
                     {
                         reason = $"boss area '{a.id}' is opened by gate '{g.id}' with opensWith='{g.opensWith}' " +
-                                 $"— it must be '{requiredCondition}' so the boss sits behind every shed";
+                                 $"— it must be '{AllShedsDestroyedCondition}' or '{ShedsDestroyedBeforeCondition}' " +
+                                 "so the boss sits behind every shed";
                         return false;
                     }
                 }
