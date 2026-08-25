@@ -134,8 +134,8 @@ namespace MaxWorlds.Enemies
             // whatever the rusher/panel default is to stay the slow tank (was 0.925 = half of YT-169's
             // 1.85, then 1.355 = half of MV-289's 2.71, now 1.02 = half of MV-315's 2.04). Flag: if
             // Lee wants ALL robots flat at the rusher's speed, this is the one line to change.
-            moveSpeed: 1.02f, maxHealth: 135f,   // MV-512: 150 -> 135, -10% per Lee's play feedback
-            // (was YT-194's 100 -> 150, the same 1.5x as the rusher)
+            moveSpeed: 1.02f, maxHealth: 68f,   // MV-540: 135 -> 68, -50% per Lee's play feedback
+            // (was MV-512's 150 -> 135, before that YT-194's 100 -> 150, the same 1.5x as the rusher)
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
@@ -152,7 +152,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Heavy => new EnemyArchetype(
             EnemyKind.Heavy, EnemyShape.Box, new Vector3(1.2f, 1.35f, 1.2f),
             colliderHeight: 1.55f, colliderRadius: 0.58f,
-            moveSpeed: 0.85f, maxHealth: 260f,   // ~1.73x the bruiser's 150
+            moveSpeed: 0.85f, maxHealth: 260f,   // ~3.82x the bruiser's 68 (MV-540)
             contactDamage: 32f, contactRadius: 1.5f,
             lungeRange: 2.6f, telegraphTime: 1.05f,
             lungeSpeed: 8.5f, lungeTime: 0.35f, recoverTime: 1.5f,
@@ -167,7 +167,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Brute => new EnemyArchetype(
             EnemyKind.Brute, EnemyShape.Box, new Vector3(1.25f, 1.5f, 1.25f),
             colliderHeight: 1.9f, colliderRadius: 0.6f,
-            moveSpeed: 0.75f, maxHealth: 420f,   // ~2.8x the bruiser's 150, well past the heavy's 260
+            moveSpeed: 0.75f, maxHealth: 420f,   // ~6.18x the bruiser's 68, well past the heavy's 260 (MV-540)
             contactDamage: 38f, contactRadius: 1.6f,
             lungeRange: 2.6f, telegraphTime: 1.15f,
             lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
