@@ -56,6 +56,14 @@ namespace MaxWorlds.UI
         /// <summary>The Force Field button's colour (MV-361) — the same ready-cyan the bubble itself
         /// glows, so the button and the shield read as one thing.</summary>
         private static readonly Color ForceFieldColor = new Color(0.31f, 0.76f, 0.97f);
+        /// <summary>MV-543: test-only read of <see cref="ForceFieldColor"/> — a contrast-ratio test
+        /// needs the real ring colour the button renders, not a hand-copied duplicate.</summary>
+        public static Color ForceFieldColorForTest => ForceFieldColor;
+        /// <summary>MV-543: the Force Field %-remaining label's own ink — deliberately dark rather than
+        /// the "near-white" a first instinct reaches for, because ForceFieldColor's luminance is
+        /// mid-range and only a dark fill clears WCAG 4.5:1 against it (see the fixture in
+        /// <c>BuildForceFieldButton</c>).</summary>
+        private static readonly Color ForceFieldLabelInk = new Color(0.05f, 0.05f, 0.06f);
         /// <summary>The Sentinel deploy button's colour (MV-362, MV-422: one sentinel only) — the
         /// primary's own blue, since the turret is meant to read as Max's own tech ("a hose pipe on a
         /// stick").</summary>
@@ -1286,13 +1294,22 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(OnForceFieldButtonTapped);
 
-            _forceFieldLabel = AddText(root, 20f, ForceFieldColor, TextAnchor.MiddleCenter);
-            Stretch(_forceFieldLabel.rectTransform);
+            // MV-543: ForceFieldColor's own luminance sits mid-range, so a light "bone" fill on the
+            // label can't clear 4.5:1 against it (peaks near 2:1 even at pure white) — only a dark ink
+            // does the maths. The BoneWhite outline supplies the "near-white" treatment instead, framing
+            // the digits rather than filling them.
+            _forceFieldLabel = AddText(root, 20f, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            Anchor(_forceFieldLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            _forceFieldLabel.rectTransform.sizeDelta = new Vector2(84f, 40f);
+            _forceFieldLabel.rectTransform.anchoredPosition = Vector2.zero;
             _forceFieldLabel.text = "FIELD";
             _forceFieldLabel.fontStyle = FontStyle.Bold;
             _forceFieldLabel.raycastTarget = false;
             _forceFieldLabel.resizeTextForBestFit = true;
             _forceFieldLabel.resizeTextMinSize = 10;
+            var forceFieldLabelOutline = _forceFieldLabel.gameObject.AddComponent<Outline>();
+            forceFieldLabelOutline.effectColor = BoneWhite;
+            forceFieldLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
             _forceFieldLabel.resizeTextMaxSize = 22;
 
             var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
