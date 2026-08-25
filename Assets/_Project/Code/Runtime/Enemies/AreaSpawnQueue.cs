@@ -197,6 +197,37 @@ namespace MaxWorlds.Enemies
             return false;
         }
 
+        /// <summary>Same as <see cref="TryTakeForGarrison(int, out EnemyKind)"/>, but for an authored
+        /// garrison slot (MV-559) that names a specific kind: takes THAT kind out of the queue rather
+        /// than whatever is next, so an authored Blinker spot actually spawns a Blinker. Falls back to
+        /// the ordinary any-kind behaviour above when <paramref name="requestedKind"/> is null (an
+        /// unauthored/ring slot) or that kind is not queued for this area (a content mismatch — still
+        /// places a robot rather than leaving the authored spot empty).</summary>
+        public bool TryTakeForGarrison(int areaIndex, EnemyKind? requestedKind, out EnemyKind kind)
+        {
+            if (requestedKind.HasValue && TryTakeExactKind(areaIndex, requestedKind.Value, out kind)) return true;
+            return TryTakeForGarrison(areaIndex, out kind);
+        }
+
+        private bool TryTakeExactKind(int areaIndex, EnemyKind requestedKind, out EnemyKind kind)
+        {
+            int count = _queued.Count;
+            for (int i = 0; i < count; i++)
+            {
+                QueuedSpawn next = _queued.Dequeue();
+                if (next.Area == areaIndex && next.Kind == requestedKind)
+                {
+                    kind = next.Kind;
+                    Activate(areaIndex);
+                    return true;
+                }
+                _queued.Enqueue(next);
+            }
+
+            kind = default;
+            return false;
+        }
+
         /// <summary>Puts a released-but-not-yet-placed entry back on the queue for <paramref name="areaIndex"/>
         /// (MV-417) - what a caller does when it pulled a robot off the queue but then couldn't find it
         /// a legal spawn point this tick (see <c>AreaAccumulationDirector.TryFindSpawnPoint</c>) and
