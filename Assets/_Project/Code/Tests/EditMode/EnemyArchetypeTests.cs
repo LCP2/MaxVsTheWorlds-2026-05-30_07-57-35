@@ -270,11 +270,12 @@ namespace MaxWorlds.Tests.EditMode
         // --- Heavy & Brute (v0.5 recut spec §2-3, MV-224) ---------------------------------------
 
         [Test]
-        public void Bruiser_HealthCutTenPercent_AndOrderingHolds_MV512()
+        public void Bruiser_HealthCutFiftyPercent_AndOrderingHolds_MV540()
         {
-            // MV-512 (21 Aug 2026, Lee, from play): "Bruisers have too much health. Reduce by 10%."
-            // 150 -> 135, the only authored source (EnemyArchetype.Bruiser).
-            Assert.AreEqual(135f, Bruiser.MaxHealth, 0.01f, "MV-512: Bruiser health must be cut 10% (150 -> 135)");
+            // MV-540 (25 Aug 2026, Lee, from play): "Bruisers have too much health. Reduce by 50%."
+            // 135 -> 68 (67.5 rounded up), the only authored source (EnemyArchetype.Bruiser). Was
+            // MV-512's 150 -> 135 (-10%) before this.
+            Assert.AreEqual(68f, Bruiser.MaxHealth, 0.01f, "MV-540: Bruiser health must be cut 50% (135 -> 68)");
             Assert.Less(Rusher.MaxHealth, Bruiser.MaxHealth);
             Assert.Less(Bruiser.MaxHealth, Heavy.MaxHealth);
             Assert.Less(Heavy.MaxHealth, Brute.MaxHealth);
