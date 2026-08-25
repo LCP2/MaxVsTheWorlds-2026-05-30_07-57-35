@@ -31,6 +31,7 @@ namespace MaxWorlds.UI
         private PlayerAbilities _abilities;
 
         private GameObject _circleGo;
+        private Mesh _circleMesh;
 
         /// <summary>Wired by <c>HudController</c> right after construction — the same self-attach
         /// hand-off shape <see cref="WaterBalloonJoystickControl"/> uses.</summary>
@@ -62,6 +63,17 @@ namespace MaxWorlds.UI
                 return mesh != null ? mesh.vertexCount : 0;
             }
         }
+
+        /// <summary>MV-545 diagnostic: where the landing circle currently sits, world space. Zero if
+        /// it doesn't exist yet — matches <see cref="LandingCircleVertexCount"/>'s "not built" reading.</summary>
+        public Vector3 LandingCircleWorldPosition => _circleGo != null ? _circleGo.transform.position : Vector3.zero;
+
+        /// <summary>MV-545 diagnostic: <see cref="Renderer.isVisible"/> off the circle's own
+        /// <see cref="MeshRenderer"/> — true only if it was actually inside a camera's frustum and drawn
+        /// last frame. An object that reads active + non-empty mesh + this true, yet the player reports
+        /// seeing nothing, is not a lifecycle bug: something else is drawing over it.</summary>
+        public bool LandingCircleRendererIsVisible =>
+            _circleGo != null && _circleGo.TryGetComponent<MeshRenderer>(out var r) && r.isVisible;
 
         protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.Teleport);
 
@@ -101,7 +113,10 @@ namespace MaxWorlds.UI
             // repaints it — same guard WaterBalloonJoystickControl's own aim meshes carry.
             go.AddComponent<KeepsOwnMaterial>();
             var renderer = go.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            // MV-545: a dedicated above-everything queue, not the shared ground-VFX baseline — see
+            // VfxMaterials.AlphaBlendOnTop's own doc comment for why the baseline queue loses the
+            // sort the moment a decal lands on the same spot.
+            renderer.sharedMaterial = VfxMaterials.AlphaBlendOnTop(VfxMaterials.Solid());
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
             go.SetActive(false);
@@ -133,7 +148,8 @@ namespace MaxWorlds.UI
             Vector3 landing = _origin.position + Direction * distance;
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
-            _circleGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.BuildLandingCircle(LandingRadius);
+            _circleMesh = WaterBalloonAimMesh.BuildLandingCircle(LandingRadius, reuse: _circleMesh);
+            _circleGo.GetComponent<MeshFilter>().sharedMesh = _circleMesh;
 
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady);
         }

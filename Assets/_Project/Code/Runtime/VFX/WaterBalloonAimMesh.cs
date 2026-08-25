@@ -35,7 +35,10 @@ namespace MaxWorlds.VFX
         /// the same way <see cref="AimReticleMesh"/> does, so the owner only has to yaw it toward the
         /// aim direction.
         /// </summary>
-        public static Mesh Build(float distance, int segments = 20)
+        /// <summary><paramref name="reuse"/> (MV-545): see <see cref="AimReticleMesh.Build"/>'s own doc
+        /// comment — pass the previous frame's mesh back in to overwrite it in place instead of leaking
+        /// a fresh one every drag frame.</summary>
+        public static Mesh Build(float distance, int segments = 20, Mesh reuse = null)
         {
             distance = Mathf.Max(0.01f, distance);
             segments = Mathf.Max(2, segments);
@@ -63,7 +66,9 @@ namespace MaxWorlds.VFX
                 tris.Add(b); tris.Add(c); tris.Add(d);
             }
 
-            var mesh = new Mesh { name = $"WaterBalloonArc {distance:0.0}m" };
+            var mesh = reuse != null ? reuse : new Mesh();
+            mesh.name = $"WaterBalloonArc {distance:0.0}m";
+            if (reuse != null) mesh.Clear();
             mesh.SetVertices(verts);
             mesh.SetColors(cols);
             mesh.SetTriangles(tris, 0);
@@ -77,8 +82,8 @@ namespace MaxWorlds.VFX
         /// Balloon's ring uses the exact same fill/edge/fade language as the blaster's own reticle
         /// rather than a second hand-tuned ramp.
         /// </summary>
-        public static Mesh BuildLandingCircle(float radius, int segments = 40) =>
-            AimReticleMesh.Build(radius, 180f, segments);
+        public static Mesh BuildLandingCircle(float radius, int segments = 40, Mesh reuse = null) =>
+            AimReticleMesh.Build(radius, 180f, segments, reuse);
 
         /// <summary>
         /// The same parabola <see cref="Build"/> draws, evaluated at a single fraction <paramref name="t"/>

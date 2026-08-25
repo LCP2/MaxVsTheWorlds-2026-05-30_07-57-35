@@ -1,0 +1,22 @@
+﻿ok
+MV-545 aim-circle diagnostic starting
+[Balloon] cycle 1: active=True vertexCount=124 pos=(4.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-balloon-cycle1.png
+[Balloon] cycle 2: active=True vertexCount=124 pos=(4.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-balloon-cycle2.png
+[Balloon] cycle 3: active=True vertexCount=124 pos=(4.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-balloon-cycle3.png
+[Balloon] cycle 4: active=True vertexCount=124 pos=(4.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-balloon-cycle4.png
+[Balloon] cycle 5: active=True vertexCount=124 pos=(4.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-balloon-cycle5.png
+[Teleport] cycle 1: active=True vertexCount=124 pos=(8.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-teleport-cycle1.png
+[Teleport] cycle 2: active=True vertexCount=124 pos=(8.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-teleport-cycle2.png
+[Teleport] cycle 3: active=True vertexCount=124 pos=(8.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-teleport-cycle3.png
+[Teleport] cycle 4: active=True vertexCount=124 pos=(8.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-teleport-cycle4.png
+[Teleport] cycle 5: active=True vertexCount=124 pos=(8.00, 0.01, -4.00) renderer.isVisible=False
+wrote aimcircle-teleport-cycle5.png

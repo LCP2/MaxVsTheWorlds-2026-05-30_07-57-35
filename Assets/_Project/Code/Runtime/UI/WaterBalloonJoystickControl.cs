@@ -31,6 +31,8 @@ namespace MaxWorlds.UI
 
         private GameObject _arcGo;
         private GameObject _circleGo;
+        private Mesh _arcMesh;
+        private Mesh _circleMesh;
 
         /// <summary>How long the auto-aimed knob holds at its chosen point before firing (MV-373) —
         /// quick and readable per Lee's design note, not a slow glide that misrepresents when the shot
@@ -72,6 +74,31 @@ namespace MaxWorlds.UI
                 return mesh != null ? mesh.vertexCount : 0;
             }
         }
+
+        /// <summary>MV-545 diagnostic: where the landing circle currently sits, world space. Zero if
+        /// it doesn't exist yet — matches <see cref="LandingCircleVertexCount"/>'s "not built" reading.</summary>
+        public Vector3 LandingCircleWorldPosition => _circleGo != null ? _circleGo.transform.position : Vector3.zero;
+
+        /// <summary>MV-545 diagnostic: <see cref="Renderer.isVisible"/> off the circle's own
+        /// <see cref="MeshRenderer"/> — true only if it was actually inside a camera's frustum and drawn
+        /// last frame. An object that reads active + non-empty mesh + this true, yet the player reports
+        /// seeing nothing, is not a lifecycle bug: something else is drawing over it.</summary>
+        public bool LandingCircleRendererIsVisible =>
+            _circleGo != null && _circleGo.TryGetComponent<MeshRenderer>(out var r) && r.isVisible;
+
+        /// <summary>MV-545 diagnostic: the landing circle's actual mesh instance — a test can assert
+        /// identity across repeated <see cref="RebuildAimVisual"/> calls to prove it's reused, not
+        /// reallocated (and leaked) every drag frame.</summary>
+        public Mesh LandingCircleMesh => _circleGo != null ? _circleGo.GetComponent<MeshFilter>().sharedMesh : null;
+
+        /// <summary>MV-545 diagnostic: the landing circle's own resolved render queue. Every other
+        /// ground-layer VFX (decals, anchor rings, motes) shares <c>VfxMaterials.Get</c>'s baseline
+        /// <see cref="UnityEngine.Rendering.RenderQueue.Transparent"/> queue — this must sit strictly
+        /// above that baseline or the circle loses URP's distance-based transparent sort the moment
+        /// anything else marks the same ground.</summary>
+        public int LandingCircleRenderQueue =>
+            _circleGo != null && _circleGo.TryGetComponent<MeshRenderer>(out var r) && r.sharedMaterial != null
+                ? r.sharedMaterial.renderQueue : -1;
 
         protected override bool IsOwned => WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon);
 
@@ -183,7 +210,10 @@ namespace MaxWorlds.UI
             // describe) — see KeepsOwnMaterial's own doc comment.
             go.AddComponent<KeepsOwnMaterial>();
             var renderer = go.GetComponent<MeshRenderer>();
-            renderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            // MV-545: a dedicated above-everything queue, not the shared ground-VFX baseline — see
+            // VfxMaterials.AlphaBlendOnTop's own doc comment for why the baseline queue loses the
+            // sort the moment a decal lands on the same spot.
+            renderer.sharedMaterial = VfxMaterials.AlphaBlendOnTop(VfxMaterials.Solid());
             renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             renderer.receiveShadows = false;
             go.SetActive(false);
@@ -205,13 +235,14 @@ namespace MaxWorlds.UI
             float distance = Mathf.Max(0.15f, maxDistance * DistanceFraction);
 
             _arcGo.transform.SetPositionAndRotation(_origin.position, Quaternion.LookRotation(Direction, Vector3.up));
-            _arcGo.GetComponent<MeshFilter>().sharedMesh = WaterBalloonAimMesh.Build(distance);
+            _arcMesh = WaterBalloonAimMesh.Build(distance, reuse: _arcMesh);
+            _arcGo.GetComponent<MeshFilter>().sharedMesh = _arcMesh;
 
             Vector3 landing = _origin.position + Direction * distance;
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(landing.x, 0.01f, landing.z), Quaternion.identity);
-            _circleGo.GetComponent<MeshFilter>().sharedMesh =
-                WaterBalloonAimMesh.BuildLandingCircle(PlayerAbilities.SplashRadius);
+            _circleMesh = WaterBalloonAimMesh.BuildLandingCircle(PlayerAbilities.SplashRadius, reuse: _circleMesh);
+            _circleGo.GetComponent<MeshFilter>().sharedMesh = _circleMesh;
 
             ApplyArmedTint(_arcGo, IsArmed, AbilityReady);
             ApplyArmedTint(_circleGo, IsArmed, AbilityReady);

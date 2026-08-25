@@ -120,6 +120,30 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void RebuildAimVisual_ReusesTheSameMeshAndSortsAboveGroundDecals()
+        {
+            // MV-545: two symptoms of the same "RebuildAimVisual just does new-and-assign" defect.
+            // AC4 — a fresh Mesh every drag frame, never Destroy()'d, a real leak on its own. AC1/AC2's
+            // actual root cause (H1, confirmed live via the MV-545 diagnostic capture, not H2's lifecycle
+            // guess the existing tests above already ruled out): the circle shared every OTHER ground
+            // VFX's render queue, so URP's distance-based transparent sort loses the moment anything
+            // else marks the same spot — the very next scorch decal from a kill draws over it. Both
+            // symptoms are the same call's own contract (what RebuildAimVisual leaves the circle's
+            // renderer holding), not two independent regressions.
+            _control.OnPointerDown(At(Vector2.zero));
+            _control.OnDrag(At(new Vector2(2f, 0f)));
+            Mesh first = _control.LandingCircleMesh;
+            Assert.That(first, Is.Not.Null, "precondition: the first drag must have built a mesh");
+
+            _control.OnDrag(At(new Vector2(3f, 0f)));   // a second RebuildAimVisual call, same drag
+            Assert.That(_control.LandingCircleMesh, Is.SameAs(first),
+                "RebuildAimVisual must reuse the same Mesh instance, not allocate (and leak) a new one every drag frame");
+
+            Assert.That(_control.LandingCircleRenderQueue, Is.GreaterThan((int)UnityEngine.Rendering.RenderQueue.Transparent),
+                "the landing circle must sort strictly above the baseline Transparent queue every ground decal/anchor/mote shares, or it loses the sort the moment anything else marks the same spot");
+        }
+
+        [Test]
         public void TheArcAndTheCircleAreBuiltOnce_AndReusedEverySession()
         {
             // The bug this ticket describes is exactly a one-shot object: created on first use, then

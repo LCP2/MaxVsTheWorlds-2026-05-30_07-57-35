@@ -42,8 +42,13 @@ namespace MaxWorlds.VFX
         /// <c>SprayHit.InCone</c>, so the drawing and the hit test read the same number the same way
         /// — a reticle that showed the full angle where the code meant the half would have promised
         /// twice the coverage the weapon has.
+        ///
+        /// <paramref name="reuse"/> (MV-545): pass an existing mesh to overwrite it in place instead of
+        /// allocating a new one. A caller that rebuilds every drag frame (the joystick aim visuals) MUST
+        /// pass its own mesh back in, or every frame leaks a Mesh nothing ever <c>Destroy()</c>s.
+        /// Callers that build once (<see cref="MaxWorlds.VFX.AimReticle"/>) can leave it null.
         /// </summary>
-        public static Mesh Build(float range, float halfAngleDeg, int segments = 28)
+        public static Mesh Build(float range, float halfAngleDeg, int segments = 28, Mesh reuse = null)
         {
             range = Mathf.Max(0.01f, range);
             halfAngleDeg = Mathf.Clamp(halfAngleDeg, 1f, 180f);
@@ -107,7 +112,9 @@ namespace MaxWorlds.VFX
                 }
             }
 
-            var mesh = new Mesh { name = $"AimReticle {range:0.0}m {halfAngleDeg:0}deg" };
+            var mesh = reuse != null ? reuse : new Mesh();
+            mesh.name = $"AimReticle {range:0.0}m {halfAngleDeg:0}deg";
+            if (reuse != null) mesh.Clear();
             mesh.SetVertices(verts);
             mesh.SetColors(cols);
             mesh.SetTriangles(tris, 0);
