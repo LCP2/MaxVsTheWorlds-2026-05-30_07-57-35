@@ -1,6 +1,9 @@
 using System.IO;
 using NUnit.Framework;
+using MaxWorlds.Arena;
+using MaxWorlds.Pickups;
 using MaxWorlds.Save;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -21,12 +24,16 @@ namespace MaxWorlds.Tests.EditMode
             if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
             SaveSystem.DirectoryOverride = _dir;
             SaveSystem.ActiveSlot = -1;
+            PickupWallet.Reset();   // also resets RigState
+            DeathRunState.Reset();
         }
 
         [TearDown]
         public void TearDown()
         {
             SaveSystem.ResetForTests();
+            PickupWallet.Reset();   // also resets RigState
+            DeathRunState.Reset();
             if (Directory.Exists(_dir)) Directory.Delete(_dir, recursive: true);
         }
 
@@ -135,6 +142,49 @@ namespace MaxWorlds.Tests.EditMode
         {
             SaveSystem.RecordResult(-1, 0);
             // No slot -1 file should ever be written; this is just asserting no exception is thrown.
+        }
+
+        /// <summary>MV-557 (part 1 of MV-524): a mid-run checkpoint round-trips through capture/restore,
+        /// and a save file written before the checkpoint fields existed still loads cleanly as "no run
+        /// in progress" rather than throwing or leaving the new array fields null.</summary>
+        [Test]
+        public void CaptureCheckpoint_RoundTripsEveryField_AndALegacySaveWithoutCheckpointFieldsLoadsCleanly()
+        {
+            Directory.CreateDirectory(_dir);
+            File.WriteAllText(Path.Combine(_dir, "save_slot_1.json"),
+                "{\"HasData\":true,\"DisplayName\":\"DEXTER\",\"BestDeathsToVictory\":3}");
+
+            SaveSlotData legacy = SaveSystem.Load(1);
+
+            Assert.That(legacy.HasData, Is.True);
+            Assert.That(legacy.DisplayName, Is.EqualTo("DEXTER"));
+            Assert.That(legacy.BestDeathsToVictory, Is.EqualTo(3));
+            Assert.That(legacy.HasRunInProgress, Is.False,
+                "a save predating checkpoints must read as no run in progress");
+            Assert.That(legacy.CheckpointRigNodeIds, Is.Not.Null.And.Empty);
+            Assert.That(legacy.CheckpointRigNodeLevels, Is.Not.Null.And.Empty);
+            Assert.That(legacy.CheckpointUnlockedCategories, Is.Not.Null.And.Empty);
+
+            RigState.RaiseLevel("p_dmg");   // owned at start level 1 (run-start ability) -> level 2
+            PickupWallet.SetPowerCells(7);
+            DeathRunState.RecordDeath();
+            DeathRunState.RecordDeath();    // DeathsTaken == 2
+
+            SaveSystem.CaptureCheckpoint(0, areaIndex: 3);
+
+            // Disturb live state so a passing restore is provably doing the work, not reading stale statics.
+            PickupWallet.Reset();
+            DeathRunState.Reset();
+
+            bool restored = SaveSystem.RestoreCheckpoint(0);
+
+            Assert.That(restored, Is.True);
+            Assert.That(RigState.Level("p_dmg"), Is.EqualTo(2));
+            Assert.That(PickupWallet.PowerCells, Is.EqualTo(7));
+            Assert.That(DeathRunState.DeathsTaken, Is.EqualTo(2));
+            SaveSlotData saved = SaveSystem.Load(0);
+            Assert.That(saved.HasRunInProgress, Is.True);
+            Assert.That(saved.CheckpointAreaIndex, Is.EqualTo(3));
         }
     }
 }

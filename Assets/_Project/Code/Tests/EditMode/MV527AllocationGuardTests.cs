@@ -1,8 +1,11 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -61,18 +64,43 @@ namespace MaxWorlds.Tests.EditMode
         /// </summary>
         private static readonly string[] Allowlist = { "GameFeel.cs", "AmbienceVfx.cs" };
 
+        /// <summary>
+        /// MV-553 — this test intermittently failed in CI (~1 run in 3) with no offender ever seen in
+        /// any report. Pulling the actual GitHub Actions logs for five historical failures (not
+        /// reproducible from a local run — see below) showed every one carries the identical NUnit
+        /// message <c>"Timeout value of 180000 ms was exceeded"</c>, with reported durations of
+        /// 180-421s. Proof it is not content-dependent: commit <c>c83bfa2</c> changed only
+        /// <c>deploy.yml</c> — zero Runtime files differed from the immediately preceding passing
+        /// commit — and still hit the same timeout. 54 consecutive local runs (24 class-filtered + 30
+        /// full-suite, both on this exact commit) never reproduced it: this scan reads ~266 files in
+        /// well under a second on local SSD hardware, so a local machine never encounters the failure
+        /// mode at all. The prior nondeterminism hypothesis in this ticket ("unordered enumeration",
+        /// "state that carries between files") is disproven by the CI evidence — there is no offender
+        /// list because the run never reaches the assertion; NUnit aborts it mid-scan.
+        ///
+        /// Fix: the loop below read all ~266 files sequentially and synchronously on one thread, so any
+        /// single slow file-open call (GameCI's Docker container mounts the workspace with an SELinux
+        /// `:z` label under a shared, cgroup-limited runner — exactly the kind of environment where
+        /// individual syscalls occasionally stall) adds its full latency to the total, and 266 stalls
+        /// compound additively. Reading the files in parallel bounds the wall-clock cost by the single
+        /// slowest read instead of their sum, without changing what is scanned, what counts as an
+        /// offender, or the assertion itself (AC5). Offenders are collected in a thread-safe bag and
+        /// sorted before the assertion so the reported order stays deterministic despite the now-
+        /// unordered completion of parallel reads.
+        /// </summary>
         [Test]
         public void NoUpdateMethodInRuntime_CallsFindObjectsByType_WithoutCaching()
         {
             string runtimeRoot = Path.Combine(Application.dataPath, "_Project", "Code", "Runtime");
             Assert.IsTrue(Directory.Exists(runtimeRoot), $"Runtime root not found: {runtimeRoot}");
 
-            var offenders = new List<string>();
+            var offenders = new ConcurrentBag<string>();
 
-            foreach (string path in Directory.GetFiles(runtimeRoot, "*.cs", SearchOption.AllDirectories))
+            string[] files = Directory.GetFiles(runtimeRoot, "*.cs", SearchOption.AllDirectories);
+            Parallel.ForEach(files, path =>
             {
                 string fileName = Path.GetFileName(path);
-                if (Array.IndexOf(Allowlist, fileName) >= 0) continue;
+                if (Array.IndexOf(Allowlist, fileName) >= 0) return;
 
                 string rawText = File.ReadAllText(path);
 
@@ -83,7 +111,7 @@ namespace MaxWorlds.Tests.EditMode
                 // only blanks comment characters to spaces, it never adds characters, so if the target
                 // strings are absent from the raw text they cannot appear in the stripped code either.
                 if (!rawText.Contains("FindObjectsByType") && !rawText.Contains("FindFirstObjectByType"))
-                    continue;
+                    return;
 
                 // Strip comments first — several of this ticket's own fix-site comments explain what
                 // USED to be a per-frame FindObjectsByType call, in prose, right inside the very Update
@@ -102,12 +130,13 @@ namespace MaxWorlds.Tests.EditMode
                         offenders.Add($"{fileName}:{line} — {m.Groups["sig"].Value.Trim()}");
                     }
                 }
-            }
+            });
 
-            Assert.IsEmpty(offenders,
+            List<string> sortedOffenders = offenders.OrderBy(o => o, StringComparer.Ordinal).ToList();
+            Assert.IsEmpty(sortedOffenders,
                 "Update/LateUpdate/FixedUpdate must not call FindObjectsByType/FindFirstObjectByType " +
                 "every frame — that's the MV-527 regression (source-shape check, not a behavioural one). " +
-                BuildOffendersMessage(offenders));
+                BuildOffendersMessage(sortedOffenders));
         }
 
         // MV-533: the CI test reporter drops any failure message over 65,534 characters ("Test details

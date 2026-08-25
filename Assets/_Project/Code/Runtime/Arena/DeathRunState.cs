@@ -44,6 +44,17 @@ namespace MaxWorlds.Arena
             DeathsChanged?.Invoke(DeathsTaken);
         }
 
+        /// <summary>Overwrite <see cref="DeathsTaken"/> directly from a captured checkpoint (MV-557: a
+        /// mid-run resume restore, not a death event) — deaths persist across a resume by design, so
+        /// this is the one caller allowed to set the count outside <see cref="RecordDeath"/>/<see cref="Reset"/>.
+        /// Does not touch <see cref="s_partGrantedAreas"/>: that set is arena-scoped and not part of
+        /// the checkpoint.</summary>
+        public static void RestoreDeathsTaken(int deathsTaken)
+        {
+            DeathsTaken = Math.Max(0, deathsTaken);
+            DeathsChanged?.Invoke(DeathsTaken);
+        }
+
         /// <summary>Back to a fresh run's baseline: no area has granted its part, no deaths taken.
         /// Test isolation and a new run (a fresh <c>HomeScreen.StartSlot</c> pick).</summary>
         public static void Reset()

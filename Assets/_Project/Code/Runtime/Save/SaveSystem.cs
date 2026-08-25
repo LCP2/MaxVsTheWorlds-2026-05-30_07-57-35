@@ -1,6 +1,10 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using UnityEngine;
+using MaxWorlds.Arena;
+using MaxWorlds.Pickups;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Save
 {
@@ -105,6 +109,57 @@ namespace MaxWorlds.Save
             if (data.BestDeathsToVictory >= 0 && deathsTaken >= data.BestDeathsToVictory) return;
             data.BestDeathsToVictory = deathsTaken;
             Save(slot, data);
+        }
+
+        /// <summary>Capture a mid-run checkpoint into <paramref name="slot"/>'s save (MV-557, part 1 of
+        /// MV-524): snapshots <see cref="RigState"/>'s node levels and unlocked categories,
+        /// <see cref="PickupWallet.PowerCells"/> and <see cref="DeathRunState.DeathsTaken"/> at
+        /// <paramref name="areaIndex"/>. Preserves the slot's existing identity/personal-best fields.
+        /// Not called from anywhere yet — <see cref="AreaAccumulationDirector.EnterArea"/> and an
+        /// <c>OnApplicationPause</c> handler are the trigger wiring, MV-524 parts 2/3.</summary>
+        public static void CaptureCheckpoint(int slot, int areaIndex)
+        {
+            SaveSlotData data = Load(slot);
+            if (!data.HasData) data = new SaveSlotData { HasData = true, DisplayName = DefaultDisplayName(slot) };
+
+            IReadOnlyDictionary<string, int> levels = RigState.SnapshotLevels();
+            data.CheckpointRigNodeIds = new string[levels.Count];
+            data.CheckpointRigNodeLevels = new int[levels.Count];
+            int i = 0;
+            foreach (KeyValuePair<string, int> kv in levels)
+            {
+                data.CheckpointRigNodeIds[i] = kv.Key;
+                data.CheckpointRigNodeLevels[i] = kv.Value;
+                i++;
+            }
+
+            var categories = new List<string>(RigState.SnapshotUnlockedCategories());
+            data.CheckpointUnlockedCategories = categories.ToArray();
+            data.CheckpointAreaIndex = areaIndex;
+            data.CheckpointPowerCells = PickupWallet.PowerCells;
+            data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
+            data.HasRunInProgress = true;
+
+            Save(slot, data);
+        }
+
+        /// <summary>Restore <paramref name="slot"/>'s captured checkpoint (MV-557, part 1 of MV-524)
+        /// into the live <see cref="RigState"/>/<see cref="PickupWallet"/>/<see cref="DeathRunState"/>.
+        /// Returns false and changes nothing if the slot holds no checkpoint. Re-entering the checkpoint's
+        /// area is the caller's job — this ticket does not wire a scene/HomeScreen caller (MV-524 part 3).</summary>
+        public static bool RestoreCheckpoint(int slot)
+        {
+            SaveSlotData data = Load(slot);
+            if (!data.HasRunInProgress) return false;
+
+            var levels = new Dictionary<string, int>();
+            int count = Math.Min(data.CheckpointRigNodeIds?.Length ?? 0, data.CheckpointRigNodeLevels?.Length ?? 0);
+            for (int i = 0; i < count; i++) levels[data.CheckpointRigNodeIds[i]] = data.CheckpointRigNodeLevels[i];
+
+            RigState.RestoreSnapshot(levels, data.CheckpointUnlockedCategories ?? Array.Empty<string>());
+            PickupWallet.SetPowerCells(data.CheckpointPowerCells);
+            DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
+            return true;
         }
 
         /// <summary>Test isolation / a fresh process: forget which slot is live and stop pointing at a
