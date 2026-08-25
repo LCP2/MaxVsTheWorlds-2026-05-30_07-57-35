@@ -52,6 +52,14 @@ namespace MaxWorlds.Arena
         /// plus clearance without crowding the boundary.</summary>
         public const float MinShedWallMargin = 6f;
 
+        /// <summary>Closest a MOBILE shed (MV-562, <see cref="WorldShed.mobile"/>) may sit to its
+        /// area's walls or to a piece of authored cover — wider than <see cref="MinShedWallMargin"/>'s
+        /// static 6 m because a walking shed needs room to stand up and move off, not just a spawn
+        /// ring. Applies to every mobile shed regardless of how many sheds share the area, unlike
+        /// <see cref="MinShedWallMargin"/>'s multi-shed-only gate — the clearance a mobile shed needs
+        /// does not depend on how many neighbours it has.</summary>
+        public const float MinMobileShedClearance = 7f;
+
         /// <summary>Closest two bosses authored in the SAME area may sit, centre to centre (MV-561) —
         /// room enough for a fight with two Big Bermudas to not have them standing on top of each
         /// other.</summary>
@@ -400,6 +408,7 @@ namespace MaxWorlds.Arena
 
             return WorldAreas(cfg, out reason)
                 && WorldSheds(cfg, out reason)
+                && WorldMobileSheds(cfg, out reason)
                 && WorldBosses(cfg, out reason)
                 && WorldGarrison(cfg, out reason)
                 && WorldGates(cfg, out reason)
@@ -630,6 +639,52 @@ namespace MaxWorlds.Arena
                         reason = $"area '{a.id}' has two sheds {dist:0.#} m apart — under the " +
                                  $"{MinShedSeparation} m minimum shed separation";
                         return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>Every mobile shed (MV-562, <see cref="WorldShed.mobile"/>) must sit at least
+        /// <see cref="MinMobileShedClearance"/> from its own area's walls and from every piece of
+        /// authored cover — the room a walking shed needs to stand up and move off, enforced BEFORE
+        /// the walking behaviour exists so the map never has to be re-authored once it lands. Unlike
+        /// <see cref="WorldSheds"/>'s static-shed wall margin, this runs for every mobile shed
+        /// regardless of how many sheds the area has — a lone mobile shed still needs the room.</summary>
+        private static bool WorldMobileSheds(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                foreach (WorldShed s in a.Sheds())
+                {
+                    if (!s.mobile) continue;
+
+                    if (s.x - a.XMin < MinMobileShedClearance || a.XMax - s.x < MinMobileShedClearance ||
+                        s.z - a.ZMin < MinMobileShedClearance || a.ZMax - s.z < MinMobileShedClearance)
+                    {
+                        reason = $"area '{a.id}': mobile shed '{s.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
+                                 $"{MinMobileShedClearance} m of its area's walls";
+                        return false;
+                    }
+
+                    var point = new Vector2(s.x, s.z);
+                    foreach (WorldCover c in a.cover)
+                    {
+                        if (c == null) continue;
+
+                        ArenaCover body = new MapEntity
+                        {
+                            x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                        }.ToCover();
+
+                        if (body.DistanceTo(point) < MinMobileShedClearance)
+                        {
+                            reason = $"area '{a.id}': mobile shed '{s.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
+                                     $"{MinMobileShedClearance} m of cover '{c.id}'";
+                            return false;
+                        }
                     }
                 }
             }
