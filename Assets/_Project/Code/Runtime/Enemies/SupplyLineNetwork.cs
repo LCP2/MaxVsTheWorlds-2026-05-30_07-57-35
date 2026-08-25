@@ -28,6 +28,12 @@ namespace MaxWorlds.Enemies
         /// looks a shed's area up rather than re-deriving the id rule.</summary>
         private readonly Dictionary<string, List<string>> _areaSheds = new Dictionary<string, List<string>>();
 
+        /// <summary>Every area's authored <see cref="WorldArea.index"/>, keyed by area id — what
+        /// <see cref="ShedsDestroyedBefore"/> (MV-560) walks to decide which sheds sit "before" a
+        /// mid-run boss, since <see cref="_areaSheds"/> only knows a shed's area id, not that area's
+        /// position in the run.</summary>
+        private readonly Dictionary<string, int> _areaIndex = new Dictionary<string, int>();
+
         /// <summary>The reverse of <see cref="_areaSheds"/> — which area a given shed entity id belongs
         /// to, so <see cref="DestroyShed"/> can take just the shed id (the identity a factory actually
         /// dies with) and still know which area's line it affects.</summary>
@@ -40,6 +46,8 @@ namespace MaxWorlds.Enemies
             foreach (WorldArea a in _cfg.areas)
             {
                 if (a == null) continue;
+                _areaIndex[a.id] = a.index;
+
                 WorldShed[] sheds = a.Sheds();
                 if (sheds.Length == 0) continue;
 
@@ -110,6 +118,30 @@ namespace MaxWorlds.Enemies
                 }
                 return anyShed;
             }
+        }
+
+        /// <summary>True once every shed in every area with a LOWER <see cref="WorldArea.index"/> than
+        /// <paramref name="areaIndex"/> has been destroyed — a mid-run boss gate's
+        /// <c>sheds-destroyed-before</c> condition (MV-560; <see cref="MapValidation.ValidateWorldConfig"/>'s
+        /// boss-gate rule guarantees only this string or <c>all-sheds-destroyed</c> names a gate waiting
+        /// on a shed condition). Same "false when there is nothing to clear" convention as
+        /// <see cref="AllShedsDestroyed"/> — a mid-run boss authored with no earlier sheds at all is a
+        /// content bug, not a legitimately pre-opened gate. Counts every SHED, not every shed area
+        /// (MV-475), same as <see cref="AllShedsDestroyed"/>.</summary>
+        public bool ShedsDestroyedBefore(int areaIndex)
+        {
+            bool anyShed = false;
+            foreach (KeyValuePair<string, List<string>> areaShedIds in _areaSheds)
+            {
+                if (!_areaIndex.TryGetValue(areaShedIds.Key, out int index) || index >= areaIndex) continue;
+
+                foreach (string shedId in areaShedIds.Value)
+                {
+                    anyShed = true;
+                    if (!_destroyedSheds.Contains(shedId)) return false;
+                }
+            }
+            return anyShed;
         }
 
         /// <summary>Every area a STANDING shed at <paramref name="shedAreaId"/> currently tops up: its
