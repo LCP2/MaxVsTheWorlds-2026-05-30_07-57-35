@@ -43,16 +43,66 @@ namespace MaxWorlds.Enemies
             return Mathf.RoundToInt(total * DensityShare(area.garrisonDensity));
         }
 
-        /// <summary>Deterministic, authored-not-random placement for <paramref name="count"/> robots
-        /// inside <paramref name="area"/>: an evenly-spaced ring inset from the walls, so the same area
-        /// and count always produce the same positions (robots already there, not popping in at random
-        /// each run) — dodged along that same ring, never off it, around any authored cover a slot's
-        /// own angle would otherwise land it inside (MV-459), and around EVERY shed in the area's own
-        /// spawn ring, not just the first (MV-496, extended to N sheds by MV-541).</summary>
+        /// <summary>One garrison seed slot: where to stand, and which kind to stand there —
+        /// <see langword="null"/> <see cref="Kind"/> means "any", the ring's original behaviour, where
+        /// the caller takes whatever the spawn queue hands back next (MV-559).</summary>
+        public readonly struct Seed
+        {
+            public readonly Vector3 Position;
+            public readonly EnemyKind? Kind;
+            public Seed(Vector3 position, EnemyKind? kind) { Position = position; Kind = kind; }
+        }
+
+        /// <summary>Deterministic, authored-not-random placement for <paramref name="count"/> garrison
+        /// slots in <paramref name="area"/> (MV-559): <see cref="WorldArea.garrison"/>'s authored
+        /// entries fill the first slots, in authored order, each carrying its own authored kind; any
+        /// slots beyond that — all of them, when nothing is authored — fill from the same evenly-spaced
+        /// ring <see cref="SeedPositions"/> always used, each with no kind preference. An area that
+        /// authors more entries than <paramref name="count"/> only uses the first <paramref name="count"/>
+        /// of them.</summary>
+        public static Seed[] SeedSlots(WorldArea area, int count)
+        {
+            if (area == null || count <= 0) return Array.Empty<Seed>();
+
+            WorldGarrisonEntry[] authored = area.garrison ?? Array.Empty<WorldGarrisonEntry>();
+            int authoredUsed = Mathf.Min(authored.Length, count);
+            int remaining = count - authoredUsed;
+
+            var slots = new Seed[count];
+            for (int i = 0; i < authoredUsed; i++)
+            {
+                WorldGarrisonEntry entry = authored[i];
+                EnemyKind? kind = EnemyKindNames.TryParse(entry.kind, out EnemyKind k) ? k : (EnemyKind?)null;
+                slots[i] = new Seed(new Vector3(entry.x, 0f, entry.z), kind);
+            }
+
+            if (remaining > 0)
+            {
+                Vector3[] ring = RingPositions(area, remaining);
+                for (int i = 0; i < remaining; i++)
+                    slots[authoredUsed + i] = new Seed(ring[i], null);
+            }
+
+            return slots;
+        }
+
+        /// <summary>Just the positions from <see cref="SeedSlots"/> — every existing caller that only
+        /// cares where a garrison stands, not what kind, keeps working unchanged.</summary>
         public static Vector3[] SeedPositions(WorldArea area, int count)
         {
-            if (area == null || count <= 0) return Array.Empty<Vector3>();
+            Seed[] slots = SeedSlots(area, count);
+            var positions = new Vector3[slots.Length];
+            for (int i = 0; i < slots.Length; i++) positions[i] = slots[i].Position;
+            return positions;
+        }
 
+        /// <summary>The evenly-spaced ring inset from the walls, so the same area and count always
+        /// produce the same positions (robots already there, not popping in at random each run) —
+        /// dodged along that same ring, never off it, around any authored cover a slot's own angle
+        /// would otherwise land it inside (MV-459), and around EVERY shed in the area's own spawn ring,
+        /// not just the first (MV-496, extended to N sheds by MV-541).</summary>
+        private static Vector3[] RingPositions(WorldArea area, int count)
+        {
             Vector2 center = area.CenterXz;
             float radius = Mathf.Min(area.size.w, area.size.d) * 0.3f;
             WorldShed[] sheds = area.Sheds();

@@ -8,6 +8,28 @@ namespace MaxWorlds.Enemies
 
     public enum EnemyShape { Capsule, Box }
 
+    /// <summary>Parses the lowercase kind-name strings authored content uses (MV-559's
+    /// <see cref="MaxWorlds.Arena.WorldGarrisonEntry.kind"/>, same key set as
+    /// <see cref="MaxWorlds.Arena.WorldComposition"/>'s field names) into an <see cref="EnemyKind"/>.</summary>
+    public static class EnemyKindNames
+    {
+        public static bool TryParse(string s, out EnemyKind kind)
+        {
+            switch (s?.Trim().ToLowerInvariant())
+            {
+                case "rusher": kind = EnemyKind.Rusher; return true;
+                case "bruiser": kind = EnemyKind.Bruiser; return true;
+                case "heavy": kind = EnemyKind.Heavy; return true;
+                case "brute": kind = EnemyKind.Brute; return true;
+                case "gunner": kind = EnemyKind.Gunner; return true;
+                case "launcher": kind = EnemyKind.Launcher; return true;
+                case "blinker": kind = EnemyKind.Blinker; return true;
+                case "bolter": kind = EnemyKind.Bolter; return true;
+                default: kind = default; return false;
+            }
+        }
+    }
+
     /// <summary>
     /// What one kind of domestic robot IS (YT-66) — stats and silhouette in one place, so a second
     /// enemy type is a row of data rather than a second class.

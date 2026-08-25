@@ -55,6 +55,17 @@ namespace MaxWorlds.Arena
         public string produces;
     }
 
+    /// <summary>One authored, exact robot placement (MV-559) — a designer's "this Blinker stands
+    /// here" override for <see cref="MaxWorlds.Enemies.Garrison.SeedPositions"/>'s otherwise-even
+    /// ring. <see cref="kind"/> is the same lowercase key set <see cref="WorldComposition"/> uses.</summary>
+    [Serializable]
+    public sealed class WorldGarrisonEntry
+    {
+        public string kind;
+        public float x;
+        public float z;
+    }
+
     /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
     [Serializable]
     public sealed class WorldBoss
@@ -164,6 +175,12 @@ namespace MaxWorlds.Arena
         /// fall back to the dial-derived budget solve" (<see cref="WorldConfig.SolveComposition"/>).
         /// Most Phase B areas carry one; nothing requires every area to.</summary>
         public WorldComposition composition;
+
+        /// <summary>Authored, exact garrison placements (MV-559) — when non-empty,
+        /// <see cref="MaxWorlds.Enemies.Garrison.SeedPositions"/> places these first, in authored order,
+        /// each at its authored <c>kind</c>, and only fills any remaining seed slots from the ring.
+        /// Optional; most areas carry none and behave exactly as before.</summary>
+        public WorldGarrisonEntry[] garrison = Array.Empty<WorldGarrisonEntry>();
 
         /// <summary>A named encounter shape for this area (MV-365) — data only, read by
         /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> to bias WHERE within the room a

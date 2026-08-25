@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
 {
@@ -381,16 +382,113 @@ namespace MaxWorlds.Arena
         // openings" rather than merely "the numbers were self-consistent".
         // ---------------------------------------------------------------------------------------
 
+        /// <summary>Closest an authored garrison entry (MV-559) may sit to a piece of cover — a robot
+        /// authored inside a hedge is a content bug that should fail the build, not ship.</summary>
+        public const float MinGarrisonCoverGap = 1f;
+
         public static bool ValidateWorldConfig(WorldConfig cfg, out string reason)
         {
             if (cfg == null) { reason = "the world config is null"; return false; }
 
             return WorldAreas(cfg, out reason)
                 && WorldSheds(cfg, out reason)
+                && WorldGarrison(cfg, out reason)
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
                 && WorldBossGate(cfg, out reason);
         }
+
+        /// <summary>Every authored garrison entry (MV-559, <see cref="WorldArea.garrison"/>) must sit
+        /// inside its own area, clear of cover and clear of every shed — the same "nowhere for a robot
+        /// to spawn on top of something" guarantee <see cref="WorldSheds"/> gives a shed's own
+        /// neighbours, extended to a designer's own placed robots — and an area must not author more of
+        /// a kind than its solved composition actually has, or a garrison slot would have nothing to
+        /// draw from.</summary>
+        private static bool WorldGarrison(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldGarrisonEntry[] garrison = a.garrison;
+                if (garrison == null || garrison.Length == 0) continue;
+
+                var countByKind = new Dictionary<EnemyKind, int>();
+
+                foreach (WorldGarrisonEntry entry in garrison)
+                {
+                    if (entry == null) { reason = $"area '{a.id}' has a null garrison entry"; return false; }
+
+                    var point = new Vector2(entry.x, entry.z);
+
+                    if (!a.Footprint.Contains(point))
+                    {
+                        reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is outside the area";
+                        return false;
+                    }
+
+                    foreach (WorldCover c in a.cover)
+                    {
+                        if (c == null) continue;
+
+                        ArenaCover body = new MapEntity
+                        {
+                            x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                        }.ToCover();
+
+                        if (body.DistanceTo(point) < MinGarrisonCoverGap)
+                        {
+                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
+                                     $"{MinGarrisonCoverGap} m of cover '{c.id}'";
+                            return false;
+                        }
+                    }
+
+                    foreach (WorldShed s in a.Sheds())
+                    {
+                        float toShed = Vector2.Distance(point, new Vector2(s.x, s.z));
+                        if (toShed < SpawnRadius + SpawnClearance)
+                        {
+                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
+                                     $"{SpawnRadius + SpawnClearance:0.#} m of a shed";
+                            return false;
+                        }
+                    }
+
+                    if (!EnemyKindNames.TryParse(entry.kind, out EnemyKind kind))
+                    {
+                        reason = $"area '{a.id}': garrison entry has an unrecognised kind '{entry.kind}'";
+                        return false;
+                    }
+                    countByKind[kind] = countByKind.TryGetValue(kind, out int existing) ? existing + 1 : 1;
+                }
+
+                DifficultyEngine.Composition solved = cfg.SolveComposition(a.index);
+                foreach (KeyValuePair<EnemyKind, int> kv in countByKind)
+                {
+                    int authoredCount = CompositionCount(solved, kv.Key);
+                    if (kv.Value > authoredCount)
+                    {
+                        reason = $"area '{a.id}': garrison authors {kv.Value} {kv.Key}(s) but composition only has {authoredCount}";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        private static int CompositionCount(DifficultyEngine.Composition c, EnemyKind kind) => kind switch
+        {
+            EnemyKind.Rusher => c.Rusher,
+            EnemyKind.Bruiser => c.Bruiser,
+            EnemyKind.Heavy => c.Heavy,
+            EnemyKind.Brute => c.Brute,
+            EnemyKind.Gunner => c.Gunner,
+            EnemyKind.Launcher => c.Launcher,
+            EnemyKind.Blinker => c.Blinker,
+            EnemyKind.Bolter => c.Bolter,
+            _ => 0,
+        };
 
         private static bool WorldAreas(WorldConfig cfg, out string reason)
         {
