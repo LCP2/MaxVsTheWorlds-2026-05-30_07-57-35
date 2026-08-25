@@ -46,7 +46,9 @@ namespace MaxWorlds.Tests.EditMode
                 // that isn't the thing under test here, so it's expected rather than left to fail the
                 // test on an unrelated log message (same idiom MV504's test suite already uses).
                 LogAssert.Expect(LogType.Error, new Regex("Destroy may not be called from edit mode"));
-                InvokePrivate(screen, "Close");
+                // MV-550 added an optional `cinematicStarted` parameter to Close(); MethodInfo.Invoke
+                // does not apply C# default-parameter values, so it must be passed explicitly.
+                InvokePrivate(screen, "Close", false);
                 return Time.timeScale;
             }
             finally

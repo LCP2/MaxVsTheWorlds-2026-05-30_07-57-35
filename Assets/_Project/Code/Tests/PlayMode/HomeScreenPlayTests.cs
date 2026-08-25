@@ -17,9 +17,10 @@ namespace MaxWorlds.Tests.PlayMode
 {
     /// <summary>
     /// The Home screen (YT-151; profiles per YT-218): three player-profile slots, pausing the game
-    /// until one is picked, and handing off to <see cref="SaveSystem"/> — plus, on every pick, the
-    /// (YT-216: now opt-in, default OFF) opening cinematic (YT-155/156). A profile is an identity
-    /// plus a personal best, not a paused game, so there is no Continue/resume path any more.
+    /// until one is picked, and handing off to <see cref="SaveSystem"/> — plus, on a derived true
+    /// first launch (MV-550: no save slot has ever had data), the opening cinematic (YT-155/156). A
+    /// profile is an identity plus a personal best, not a paused game, so there is no Continue/resume
+    /// path any more.
     /// </summary>
     public sealed class HomeScreenPlayTests
     {
@@ -115,10 +116,12 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator Play_SeedsTheProfileAndResumesTimeWithoutTheIntro()
+        public IEnumerator Play_OnAReturningProfile_ResumesTimeWithoutTheIntro()
         {
-            // YT-216: the cinematic is gated OFF by default so a fresh run starts instantly — restart
-            // must never wait on the ~24s sequence.
+            // MV-550: the intro is now a true-first-launch treatment, derived from SaveSystem's slot
+            // state — once ANY slot has data, this device is no longer a first launch, so even a pick
+            // on a still-empty slot must never wait on the ~24s sequence.
+            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "DEXTER" });
             yield return NewScreen();
 
             PlayButton(0).onClick.Invoke();
@@ -129,14 +132,30 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.That(SaveSystem.ActiveSlot, Is.EqualTo(0), "the first PLAY button belongs to slot 0");
             Assert.That(SaveSystem.Load(0).HasData, Is.True, "picking a slot must seed its profile immediately");
             Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Null,
-                "picking a slot must never show the cinematic while it defaults OFF (YT-216)");
+                "a device with existing save data must never show the cinematic (MV-550)");
+        }
+
+        [UnityTest]
+        public IEnumerator Play_OnATrueFirstLaunch_PlaysTheIntro()
+        {
+            // MV-550: no slot has ever had data — the derived gate must trigger the cinematic even
+            // though IntroCinematic.Enabled is left at its authored-off default.
+            yield return NewScreen();
+
+            PlayButton(0).onClick.Invoke();
+            yield return null;
+
+            Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Not.Null,
+                "a genuinely first-ever PLAY must trigger the intro cinematic (MV-550)");
         }
 
         [UnityTest]
         public IEnumerator Play_StillPlaysTheIntroWhenTheFlagIsExplicitlyEnabled()
         {
-            // The sequence is parked, not deleted — flipping the authored flag back on must still
-            // trigger it exactly as YT-155 built it.
+            // MV-550: IntroCinematic.Enabled stays a manual/test override on top of the derived
+            // first-launch gate — seed a slot so the derived gate alone would say "no", and prove
+            // Enabled still forces it on regardless.
+            SaveSystem.Save(1, new SaveSlotData { HasData = true, DisplayName = "DEXTER" });
             IntroCinematic.Enabled = true;
             yield return NewScreen();
 
@@ -144,7 +163,8 @@ namespace MaxWorlds.Tests.PlayMode
             yield return null;
 
             Assert.That(Object.FindFirstObjectByType<IntroCinematic>(), Is.Not.Null,
-                "PLAY is still the intro cinematic's trigger once Enabled is opted back in (YT-155)");
+                "PLAY is still the intro cinematic's trigger once Enabled is opted back in (YT-155), " +
+                "even on a device that already has save data");
         }
 
         [UnityTest]
