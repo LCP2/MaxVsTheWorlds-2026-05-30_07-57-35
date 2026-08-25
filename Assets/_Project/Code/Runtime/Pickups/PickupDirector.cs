@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.UI;
@@ -283,10 +284,19 @@ namespace MaxWorlds.Pickups
 
             Vector3 m = _max.position;
             float r2 = CollectRadius * CollectRadius;
+
+            // MV-546: the top of Magneto's curve is the current area's diagonal, not a fixed metre
+            // value, so it stays correct as areas are resized or new worlds are added. Falls back to
+            // a fixed radius with no live area context (boss arena, stub, dev/test scenes).
+            MapZone magnetoZone = EnemyNavigation.Map?.ZoneAt(m.x, m.z);
+            float magnetoTopRadius = magnetoZone != null
+                ? magnetoZone.Diagonal
+                : MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusFallback;
             float magnetoRadius = MaxWorlds.Weapons.AbilityTuning.MagnetoPullRadius(
                 MaxWorlds.Weapons.RigState.Level("e_mag"),
+                MaxWorlds.Weapons.RigBoard.MaxLevel("e_mag"),
                 MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
-                MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
+                magnetoTopRadius);
             float dt = Time.deltaTime;
 
             for (int i = _live.Count - 1; i >= 0; i--)
@@ -298,10 +308,10 @@ namespace MaxWorlds.Pickups
                 if (d2 <= r2) { Collect(i, p); continue; }
                 _reserveFullTold.Remove(p);   // out of the radius — the next entry gets a fresh tell
 
-                // Magneto (MV-422, e_mag): a caught power cell flies to Max from range instead of
-                // waiting for a manual walk-over. Only power cells — parts/devices stay a deliberate
-                // walk-over pickup. MV-439: never pulls once the reserve is full — an owned ability
-                // must not actively destroy the player's resources.
+                // Magneto (MV-422, e_mag): a caught pickup flies to Max from range instead of waiting
+                // for a manual walk-over. MV-546: every pickup kind is hoovered, not just power cells.
+                // MV-439: a power cell never pulls once the reserve is full — an owned ability must
+                // not actively destroy the player's resources. Supercells/Devices have no such cap.
                 if (MagnetoShouldPull(p.Kind, magnetoRadius, d2))
                 {
                     Vector3 pos = p.transform.position;
@@ -313,13 +323,16 @@ namespace MaxWorlds.Pickups
             }
         }
 
-        /// <summary>Whether Magneto should reel this pickup in this frame (MV-422/MV-439) — pulled out
-        /// as a pure function so the reserve-full guard is testable without a live scene. Public: the
-        /// EditMode test assembly has no <c>InternalsVisibleTo</c> back to Gameplay.</summary>
+        /// <summary>Whether Magneto should reel this pickup in this frame (MV-422/MV-439/MV-546) —
+        /// pulled out as a pure function so the reserve-full guard is testable without a live scene.
+        /// Public: the EditMode test assembly has no <c>InternalsVisibleTo</c> back to Gameplay.
+        /// MV-546: every <see cref="PickupKind"/> is in range-gated; only <see cref="PickupKind.PowerCell"/>
+        /// carries MV-439's additional reserve-full exception — Supercells and Devices have no
+        /// capacity cap, so they always pull once in radius.</summary>
         public static bool MagnetoShouldPull(PickupKind kind, float magnetoRadius, float squaredDistance) =>
-            kind == PickupKind.PowerCell && magnetoRadius > 0f
+            magnetoRadius > 0f
             && squaredDistance <= magnetoRadius * magnetoRadius
-            && PickupWallet.PowerCells < PickupWallet.Capacity;
+            && (kind != PickupKind.PowerCell || PickupWallet.PowerCells < PickupWallet.Capacity);
 
         private void Collect(int index, Pickup p)
         {

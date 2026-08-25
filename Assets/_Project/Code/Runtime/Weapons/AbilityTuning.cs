@@ -334,21 +334,36 @@ namespace MaxWorlds.Weapons
 
         // --- Magneto (MV-422, e_mag) ---
 
-        /// <summary>Cell pull radius at Magneto Level 1, metres (MV-422: "3 m at level 1").</summary>
-        public const float DefaultMagnetoPullRadiusBase = 3f;
+        /// <summary>Cell pull radius at Magneto Level 1, metres (MV-546: dropped from the original
+        /// MV-422 3 m so level 1 reads as a slight reach, not the whole-area sweep the top level now
+        /// is). Kept meaningfully above <see cref="MaxWorlds.Pickups.PickupDirector.CollectRadius"/>'s
+        /// 1.4 m walk-over range.</summary>
+        public const float DefaultMagnetoPullRadiusBase = 2f;
 
-        /// <summary>Extra pull radius each Magneto level beyond L1 adds (MV-422: "+2 m per level to
-        /// 11 m at level 5" — 3 + 2*4 = 11).</summary>
-        public const float DefaultMagnetoPullRadiusPerLevel = 2f;
+        /// <summary>Magneto's pull radius when there is no live area to derive a top end from — the
+        /// boss arena, the stub scene, dev/test scenes (MV-546). This is the old flat MV-422 top end
+        /// (3 + 2*4), kept as a sane bounded fallback rather than 0 or unbounded.</summary>
+        public const float DefaultMagnetoPullRadiusFallback = 11f;
 
         /// <summary>How fast a caught power cell flies to Max, m/s — fast enough to read as "pulled",
         /// not a lazy drift.</summary>
         public const float DefaultMagnetoPullSpeed = 10f;
 
-        /// <summary>Magneto's pull radius at a given level — 0 while unowned (level 0), so an
-        /// un-drafted Magneto pulls nothing.</summary>
-        public static float MagnetoPullRadius(int level, float baseRadius, float perLevel) =>
-            level <= 0 ? 0f : Mathf.Max(0f, baseRadius) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
+        /// <summary>Magneto's pull radius at a given level (MV-546) — 0 while unowned (level 0),
+        /// otherwise linearly interpolated from <paramref name="baseRadius"/> at level 1 up to
+        /// <paramref name="topRadius"/> (the current area's diagonal, or
+        /// <see cref="DefaultMagnetoPullRadiusFallback"/> with no live area) at
+        /// <paramref name="maxLevel"/>. A single <see cref="Mathf.Lerp"/> so the curve's shape stays
+        /// easy to re-tune in one place if Lee wants something other than linear after playing it.</summary>
+        public static float MagnetoPullRadius(int level, int maxLevel, float baseRadius, float topRadius)
+        {
+            if (level <= 0) return 0f;
+            baseRadius = Mathf.Max(0f, baseRadius);
+            topRadius = Mathf.Max(0f, topRadius);
+            if (maxLevel <= 1) return baseRadius;
+            float t = Mathf.Clamp01((level - 1f) / (maxLevel - 1f));
+            return Mathf.Lerp(baseRadius, topRadius, t);
+        }
 
         /// <summary>Seconds a sentinel must go without taking a hit before its passive regen starts
         /// (MV-398, same-day reversal of MV-362's "no repair" DECISION — passive only, still no
