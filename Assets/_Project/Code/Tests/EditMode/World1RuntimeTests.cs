@@ -486,7 +486,7 @@ namespace MaxWorlds.Tests.EditMode
             new Regex("\"(\\w+)\"\\s*:", RegexOptions.Compiled);
         private static readonly HashSet<string> KnownCompositionFields = new HashSet<string>
         {
-            "rusher", "bruiser", "heavy", "brute", "gunner", "launcher", "blinker"
+            "rusher", "bruiser", "heavy", "brute", "gunner", "launcher", "blinker", "bolter"
         };
 
         private static bool TryFindUnknownCompositionKey(string json, out string badKey)
@@ -517,8 +517,8 @@ namespace MaxWorlds.Tests.EditMode
             bool foundUnknownKey = TryFindUnknownCompositionKey(asset.text, out string badKey);
             Assert.IsFalse(foundUnknownKey,
                 $"composition key '{badKey}' does not match any WorldComposition field (rusher/bruiser/" +
-                "heavy/brute/gunner/launcher/blinker) — JsonUtility silently drops it and its authored " +
-                "robots never spawn (MV-500)");
+                "heavy/brute/gunner/launcher/blinker/bolter) — JsonUtility silently drops it and its " +
+                "authored robots never spawn (MV-500)");
         }
     }
 }
