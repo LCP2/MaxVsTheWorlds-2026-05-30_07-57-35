@@ -123,7 +123,11 @@ if exist "%PROJECT%\Logs\build.log" del /f /q "%PROJECT%\Logs\build.log"
 start "" /min /wait "%UNITY_PATH%" -batchmode -nographics -projectPath "%PROJECT%" -quit -buildTarget Win64 -executeMethod MaxWorlds.Editor.HeadlessBuild.WindowsBootstrap -buildOutput "%BUILD%\MaxVsTheWorlds.exe" -logFile "%PROJECT%\Logs\build.log"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
-  echo        FAIL ^(exit %RC%^) — see Logs\build.log
+  if "%RC%"=="198" (
+    echo        FAIL ^(exit 198^) — Unity licence not resolved — see Logs\build.log
+  ) else (
+    echo        FAIL ^(exit %RC%^) — see Logs\build.log
+  )
   set "FAIL=1"
 ) else (
   echo        ok
@@ -164,19 +168,24 @@ echo [5/6] frame-time gate ...
 set "PERFREPORT=%PROJECT%\Logs\perf-report.txt"
 if exist "%PERFREPORT%" del /f /q "%PERFREPORT%"
 if exist "%PROJECT%\Logs\perf-run.log" del /f /q "%PROJECT%\Logs\perf-run.log"
-start "" /min /wait "%BUILD%\MaxVsTheWorlds.exe" -batchmode -nographics -ccperf -perfReportPath "%PERFREPORT%" -logFile "%PROJECT%\Logs\perf-run.log"
-set "RC=%ERRORLEVEL%"
-if not exist "%PERFREPORT%" (
-  echo        FAIL — %PERFREPORT% was not regenerated ^(exit %RC%^) — see Logs\perf-run.log
+if not exist "%BUILD%\MaxVsTheWorlds.exe" (
+  echo        FAIL — %BUILD%\MaxVsTheWorlds.exe was not produced — see Logs\build.log
   set "FAIL=1"
 ) else (
-  echo        measured:
-  for /f "usebackq delims=" %%L in ("%PERFREPORT%") do echo          %%L
-  if not "%RC%"=="0" (
-    echo        FAIL — see p95_ms / threshold_p95_ms above ^(exit %RC%^) — see Logs\perf-run.log
+  start "" /min /wait "%BUILD%\MaxVsTheWorlds.exe" -batchmode -nographics -ccperf -perfReportPath "%PERFREPORT%" -logFile "%PROJECT%\Logs\perf-run.log"
+  set "RC=%ERRORLEVEL%"
+  if not exist "%PERFREPORT%" (
+    echo        FAIL — %PERFREPORT% was not regenerated ^(exit %RC%^) — see Logs\perf-run.log
     set "FAIL=1"
   ) else (
-    echo        ok
+    echo        measured:
+    for /f "usebackq delims=" %%L in ("%PERFREPORT%") do echo          %%L
+    if not "%RC%"=="0" (
+      echo        FAIL — see p95_ms / threshold_p95_ms above ^(exit %RC%^) — see Logs\perf-run.log
+      set "FAIL=1"
+    ) else (
+      echo        ok
+    )
   )
 )
 

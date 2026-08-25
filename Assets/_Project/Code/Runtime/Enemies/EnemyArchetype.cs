@@ -2,9 +2,9 @@ using UnityEngine;
 
 namespace MaxWorlds.Enemies
 {
-    // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Launcher/Blinker are new
+    // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Launcher/Blinker/Bolter are new
     // archetype ROWS, not a renumbering of the existing tiers.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker }
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -256,6 +256,33 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             teleportCooldown: 4.5f);
 
+        /// <summary>
+        /// Fires a straight-line rod bolt (MV-539) rather than a beam or a homing splash — the third
+        /// ranged answer, and the first with no tracking of any kind: once fired, the shot's direction
+        /// is fixed for its whole flight (<see cref="BolterBolt"/>), so the punish for standing in a
+        /// straight line is entirely on the player to read and step out of, not on the game to enforce.
+        /// <see cref="LungeSpeed"/> doubles as the bolt's own flight speed (same idiom as
+        /// <see cref="Launcher"/>'s missile); <see cref="ContactRadius"/> is the bolt's hit-check radius
+        /// against the player. <see cref="ContactDamage"/> is deliberately left at 0 and unread — the
+        /// ticket's own AC1 requires the hit amount to be resolved from the player's live max health at
+        /// the moment of impact, not authored here as a flat number.
+        /// MV-293's "every small-tier kind stays a one-rusher-shot kill" invariant applies the same way
+        /// it did to <see cref="Launcher"/>/<see cref="Blinker"/>: kept below the Rusher's HP on purpose.
+        /// </summary>
+        public static EnemyArchetype Bolter => new EnemyArchetype(
+            EnemyKind.Bolter, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
+            colliderHeight: 1.4f, colliderRadius: 0.4f,
+            moveSpeed: 2.1f, maxHealth: 30f,
+            contactDamage: 0f,    // unread — bolt damage is resolved live off PlayerHealth.Max (AC1)
+            contactRadius: 0.35f, // bolt hit-check radius against the player
+            lungeRange: 9f,       // max fire range
+            telegraphTime: 0.35f, // aim wind-up / dodge tell
+            lungeSpeed: 14f,      // bolt flight speed
+            lungeTime: 0f,        // instant release — the whole cadence is telegraph + recover (1.25s)
+            recoverTime: 0.9f,    // ~1.25s per shot with the telegraph above — clearly faster than the Launcher's 2.2s
+            knockbackDecay: 28f,
+            standoffRange: 4.5f);
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -264,6 +291,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Gunner => Gunner,
             EnemyKind.Launcher => Launcher,
             EnemyKind.Blinker => Blinker,
+            EnemyKind.Bolter => Bolter,
             _ => Rusher,
         };
 

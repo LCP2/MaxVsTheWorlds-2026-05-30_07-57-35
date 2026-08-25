@@ -21,6 +21,11 @@ namespace MaxWorlds.Enemies
         public const float Launcher = 3.6f;
         public const float Blinker = 3.3f;
 
+        // MV-539: the Bolter is a small-tier ranged kind like the Gunner, but simpler (no beam-hold
+        // DPS, no splash) and less tanky (kept below the rusher's HP, unlike the Gunner) — placed
+        // just under the Gunner's 3.0 on the same placeholder footing.
+        public const float Bolter = 2.8f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -29,6 +34,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Gunner => Gunner,
             EnemyKind.Launcher => Launcher,
             EnemyKind.Blinker => Blinker,
+            EnemyKind.Bolter => Bolter,
             _ => Rusher,
         };
     }

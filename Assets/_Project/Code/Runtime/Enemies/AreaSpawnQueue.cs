@@ -102,6 +102,7 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < composition.Gunner; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Gunner));
             for (int i = 0; i < composition.Launcher; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Launcher));
             for (int i = 0; i < composition.Blinker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Blinker));
+            for (int i = 0; i < composition.Bolter; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Bolter));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

@@ -24,7 +24,7 @@ It is the canonical craft standard for MAX vs THE WORLDS. Every change you ship 
 
 - **Project key:** `MV`
 - **Project slug:** `mv-game`
-- **Repo path:** `C:\dev\MaxVsTheWorlds`
+- **Repo path:** whatever clone the harness passed as `-RepoDir` — never assume an absolute repo path or `cd` to one. `C:\Dev\MaxVsTheWorlds` is Lee's personal clone; it may have the Unity Editor open at any time, and a worker must never build, verify, or commit to it.
 - **Spec root:** Confluence space **Games** — Phase B Vertical Slice Spec, page id `12058680` ([link](https://codynamics.atlassian.net/wiki/spaces/Games/pages/12058680)).
 - **Active epic:** `MV-13` (M1 Vertical Slice).
 - **Stack:** Unity 6 LTS (6000.4.x), URP, 3D low-poly, target iOS (build deferred until Mac available; validate via Windows standalone).
@@ -160,6 +160,6 @@ prepares the change on a branch via the GitHub web editor for Lee to merge.
 - **TextMeshPro** ships inside `com.unity.ugui` in Unity 6 — no separate install.
 - **Asmdef layout:** root namespace `MaxWorlds`. Assemblies: `MaxWorlds.Core`, `MaxWorlds.Gameplay`, `MaxWorlds.Editor`, `MaxWorlds.Tests.EditMode`, `MaxWorlds.Tests.PlayMode`. Don't over-split for the slice.
 - **`Application.targetFrameRate = 60` and `QualitySettings.vSyncCount = 0`** — both set in `Bootstrap.cs` Awake; don't change without reason.
-- **Repo location:** `C:\dev\MaxVsTheWorlds` — **not** in OneDrive (Unity `Library/` corrupts under sync).
+- **Repo location:** whatever clone the harness passed as `-RepoDir` — never assume an absolute path. That clone must not be in OneDrive (Unity `Library/` corrupts under sync).
 - **Build pipeline / boot scene (IMPORTANT):** The WebGL build boots **scene 0** of `ProjectSettings/EditorBuildSettings.asset`, so scene 0 MUST be the current *playable* scene (currently `Assets/_Project/Scenes/Backyard_Slice.unity`) — NOT the empty `Bootstrap.unity` smoke-test scene. Whenever you add or reorder scenes, keep the playable scene at index 0 (or make `Bootstrap` load it via `SceneManager`), and after any change confirm the deployed WebGL link shows the playable scene, not a bare cube. Verify script builds Windows standalone to `Builds/cc-verify/` (gitignored).
 - **Scenes & wiring - code-driven only.** Follow `docs/CODE_DRIVEN_SCENES.md`: assemble scenes and prefabs in code (Bootstrap + ScriptableObjects), never via manual Inspector wiring. A feature that needs hand-wiring in the editor to run is not done - it must build headlessly in CI and show up on the WebGL play link.

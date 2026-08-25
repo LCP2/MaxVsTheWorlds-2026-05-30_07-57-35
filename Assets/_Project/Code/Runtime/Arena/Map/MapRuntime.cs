@@ -59,6 +59,10 @@ namespace MaxWorlds.Arena
             RetireSceneFactories();
             FactoryCensus.Reset();
 
+            // MV-542: same reasoning, one level up — a level loaded a second time must count its own
+            // bosses, not the previous level's (or the previous test's) ghosts.
+            BossCensus.Reset();
+
             // A new level is a new Invasion Level clock (YT-181) — a run's escalation must not carry
             // over from whatever the last level (or the last test) left it at.
             DifficultyDirector.Reset();

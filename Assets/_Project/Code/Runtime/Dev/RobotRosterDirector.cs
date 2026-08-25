@@ -46,7 +46,7 @@ namespace MaxWorlds.Dev
         /// but it makes the fix comment's screenshot list read in the same order Lee wrote the AC.</summary>
         private static readonly EnemyKind[] Roster =
         {
-            EnemyKind.Rusher, EnemyKind.Launcher, EnemyKind.Blinker, EnemyKind.Gunner,
+            EnemyKind.Rusher, EnemyKind.Launcher, EnemyKind.Blinker, EnemyKind.Gunner, EnemyKind.Bolter,
             EnemyKind.Bruiser, EnemyKind.Heavy, EnemyKind.Brute,
         };
 
