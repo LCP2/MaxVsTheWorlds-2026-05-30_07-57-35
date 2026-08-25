@@ -9,7 +9,8 @@ mechanical work; the worker loop checks Jira with a free REST poll. Tokens buy j
 review, debugging. Releases ship from a **tag push**, never from a chat driving the browser.
 
 ## Folders
-- **Code (this repo):** `C:\Dev\MaxVsTheWorlds` — git remote `LCP2/MaxVsTheWorlds-2026-05-30_07-57-35`. Local disk only; never sync to OneDrive.
+- **Code:** the worker operates in whatever clone the harness passed as `-RepoDir` — never assume an absolute repo path or `cd` to one. Git remote `LCP2/MaxVsTheWorlds-2026-05-30_07-57-35`. Local disk only; never sync to OneDrive.
+- **Lee's personal clone:** `C:\Dev\MaxVsTheWorlds` — may have the Unity Editor open at any time. A worker must never build, verify, or commit to it.
 - **Worker infra:** `C:\Dev\MAx CCs` — `run-cc.ps1` runs a single worker with one checkout, `cc-web`. `start-gameplay.bat` / `start-art.bat` are retired (`.retired`).
 - **Secrets:** GitHub Actions secrets, plus one `ATLASSIAN_API_TOKEN` env var on the dev PC (set once via `setx`). Never in the repo.
 

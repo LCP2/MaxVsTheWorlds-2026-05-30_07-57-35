@@ -140,9 +140,9 @@ namespace MaxWorlds.Arena
                         kind = "factory",
                         x = s.x,
                         z = s.z,
-                        width = 3f,
-                        height = 2f,
-                        depth = 3f,
+                        width = 2.25f,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
+                        height = 1.5f,  // MV-541: 25% smaller (0.75x the pre-541 2 m body)
+                        depth = 2.25f,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
                         dressing = "shed",
                     });
                 }

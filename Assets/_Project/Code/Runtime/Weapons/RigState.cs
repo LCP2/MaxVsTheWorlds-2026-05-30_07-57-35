@@ -80,12 +80,18 @@ namespace MaxWorlds.Weapons
         /// but a non-root node now needs its PARENT at level &gt;= 2, tightened from the level &gt;= 1
         /// <see cref="IsReached"/> uses. <see cref="IsReached"/> itself is untouched: it still gates the
         /// Morphing Module draft pool (<see cref="EligibleCapIds"/>), which this ticket doesn't touch.
-        /// Since &gt;= 2 implies &gt;= 1, anything cell-unlockable is always also reached.</summary>
+        /// Since &gt;= 2 implies &gt;= 1, anything cell-unlockable is always also reached.
+        ///
+        /// MV-530: the gate is <c>Level(parent) &gt;= min(2, parent's own MaxLevel)</c>, not a bare
+        /// &gt;= 2 — three roots (<c>s_bal</c>, <c>u_sen</c>, <c>s_aut</c>) cap at <c>maxLevel: 1</c>,
+        /// so a bare &gt;= 2 made their six children permanently unreachable. A parent that is fully
+        /// maxed always satisfies the gate now, whatever its cap; a parent whose cap is &gt;= 2 still
+        /// needs the full two levels, preserving MV-458's depth-before-breadth intent.</summary>
         public static bool IsCellUnlockable(string id)
         {
             string parent = RigBoard.Parent(id);
             if (string.IsNullOrEmpty(parent)) return IsCategoryUnlocked(RigBoard.Category(id));
-            return Level(parent) >= 2;
+            return Level(parent) >= Math.Min(2, RigBoard.MaxLevel(parent));
         }
 
         /// <summary>Raise <paramref name="id"/> by a level — the currency-agnostic model primitive
@@ -148,6 +154,36 @@ namespace MaxWorlds.Weapons
         public static void Reset()
         {
             ResetLevels();
+            Changed?.Invoke();
+        }
+
+        /// <summary>Every node currently at a non-zero level, id to level (MV-557: a mid-run resume
+        /// checkpoint snapshot). Returns a fresh copy; the caller owns it and mutating it has no
+        /// effect on live state.</summary>
+        public static IReadOnlyDictionary<string, int> SnapshotLevels() => new Dictionary<string, int>(s_levels);
+
+        /// <summary>Every category unlocked this run (MV-557: a mid-run resume checkpoint snapshot).
+        /// Returns a fresh copy; the caller owns it.</summary>
+        public static IReadOnlyCollection<string> SnapshotUnlockedCategories() =>
+            new List<string>(s_unlockedCategories);
+
+        /// <summary>Overwrite the whole tree from a captured checkpoint (MV-557: a mid-run resume
+        /// restore, not a draft/spend) — replaces levels and unlocked categories wholesale rather than
+        /// merging, since a restore always starts from <see cref="Reset"/>'s baseline in practice. Fires
+        /// <see cref="Changed"/> once so live systems (e.g. <see cref="MaxWorlds.Pickups.PickupWallet"/>'s
+        /// capacity readout) re-fit.</summary>
+        public static void RestoreSnapshot(IReadOnlyDictionary<string, int> levels, IEnumerable<string> unlockedCategories)
+        {
+            s_levels.Clear();
+            if (levels != null)
+                foreach (KeyValuePair<string, int> kv in levels)
+                    s_levels[kv.Key] = kv.Value;
+
+            s_unlockedCategories.Clear();
+            if (unlockedCategories != null)
+                foreach (string category in unlockedCategories)
+                    s_unlockedCategories.Add(category);
+
             Changed?.Invoke();
         }
 
