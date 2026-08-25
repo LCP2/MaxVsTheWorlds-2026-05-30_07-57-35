@@ -977,7 +977,10 @@ namespace MaxWorlds.Dev
                 ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
                                        : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
 
-            // 3. Family contrast — mean luminance of a lit category's own column band vs an unlit one.
+            // 3. Family contrast — mean luminance of an unlocked category's own column band vs a locked
+            // one. MV-538: the dim now follows RigState.IsCategoryUnlocked, not ownership — an unlocked
+            // family with nothing owned in it yet renders at full strength, so "lit" here must track the
+            // same unlock flag WeaponsScreen.DimIfUnlit actually reads, not IsOwned.
             CheckFamilyContrast(tex, categories, abilities, transform, phoneMode, out float contrastRatio, out float litMean, out float unlitMean);
             Emit("family-contrast", contrastRatio >= 1.5f,
                 $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
@@ -1125,8 +1128,7 @@ namespace MaxWorlds.Dev
                 float left = Mathf.Max(columnLeft, categories[i].X - MaxSampleHalfWidth);
                 float right = Mathf.Min(columnRight, categories[i].X + MaxSampleHalfWidth);
 
-                bool lit = false;
-                foreach (var ab in abilities) if (ab.Category == categories[i].Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
+                bool lit = RigState.IsCategoryUnlocked(categories[i].Id);
 
                 float mean = RigBoardConformance.MeanLuminance(tex, left, right, yMin, yMax, transform: transform);
                 (lit ? litVals : unlitVals).Add(mean);
