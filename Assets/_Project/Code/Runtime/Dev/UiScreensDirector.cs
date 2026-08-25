@@ -196,6 +196,12 @@ namespace MaxWorlds.Dev
                     weapons.BoardNode("SECONDARY")?.GetComponentInChildren<Button>().onClick.Invoke();
                 },
                 weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-530 AC5's human-check shot: BALLOON (s_bal) and SENTINEL (u_sen) each maxed at their
+            // own cap of level 1 — under the old bare Level(parent) >= 2 gate their children could never
+            // read as unlockable. s_spl/s_lob (BALLOON's) and u_dmg/u_rng/u_hp (SENTINEL's) must now show
+            // as available, not stuck behind LOCK forever.
+            yield return CaptureFixtureScreen("rig-mv530-16x9", 1920, 1080, ApplyRigFixtureMv530, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -276,6 +282,24 @@ namespace MaxWorlds.Dev
             SpendRigFixtureLevels();
             PickupWallet.SetPowerCells(25);
             PickupWallet.AddSupercell();
+        }
+
+        /// <summary>MV-530 AC5: a fresh run with SECONDARY and SUPPORT unlocked and their roots,
+        /// <c>s_bal</c> (BALLOON) and <c>u_sen</c> (SENTINEL), each acquired at their own
+        /// <see cref="RigBoard.MaxLevel"/> of 1 — via <see cref="RigState.AcquireCap"/> only, deliberately
+        /// not <see cref="SpendRigFixtureLevels"/>'s children, so <c>s_spl</c>/<c>s_lob</c>/<c>u_dmg</c>/
+        /// <c>u_rng</c>/<c>u_hp</c> stay unowned and the shot proves the fix through
+        /// <see cref="RigState.IsCellUnlockable"/>'s own real gate, not through a bypass that would show
+        /// them owned regardless of the defect.</summary>
+        public static void ApplyRigFixtureMv530()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            RigState.UnlockCategory("SECONDARY");
+            RigState.UnlockCategory("SUPPORT");
+            RigState.AcquireCap("s_bal");
+            RigState.AcquireCap("u_sen");
+            PickupWallet.SetPowerCells(20);
         }
 
         private static void ResetRunForFixture()
