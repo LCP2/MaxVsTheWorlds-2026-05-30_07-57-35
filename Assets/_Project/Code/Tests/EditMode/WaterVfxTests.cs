@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Combat;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.EditMode
@@ -373,6 +374,52 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Object.DestroyImmediate(go);
             }
+        }
+
+        // --- MV-555: the ground trail must read as part of the wedge, at every firing angle ---
+
+        [Test]
+        public void GroundTrail_EveryPointStaysInsideTheWedgesOwnFootprint_WhenAimingSideways()
+        {
+            // Lee's exact report: firing due LEFT/RIGHT is where the jet used to read as floating
+            // clear of the outline. Build the trail's placement the same way WaterVfx.LateUpdate
+            // does (WaterGroundTrailTuning.Placement — no live frame needed) and prove every vertex
+            // of its mesh — which is AimReticleMesh's own wedge, reused verbatim — lands inside the
+            // identical cone SprayHit.InCone (and therefore FireTick) uses to decide a hit. This is
+            // resolved-world-position coverage (Tier 2), not a check that a component exists.
+            const float range = 6f, coneHalfAngle = 24f;
+            Vector3 ownerPos = new Vector3(3f, 1f, -2f);
+
+            foreach (Vector3 dir in new[] { Vector3.left, Vector3.right })
+            {
+                WaterGroundTrailTuning.Placement(ownerPos, dir, WaterVfx.GroundTrailLift,
+                    out Vector3 pos, out Quaternion rot);
+
+                var mesh = AimReticleMesh.Build(range, coneHalfAngle);
+                try
+                {
+                    foreach (Vector3 v in mesh.vertices)
+                    {
+                        Vector3 world = pos + rot * v;
+                        // A tiny slack on the range: the fade ring's outermost vertices sit AT
+                        // DrawnReach exactly, and the LookRotation used to place the trail (see
+                        // WaterGroundTrailTuning.Placement) can perturb that by float-precision noise
+                        // — not a real gap between the trail and the wedge it's built from.
+                        Assert.IsTrue(
+                            SprayHit.InCone(ownerPos, dir, world, AimReticleMesh.DrawnReach(range) + 0.01f, coneHalfAngle + 0.5f),
+                            $"ground trail vertex {world} (aiming {dir}) fell outside the wedge's own footprint");
+                    }
+                }
+                finally { Object.DestroyImmediate(mesh); }
+            }
+
+            // Stacking (same rule AimReticleTests.EveryGroundMarkThatMattersDrawsOverTheReticle
+            // pins for the wedge itself): the trail must draw OVER the idle wedge but under anything
+            // an actor's own ground marks use, or it could bury a contact shadow/anchor/telegraph.
+            Assert.Greater(WaterVfx.GroundTrailLift, AimReticle.GroundLift,
+                "the trail must draw over the wedge it's tied to, or it reads as buried under it");
+            Assert.Less(WaterVfx.GroundTrailLift, GroundAnchorTuning.ShadowLift,
+                "the trail must never be able to cover an actor's contact shadow, anchor ring, or telegraph");
         }
     }
 }
