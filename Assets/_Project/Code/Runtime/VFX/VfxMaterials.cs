@@ -57,6 +57,18 @@ namespace MaxWorlds.VFX
         /// <summary>Alpha-blended — droplets and spray that should read as water volume, not light.</summary>
         public static Material AlphaBlend(Texture2D tex) => Get("alpha:" + tex.name, tex, additive: false);
 
+        /// <summary>Alpha-blended, same as <see cref="AlphaBlend"/>, but pinned to a render queue above
+        /// every other ground-layer VFX (MV-545) — a dedicated aim-indicator queue, not another
+        /// y-offset arms race. URP's transparent sort takes render queue as its primary key ahead of
+        /// camera distance, so anything built from this always draws on top of decals/anchor
+        /// rings/motes/etc. regardless of how close in depth they land, instead of losing a distance-sort
+        /// tie the moment something else marks the same spot — confirmed live via
+        /// <c>MaxWorlds.Dev.AimCircleDiagnosticsDirector</c>'s capture: a Water Balloon/Teleport landing
+        /// circle at the baseline Transparent queue reads active, non-empty, "visible" by every API, and
+        /// still draws invisibly under the very next scorch decal left at the same spot.</summary>
+        public static Material AlphaBlendOnTop(Texture2D tex) =>
+            Get("alpha-ontop:" + tex.name, tex, additive: false, renderQueue: (int)UnityEngine.Rendering.RenderQueue.Transparent + 50);
+
         // --- textures ---
 
         /// <summary>Round droplet: opaque core, soft falloff. The workhorse water particle.</summary>
@@ -169,7 +181,7 @@ namespace MaxWorlds.VFX
 
         // --- internals ---
 
-        private static Material Get(string key, Texture2D tex, bool additive)
+        private static Material Get(string key, Texture2D tex, bool additive, int? renderQueue = null)
         {
             if (s_materials.TryGetValue(key, out var m) && m != null) return m;
 
@@ -185,8 +197,9 @@ namespace MaxWorlds.VFX
                 name = key,
                 hideFlags = HideFlags.HideAndDontSave,
                 // Transparent, never depth-writing: particles must not occlude each other
-                // or punch holes in the scene.
-                renderQueue = (int)UnityEngine.Rendering.RenderQueue.Transparent,
+                // or punch holes in the scene. Callers needing a different sort tier (see
+                // AlphaBlendOnTop) override the queue explicitly rather than fighting depth.
+                renderQueue = renderQueue ?? (int)UnityEngine.Rendering.RenderQueue.Transparent,
             };
 
             // URP's particle shader is configured through properties + keywords rather
