@@ -159,9 +159,10 @@ namespace MaxWorlds.Tests.EditMode
                 PickupWallet.SetPowerCells(0);
                 FillReserve();
 
-                // 2m out: inside every level's Magneto pull radius (3m base, up to 11m) but outside
-                // the 1.4m walk-over CollectRadius, so only the Magneto branch is under test here.
-                SpawnCellAt(_director, new Vector3(2f, 0f, 0f));
+                // 1.8m out: inside every level's Magneto pull radius (MV-546: 2m base, up to the area
+                // diagonal or an 11m fallback) but outside the 1.4m walk-over CollectRadius, so only
+                // the Magneto branch is under test here.
+                SpawnCellAt(_director, new Vector3(1.8f, 0f, 0f));
                 _maxGo.transform.position = Vector3.zero;
 
                 var cell = LiveList(_director)[0];
@@ -180,15 +181,30 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MagnetoShouldPullIsPureAndCapacityGated()
         {
+            // MV-546: Magneto now hoovers every pickup kind, range-gated the same way for all three;
+            // only PowerCell keeps MV-439's additional reserve-full exception.
             PickupWallet.SetPowerCells(0);
             Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.PowerCell, 3f, 1f), Is.True,
                 "below capacity, within radius, a power cell must pull");
-            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Supercell, 3f, 1f), Is.False,
-                "Supercells are a deliberate walk-over pickup, never magneted");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Supercell, 3f, 1f), Is.True,
+                "MV-546: Supercells are now magneted too");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Device, 3f, 1f), Is.True,
+                "MV-546: Devices are now magneted too");
+
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.PowerCell, 3f, 100f), Is.False,
+                "out of range, a power cell must not pull");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Supercell, 3f, 100f), Is.False,
+                "out of range, a supercell must not pull");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Device, 3f, 100f), Is.False,
+                "out of range, a device must not pull");
 
             FillReserve();
             Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.PowerCell, 3f, 1f), Is.False,
-                "at capacity, Magneto must not pull — MV-439");
+                "at capacity, Magneto must not pull a power cell — MV-439");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Supercell, 3f, 1f), Is.True,
+                "MV-546: at capacity, a supercell still pulls — no capacity limit on it");
+            Assert.That(PickupDirector.MagnetoShouldPull(PickupKind.Device, 3f, 1f), Is.True,
+                "MV-546: at capacity, a device still pulls — no capacity limit on it");
         }
     }
 }

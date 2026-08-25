@@ -52,6 +52,11 @@ namespace MaxWorlds.Arena
         /// use. A fight room with a small number here is a corridor wearing a room's name.</summary>
         public float InscribedRadius => Mathf.Min(width, depth) * 0.5f;
 
+        /// <summary>Corner-to-corner span of the room, metres — the worst case distance between any
+        /// two points inside it (MV-546: a fully-upgraded Magneto's pull radius must reach a pickup
+        /// dropped in the opposite corner from wherever Max is standing).</summary>
+        public float Diagonal => Mathf.Sqrt(width * width + depth * depth);
+
         /// <summary>Pulls a point back inside this room by <paramref name="edgeMargin"/> from every
         /// wall (MV-399: an aimed sentinel placement reticle must stay "constrained to the current
         /// arena's walkable space" rather than showing a target beyond a wall that then silently fails
