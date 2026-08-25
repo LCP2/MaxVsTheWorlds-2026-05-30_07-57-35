@@ -190,60 +190,59 @@ namespace MaxWorlds.Tests.EditMode
 
         // ------------------------------------------------------------------ defect 3: unlit family dim
 
-        /// <summary>Run-start state (only PRIMARY lit, <c>RigState.Reset</c>'s own baseline), MOVE's
-        /// category shed-unlocked (MV-457, merged after this test was written — a root is only
-        /// reached/draftable once its own category is unlocked) but still zero owned abilities, so
-        /// every graphic in its subtree must be dimmed by <c>RigBoardLayout.FamilyDimFactor</c> on top
-        /// of whatever state-specific alpha it already carries. Checked via the region panel/border
-        /// (opacityLit/borderAlphaLit — MV-457: a freshly-unlocked family reads at the LIT base opacity
-        /// immediately, before anything is owned; the family dim is what still recedes it — category
-        /// level), an ability node's own draftable glow (GlowAlphaDraft, node-level — both of MOVE's
-        /// abilities, m_spd/m_tp, are roots so both are draftable once unlocked), and a category
-        /// connector (ConnectorAlphaLive, since a draftable child still counts as "live" —
-        /// connector-level) — one representative graphic per level the AC calls out, each backed by a
-        /// named <c>RigBoardLayout</c> constant rather than a duplicated magic literal, so this stays
-        /// accurate if those constants ever move. Must fail on <c>main</c> (no dim applied at all — MOVE
-        /// would read at the same undimmed alpha as PRIMARY).</summary>
+        /// <summary>MV-538 revision: MV-462's own version of this test pinned the wrong invariant — it
+        /// asserted a shed-unlocked-but-still-EMPTY family (SECONDARY here, nothing owned) should read
+        /// dimmed, which is the exact defect MV-538 fixed ("I've turned on a new ability family... I
+        /// can't see that I can do that"). A family now only ever dims while genuinely LOCKED
+        /// (<c>RigState.IsCategoryUnlocked</c> false) — MOVE stays locked all run and must still dim by
+        /// <c>RigBoardLayout.FamilyDimFactor</c>; SECONDARY is shed-unlocked with nothing owned and must
+        /// read fully undimmed. Checked via the region panel/border (category level) and a category
+        /// connector (connector level), each backed by a named <c>RigBoardLayout</c> constant rather
+        /// than a duplicated magic literal. Must fail on the MV-538 base commit — SECONDARY's panel
+        /// would still read <c>RegionOpacityLit * FamilyDimFactor</c>, not the plain
+        /// <c>RegionOpacityLit</c> this test now asserts.</summary>
         [Test]
-        public void UnlitFamilyDimsCategoryAbilityAndConnectorGraphicsByFamilyDimFactor()
+        public void OnlyAGenuinelyLockedFamilyDimsCategoryAndConnectorGraphics()
         {
-            RigState.UnlockCategory("MOVE");
+            RigState.UnlockCategory("SECONDARY");
             OpenScreen();
             float factor = RigBoardLayout.FamilyDimFactor;
-            Assert.That(RigState.IsOwned("m_spd"), Is.False, "fixture assumption: MOVE has nothing owned at run start");
-            Assert.That(RigState.IsOwned("m_tp"), Is.False, "fixture assumption: MOVE has nothing owned at run start");
+            Assert.That(RigState.IsCategoryUnlocked("MOVE"), Is.False, "fixture: MOVE stays locked all run");
+            Assert.That(RigState.IsCategoryUnlocked("SECONDARY"), Is.True, "fixture: SECONDARY is shed-unlocked");
+            Assert.That(RigState.IsOwned("s_bal"), Is.False, "fixture: SECONDARY still has nothing owned");
 
-            var panel = _screen.CategoryPanel("MOVE");
-            var border = _screen.CategoryPanelBorder("MOVE");
-            Assert.That(panel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit * factor).Within(1e-4f), "MOVE region panel");
-            Assert.That(border.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaLit * factor).Within(1e-4f), "MOVE region border");
+            var lockedPanel = _screen.CategoryPanel("MOVE");
+            var lockedBorder = _screen.CategoryPanelBorder("MOVE");
+            Assert.That(lockedPanel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityDark * factor).Within(1e-4f), "MOVE (locked) region panel");
+            Assert.That(lockedBorder.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaDark * factor).Within(1e-4f), "MOVE (locked) region border");
+            var lockedConn = _screen.Connector("conn:cat:MOVE>m_spd");
+            Assert.That(lockedConn, Is.Not.Null, "missing category connector for 'm_spd'");
+            Assert.That(lockedConn.color.a, Is.EqualTo(RigBoardLayout.ConnectorAlphaDim * factor).Within(1e-4f), "MOVE (locked) category connector");
 
-            foreach (var abilityId in new[] { "m_spd", "m_tp" })
-            {
-                var glow = _screen.BoardNode(abilityId).Find("Glow").GetComponent<Image>();
-                Assert.That(glow.gameObject.activeSelf, Is.True, $"'{abilityId}' must be draftable (active glow) at run start");
-                Assert.That(glow.color.a, Is.EqualTo(RigBoardLayout.GlowAlphaDraft * factor).Within(1e-4f), $"'{abilityId}' draftable glow");
-
-                var conn = _screen.Connector($"conn:cat:MOVE>{abilityId}");
-                Assert.That(conn, Is.Not.Null, $"missing category connector for '{abilityId}'");
-                Assert.That(conn.color.a, Is.EqualTo(RigBoardLayout.ConnectorAlphaLive * factor).Within(1e-4f), $"'{abilityId}' category connector");
-            }
+            var unlockedPanel = _screen.CategoryPanel("SECONDARY");
+            var unlockedBorder = _screen.CategoryPanelBorder("SECONDARY");
+            Assert.That(unlockedPanel.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit).Within(1e-4f),
+                "SECONDARY (unlocked, nothing owned) region panel must NOT carry the family dim");
+            Assert.That(unlockedBorder.color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaLit).Within(1e-4f),
+                "SECONDARY (unlocked, nothing owned) region border must NOT carry the family dim");
+            var unlockedConn = _screen.Connector("conn:cat:SECONDARY>s_bal");
+            Assert.That(unlockedConn, Is.Not.Null, "missing category connector for 's_bal'");
+            Assert.That(unlockedConn.color.a, Is.EqualTo(RigBoardLayout.ConnectorAlphaLive).Within(1e-4f),
+                "SECONDARY (unlocked, nothing owned) category connector must read LIVE undimmed — s_bal is draftable");
         }
 
-        /// <summary>Owning one ability in an otherwise-untouched family must flip the WHOLE family back
-        /// to full strength, not just the one node acquired — SECONDARY's root (<c>s_bal</c>) becomes
-        /// reached once its category is shed-unlocked (MV-457, merged after this test was written), so
-        /// <c>RigState.AcquireCap</c> alone (no parent spend needed) is enough to light it from there.</summary>
+        /// <summary>MV-538: unlocking a category alone already renders it at full (undimmed) strength —
+        /// before this ticket, an otherwise-untouched family stayed dimmed until something in it was
+        /// OWNED (<c>RigState.AcquireCap</c>), the exact trap Lee reported. Owning something afterward
+        /// must be a no-op on the panel's own alpha, not a "flip."</summary>
         [Test]
-        public void OwningOneAbilityFlipsTheWholeFamilyBackToFullStrength()
+        public void UnlockingACategoryAloneRendersItAtFullStrengthBeforeAnythingIsOwned()
         {
             RigState.UnlockCategory("SECONDARY");
             OpenScreen();
             var panelBefore = _screen.CategoryPanel("SECONDARY");
-            // MV-457: a shed-unlocked category reads at the LIT base opacity immediately, before
-            // anything is owned — the family dim is what still recedes it, not the region's own base.
-            Assert.That(panelBefore.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit * RigBoardLayout.FamilyDimFactor).Within(1e-4f),
-                "SECONDARY must start dimmed (nothing owned)");
+            Assert.That(panelBefore.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit).Within(1e-4f),
+                "SECONDARY must already read at full (lit, undimmed) strength the moment it is unlocked — nothing owned yet");
 
             Assert.That(RigState.AcquireCap("s_bal"), Is.True, "s_bal must be a reached, ownable root at run start");
 
@@ -255,7 +254,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var panelAfter = _screen.CategoryPanel("SECONDARY");
             Assert.That(panelAfter.color.a, Is.EqualTo(RigBoardLayout.RegionOpacityLit).Within(1e-4f),
-                "SECONDARY must flip to full (lit, undimmed) strength once one of its abilities is owned");
+                "SECONDARY must stay at the same full strength once one of its abilities is owned too");
         }
     }
 }

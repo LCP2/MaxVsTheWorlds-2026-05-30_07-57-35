@@ -140,14 +140,12 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(_screen.IsRevealActive, Is.True, "fixture (feeds AC5): a reveal must start when a pick resolves");
 
             // ---------------------------------------------------------------- AC2: no longer family-locked
-            // The category's own panel border alpha carries BOTH "lit" (RigState.IsCategoryUnlocked,
-            // what this AC is about) and the separate, still-unlit "familyLit" dim (CategoryHasOwnedAbility
-            // — no ability is owned yet, only the category) — so the raw RegionBorderAlphaLit constant
-            // isn't what renders here; the dimmed product of it is. Comparing against the dark reading
-            // (what it would still be if the pick had NOT taken effect) is the value this AC actually cares about.
-            float darkAlpha = RigBoardLayout.RegionBorderAlphaDark * RigBoardLayout.FamilyDimFactor;
-            Assert.That(_screen.CategoryPanelBorder(revealedCategory).color.a, Is.Not.EqualTo(darkAlpha).Within(0.0001f),
-                "AC2: the unlocked category's own panel must no longer render at the dark/family-locked reading");
+            // MV-538: the category's own panel border alpha now carries ONLY "lit" (RigState.IsCategoryUnlocked,
+            // what this AC is about) — the separate "familyLit"/CategoryHasOwnedAbility dim MV-462 also
+            // applied here was the bug MV-538 fixed (a freshly-unlocked, still-empty family must not
+            // dim), so the border now renders at the plain RegionBorderAlphaLit constant, undimmed.
+            Assert.That(_screen.CategoryPanelBorder(revealedCategory).color.a, Is.EqualTo(RigBoardLayout.RegionBorderAlphaLit).Within(0.0001f),
+                "AC2: the unlocked category's own panel must render at full (lit, undimmed) strength, not the dark/family-locked reading");
             RigAbilityLayout rootAbility = null;
             foreach (var ab in RigBoardLayout.Abilities)
                 if (ab.Category == revealedCategory && string.IsNullOrEmpty(ab.Parent)) { rootAbility = ab; break; }

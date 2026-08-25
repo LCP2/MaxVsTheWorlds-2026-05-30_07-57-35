@@ -112,6 +112,11 @@ namespace MaxWorlds.UI
         // lens-flare-looking blowout.
         private const float GlowRadiusMultiplier = 1.15f;
 
+        // MV-538 AC4: the progress ring's own empty TRACK — a dim full-circle drawn behind the fill
+        // so a partial arc reads as "part of a whole," not a decorative stray arc. Below the ring's
+        // own 0.9 fill alpha so the fill always reads as the foreground.
+        private const float ProgressTrackAlpha = 0.22f;
+
         private Canvas _canvas;
         private RectTransform _topBar;
         private RectTransform _screenRoot;
@@ -269,6 +274,24 @@ namespace MaxWorlds.UI
         /// <summary>MV-520: an ability node's own name label — test-only access, so a test can confirm
         /// the "? ? ?" name-hidden placeholder never coincides with a spendable cost.</summary>
         public Text NodeLabel(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Label : null;
+
+        /// <summary>MV-538: an ability node's own hex fill — test-only access, same idiom as
+        /// <see cref="NodeLabel"/>, so a dim-scope test can compare alpha across nodes without
+        /// guessing GameObject names among a node's several Image children.</summary>
+        public Image NodeHexFill(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.HexFill : null;
+
+        /// <summary>MV-538: an ability node's own tap button — test-only access, same idiom as
+        /// <see cref="NodeHexFill"/>.</summary>
+        public Button NodeButton(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.Button : null;
+
+        /// <summary>MV-470/MV-538: an ability node's own accumulation ring — test-only access, same
+        /// idiom as <see cref="NodeHexFill"/>.</summary>
+        public Image NodeProgressRing(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.ProgressRing : null;
+
+        /// <summary>MV-538: the dim full-circle track drawn behind <see cref="NodeProgressRing"/> so a
+        /// partial fill reads as "part of a whole" instead of a stray arc (AC4) — test-only access,
+        /// same idiom as <see cref="NodeHexFill"/>.</summary>
+        public Image NodeProgressTrack(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.ProgressTrack : null;
 
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
@@ -516,7 +539,7 @@ namespace MaxWorlds.UI
                     // not just at the moment Refresh() ran — Update() drives this pulse independently of
                     // Refresh(), so without this factor the ring/halo would flash back up to full
                     // brightness on every tick regardless of the static dim RefreshAbilityNode applied.
-                    float dim = FamilyLitForAbility(kv.Key) ? 1f : RigBoardLayout.FamilyDimFactor;
+                    float dim = CategoryUnlockedForAbility(kv.Key) ? 1f : RigBoardLayout.FamilyDimFactor;
                     float baseAlpha = spendable ? pulse : InertRingAlpha;
 
                     var c = v.OuterRing.color;
@@ -706,15 +729,22 @@ namespace MaxWorlds.UI
                 // must not glow "live" toward a node the board can't actually let you tap open yet.
                 bool owned = RigState.IsOwned(ab.Id);
                 bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
-                // MV-462 defect 3: a connector is wholly inside one family (both ends share ab.Category),
-                // so it dims exactly like every other graphic in an unlit one.
+                // MV-462 defect 3: a connector is wholly inside one family (both ends share ab.Category)
+                // — familyLit (has >=1 owned ability) still drives which of the two LIVE/DIM alphas a
+                // connector picks (a genuinely different question — "is there real traffic here" —
+                // from whether the family is dimmed at all).
                 bool familyLit = CategoryHasOwnedAbility(ab.Category);
+                // MV-538: the DIM SCOPE itself (as opposed to the live/dim alpha choice above) must
+                // track the category's own unlock, not ownership — see RefreshAbilityNode's own
+                // categoryUnlocked comment for the full defect. A shed-unlocked-but-still-empty family's
+                // connectors must render at full strength, same as RefreshCategoryNode/RefreshAbilityNode.
+                bool categoryUnlocked = RigState.IsCategoryUnlocked(ab.Category);
 
                 if (string.IsNullOrEmpty(ab.Parent))
                 {
                     if (!_connectors.TryGetValue($"conn:cat:{ab.Category}>{ab.Id}", out var img)) continue;
                     bool live = familyLit || draftable;
-                    img.color = DimIfUnlit(new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim), familyLit);
+                    img.color = DimIfUnlit(new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim), categoryUnlocked);
                 }
                 else
                 {
@@ -725,12 +755,12 @@ namespace MaxWorlds.UI
                     // "Live" now tracks the CHILD's own state; a parent-gated child gets its own distinct
                     // module-cyan tell instead, at the cell economy's colour, pointing back at whichever
                     // parent needs a level.
-                    bool parentGated = !owned && !draftable && RigState.IsCategoryUnlocked(ab.Category);
+                    bool parentGated = !owned && !draftable && categoryUnlocked;
                     bool live = owned || draftable;
                     Color lineColor = parentGated
                         ? new Color(module.r, module.g, module.b, RigBoardLayout.ConnectorAlphaLive)
                         : new Color(family.r, family.g, family.b, live ? RigBoardLayout.ConnectorAlphaLive : RigBoardLayout.ConnectorAlphaDim);
-                    img.color = DimIfUnlit(lineColor, familyLit);
+                    img.color = DimIfUnlit(lineColor, categoryUnlocked);
                 }
             }
 
@@ -754,14 +784,17 @@ namespace MaxWorlds.UI
             return false;
         }
 
-        /// <summary>MV-462 defect 3: is <paramref name="abilityId"/>'s own category lit (≥1 owned
-        /// ability anywhere in it)? <see cref="Update"/>'s per-frame pulse only has the ability id to
-        /// hand (from <c>_abilityNodes</c>'s own key), so this re-derives the category the same way
-        /// <see cref="RefreshAbilityNode"/> does at refresh time.</summary>
-        private static bool FamilyLitForAbility(string abilityId)
+        /// <summary>MV-538 (was MV-462 defect 3's "FamilyLitForAbility"): is <paramref name="abilityId"/>'s
+        /// own category shed-unlocked? <see cref="Update"/>'s per-frame pulse only has the ability id
+        /// to hand (from <c>_abilityNodes</c>'s own key), so this re-derives the category the same way
+        /// <see cref="RefreshAbilityNode"/> does at refresh time. Renamed from the old
+        /// CategoryHasOwnedAbility-backed version: the dim must track whether a shed has opened the
+        /// category, not whether anything in it is owned yet — see RefreshAbilityNode's own
+        /// categoryUnlocked comment for the full defect.</summary>
+        private static bool CategoryUnlockedForAbility(string abilityId)
         {
             foreach (var ab in RigBoardLayout.Abilities)
-                if (ab.Id == abilityId) return CategoryHasOwnedAbility(ab.Category);
+                if (ab.Id == abilityId) return RigState.IsCategoryUnlocked(ab.Category);
             return true;
         }
 
@@ -861,17 +894,18 @@ namespace MaxWorlds.UI
             }
             // MV-457: "lit" now reads the shed's own unlock, not merely "has an owned ability" — a
             // freshly-unlocked family reads lit immediately, before the player has spent anything into it.
+            // MV-538: every graphic below now dims off this SAME `lit` flag — MV-462's separate "has an
+            // owned ability" dim (CategoryHasOwnedAbility) was the actual bug: a shed-unlocked-but-still-
+            // empty family rendered its whole column at FamilyDimFactor even though its root nodes were
+            // already unlockable and affordable. A family is only ever dim while genuinely LOCKED now.
             bool lit = RigState.IsCategoryUnlocked(cat.Id);
-            // MV-462 defect 3: the family DIM is its own, older concept — "has an owned ability" — kept
-            // distinct from `lit` above so a shed-unlocked-but-still-empty family still dims correctly.
-            bool familyLit = CategoryHasOwnedAbility(cat.Id);
             Color family = RigBoardLayout.Colour(cat.Family);
             Color ink = RigBoardLayout.Colour("ink");
 
             if (_categoryPanels.TryGetValue(cat.Id, out var panel))
-                panel.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark), familyLit);
+                panel.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionOpacityLit : RigBoardLayout.RegionOpacityDark), lit);
             if (_categoryPanelBorders.TryGetValue(cat.Id, out var border))
-                border.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark), familyLit);
+                border.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? RigBoardLayout.RegionBorderAlphaLit : RigBoardLayout.RegionBorderAlphaDark), lit);
 
             if (lit)
             {
@@ -887,18 +921,18 @@ namespace MaxWorlds.UI
             }
             else
             {
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.12f), familyLit);
-                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.55f), familyLit);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.12f), lit);
+                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.55f), lit);
                 v.Glow.gameObject.SetActive(false);
                 v.OuterRing.gameObject.SetActive(false);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.85f), familyLit);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.85f), lit);
             }
 
             v.PillText.text = $"{owned}/{total}";
-            v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
-            v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), familyLit);
-            v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), familyLit);
-            v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), familyLit);
+            v.PillBg.color = DimIfUnlit(PillBackdrop, lit);
+            v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), lit);
+            v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), lit);
+            v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), lit);
         }
 
         /// <summary>MV-462 defect 3: multiplies <paramref name="c"/>'s alpha by
@@ -927,11 +961,16 @@ namespace MaxWorlds.UI
             // node, its parent at level >= 2 (RigState.IsCellUnlockable, tighter than the IsReached the
             // now production-dead ability-level Morphing Module draft pool still uses).
             bool draftable = RigState.IsCellUnlockable(ab.Id) && !owned;
+            // MV-538: the dim scope for every DimIfUnlit call below — was CategoryHasOwnedAbility (has
+            // >=1 owned ability), which meant a shed-unlocked-but-still-empty family rendered its own
+            // draftable/parent-gated/locked nodes at FamilyDimFactor even though the root was already
+            // unlockable and affordable. A node's family is only ever dim while genuinely LOCKED now.
+            bool categoryUnlocked = RigState.IsCategoryUnlocked(ab.Category);
             // MV-470: the ticket's second lock reason — category already open (so the node IS reached
             // the old way) but the parent hasn't hit level 2 yet, the tighter cell-unlock gate. Distinct
             // from the deeper "family not unlocked" lock below; see RefreshConnectors for the matching
             // connector-line tell.
-            bool parentGated = !owned && !draftable && RigState.IsCategoryUnlocked(ab.Category);
+            bool parentGated = !owned && !draftable && categoryUnlocked;
             int cellsBanked = PickupWallet.PowerCells;
             // MV-520: the live ring/progress read stays scoped to a node you can actually act on right
             // now (draftable, or owned-and-below-max) — unchanged from before this ticket.
@@ -944,10 +983,6 @@ namespace MaxWorlds.UI
             // MV-470: whether CELLS alone would pay for this node's action right now — drives the
             // afford-dot (CapMarker) and, via Update(), whether the dashed ring pulses live or sits inert.
             bool cellAffordable = CellSpend.IsCellActionAffordable(ab.Id, cellsBanked);
-            // MV-462 defect 3: owned==true implies this ability's category already has ≥1 owned ability,
-            // so familyLit is always true on the `owned` branch below — DimIfUnlit only ever bites on
-            // the draftable/locked branches, which is exactly the "family with nothing owned" case.
-            bool familyLit = CategoryHasOwnedAbility(ab.Category);
 
             Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(ab.Category));
             Color module = RigBoardLayout.Colour("module");
@@ -963,16 +998,22 @@ namespace MaxWorlds.UI
             v.HexOutline.sprite = draftable ? DashedHexSprite(v.Radius) : owned ? SolidHexOutlineSprite(v.Radius) : LockedHexOutlineSprite(v.Radius);
 
             // MV-470: the progress ring stays scoped to a live cell action — accumulation only means
-            // something for a node you can currently act on.
+            // something for a node you can currently act on. MV-538 AC4: ProgressTrack is the dim
+            // full-circle track drawn behind the fill, same scope as the fill itself, so a partial arc
+            // always reads as "part of a whole" rather than a stray arc with nothing to measure against.
             if (hasLiveCellAction)
             {
                 v.ProgressRing.gameObject.SetActive(true);
                 v.ProgressRing.fillAmount = CellSpend.CellCostProgress01(ab.Id, cellsBanked);
-                v.ProgressRing.color = DimIfUnlit(new Color(module.r, module.g, module.b, 0.9f), familyLit);
+                v.ProgressRing.color = DimIfUnlit(new Color(module.r, module.g, module.b, 0.9f), categoryUnlocked);
+
+                v.ProgressTrack.gameObject.SetActive(true);
+                v.ProgressTrack.color = DimIfUnlit(new Color(module.r, module.g, module.b, ProgressTrackAlpha), categoryUnlocked);
             }
             else
             {
                 v.ProgressRing.gameObject.SetActive(false);
+                v.ProgressTrack.gameObject.SetActive(false);
             }
 
             // MV-520: the cost tag itself is always on for anything that will ever cost cells — gating
@@ -1024,8 +1065,8 @@ namespace MaxWorlds.UI
             }
             else if (draftable)
             {
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.16f), familyLit);
-                v.HexOutline.color = DimIfUnlit(module, familyLit);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.16f), categoryUnlocked);
+                v.HexOutline.color = DimIfUnlit(module, categoryUnlocked);
                 // MV-433 item 3, MV-443 defect 5: the dashed-outer-ring halo is now a SOFT FAMILY glow
                 // (was module cyan) — the module tint lives on the border/dot instead so it still reads
                 // "draftable", pulsing in Update() alongside the ring itself. MV-446 defect 2: hex-tight
@@ -1034,24 +1075,24 @@ namespace MaxWorlds.UI
                 v.Glow.gameObject.SetActive(true);
                 v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurDraft);
                 v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
-                v.Glow.color = DimIfUnlit(new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaDraft), familyLit);
+                v.Glow.color = DimIfUnlit(new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaDraft), categoryUnlocked);
                 // MV-445 defect 4: OuterRing's RGB was never set here — Update()'s pulse only ever
                 // touched its alpha, leaving the dashed ring stuck at Color.clear's (0,0,0) RGB from
                 // BuildNodeShell, i.e. black dashes instead of the module cyan every other draftable
-                // tell uses. MV-462 defect 3: Update() itself applies the family dim to the pulsed alpha
-                // (see its own comment) — the alpha set here is only ever the pre-pulse 0f, nothing to
-                // dim on this line.
+                // tell uses. MV-462/MV-538: Update() itself applies the same category-unlocked dim to
+                // the pulsed alpha (see its own comment) — the alpha set here is only ever the pre-pulse
+                // 0f, nothing to dim on this line.
                 v.OuterRing.color = new Color(module.r, module.g, module.b, 0f);
-                v.CapMarker.color = DimIfUnlit(module, familyLit);
+                v.CapMarker.color = DimIfUnlit(module, categoryUnlocked);
                 // MV-458: was "SHED" — a shed now only ever unlocks a whole CATEGORY (MV-457), never an
                 // individual node, so a draftable node's own unlock is this cell cost, tapped directly.
                 v.PillText.text = CellSpend.UnlockCostCells.ToString();
-                v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
-                v.PillBorder.color = DimIfUnlit(module, familyLit);
-                v.PillText.color = DimIfUnlit(module, familyLit);
+                v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
+                v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
+                v.PillText.color = DimIfUnlit(module, categoryUnlocked);
                 v.Label.text = ab.Label;
-                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f), familyLit);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.95f), familyLit);
+                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.78f), categoryUnlocked);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.95f), categoryUnlocked);
             }
             else if (parentGated)
             {
@@ -1060,29 +1101,29 @@ namespace MaxWorlds.UI
                 // whole family is still locked. Same LOCK/??? text (no new prose), but tinted the same
                 // module cyan the cell economy uses everywhere else on the board, so the eye can trace
                 // "this needs a cell spend upstream" straight to the parent's own pulsing cost tag.
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), familyLit);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), categoryUnlocked);
                 v.HexOutline.color = new Color(module.r, module.g, module.b, 0.40f);
                 v.Glow.gameObject.SetActive(false);
                 v.PillText.text = "LOCK";
-                v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
+                v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = new Color(module.r, module.g, module.b, 0.35f);
                 v.PillText.color = new Color(module.r, module.g, module.b, 0.55f);
                 v.Label.text = "? ? ?";
-                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), familyLit);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
+                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), categoryUnlocked);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), categoryUnlocked);
             }
             else   // family not unlocked — the deepest lock, unchanged from before MV-470
             {
-                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), familyLit);
-                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.24f), familyLit);
+                v.HexFill.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.035f), categoryUnlocked);
+                v.HexOutline.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.24f), categoryUnlocked);
                 v.Glow.gameObject.SetActive(false);
                 v.PillText.text = "LOCK";
-                v.PillBg.color = DimIfUnlit(PillBackdrop, familyLit);
-                v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.22f), familyLit);
-                v.PillText.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.34f), familyLit);
+                v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
+                v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.22f), categoryUnlocked);
+                v.PillText.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.34f), categoryUnlocked);
                 v.Label.text = "? ? ?";
-                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), familyLit);
-                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), familyLit);
+                v.Label.color = DimIfUnlit(new Color(TextColor.r, TextColor.g, TextColor.b, 0.30f), categoryUnlocked);
+                v.Icon.color = DimIfUnlit(new Color(family.r, family.g, family.b, 0.40f), categoryUnlocked);
             }
 
             // MV-516: the base (pre-pulse) alpha Update() pulses the hex FILL/OUTLINE around — captured
@@ -1970,6 +2011,16 @@ namespace MaxWorlds.UI
             // cellsBanked climbs toward whichever cost currently applies (RefreshAbilityNode sets
             // fillAmount off CellSpend.CellCostProgress01). Inactive until a cell cost applies.
             float progressRingR = r + 4f;
+
+            // MV-538 AC4: the empty TRACK, built first so it renders BEHIND the fill — same size and
+            // position, a plain (non-filled) ring at a dim, always-on alpha whenever the fill is
+            // active, so a partial arc always reads as "part of a whole."
+            shell.ProgressTrack = AddImage(shell.Root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Track");
+            Anchor(shell.ProgressTrack.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
+            shell.ProgressTrack.rectTransform.sizeDelta = new Vector2(progressRingR * 2f, progressRingR * 2f);
+            shell.ProgressTrack.raycastTarget = false;
+            shell.ProgressTrack.gameObject.SetActive(false);
+
             shell.ProgressRing = AddImage(shell.Root, HudTextures.Ring(96, RigBoardLayout.StrokeActive, false), Color.clear, "Progress Ring");
             Anchor(shell.ProgressRing.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
             shell.ProgressRing.rectTransform.sizeDelta = new Vector2(progressRingR * 2f, progressRingR * 2f);
@@ -2228,9 +2279,11 @@ namespace MaxWorlds.UI
             /// <summary>MV-470: ability nodes only (null for category/fusion) — the accumulation ring
             /// (<see cref="Image.Type.Filled"/>/<see cref="Image.FillMethod.Radial360"/>, fillAmount =
             /// cells-banked / cost) and the small cost-tag icon+number pair sitting between the level
-            /// pill and the label, where THE RIG's row spacing leaves real clearance. All three null
-            /// unless a cell cost currently applies to the node (draftable or owned-and-below-max).</summary>
-            public Image ProgressRing, CostIcon;
+            /// pill and the label, where THE RIG's row spacing leaves real clearance. MV-538 adds
+            /// ProgressTrack, the dim full-circle drawn behind ProgressRing (AC4) — same lifetime as the
+            /// ring itself. All null unless a cell cost currently applies to the node (draftable or
+            /// owned-and-below-max).</summary>
+            public Image ProgressRing, ProgressTrack, CostIcon;
             public Text CostText;
         }
 

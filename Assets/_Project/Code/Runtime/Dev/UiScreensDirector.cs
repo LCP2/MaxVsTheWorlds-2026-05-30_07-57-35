@@ -202,6 +202,13 @@ namespace MaxWorlds.Dev
             // read as unlockable. s_spl/s_lob (BALLOON's) and u_dmg/u_rng/u_hp (SENTINEL's) must now show
             // as available, not stuck behind LOCK forever.
             yield return CaptureFixtureScreen("rig-mv530-16x9", 1920, 1080, ApplyRigFixtureMv530, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-538 AC8's two human-check shots: Part 1 (a freshly unlocked family must render at full
+            // strength, not the old ownership-gated dim) and Part 2 (the progress ring's new empty track
+            // reads as a meter, not a stray arc). Named without the "rig-"/"-16x9" convention because
+            // AC8 names these two exact files — see ApplyRigFixtureMv538Unlocked/Progress's own docs.
+            yield return CaptureFixtureScreen("MV-538-unlocked", 1920, 1080, ApplyRigFixtureMv538Unlocked, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+            yield return CaptureFixtureScreen("MV-538-progress", 1920, 1080, ApplyRigFixtureMv538Progress, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -300,6 +307,30 @@ namespace MaxWorlds.Dev
             RigState.AcquireCap("s_bal");
             RigState.AcquireCap("u_sen");
             PickupWallet.SetPowerCells(20);
+        }
+
+        /// <summary>MV-538 AC8 shot 1: SECONDARY freshly unlocked via its shed, zero abilities owned in
+        /// it yet, with cells banked past its root's <see cref="CellSpend.UnlockCostCells"/> (10) — the
+        /// exact defect state the ticket fixes. PRIMARY sits alongside at <see cref="RigState.Reset"/>'s
+        /// own baseline (already owning p_dmg at level 1), so the shot is a direct side-by-side: post-fix
+        /// SECONDARY must render at the same strength as PRIMARY, not the old 39%-alpha ownership dim.</summary>
+        public static void ApplyRigFixtureMv538Unlocked()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            RigState.UnlockCategory("SECONDARY");
+            PickupWallet.SetPowerCells(15);
+        }
+
+        /// <summary>MV-538 AC8 shot 2: p_dmg (owned, level 1 from <see cref="RigState.Reset"/>'s own
+        /// baseline) with 2 of its 5-cell <see cref="CellSpend.UpgradeCostFor"/>(1) banked — a genuine
+        /// partial fill, neither empty nor full, so the new <c>ProgressTrack</c> (Part 2) is visibly
+        /// "part of a whole" behind the arc rather than a bare stray fill.</summary>
+        public static void ApplyRigFixtureMv538Progress()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PickupWallet.SetPowerCells(2);
         }
 
         private static void ResetRunForFixture()
@@ -977,7 +1008,10 @@ namespace MaxWorlds.Dev
                 ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
                                        : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
 
-            // 3. Family contrast — mean luminance of a lit category's own column band vs an unlit one.
+            // 3. Family contrast — mean luminance of an unlocked category's own column band vs a locked
+            // one. MV-538: the dim now follows RigState.IsCategoryUnlocked, not ownership — an unlocked
+            // family with nothing owned in it yet renders at full strength, so "lit" here must track the
+            // same unlock flag WeaponsScreen.DimIfUnlit actually reads, not IsOwned.
             CheckFamilyContrast(tex, categories, abilities, transform, phoneMode, out float contrastRatio, out float litMean, out float unlitMean);
             Emit("family-contrast", contrastRatio >= 1.5f,
                 $"lit={RigBoardConformance.Fmt(litMean)} unlit={RigBoardConformance.Fmt(unlitMean)} ratio={RigBoardConformance.Fmt(contrastRatio)} (need >=1.5)");
@@ -1125,8 +1159,7 @@ namespace MaxWorlds.Dev
                 float left = Mathf.Max(columnLeft, categories[i].X - MaxSampleHalfWidth);
                 float right = Mathf.Min(columnRight, categories[i].X + MaxSampleHalfWidth);
 
-                bool lit = false;
-                foreach (var ab in abilities) if (ab.Category == categories[i].Id && RigState.IsOwned(ab.Id)) { lit = true; break; }
+                bool lit = RigState.IsCategoryUnlocked(categories[i].Id);
 
                 float mean = RigBoardConformance.MeanLuminance(tex, left, right, yMin, yMax, transform: transform);
                 (lit ? litVals : unlitVals).Add(mean);
