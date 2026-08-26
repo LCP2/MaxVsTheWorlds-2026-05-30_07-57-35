@@ -108,17 +108,25 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator ThereIsNoFullMapScreenOrButtonOnTheHud()
+        public IEnumerator TheMapButtonExists_AndStaysClearOfTheTwinSticks()
         {
             yield return null;
 
-            // MV-264 brought the minimap back (YT-217's "bounded single garden" no longer describes
-            // the v0.5 recut's 10-area gated arena) — but only the compact strip, not the old tappable
-            // full map screen or its dedicated button. This scene has no BackyardPath/map, so the
-            // strip itself never builds here (see MinimapPlayTests for that against a real map); this
-            // just pins the two pieces that should stay gone regardless.
-            Assert.That(Find("Map Screen"), Is.Null, "the full map screen should not have come back");
-            Assert.That(Find("Map Button"), Is.Null, "the dedicated MAP button should not have come back");
+            // MV-563 replaced the old always-on minimap strip with a MAP button (mirroring WEAPONS on
+            // the opposite side) that opens a full-screen map — the very things a prior ticket had
+            // pinned as "should stay gone". This is the same non-overlap discipline this file's other
+            // tests already apply to HOME: present, inside the safe area, clear of both thumb sticks.
+            RectTransform mapButton = Find("Map Button");
+            Assert.IsNotNull(mapButton, "the MAP button is missing from the HUD");
+
+            Rect map = ScreenRect(mapButton);
+            foreach (var n in new[] { "Move Joystick", "Aim Joystick", "Weapons Button" })
+            {
+                RectTransform rt = Find(n);
+                Assert.IsNotNull(rt, $"'{n}' is missing from the HUD");
+                Assert.IsFalse(map.Overlaps(ScreenRect(rt)),
+                    $"the MAP button {map} overlaps '{n}' {ScreenRect(rt)}");
+            }
         }
     }
 }

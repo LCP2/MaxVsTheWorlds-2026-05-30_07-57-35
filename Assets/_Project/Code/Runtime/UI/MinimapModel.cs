@@ -4,17 +4,13 @@ using MaxWorlds.Enemies;
 
 namespace MaxWorlds.UI
 {
-    /// <summary>What the minimap draws for one area (MV-264): hidden until the player has been
-    /// there, current while they are standing in it, visited once they have moved on. A one-way
-    /// progression — the gated arena has no way back past a broken gate — so this is read straight
-    /// off <see cref="AreaAccumulationDirector.CurrentArea"/> rather than tracked independently.</summary>
-    public enum AreaVisibility { Hidden, Visited, Current }
-
     /// <summary>
-    /// Pure fog-of-war maths for the HUD minimap (MV-264, reintroducing YT-217's minimap now that the
-    /// v0.5 recut replaced "a bounded single garden" with a 10-area gated arena). No MonoBehaviour, no
-    /// state of its own — <see cref="HudController"/> calls this off the real
-    /// <see cref="AreaAccumulationDirector.CurrentArea"/>, the same live index MV-242 already wired.
+    /// Pure map-geometry maths (MV-264, spatial rework MV-341): projecting the "area&lt;N&gt;" zones a
+    /// world defines into a 2D diagram. No MonoBehaviour, no state of its own — originally
+    /// <see cref="HudController"/>'s always-on minimap read this off the real
+    /// <see cref="AreaAccumulationDirector.CurrentArea"/>; MV-563 replaced that widget with a full-screen
+    /// <see cref="MapScreen"/> (no fog of war — every area is visible from the start) that reads the same
+    /// geometry here, plus the two rotated projections and the shed lookup this class adds for it.
     /// </summary>
     public static class MinimapModel
     {
@@ -35,25 +31,6 @@ namespace MaxWorlds.UI
                 if (index > max) max = index;
             }
             return max;
-        }
-
-        /// <summary>One state per area, 1..<paramref name="totalAreas"/> in order. Areas below
-        /// <paramref name="currentArea"/> are Visited — the gates behind Max do not reopen, so once
-        /// passed they stay passed — the one Max is standing in is Current, and everything ahead is
-        /// Hidden: the fog-of-war the ticket asks for.</summary>
-        public static AreaVisibility[] BuildStates(int totalAreas, int currentArea)
-        {
-            if (totalAreas < 0) totalAreas = 0;
-
-            var states = new AreaVisibility[totalAreas];
-            for (int i = 0; i < totalAreas; i++)
-            {
-                int areaIndex = i + 1;
-                states[i] = areaIndex < currentArea ? AreaVisibility.Visited
-                    : areaIndex == currentArea ? AreaVisibility.Current
-                    : AreaVisibility.Hidden;
-            }
-            return states;
         }
 
         /// <summary>World-space (XZ) bounding rect of just the "area&lt;N&gt;" zones (MV-341) — the
@@ -103,6 +80,61 @@ namespace MaxWorlds.UI
             float nx = Mathf.Clamp01((worldX - bounds.xMin) / bounds.width);
             float nz = Mathf.Clamp01((worldZ - bounds.yMin) / bounds.height);
             return new Vector2(nx, nz);
+        }
+
+        /// <summary>Is this an area's boss arena? Reads the same <c>MapZone.type</c> the design already
+        /// authors ("boss") through <see cref="WorldMapLoader"/> — a boss-role area keeps its numbered
+        /// "area&lt;N&gt;" id (so <see cref="CountAreas"/>/<see cref="AreaBounds"/> already include it),
+        /// it just carries <see cref="ZoneKind.Boss"/> instead of Open/Entry. Null-safe so a caller
+        /// iterating <c>map.zones</c> doesn't need its own guard.</summary>
+        public static bool IsBossZone(MapZone zone) => zone != null && zone.Kind == ZoneKind.Boss;
+
+        /// <summary>Does a shed stand inside this zone's own footprint (MV-563)? A shed is authored as
+        /// its own <see cref="MapEntity"/> (kind <c>factory</c>, dressing <c>shed</c>,
+        /// <see cref="WorldMapLoader"/>) at a position inside the area that owns it, not as a flag on the
+        /// zone itself — so this is a live spatial lookup against <paramref name="map"/>'s entities
+        /// rather than a stored bit, exactly the "map is drawn from live map data" the ticket asks for
+        /// (adding a shed to the config makes this true with no further wiring).</summary>
+        public static bool ZoneHasShed(MapData map, MapZone zone)
+        {
+            if (map?.entities == null || zone == null) return false;
+
+            foreach (MapEntity entity in map.entities)
+            {
+                if (entity == null) continue;
+                if (entity.Kind != EntityKind.Factory || entity.Dressing != CoverDressing.Shed) continue;
+                if (zone.Contains(entity.x, entity.z)) return true;
+            }
+            return false;
+        }
+
+        /// <summary>A zone's footprint, rotated 90° clockwise off <see cref="NormalizedZoneRect"/> so the
+        /// world's long Z-axis (the run) reads left-to-right on screen instead of bottom-to-top (MV-563:
+        /// "rotated 90 clockwise from world axes so the run reads left to right", matching the design's
+        /// own <c>MVW_World1_Map.svg</c> reference). Clockwise turns old "up" (+Z, further into the level)
+        /// into new "right", and old "right" (+X) into new "down" — so the rotated rect's X axis spans
+        /// the Z fraction and its Y axis spans the (inverted) X fraction. Degenerates the same way
+        /// <see cref="NormalizedZoneRect"/> does: a zero-size <paramref name="bounds"/> is never expected
+        /// (the caller already has real zones), but is guarded here too rather than dividing by zero.</summary>
+        public static Rect RotatedNormalizedZoneRect(Rect bounds, MapZone zone)
+        {
+            if (zone == null) return new Rect(0f, 0f, 0f, 0f);
+            if (bounds.width <= 0f || bounds.height <= 0f) return new Rect(0f, 0f, 1f, 1f);
+
+            float zFracMin = (zone.ZMin - bounds.yMin) / bounds.height;
+            float zFracMax = (zone.ZMax - bounds.yMin) / bounds.height;
+            float xFracMin = (zone.XMin - bounds.xMin) / bounds.width;
+            float xFracMax = (zone.XMax - bounds.xMin) / bounds.width;
+
+            return new Rect(zFracMin, 1f - xFracMax, zFracMax - zFracMin, xFracMax - xFracMin);
+        }
+
+        /// <summary>A world XZ point, rotated the same way <see cref="RotatedNormalizedZoneRect"/> rotates
+        /// a zone's footprint — the player marker's own position on the rotated full map.</summary>
+        public static Vector2 RotatedNormalizedPosition(Rect bounds, float worldX, float worldZ)
+        {
+            Vector2 n = NormalizedPosition(bounds, worldX, worldZ);
+            return new Vector2(n.y, 1f - n.x);
         }
     }
 }
