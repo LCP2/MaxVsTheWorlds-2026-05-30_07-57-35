@@ -62,30 +62,46 @@ namespace MaxWorlds.Tests.EditMode
             var panels = Set()
                 .Where(p => p.Key == PropCatalog.FencePanel || p.Key == PropCatalog.FenceGate)
                 .ToList();
+            ArenaCover[] cover = Cover;
 
             foreach (WallFace face in MapGeometry.Faces(map))
             {
                 if (!face.FacesRoom) continue;
 
                 Vector2 mid = (face.A + face.B) * 0.5f;
+
+                // MV-564: a10's a10_h1 hedge sits flush against its area's south wall (authored cover,
+                // not the dressing's to move) — where cover already occupies the wall line, FenceRun's
+                // keepout correctly drops the panel that would clip through it (same rule as a fence
+                // panel crowding a shed's spawn ring, MV-416). The hedge itself reads as the boundary,
+                // so this is not an unfenced gap.
+                if (cover.Any(c => c.Footprint.Contains(mid))) continue;
+
                 Assert.IsTrue(panels.Any(p => p.DistanceTo(mid) < 0.5f),
                     $"the wall face at {mid} looks into a room and has no fence on it — the dressing " +
                     "is still following something other than the map");
             }
         }
 
-        /// <summary>Named rather than counted: it is the eight shed rooms and the boss clearing —
-        /// rooms spread across World1's 18-area chain (MV-411/MV-437, reverted at Area 1 by
-        /// MV-442) — that this has to cover.</summary>
+        /// <summary>Named rather than counted: it is every shed room and every boss arena — MV-564's
+        /// v4 redraw spreads sheds across 21 of the 30 areas and folds each boss arena into its own
+        /// combat area (a12/a20/a30), rather than a single separate "boss" clearing the way MV-411's
+        /// 18-area world built it — that this has to cover.</summary>
         [Test]
         public void TheFactoryRoomsAndTheBossClearingAreBothFenced()
         {
+            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
             MapData map = Map;
             var set = Set();
 
-            foreach (string id in new[] { "area3", "area6", "area8", "area9", "area11", "area14", "area15", "area17", "boss" })
+            var ids = new List<string>();
+            foreach (WorldArea a in cfg.areas)
+                if (a.hasShed || a.role == "boss") ids.Add($"area{a.index}");
+
+            foreach (string id in ids)
             {
                 MapZone zone = map.Zone(id);
+                Assert.IsNotNull(zone, $"'{id}' has no zone");
                 Assert.IsTrue(
                     set.Any(p => p.Key == PropCatalog.FencePanel && Near(zone, p.CenterXz, 1.5f)),
                     $"'{id}' has no fence on it");
@@ -258,7 +274,8 @@ namespace MaxWorlds.Tests.EditMode
             List<Vector2> rings = MapValidation.Kind(Map, EntityKind.Factory)
                                                .Select(f => f.CenterXz).ToList();
 
-            Assert.AreEqual(8, rings.Count, "World1 ships eight sheds (a3/a6/a8/a9/a11/a14/a15/a17)");
+            // MV-564: v4's redraw raises world 1 to 37 authored sheds across 21 areas.
+            Assert.AreEqual(37, rings.Count, "World1 ships thirty-seven sheds");
 
             var shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
             Assert.IsNotEmpty(shedProps, "no shed was dressed at all");
@@ -304,7 +321,10 @@ namespace MaxWorlds.Tests.EditMode
         public void ABushInTheBossGateIsRejected()
         {
             var bad = Set();
-            MapEntity gate = Map.Entity("bg");   // World1's boss gate (WorldMapLoader emits kind "areagate")
+            // MV-564: v4 has no single dedicated "bg" id — a12/a20/a30 are entered by ordinary gates
+            // (g11/g19/g29) authored with a sheds-destroyed-before/all-sheds-destroyed condition. g11
+            // is the first.
+            MapEntity gate = Map.Entity("g11");
 
             bad.Add(new DressingProp(PropCatalog.BushDetailed, gate.CenterXz,
                                      PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 1f)));

@@ -56,14 +56,17 @@ namespace MaxWorlds.Tests.EditMode
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
+            // MV-564: v4's redraw drops Bruiser from area 1 entirely — it's 4 Rusher only now.
             DifficultyEngine.Composition area1 = cfg.SolveComposition(1);
-            Assert.AreEqual(2, area1.Bruiser, "MV-442: area 1 must hold exactly two tanks (large robots)");
-            Assert.That(area1.Rusher, Is.InRange(2, 3), "area 1 must hold 2-3 Rusher");
+            Assert.AreEqual(0, area1.Bruiser, "MV-564: area 1 no longer authors any tanks (large robots)");
+            Assert.AreEqual(4, area1.Rusher, "MV-564: area 1 authors exactly 4 Rusher");
             Assert.AreEqual(0, area1.Heavy, "Heavy is not unlocked this early");
             Assert.AreEqual(0, area1.Brute, "Brute is not unlocked this early");
 
+            // MV-564: v4 authors area 2's escalation via Blinker, not Gunner (world1_config's own
+            // gunnerFromArea dial only governs a dial-derived area — area 2 is fully authored).
             DifficultyEngine.Composition area2 = cfg.SolveComposition(2);
-            Assert.Greater(area2.Gunner, 0, "Gunner must be present by area 2, per world1_config's gunnerFromArea");
+            Assert.Greater(area2.Blinker, 0, "MV-564: Blinker must be present by area 2, per world1_config's authored composition");
 
             _directorGo = new GameObject("Area Accumulation");
             var director = _directorGo.AddComponent<AreaAccumulationDirector>();
@@ -91,17 +94,18 @@ namespace MaxWorlds.Tests.EditMode
         /// <summary>MV-401: <see cref="AreaAccumulationDirector.BruiserCountForArea"/> must expose the
         /// area's actually-solved Bruiser count so <c>PickupDirector</c> can count it down to the last
         /// one — including the real zero case, world1_config's Area 4 ranged-pressure room (Rusher +
-        /// Gunner only, no Bruiser authored at all).</summary>
+        /// Gunner only, no Bruiser authored at all). MV-564: v4's redraw drops Bruiser from areas 1-5,
+        /// so the nonzero contrast case moves to Area 6 (the first area to author any Bruiser).</summary>
         [Test]
         public void BruiserCountForArea_MatchesSolvedComposition_IncludingAZeroBruiserArea()
         {
             WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
-            DifficultyEngine.Composition area1 = cfg.SolveComposition(1);
             DifficultyEngine.Composition area4 = cfg.SolveComposition(4);
-            Assert.AreEqual(2, area1.Bruiser, "MV-442: area 1's authored composition holds exactly two Bruiser");
+            DifficultyEngine.Composition area6 = cfg.SolveComposition(6);
             Assert.AreEqual(0, area4.Bruiser, "area 4's authored composition is Rusher+Gunner only");
+            Assert.AreEqual(3, area6.Bruiser, "MV-564: area 6's authored composition holds exactly three Bruiser");
 
             _directorGo = new GameObject("Area Accumulation");
             var director = _directorGo.AddComponent<AreaAccumulationDirector>();
@@ -110,11 +114,13 @@ namespace MaxWorlds.Tests.EditMode
             director.EnterArea(2);
             director.EnterArea(3);
             director.EnterArea(4);
+            director.EnterArea(5);
+            director.EnterArea(6);
 
-            Assert.AreEqual(2, director.BruiserCountForArea(1),
-                "area 1's Bruiser count must match its solved composition");
             Assert.AreEqual(0, director.BruiserCountForArea(4),
                 "a Bruiser-less area must report exactly zero, not fall back to some other count");
+            Assert.AreEqual(3, director.BruiserCountForArea(6),
+                "area 6's Bruiser count must match its solved composition");
             Assert.AreEqual(0, director.BruiserCountForArea(9),
                 "an area never filled must report zero rather than throwing");
         }

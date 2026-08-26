@@ -302,13 +302,13 @@ namespace MaxWorlds.Tests.EditMode
 
         private static WorldConfig LoadWorld1() => WorldLibrary.Load(WorldLibrary.World1);
 
-        // --- AC1 (superseded by MV-442, Lee's 2026-08-19 redraw): Arena 1 now holds 5 robots --------
+        // --- AC1 (superseded by MV-564, v4's 30-area redraw): Arena 1 now holds 4 robots ------------
 
         [Test]
-        public void World1_Area1HasExactlyFiveRobots()
+        public void World1_Area1HasExactlyFourRobots()
         {
             DifficultyEngine.Composition area1 = LoadWorld1().SolveComposition(1);
-            Assert.AreEqual(5, area1.TotalCount);
+            Assert.AreEqual(4, area1.TotalCount);
         }
 
         // --- AC2/AC4: Arena 2 does not read as "more Rushers than Arena 1"; escalates via new kinds -
@@ -324,7 +324,8 @@ namespace MaxWorlds.Tests.EditMode
                 "area 2 must not simply add more Rushers than area 1 (AC2/AC4)");
             Assert.Greater(area2.TotalCount, area1.TotalCount,
                 "area 2 must still read as an escalation overall, just not a Rusher one");
-            Assert.Greater(area2.Gunner, 0, "area 2's growth comes from a new kind (Gunner), not Rusher volume");
+            // MV-564: v4's redraw grows area 2 via Blinker rather than Gunner.
+            Assert.Greater(area2.Blinker, 0, "area 2's growth comes from a new kind (Blinker), not Rusher volume");
         }
 
         // --- AC3: at least the three example scenarios exist, differing in kind, not just count -----
@@ -341,21 +342,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(5, area4.Rusher, "MV-442 authored exactly 5 Rushers for area 4");
         }
 
-        [Test]
-        public void World1_CenterDenialScenario_HasABombardBarrageAndIsTaggedForPlacement()
-        {
-            // Area 5, per world1_config.json's authored composition, notes and scenario tag.
-            WorldConfig cfg = LoadWorld1();
-            WorldArea area5 = cfg.AreaByIndex(5);
-            DifficultyEngine.Composition composition = cfg.SolveComposition(5);
-
-            Assert.AreEqual("centerDenial", area5.scenario,
-                "the missile-barrage room must be tagged so AreaAccumulationDirector biases Launcher " +
-                "spawns toward the centre");
-            Assert.Greater(composition.Launcher, 0, "the room needs an actual missile barrage");
-            Assert.Greater(composition.TotalCount - composition.Launcher, 0,
-                "the barrage must be 'surrounded by robots', not Launcher-only");
-        }
+        // --- SUPERSEDED: MV-564's v4 redraw drops the centerDenial tag from area 5 (composition is ---
+        // 4 Rusher + 4 Bolter with zero Launcher, so the tag was biasing a spawn kind the room never
+        // authors) and no v4 area carries a scenario tag. World1_CenterDenialScenario_
+        // HasABombardBarrageAndIsTaggedForPlacement removed with it.
 
         [Test]
         public void World1_BlinkerScenario_IsBuiltAroundTeleportingBlinkers()
@@ -374,7 +364,8 @@ namespace MaxWorlds.Tests.EditMode
         // EvenWhenTwoOfThemOverflowTheCapCombined_ThroughTheDirector above, which proves that directly.
         // RusherCap.Apply / AreaAccumulationDirector.ClampRusherCap still clamp a DIAL-DERIVED
         // composition (see RusherCap_StillClampsADialDerivedAreaFollowingAnAuthoredOne_ThroughTheDirector
-        // above) — world1_config.json just doesn't have one, every one of its 18 areas is authored.
+        // above) — world1_config.json just doesn't have one, every one of its areas is authored.
+        // MV-564's 30-area redraw raised the world total to 20.
 
         [Test]
         public void World1_AuthoredRusherTotalExceedsThePerLevelCap_AndIsNeverTrimmedForIt()
@@ -385,7 +376,7 @@ namespace MaxWorlds.Tests.EditMode
             for (int area = 1; area <= cfg.dials.areaCount; area++)
                 totalRushers += cfg.SolveComposition(area).Rusher;
 
-            Assert.AreEqual(14, totalRushers,
+            Assert.AreEqual(20, totalRushers,
                 "world1_config.json's authored Rusher total changed — if it dropped back under " +
                 $"RusherCap.PerLevel ({RusherCap.PerLevel}), update this expectation to match");
         }
