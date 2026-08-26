@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using UnityEditor;
@@ -301,6 +302,65 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(
                     shedProps.Any(p => (p.CenterXz - factory.CenterXz).magnitude < MapValidation.SpawnRadius),
                     $"'{factory.id}' is standing in the open — nothing was built around it");
+            }
+        }
+
+        // --- MV-570: cover trees are height-authored, not width-scaled -------------------------
+
+        /// <summary>MV-570: <c>DressCover</c>'s Tree case used to size ONE tree off the block's
+        /// narrow side and stretch only upward, so a wide block's tree grew as tall as the block was
+        /// wide — a7's 6x7 block grew a 13.6 m tree beside a 1.5 m fence. The fix authors a fixed
+        /// height and tiles as many normal trees as the footprint holds. Both assertions below read
+        /// resolved values (the placed prop's actually-scaled height, and how many landed), not the
+        /// authored constant itself.</summary>
+        [Test]
+        public void AWideTreeBlockGetsSeveralTreesAtAFixedHeight_NotOneGiantOne()
+        {
+            var host = new GameObject("MV570 host");
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var dressing = host.AddComponent<BackyardDressing>();
+
+                var propsHost = new GameObject("MV570 props").transform;
+                propsHost.SetParent(host.transform, false);
+                typeof(BackyardDressing)
+                    .GetField("_props", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .SetValue(dressing, propsHost);
+
+                // Matches a7_h3, the ticket's worked example: a 6x7 block, 1.5 m wallHeight.
+                var cover = new ArenaCover("a7_h3", Vector2.zero, new Vector3(6f, 1.5f, 7f),
+                    CoverShape.Box, CoverDressing.Tree);
+                var piece = new CoverPiece(cover, body);
+
+                typeof(BackyardDressing)
+                    .GetMethod("DressCover", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(dressing, new object[] { piece });
+
+                var trees = propsHost.GetComponentsInChildren<Transform>()
+                    .Where(t => t != propsHost && t.name == PropCatalog.TreeDefault)
+                    .ToList();
+
+                Assert.IsNotEmpty(trees, "no tree was placed at all");
+
+                float kitHeight = PropCatalog.Size(PropCatalog.TreeDefault).y;
+                foreach (Transform t in trees)
+                {
+                    float resolvedHeight = kitHeight * t.localScale.y;
+                    Assert.LessOrEqual(resolvedHeight, 3.5f + 0.01f,
+                        $"a tree resolved to {resolvedHeight:0.0} m tall — still scaled off the " +
+                        "block's width instead of an authored height");
+                }
+
+                // The ticket's worked example: a 6x7 block tiles 3 x 4 trees.
+                Assert.AreEqual(12, trees.Count,
+                    "a 6x7 block should tile 3 x 4 = 12 trees at the authored height, not one " +
+                    "oversized tree");
+            }
+            finally
+            {
+                Object.DestroyImmediate(body);
+                Object.DestroyImmediate(host);
             }
         }
 
