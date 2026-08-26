@@ -31,8 +31,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
             Assert.IsTrue(MapValidation.Validate(map, out string why), why);
 
-            Assert.AreEqual(20, map.zones.Length, "MV-411: 18 combat areas + entry stub + compost clearing");
-            Assert.AreEqual(19, map.links.Length, "MV-411: g0..g17 plus the boss gate bg");
+            // MV-564: v4's redraw is 30 combat areas + the entry stub, one MapZone per authored area
+            // (a boss-role area is one zone for its whole footprint, not a combat room plus a separate
+            // boss clearing the way MV-411's 18-area world built it) and one MapLink per authored gate.
+            Assert.AreEqual(31, map.zones.Length, "MV-564: 30 combat areas + entry stub");
+            Assert.AreEqual(30, map.links.Length, "MV-564: g0..g29");
         }
 
         // --- AreaAccumulationDirector compatibility (MV-270): combat areas must round-trip to the ---
@@ -63,14 +66,28 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World1_ShedAreasBuildAFactoryEntity()
         {
-            Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
+            WorldConfig cfg = LoadWorld1();
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
-            foreach (string shedAreaId in new[] { "a3", "a6", "a8", "a9", "a11", "a14", "a15", "a17" })
+            // MV-564: v4 authors sheds[] (0-2+ per area, e.g. a9/a14/a15 carry two), so an area's shed
+            // entity id is only the legacy singular "{id}_shed" when it authors exactly one — otherwise
+            // it's "{id}_shed1"/"{id}_shed2" (WorldArea.ShedId). Resolve every authored shed's real id
+            // rather than a hard-coded pre-v4 list of single-shed areas.
+            int shedCount = 0;
+            foreach (WorldArea a in cfg.areas)
             {
-                MapEntity factory = map.Entity($"{shedAreaId}_shed");
-                Assert.IsNotNull(factory, $"shed area '{shedAreaId}' has no factory entity");
-                Assert.AreEqual(EntityKind.Factory, factory.Kind);
+                WorldShed[] sheds = a.Sheds();
+                for (int i = 0; i < sheds.Length; i++)
+                {
+                    string shedId = a.ShedId(i, sheds.Length);
+                    MapEntity factory = map.Entity(shedId);
+                    Assert.IsNotNull(factory, $"authored shed '{shedId}' has no factory entity");
+                    Assert.AreEqual(EntityKind.Factory, factory.Kind);
+                    shedCount++;
+                }
             }
+
+            Assert.AreEqual(37, shedCount, "World 1 must carry exactly 37 authored sheds");
         }
 
         // --- MV-437: raised world 1 from 6 sheds to 9 so a full run can reach more than 6 of the ---
@@ -78,9 +95,11 @@ namespace MaxWorlds.Tests.EditMode
         // --- run isn't a single-sink DAMAGE grind before the first Morphing Module. ------------------
         // --- MV-442 (Lee, 2026-08-19): Area 1's shed was reverted — his redraw of a1 has no shed in ---
         // --- it, so world 1 is back to 8 sheds and the first Morphing Module is Area 3 again. --------
+        // --- MV-564: v4's 30-area redraw raises world 1 to 37 sheds across 21 areas, most from a10 ---
+        // --- carrying two or more (a18/a20/a27 carry three each). ------------------------------------
 
         [Test]
-        public void World1_HasExactlyEightShedsAtTheAuthoredIndices()
+        public void World1_HasExactlyThirtySevenShedsAtTheAuthoredIndices()
         {
             WorldConfig cfg = LoadWorld1();
 
@@ -89,8 +108,15 @@ namespace MaxWorlds.Tests.EditMode
                 if (area.hasShed) shedIndices.Add(area.index);
             shedIndices.Sort();
 
-            CollectionAssert.AreEqual(new[] { 3, 6, 8, 9, 11, 14, 15, 17 }, shedIndices,
-                "World 1 must carry exactly 8 shed areas, at indices 3, 6, 8, 9, 11, 14, 15, 17");
+            CollectionAssert.AreEqual(
+                new[] { 3, 6, 8, 9, 10, 11, 12, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29 },
+                shedIndices,
+                "World 1 must carry shed areas at indices 3, 6, 8, 9, 10, 11, 12, 14, 15, 16, 18, 19, " +
+                "20, 21, 22, 23, 24, 25, 26, 27, 29 (21 areas, 37 sheds total)");
+
+            int shedTotal = 0;
+            foreach (WorldArea area in cfg.areas) shedTotal += area.Sheds().Length;
+            Assert.AreEqual(37, shedTotal, "World 1 must carry exactly 37 sheds in total");
         }
 
         [Test]
@@ -245,23 +271,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(1.41f, cfg.enemyTypes.large.thv, 0.01f, "MV-540: large.thv must be re-derived for the Bruiser health cut");
         }
 
-        // --- MV-298: Area 1 is a light opening, not a swarm — 2-3 lowest-tier (Rusher) + a couple ---
-        // --- of tanks (Bruiser), not the 9-10 robots the pre-MV-298 pacing produced. MV-442 (Lee's ---
-        // --- 2026-08-19 redraw) raised the tank count from 1 to 2 Bruiser. ---------------------------
-
-        [Test]
-        public void World1_Area1ComposesToALightOpening_NotASwarm()
-        {
-            WorldConfig cfg = LoadWorld1();
-
-            DifficultyEngine.Composition composition = cfg.SolveComposition(1);
-
-            Assert.AreEqual(2, composition.Bruiser, "MV-442: Area 1 must hold exactly two tanks (large robots)");
-            Assert.AreEqual(0, composition.Heavy, "Heavy is not unlocked this early");
-            Assert.AreEqual(0, composition.Brute, "Brute is not unlocked this early");
-            Assert.That(composition.Rusher, Is.InRange(2, 3),
-                "Area 1 must hold 2-3 lowest-tier (Rusher) robots");
-        }
+        // --- SUPERSEDED: MV-298/MV-442's "2 Bruiser tanks in Area 1" call is withdrawn by MV-564's ---
+        // v4 redraw — a1 is now 4 Rusher and deliberately holds zero Bruiser. World1_Area1Composes-
+        // ToALightOpening_NotASwarm removed with it; see MV365ArenaCompositionTests.
+        // World1_Area1HasExactlyFourRobots for the current authored shape.
 
         // --- MV-310: the shipped world1_config.json must actually surface Gunner/Launcher/Blinker ---
         // --- in the ambient arena population, not only via factory production. Range widened from ---
@@ -355,20 +368,20 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(posTo, Is.EqualTo(18.5f).Within(0.05f), "g1's a2-side endpoint does not resolve to z 18.5");
         }
 
-        // --- AC5 -------------------------------------------------------------------------------------
+        // --- AC5 (MV-564: v4's 30-area redraw re-authored areas 1-4's composition) --------------------
 
         [Test]
         public void World1_AreasOneToFour_CarryLeesRedrawnComposition()
         {
             WorldConfig cfg = LoadWorld1();
 
-            AssertComposition(cfg, 1, rusher: 3, bruiser: 2, gunner: 0);
-            AssertComposition(cfg, 2, rusher: 2, bruiser: 2, gunner: 2);
-            AssertComposition(cfg, 3, rusher: 3, bruiser: 3, gunner: 2);
-            AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 5);
+            AssertComposition(cfg, 1, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 0);
+            AssertComposition(cfg, 2, rusher: 4, bruiser: 0, gunner: 0, blinker: 4, bolter: 0);
+            AssertComposition(cfg, 3, rusher: 3, bruiser: 0, gunner: 2, blinker: 0, bolter: 2);
+            AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 5, blinker: 0, bolter: 0);
         }
 
-        private static void AssertComposition(WorldConfig cfg, int areaIndex, int rusher, int bruiser, int gunner)
+        private static void AssertComposition(WorldConfig cfg, int areaIndex, int rusher, int bruiser, int gunner, int blinker, int bolter)
         {
             WorldComposition c = cfg.AreaByIndex(areaIndex)?.composition;
             Assert.IsNotNull(c, $"area {areaIndex} has no authored composition");
@@ -376,10 +389,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(rusher, c.rusher, $"area {areaIndex}'s authored Rusher count");
             Assert.AreEqual(bruiser, c.bruiser, $"area {areaIndex}'s authored Bruiser count");
             Assert.AreEqual(gunner, c.gunner, $"area {areaIndex}'s authored Gunner count");
+            Assert.AreEqual(blinker, c.blinker, $"area {areaIndex}'s authored Blinker count");
+            Assert.AreEqual(bolter, c.bolter, $"area {areaIndex}'s authored Bolter count");
             Assert.AreEqual(0, c.heavy, $"area {areaIndex} must not author Heavy");
             Assert.AreEqual(0, c.brute, $"area {areaIndex} must not author Brute");
             Assert.AreEqual(0, c.launcher, $"area {areaIndex} must not author Launcher");
-            Assert.AreEqual(0, c.blinker, $"area {areaIndex} must not author Blinker");
         }
 
         // --- AC6 -------------------------------------------------------------------------------------
