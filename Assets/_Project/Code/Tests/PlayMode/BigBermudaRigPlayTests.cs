@@ -75,12 +75,11 @@ namespace MaxWorlds.Tests.PlayMode
             DifficultyDirector.Reset();
         }
 
-        /// <summary>Self-installs at AfterSceneLoad in the game; that moment is long gone inside a test,
-        /// so stand it up by hand — which is the point of the code-driven rule: it can be.</summary>
+        /// <summary>Built per-boss by MapRuntime.BuildBoss in the game (MV-573); that call site does not
+        /// exist inside this fixture's hand-placed boss, so bind it explicitly the same way.</summary>
         private IEnumerator InstallRig()
         {
-            _rigHost = new GameObject("BigBermudaRig");
-            _rigHost.AddComponent<BigBermudaRig>();
+            _rigHost = BigBermudaRig.CreateFor(Boss).gameObject;
             yield return null;
         }
 
