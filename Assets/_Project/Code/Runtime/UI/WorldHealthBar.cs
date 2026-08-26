@@ -87,6 +87,7 @@ namespace MaxWorlds.UI
         private Transform _scaleAnchor;
         private Transform _pivot;
         private RectTransform _canvas;
+        private RectTransform _barVisuals;
         private Image _fill;
         private Text _nameText;
         private Text _numberText;
@@ -109,6 +110,13 @@ namespace MaxWorlds.UI
         /// health can never move under fire, a full bar that never depletes is the clearest possible
         /// signal that the game is broken, not that a lock is waiting on something else.</summary>
         private bool _forceHidden;
+
+        /// <summary>MV-571: hide the bar strip (outline, track, fill, HP number, water gauge) while
+        /// leaving the name label showing — a condition-locked gate has no HP worth drawing, but it
+        /// still has something to say, and the label is what says it. Unlike
+        /// <see cref="_forceHidden"/>, which takes the whole bar (label included) off screen, this
+        /// leaves the pivot itself alone so <see cref="Refresh"/> keeps the label live.</summary>
+        private bool _barHiddenKeepLabel;
 
         /// <summary>Extra world-up metres from the MV-473 de-clutter pass (<see cref="WorldHealthBarDeclutter"/>)
         /// — zero unless this bar is currently clustered with another showing bar. Added on top of
@@ -170,6 +178,17 @@ namespace MaxWorlds.UI
             if (hidden && _pivot != null) _pivot.gameObject.SetActive(false);
         }
 
+        /// <summary>Hide the bar strip but keep the name label (MV-571). A condition-locked gate has
+        /// no HP worth drawing, but it still has something to say — the label carries it. Only forces
+        /// the strip off immediately, same asymmetry as <see cref="SetForceHidden"/>: un-hiding is
+        /// picked up by the next <see cref="Refresh"/>, which already re-evaluates visibility every
+        /// frame.</summary>
+        public void SetBarHiddenKeepLabel(bool hidden)
+        {
+            _barHiddenKeepLabel = hidden;
+            if (hidden && _barVisuals != null) _barVisuals.gameObject.SetActive(false);
+        }
+
         private void Build()
         {
             if (_pivot != null) return;
@@ -203,8 +222,16 @@ namespace MaxWorlds.UI
             _canvas.SetParent(_pivot, false);
             _canvas.sizeDelta = new Vector2(BarPixelWidth, BarPixelHeight);
 
+            // MV-571: everything that reads as "the bar" (outline, track, fill, water gauge, HP
+            // number) lives under one container, so SetBarHiddenKeepLabel can hide all of it with a
+            // single SetActive while _nameText, parented straight to _canvas, is left alone.
+            var barVisualsGo = new GameObject("BarVisuals", typeof(RectTransform));
+            _barVisuals = (RectTransform)barVisualsGo.transform;
+            _barVisuals.SetParent(_canvas, false);
+            Stretch(_barVisuals, 0f);
+
             // The life bar: a bold outlined capsule filling the whole canvas.
-            _fill = BuildCapsule(_canvas, HealthBarColor.Ramp(1f), "");
+            _fill = BuildCapsule(_barVisuals, HealthBarColor.Ramp(1f), "");
 
             // The water gauge (YT-121) stacks directly ABOVE the life bar, and gets the same beefed
             // treatment (YT-125). Slightly shorter so the stack reads as "gauge on top, health below"
@@ -214,7 +241,7 @@ namespace MaxWorlds.UI
             {
                 float h = BarPixelHeight * SecondaryHeightFraction;
                 var host = new GameObject("Water", typeof(RectTransform)).GetComponent<RectTransform>();
-                host.SetParent(_canvas, false);
+                host.SetParent(_barVisuals, false);
                 host.anchorMin = new Vector2(0f, 1f); host.anchorMax = new Vector2(1f, 1f);
                 host.pivot = new Vector2(0.5f, 0f);
                 host.offsetMin = Vector2.zero; host.offsetMax = Vector2.zero;
@@ -237,7 +264,7 @@ namespace MaxWorlds.UI
 
             // The number sits ON the bar, Brawl-Stars style, so the figure and the length it
             // describes are one object rather than two things to look between.
-            _numberText = NewText(_canvas, NumberFontSize, Color.white, TextAnchor.MiddleCenter);
+            _numberText = NewText(_barVisuals, NumberFontSize, Color.white, TextAnchor.MiddleCenter);
             Stretch(_numberText.rectTransform, 0f);
 
             SyncToBody();
@@ -338,7 +365,10 @@ namespace MaxWorlds.UI
         private void Refresh()
         {
             float n = Mathf.Clamp01(_source.HealthNormalized);
-            bool show = !_forceHidden && _source.IsAlive && (_alwaysShow || n < FullEnough);
+            bool wouldShowBar = _alwaysShow || n < FullEnough;
+            // MV-571: a bar-hidden-keep-label gate still needs the pivot (and so the label) on screen
+            // even though it has nothing bar-shaped to draw — that's the whole point of the flag.
+            bool show = !_forceHidden && _source.IsAlive && (_barHiddenKeepLabel || wouldShowBar);
 
             if (_pivot.gameObject.activeSelf != show) _pivot.gameObject.SetActive(show);
 
@@ -357,21 +387,28 @@ namespace MaxWorlds.UI
 
             if (!show) return;
 
-            _fill.fillAmount = n;
-            // Shared ramp: green → yellow → orange → red, flashing when critical (YT-121). unscaled
-            // time so it keeps pulsing even if the game is paused on a low-health beat.
-            _fill.color = HealthBarColor.At(n, Time.unscaledTime);
+            bool showBarVisuals = wouldShowBar && !_barHiddenKeepLabel;
+            if (_barVisuals.gameObject.activeSelf != showBarVisuals)
+                _barVisuals.gameObject.SetActive(showBarVisuals);
 
-            if (_secondaryFill != null && _secondary != null)
-                _secondaryFill.fillAmount = Mathf.Clamp01(_secondary());
-
-            // Only rebuild the string when the printed number actually changes. At ~25 robots a
-            // per-frame ToString is 1500 allocations a second for text nobody can read changing.
-            int hp = Mathf.Max(0, Mathf.CeilToInt(_source.HealthCurrent));
-            if (hp != _shownHp)
+            if (showBarVisuals)
             {
-                _shownHp = hp;
-                _numberText.text = hp.ToString();
+                _fill.fillAmount = n;
+                // Shared ramp: green → yellow → orange → red, flashing when critical (YT-121). unscaled
+                // time so it keeps pulsing even if the game is paused on a low-health beat.
+                _fill.color = HealthBarColor.At(n, Time.unscaledTime);
+
+                if (_secondaryFill != null && _secondary != null)
+                    _secondaryFill.fillAmount = Mathf.Clamp01(_secondary());
+
+                // Only rebuild the string when the printed number actually changes. At ~25 robots a
+                // per-frame ToString is 1500 allocations a second for text nobody can read changing.
+                int hp = Mathf.Max(0, Mathf.CeilToInt(_source.HealthCurrent));
+                if (hp != _shownHp)
+                {
+                    _shownHp = hp;
+                    _numberText.text = hp.ToString();
+                }
             }
 
             if (_camera == null) _camera = Camera.main;

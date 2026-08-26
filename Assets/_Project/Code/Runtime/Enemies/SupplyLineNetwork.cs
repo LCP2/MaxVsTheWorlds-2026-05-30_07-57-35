@@ -144,6 +144,25 @@ namespace MaxWorlds.Enemies
             return anyShed;
         }
 
+        /// <summary>The same set <see cref="ShedsDestroyedBefore"/> tests, counted rather than
+        /// reduced to a bool (MV-571) — how many sheds sit before <paramref name="areaIndex"/> and how
+        /// many of them are down, so a locked gate can show "SHEDS 3 / 8" instead of nothing.</summary>
+        public void ShedProgressBefore(int areaIndex, out int destroyed, out int total)
+        {
+            destroyed = 0;
+            total = 0;
+            foreach (KeyValuePair<string, List<string>> areaShedIds in _areaSheds)
+            {
+                if (!_areaIndex.TryGetValue(areaShedIds.Key, out int index) || index >= areaIndex) continue;
+
+                foreach (string shedId in areaShedIds.Value)
+                {
+                    total++;
+                    if (_destroyedSheds.Contains(shedId)) destroyed++;
+                }
+            }
+        }
+
         /// <summary>Every area a STANDING shed at <paramref name="shedAreaId"/> currently tops up: its
         /// own area, plus every gate-adjacent area that has no shed of its own. Empty for a
         /// non-shed area or a destroyed shed — its line has nothing to top up.</summary>
