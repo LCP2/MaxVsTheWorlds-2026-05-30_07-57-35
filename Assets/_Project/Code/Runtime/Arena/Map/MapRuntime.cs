@@ -272,9 +272,28 @@ namespace MaxWorlds.Arena
             // the horizon is exactly the telegraph this ticket exists to remove.
             MarkDiscoverable(body);
 
+            // MV-548 (shed roadmap stage 3): a mobile shed pursues Max via the same
+            // CharacterController.SafeMove pattern Big Bermuda uses (MV-386) — one physical shape only,
+            // so the primitive's stray BoxCollider is stripped first, exactly as BuildBoss does below.
+            // A static shed (the default) is untouched — it keeps the plain BoxCollider it always had.
+            if (e.mobile)
+            {
+                var stray = body.GetComponent<BoxCollider>();
+                if (stray != null) Object.DestroyImmediate(stray);
+                CharacterController cc = body.AddComponent<CharacterController>();
+                // LOCAL (unscaled) unit-cube extents, exactly like BigBermudaBoss.FitColliderToRenderedBody
+                // — CharacterController.height/radius/center are in local space and Unity scales them by
+                // transform.lossyScale automatically. Passing e.Size (already world-space) here would
+                // double-scale into an oversized, geometrically invalid capsule (2*radius > height).
+                cc.center = Vector3.zero;
+                cc.height = 1f;
+                cc.radius = 0.5f;
+            }
+
             // RequireComponent brings the EnemySpawner with it — the factory's mouth is part of what a
             // factory IS, not something a scene has to remember to bolt on.
             var hutch = body.AddComponent<MowerHutch>();
+            if (e.mobile) hutch.ConfigureMobility(true);
 
             built.Actors[e.id] = body;
             return hutch;

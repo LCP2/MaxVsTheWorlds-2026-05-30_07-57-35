@@ -3,6 +3,7 @@ using UnityEngine.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Player;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
@@ -55,6 +56,33 @@ namespace MaxWorlds.Factories
         private Renderer _core;
         private MaterialPropertyBlock _coreMpb;
 
+        // --- Mobile shed (MV-548, shed roadmap stage 3) — levitate, then pursue Max while still
+        // spawning. Only ever engages for a shed MapRuntime built with WorldShed.mobile true
+        // (ConfigureMobility(true)); a static shed never leaves ShedMobility.Grounded. ---
+
+        /// <summary>Where a mobile shed's own state machine sits — see the state table on MV-548.</summary>
+        public enum ShedMobility { Grounded, LiftOff, Pursuit }
+
+        private const float MobilityTriggerRadius = 10f;  // Max within this range wakes a grounded mobile shed
+        private const float LiftHeight = 0.75f;            // metres hovered once fully risen
+        private const float LiftDuration = 2.5f;           // seconds to rise from grounded to full hover
+        private const float PursuitSpeedFraction = 0.6f;   // of Max's own walk speed
+        private const float PursuitStandoff = 2f;          // metres kept from Max once in range
+
+        private bool _mobile;
+        private CharacterController _cc;
+        private ShedMobility _mobilityState = ShedMobility.Grounded;
+        private float _groundY;
+        private float _liftTimer;
+        private bool _tookDamage;
+        private Transform _pursuitTarget;
+        private PlayerController _pursuitPlayer;
+        private MaterialPropertyBlock _bodyMpb;
+
+        /// <summary>Where a mobile shed's own state machine currently sits. Always
+        /// <see cref="ShedMobility.Grounded"/> for a static shed.</summary>
+        public ShedMobility MobilityState => _mobilityState;
+
         public bool IsAlive => _health != null && _health.IsAlive;
         public Team Team => Team.Enemy; // Water Blaster (Team.Player) can damage it; robots can't
         public float Normalized => _health?.Normalized ?? 0f;
@@ -83,6 +111,22 @@ namespace MaxWorlds.Factories
             if (_health == null) return;
             _health.Retune(DevTuning.Or(DevTuning.FactoryHealth, factoryHealth));
             if (_barFill != null) _barFill.fillAmount = Normalized;
+        }
+
+        /// <summary>Wires this hutch into the mobile-shed capability (MV-548), resolved from
+        /// <see cref="MaxWorlds.Arena.Map.WorldShed.mobile"/>. Called by
+        /// <see cref="MaxWorlds.Arena.Map.MapRuntime"/> right after <c>AddComponent&lt;MowerHutch&gt;</c>
+        /// — <em>after</em> a <see cref="CharacterController"/> has already been added to the body for a
+        /// mobile shed, never by the hutch itself, which has no opinion on whether its own body carries
+        /// one. Public (same reasoning as <see cref="Build"/>) so an EditMode test can drive it directly.
+        /// A static shed (the default — this is never called) stays in <see cref="ShedMobility.Grounded"/>
+        /// forever; <see cref="TickMobility"/> is a no-op without it.</summary>
+        public void ConfigureMobility(bool mobile)
+        {
+            _mobile = mobile;
+            if (!_mobile) return;
+            _cc = GetComponent<CharacterController>();
+            _groundY = transform.position.y;
         }
 
         private void Awake() => Build();
@@ -164,6 +208,7 @@ namespace MaxWorlds.Factories
             if (!IsAlive) return;
             if (!DamageRules.Applies(info.Attacker, Team)) return; // robots can't wreck their own factory
             HudSignals.EmitDamage(transform.position + Vector3.up * 2f, info.Amount);
+            _tookDamage = true; // MV-548: a mobile shed's Grounded->LiftOff trigger, first hit ever
             _health.TakeDamage(info.Amount);
         }
 
@@ -183,6 +228,11 @@ namespace MaxWorlds.Factories
             if (_spawner != null) _spawner.EnterPostDestructionMode();
             if (gate != null) gate.Unlock();                      // one key turned; the gate counts
             FactoryCensus.ReportDestroyed(this);                  // ...and the boss listens to that
+
+            // MV-548: a mobile shed's wreck drops to the ground at wherever it currently is — X/Z stay
+            // exactly where it died mid-pursuit; only the hover Y is undone. TickMobility never runs
+            // again once IsAlive is false, so nothing re-lifts it after this.
+            if (_mobile) transform.position = new Vector3(transform.position.x, _groundY, transform.position.z);
             // The destruction VFX hangs off this signal (CombatVfx, YT-48).
             HudSignals.EmitFactoryDestroyed(transform.position);
             HudSignals.EmitPickup(transform.position + Vector3.up * 2.4f, Banner(), barColor);
@@ -207,6 +257,115 @@ namespace MaxWorlds.Factories
             gate != null && gate.KeysRemaining > 0
                 ? $"{gate.Keys - gate.KeysRemaining} OF {gate.Keys} DOWN"
                 : "GATE OPEN";
+
+        private void Update()
+        {
+            if (!_mobile || !IsAlive) return;
+
+            if (_pursuitTarget == null)
+            {
+                var p = GameObject.FindGameObjectWithTag("Player");
+                if (p == null) return;
+                _pursuitTarget = p.transform;
+                _pursuitPlayer = p.GetComponent<PlayerController>();
+            }
+
+            float walkSpeed = _pursuitPlayer != null ? _pursuitPlayer.WalkSpeed : 0f;
+            TickMobility(Time.deltaTime, _pursuitTarget.position, walkSpeed);
+        }
+
+        /// <summary>Advances the mobile-shed state machine one step (MV-548). Public and explicitly
+        /// dt/target-parameterized — like <see cref="Build"/>/<see cref="RefreshMax"/> — so an EditMode
+        /// test can drive it directly with a synthetic Max and an explicit <paramref name="dt"/> rather
+        /// than needing a live scene and <see cref="Time.deltaTime"/>. A no-op for a static shed
+        /// (<see cref="ConfigureMobility"/> never called with <c>true</c>) or a dead one.</summary>
+        public void TickMobility(float dt, Vector3 targetPosition, float targetWalkSpeed)
+        {
+            if (!_mobile || !IsAlive) return;
+
+            switch (_mobilityState)
+            {
+                case ShedMobility.Grounded:
+                    if (ShouldLiftOff(targetPosition))
+                    {
+                        _mobilityState = ShedMobility.LiftOff;
+                        _liftTimer = 0f;
+                        HudSignals.EmitShedLiftOff(transform.position);
+                    }
+                    break;
+                case ShedMobility.LiftOff:
+                    TickLiftOff(dt);
+                    break;
+                case ShedMobility.Pursuit:
+                    TickPursuit(dt, targetPosition, targetWalkSpeed);
+                    break;
+            }
+        }
+
+        /// <summary>Grounded's own exit condition (MV-548 state table): the area has to be ACTIVE —
+        /// reusing <see cref="Discoverable.FoundOn"/>, the same "has the player actually encountered
+        /// this" gate <see cref="ApplyDiscovery"/> already uses, rather than a second area-tracking
+        /// concept — AND either this shed has taken its first hit, or Max has closed to within
+        /// <see cref="MobilityTriggerRadius"/>.</summary>
+        private bool ShouldLiftOff(Vector3 targetPosition)
+        {
+            if (!Discoverable.FoundOn(this)) return false;
+            if (_tookDamage) return true;
+            Vector3 to = targetPosition - transform.position; to.y = 0f;
+            return to.magnitude <= MobilityTriggerRadius;
+        }
+
+        private void TickLiftOff(float dt)
+        {
+            _liftTimer = Mathf.Min(_liftTimer + dt, LiftDuration);
+            float t = _liftTimer / LiftDuration;
+            float targetY = _groundY + LiftHeight * t;
+            float dy = targetY - transform.position.y;
+            if (Mathf.Abs(dy) > 1e-6f) MoveBody(Vector3.up * dy);
+
+            ApplyLiftTell(t);
+
+            if (_liftTimer >= LiftDuration) _mobilityState = ShedMobility.Pursuit;
+        }
+
+        private void TickPursuit(float dt, Vector3 targetPosition, float targetWalkSpeed)
+        {
+            Vector3 to = targetPosition - transform.position; to.y = 0f;
+            float dist = to.magnitude;
+            if (dist <= PursuitStandoff) return;
+
+            Vector3 dir = to.normalized;
+            float speed = targetWalkSpeed * PursuitSpeedFraction;
+            float step = Mathf.Min(speed * dt, dist - PursuitStandoff);
+            if (step > 0f) MoveBody(dir * step);
+        }
+
+        /// <summary>MV-386's own hardening, not a raw <c>cc.Move</c> — the shed must never tunnel through
+        /// a wall, cover, gate or another shed any more than Big Bermuda does. Falls back to a direct
+        /// transform move only if this body somehow has no <see cref="CharacterController"/> (never true
+        /// for a shed <see cref="MaxWorlds.Arena.Map.MapRuntime"/> built, but keeps a test fixture that
+        /// skips the collider from silently doing nothing).</summary>
+        private void MoveBody(Vector3 displacement)
+        {
+            if (_cc != null) CharacterControllerMotion.SafeMove(_cc, displacement);
+            else transform.position += displacement;
+        }
+
+        /// <summary>The greybox lift-off tell (MV-548): a bright pulse toward the body's damaged-flash
+        /// white as it rises, fading back to its own tint once fully hovering. Real dust/debris and a
+        /// rumble are VFX/audio work for a later pass — <see cref="HudSignals.EmitShedLiftOff"/> is the
+        /// hook already in place for it, the same decoupling <see cref="OnDestroyed"/>'s
+        /// <see cref="HudSignals.EmitFactoryDestroyed"/> uses.</summary>
+        private void ApplyLiftTell(float t)
+        {
+            var rend = GetComponent<Renderer>();
+            if (rend == null) return;
+            if (_bodyMpb == null) _bodyMpb = new MaterialPropertyBlock();
+            rend.GetPropertyBlock(_bodyMpb);
+            Color tint = Color.Lerp(bodyColor, Color.white, 0.5f * Mathf.Sin(t * Mathf.PI));
+            _bodyMpb.SetColor("_BaseColor", tint);
+            rend.SetPropertyBlock(_bodyMpb);
+        }
 
         private void LateUpdate()
         {
