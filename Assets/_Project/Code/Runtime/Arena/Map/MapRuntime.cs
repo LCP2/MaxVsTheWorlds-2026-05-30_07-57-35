@@ -228,7 +228,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Boss:
-                        built.Bosses.Add(BuildBoss(e, root, built));
+                        built.Bosses.Add(BuildBoss(map, e, root, built));
                         break;
                 }
             }
@@ -306,8 +306,13 @@ namespace MaxWorlds.Arena
         /// exactly as the scaffold always did — <see cref="BigBermudaBoss"/>'s required
         /// CharacterController is the sole physical shape a boss carries (MV-410), and Unity does not
         /// support both on one GameObject.
+        ///
+        /// MV-572: also hands the boss its own wake area — the footprint of whichever zone it was
+        /// authored inside. <see cref="MapValidation"/> already requires every non-gate entity
+        /// (including a boss) to sit inside a zone, so <c>ZoneAt</c> is resolved here, not defended
+        /// against being null.
         /// </summary>
-        private static BigBermudaBoss BuildBoss(MapEntity e, Transform root, MapBuild built)
+        private static BigBermudaBoss BuildBoss(MapData map, MapEntity e, Transform root, MapBuild built)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
 
@@ -316,6 +321,7 @@ namespace MaxWorlds.Arena
 
             MarkDiscoverable(body);
             var boss = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
+            boss.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
 
             built.Actors[e.id] = body;
             return boss;

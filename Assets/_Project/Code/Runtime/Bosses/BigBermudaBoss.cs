@@ -48,6 +48,12 @@ namespace MaxWorlds.Bosses
         private Renderer _renderer;
         private MaterialPropertyBlock _mpb;
 
+        // The area whose floor wakes this boss (MV-572) — MapRuntime.BuildBoss hands this in right
+        // after AddComponent, from the same WorldArea/MapZone footprint the boss was authored inside.
+        // Defaults to an empty Rect, which Contains() never satisfies, so a boss nobody assigns one to
+        // (a stray scene-authored instance) simply never wakes rather than waking on any stray position.
+        private Rect _wakeArea;
+
         private float _verticalVel;
         private float _introTimer;
         private Vector3 _chargeDir;
@@ -113,6 +119,11 @@ namespace MaxWorlds.Bosses
         /// the volley is dormant (asleep, intro, between waves, dead).</summary>
         public float SpawnWindup01 => _volley != null ? _volley.SpawnWindup01 : 0f;
 
+        /// <summary>Hands this boss its own authoring area's floor (MV-572) — the rectangle
+        /// <see cref="MapRuntime.BuildBoss"/> resolves from the map zone/world area it was built inside.
+        /// Called once, right after <c>AddComponent</c>, before this boss ever ticks Dormant.</summary>
+        public void SetWakeArea(Rect area) => _wakeArea = area;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -127,19 +138,6 @@ namespace MaxWorlds.Bosses
             SetTell(idleColor);
         }
 
-        // It wakes when the SOURCES ARE ALL GONE, not when one of them is (YT-92). The slice had a
-        // single factory, so "a factory died" and "the yard is clear" were the same event and this
-        // could listen to the identity-less destruction signal. With two factories that signal fires
-        // on the first kill — and a boss that woke up then would come through the gate while the
-        // player still had a factory pumping robots at their back. FactoryCensus is the one thing that
-        // knows how many sources the run has; it says when the last of them falls — the same instant
-        // WorldRunner unlocks and force-opens the boss gate (SupplyLineNetwork.AllShedsDestroyed), so
-        // this and "the room is reachable" can never drift apart.
-        //
-        // YT-210 used to add a SECOND, independent wake: the bounded ~6-minute run topping out the
-        // Invasion Level, sheds standing or not. MV-279 removed it — on the real 3-shed map that
-        // ceiling could be reached before all 3 sheds actually fell, which read as the boss erupting
-        // while its own gate was still locked. FactoryCensus.Cleared is the only wake left.
         /// <summary>Size the CharacterController to the primitive cube <see cref="Stage27BossScaffold"/>
         /// actually renders (MV-542). <c>RequireComponent</c> hands the boss Unity's stock capsule
         /// defaults (height 2, radius 0.5, centred on the pivot), which have no authored relationship
@@ -161,20 +159,21 @@ namespace MaxWorlds.Bosses
             _cc.radius = Mathf.Max(local.extents.x, local.extents.z);
         }
 
-        private void OnEnable() => FactoryCensus.Cleared += OnFactoriesCleared;
-        private void OnDisable() => FactoryCensus.Cleared -= OnFactoriesCleared;
-
         private void Start()
         {
             // Tell the HUD a real boss exists so it never engages/drains its stand-in boss.
             HudSignals.EmitBossRegistered();
         }
 
-        private void OnFactoriesCleared()
-        {
-            if (_phase == Phase.Dormant) Wake();
-        }
-
+        // Each boss wakes on its OWN area, not on a world-wide "sources are all gone" signal (MV-572).
+        // World 1 v4 authors bosses mid-run, well before every factory in the run is dead, and MV-560
+        // opens each boss's own gate on its own prerequisite sheds — so by the time Max can reach a
+        // boss, that boss's job is simply to notice he did. A single FactoryCensus.Cleared subscription
+        // (the pre-MV-572 wake) is wrong the moment a map has more than one boss area: it would wake
+        // every boss on the map at once, and only once the LAST one's factories fall — the exact bug
+        // observed live (Lee, 2026-08-26): boss 1's area entered at 9/37 factories, boss standing
+        // permanently Dormant because 28 more factories, belonging to areas the player hasn't even
+        // reached yet, were still up.
         private void Wake()
         {
             _phase = Phase.Intro;
@@ -184,12 +183,20 @@ namespace MaxWorlds.Bosses
             BossCensus.Register(this, BossName, 2, _health.Current, _health.Max);
         }
 
+        /// <summary>Wakes the instant Max's planar position enters this boss's own authored area
+        /// (<see cref="_wakeArea"/>, set by <see cref="SetWakeArea"/>) — visible and asleep until then.</summary>
+        private void TickDormant()
+        {
+            if (_target == null) { AcquireTarget(); return; }
+            if (_wakeArea.Contains(new Vector2(_target.position.x, _target.position.z))) Wake();
+        }
+
         private void Update()
         {
             float dt = Time.deltaTime;
             switch (_phase)
             {
-                case Phase.Dormant: break; // waits on OnFactoriesCleared; nothing to tick
+                case Phase.Dormant: TickDormant(); break;
                 case Phase.Intro: TickIntro(dt); break;
                 case Phase.Fight: TickFight(dt); break;
             }
