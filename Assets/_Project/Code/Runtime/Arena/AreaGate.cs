@@ -73,7 +73,28 @@ namespace MaxWorlds.Arena
         // --- IHealthReadout (YT-111): what the gate's floating bar reads. ---
         public float HealthNormalized => Normalized;
         public float HealthCurrent => _health?.Current ?? 0f;
-        public string ReadoutName => "GATE";
+
+        private const string GateReadoutName = "GATE";
+
+        private int _lockDestroyed;
+        private int _lockTotal;
+
+        /// <summary>How many of the sheds this gate is waiting on are down (MV-571). Pushed in by
+        /// <see cref="MaxWorlds.Arena.WorldRunner"/>, which already polls the condition every tick —
+        /// the gate does not reach into the supply line itself.</summary>
+        public void SetLockProgress(int destroyed, int total)
+        {
+            _lockDestroyed = destroyed;
+            _lockTotal = total;
+        }
+
+        /// <summary>What the gate's floating label reads (MV-571). A condition-locked gate has no HP
+        /// worth showing, but it still owes the player a reason it won't open — the shed count while
+        /// locked, its ordinary name once the condition resolves.</summary>
+        public string ReadoutName =>
+            Locked && _lockTotal > 0 ? $"SHEDS  {_lockDestroyed} / {_lockTotal}"
+            : Locked                 ? "LOCKED"
+                                     : GateReadoutName;
 
         /// <summary>The gate's current HP ceiling — <c>gateBreakSeconds</c> (at build time) times
         /// <see cref="AssumedPrimaryDps"/>. Exposed so a test (or a future HUD bar) can read it without
@@ -128,7 +149,9 @@ namespace MaxWorlds.Arena
                 // a broken game rather than as a condition. Hide the bar while locked and show it
                 // again the moment the condition resolves and the gate becomes breakable. Set by
                 // WorldRunner after Awake, which is why this is a property and not a constructor arg.
-                if (_healthBar != null) _healthBar.SetForceHidden(_locked);
+                // MV-571: hide only the bar strip, not the label — the label is what tells the player
+                // why the gate is shut (SetLockProgress/ReadoutName above).
+                if (_healthBar != null) _healthBar.SetBarHiddenKeepLabel(_locked);
                 LockedChanged?.Invoke(_locked);
             }
         }
@@ -179,7 +202,7 @@ namespace MaxWorlds.Arena
             float halfHeight = transform.localScale.y * 0.5f;
             _healthBar = WorldHealthBar.Attach(gameObject, this, halfHeight + BarHeightClearance,
                                                BarWorldWidth, alwaysShow: true);
-            if (_locked && _healthBar != null) _healthBar.SetForceHidden(true);
+            if (_locked && _healthBar != null) _healthBar.SetBarHiddenKeepLabel(true);
         }
 
         /// <summary>Builds the world-fixed threshold collider (MV-386) on its own GameObject, sized and

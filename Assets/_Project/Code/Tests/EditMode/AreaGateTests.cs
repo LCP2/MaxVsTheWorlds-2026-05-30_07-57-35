@@ -257,6 +257,38 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- MV-571: a locked gate must still say why it's shut, not go silent ---
+
+        /// <summary>Pins MV-571: MV-569 correctly stopped a locked gate from showing a full health
+        /// bar it can never lose, but landed with no replacement message — Lee stood at a locked gate
+        /// with no bar and no text and still couldn't tell why it wouldn't open. <see cref="Locked"/>,
+        /// <see cref="AreaGate.SetLockProgress"/> and <see cref="AreaGate.ReadoutName"/> none touch
+        /// <c>_health</c> or anything else Awake() builds, so — unlike the Open()/TakeDamage coverage
+        /// this file's other tests defer to PlayMode (see the MV-386 note below) — this one is safe to
+        /// assert here without a frame ever ticking.</summary>
+        [Test]
+        public void LockedGate_ReadoutName_ShowsShedProgress_ThenTheOrdinaryNameOnceUnlocked()
+        {
+            var go = new GameObject("Locked Gate Probe");
+            try
+            {
+                var gate = go.AddComponent<AreaGate>();
+
+                gate.Locked = true;
+                gate.SetLockProgress(3, 8);
+                Assert.AreEqual("SHEDS  3 / 8", gate.ReadoutName,
+                    "a locked gate must tell the player how many sheds it's waiting on, not go silent");
+
+                gate.Locked = false;
+                Assert.AreEqual("GATE", gate.ReadoutName,
+                    "an unlocked gate's name must be unchanged");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
         // --- MV-386: opening a gate must drop the doorway's threshold, but the physical leaf has to
         // stay solid -- MV-378's fix only ever disabled the one collider both jobs shared, so a fully
         // open gate leaf had zero collision forever. That split (AreaGate._thresholdCollider /

@@ -109,6 +109,11 @@ namespace MaxWorlds.Arena
             // is a content bug for the world config to fix, not something this runner should paper over.
             if (_bossGate != null) _bossGate.Locked = true;
 
+            // MV-571: push the boss gate's starting count immediately — Update()'s polling loop below
+            // only recomputes when a shed dies, which would otherwise leave the gate reading LOCKED
+            // (zero/zero) rather than its real total until the first shed anywhere falls.
+            PushBossGateProgress();
+
             // MV-560: every OTHER gate authored with sheds-destroyed-before — a mid-run boss's entry,
             // which the fixed "bg" lookup above never finds. Same lock-until-condition-met shape as the
             // final boss gate, just resolved generically off the gate's own opensWith/to-area instead
@@ -129,6 +134,11 @@ namespace MaxWorlds.Arena
 
                     gate.Locked = true;
                     _shedsBeforeGates.Add((gate, toArea.index));
+
+                    // MV-571: same starting-count push as the boss gate above, keyed to this gate's
+                    // own local boundary rather than the whole world.
+                    _supply.ShedProgressBefore(toArea.index, out int destroyed, out int total);
+                    gate.SetLockProgress(destroyed, total);
                 }
             }
 
@@ -166,6 +176,20 @@ namespace MaxWorlds.Arena
             if (_playerHealth != null) _playerHealth.Died -= OnPlayerDied;
         }
 
+        /// <summary>Pushes the final boss gate's shed count (MV-571) — every shed in the world, the
+        /// same set <see cref="SupplyLineNetwork.AllShedsDestroyed"/> counts, unlike a mid-run gate's
+        /// local <see cref="SupplyLineNetwork.ShedsDestroyedBefore"/> boundary. Reuses
+        /// <see cref="SupplyLineNetwork.ShedProgressBefore"/> with an area-index bound past every
+        /// authored area so nothing before it is excluded (<c>_cfg.dials.areaCount + 1</c> is the same
+        /// synthetic index <see cref="BuildGateIntoAreaMap"/> already uses for the boss room).</summary>
+        private void PushBossGateProgress()
+        {
+            if (_bossGate == null) return;
+            int worldAreaBound = _cfg?.dials != null ? _cfg.dials.areaCount + 1 : int.MaxValue;
+            _supply.ShedProgressBefore(worldAreaBound, out int destroyed, out int total);
+            _bossGate.SetLockProgress(destroyed, total);
+        }
+
         private void Update()
         {
             if (_supply != null)
@@ -179,10 +203,15 @@ namespace MaxWorlds.Arena
                     _supply.DestroyShed(shedId);
                     TrackDestroyedShedStream(areaId, hutch);
 
-                    if (_supply.AllShedsDestroyed && _bossGate != null)
+                    if (_bossGate != null)
                     {
-                        _bossGate.Locked = false;
-                        _bossGate.ForceOpen();
+                        PushBossGateProgress();   // <-- MV-571, before AllShedsDestroyed opens it
+
+                        if (_supply.AllShedsDestroyed)
+                        {
+                            _bossGate.Locked = false;
+                            _bossGate.ForceOpen();
+                        }
                     }
 
                     // MV-560: a shed just fell, so it's the moment any mid-run boss's own condition
@@ -191,6 +220,10 @@ namespace MaxWorlds.Arena
                     for (int j = _shedsBeforeGates.Count - 1; j >= 0; j--)
                     {
                         (AreaGate gate, int toAreaIndex) = _shedsBeforeGates[j];
+
+                        _supply.ShedProgressBefore(toAreaIndex, out int done, out int total);
+                        gate.SetLockProgress(done, total);          // <-- MV-571, before the early-continue
+
                         if (!_supply.ShedsDestroyedBefore(toAreaIndex)) continue;
 
                         gate.Locked = false;
