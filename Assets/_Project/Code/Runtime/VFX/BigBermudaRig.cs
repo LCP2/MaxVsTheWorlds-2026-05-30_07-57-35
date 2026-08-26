@@ -86,13 +86,25 @@ namespace MaxWorlds.VFX
     [DisallowMultipleComponent]
     public sealed class BigBermudaRig : MonoBehaviour
     {
-        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install()
+        /// <summary>
+        /// Give <paramref name="boss"/> its own rig, bound to it alone.
+        ///
+        /// Used to be a scene-wide singleton (<c>[RuntimeInitializeOnLoadMethod] Install()</c>) that
+        /// self-located "the" boss and bailed the moment ANY rig already existed — a single-boss
+        /// assumption World 1 v4 broke (MV-573): six map-built bosses share one scene, so only the
+        /// FIRST one ever grew a body and every other one stood there as the bare greybox cube
+        /// <see cref="BigBermudaBoss.Awake"/> leaves behind. There is no scene-load moment general
+        /// enough to catch every boss any more — a map can build one well after the scene has loaded —
+        /// so the rig is built HERE instead, at the one moment every boss already passes through
+        /// regardless of when in the run that happens: <see cref="MaxWorlds.Arena.MapRuntime"/>'s own
+        /// per-boss build step, bound explicitly to the boss that was just built, never discovered.
+        /// </summary>
+        public static BigBermudaRig CreateFor(BigBermudaBoss boss)
         {
-            if (FindFirstObjectByType<BigBermudaRig>() != null) return;
-            if (FindFirstObjectByType<BigBermudaBoss>() == null) return;   // no boss, nothing to build
-
-            new GameObject("BigBermudaRig").AddComponent<BigBermudaRig>();
+            if (boss == null) return null;
+            var rig = new GameObject("BigBermudaRig").AddComponent<BigBermudaRig>();
+            rig.Bind(boss);
+            return rig;
         }
 
         // ---------------------------------------------------------------- the palette
@@ -206,6 +218,10 @@ namespace MaxWorlds.VFX
         /// <summary>The hatches, 0 shut … 1 fully open. The spawn tell, in one value a test can read.</summary>
         public float HatchOpen => _hatchOpen;
 
+        /// <summary>The boss this rig is bound to — for a test to prove distinct rigs bind to distinct
+        /// bosses, not the same one FindFirstObjectByType happened to see first (MV-573).</summary>
+        public BigBermudaBoss Boss => _boss;
+
         // ---------------------------------------------------------------- build
 
         private void OnEnable()
@@ -222,10 +238,9 @@ namespace MaxWorlds.VFX
             HudSignals.BossDefeated -= OnDefeated;
         }
 
-        private void Awake()
+        private void Bind(BigBermudaBoss boss)
         {
-            _boss = FindFirstObjectByType<BigBermudaBoss>();
-            if (_boss == null) return;
+            _boss = boss;
 
             // Both scene-sweeping directors honour this, and it covers everything parented below us.
             gameObject.AddComponent<KeepsOwnMaterial>();
@@ -522,7 +537,10 @@ namespace MaxWorlds.VFX
         private static void Strip(GameObject go)
         {
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            // DestroyImmediate, not Destroy: a rig is now built inside EditMode tests too (MV-573), not
+            // only at runtime off the old scene-load singleton, and Destroy() logs an error there — the
+            // same reason MapRuntime.BuildBoss already strips its own stray BoxCollider this way.
+            if (col != null) DestroyImmediate(col);
         }
 
         /// <summary>The disgorged swarm — a short burst of xeno-teal motes spat out of the hatches on a
@@ -868,8 +886,10 @@ namespace MaxWorlds.VFX
         private void OnDestroy()
         {
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
+            // DestroyImmediate, not Destroy — see Strip() above; a rig can now be torn down inside
+            // EditMode tests too (MV-573), not only at runtime.
             foreach (var m in new[] { _chitinMat, _plateMat, _iridMat })
-                if (m != null) Destroy(m);
+                if (m != null) DestroyImmediate(m);
         }
     }
 }

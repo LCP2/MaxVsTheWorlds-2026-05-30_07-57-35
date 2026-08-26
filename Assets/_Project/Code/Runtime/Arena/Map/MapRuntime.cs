@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Bosses;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Arena
 {
@@ -323,6 +324,12 @@ namespace MaxWorlds.Arena
             var boss = body.AddComponent<BigBermudaBoss>(); // RequireComponent adds the CharacterController
             boss.SetWakeArea(map.ZoneAt(e.x, e.z).Footprint);
 
+            // MV-573: every boss gets its own rig, bound to it alone, right here — the old scene-load
+            // singleton (BigBermudaRig.Install) built exactly one rig per scene and bailed the moment
+            // any rig existed, so only the FIRST boss on a multi-boss map ever grew a body and every
+            // other one stood there as the bare greybox cube above.
+            BigBermudaRig.CreateFor(boss);
+
             built.Actors[e.id] = body;
             return boss;
         }
@@ -417,6 +424,18 @@ namespace MaxWorlds.Arena
                          FindObjectsInactive.Include, FindObjectsSortMode.None))
             {
                 if (boss != null) boss.gameObject.SetActive(false);
+            }
+
+            // MV-573: a boss now owns a real rig (BigBermudaRig.CreateFor), built as its own root
+            // GameObject alongside it rather than one shared scene singleton — so retiring a boss above
+            // must retire its rig too, or a map built a second time in the same scene (a later area, a
+            // level reload, or a test) leaks the old boss's whole 30-part articulated body forever. A
+            // retired rig has no boss left to follow or read tells off, so destroying it outright (not
+            // just deactivating, unlike the boss above) is correct rather than just tidy.
+            foreach (var rig in Object.FindObjectsByType<BigBermudaRig>(
+                         FindObjectsInactive.Include, FindObjectsSortMode.None))
+            {
+                if (rig != null) Object.DestroyImmediate(rig.gameObject);
             }
         }
 
