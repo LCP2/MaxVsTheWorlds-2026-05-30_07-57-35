@@ -54,11 +54,12 @@ namespace MaxWorlds.Arena
         public float z;
         public string produces;
 
-        /// <summary>True once a world authors this shed to walk (MV-562) — schema and validation
-        /// only for now, nothing reads it at runtime yet. A mobile shed needs more clearance than a
-        /// static one (<see cref="MapValidation.MinMobileShedClearance"/> vs
-        /// <see cref="MapValidation.MinShedWallMargin"/>) so it has room to stand up and move off once
-        /// the walking behaviour lands.</summary>
+        /// <summary>True once a world authors this shed to walk (MV-562 schema/validation; MV-548
+        /// runtime). A mobile shed needs more clearance than a static one
+        /// (<see cref="MapValidation.MinMobileShedClearance"/> vs
+        /// <see cref="MapValidation.MinShedWallMargin"/>) so it has room to stand up and move off.
+        /// Propagated onto the built <see cref="MapEntity"/> by <see cref="WorldMapLoader"/> and read
+        /// by <see cref="MapRuntime.Build"/>/<see cref="MaxWorlds.Factories.MowerHutch"/>.</summary>
         public bool mobile;
     }
 

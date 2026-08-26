@@ -101,6 +101,12 @@ namespace MaxWorlds.Arena
         public string shape = "box";      // box | cylinder
         public string dressing = "none";  // none | tree | hedge | planter | shed  (art pass, YT-75; shed added YT-172)
 
+        /// <summary>Factory only — resolved from <see cref="WorldShed.mobile"/> (MV-548, shed roadmap
+        /// stage 3). <see cref="MapRuntime"/> gives a mobile factory a <c>CharacterController</c> and
+        /// wires it into <see cref="MaxWorlds.Factories.MowerHutch.ConfigureMobility"/> instead of
+        /// leaving it a static body.</summary>
+        public bool mobile;
+
         /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
         /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means
         /// the gate never opens, which validation rejects: a locked door with no key is a bug every

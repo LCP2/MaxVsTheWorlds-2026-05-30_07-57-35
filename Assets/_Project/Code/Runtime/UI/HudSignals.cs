@@ -85,6 +85,12 @@ namespace MaxWorlds.UI
         /// disabled mid-aim.</summary>
         public static event Action TeleportAimEnded;
 
+        /// <summary>A mobile shed (MV-548, shed roadmap stage 3) began its lift-off. (worldPos) — the
+        /// hook a future VFX/audio pass hangs the dust-burst and rumble on, same decoupling as
+        /// <see cref="FactoryDestroyed"/>; this greybox slice fires it and drives the body's own tint
+        /// pulse directly, no particle system yet.</summary>
+        public static event Action<Vector3> ShedLiftOff;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -102,6 +108,9 @@ namespace MaxWorlds.UI
 
         public static void EmitFactoryDestroyed(Vector3 worldPos)
             => FactoryDestroyed?.Invoke(worldPos);
+
+        public static void EmitShedLiftOff(Vector3 worldPos)
+            => ShedLiftOff?.Invoke(worldPos);
 
         public static void EmitBossRegistered()
             => BossRegistered?.Invoke();

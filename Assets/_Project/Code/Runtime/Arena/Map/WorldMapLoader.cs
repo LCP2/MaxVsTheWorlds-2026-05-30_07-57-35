@@ -144,6 +144,7 @@ namespace MaxWorlds.Arena
                         height = 1.5f,  // MV-541: 25% smaller (0.75x the pre-541 2 m body)
                         depth = 2.25f,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
                         dressing = "shed",
+                        mobile = s.mobile,  // MV-548
                     });
                 }
             }
