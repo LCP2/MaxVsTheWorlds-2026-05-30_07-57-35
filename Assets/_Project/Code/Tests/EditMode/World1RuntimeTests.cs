@@ -325,10 +325,12 @@ namespace MaxWorlds.Tests.EditMode
             WorldArea a1 = LoadWorld1().AreaByIndex(1);
             Assert.IsNotNull(a1, "world1_config.json has no area at index 1");
 
-            Assert.AreEqual(-11f, a1.origin.x, "a1's origin.x moved");
-            Assert.AreEqual(0f, a1.origin.z, "a1's origin.z moved");
-            Assert.AreEqual(22f, a1.size.w, "a1's width must stay 22 m");
-            Assert.AreEqual(24f, a1.size.d, "a1 must have deepened to 24 m (was 18 m)");
+            // MV-568: World 1 rotated 90° to run +X (left to right) instead of +Z — every area's
+            // origin moved, and each area's authored width/depth swapped along with the axis of travel.
+            Assert.AreEqual(5f, a1.origin.x, "a1's origin.x moved");
+            Assert.AreEqual(140f, a1.origin.z, "a1's origin.z moved");
+            Assert.AreEqual(24f, a1.size.w, "a1's width must stay 24 m (was 22 m pre-rotation)");
+            Assert.AreEqual(22f, a1.size.d, "a1 must have shallowed to 22 m (was 24 m pre-rotation)");
             Assert.IsFalse(a1.hasShed, "MV-442 reverses MV-437: a1 must no longer carry a shed");
             Assert.AreEqual("normal", a1.role, "a1's role must revert to \"normal\"");
 
@@ -343,7 +345,7 @@ namespace MaxWorlds.Tests.EditMode
         // --- AC4 -------------------------------------------------------------------------------------
 
         [Test]
-        public void World1_GateG1EndpointsBothResolveToZ18Point5()
+        public void World1_GateG1EndpointsBothResolveToX23Point5()
         {
             WorldConfig cfg = LoadWorld1();
 
@@ -364,21 +366,27 @@ namespace MaxWorlds.Tests.EditMode
             float posFrom = fromSpan.Min + g1.from.pos * fromSpan.Length;
             float posTo = toSpan.Min + g1.to.pos * toSpan.Length;
 
-            Assert.That(posFrom, Is.EqualTo(18.5f).Within(0.05f), "g1's a1-side endpoint does not resolve to z 18.5");
-            Assert.That(posTo, Is.EqualTo(18.5f).Within(0.05f), "g1's a2-side endpoint does not resolve to z 18.5");
+            // MV-568: the rotation swapped g1 from an E/W gate (resolving along Z) to a N/S gate
+            // (resolving along X) — the 11 N/S gates became the 11 E/W gates that carry the run.
+            Assert.That(posFrom, Is.EqualTo(23.5f).Within(0.05f), "g1's a1-side endpoint does not resolve to x 23.5");
+            Assert.That(posTo, Is.EqualTo(23.5f).Within(0.05f), "g1's a2-side endpoint does not resolve to x 23.5");
         }
 
         // --- AC5 (MV-564: v4's 30-area redraw re-authored areas 1-4's composition) --------------------
 
         [Test]
-        public void World1_AreasOneToFour_CarryLeesRedrawnComposition()
+        public void World1_AreasOneToFive_CarryLeesRedrawnComposition()
         {
             WorldConfig cfg = LoadWorld1();
 
+            // MV-568: the designer's final composition edit dropped a2's blinkers 4 -> 2, moved a3
+            // from 3 rusher/2 gunner to 5 rusher/0 gunner (bolter unchanged at 2), and dropped a5's
+            // bolters 4 -> 3.
             AssertComposition(cfg, 1, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 0);
-            AssertComposition(cfg, 2, rusher: 4, bruiser: 0, gunner: 0, blinker: 4, bolter: 0);
-            AssertComposition(cfg, 3, rusher: 3, bruiser: 0, gunner: 2, blinker: 0, bolter: 2);
+            AssertComposition(cfg, 2, rusher: 4, bruiser: 0, gunner: 0, blinker: 2, bolter: 0);
+            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 2);
             AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 5, blinker: 0, bolter: 0);
+            AssertComposition(cfg, 5, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 3);
         }
 
         private static void AssertComposition(WorldConfig cfg, int areaIndex, int rusher, int bruiser, int gunner, int blinker, int bolter)

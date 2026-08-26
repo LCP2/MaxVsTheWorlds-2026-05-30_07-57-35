@@ -128,31 +128,23 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(new Vector2(0.5f, 0.5f), norm);
         }
 
-        /// <summary>MV-563: the full map screen rotates the plain world-space projection 90° clockwise
-        /// so the world's long Z-axis (the run) reads left-to-right, matching the design's own
-        /// <c>MVW_World1_Map.svg</c> reference — old "up" (+Z) becomes new "right", old "right" (+X)
-        /// becomes new "down". Same fixture as <see cref="NormalizedZoneRect_MapsAZonesFootprint_ToAFractionOfTheBounds"/>
-        /// (bounds 20x10, zone occupying the low-X/low-Z quarter — plain-projection rect (0,0,0.5,0.5))
-        /// so the two are directly comparable: rotating swaps which axis is width vs height AND flips
-        /// the surviving X-derived axis, landing at (0, 0.5, 0.5, 0.5) — not the unrotated rect, and not
-        /// a naive axis swap without the flip either. The player position gets the same treatment.</summary>
         [Test]
-        public void RotatedNormalizedZoneRectAndPosition_TurnTheWorldsLongZAxisIntoScreenLeftToRight()
+        public void NormalizedProjection_LeavesTheWorldUnrotated_SoTheRunReadsLeftToRight()
         {
+            // World 1 is authored running +X (341 m along the run, 174 m across), so the map is a
+            // plain north-up projection: +X is screen right, +Z is screen up. Nothing is swapped.
             var bounds = new Rect(0f, 0f, 20f, 10f);
-            var zone = new MapZone { x = 5f, z = 2.5f, width = 10f, depth = 5f }; // XMin 0, ZMin 0, XMax 10, ZMax 5
+            var zone = new MapZone { x = 2.5f, z = 5f, width = 5f, depth = 10f }; // XMin 0, ZMin 0, XMax 5, ZMax 10
 
-            Rect rotatedRect = MinimapModel.RotatedNormalizedZoneRect(bounds, zone);
-            Assert.AreEqual(0f, rotatedRect.x, 0.001f, "rotated X should track the zone's Z-fraction min");
-            Assert.AreEqual(0.5f, rotatedRect.y, 0.001f, "rotated Y should be 1 - the zone's X-fraction max");
-            Assert.AreEqual(0.5f, rotatedRect.width, 0.001f, "rotated width should track the zone's Z extent");
-            Assert.AreEqual(0.5f, rotatedRect.height, 0.001f, "rotated height should track the zone's X extent");
+            Rect rect = MinimapModel.NormalizedZoneRect(bounds, zone);
 
-            Vector2 rotatedPos = MinimapModel.RotatedNormalizedPosition(bounds, worldX: 10f, worldZ: 5f);
-            Assert.AreEqual(new Vector2(0.5f, 0.5f), rotatedPos, "world (10,5) is bounds-centre either way, so rotation is a no-op here");
+            Assert.That(rect.x,      Is.EqualTo(0f).Within(1e-4f));
+            Assert.That(rect.width,  Is.EqualTo(0.25f).Within(1e-4f), "5 m of the world's 20 m X-extent");
+            Assert.That(rect.height, Is.EqualTo(1f).Within(1e-4f),    "10 m of the world's 10 m Z-extent");
 
-            Vector2 rotatedCorner = MinimapModel.RotatedNormalizedPosition(bounds, worldX: 20f, worldZ: 0f);
-            Assert.AreEqual(new Vector2(0f, 0f), rotatedCorner, "old max-X/min-Z corner should rotate to the new (0,0) corner");
+            Vector2 pos = MinimapModel.NormalizedPosition(bounds, worldX: 10f, worldZ: 5f);
+            Assert.That(pos.x, Is.EqualTo(0.5f).Within(1e-4f));
+            Assert.That(pos.y, Is.EqualTo(0.5f).Within(1e-4f));
         }
 
         /// <summary>MV-566 AC 5: a gate into (or out of) a boss arena must read as a boss gate, and an

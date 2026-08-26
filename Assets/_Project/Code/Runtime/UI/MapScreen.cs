@@ -18,7 +18,7 @@ namespace MaxWorlds.UI
     /// GameObject.
     ///
     /// Geometry is never hand-placed: every area rectangle and the player marker are projected straight
-    /// off the live <see cref="MaxWorlds.Arena.MapData"/> through <see cref="MinimapModel"/>'s rotated
+    /// off the live <see cref="MaxWorlds.Arena.MapData"/> through <see cref="MinimapModel"/>'s
     /// projections, rebuilt fresh on every <see cref="Open"/> — so a config edit (an added area, a moved
     /// shed) shows up with no code change, and there is nothing here to keep in sync by hand.
     /// </summary>
@@ -303,13 +303,13 @@ namespace MaxWorlds.UI
             }
 
             _worldBounds = MinimapModel.AreaBounds(_map);
-            // Rotated: content width tracks the world's Z-extent (the long run), height tracks its
-            // X-extent (MinimapModel.RotatedNormalizedZoneRect's own axis swap) — metres treated 1:1 as
-            // local units; only the aspect ratio between them matters, everything else is scale-to-fit.
-            _contentSize = new Vector2(Mathf.Max(1f, _worldBounds.height), Mathf.Max(1f, _worldBounds.width));
+            // Unrotated: World 1 is authored running +X, so content width IS the world's X-extent (the
+            // long run, 341 m) and height IS its Z-extent (174 m) — metres treated 1:1 as local units;
+            // only the aspect ratio between them matters, everything else is scale-to-fit.
+            _contentSize = new Vector2(Mathf.Max(1f, _worldBounds.width), Mathf.Max(1f, _worldBounds.height));
             _content.sizeDelta = _contentSize;
 
-            float totalAreaWidth = 0f; // world-X extent per zone — becomes the rotated on-screen HEIGHT
+            float totalAreaWidth = 0f; // world-X extent per zone — the on-screen WIDTH
             int zoneCount = 0;
             // Queued rather than drawn inline (MV-567 item 7): labels must land above cover/gates/sheds/
             // bosses in the final draw order, not just above their own room's fill+border.
@@ -321,7 +321,7 @@ namespace MaxWorlds.UI
                 int areaIndex = AreaAccumulationDirector.AreaIndexOf(zone.id);
                 if (areaIndex <= 0 || areaIndex > areaCount) continue;
 
-                Rect rot = MinimapModel.RotatedNormalizedZoneRect(_worldBounds, zone);
+                Rect rot = MinimapModel.NormalizedZoneRect(_worldBounds, zone);
                 bool isBoss = MinimapModel.IsBossZone(zone);
                 bool isShed = !isBoss && MinimapModel.ZoneHasShed(_map, zone);
                 (Color fill, Color border) = RoleColors(isBoss, isShed);
@@ -448,13 +448,13 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>A world XZ point projected onto <see cref="_content"/> exactly the way the player
-        /// marker and every area rectangle already are (<see cref="MinimapModel.RotatedNormalizedPosition"/>
+        /// marker and every area rectangle already are (<see cref="MinimapModel.NormalizedPosition"/>
         /// times <see cref="_contentSize"/>) — the one projection every marker in this file shares, so a
         /// cover blob, a gate and the player dot can never disagree about where the same ground point
         /// sits on screen.</summary>
         private Vector2 ContentPoint(float worldX, float worldZ)
         {
-            Vector2 n = MinimapModel.RotatedNormalizedPosition(_worldBounds, worldX, worldZ);
+            Vector2 n = MinimapModel.NormalizedPosition(_worldBounds, worldX, worldZ);
             return new Vector2(n.x * _contentSize.x, n.y * _contentSize.y);
         }
 
@@ -587,7 +587,7 @@ namespace MaxWorlds.UI
             if (_playerMarker == null || _player == null) return;
 
             Vector3 pos = _player.transform.position;
-            Vector2 rot = MinimapModel.RotatedNormalizedPosition(_worldBounds, pos.x, pos.z);
+            Vector2 rot = MinimapModel.NormalizedPosition(_worldBounds, pos.x, pos.z);
             _playerMarker.anchoredPosition = new Vector2(rot.x * _contentSize.x, rot.y * _contentSize.y);
         }
 

@@ -10,7 +10,7 @@ namespace MaxWorlds.UI
     /// <see cref="HudController"/>'s always-on minimap read this off the real
     /// <see cref="AreaAccumulationDirector.CurrentArea"/>; MV-563 replaced that widget with a full-screen
     /// <see cref="MapScreen"/> (no fog of war — every area is visible from the start) that reads the same
-    /// geometry here, plus the two rotated projections and the shed lookup this class adds for it.
+    /// geometry here, plus the shed lookup this class adds for it.
     /// </summary>
     public static class MinimapModel
     {
@@ -106,35 +106,6 @@ namespace MaxWorlds.UI
                 if (zone.Contains(entity.x, entity.z)) return true;
             }
             return false;
-        }
-
-        /// <summary>A zone's footprint, rotated 90° clockwise off <see cref="NormalizedZoneRect"/> so the
-        /// world's long Z-axis (the run) reads left-to-right on screen instead of bottom-to-top (MV-563:
-        /// "rotated 90 clockwise from world axes so the run reads left to right", matching the design's
-        /// own <c>MVW_World1_Map.svg</c> reference). Clockwise turns old "up" (+Z, further into the level)
-        /// into new "right", and old "right" (+X) into new "down" — so the rotated rect's X axis spans
-        /// the Z fraction and its Y axis spans the (inverted) X fraction. Degenerates the same way
-        /// <see cref="NormalizedZoneRect"/> does: a zero-size <paramref name="bounds"/> is never expected
-        /// (the caller already has real zones), but is guarded here too rather than dividing by zero.</summary>
-        public static Rect RotatedNormalizedZoneRect(Rect bounds, MapZone zone)
-        {
-            if (zone == null) return new Rect(0f, 0f, 0f, 0f);
-            if (bounds.width <= 0f || bounds.height <= 0f) return new Rect(0f, 0f, 1f, 1f);
-
-            float zFracMin = (zone.ZMin - bounds.yMin) / bounds.height;
-            float zFracMax = (zone.ZMax - bounds.yMin) / bounds.height;
-            float xFracMin = (zone.XMin - bounds.xMin) / bounds.width;
-            float xFracMax = (zone.XMax - bounds.xMin) / bounds.width;
-
-            return new Rect(zFracMin, 1f - xFracMax, zFracMax - zFracMin, xFracMax - xFracMin);
-        }
-
-        /// <summary>A world XZ point, rotated the same way <see cref="RotatedNormalizedZoneRect"/> rotates
-        /// a zone's footprint — the player marker's own position on the rotated full map.</summary>
-        public static Vector2 RotatedNormalizedPosition(Rect bounds, float worldX, float worldZ)
-        {
-            Vector2 n = NormalizedPosition(bounds, worldX, worldZ);
-            return new Vector2(n.y, 1f - n.x);
         }
 
         /// <summary>Is this link's doorway a boss gate (MV-566 AC 5)? True if EITHER zone it joins is a
