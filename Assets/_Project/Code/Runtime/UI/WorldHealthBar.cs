@@ -104,6 +104,12 @@ namespace MaxWorlds.UI
         private string _shownName;
         private bool _alwaysShow;
 
+        /// <summary>MV-569: forces the bar off regardless of <see cref="_alwaysShow"/> or the unit's own
+        /// health — for a condition-locked gate (<see cref="MaxWorlds.Arena.AreaGate.Locked"/>), whose
+        /// health can never move under fire, a full bar that never depletes is the clearest possible
+        /// signal that the game is broken, not that a lock is waiting on something else.</summary>
+        private bool _forceHidden;
+
         /// <summary>Extra world-up metres from the MV-473 de-clutter pass (<see cref="WorldHealthBarDeclutter"/>)
         /// — zero unless this bar is currently clustered with another showing bar. Added on top of
         /// <see cref="_heightAboveCentre"/> every frame in <see cref="SyncToBody"/>, never baked into it,
@@ -153,6 +159,16 @@ namespace MaxWorlds.UI
 
         /// <summary>Is the secondary (water) gauge present? Exposed for the tests.</summary>
         public bool HasSecondary => _secondaryFill != null;
+
+        /// <summary>MV-569: hide (or release) this bar independent of health/<see cref="_alwaysShow"/>.
+        /// Applied immediately when hiding, so a caller never has to wait for the next
+        /// <see cref="LateUpdate"/> to see the bar disappear; releasing it lets the next
+        /// <see cref="Refresh"/> decide visibility exactly as it always has.</summary>
+        public void SetForceHidden(bool hidden)
+        {
+            _forceHidden = hidden;
+            if (hidden && _pivot != null) _pivot.gameObject.SetActive(false);
+        }
 
         private void Build()
         {
@@ -322,7 +338,7 @@ namespace MaxWorlds.UI
         private void Refresh()
         {
             float n = Mathf.Clamp01(_source.HealthNormalized);
-            bool show = _source.IsAlive && (_alwaysShow || n < FullEnough);
+            bool show = !_forceHidden && _source.IsAlive && (_alwaysShow || n < FullEnough);
 
             if (_pivot.gameObject.activeSelf != show) _pivot.gameObject.SetActive(show);
 

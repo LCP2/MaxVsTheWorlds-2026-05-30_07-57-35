@@ -117,7 +117,28 @@ namespace MaxWorlds.Arena
         /// gate cannot be chipped down by fire at all; only <see cref="ForceOpen"/> opens it, once
         /// whatever external condition it is waiting on (here, <c>SupplyLineNetwork.AllShedsDestroyed</c>)
         /// is met. Every other gate leaves this false and behaves exactly as before.</summary>
-        public bool Locked { get; set; }
+        public bool Locked
+        {
+            get => _locked;
+            set
+            {
+                if (_locked == value) return;
+                _locked = value;
+                // MV-569: a locked gate takes no damage, so a full, never-moving health bar reads as
+                // a broken game rather than as a condition. Hide the bar while locked and show it
+                // again the moment the condition resolves and the gate becomes breakable. Set by
+                // WorldRunner after Awake, which is why this is a property and not a constructor arg.
+                if (_healthBar != null) _healthBar.SetForceHidden(_locked);
+                LockedChanged?.Invoke(_locked);
+            }
+        }
+        private bool _locked;
+
+        /// <summary>Fired whenever <see cref="Locked"/> flips — the HUD's cue that this doorway is
+        /// waiting on a condition rather than on fire.</summary>
+        public event Action<bool> LockedChanged;
+
+        private WorldHealthBar _healthBar;
 
         /// <summary>World-space direction from the room the player approaches this gate from toward
         /// the room beyond it (MV-320) — set by <see cref="MapRuntime"/> from the link's from/to zone
@@ -152,10 +173,13 @@ namespace MaxWorlds.Arena
 
             // Always shown, not earned by a hit (unlike a robot's) — the player needs to discover
             // the gate is a breakable target in the first place, not just watch it deplete once they
-            // already found it (MV-265: Lee couldn't tell the gate was damageable at all).
+            // already found it (MV-265: Lee couldn't tell the gate was damageable at all). Captured so
+            // the Locked property (MV-569) can hide it again for a condition-locked gate, whose bar
+            // would otherwise sit full forever under fire it is designed to ignore.
             float halfHeight = transform.localScale.y * 0.5f;
-            WorldHealthBar.Attach(gameObject, this, halfHeight + BarHeightClearance, BarWorldWidth,
-                                  alwaysShow: true);
+            _healthBar = WorldHealthBar.Attach(gameObject, this, halfHeight + BarHeightClearance,
+                                               BarWorldWidth, alwaysShow: true);
+            if (_locked && _healthBar != null) _healthBar.SetForceHidden(true);
         }
 
         /// <summary>Builds the world-fixed threshold collider (MV-386) on its own GameObject, sized and
