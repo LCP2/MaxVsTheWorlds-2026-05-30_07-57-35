@@ -46,6 +46,16 @@ namespace MaxWorlds.Arena
         /// — but only this far. Past that a bush stops reading as a bush.</summary>
         private const float MaxStretch = 2.6f;
 
+        /// <summary>How tall a tree stands, in metres, regardless of how wide the cover block under
+        /// it is (MV-570). Cover trees used to be scaled uniformly off the block's narrow side, so a
+        /// 6 m block grew a 13.6 m tree next to a 1.5 m fence. Roughly twice the fence: clearly the
+        /// tall cover, still readable at the shipped 60 deg camera pitch.</summary>
+        private const float TreeHeightMetres = 3.5f;
+
+        /// <summary>Never tile more than this many trees into one block — a sanity cap on prop count,
+        /// not a look. No authored block comes close (the largest, 8x6, tiles 5x4).</summary>
+        private const int MaxTreesPerBlock = 24;
+
         private Transform _props;
 
         /// <summary>How many kit props were placed. 0 means the set was rejected — see the log.</summary>
@@ -161,11 +171,35 @@ namespace MaxWorlds.Arena
             switch (c.Dressing)
             {
                 case CoverDressing.Tree:
-                    // Sized off the block's height and left uniform: a stretched tree reads as a bug.
-                    // Its crown lands inside the collider, so the player never stops short of thin air.
-                    Fill(PropCatalog.TreeDefault, at, c.Size.y, Mathf.Min(c.Size.x, c.Size.z), 0f);
-                    Fill(PropCatalog.BushDetailed, at + new Vector2(0.55f, 0.45f), 0.6f, 1.1f, 40f);
+                {
+                    // MV-570: a fixed height in metres, tiled across the footprint. Sizing one tree
+                    // off the block's width made the tree as tall as the block was wide (2.262x), so
+                    // the 6 m blocks in a7 and a30 grew 13.6 m trees. Height is authored now; the
+                    // footprint is filled with as many normal trees as it holds, so the crowns still
+                    // land inside the collider and the player never stops short of thin air.
+                    Vector3 treeScale = PropCatalog.ScaleToHeight(PropCatalog.TreeDefault, TreeHeightMetres);
+                    float treeWidth = Mathf.Max(0.1f, PropCatalog.Size(PropCatalog.TreeDefault).x * treeScale.x);
+
+                    int nx = Mathf.Max(1, Mathf.FloorToInt(c.Size.x / treeWidth));
+                    int nz = Mathf.Max(1, Mathf.FloorToInt(c.Size.z / treeWidth));
+                    while (nx * nz > MaxTreesPerBlock) { if (nx >= nz) nx--; else nz--; }
+
+                    for (int ix = 0; ix < nx; ix++)
+                    {
+                        for (int iz = 0; iz < nz; iz++)
+                        {
+                            float tx = (ix + 0.5f) / nx - 0.5f;
+                            float tz = (iz + 0.5f) / nz - 0.5f;
+                            var offset = new Vector2(c.Size.x * tx, c.Size.z * tz);
+                            Place(new DressingProp(PropCatalog.TreeDefault, at + offset, treeScale,
+                                                   (ix * 5 + iz) * 47f));
+                        }
+                    }
+
+                    Place(new DressingProp(PropCatalog.BushDetailed, at + new Vector2(0.55f, 0.45f),
+                                           PropCatalog.ScaleToHeight(PropCatalog.BushDetailed, 0.6f), 40f));
                     break;
+                }
 
                 case CoverDressing.Hedge:
                 {
