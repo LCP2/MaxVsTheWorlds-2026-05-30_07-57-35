@@ -34,33 +34,10 @@ namespace MaxWorlds.UI
 
         private const float RefW = 1920f, RefH = 1080f;
 
-        private static readonly Color Background = new Color(0.03f, 0.04f, 0.05f, 0.98f);
+        // Every colour and dimension for the map itself lives in MapScreenDesign (MV-567) — this block
+        // keeps only the screen chrome that design artefact does not cover (close button, legend panel).
         private static readonly Color PanelColor = new Color(0.06f, 0.07f, 0.09f, 0.9f);
         private static readonly Color TextColor = Color.white;
-        private static readonly Color NameTextColor = new Color(0.82f, 0.85f, 0.88f, 0.9f);
-
-        // Every area reads at this dim, plain tone; the current one lights up cyan — the same
-        // tech-ring cyan the rest of the HUD already uses for "this is you" (MinimapCurrentColor's old
-        // language, carried over since the widget it lived on is gone).
-        private static readonly Color AreaFillColor = new Color(0.55f, 0.58f, 0.62f, 0.5f);
-        private static readonly Color AreaBorderColor = new Color(0.72f, 0.75f, 0.78f, 0.85f);
-        private static readonly Color CurrentAreaColor = new Color(0.31f, 0.76f, 0.97f, 0.85f);
-        // Boss arenas must "read as distinctly different at a glance" (AC) — a warm red no other area
-        // tone is near, so it never gets mistaken for a keyed-up current-area highlight.
-        private static readonly Color BossAreaFillColor = new Color(0.85f, 0.22f, 0.20f, 0.6f);
-        private static readonly Color BossAreaBorderColor = new Color(1f, 0.55f, 0.5f, 0.95f);
-        // A shed area (MV-566, AC2) gets its own warm-amber family — distinct from both the plain
-        // grey of an ordinary room and the red of a boss arena, at full zoom-out, fill+border alone.
-        private static readonly Color ShedAreaFillColor = new Color(0.42f, 0.34f, 0.16f, 0.55f);
-        private static readonly Color ShedAreaBorderColor = new Color(0.96f, 0.72f, 0.28f, 0.9f);
-        private static readonly Color ShedMarkerColor = new Color(0.96f, 0.72f, 0.28f, 1f);
-        private static readonly Color CoverColor = new Color(0.38f, 0.58f, 0.34f, 0.85f);
-        private static readonly Color GateColor = new Color(0.92f, 0.86f, 0.42f, 0.95f);
-        // A boss gate is a locked, shed-gated approach (WorldRunner) — pink reads as neither the
-        // ordinary gate's yellow nor the boss arena's red, so the two boss-adjacent tones never blur.
-        private static readonly Color BossGateColor = new Color(0.95f, 0.35f, 0.55f, 0.95f);
-        private static readonly Color BossMarkerColor = new Color(0.95f, 0.15f, 0.15f, 0.95f);
-        private static readonly Color PlayerDotColor = new Color(0.96f, 0.94f, 0.86f);
         private static readonly Color CloseButtonColor = new Color(0.85f, 0.20f, 0.20f);
         private static readonly Color LegendPanelColor = new Color(0.05f, 0.06f, 0.08f, 0.88f);
 
@@ -96,6 +73,7 @@ namespace MaxWorlds.UI
         private readonly List<int> _areaIndexByImage = new List<int>();
         private readonly List<bool> _areaIsBoss = new List<bool>();
         private readonly List<bool> _areaIsShed = new List<bool>();
+        private readonly List<Image> _areaBorderImages = new List<Image>();
 
         private readonly Dictionary<int, Vector2> _lastPointers = new Dictionary<int, Vector2>();
 
@@ -127,6 +105,20 @@ namespace MaxWorlds.UI
             // Update, so the viewport must actually be enabled first for that rect to be real.
             _screenRoot.gameObject.SetActive(true);
             RebuildContent();
+            ResetView();
+        }
+
+        /// <summary>Re-fits the opening view against an EXPLICIT viewport size instead of the live
+        /// (possibly stale) <c>_viewport.rect</c> — for a caller that already knows the exact pixel
+        /// target it's about to render at, same reason <c>WeaponsScreen.ApplyBoardScale</c> exists
+        /// (MV-444): <see cref="UiScreensDirector"/>'s capture flips this canvas onto its own camera
+        /// AFTER <see cref="Open"/> has already run <see cref="RebuildContent"/> against whatever ambient
+        /// resolution batchmode happened to have live at that moment, not the shot's real (w, h).</summary>
+        public void RefitOpeningView(float viewportWidth, float viewportHeight)
+        {
+            if (!_contentBuilt) return;
+            Vector2 viewportSize = new Vector2(Mathf.Max(1f, viewportWidth), Mathf.Max(1f, viewportHeight));
+            _fitScale = MapPanZoomModel.FitScale(viewportSize, _contentSize) * (1f - MapScreenDesign.FitMargin);
             ResetView();
         }
 
@@ -172,7 +164,7 @@ namespace MaxWorlds.UI
             _screenRoot = NewRect("Screen Root", _canvas.transform);
             Stretch(_screenRoot);
 
-            var backdrop = AddImage(_screenRoot, HudTextures.Solid(), Background, "Backdrop");
+            var backdrop = AddImage(_screenRoot, HudTextures.Solid(), MapScreenDesign.Background, "Backdrop");
             Stretch(backdrop.rectTransform);
             backdrop.raycastTarget = false;
 
@@ -234,15 +226,16 @@ namespace MaxWorlds.UI
 
             (string label, Sprite sprite, Color color, Sprite outlineSprite, Color outlineColor)[] rows =
             {
-                ("Area", HudTextures.RoundedBox(16, 0.18f), AreaFillColor, HudTextures.RoundedBoxOutline(16, 0.18f, 2f), AreaBorderColor),
-                ("Shed area", HudTextures.RoundedBox(16, 0.18f), ShedAreaFillColor, HudTextures.RoundedBoxOutline(16, 0.18f, 2f), ShedAreaBorderColor),
-                ("Boss arena", HudTextures.RoundedBox(16, 0.18f), BossAreaFillColor, HudTextures.RoundedBoxOutline(16, 0.18f, 2f), BossAreaBorderColor),
-                ("Cover", HudTextures.RoundedBox(12, 0.2f), CoverColor, null, default),
-                ("Shed", HudTextures.Disc(24), ShedMarkerColor, null, default),
-                ("Gate", HudTextures.RoundedBox(8, 0.4f), GateColor, null, default),
-                ("Boss gate", HudTextures.RoundedBox(8, 0.4f), BossGateColor, null, default),
-                ("Boss", HudTextures.Disc(24), BossMarkerColor, null, default),
-                ("You", HudTextures.Disc(24), PlayerDotColor, null, default),
+                ("Area", HudTextures.RoundedBox(16, 0.18f), MapScreenDesign.AreaFill, HudTextures.RoundedBoxOutline(16, 0.18f, MapScreenDesign.AreaBorderWidth), MapScreenDesign.AreaBorder),
+                ("Shed area", HudTextures.RoundedBox(16, 0.18f), MapScreenDesign.ShedAreaFill, HudTextures.RoundedBoxOutline(16, 0.18f, MapScreenDesign.AreaBorderWidth), MapScreenDesign.ShedAreaBorder),
+                ("Boss arena", HudTextures.RoundedBox(16, 0.18f), MapScreenDesign.BossAreaFill, HudTextures.RoundedBoxOutline(16, 0.18f, MapScreenDesign.AreaBorderWidth), MapScreenDesign.BossAreaBorder),
+                ("Cover", HudTextures.RoundedBox(12, 0.2f), MapScreenDesign.Cover, null, default),
+                ("Static shed", HudTextures.Disc(24), MapScreenDesign.ShedStatic, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline),
+                ("Mobile shed", HudTextures.Disc(24), MapScreenDesign.ShedMobile, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline),
+                ("Gate", HudTextures.RoundedBox(8, 0.4f), MapScreenDesign.Gate, null, default),
+                ("Boss gate", HudTextures.RoundedBox(8, 0.4f), MapScreenDesign.BossGate, null, default),
+                ("Boss", HudTextures.Disc(24), MapScreenDesign.Boss, HudTextures.Ring(24, 2f), MapScreenDesign.BossOutline),
+                ("You", HudTextures.Disc(24), MapScreenDesign.Player, null, default),
             };
 
             float height = padTop + padBottom + rowH * rows.Length;
@@ -296,6 +289,7 @@ namespace MaxWorlds.UI
             _areaIndexByImage.Clear();
             _areaIsBoss.Clear();
             _areaIsShed.Clear();
+            _areaBorderImages.Clear();
             _playerMarker = null;
             _shownCurrentArea = -1;
 
@@ -317,6 +311,9 @@ namespace MaxWorlds.UI
 
             float totalAreaWidth = 0f; // world-X extent per zone — becomes the rotated on-screen HEIGHT
             int zoneCount = 0;
+            // Queued rather than drawn inline (MV-567 item 7): labels must land above cover/gates/sheds/
+            // bosses in the final draw order, not just above their own room's fill+border.
+            var roomLabels = new List<(RectTransform room, Vector2 roomSize, int areaIndex, string name, bool isBoss)>();
 
             foreach (MapZone zone in _map.zones)
             {
@@ -343,60 +340,27 @@ namespace MaxWorlds.UI
                 _areaIsBoss.Add(isBoss);
                 _areaIsShed.Add(isShed);
 
-                var outline = AddImage(room.rectTransform, HudTextures.RoundedBoxOutline(16, 0.12f, 2f), border, "Border");
+                var outline = AddImage(room.rectTransform, HudTextures.RoundedBoxOutline(16, 0.12f, MapScreenDesign.AreaBorderWidth), border, "Border");
                 Stretch(outline.rectTransform);
                 outline.type = Image.Type.Sliced;
                 outline.raycastTarget = false;
+                _areaBorderImages.Add(outline);
 
-                // Sized off the room's own shorter side, not a fixed size (MV-566 AC 7) — a fixed
-                // 14-unit glyph in a room whose content-space units are real metres (20-46 m here) was
-                // the "so large they overlap neighbouring rooms" defect this ticket exists to fix.
-                float indexFontSize = Mathf.Clamp(Mathf.Min(roomSize.x, roomSize.y) * 0.24f, 1.4f, 5f);
-                var indexLabel = AddText(room.rectTransform, indexFontSize, TextColor, TextAnchor.UpperLeft);
-                Stretch(indexLabel.rectTransform, 4f);
-                indexLabel.text = areaIndex.ToString();
-                indexLabel.fontStyle = FontStyle.Bold;
-                indexLabel.raycastTarget = false;
-
-                if (!string.IsNullOrEmpty(zone.name))
-                {
-                    float nameFontSize = Mathf.Max(1f, indexFontSize * 0.5f);
-                    var nameLabel = AddText(room.rectTransform, nameFontSize, NameTextColor, TextAnchor.UpperLeft);
-                    Anchor(nameLabel.rectTransform, new Vector2(0f, 1f), new Vector2(1f, 1f), new Vector2(0f, 1f));
-                    nameLabel.rectTransform.sizeDelta = new Vector2(-8f, nameFontSize * 1.3f);
-                    nameLabel.rectTransform.anchoredPosition = new Vector2(4f, -(indexFontSize * 1.2f + 2f));
-                    nameLabel.text = zone.name;
-                    nameLabel.raycastTarget = false;
-                }
+                roomLabels.Add((room.rectTransform, roomSize, areaIndex, zone.name, isBoss));
 
                 totalAreaWidth += zone.width;
                 zoneCount++;
             }
 
-            // Cover, sheds and bosses (MV-566 items 2/3/5) are drawn straight off the flat entity list,
-            // each projected through the exact same world->content point every other marker here uses
-            // (ContentPoint) — an area rectangle is spatial context only, never a parent an entity's
-            // marker needs to belong to.
+            // Cover (MV-567 draw order item 4) — projected through the exact same world->content point
+            // every other marker here uses (ContentPoint); an area rectangle is spatial context only,
+            // never a parent an entity's marker needs to belong to.
             foreach (MapEntity entity in _map.entities)
-            {
-                if (entity == null) continue;
-                switch (entity.Kind)
-                {
-                    case EntityKind.Cover:
-                        AddCoverMarker(entity);
-                        break;
-                    case EntityKind.Factory:
-                        if (entity.Dressing == CoverDressing.Shed) AddShedMarker(entity);
-                        break;
-                    case EntityKind.Boss:
-                        AddBossMarker(entity);
-                        break;
-                }
-            }
+                if (entity != null && entity.Kind == EntityKind.Cover) AddCoverMarker(entity);
 
-            // Gates (MV-566 item 4): every doorway a link cuts, drawn on the exact hole
-            // MapGeometry.Doorway solves — not a per-entity loop, since an open (gate-less) doorway is
-            // still a way through the wall the map must show.
+            // Gates (item 5): every doorway a link cuts, drawn on the exact hole MapGeometry.Doorway
+            // solves — not a per-entity loop, since an open (gate-less) doorway is still a way through
+            // the wall the map must show.
             if (_map.links != null)
             {
                 foreach (MapLink link in _map.links)
@@ -410,22 +374,67 @@ namespace MaxWorlds.UI
                 }
             }
 
+            // Sheds (item 6), then bosses (item 7) — two passes over the same flat list rather than one
+            // switch, so a shed can never end up drawn after a boss just because it happened to be
+            // authored later in the map file.
+            foreach (MapEntity entity in _map.entities)
+                if (entity != null && entity.Kind == EntityKind.Factory && entity.Dressing == CoverDressing.Shed)
+                    AddShedMarker(entity);
+            foreach (MapEntity entity in _map.entities)
+                if (entity != null && entity.Kind == EntityKind.Boss) AddBossMarker(entity);
+
+            // Area index + name labels (item 8) — anchored to each room's own bottom-left corner (item
+            // 3): the top-left is where cover clusters, and drawn last so a label is never buried under
+            // a shed or boss glow that happens to sit near it.
+            foreach ((RectTransform room, Vector2 roomSize, int areaIndex, string name, bool isBoss) in roomLabels)
+            {
+                Color labelColor = isBoss ? MapScreenDesign.BossLabelText : MapScreenDesign.LabelText;
+                // Bounded to the room's OWN width (MV-567 fidelity fix, not in the original seven
+                // changes): with 30 areas packed edge to edge, AddText's shared Overflow setting let a
+                // long area name bleed sideways straight into whichever neighbour sat alongside it —
+                // that cross-room bleed, not the (correctly tiny, ~11 px) font height, is what actually
+                // made the map illegible against the reference.
+                float labelWidth = Mathf.Max(4f, roomSize.x - MapScreenDesign.LabelInset * 2f);
+
+                var indexLabel = AddWorldMetreLabel(room, MapScreenDesign.IndexLabelHeight,
+                    new Vector2(labelWidth, MapScreenDesign.IndexLabelHeight * 1.3f),
+                    new Vector2(MapScreenDesign.LabelInset, MapScreenDesign.LabelInset),
+                    labelColor, TextAnchor.LowerLeft);
+                indexLabel.text = areaIndex.ToString();
+                indexLabel.fontStyle = FontStyle.Bold;
+                indexLabel.raycastTarget = false;
+
+                if (!string.IsNullOrEmpty(name))
+                {
+                    var nameLabel = AddWorldMetreLabel(room, MapScreenDesign.NameLabelHeight,
+                        new Vector2(labelWidth, MapScreenDesign.NameLabelHeight * 1.3f),
+                        new Vector2(MapScreenDesign.LabelInset, MapScreenDesign.LabelInset + MapScreenDesign.IndexLabelHeight * 1.2f),
+                        labelColor, TextAnchor.LowerLeft);
+                    nameLabel.horizontalOverflow = HorizontalWrapMode.Wrap;   // wraps within the room, never bleeds sideways
+                    nameLabel.text = name;
+                    nameLabel.raycastTarget = false;
+                }
+            }
+
             float typicalAreaWorldHeight = zoneCount > 0 ? totalAreaWidth / zoneCount : 1f;
             Vector2 viewportSize = ViewportSize();
-            _fitScale = MapPanZoomModel.FitScale(viewportSize, _contentSize);
+            _fitScale = MapPanZoomModel.FitScale(viewportSize, _contentSize) * (1f - MapScreenDesign.FitMargin);
             _maxZoomMultiplier = MapPanZoomModel.MaxZoomMultiplier(viewportSize.y, _fitScale, typicalAreaWorldHeight);
 
+            // Player dot (item 9) — legend (item 10) is screen-space chrome built once in Build(), never
+            // part of this pannable content.
+            float playerDiameter = MapScreenDesign.PlayerRadius * 2f;
             _playerMarker = NewRect("Player Marker", _content);
             Anchor(_playerMarker, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
-            _playerMarker.sizeDelta = new Vector2(20f, 20f);
+            _playerMarker.sizeDelta = new Vector2(playerDiameter, playerDiameter);
 
             var glow = AddImage(_playerMarker, HudTextures.Disc(32),
-                new Color(CurrentAreaColor.r, CurrentAreaColor.g, CurrentAreaColor.b, 0.45f), "Glow");
+                new Color(MapScreenDesign.Player.r, MapScreenDesign.Player.g, MapScreenDesign.Player.b, 0.45f), "Glow");
             Stretch(glow.rectTransform);
             glow.raycastTarget = false;
 
-            var dot = AddImage(_playerMarker, HudTextures.Disc(24), PlayerDotColor, "Dot");
-            Center(dot.rectTransform, 10f);
+            var dot = AddImage(_playerMarker, HudTextures.Disc(24), MapScreenDesign.Player, "Dot");
+            Center(dot.rectTransform, MapScreenDesign.PlayerRadius);
             dot.raycastTarget = false;
         }
 
@@ -433,9 +442,9 @@ namespace MaxWorlds.UI
         /// boss arena that happens to also hold a shed still reads red, not amber.</summary>
         private static (Color fill, Color border) RoleColors(bool isBoss, bool isShed)
         {
-            if (isBoss) return (BossAreaFillColor, BossAreaBorderColor);
-            if (isShed) return (ShedAreaFillColor, ShedAreaBorderColor);
-            return (AreaFillColor, AreaBorderColor);
+            if (isBoss) return (MapScreenDesign.BossAreaFill, MapScreenDesign.BossAreaBorder);
+            if (isShed) return (MapScreenDesign.ShedAreaFill, MapScreenDesign.ShedAreaBorder);
+            return (MapScreenDesign.AreaFill, MapScreenDesign.AreaBorder);
         }
 
         /// <summary>A world XZ point projected onto <see cref="_content"/> exactly the way the player
@@ -451,7 +460,7 @@ namespace MaxWorlds.UI
 
         private void AddCoverMarker(MapEntity entity)
         {
-            var marker = AddImage(_content, HudTextures.RoundedBox(12, 0.2f), CoverColor, "Cover");
+            var marker = AddImage(_content, HudTextures.RoundedBox(12, 0.2f), MapScreenDesign.Cover, "Cover");
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             marker.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
             // Rotated the same way a room's own footprint is: world depth (Z) becomes on-screen width,
@@ -461,14 +470,21 @@ namespace MaxWorlds.UI
             marker.raycastTarget = false;
         }
 
+        /// <summary>A mobile shed (MV-548/MV-562) reads distinctly from a static one (MV-567 item 4) —
+        /// same size and outline, different fill, resolved straight off <see cref="MapEntity.mobile"/>
+        /// rather than re-reading the world config the map already has this flat off of.</summary>
         private void AddShedMarker(MapEntity entity)
         {
-            float size = Mathf.Max(4f, Mathf.Max(entity.width, entity.depth) * 1.6f);
-            var marker = AddImage(_content, HudTextures.Disc(24), ShedMarkerColor, "Shed");
+            Color fill = entity.mobile ? MapScreenDesign.ShedMobile : MapScreenDesign.ShedStatic;
+            var marker = AddImage(_content, HudTextures.Disc(24), fill, "Shed");
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             marker.rectTransform.anchoredPosition = ContentPoint(entity.x, entity.z);
-            marker.rectTransform.sizeDelta = new Vector2(size, size);
+            marker.rectTransform.sizeDelta = new Vector2(MapScreenDesign.ShedSize, MapScreenDesign.ShedSize);
             marker.raycastTarget = false;
+
+            var outline = AddImage(marker.rectTransform, HudTextures.Ring(24, 2f), MapScreenDesign.ShedOutline, "Outline");
+            Stretch(outline.rectTransform);
+            outline.raycastTarget = false;
         }
 
         /// <summary>A boss "dominates its arena" (AC 2/6) — a soft halo behind a bright disc, both sized
@@ -477,20 +493,24 @@ namespace MaxWorlds.UI
         private void AddBossMarker(MapEntity entity)
         {
             Vector2 pos = ContentPoint(entity.x, entity.z);
-            float size = Mathf.Max(7f, Mathf.Max(entity.width, entity.depth) * 1.8f);
+            float size = MapScreenDesign.BossRadius * 2f;
 
             var glow = AddImage(_content, HudTextures.Glow(32),
-                new Color(BossMarkerColor.r, BossMarkerColor.g, BossMarkerColor.b, 0.4f), "Boss Glow");
+                new Color(MapScreenDesign.Boss.r, MapScreenDesign.Boss.g, MapScreenDesign.Boss.b, 0.4f), "Boss Glow");
             Anchor(glow.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             glow.rectTransform.anchoredPosition = pos;
             glow.rectTransform.sizeDelta = new Vector2(size * 1.8f, size * 1.8f);
             glow.raycastTarget = false;
 
-            var marker = AddImage(_content, HudTextures.Disc(24), BossMarkerColor, "Boss");
+            var marker = AddImage(_content, HudTextures.Disc(24), MapScreenDesign.Boss, "Boss");
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             marker.rectTransform.anchoredPosition = pos;
             marker.rectTransform.sizeDelta = new Vector2(size, size);
             marker.raycastTarget = false;
+
+            var outline = AddImage(marker.rectTransform, HudTextures.Ring(24, 2f), MapScreenDesign.BossOutline, "Outline");
+            Stretch(outline.rectTransform);
+            outline.raycastTarget = false;
         }
 
         /// <summary>A gate as a short bar spanning its doorway's actual hole (MV-566 item 4: "using
@@ -504,12 +524,13 @@ namespace MaxWorlds.UI
             Vector2 mid = (a + b) * 0.5f;
             float length = Mathf.Max(1.5f, Vector2.Distance(a, b));
             float angle = Mathf.Atan2(b.y - a.y, b.x - a.x) * Mathf.Rad2Deg;
+            float thickness = isBossGate ? MapScreenDesign.BossGateThickness : MapScreenDesign.GateThickness;
 
             var marker = AddImage(_content, HudTextures.RoundedBox(8, 0.4f),
-                isBossGate ? BossGateColor : GateColor, "Gate");
+                isBossGate ? MapScreenDesign.BossGate : MapScreenDesign.Gate, "Gate");
             Anchor(marker.rectTransform, Vector2.zero, Vector2.zero, new Vector2(0.5f, 0.5f));
             marker.rectTransform.anchoredPosition = mid;
-            marker.rectTransform.sizeDelta = new Vector2(length, 1.4f);
+            marker.rectTransform.sizeDelta = new Vector2(length, thickness);
             marker.rectTransform.localEulerAngles = new Vector3(0f, 0f, angle);
             marker.raycastTarget = false;
         }
@@ -550,10 +571,14 @@ namespace MaxWorlds.UI
             if (currentArea == _shownCurrentArea) return;
             _shownCurrentArea = currentArea;
 
+            // Border-only override (MapScreenDesign.CurrentAreaBorder's own doc comment): the fill
+            // never changes, so a current BOSS arena still reads red, not the highlight cyan.
             for (int i = 0; i < _areaImages.Count; i++)
             {
                 bool isCurrent = _areaIndexByImage[i] == currentArea;
-                _areaImages[i].color = isCurrent ? CurrentAreaColor : RoleColors(_areaIsBoss[i], _areaIsShed[i]).fill;
+                _areaBorderImages[i].color = isCurrent
+                    ? MapScreenDesign.CurrentAreaBorder
+                    : RoleColors(_areaIsBoss[i], _areaIsShed[i]).border;
             }
         }
 
@@ -675,12 +700,41 @@ namespace MaxWorlds.UI
             go.transform.SetParent(parent, false);
             var t = go.AddComponent<Text>();
             t.font = HudFont.Get();
-            t.fontSize = Mathf.RoundToInt(size);
+            // Floored at 4 (MV-567): this legacy dynamic font renders wildly oversized — many times its
+            // own container — below roughly fontSize 4 in this project's setup (confirmed empirically:
+            // NameLabelHeight's 2.3 rounds to 2 and blew the area-name labels up past their own room;
+            // IndexLabelHeight's 3.4 rounds to 3 and happened to render fine, right at the edge of
+            // whatever internal threshold this is). Every caller of this helper wants legible text, never
+            // a value in that broken range, so the floor belongs here once, not repeated per call site.
+            t.fontSize = Mathf.Max(4, Mathf.RoundToInt(size));
             t.color = color;
             t.alignment = align;
             t.horizontalOverflow = HorizontalWrapMode.Overflow;
             t.verticalOverflow = VerticalWrapMode.Overflow;
             t.raycastTarget = false;
+            return t;
+        }
+
+        /// <summary>A map-content label sized directly in world metres (MV-567 fidelity fix, not in the
+        /// original seven changes): asked for at its true tiny nominal size, this dynamic font
+        /// rasterizes each glyph at only a few pixels, and <see cref="_content"/>'s own zoom then
+        /// magnifies that low-res glyph into an illegible blur — the same defect the constant-size
+        /// design was meant to fix, just moved from "wrong size" to "wrong resolution". Asking for a
+        /// much bigger nominal <see cref="Text.fontSize"/>, then compensating with the label's own
+        /// <see cref="Transform.localScale"/>, keeps the on-screen footprint identical (world metres in,
+        /// world metres out — <paramref name="worldSizeDelta"/> and <paramref name="worldAnchoredPosition"/>
+        /// are both still expressed in the room's own world-metre space) while the glyph itself
+        /// rasterizes crisp.</summary>
+        private const float TextCrispnessBoost = 12f;
+
+        private static Text AddWorldMetreLabel(Transform parent, float worldHeight, Vector2 worldSizeDelta,
+            Vector2 worldAnchoredPosition, Color color, TextAnchor align)
+        {
+            Text t = AddText(parent, worldHeight * TextCrispnessBoost, color, align);
+            Anchor(t.rectTransform, Vector2.zero, Vector2.zero, Vector2.zero);
+            t.rectTransform.localScale = new Vector3(1f / TextCrispnessBoost, 1f / TextCrispnessBoost, 1f);
+            t.rectTransform.sizeDelta = worldSizeDelta * TextCrispnessBoost;
+            t.rectTransform.anchoredPosition = worldAnchoredPosition;
             return t;
         }
 
