@@ -6,51 +6,12 @@ using MaxWorlds.UI;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// Unit tests for the minimap's fog-of-war maths (MV-264): which areas are Hidden, Visited or
-    /// Current for a given <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.CurrentArea"/>, and
-    /// how many areas a map defines in the first place.
+    /// Unit tests for the map's geometry maths (MV-264, spatial rework MV-341): how many areas a map
+    /// defines, their world-space bounds, and the plain and rotated projections
+    /// <see cref="MaxWorlds.UI.MapScreen"/> draws them through (MV-563).
     /// </summary>
     public sealed class MinimapModelTests
     {
-        [Test]
-        public void BuildStates_OnAFreshRun_OnlyAreaOneIsCurrent_TheRestAreHidden()
-        {
-            AreaVisibility[] states = MinimapModel.BuildStates(totalAreas: 5, currentArea: 1);
-
-            Assert.AreEqual(5, states.Length);
-            Assert.AreEqual(AreaVisibility.Current, states[0]);
-            for (int i = 1; i < states.Length; i++)
-                Assert.AreEqual(AreaVisibility.Hidden, states[i], $"area {i + 1} should still be hidden");
-        }
-
-        [Test]
-        public void BuildStates_MidRun_AreasBehindAreVisited_CurrentIsMarked_AheadStaysHidden()
-        {
-            AreaVisibility[] states = MinimapModel.BuildStates(totalAreas: 5, currentArea: 3);
-
-            Assert.AreEqual(AreaVisibility.Visited, states[0], "area 1");
-            Assert.AreEqual(AreaVisibility.Visited, states[1], "area 2");
-            Assert.AreEqual(AreaVisibility.Current, states[2], "area 3");
-            Assert.AreEqual(AreaVisibility.Hidden, states[3], "area 4");
-            Assert.AreEqual(AreaVisibility.Hidden, states[4], "area 5");
-        }
-
-        [Test]
-        public void BuildStates_AtTheLastArea_EveryAreaIsRevealed_NoneHidden()
-        {
-            AreaVisibility[] states = MinimapModel.BuildStates(totalAreas: 5, currentArea: 5);
-
-            for (int i = 0; i < states.Length - 1; i++)
-                Assert.AreEqual(AreaVisibility.Visited, states[i], $"area {i + 1}");
-            Assert.AreEqual(AreaVisibility.Current, states[4], "area 5");
-        }
-
-        [Test]
-        public void BuildStates_NegativeTotal_ClampsToAnEmptyStrip()
-        {
-            Assert.AreEqual(0, MinimapModel.BuildStates(totalAreas: -3, currentArea: 1).Length);
-        }
-
         [Test]
         public void CountAreas_CountsOnlyAreaPrefixedZones_IgnoringTheBossClearing()
         {
@@ -165,6 +126,33 @@ namespace MaxWorlds.Tests.EditMode
         {
             Vector2 norm = MinimapModel.NormalizedPosition(Rect.zero, worldX: 3f, worldZ: 3f);
             Assert.AreEqual(new Vector2(0.5f, 0.5f), norm);
+        }
+
+        /// <summary>MV-563: the full map screen rotates the plain world-space projection 90° clockwise
+        /// so the world's long Z-axis (the run) reads left-to-right, matching the design's own
+        /// <c>MVW_World1_Map.svg</c> reference — old "up" (+Z) becomes new "right", old "right" (+X)
+        /// becomes new "down". Same fixture as <see cref="NormalizedZoneRect_MapsAZonesFootprint_ToAFractionOfTheBounds"/>
+        /// (bounds 20x10, zone occupying the low-X/low-Z quarter — plain-projection rect (0,0,0.5,0.5))
+        /// so the two are directly comparable: rotating swaps which axis is width vs height AND flips
+        /// the surviving X-derived axis, landing at (0, 0.5, 0.5, 0.5) — not the unrotated rect, and not
+        /// a naive axis swap without the flip either. The player position gets the same treatment.</summary>
+        [Test]
+        public void RotatedNormalizedZoneRectAndPosition_TurnTheWorldsLongZAxisIntoScreenLeftToRight()
+        {
+            var bounds = new Rect(0f, 0f, 20f, 10f);
+            var zone = new MapZone { x = 5f, z = 2.5f, width = 10f, depth = 5f }; // XMin 0, ZMin 0, XMax 10, ZMax 5
+
+            Rect rotatedRect = MinimapModel.RotatedNormalizedZoneRect(bounds, zone);
+            Assert.AreEqual(0f, rotatedRect.x, 0.001f, "rotated X should track the zone's Z-fraction min");
+            Assert.AreEqual(0.5f, rotatedRect.y, 0.001f, "rotated Y should be 1 - the zone's X-fraction max");
+            Assert.AreEqual(0.5f, rotatedRect.width, 0.001f, "rotated width should track the zone's Z extent");
+            Assert.AreEqual(0.5f, rotatedRect.height, 0.001f, "rotated height should track the zone's X extent");
+
+            Vector2 rotatedPos = MinimapModel.RotatedNormalizedPosition(bounds, worldX: 10f, worldZ: 5f);
+            Assert.AreEqual(new Vector2(0.5f, 0.5f), rotatedPos, "world (10,5) is bounds-centre either way, so rotation is a no-op here");
+
+            Vector2 rotatedCorner = MinimapModel.RotatedNormalizedPosition(bounds, worldX: 20f, worldZ: 0f);
+            Assert.AreEqual(new Vector2(0f, 0f), rotatedCorner, "old max-X/min-Z corner should rotate to the new (0,0) corner");
         }
     }
 }
