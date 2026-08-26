@@ -95,6 +95,7 @@ namespace MaxWorlds.Dev
 
             yield return CaptureRigBoard();
             yield return CaptureWeaponsButton();
+            yield return CaptureMapScreen();
 
             Finish();
 
@@ -412,6 +413,33 @@ namespace MaxWorlds.Dev
             yield return CaptureFixtureScreen("hud-mv519-pickup-1920x1080", 1920, 1080, ApplySupercellPickupFixture, null, null, canvas);
 
             ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
+        }
+
+        // --- MAP screen (MV-567 AC5) ------------------------------------------------------------
+
+        /// <summary>MV-567 AC5's comparison-test evidence: the map at its opening fit-to-world zoom,
+        /// against which <c>MV-566-map-reference.png</c> is checked by eye. No data fixture needed —
+        /// the capture scene's own live <c>BackyardPath.Map</c> is exactly what the map screen always
+        /// draws from.</summary>
+        private IEnumerator CaptureMapScreen()
+        {
+            var map = FindFirstObjectByType<MapScreen>();
+            if (map == null) { LogWarn("map: no MapScreen in the scene"); yield break; }
+
+            Canvas canvas = map.GetComponentInChildren<Canvas>(true);
+            if (canvas == null)
+            {
+                // MapScreen builds its canvas lazily inside Open() the first time (MapScreen.Build()) —
+                // prime it once so the fixture below already has a real canvas reference before
+                // CaptureFixtureScreen calls Open() itself.
+                map.Open();
+                map.Close();
+                canvas = map.GetComponentInChildren<Canvas>(true);
+            }
+            if (canvas == null) { LogWarn("map: MapScreen built no canvas"); yield break; }
+
+            yield return CaptureFixtureScreen("map-screen-1920x1080", 1920, 1080, null, map.Open, map.Close, canvas,
+                (w, h) => map.RefitOpeningView(w, h));
         }
 
         /// <summary>MV-519 AC9: fires the real <see cref="HudSignals.SupercellCollected"/> signal at
