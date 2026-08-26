@@ -68,6 +68,12 @@ namespace MaxWorlds.Arena
         /// <summary>Closest a boss may sit to its own area's walls (MV-561).</summary>
         public const float MinBossWallMargin = 6f;
 
+        /// <summary>Closest cover may sit to a boss inside a boss arena (MV-565). A boss is 6x6 m, so
+        /// 12 m from its centre leaves roughly 9 m of clear ground round its edge — enough that the
+        /// boss and its telegraphs read from any approach. You must never lose a boss behind a hedge;
+        /// this is the radius that keeps that true without banning cover from the whole room.</summary>
+        public const float MinBossCoverClearance = 12f;
+
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
         /// room.</summary>
         public const float MinFreeChannel = 3f;
@@ -290,6 +296,7 @@ namespace MaxWorlds.Arena
         {
             List<MapEntity> cover = Kind(map, EntityKind.Cover);
             List<MapEntity> factories = Kind(map, EntityKind.Factory);
+            List<MapEntity> bosses = Kind(map, EntityKind.Boss);
 
             for (int i = 0; i < cover.Count; i++)
             {
@@ -302,9 +309,24 @@ namespace MaxWorlds.Arena
                 MapZone zone = map.ZoneAt(c.x, c.z);
                 if (zone != null && zone.Kind == ZoneKind.Boss)
                 {
-                    reason = $"'{c.id}' is cover in the boss arena '{zone.id}' — the boss fight is " +
-                             "readability-first and stays open";
-                    return false;
+                    List<MapEntity> zoneBosses = bosses.FindAll(b => map.ZoneAt(b.x, b.z) == zone);
+                    if (zoneBosses.Count == 0)
+                    {
+                        reason = $"'{c.id}' is cover in the boss arena '{zone.id}' — the boss fight is " +
+                                 "readability-first and stays open";
+                        return false;
+                    }
+
+                    foreach (MapEntity boss in zoneBosses)
+                    {
+                        float dist = body.DistanceTo(boss.CenterXz);
+                        if (dist < MinBossCoverClearance)
+                        {
+                            reason = $"'{c.id}' is {dist:0.#} m from boss '{boss.id}' — a boss arena needs " +
+                                     $"{MinBossCoverClearance:0.#} m of clear ground round every boss";
+                            return false;
+                        }
+                    }
                 }
 
                 foreach (MapEntity f in factories)
