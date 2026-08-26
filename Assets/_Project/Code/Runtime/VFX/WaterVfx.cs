@@ -1,5 +1,6 @@
 using UnityEngine;
 using MaxWorlds.Combat;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.VFX
 {
@@ -23,6 +24,20 @@ namespace MaxWorlds.VFX
     [DisallowMultipleComponent]
     public sealed class WaterVfx : MonoBehaviour
     {
+        /// <summary>
+        /// Height the ground trail (MV-555) draws at. Above <see cref="AimReticle.GroundLift"/>
+        /// (0.006) so the wet fill draws OVER the whisper-level idle wedge, but below
+        /// <see cref="GroundAnchorTuning.ShadowLift"/> (0.012) so it can never cover a contact
+        /// shadow, an anchor ring, or a danger telegraph — one step further down the same stacking
+        /// rule <see cref="AimReticle"/> already documents.
+        /// </summary>
+        public const float GroundTrailLift = 0.008f;
+
+        /// <summary>Alpha the ground trail is drawn at. Read against <see cref="waterColor"/> rather
+        /// than authored as its own colour, so a future palette tweak to the jet can't leave the
+        /// ground trail describing a different weapon than the one firing.</summary>
+        private const float GroundTrailAlpha = 0.5f;
+
         [Header("Palette")]
         [Tooltip("Core of the jet — near-white, reads as pressurised water.")]
         [SerializeField] private Color coreColor = new Color(0.85f, 0.97f, 1f, 1f);
@@ -102,9 +117,20 @@ namespace MaxWorlds.VFX
         private ParticleSystem _splash;     // shared, world-space; Emit()-driven per impact
         private ParticleSystem _flash;      // shared, additive pop at each impact
 
+        // Ground trail (MV-555): a water-tinted fill in the SAME wedge shape AimReticle draws,
+        // shown only while the stream is actually emitting. Unparented and driven manually here —
+        // same reason as AimReticle: CharacterSkinDirector repaints every MeshRenderer under an
+        // IDamageable, and Max is one, so a mesh childed to him would have its material silently
+        // overwritten with his skin.
+        private GameObject _groundTrailGo;
+        private MeshRenderer _groundTrailRenderer;
+        private MaterialPropertyBlock _groundTrailMpb;
+        private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
+
         private float _range = 6f;
         private float _radius = 0.6f;
         private float _visualStrength = 1f;
+        private float _coneHalfAngle = 8f;
         private bool _built;
         private bool _streaming;
         private int _splashesThisFrame;
@@ -145,6 +171,7 @@ namespace MaxWorlds.VFX
             _range = Mathf.Max(0.1f, range);
             _visualStrength = visualStrength;
             _radius = Mathf.Max(0.05f, radius) * SizeScale;
+            _coneHalfAngle = coneHalfAngle;
             streamAngle = SprayHalfAngleFor(coneHalfAngle);
             if (_built) { Refit(); return; }   // a nozzle upgrade re-shapes the live stream (YT-141)
             _built = true;
@@ -154,6 +181,7 @@ namespace MaxWorlds.VFX
             _muzzle = BuildMuzzle();
             _splash = BuildSplash();
             _flash = BuildFlash();
+            _groundTrailGo = BuildGroundTrail();
 
             SetStreaming(false, force: true);
         }
@@ -192,6 +220,10 @@ namespace MaxWorlds.VFX
                 var s = _muzzle.shape; s.radius = _radius * 0.16f;
                 var e = _muzzle.emission; e.rateOverTime = 40f * RateScale;
             }
+            // A nozzle upgrade changes range/spread (YT-133), so the ground trail's shape has to
+            // be rebuilt from the same numbers or it would keep describing the OLD weapon.
+            if (_groundTrailGo != null)
+                _groundTrailGo.GetComponent<MeshFilter>().sharedMesh = AimReticleMesh.Build(_range, _coneHalfAngle);
         }
 
         /// <summary>Start/stop the jet. Only acts on change, so it is free to call every frame.</summary>
@@ -206,6 +238,9 @@ namespace MaxWorlds.VFX
             Toggle(_stream, on);
             Toggle(_core, on);
             Toggle(_muzzle, on);
+            // No fade here (unlike AimReticle's idle/aiming wash) — it snaps on/off exactly like
+            // the particle jet itself already does, because it IS that jet's ground contact.
+            if (_groundTrailGo != null) _groundTrailGo.SetActive(on);
         }
 
         private static void Toggle(ParticleSystem ps, bool on)
@@ -265,7 +300,19 @@ namespace MaxWorlds.VFX
             return true;
         }
 
-        private void LateUpdate() => _splashesThisFrame = 0;
+        private void LateUpdate()
+        {
+            _splashesThisFrame = 0;
+
+            // Track Max's current position/facing while the trail is showing — the blaster's own
+            // transform is what WaterBlaster.Update just rotated to the player's aim this frame.
+            if (_groundTrailGo != null && _groundTrailGo.activeSelf)
+            {
+                WaterGroundTrailTuning.Placement(transform.position, transform.forward, GroundTrailLift,
+                    out Vector3 pos, out Quaternion rot);
+                _groundTrailGo.transform.SetPositionAndRotation(pos, rot);
+            }
+        }
 
         // --- construction ---
 
@@ -438,6 +485,35 @@ namespace MaxWorlds.VFX
             return ps;
         }
 
+        /// <summary>
+        /// The ground trail (MV-555): reuses <see cref="AimReticleMesh"/>'s wedge builder — the same
+        /// shape as the aim reticle itself, at the same range and cone — so every point on it is
+        /// already inside the wedge's own footprint by construction, tinted like water and shown
+        /// only while the stream is actually emitting. Unparented, with <see cref="KeepsOwnMaterial"/>
+        /// so <see cref="RuntimeSurfaceDirector"/>'s "dress every surface" sweep leaves its material
+        /// alone (the exact trap <see cref="AimReticle"/>'s own doc comment explains).
+        /// </summary>
+        private GameObject BuildGroundTrail()
+        {
+            var go = new GameObject("WaterGroundTrail");
+            go.AddComponent<KeepsOwnMaterial>();
+            go.AddComponent<MeshFilter>().sharedMesh = AimReticleMesh.Build(_range, _coneHalfAngle);
+
+            _groundTrailRenderer = go.AddComponent<MeshRenderer>();
+            _groundTrailRenderer.sharedMaterial = VfxMaterials.AlphaBlend(VfxMaterials.Solid());
+            _groundTrailRenderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _groundTrailRenderer.receiveShadows = false;
+
+            _groundTrailMpb = new MaterialPropertyBlock();
+            var tint = waterColor;
+            tint.a = GroundTrailAlpha;
+            _groundTrailMpb.SetColor(BaseColorId, tint);
+            _groundTrailRenderer.SetPropertyBlock(_groundTrailMpb);
+
+            go.SetActive(false);
+            return go;
+        }
+
         /// <summary>A stopped, world-simulated, material-assigned ParticleSystem. Assigning the
         /// material is not optional: AddComponent leaves the renderer with none, and a particle
         /// system with no material draws nothing.</summary>
@@ -480,6 +556,13 @@ namespace MaxWorlds.VFX
             // moves), which means they would otherwise outlive the blaster and leak.
             Dispose(_splash);
             Dispose(_flash);
+            // The ground trail is unparented too (dodging CharacterSkinDirector — see BuildGroundTrail),
+            // so it needs the same manual teardown or it outlives the blaster just like the splashes would.
+            if (_groundTrailGo != null)
+            {
+                if (Application.isPlaying) Destroy(_groundTrailGo);
+                else DestroyImmediate(_groundTrailGo);
+            }
         }
 
         private static void Dispose(ParticleSystem ps)
