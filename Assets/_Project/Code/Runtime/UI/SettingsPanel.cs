@@ -177,7 +177,11 @@ namespace MaxWorlds.UI
         {
             // Never leave the world frozen if we're torn down mid-open (a scene swap, a test) — same
             // safety net as WeaponsScreen.OnDestroy.
-            if (_open) Time.timeScale = _prevTimeScale;
+            if (_open)
+            {
+                Time.timeScale = _prevTimeScale;
+                ModalFrameRateGate.Exit();
+            }
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
@@ -1021,10 +1025,12 @@ namespace MaxWorlds.UI
                 {
                     _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
                     Time.timeScale = 0f;
+                    ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
                 }
                 else
                 {
                     Time.timeScale = _prevTimeScale;
+                    ModalFrameRateGate.Exit();
                 }
             }
 

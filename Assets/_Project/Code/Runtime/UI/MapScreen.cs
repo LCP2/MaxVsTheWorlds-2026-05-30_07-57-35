@@ -83,7 +83,11 @@ namespace MaxWorlds.UI
 
         private void OnDestroy()
         {
-            if (_open) Time.timeScale = _prevTimeScale;
+            if (_open)
+            {
+                Time.timeScale = _prevTimeScale;
+                ModalFrameRateGate.Exit();
+            }
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
@@ -99,6 +103,7 @@ namespace MaxWorlds.UI
             _open = true;
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
 
             // Activate before measuring: RebuildContent/ResetView read _viewport.rect to fit the world
             // to screen, and the safe area's own inset (SafeArea.Apply) only ever runs from OnEnable/
@@ -128,6 +133,7 @@ namespace MaxWorlds.UI
             if (!_open) return;
             _open = false;
             Time.timeScale = _prevTimeScale;
+            ModalFrameRateGate.Exit();
             _screenRoot.gameObject.SetActive(false);
         }
 

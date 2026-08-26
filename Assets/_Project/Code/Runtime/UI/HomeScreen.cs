@@ -114,7 +114,11 @@ namespace MaxWorlds.UI
         {
             // Never leave the world frozen if this is torn down while still open (a scene swap, a
             // test) — same safety net as UpgradeScreen.
-            if (_open) Time.timeScale = _prevTimeScale;
+            if (_open)
+            {
+                Time.timeScale = _prevTimeScale;
+                ModalFrameRateGate.Exit();
+            }
         }
 
         private void Open()
@@ -125,6 +129,7 @@ namespace MaxWorlds.UI
             Build();
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
         }
 
         /// <param name="cinematicStarted">MV-550: true when this pick just triggered
@@ -135,6 +140,7 @@ namespace MaxWorlds.UI
         {
             _open = false;
             Time.timeScale = _prevTimeScale;
+            ModalFrameRateGate.Exit();
             if (_maxStage != null) _maxStage.Hide();
             if (_root != null) Destroy(_root);
             _confirmRoot = null;   // was a child of _root; already gone

@@ -319,7 +319,11 @@ namespace MaxWorlds.UI
         private void OnDestroy()
         {
             // Never leave the world frozen if we're torn down mid-open (a scene swap, a test).
-            if (_open) Time.timeScale = _prevTimeScale;
+            if (_open)
+            {
+                Time.timeScale = _prevTimeScale;
+                ModalFrameRateGate.Exit();
+            }
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
@@ -598,6 +602,7 @@ namespace MaxWorlds.UI
             _open = true;
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;   // freeze the fight while the player reads/spends
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
 
             Refresh();
             _screenRoot.gameObject.SetActive(true);
@@ -615,6 +620,7 @@ namespace MaxWorlds.UI
             // play out.
             if (_revealGlow != null) _revealGlow.gameObject.SetActive(false);
             Time.timeScale = _prevTimeScale;
+            ModalFrameRateGate.Exit();
             _screenRoot.gameObject.SetActive(false);
         }
 
@@ -654,6 +660,7 @@ namespace MaxWorlds.UI
                 _open = true;
                 _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
                 Time.timeScale = 0f;
+                ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
             }
 
             Refresh();

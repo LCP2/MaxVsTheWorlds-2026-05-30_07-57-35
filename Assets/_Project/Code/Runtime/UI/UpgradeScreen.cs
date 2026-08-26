@@ -127,7 +127,11 @@ namespace MaxWorlds.UI
         private void OnDestroy()
         {
             // Never leave the world frozen if we're torn down mid-open (a scene swap, a test).
-            if (_open) Time.timeScale = _prevTimeScale;
+            if (_open)
+            {
+                Time.timeScale = _prevTimeScale;
+                ModalFrameRateGate.Exit();
+            }
             if (_canvas != null) Destroy(_canvas.gameObject);
         }
 
@@ -147,6 +151,7 @@ namespace MaxWorlds.UI
             _t = 0f;
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;   // freeze the fight; we animate on unscaled time
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
 
             // "HOSE UPGRADE" / "MOVEMENT UPGRADE" / "DETACH UPGRADE" — labels which of the three
             // families (YT-166) this reveal belongs to, so the system reads at a glance instead of
@@ -232,6 +237,7 @@ namespace MaxWorlds.UI
             _t = RevealTime + FitTime;     // nothing is flying in — skip straight to the settled state
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
 
             _title.text = "WEAPONS";
             _partLabel.text = UpgradeCatalog.WeaponName(UpgradeState.Installed);
@@ -290,6 +296,7 @@ namespace MaxWorlds.UI
             _t = RevealTime + FitTime;   // no weapon/portrait fly-in for the choice screen
             _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
             Time.timeScale = 0f;
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
 
             _title.text = title;
             _continueHint.gameObject.SetActive(false);   // no "tap anywhere" — must tap a specific card
@@ -349,6 +356,7 @@ namespace MaxWorlds.UI
             _choiceMode = false;
             _onCandidateChosen = null;
             Time.timeScale = _prevTimeScale;
+            ModalFrameRateGate.Exit();
             _choiceRoot.gameObject.SetActive(false);
 
             onChosen(index);
@@ -366,6 +374,7 @@ namespace MaxWorlds.UI
             if (!_open || _choiceMode) return;
             _open = false;
             Time.timeScale = _prevTimeScale;
+            ModalFrameRateGate.Exit();
             if (_stage != null) _stage.Hide();  // stop the live weapon render (YT-140)
             if (_maxStage != null) _maxStage.Hide();   // and the live Max render (YT-176)
             if (!_statusOnly)

@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Core;
 
 namespace MaxWorlds.UI
 {
@@ -29,6 +30,7 @@ namespace MaxWorlds.UI
             EnsureEventSystem();
             BuildCanvas(stats);
             Time.timeScale = 0f; // freeze the run behind the card
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate — this screen never closes in the slice
         }
 
         private void BuildCanvas(RunStats stats)

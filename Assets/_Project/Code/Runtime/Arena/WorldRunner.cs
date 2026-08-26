@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
@@ -291,6 +292,7 @@ namespace MaxWorlds.Arena
             _pendingRespawn = plan;
 
             Time.timeScale = 0f;   // frozen until CONTINUE — nothing below this line until then
+            ModalFrameRateGate.Enter();   // MV-574: idle the frame rate behind the death overlay
 
             WorldArea restoreArea = _cfg.AreaByIndex(plan.RestoreAreaIndex);
             string areaName = restoreArea != null ? restoreArea.name : $"Area {plan.RestoreAreaIndex}";
@@ -333,6 +335,7 @@ namespace MaxWorlds.Arena
             _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
 
             Time.timeScale = 1f;
+            ModalFrameRateGate.Exit();
         }
 
         private void EnsurePlayer()
