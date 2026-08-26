@@ -136,5 +136,28 @@ namespace MaxWorlds.UI
             Vector2 n = NormalizedPosition(bounds, worldX, worldZ);
             return new Vector2(n.y, 1f - n.x);
         }
+
+        /// <summary>Is this link's doorway a boss gate (MV-566 AC 5)? True if EITHER zone it joins is a
+        /// boss arena. A gate INTO a boss area is exactly the one the World &amp; Difficulty Framework's
+        /// "opensWith: sheds-destroyed-before" rule requires every such gate to carry
+        /// (<see cref="MaxWorlds.Arena.MapValidation"/>'s <c>WorldBossGate</c> check) — reading the
+        /// distinction off the zone graph here means the map screen can draw it from
+        /// <see cref="MapData"/> alone, without needing the raw <c>WorldConfig</c> that authored it.
+        /// Null-safe throughout so a caller iterating <c>map.links</c> doesn't need its own guard.</summary>
+        public static bool IsBossGate(MapData map, MapLink link)
+        {
+            if (map == null || link == null) return false;
+            return IsBossZone(map.Zone(link.from)) || IsBossZone(map.Zone(link.to));
+        }
+
+        /// <summary>The two world XZ endpoints of the bar a doorway draws as, from the same
+        /// <c>(runsAlongX, coord, hole)</c> triple <see cref="MaxWorlds.Arena.MapGeometry.Doorway"/>
+        /// returns — the one place that decides which axis the hole's <c>Min</c>/<c>Max</c> sit on, so a
+        /// caller can never mix up <paramref name="runsAlongX"/> and land the bar on the wrong wall.</summary>
+        public static void DoorwayEndpoints(bool runsAlongX, float coord, Span hole, out Vector2 worldA, out Vector2 worldB)
+        {
+            worldA = runsAlongX ? new Vector2(hole.Min, coord) : new Vector2(coord, hole.Min);
+            worldB = runsAlongX ? new Vector2(hole.Max, coord) : new Vector2(coord, hole.Max);
+        }
     }
 }

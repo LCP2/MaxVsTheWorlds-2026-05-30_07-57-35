@@ -154,5 +154,34 @@ namespace MaxWorlds.Tests.EditMode
             Vector2 rotatedCorner = MinimapModel.RotatedNormalizedPosition(bounds, worldX: 20f, worldZ: 0f);
             Assert.AreEqual(new Vector2(0f, 0f), rotatedCorner, "old max-X/min-Z corner should rotate to the new (0,0) corner");
         }
+
+        /// <summary>MV-566 AC 5: a gate into (or out of) a boss arena must read as a boss gate, and an
+        /// ordinary gate between two non-boss rooms must not — the exact distinction the map screen
+        /// draws with a different colour, read straight off the zone graph so it needs no access to the
+        /// raw WorldConfig that authored the gate. Also covers the null-map/null-link guard so a caller
+        /// iterating <c>map.links</c> never needs one of its own.</summary>
+        [Test]
+        public void IsBossGate_TrueOnlyWhenEitherJoinedZoneIsABossArena()
+        {
+            var map = new MapData
+            {
+                zones = new[]
+                {
+                    new MapZone { id = "area1", type = "open" },
+                    new MapZone { id = "area2", type = "open" },
+                    new MapZone { id = "compost", type = "boss" },
+                },
+                links = new[]
+                {
+                    new MapLink { from = "area1", to = "area2", gate = "g1" },
+                    new MapLink { from = "area2", to = "compost", gate = "g2" },
+                },
+            };
+
+            Assert.IsFalse(MinimapModel.IsBossGate(map, map.links[0]), "area1<->area2 joins no boss zone");
+            Assert.IsTrue(MinimapModel.IsBossGate(map, map.links[1]), "area2<->compost joins a boss zone");
+            Assert.IsFalse(MinimapModel.IsBossGate(null, map.links[0]), "a null map guards rather than throws");
+            Assert.IsFalse(MinimapModel.IsBossGate(map, null), "a null link guards rather than throws");
+        }
     }
 }
