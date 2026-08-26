@@ -460,6 +460,25 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(Bar.Showing, Is.False, "a corpse is still advertising its health");
         }
 
+        // --- MV-569: a condition-locked gate must not show a full bar it can never lose ---
+
+        [Test]
+        public void SetForceHidden_HidesAnAlwaysShowBarAndReleasingItLetsItShowAgain()
+        {
+            NewUnit(Vector3.one, alwaysShow: true).Hp = 100f;
+            Assert.That(Bar.Showing, Is.True, "sanity: an always-show bar starts visible");
+
+            Bar.SetForceHidden(true);
+            Assert.That(Bar.Showing, Is.False,
+                "a locked gate's bar must hide even though alwaysShow is true — a full bar that never " +
+                "moves under fire it's designed to ignore reads as a broken game (MV-569)");
+
+            Bar.SetForceHidden(false);
+            Refresh(Bar);
+            Assert.That(Bar.Showing, Is.True,
+                "releasing force-hidden must let the bar show again once the lock resolves");
+        }
+
         private UnityEngine.UI.Image FindImage(string name)
         {
             foreach (UnityEngine.UI.Image i in _go.GetComponentsInChildren<UnityEngine.UI.Image>(true))
