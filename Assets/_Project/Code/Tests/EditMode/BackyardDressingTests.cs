@@ -310,7 +310,11 @@ namespace MaxWorlds.Tests.EditMode
         public void ATreeInTheMiddleOfTheLawnIsRejected()
         {
             var bad = Set();
-            bad.Add(new DressingProp(PropCatalog.TreeDefault, new Vector2(0f, 8f),
+            // Asked of the map (MV-568: World 1 rotated to run +X, moving every room's coordinates)
+            // rather than a hardcoded point, so a future re-layout can't silently stop this test from
+            // ever landing inside a room.
+            Vector2 areaOneCentre = Map.Zone("area1").CenterXz;
+            bad.Add(new DressingProp(PropCatalog.TreeDefault, areaOneCentre,
                                      PropCatalog.ScaleToHeight(PropCatalog.TreeDefault, 4f)));
 
             Assert.IsFalse(BackyardDressingSet.Validate(Map, bad, Cover, out string why));

@@ -11,7 +11,7 @@ namespace MaxWorlds.UI
     /// interpreted — if the map is drawn with these values, in the order below, it matches the
     /// reference. If it does not match, the bug is in how these are applied, not in the values.
     ///
-    /// UNITS. The map content lives in world metres (MapScreen._contentSize is the rotated world
+    /// UNITS. The map content lives in world metres (MapScreen._contentSize is the world
     /// footprint, metres treated 1:1 as local units) and the whole content is then scaled by
     /// fitScale * zoom. So every size below is in WORLD METRES, and stays visually constant relative
     /// to the world as the player zooms — which is the point. A label sized as a fraction of its own
