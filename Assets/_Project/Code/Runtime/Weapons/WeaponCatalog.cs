@@ -24,8 +24,10 @@ namespace MaxWorlds.Weapons
         /// <summary>Placeholder base cooldowns (v0.5 recut spec §9 names these as settings —
         /// <c>waterBalloonCooldown</c>/<c>teleportCooldown</c> — without pinning numbers; live-tune
         /// via DevTuning once the Settings tab exists, WV-234). Water Balloon's is 3x the original 3s
-        /// per MV-336 feedback (Max 0.7 doc).</summary>
-        public const float DefaultWaterBalloonCooldownSeconds = 9f;
+        /// per MV-336 feedback (Max 0.7 doc); MV-596 (Lee, 26 Aug 2026: "fire rate higher at base
+        /// (+40%)") divides that 9s by 1.4 to 6.43s — the per-level Repeat Fire curve and its 40%
+        /// floor are unchanged, only the base it starts from.</summary>
+        public const float DefaultWaterBalloonCooldownSeconds = 6.43f;
         public const float DefaultTeleportCooldownSeconds = 6f;
 
         /// <summary>Force Field's base cooldown, seconds, before any Weapon Cooldown reduction

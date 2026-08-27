@@ -69,8 +69,18 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Water Balloon's damage as a percentage of the ROBOT'S OWN max health (spec §9:
         /// <c>waterBalloonDamagePct</c>) — a percentage rather than a flat number, so one fixed-size
-        /// splash still threatens the WV-224 Heavy/Brute tiers without needing its own scaling curve.</summary>
-        public const float DefaultWaterBalloonDamagePct = 50f;
+        /// splash still threatens the WV-224 Heavy/Brute tiers without needing its own scaling curve.
+        /// MV-596 (Lee, 26 Aug 2026: "damage done to be less (-25%)") cuts the old 50% by a quarter to
+        /// 37.5%; since this is a percentage of each robot's own max health, the cut applies
+        /// proportionally across every robot type with no per-type retuning needed.</summary>
+        public const float DefaultWaterBalloonDamagePct = 37.5f;
+
+        /// <summary>The splash's damage against one target, given ITS OWN max health and the
+        /// Water Balloon damage-percent setting — extracted out of <c>PlayerAbilities.Land</c>'s
+        /// per-target loop (MV-596) so the percentage-of-max-health math is covered by an EditMode
+        /// test without needing physics/a live scene.</summary>
+        public static float WaterBalloonDamage(float targetMaxHealth, float damagePct) =>
+            Mathf.Max(0f, targetMaxHealth) * Mathf.Max(0f, damagePct) * 0.01f;
 
         /// <summary>How long the splash halts the robots it hits, seconds (spec §9:
         /// <c>waterBalloonStopDuration</c> — spec names the setting but doesn't pin a number; an
