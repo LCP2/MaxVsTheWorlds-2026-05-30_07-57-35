@@ -28,30 +28,26 @@ namespace MaxWorlds.Arena
         }
     }
 
-    /// <summary>Resolves a <see cref="RespawnPlan"/> from where Max died. The three edge cases the
-    /// ticket calls out by name (Area 1, the boss room, an ordinary mid-run area) all fall out of the
-    /// same two rules: land one area back, and never re-close a condition-gated door.</summary>
+    /// <summary>Resolves a <see cref="RespawnPlan"/> from where Max died. MV-575: every area a death
+    /// can happen in — ordinary or boss — carries a real 1-based index into the world's authored
+    /// sequence; there is no synthetic index past the end of it for "the boss room" (World 1 places
+    /// three bosses, at areas 12, 20 and 30, not one at <c>areaCount + 1</c>). Both edge cases the
+    /// ticket calls out by name (Area 1, a boss area) fall out of the same two rules: land one area
+    /// back, and never re-close a condition-gated door.</summary>
     public static class RespawnPlanner
     {
-        /// <summary><paramref name="deathAreaIndex"/> is the 1-based area Max died in (a normal area
-        /// is 1..<paramref name="areaCount"/>; the boss room is <paramref name="areaCount"/> + 1).
-        /// <paramref name="areaCount"/> is the world's authored combat-area count
-        /// (<c>WorldConfig.dials.areaCount</c>, 18 for World 1).</summary>
-        public static RespawnPlan Resolve(int deathAreaIndex, int areaCount)
+        /// <summary><paramref name="deathAreaIndex"/> is the 1-based area Max died in.
+        /// <paramref name="deathGateIsConditionGated"/> is whether the gate leading INTO that area
+        /// opens on a condition (<c>all-sheds-destroyed</c> / <c>sheds-destroyed-before</c>) rather
+        /// than combat — the caller (<see cref="WorldRunner"/>) knows this from the area's own
+        /// <c>WorldArea.role</c>, not from where the area sits in the sequence. Whether a gate may be
+        /// re-closed is a property of the AREA, not its index.</summary>
+        public static RespawnPlan Resolve(int deathAreaIndex, bool deathGateIsConditionGated)
         {
-            int bossAreaIndex = areaCount + 1;
-
-            if (deathAreaIndex >= bossAreaIndex)
-            {
-                // The boss room: fall back one area, but the boss gate — opened on a condition, not
-                // broken by fire — must never re-close (edge case 2: it would be unreopenable).
-                return new RespawnPlan(areaCount, deathAreaIndex, recloseGate: false);
-            }
-
-            // Area 1 has no previous arena — fall back to the entry stub (index 0), still gated by
-            // the same combat gate every other area's fallback recloses (edge case 1).
+            // Area 1 has no previous arena — fall back to the entry stub (index 0). Every other area
+            // falls back exactly one area, boss areas included.
             int respawnArea = Mathf.Max(0, deathAreaIndex - 1);
-            return new RespawnPlan(respawnArea, deathAreaIndex, recloseGate: true);
+            return new RespawnPlan(respawnArea, deathAreaIndex, recloseGate: !deathGateIsConditionGated);
         }
     }
 }

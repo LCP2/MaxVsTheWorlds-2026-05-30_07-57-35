@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -7,7 +8,8 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// Pure-logic coverage for MV-427 ("death continues the run"): the respawn/restore decision
-    /// (<see cref="RespawnPlanner"/>), the once-ever award guard (<see cref="DeathRunState"/>), the
+    /// (<see cref="RespawnPlanner"/>, table-driven over the real world config since MV-575), the
+    /// once-ever award guard (<see cref="DeathRunState"/>), the
     /// per-area queue-drop used when an arena resets (<see cref="AreaSpawnQueue.RemoveQueued"/>), and
     /// the one-shot health primitive a destroyed shed's persistence relies on
     /// (<see cref="DestructibleHealth"/>).
@@ -23,37 +25,61 @@ namespace MaxWorlds.Tests.EditMode
         [TearDown]
         public void TearDown() => DeathRunState.Reset();
 
-        // ------------------------------------------------------------ RespawnPlanner
+        // ------------------------------------------------------------ RespawnPlanner (MV-575)
 
+        /// <summary>MV-575: dying to ANY of World 1's three bosses (areas 12, 20, 30) used to respawn
+        /// at area 30 regardless of which boss it was — <c>ResolveDeathArea</c>/<c>RespawnPlanner</c>
+        /// both assumed a single boss room synthesized at <c>areaCount + 1</c> (31), an assumption the
+        /// real shipped config broke the moment a boss became a real numbered area. Table-driven over
+        /// the actual <c>world1_config.json</c> so this can never again drift from what ships: every
+        /// area death — ordinary or boss — must fall back exactly one area and restore the area
+        /// actually died in (AC1/AC2), RecloseGate must be false for every boss area and true for every
+        /// ordinary one (AC3), no plan value may ever land outside 0..areaCount (AC4), a boss death
+        /// must resolve a real <see cref="WorldArea"/> for the overlay to name (AC5), and every
+        /// expectation is read from the config's own <c>IsBossRole</c>/<c>index</c>, never a hardcoded
+        /// 12/20/30/31 (AC6).</summary>
         [Test]
-        public void OrdinaryMidRunArea_RespawnsOneAreaBack_AndReclosesItsGate()
+        public void DeathInAnyWorld1Area_FallsBackOneArea_AndReclosesOnlyNonBossGates()
         {
-            RespawnPlan plan = RespawnPlanner.Resolve(deathAreaIndex: 6, areaCount: 18);
+            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
+            Assert.IsNotNull(cfg, "the shipped world1_config.json failed to load — see the error log above");
 
-            Assert.That(plan.RespawnAreaIndex, Is.EqualTo(5));
-            Assert.That(plan.RestoreAreaIndex, Is.EqualTo(6));
-            Assert.That(plan.RecloseGate, Is.True);
-        }
+            int areaCount = cfg.dials.areaCount;
+            int bossAreasChecked = 0;
 
-        [Test]
-        public void DeathInArea1_FallsBackToTheEntryStub_AndStillReclosesItsGate()
-        {
-            RespawnPlan plan = RespawnPlanner.Resolve(deathAreaIndex: 1, areaCount: 18);
+            for (int deathArea = 1; deathArea <= areaCount; deathArea++)
+            {
+                WorldArea area = cfg.AreaByIndex(deathArea);
+                Assert.IsNotNull(area, $"world1_config.json has no authored area at index {deathArea}");
 
-            Assert.That(plan.RespawnAreaIndex, Is.EqualTo(0), "no previous arena — the entry stub");
-            Assert.That(plan.RestoreAreaIndex, Is.EqualTo(1));
-            Assert.That(plan.RecloseGate, Is.True);
-        }
+                bool isBoss = area.IsBossRole;
+                if (isBoss) bossAreasChecked++;
 
-        [Test]
-        public void DeathInTheBossRoom_RespawnsInTheLastNormalArea_AndNeverReclosesTheBossGate()
-        {
-            RespawnPlan plan = RespawnPlanner.Resolve(deathAreaIndex: 19, areaCount: 18);
+                RespawnPlan plan = RespawnPlanner.Resolve(deathArea, deathGateIsConditionGated: isBoss);
 
-            Assert.That(plan.RespawnAreaIndex, Is.EqualTo(18));
-            Assert.That(plan.RestoreAreaIndex, Is.EqualTo(19));
-            Assert.That(plan.RecloseGate, Is.False,
-                "the boss gate opens on a condition, not combat — re-closing it would softlock the run");
+                Assert.That(plan.RestoreAreaIndex, Is.EqualTo(deathArea),
+                    $"area {deathArea}: must always restore the area actually died in");
+                Assert.That(plan.RespawnAreaIndex, Is.EqualTo(Mathf.Max(0, deathArea - 1)),
+                    $"area {deathArea}: must always fall back exactly one area (0 for area 1's entry stub)");
+                Assert.That(plan.RecloseGate, Is.EqualTo(!isBoss),
+                    $"area {deathArea} ('{area.name}', role='{area.role}'): RecloseGate must be false for " +
+                    "every boss area (its gate opens on a shed condition, not combat — re-closing it would " +
+                    "softlock the run) and true for every ordinary one");
+
+                Assert.That(plan.RespawnAreaIndex, Is.InRange(0, areaCount), $"area {deathArea}: respawn index out of range");
+                Assert.That(plan.RestoreAreaIndex, Is.InRange(0, areaCount), $"area {deathArea}: restore index out of range");
+
+                if (isBoss)
+                {
+                    WorldArea restoreArea = cfg.AreaByIndex(plan.RestoreAreaIndex);
+                    Assert.IsNotNull(restoreArea,
+                        $"AC5: a boss death at area {deathArea} must resolve a real WorldArea for the death " +
+                        "overlay to name — never fall back to the 'Area {N}' placeholder");
+                }
+            }
+
+            Assert.That(bossAreasChecked, Is.GreaterThan(0),
+                "world1_config.json must author at least one boss area for this test to mean anything");
         }
 
         // ------------------------------------------------------------ DeathRunState
