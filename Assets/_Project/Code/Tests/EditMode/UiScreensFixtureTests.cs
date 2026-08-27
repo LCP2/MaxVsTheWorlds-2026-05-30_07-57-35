@@ -52,7 +52,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             UiScreensDirector.ApplyRigFixture();
 
-            foreach (string cap in new[] { "p_prc", "s_bal", "e_mag", "m_spd", "m_tp" })
+            foreach (string cap in new[] { "s_bal", "e_mag", "m_spd", "m_tp" })
             {
                 Assert.That(RigState.IsOwned(cap), Is.False, $"{cap} must not be owned");
                 Assert.That(RigState.IsReached(cap), Is.True, $"{cap} must be reached");

@@ -13,7 +13,8 @@ namespace MaxWorlds.Weapons
     /// single source of truth, so every existing call site (<c>WaterBlaster</c>, <c>WeaponsScreen</c>,
     /// <c>HudController</c>, ...) keeps compiling unchanged while the actual levels/gating live in one
     /// place. <see cref="AbilityKind.WeaponCooldown"/> has no node in the canonical <c>rig_board.json</c>
-    /// (it names exactly 23 abilities, none of them a global cooldown-reduction ability) — MV-422
+    /// (it names exactly 22 abilities (MV-597: 23 -&gt; 22, PIERCE deleted), none of them a global
+    /// cooldown-reduction ability) — MV-422
     /// retires it: <see cref="MapId(AbilityKind)"/> returns null for it, so it can never be acquired,
     /// never appears in <see cref="Unacquired"/>, and <see cref="EffectiveCooldownSeconds"/> always
     /// multiplies by 1x (unchanged code, since <see cref="AbilityTuning.CooldownMultiplier"/> at level
@@ -38,7 +39,7 @@ namespace MaxWorlds.Weapons
             WeaponTrackKind.Range => "p_rng",
             WeaponTrackKind.Spread => "p_spr",
             WeaponTrackKind.Damage => "p_dmg",
-            WeaponTrackKind.DepletionRate => "p_flw",
+            WeaponTrackKind.Endurance => "p_flw",
             _ => null,
         };
 
@@ -159,7 +160,7 @@ namespace MaxWorlds.Weapons
         /// deals in ids, not <see cref="AbilityKind"/>. Routes through <see cref="Acquire"/> when the
         /// id maps to a legacy HUD-bearing kind, so acquisition order and <see cref="Changed"/> both
         /// fire exactly as a direct <see cref="Acquire"/> call would; for a RIG-only id with no
-        /// AbilityKind equivalent (<c>p_prc</c>, <c>e_cel</c>, <c>e_mag</c>) grants straight through
+        /// AbilityKind equivalent (<c>e_cel</c>, <c>e_mag</c>) grants straight through
         /// <see cref="RigState.AcquireCap"/> and still fires <see cref="Changed"/>, just without an
         /// acquisition-order entry (there is no HUD control for these to reveal). This is meant to be
         /// THE RIG's only entry point into <see cref="RigState.AcquireCap"/> — no caller outside this

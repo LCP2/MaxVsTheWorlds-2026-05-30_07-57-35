@@ -82,7 +82,7 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
             WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage);
             RigState.AcquireCap("p_flw");
-            WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate);
+            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance);
 
             Assert.That(_blaster.VisualStrength, Is.EqualTo(before).Within(1e-5f),
                 "only the Spread track should move the stream's visual-only presentation");

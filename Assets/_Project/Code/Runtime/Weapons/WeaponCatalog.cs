@@ -40,7 +40,7 @@ namespace MaxWorlds.Weapons
             WeaponTrackKind.Range,
             WeaponTrackKind.Spread,
             WeaponTrackKind.Damage,
-            WeaponTrackKind.DepletionRate,
+            WeaponTrackKind.Endurance,
         };
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
@@ -74,19 +74,25 @@ namespace MaxWorlds.Weapons
             WaterBalloonTrackKind.RepeatFire,
         };
 
-        /// <summary>The level cap for an RCDA track. Damage and Depletion Rate keep MV-291's 5 steps
-        /// (levels 1-6). Range and Spread get 3 more (levels 1-9, MV-367, Lee: "introduce probably two
-        /// or three more upgrade levels" so a lower ceiling still reads as steady, frequent growth
-        /// rather than two giant jumps) — so unlike MV-291, the tracks no longer share one flat cap.</summary>
+        /// <summary>The level cap for an RCDA track. Range keeps MV-367's 9-level cap. Damage and
+        /// Spread were both cut to 4 levels (MV-597, Lee's playtest: 6/6 Damage + 5/9 Spread + 6/6 Flow
+        /// was "obliterating everything" — the wide, full-power cone was the main lever). Endurance
+        /// (renamed from Flow/Depletion Rate) rose from 6 to 8 levels, paired with a shallower per-level
+        /// step so level 8 lands exactly on the drain floor with no dead level in between (MV-597, see
+        /// <see cref="EffectiveDrainPerSecond"/>). These caps must stay in lockstep with
+        /// <c>rig_board.json</c>'s own per-node <c>maxLevel</c> — the RIG board's real gameplay gate
+        /// (<see cref="RigState.RaiseLevel"/> reads <see cref="RigBoard.MaxLevel"/> directly) — this
+        /// duplicate exists only because <see cref="MaxWorlds.Combat.WaterBlaster.VisualStrength"/>-style
+        /// enum-keyed callers predate the RIG board and were never migrated to read the JSON directly.</summary>
         public static int MaxLevel(WeaponTrackKind kind)
         {
             switch (kind)
             {
-                case WeaponTrackKind.Range:
-                case WeaponTrackKind.Spread:
-                    return 9;
-                default:
-                    return 6;
+                case WeaponTrackKind.Range: return 9;
+                case WeaponTrackKind.Spread: return 4;
+                case WeaponTrackKind.Damage: return 4;
+                case WeaponTrackKind.Endurance: return 8;
+                default: return 6;
             }
         }
 
@@ -102,25 +108,27 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Fraction each Spread track level above 1 widens the spray cone (MV-263, MV-281,
         /// MV-289, re-retuned MV-291 against the widened cap, re-retuned MV-301 against the re-narrowed
-        /// base, re-retuned again MV-367 against both the re-narrowed MV-367 base and the new 8-step
-        /// cap — <see cref="MaxLevel(WeaponTrackKind)"/>). Lee's MV-367 direction cuts the max-level
-        /// arc ~20% below MV-301's 66° total ceiling: 8 steps at 70%/level over the new 4° base land
-        /// exactly at 4*(1+0.7*8) = 26.4° half-angle, i.e. 52.8° total (66*0.8 = 52.8 — change the two
-        /// together).</summary>
+        /// base, re-retuned again MV-367 against both the re-narrowed MV-367 base and its then-9-level
+        /// cap — <see cref="MaxLevel(WeaponTrackKind)"/>). MV-597 cut the cap to 4 levels (Lee's
+        /// playtest: a maxed cone was the main over-power lever) without touching this value: 4 steps
+        /// at 70%/level over the 8° base now land at 8*(1+0.7*3) = 24.8° half-angle, 49.6° total.</summary>
         public const float DefaultRcdaSpreadPerLevel = 0.7f;
 
         /// <summary>Fraction each Damage track level above 1 adds to the primary's per-tick damage
         /// (MV-291) — the curve's missing third axis: Range and Spread already had a visible per-level
         /// step, but the primary's damage was a flat authored constant nobody's upgrade ever touched.
-        /// 5 steps at 20%/level land at 2x base, matching Range/Spread's ~2-2.5x ceiling.</summary>
+        /// MV-597 cut the cap from 6 to 4 levels without touching this value: 3 steps at 20%/level now
+        /// land at 1.6x base (4 -&gt; 6.4 damage per tick, 64 DPS) instead of the old 2x/80 DPS.</summary>
         public const float DefaultRcdaDamagePerLevel = 0.2f;
 
-        /// <summary>Fraction each Depletion Rate track level above 1 CUTS the tank's drain per second
-        /// (MV-299, reinstating the tank MV-290 cut) — the inverse shape of the other tracks: they
-        /// scale a number UP, this scales the drain DOWN so a spend buys longer sustained fire, not a
-        /// bigger number in a combat log. 5 steps at 15%/level land at 25% of the base drain (4x the
-        /// sustained-fire time) at the maxed track — see <see cref="EffectiveDrainPerSecond"/>.</summary>
-        public const float DefaultRcdaDepletionRatePerLevel = 0.15f;
+        /// <summary>Fraction each Endurance track level CUTS the tank's drain per second (MV-299,
+        /// reinstating the tank MV-290 cut; renamed from Flow/Depletion Rate and rebalanced by MV-597)
+        /// — the inverse shape of the other tracks: they scale a number UP, this scales the drain DOWN
+        /// so a spend buys longer sustained fire, not a bigger number in a combat log. 8 steps at
+        /// 10%/level land exactly at the 20% drain floor at the maxed track, with no dead level along
+        /// the way (MV-597: the old 15%/level, 6-level curve would have hit the floor two levels early
+        /// if simply extended to 8 — see <see cref="EffectiveDrainPerSecond"/>).</summary>
+        public const float DefaultRcdaDepletionRatePerLevel = 0.10f;
 
         /// <summary>Effective spray reach at a given Range-track level, given the weapon's authored
         /// base reach. Found by Lee playtesting (MV-263): the Range track raised no number at all, so
@@ -147,15 +155,17 @@ namespace MaxWorlds.Weapons
         public static float EffectiveDamagePerTick(float baseDamage, int damageLevel, float perLevel) =>
             baseDamage * (1f + perLevel * (Mathf.Max(1, damageLevel) - 1));
 
-        /// <summary>Effective tank drain per second at a given Depletion Rate track level, given the
-        /// weapon's authored base drain (MV-299) — level 1 is the unmodified base, same as every other
-        /// track, but each level above it SUBTRACTS from the drain rather than adding to a magnitude.
-        /// Floored at 20% of base so a maxed track buys a much longer tank, never a literally free
-        /// one. <paramref name="outputScale"/> (MV-368, default 1x) layers the weapon's current output
-        /// — see <see cref="DrainOutputScale"/> — on TOP of the track's own reduction, so upgrading
-        /// Range/Spread makes the tank drain faster again even at a maxed Depletion Rate track.</summary>
+        /// <summary>Effective tank drain per second at a given Endurance track level, given the
+        /// weapon's authored base drain (MV-299) — level 0 (undrafted) is the unmodified base, and
+        /// EVERY owned level cuts the drain further, level 1 included (MV-597: the old formula's
+        /// <c>Mathf.Max(1, depletionLevel) - 1</c> made level 0 and level 1 identical, so the node's own
+        /// unlock bought nothing — dropped here so a level-1 spend is felt immediately). Floored at 20%
+        /// of base so a maxed track buys a much longer tank, never a literally free one.
+        /// <paramref name="outputScale"/> (MV-368, default 1x) layers the weapon's current output — see
+        /// <see cref="DrainOutputScale"/> — on TOP of the track's own reduction, so upgrading
+        /// Range/Spread makes the tank drain faster again even at a maxed Endurance track.</summary>
         public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel, float outputScale = 1f) =>
-            baseDrainPerSecond * outputScale * Mathf.Max(0.2f, 1f - perLevel * (Mathf.Max(1, depletionLevel) - 1));
+            baseDrainPerSecond * outputScale * Mathf.Max(0.2f, 1f - perLevel * depletionLevel);
 
         /// <summary>How much the tank's drain scales for the weapon's ACTUAL current output — the
         /// effective reach and cone, not "number of upgrade levels bought" (MV-368: reading levels
@@ -231,7 +241,7 @@ namespace MaxWorlds.Weapons
                 case WeaponTrackKind.Range: return "RANGE";
                 case WeaponTrackKind.Spread: return "SPREAD";
                 case WeaponTrackKind.Damage: return "DAMAGE";
-                case WeaponTrackKind.DepletionRate: return "DEPLETION RATE";
+                case WeaponTrackKind.Endurance: return "ENDURANCE";
                 default: return kind.ToString();
             }
         }

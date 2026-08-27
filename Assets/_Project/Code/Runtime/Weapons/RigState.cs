@@ -7,7 +7,7 @@ namespace MaxWorlds.Weapons
     /// A run's live levels across THE RIG's whole ability tree — the single node model that
     /// replaces <see cref="WeaponSystemState"/>'s four separate per-enum dictionaries. Keyed by
     /// the string ids <see cref="RigBoard"/> defines, not by enum, so a node with no legacy enum
-    /// equivalent (<c>e_cel</c>, <c>e_mag</c>, <c>p_prc</c>, the six new Sentinel axes, ...) is a
+    /// equivalent (<c>e_cel</c>, <c>e_mag</c>, the six new Sentinel axes, ...) is a
     /// first-class citizen from day one rather than a special case bolted on top.
     ///
     /// One gate, not two (schema 3, MV-436 — retires the old cap/stat split): every node can only
@@ -171,13 +171,22 @@ namespace MaxWorlds.Weapons
         /// restore, not a draft/spend) — replaces levels and unlocked categories wholesale rather than
         /// merging, since a restore always starts from <see cref="Reset"/>'s baseline in practice. Fires
         /// <see cref="Changed"/> once so live systems (e.g. <see cref="MaxWorlds.Pickups.PickupWallet"/>'s
-        /// capacity readout) re-fit.</summary>
+        /// capacity readout) re-fit.
+        ///
+        /// MV-597: an older save can carry an id a since-retired node used to own (e.g. <c>p_prc</c>,
+        /// deleted this ticket) or a level above a node's own current cap (a save from before
+        /// <c>p_dmg</c>/<c>p_spr</c> were capped tighter) — a node no longer in <see cref="RigBoard"/> is
+        /// dropped rather than stranded, and a level above the node's current <see cref="RigBoard.MaxLevel"/>
+        /// is clamped down to it rather than persisted out of range.</summary>
         public static void RestoreSnapshot(IReadOnlyDictionary<string, int> levels, IEnumerable<string> unlockedCategories)
         {
             s_levels.Clear();
             if (levels != null)
                 foreach (KeyValuePair<string, int> kv in levels)
-                    s_levels[kv.Key] = kv.Value;
+                {
+                    if (!RigBoard.Exists(kv.Key)) continue;
+                    s_levels[kv.Key] = Math.Min(kv.Value, RigBoard.MaxLevel(kv.Key));
+                }
 
             s_unlockedCategories.Clear();
             if (unlockedCategories != null)

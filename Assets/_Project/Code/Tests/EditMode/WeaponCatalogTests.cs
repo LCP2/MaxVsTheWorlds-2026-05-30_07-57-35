@@ -97,19 +97,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SpreadTrack_MaxLevelArcDoublesWithTheRestoredBase_MV379()
+        public void SpreadTrack_MaxLevelArc_MV379_MV597()
         {
-            // MV-379 restores the base half-angle from MV-367's 4° to the pre-MV-367 8°, without
-            // retuning the per-level step (DefaultRcdaSpreadPerLevel is untouched) — so the maxed
-            // Spread track's arc doubles right along with the base: 8 * (1 + 0.7*8) = 52.8, doubled
-            // to a 105.6° total (MV-367's old 52.8° total ceiling doubles too, the same multiplicative
-            // relationship it always had to the base).
+            // MV-379 restored the base half-angle from MV-367's 4° to the pre-MV-367 8°, without
+            // retuning the per-level step (DefaultRcdaSpreadPerLevel is untouched). MV-597 then cut
+            // Spread's own cap from 9 to 4 levels (the main over-power lever, Lee's playtest): the
+            // maxed arc is now 8 * (1 + 0.7*3) = 24.8° half-angle, 49.6° total.
             float baseHalfAngle = WaterBlaster.DefaultConeHalfAngle;
             float maxHalfAngle = WeaponCatalog.EffectiveConeHalfAngle(
                 baseHalfAngle, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
-            Assert.That(maxHalfAngle * 2f, Is.EqualTo(105.6f).Within(0.5f),
-                "MV-379: restoring the base angle (without retuning the per-level step) must scale the maxed Spread arc by the same factor");
+            Assert.That(maxHalfAngle * 2f, Is.EqualTo(49.6f).Within(0.5f),
+                "MV-597: capping Spread at 4 levels must land the maxed arc at 49.6° total, not the old 105.6°");
         }
 
         [Test]
@@ -130,55 +129,17 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageTrack_MaxLevelIsRoughlyTwiceBase_MV291()
+        public void DamageTrack_MaxLevelIs1Point6xBase_MV597()
         {
+            // MV-291 originally capped Damage at 6 levels (~2x base). MV-597 cut the cap to 4 levels
+            // (Lee's playtest: maxed Damage+Spread+Flow was over-powered) without touching the
+            // per-level step, landing the new ceiling at 1.6x base instead.
             float baseDamage = WaterBlaster.DefaultDamagePerTick;
             float maxDamage = WeaponCatalog.EffectiveDamagePerTick(
                 baseDamage, WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), WeaponCatalog.DefaultRcdaDamagePerLevel);
 
-            Assert.That(maxDamage, Is.EqualTo(baseDamage * 2f).Within(0.05f),
-                "MV-291: retuning the base damage or the per-level step must keep the maxed Damage track at ~2x base");
-        }
-
-        [Test]
-        public void DepletionRateLevelOneIsTheBaseDrainUnmodified()
-        {
-            Assert.That(WeaponCatalog.EffectiveDrainPerSecond(10f, 1, 0.15f), Is.EqualTo(10f).Within(1e-5f),
-                "level 1 is every track's starting level — it must not slow the drain yet (MV-299)");
-        }
-
-        [Test]
-        public void EachDepletionRateLevelSlowsTheDrainFurther()
-        {
-            float l1 = WeaponCatalog.EffectiveDrainPerSecond(10f, 1, 0.15f);
-            float l2 = WeaponCatalog.EffectiveDrainPerSecond(10f, 2, 0.15f);
-            float l6 = WeaponCatalog.EffectiveDrainPerSecond(10f, 6, 0.15f);
-            Assert.Less(l2, l1, "level 2 must drain slower than level 1");
-            Assert.Less(l6, l2, "level 6 (the cap) must drain slower still");
-        }
-
-        [Test]
-        public void DepletionRateTrack_MaxLevelDrainsAtQuarterBase_MV299()
-        {
-            float baseDrain = BlasterTuning.EnergyPerSecond;
-            float maxDrain = WeaponCatalog.EffectiveDrainPerSecond(
-                baseDrain, WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate), WeaponCatalog.DefaultRcdaDepletionRatePerLevel);
-
-            Assert.That(maxDrain, Is.EqualTo(baseDrain * 0.25f).Within(0.01f),
-                "MV-299: retuning the per-level step must keep the maxed Depletion Rate track at ~25% of base drain (4x sustained fire)");
-        }
-
-        [Test]
-        public void DepletionRateNeverDrainsFasterThanBase()
-        {
-            // Sanity: a track that's meant to slow the drain must never speed it up at any level.
-            for (int level = 1; level <= WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate); level++)
-            {
-                float drain = WeaponCatalog.EffectiveDrainPerSecond(
-                    10f, level, WeaponCatalog.DefaultRcdaDepletionRatePerLevel);
-                Assert.That(drain, Is.LessThanOrEqualTo(10f), $"level {level} drained faster than base");
-                Assert.That(drain, Is.GreaterThan(0f), $"level {level} drained to zero or negative — the tank must never stop draining outright");
-            }
+            Assert.That(maxDamage, Is.EqualTo(baseDamage * 1.6f).Within(0.05f),
+                "MV-597: capping Damage at 4 levels must land the maxed track at 1.6x base (6.4 dmg/tick), not the old 2x (8)");
         }
 
         // ---------------------------------------------------------------- MV-368: drain scales with output
@@ -225,33 +186,34 @@ namespace MaxWorlds.Tests.EditMode
                 baseCone, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
 
             float baseDrain = WeaponCatalog.EffectiveDrainPerSecond(
-                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+                BlasterTuning.EnergyPerSecond, 0, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
                 WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone));
             float maxedDrain = WeaponCatalog.EffectiveDrainPerSecond(
-                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+                BlasterTuning.EnergyPerSecond, 0, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
                 WeaponCatalog.DrainOutputScale(maxReach, baseReach, maxCone, baseCone));
 
             Assert.That(maxedDrain, Is.GreaterThan(baseDrain * 2f), "a maxed weapon must drain markedly faster than an un-upgraded one");
         }
 
         [Test]
-        public void LevelOneOutputWithDepletionTrackAtLevelOne_MatchesTodaysBaseDrainExactly_MV368()
+        public void UndraftedEnduranceAtBaseOutput_MatchesTodaysBaseDrainExactly_MV368()
         {
-            // AC2: a completely fresh weapon (every track at its starting level 1, no nozzle) must
-            // reproduce today's drain exactly — the scaling this ticket adds must start at a no-op.
+            // AC2: a completely fresh weapon (Range/Spread at base, Endurance not yet drafted — RigState
+            // level 0, MV-597) must reproduce today's drain exactly. MV-597 makes level 1 pay out once
+            // drafted, so "unaffected" now means level 0, not level 1.
             float baseReach = WaterBlaster.DefaultRange;
             float baseCone = WaterBlaster.DefaultConeHalfAngle;
             float drain = WeaponCatalog.EffectiveDrainPerSecond(
-                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
+                BlasterTuning.EnergyPerSecond, 0, WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
                 WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone));
 
             Assert.That(drain, Is.EqualTo(BlasterTuning.EnergyPerSecond).Within(1e-4f));
         }
 
         [Test]
-        public void DepletionRateTrack_StillOffsetsTheIncreasedDrainAtMaxedOutput_MV368()
+        public void EnduranceTrack_StillOffsetsTheIncreasedDrainAtMaxedOutput_MV368()
         {
-            // AC3: spending on Depletion Rate must measurably cut the drain even when the weapon's
+            // AC3: spending on Endurance must measurably cut the drain even when the weapon's
             // output is maxed, and AC4: it must never become literally free to run.
             float baseReach = WaterBlaster.DefaultRange;
             float baseCone = WaterBlaster.DefaultConeHalfAngle;
@@ -261,14 +223,14 @@ namespace MaxWorlds.Tests.EditMode
                 baseCone, WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), WeaponCatalog.DefaultRcdaSpreadPerLevel);
             float outputScale = WeaponCatalog.DrainOutputScale(maxReach, baseReach, maxCone, baseCone);
 
-            float noDepletionSpend = WeaponCatalog.EffectiveDrainPerSecond(
-                BlasterTuning.EnergyPerSecond, 1, WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
+            float undraftedEndurance = WeaponCatalog.EffectiveDrainPerSecond(
+                BlasterTuning.EnergyPerSecond, 0, WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
             float maxedDepletionSpend = WeaponCatalog.EffectiveDrainPerSecond(
-                BlasterTuning.EnergyPerSecond, WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate),
+                BlasterTuning.EnergyPerSecond, WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance),
                 WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
 
-            Assert.Less(maxedDepletionSpend, noDepletionSpend, "Depletion Rate must still buy back sustain against a maxed-output weapon");
-            Assert.Greater(maxedDepletionSpend, 0f, "even a maxed Depletion Rate track must leave a real, positive cost to run");
+            Assert.Less(maxedDepletionSpend, undraftedEndurance, "Endurance must still buy back sustain against a maxed-output weapon");
+            Assert.Greater(maxedDepletionSpend, 0f, "even a maxed Endurance track must leave a real, positive cost to run");
         }
 
         // ---------------------------------------------------------------- MV-379: visual-only strength fraction
