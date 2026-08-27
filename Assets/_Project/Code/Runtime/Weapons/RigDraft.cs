@@ -13,22 +13,30 @@ namespace MaxWorlds.Weapons
     /// </summary>
     public static class RigDraft
     {
-        /// <summary>The most candidates a single shed Morphing Module offers when drawing CATEGORIES
-        /// (MV-457) — deliberately smaller than <see cref="RigBoard.DraftMaxCandidates"/>'s node draw
-        /// (Lee, 2026-08-19: "a random choice of 2 still-locked families").</summary>
-        public const int CategoryDraftMaxCandidates = 2;
+        /// <summary>The most candidates a single shed Morphing Module offers when drawing CATEGORIES.
+        /// MV-595 dropped this from 2 to 1 (Lee, 2026-08-26: "force the player to unlock secondary,
+        /// then energy, then move, then support, so left to right across the rig") — superseding
+        /// MV-457's "a random choice of 2 still-locked families".</summary>
+        public const int CategoryDraftMaxCandidates = 1;
 
         /// <summary>Up to <see cref="RigBoard.DraftMaxCandidates"/> distinct eligible cap ids. Empty
         /// once every cap is either owned or unreached; returns fewer than the max as the pool shrinks,
         /// and never repeats an id within one draw.</summary>
         public static string[] DrawCandidates() => Sample(RigState.EligibleCapIds(), RigBoard.DraftMaxCandidates);
 
-        /// <summary>Up to <see cref="CategoryDraftMaxCandidates"/> distinct LOCKED category ids (MV-457)
-        /// — the shed's own family draft, replacing the old per-node draw at the shed itself (the
-        /// per-node draw above still exists — the RIG board's own eventual cells-as-currency spend, not
-        /// a shed pick, is what draws individual nodes from here on). Empty once every category is
-        /// unlocked.</summary>
-        public static string[] DrawCandidateCategories() => Sample(RigState.LockedCategoryIds(), CategoryDraftMaxCandidates);
+        /// <summary>The single next-in-line LOCKED category id, in <see cref="RigBoard.AllCategoryIds"/>'s
+        /// own authored (left-to-right) order — MV-595: no longer a sample of <see cref="CategoryDraftMaxCandidates"/>
+        /// (there is nothing left to choose between at 1). Deliberately NOT routed through <see cref="Sample"/>:
+        /// that helper's Fisher-Yates shuffle is exactly the randomness this method exists to not have, and
+        /// <see cref="DrawCandidates"/> above still needs that same shuffle for its own (unrelated, node-level)
+        /// draft, so <see cref="Sample"/> itself is left untouched rather than risk silently de-randomising
+        /// both callers. Empty once every category is unlocked.</summary>
+        public static string[] DrawCandidateCategories()
+        {
+            foreach (string category in RigState.LockedCategoryIds())
+                return new[] { category };
+            return new string[0];
+        }
 
         private static string[] Sample(IEnumerable<string> eligible, int max)
         {

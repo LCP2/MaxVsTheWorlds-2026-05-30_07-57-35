@@ -87,5 +87,42 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(RigDraft.DrawCandidates(), Does.Not.Contain("m_spd"),
                     "an owned cap must never reappear in a later draw");
         }
+
+        // ---------------------------------------------------------------- MV-595: shed unlocks are forced order, not a draft
+
+        /// <summary>MV-595, one test walking every AC in order (CC_AUTONOMY's own "at most one new test
+        /// per ticket" rule — this is that one). Proven to fail on the pre-fix commit: with
+        /// <c>CategoryDraftMaxCandidates</c> at 2 and <c>DrawCandidateCategories</c> routed through
+        /// <c>Sample</c>'s Fisher-Yates shuffle, a run's sequence of unlocks varied across the 50
+        /// iterations below (both in which categories were offered together and in what order) instead
+        /// of landing on the fixed SECONDARY/ENERGY/MOVE/SUPPORT sequence every single time.</summary>
+        [Test]
+        public void ShedUnlocksFollowTheFixedLeftToRightOrder_NotARandomDraft_MV595()
+        {
+            string[] expectedOrder = { "SECONDARY", "ENERGY", "MOVE", "SUPPORT" };
+
+            for (int run = 0; run < 50; run++)
+            {
+                RigState.Reset(); // PRIMARY starts unlocked; the rest start locked (MV-457)
+
+                foreach (string expected in expectedOrder)
+                {
+                    var candidates = RigDraft.DrawCandidateCategories();
+
+                    // AC2: exactly one candidate, always the first still-locked id in board order.
+                    Assert.That(candidates.Length, Is.EqualTo(1),
+                        $"run {run}: a shed must offer exactly one category, not a choice");
+                    Assert.That(candidates[0], Is.EqualTo(expected),
+                        $"run {run}: expected '{expected}' next in board order, got '{candidates[0]}'");
+
+                    RigState.UnlockCategory(candidates[0]);
+                }
+
+                // AC3: once every category is unlocked, there is nothing left to draft — the pool that
+                // gates PickupDirector.OnFactoryDestroyed's existing part-plus-cells fallback.
+                Assert.That(RigDraft.DrawCandidateCategories(), Is.Empty,
+                    $"run {run}: every category is unlocked, nothing should remain to offer");
+            }
+        }
     }
 }

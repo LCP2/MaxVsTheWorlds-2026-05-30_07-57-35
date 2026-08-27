@@ -182,7 +182,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(_screen.IsRevealActive, Is.False, "AC5: no reveal object may remain active 1.5s after a draft pick");
         }
 
-        // ---------------------------------------------------------------- 0 and 1 candidates: no screen
+        // ---------------------------------------------------------------- 0 candidates: no screen; 1: grants AND reveals
 
         [Test]
         public void ZeroCandidatesNeverOpensTheScreen()
@@ -198,13 +198,19 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(_screen.IsOpen, Is.False);
         }
 
+        /// <summary>MV-595 AC4: a single candidate (now the ONLY shape a shed ever offers, since
+        /// <c>CategoryDraftMaxCandidates</c> dropped to 1) used to grant silently with no screen at all
+        /// — that stale pin lived here as <c>OneCandidateGrantsItDirectlyWithoutOpeningTheScreen</c> until
+        /// this ticket. The reveal is the reward (MV-521's own phrase): a single candidate must still
+        /// open THE RIG and play the same family-reveal a multi-candidate pick does once resolved.</summary>
         [Test]
-        public void OneCandidateGrantsItDirectlyWithoutOpeningTheScreen()
+        public void OneCandidateGrantsItAndOpensTheBoardWithTheReveal_MV595()
         {
             _screen.OpenMorphingModuleDraft(new[] { "e_cel" });
 
             Assert.That(RigState.Level("e_cel"), Is.EqualTo(1), "the sole candidate must be granted outright");
-            Assert.That(_screen.IsOpen, Is.False, "a single candidate must never open the board");
+            Assert.That(_screen.IsOpen, Is.True, "MV-595: a single candidate must open THE RIG, never grant silently");
+            Assert.That(_screen.IsRevealActive, Is.True, "MV-595: the newly granted family's reveal must play");
         }
 
         // ---------------------------------------------------------------- MV-425: 2-3 candidates wait, not force-open
