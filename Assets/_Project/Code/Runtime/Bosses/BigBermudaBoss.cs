@@ -5,6 +5,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Bosses
 {
@@ -344,9 +345,15 @@ namespace MaxWorlds.Bosses
         private RobotEnemy TakeAdd(in EnemyArchetype archetype)
             => _addPool.Count > 0 ? _addPool.Pop() : CreateAdd(archetype);
 
-        /// <summary>Build one greybox add, sized exactly the way <see cref="EnemySpawner"/> builds a
-        /// factory robot (YT-74 metre-space collider un-scaling) but parented to the boss's own adds
-        /// root rather than a factory. Born inactive; a volley activates it on landing.</summary>
+        /// <summary>Build one add, sized exactly the way <see cref="EnemySpawner"/> builds a factory
+        /// robot (YT-74 metre-space collider un-scaling) but parented to the boss's own adds root rather
+        /// than a factory. Dressed through the same <see cref="RobotRig"/>/<see cref="CharacterSkin"/>
+        /// body pipeline <see cref="EnemySpawner.CreateInstance"/> uses (MV-587) — a flung Rusher now
+        /// looks exactly like a shed Rusher, in flight and after landing, instead of the raw primitive
+        /// capsule/cube it used to fly out as, which drew Unity's magenta missing-shader colour. Same
+        /// ordering rule MV-535 fixed for the factory path: <c>Apply</c> stamps the real
+        /// <see cref="RobotEnemy.Kind"/> BEFORE <see cref="RobotRig"/> attaches, because its Awake reads
+        /// Kind synchronously to build the right body. Born inactive; a volley activates it on landing.</summary>
         private RobotEnemy CreateAdd(in EnemyArchetype a)
         {
             var go = GameObject.CreatePrimitive(a.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
@@ -362,6 +369,7 @@ namespace MaxWorlds.Bosses
 
             var e = go.AddComponent<RobotEnemy>();
             e.Apply(a);
+            go.AddComponent<RobotRig>();
             e.Died += OnAddDied;
             e.gameObject.SetActive(false);
             return e;
