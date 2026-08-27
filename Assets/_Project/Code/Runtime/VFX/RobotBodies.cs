@@ -142,22 +142,36 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(0.2019f, 1.3f, 0.08f), Quaternion.identity, new Vector3(0.028f, 0.028f, 0.028f));
         }
 
-        /// <summary>Blinker — one of only two kinds that keeps legs, and it earns them: it teleports rather than closing on foot, so it never needs a walk cycle. A faceted crystal core crouched on tight crossed legs.</summary>
+        /// <summary>Blinker (MV-584 rework) — one of only two kinds that keeps legs, and it earns
+        /// them: it teleports rather than closing on foot, so it never needs a walk cycle. Before this
+        /// it wore no colour of its own (fell through to <see cref="CharacterSkin.RoleFor"/>'s Rusher
+        /// default) and its faceted crystal core was small, mostly <c>p.Cool</c>/<c>p.Dark</c>, and sat
+        /// on a narrow crossed-leg stance — at gameplay distance it read as just another dark blob, the
+        /// Rusher with a different name. The core is now ~1.5x its old size and wears the kind's own
+        /// BODY material throughout (magenta, once <see cref="CharacterSkin.RoleFor"/> maps
+        /// <see cref="EnemyKind.Blinker"/> to its own role) rather than the shared cool/dark tones, the
+        /// stance is widened to plant a bigger core, and three floating crystal shards orbit the core at
+        /// head height — the at-a-glance tell that this is a crystal on legs, not a wheeled robot.</summary>
         private static void BuildBlinker(Transform root, in RobotPalette p,
                                     List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
-            Add(root, CharacterMeshes.Beam(0.1541f, 0.03f, 0.024f, 7), p.Dark, new Vector3(-0.0575f, 0.228f, 0f), Quaternion.Euler(0f, 0f, 20.9041f), Vector3.one);
-            Add(root, CharacterMeshes.Sphere(12), p.Dark, new Vector3(-0.03f, 0.156f, 0f), Quaternion.identity, new Vector3(0.069f, 0.069f, 0.069f));
-            Add(root, CharacterMeshes.Beam(0.1561f, 0.024f, 0.02f, 7), p.Dark, new Vector3(-0.0318f, 0.078f, 0f), Quaternion.Euler(0f, 0f, 6f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.038f, 0f), new Vector2(0.026f, 0.045f), new Vector2(0.01f, 0.075f) }, 8), p.Dark, new Vector3(-0.033f, -0.03f, 0.03f), Quaternion.Euler(10f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.1541f, 0.03f, 0.024f, 7), p.Dark, new Vector3(0.0575f, 0.228f, 0f), Quaternion.Euler(0f, 0f, -20.9041f), Vector3.one);
-            Add(root, CharacterMeshes.Sphere(12), p.Dark, new Vector3(0.03f, 0.156f, 0f), Quaternion.identity, new Vector3(0.069f, 0.069f, 0.069f));
-            Add(root, CharacterMeshes.Beam(0.1561f, 0.024f, 0.02f, 7), p.Dark, new Vector3(0.0318f, 0.078f, 0f), Quaternion.Euler(0f, 0f, -6f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.038f, 0f), new Vector2(0.026f, 0.045f), new Vector2(0.01f, 0.075f) }, 8), p.Dark, new Vector3(0.033f, -0.03f, 0.03f), Quaternion.Euler(10f, 0f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Beam(0.1541f, 0.03f, 0.024f, 7), p.Dark, new Vector3(-0.0805f, 0.228f, 0f), Quaternion.Euler(0f, 0f, 26.1301f), Vector3.one);
+            Add(root, CharacterMeshes.Sphere(12), p.Dark, new Vector3(-0.042f, 0.156f, 0f), Quaternion.identity, new Vector3(0.069f, 0.069f, 0.069f));
+            Add(root, CharacterMeshes.Beam(0.1561f, 0.024f, 0.02f, 7), p.Dark, new Vector3(-0.04452f, 0.078f, 0f), Quaternion.Euler(0f, 0f, 7.5f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.038f, 0f), new Vector2(0.026f, 0.045f), new Vector2(0.01f, 0.075f) }, 8), p.Dark, new Vector3(-0.0462f, -0.03f, 0.03f), Quaternion.Euler(10f, 0f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Beam(0.1541f, 0.03f, 0.024f, 7), p.Dark, new Vector3(0.0805f, 0.228f, 0f), Quaternion.Euler(0f, 0f, -26.1301f), Vector3.one);
+            Add(root, CharacterMeshes.Sphere(12), p.Dark, new Vector3(0.042f, 0.156f, 0f), Quaternion.identity, new Vector3(0.069f, 0.069f, 0.069f));
+            Add(root, CharacterMeshes.Beam(0.1561f, 0.024f, 0.02f, 7), p.Dark, new Vector3(0.04452f, 0.078f, 0f), Quaternion.Euler(0f, 0f, -7.5f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.038f, 0f), new Vector2(0.026f, 0.045f), new Vector2(0.01f, 0.075f) }, 8), p.Dark, new Vector3(0.0462f, -0.03f, 0.03f), Quaternion.Euler(10f, 0f, 0f), Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.09f, 0f), new Vector2(0.17f, 0.05f), new Vector2(0.1967f, 0.13f) }, 28), p.Cool, new Vector3(0f, 0.28f, 0f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1967f, 0.13f), new Vector2(0.2f, 0.14f), new Vector2(0.18f, 0.22f), new Vector2(0.1f, 0.28f) }, 28), p.Warm, new Vector3(0f, 0.28f, 0f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Prism(6, 0.2f, 0.3f, 0.26f, 0.3f, 22f), p.Cool, new Vector3(0f, 0.72f, 0f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Prism(6, 0.3f, 0.13f, 0.3f, 0.34f, -18f), p.Warm, new Vector3(0f, 1f, 0f), Quaternion.identity, Vector3.one);
+
+            // The faceted crystal core (MV-584): 1.5x the old prism dimensions, both facets in the
+            // BODY material (magenta) rather than p.Cool/p.Dark — the part of the silhouette that most
+            // needs to read as "crystal", not "chassis".
+            Add(root, CharacterMeshes.Prism(6, 0.2f, 0.3f, 0.26f, 0.3f, 22f), p.Warm, new Vector3(0f, 0.72f, 0f), Quaternion.identity, new Vector3(1.5f, 1.5f, 1.5f), "CrystalCore");
+            Add(root, CharacterMeshes.Prism(6, 0.3f, 0.13f, 0.3f, 0.34f, -18f), p.Warm, new Vector3(0f, 1f, 0f), Quaternion.identity, new Vector3(1.5f, 1.5f, 1.5f), "CrystalCore");
+
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.21f, 0f), new Vector2(0.235f, 0.03f), new Vector2(0.2f, 0.07f) }, 12), p.Gold, new Vector3(0f, 0.855f, 0f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1f, 0f), new Vector2(0.115f, 0.025f), new Vector2(0.08f, 0.06f) }, 10), p.Dark, new Vector3(0f, 1.16f, -0.01f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1008f, 0f), new Vector2(0.1544f, 0.0158f), new Vector2(0.1625f, 0.0325f), new Vector2(0.1463f, 0.0525f) }, 24), p.Dark, new Vector3(0f, 0.86f, 0.245f), Quaternion.Euler(46f, 0f, 0f), Vector3.one);
@@ -165,6 +179,20 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Beam(0.22f, 0.016f, 0.007f, 5), p.Dark, new Vector3(-0.09f, 1.25f, 0.02f), Quaternion.Euler(0f, 0f, 18f), Vector3.one);
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(-0.158f, 1.36f, 0.02f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
             Add(root, CharacterMeshes.Beam(0.14f, 0.016f, 0.007f, 5), p.Dark, new Vector3(0.1f, 1.19f, -0.05f), Quaternion.Euler(8f, 0f, -13f), Vector3.one);
+
+            // Three floating crystal shards (MV-584), orbit-offset around the core at head height — the
+            // at-a-glance tell that this one is not a wheeled robot: nothing else in the roster has
+            // detached parts hovering off its own silhouette.
+            const float shardRadius = 0.34f;
+            const float shardHeight = 0.95f;
+            for (int i = 0; i < 3; i++)
+            {
+                float thetaDeg = i * 120f;
+                float thetaRad = thetaDeg * Mathf.Deg2Rad;
+                var shardPos = new Vector3(Mathf.Sin(thetaRad) * shardRadius, shardHeight, Mathf.Cos(thetaRad) * shardRadius);
+                Add(root, CharacterMeshes.Prism(5, 0.03f, 0.07f, 0.11f, 0.2f, thetaDeg), p.Warm,
+                    shardPos, Quaternion.Euler(20f, thetaDeg, 12f), Vector3.one, "Shard");
+            }
         }
 
         /// <summary>Half the leg-beam length (0.34f/2) — the Beam mesh is centred on its own local

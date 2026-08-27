@@ -91,6 +91,19 @@ namespace MaxWorlds.VFX
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
+        /// <summary>MV-584: the magenta-white pop that rides the teleport collapse/expand, on top of
+        /// whatever body colour a robot wears — distinct from <see cref="EyeWarn"/> (the telegraph
+        /// colour) so a blink never gets mistaken for a wind-up.</summary>
+        private static readonly Color TeleportFlashColor = new Color(1f, 0.85f, 1f);
+
+        /// <summary>How long the real body takes to grow back from nothing once a blink lands
+        /// (MV-584) — the arrival half of the collapse/expand read.</summary>
+        private const float TeleportExpandSeconds = 0.2f;
+
+        /// <summary>How long the departure ghost takes to shrink to nothing (MV-584) — the collapse
+        /// half, played at the point this robot blinked FROM.</summary>
+        private const float TeleportCollapseSeconds = 0.15f;
+
         // ---------------------------------------------------------------- tuning
 
         [Tooltip("How fast the eye reaches the colour the current state calls for. Fast: a telegraph " +
@@ -119,6 +132,17 @@ namespace MaxWorlds.VFX
         private bool _built;
         private Color _tellColor = EyeIdle;
         private float _flash;
+
+        /// <summary>The model's resting local scale (MV-584) — captured once, right after
+        /// <see cref="BuildModel"/> cancels the archetype's body scale, so the teleport-arrival grow-in
+        /// has a real target to animate toward instead of assuming <see cref="Vector3.one"/>.</summary>
+        private Vector3 _restModelScale = Vector3.one;
+
+        /// <summary>0 the instant a blink lands, 1 once the arrival grow-in (MV-584) finishes. Stays at
+        /// 1 the rest of the time — nothing else in <see cref="LateUpdate"/> touches the model's scale,
+        /// so this is the single writer for it.</summary>
+        private float _teleportExpand = 1f;
+        private float _teleportExpandTimer;
 
         /// <summary>Every rolling part (MV-451) — see <see cref="SpinWheels"/>.</summary>
         private Transform[] _wheels;
@@ -157,18 +181,29 @@ namespace MaxWorlds.VFX
         {
             EnsureBuilt();
             HudSignals.DamageDealt += OnDamage;
+            HudSignals.BlinkerTeleported += OnBlinkerTeleported;
 
             // A pooled robot comes back fresh: no leftover flash, eye back at idle.
             _flash = 0f;
             _tellColor = EyeIdle;
             ApplyEyes(_tellColor);
 
+            // And no leftover mid-blink collapse (MV-584): a robot pulled from the pool mid-animation
+            // (e.g. it died the instant it landed) must not spawn back in stuck at zero scale.
+            _teleportExpand = 1f;
+            _teleportExpandTimer = 0f;
+            if (_model != null) _model.localScale = _restModelScale;
+
             // Reset the odometer, or a pooled robot respawning across the map spins its wheels
             // through a full revolution on its first frame (MV-451).
             _lastPos = transform.position;
         }
 
-        private void OnDisable() => HudSignals.DamageDealt -= OnDamage;
+        private void OnDisable()
+        {
+            HudSignals.DamageDealt -= OnDamage;
+            HudSignals.BlinkerTeleported -= OnBlinkerTeleported;
+        }
 
         // ---------------------------------------------------------------- build
 
@@ -264,6 +299,7 @@ namespace MaxWorlds.VFX
             var body = RobotBodies.Build(_enemy.Kind, feet,
                                          new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat));
             _eyes = body.Eyes;
+            _restModelScale = _model.localScale;
 
             _wheels = body.Wheels;
             _wheelRadius = new float[_wheels.Length];
@@ -289,6 +325,7 @@ namespace MaxWorlds.VFX
             RideTheRamp();
             SpinWheels();
             UpdateBeamVfx();
+            UpdateTeleportExpand();
 
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
@@ -302,8 +339,77 @@ namespace MaxWorlds.VFX
 
             // The chassis heats WITH the eye, but only in emission and only a little: the body has to
             // stay its own turquoise/violet or it stops reading as its kind. Same trick the boss uses.
-            Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f);
+            // MV-584: the teleport-arrival pop fades from 1 to 0 across the same grow-in as
+            // _teleportExpand climbs from 0 to 1, so it reads as a flash that is brightest the instant
+            // the body starts assembling and is gone by the time it's full size.
+            float teleportPop = 1f - _teleportExpand;
+            Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
+                       + TeleportFlashColor * (teleportPop * 0.8f);
             if (_bodyMat != null && _bodyMat.HasProperty(EmissionId)) _bodyMat.SetColor(EmissionId, heat);
+        }
+
+        /// <summary>
+        /// MV-584: the arrival half of a Blinker's teleport made visible. <see cref="RobotEnemy.TickTeleport"/>
+        /// still snaps this robot's transform straight to the landing spot with nothing to see — that
+        /// reposition and its timings are untouched — but the frame it lands, <see cref="OnBlinkerTeleported"/>
+        /// zeroes the MODEL's own scale, and this grows it back to <see cref="_restModelScale"/> over
+        /// <see cref="TeleportExpandSeconds"/>, so the body reads as assembling itself out of the blink
+        /// rather than one that was always standing there. A no-op every frame nothing is mid-expand.
+        /// </summary>
+        private void UpdateTeleportExpand()
+        {
+            if (_teleportExpand >= 1f || _model == null) return;
+
+            _teleportExpandTimer += Time.deltaTime;
+            _teleportExpand = Mathf.Clamp01(_teleportExpandTimer / TeleportExpandSeconds);
+            _model.localScale = _restModelScale * _teleportExpand;
+        }
+
+        /// <summary>
+        /// MV-584: only the Blinker that actually landed reacts. <see cref="HudSignals.BlinkerTeleported"/>
+        /// is one event shared by every Blinker in the swarm, and by the time it fires
+        /// <see cref="RobotEnemy.TickTeleport"/> has already snapped THIS transform to
+        /// <paramref name="to"/> if this is the robot that blinked — so a close match against
+        /// <paramref name="to"/> is how one rig tells its own blink from every other Blinker's, with no
+        /// object reference needed on the signal.
+        /// </summary>
+        private void OnBlinkerTeleported(Vector3 from, Vector3 to)
+        {
+            if (_enemy == null || _enemy.Kind != EnemyKind.Blinker || _model == null) return;
+            if ((transform.position - to).sqrMagnitude > 0.01f) return;
+
+            SpawnDepartureGhost(from);
+
+            _teleportExpand = 0f;
+            _teleportExpandTimer = 0f;
+            _model.localScale = Vector3.zero;
+        }
+
+        /// <summary>
+        /// The departure half (MV-584): a husk of this body, left behind at the point this robot
+        /// blinked FROM, that visibly collapses to nothing. The real body has already snapped to the
+        /// landing point by the time <see cref="OnBlinkerTeleported"/> fires (the reposition in
+        /// <see cref="RobotEnemy.TickTeleport"/> is instant), so nothing at the old spot but this clone
+        /// would tell you a robot used to be there. Its materials are cloned, not shared, so tinting the
+        /// husk toward <see cref="TeleportFlashColor"/> can never bleed onto the real robot's body,
+        /// which owns <see cref="_bodyMat"/> and keeps driving it every <see cref="LateUpdate"/>.
+        /// </summary>
+        private void SpawnDepartureGhost(Vector3 from)
+        {
+            var ghost = Instantiate(_model.gameObject, from, _model.rotation);
+            ghost.transform.localScale = _model.lossyScale;
+
+            var renderers = ghost.GetComponentsInChildren<MeshRenderer>(true);
+            for (int i = 0; i < renderers.Length; i++)
+            {
+                var mat = renderers[i].sharedMaterial;
+                if (mat == null) continue;
+                var clone = new Material(mat) { hideFlags = HideFlags.HideAndDontSave };
+                if (clone.HasProperty(EmissionId)) clone.SetColor(EmissionId, TeleportFlashColor * 1.5f);
+                renderers[i].sharedMaterial = clone;
+            }
+
+            ghost.AddComponent<TeleportGhostCollapse>().Begin(TeleportCollapseSeconds);
         }
 
         /// <summary>

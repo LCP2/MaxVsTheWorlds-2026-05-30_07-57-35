@@ -19,6 +19,7 @@ namespace MaxWorlds.VFX
         Brute,      // MV-303: the top of the composition ladder
         Gunner,     // MV-312: the ranged turret gets its own colour, not the rusher's teal
         Bolter,     // MV-578: the rod-launcher gets its own colour, not the rusher's turquoise
+        Blinker,    // MV-584: the teleporter gets its own colour, not the rusher's turquoise
     }
 
     /// <summary>
@@ -129,6 +130,22 @@ namespace MaxWorlds.VFX
         /// to sit with headroom under the ceiling.</summary>
         private static readonly Color BolterBody = new Color(0.55f, 0.275f, 0.061f);
 
+        /// <summary>The Blinker (MV-584): electric magenta — the one hue family none of the other
+        /// tiers occupy (turquoise, violet, royal blue, charcoal, crimson, sentry green, orange), and
+        /// close to the violet-white "phase" hue its own teleport VFX already uses (<see
+        /// cref="MaxWorlds.VFX.CombatVfx"/>'s <c>SurgeCore</c>/<c>TeleportFlash</c>). Before this it had
+        /// no case in <see cref="RoleFor"/> at all and fell through to <see cref="CharacterRole.Robot"/>,
+        /// wearing the Rusher's turquoise outright — indistinguishable from the one enemy it least
+        /// resembles in behaviour.
+        ///
+        /// The ticket's own authored value was (0.85, 0.25, 0.85) — a peak channel well over
+        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6), the same defect MV-348/MV-328/MV-578 already fixed
+        /// on the Rusher, the Bruiser and the Bolter: it would have clipped under the yard's 1.8x key
+        /// and washed toward a drab, hue-less pink instead of the electric magenta it was painted.
+        /// Pulled proportionally (same ratios, same hue) to sit with headroom under the ceiling, the
+        /// same margin the Bolter and the Heavy already sit at.</summary>
+        private static readonly Color BlinkerBody = new Color(0.55f, 0.162f, 0.55f);
+
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
         private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
@@ -228,6 +245,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Brute: return BruteBody;
                 case CharacterRole.Gunner: return GunnerBody;
                 case CharacterRole.Bolter: return BolterBody;
+                case CharacterRole.Blinker: return BlinkerBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -248,6 +266,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Brute: return CharacterRole.Brute;
                 case EnemyKind.Gunner: return CharacterRole.Gunner;
                 case EnemyKind.Bolter: return CharacterRole.Bolter;
+                case EnemyKind.Blinker: return CharacterRole.Blinker;
                 default: return CharacterRole.Robot;
             }
         }
@@ -257,7 +276,8 @@ namespace MaxWorlds.VFX
         public static bool IsEnemy(CharacterRole r) =>
             r == CharacterRole.Robot || r == CharacterRole.Bruiser ||
             r == CharacterRole.Heavy || r == CharacterRole.Brute ||
-            r == CharacterRole.Gunner || r == CharacterRole.Bolter || r == CharacterRole.Boss;
+            r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
+            r == CharacterRole.Blinker || r == CharacterRole.Boss;
 
         private void OnEnable()
         {
