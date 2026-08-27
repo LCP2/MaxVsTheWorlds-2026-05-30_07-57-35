@@ -71,6 +71,11 @@ namespace MaxWorlds.Weapons
         private MaterialPropertyBlock _mpb;
         private int _forceFieldLevel = 1;
 
+        /// <summary>The abilities component this bubble drains on a ram (MV-586) — null for an
+        /// unowned bubble (MV-426 BLINKGUARD's left-behind shell), which tracks no absorb budget of
+        /// its own and so has nothing for <see cref="ReportRam"/> to drain.</summary>
+        private PlayerAbilities _ownerAbilities;
+
         /// <summary>The solid, non-trigger collider that blocks robot bodies.</summary>
         public SphereCollider Collider { get; private set; }
 
@@ -81,6 +86,7 @@ namespace MaxWorlds.Weapons
         public void Init(Transform owner, CharacterController ownerCc, float radius, int forceFieldLevel = 1)
         {
             _forceFieldLevel = Mathf.Max(1, forceFieldLevel);
+            _ownerAbilities = owner != null ? owner.GetComponent<PlayerAbilities>() : null;
             transform.SetParent(owner, worldPositionStays: false);
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;
@@ -123,6 +129,18 @@ namespace MaxWorlds.Weapons
             // Physics.autoSyncTransforms is off project-wide (see GateSolidityTests) — force a sync so
             // a robot's CharacterController.Move on this very frame already sees the new collider.
             Physics.SyncTransforms();
+        }
+
+        /// <summary>MV-586: a robot body ramming this bubble costs the shield the ramming robot's own
+        /// <c>ContactDamage</c> — routed through the same <see cref="PlayerAbilities.AbsorbForceFieldDamage"/>
+        /// path a real hit uses, so the pop-at-zero rule, the MV-455 hold-up toggle and the level-3 pop
+        /// counter-attack all behave unchanged. The LEAKED portion is deliberately discarded here rather
+        /// than forwarded to <c>PlayerHealth</c>: the bubble already physically blocked the body, so
+        /// there is no real hit for the leak rule to apply to. No-op for an unowned bubble (<see cref="_ownerAbilities"/>
+        /// is null), which drains nothing because it tracks no absorb budget of its own.</summary>
+        public void ReportRam(float contactDamage)
+        {
+            _ownerAbilities?.AbsorbForceFieldDamage(contactDamage);
         }
 
         /// <summary>0 (about to pop) .. 1 (fresh) — drives the ready-white-to-warning-amber shift.</summary>
