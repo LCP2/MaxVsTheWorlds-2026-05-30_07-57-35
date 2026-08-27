@@ -1670,26 +1670,59 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
-        /// per category, spanning from the midpoint with its left neighbour to the midpoint with its
-        /// right one (the fusion row's diamonds sit exactly on these boundaries: <c>f_del</c> at
-        /// x=430 is the PRIMARY/SECONDARY midpoint, etc. — confirmed against the design file rather
-        /// than guessed). Drawn before the nodes so they sit behind everything.</summary>
+        /// per category, sized to the actual bounds of the nodes it contains (its own category node
+        /// plus every ability node whose <c>Category</c> matches it), not to a shared midpoint with its
+        /// neighbours (MV-594: midpoint-tiled panels put the visible box's edge wherever the NEXT
+        /// family's centre happened to sit, unrelated to where this family's own nodes actually are —
+        /// dead space for a narrow family, a tight crop for one with a close neighbour). Panels may now
+        /// have gaps between them; that is correct, a gap is what makes a box read as "this one family".
+        /// Drawn before the nodes so they sit behind everything.</summary>
         private void BuildCategoryPanels(RectTransform boardRoot)
         {
             var categories = Categories;
+            var abilities = Abilities;
             int n = categories.Count;
             if (n == 0) return;
             float y = RegionRectY, h = RigBoardLayout.RegionRectH, radius = RigBoardLayout.RegionRectRadius;
+            float catR = RadiusCategory, abR = RadiusAbility, padX = RigBoardLayout.RegionRectPadX;
+
+            // MV-594 pass 1: each family's true node bounds (its own category node plus every ability
+            // node whose Category matches it) — naturally handles an asymmetric family (more children on
+            // one side than the other) since it is a real min/max, never a symmetric half-width about the
+            // category centre. Categories are already left-to-right by X (BuildColumnLayout's own cursor
+            // walk), so index-adjacent entries are true neighbours for pass 2.
+            var nodeLeft = new float[n];
+            var nodeRight = new float[n];
+            for (int i = 0; i < n; i++)
+            {
+                float left = categories[i].X - catR;
+                float right = categories[i].X + catR;
+                foreach (var ab in abilities)
+                {
+                    if (ab.Category != categories[i].Id) continue;
+                    left = Mathf.Min(left, ab.X - abR);
+                    right = Mathf.Max(right, ab.X + abR);
+                }
+                nodeLeft[i] = left;
+                nodeRight[i] = right;
+            }
 
             for (int i = 0; i < n; i++)
             {
-                // MV-472: each family's own column is no longer a uniform 1/5 share of the board — its
-                // half-width is sized to its actual content (RigBoardLayout.ColumnHalfWidth). An interior
-                // boundary still splits the gap with its neighbour at the midpoint (works unchanged for
-                // non-uniform spacing); only the outer edges (first/last) needed their own column's own
-                // half-width instead of a shared "spacing" borrowed from the 0-1 gap.
-                float left = i == 0 ? categories[i].X - categories[i].ColumnHalfWidth : (categories[i - 1].X + categories[i].X) * 0.5f;
-                float right = i == n - 1 ? categories[i].X + categories[i].ColumnHalfWidth : (categories[i].X + categories[i + 1].X) * 0.5f;
+                // MV-594 pass 2: pad outward by RegionRectPadX, clamped so a panel can never cross the
+                // midpoint with a neighbour's own node bounds (which would engulf one of ITS nodes — the
+                // exact defect this ticket removes) or, at the two outer edges, past this family's own
+                // board-edge reservation (ColumnHalfWidth — the same edge the pre-fix layout already
+                // respected, and correct in both standard and phone mode since it is itself mode-resolved).
+                // In this data set every family sits closer to its neighbour than 2x padX, so every
+                // boundary clamps all the way down to leftLimit/rightLimit — panels land exactly on each
+                // family's own true half-width (touching, no visible gap) rather than the old midpoint-
+                // of-centres line that spilled into a neighbour's own column. See the MV-594 fix comment
+                // for the numbers; the panel still never re-overlaps a neighbour's nodes.
+                float leftLimit = i == 0 ? categories[i].X - categories[i].ColumnHalfWidth : (nodeRight[i - 1] + nodeLeft[i]) * 0.5f;
+                float rightLimit = i == n - 1 ? categories[i].X + categories[i].ColumnHalfWidth : (nodeRight[i] + nodeLeft[i + 1]) * 0.5f;
+                float left = Mathf.Max(nodeLeft[i] - padX, leftLimit);
+                float right = Mathf.Min(nodeRight[i] + padX, rightLimit);
                 float w = right - left;
 
                 float cornerFraction = Mathf.Clamp(radius / (Mathf.Min(w, h) * 0.5f), 0.05f, 0.5f);
