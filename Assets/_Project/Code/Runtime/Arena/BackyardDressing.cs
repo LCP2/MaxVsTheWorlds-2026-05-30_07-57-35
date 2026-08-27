@@ -46,6 +46,15 @@ namespace MaxWorlds.Arena
         /// — but only this far. Past that a bush stops reading as a bush.</summary>
         private const float MaxStretch = 2.6f;
 
+        /// <summary>Target spacing between pots along a planter, in metres (MV-577). A planter is a
+        /// row of pots, not one pot: this is what makes a 7 x 1 bed read as seven pots rather than a
+        /// single pot with six metres of invisible wall beside it.</summary>
+        private const float PlanterPitchMetres = 1.2f;
+
+        /// <summary>Sanity cap on how many pots one block may tile into. The largest authored planter,
+        /// 8 x 5, tiles 7 x 4.</summary>
+        private const int MaxPlantersPerBlock = 40;
+
         /// <summary>How tall a tree stands, in metres, regardless of how wide the cover block under
         /// it is (MV-570). Cover trees used to be scaled uniformly off the block's narrow side, so a
         /// 6 m block grew a 13.6 m tree next to a 1.5 m fence. Roughly twice the fence: clearly the
@@ -222,14 +231,29 @@ namespace MaxWorlds.Arena
 
                 case CoverDressing.Planter:
                 {
-                    float cell = Mathf.Min(c.Size.x, c.Size.z) * 0.5f;
-                    for (int i = 0; i < 4; i++)
+                    // MV-577: a planter is a ROW (or bed) of pots, so it has to be tiled across the
+                    // block the same way the Hedge case tiles bushes. Sizing one cluster off the
+                    // block's short side left a 4 x 1 planter showing a single pot with ~2.8 m of
+                    // invisible collider beside it (area 1). The collider is unchanged; only the art
+                    // that stands in for it is.
+                    float pitch = Mathf.Max(PlanterPitchMetres, Mathf.Min(c.Size.x, c.Size.z));
+                    int nx = Mathf.Max(1, Mathf.RoundToInt(c.Size.x / pitch));
+                    int nz = Mathf.Max(1, Mathf.RoundToInt(c.Size.z / pitch));
+                    while (nx * nz > MaxPlantersPerBlock) { if (nx >= nz) nx--; else nz--; }
+
+                    float potWidth = Mathf.Min(c.Size.x / nx, c.Size.z / nz);
+
+                    for (int ix = 0; ix < nx; ix++)
                     {
-                        var offset = new Vector2((i % 2 == 0 ? -1f : 1f) * cell * 0.5f,
-                                                 (i < 2 ? -1f : 1f) * cell * 0.5f);
-                        Fill(PropCatalog.BushDetailed, at + offset, c.Size.y, cell, i * 51f);
+                        for (int iz = 0; iz < nz; iz++)
+                        {
+                            var offset = new Vector2(c.Size.x * ((ix + 0.5f) / nx - 0.5f),
+                                                     c.Size.z * ((iz + 0.5f) / nz - 0.5f));
+                            Fill(PropCatalog.PotLarge, at + offset, c.Size.y, potWidth, (ix * 3 + iz) * 37f);
+                            Fill(PropCatalog.BushDetailed, at + offset, c.Size.y, potWidth * 0.7f,
+                                 (ix * 5 + iz) * 51f);
+                        }
                     }
-                    Fill(PropCatalog.PotLarge, at + new Vector2(0f, -c.Size.z * 0.35f), 0.5f, 1.2f, 0f);
                     break;
                 }
 

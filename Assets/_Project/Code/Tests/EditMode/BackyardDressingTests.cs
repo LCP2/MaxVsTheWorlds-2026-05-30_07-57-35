@@ -364,6 +364,73 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- MV-577: cover planters tile pots across the whole footprint, not one in the middle -
+
+        /// <summary>MV-577: <c>DressCover</c>'s Planter case used to size ONE pot+bush cluster off
+        /// the block's SHORT side and centre it, so a long block's planter showed one pot in the
+        /// middle with the rest of its collider invisible — a1_h4's 4x1 m block showed ~1.2 m of pot
+        /// with 2.8 m of invisible wall on either side. The fix tiles pots across the block's actual
+        /// footprint at a fixed pitch. This reads the RESOLVED position, scale and yaw of each placed
+        /// pot off its transform — not the authored pitch constant — so it fails if the tiling maths
+        /// regresses even while the constant stays 1.2.</summary>
+        [Test]
+        public void APlanterTilesPotsAcrossItsWholeLength_NotOneInTheMiddle()
+        {
+            var host = new GameObject("MV577 host");
+            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            try
+            {
+                var dressing = host.AddComponent<BackyardDressing>();
+
+                var propsHost = new GameObject("MV577 props").transform;
+                propsHost.SetParent(host.transform, false);
+                typeof(BackyardDressing)
+                    .GetField("_props", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .SetValue(dressing, propsHost);
+
+                // a1_h4, the ticket's worked example: a 4x1 m planter, 1.5 m wallHeight.
+                var cover = new ArenaCover("a1_h4", Vector2.zero, new Vector3(4f, 1.5f, 1f),
+                    CoverShape.Box, CoverDressing.Planter);
+                var piece = new CoverPiece(cover, body);
+
+                typeof(BackyardDressing)
+                    .GetMethod("DressCover", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(dressing, new object[] { piece });
+
+                var pots = propsHost.GetComponentsInChildren<Transform>()
+                    .Where(t => t != propsHost && t.name == PropCatalog.PotLarge)
+                    .ToList();
+
+                Assert.Greater(pots.Count, 1,
+                    "only one pot was placed on a 4 m planter — it will still show as a single pot " +
+                    "with invisible wall beside it");
+
+                Vector3 kit = PropCatalog.Size(PropCatalog.PotLarge);
+                float minX = float.MaxValue, maxX = float.MinValue;
+                foreach (Transform t in pots)
+                {
+                    float rad = t.eulerAngles.y * Mathf.Deg2Rad;
+                    float halfWidth = 0.5f * (kit.x * t.localScale.x * Mathf.Abs(Mathf.Cos(rad))
+                                             + kit.z * t.localScale.z * Mathf.Abs(Mathf.Sin(rad)));
+                    minX = Mathf.Min(minX, t.localPosition.x - halfWidth);
+                    maxX = Mathf.Max(maxX, t.localPosition.x + halfWidth);
+                }
+
+                // The block spans -2..2 on X. AC5 caps bare collider at 1 m, so the tiled pots must
+                // reach within 1 m of both edges — not stop 2.8 m short the way the pre-fix single
+                // centred pot did.
+                Assert.LessOrEqual(minX, -2f + 1f,
+                    $"the pots start at {minX:0.00}, leaving bare collider at the block's left edge");
+                Assert.GreaterOrEqual(maxX, 2f - 1f,
+                    $"the pots end at {maxX:0.00}, leaving bare collider at the block's right edge");
+            }
+            finally
+            {
+                Object.DestroyImmediate(body);
+                Object.DestroyImmediate(host);
+            }
+        }
+
         // --- the rules have teeth -------------------------------------------------------------
 
         [Test]
