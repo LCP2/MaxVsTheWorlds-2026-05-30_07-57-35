@@ -44,20 +44,20 @@ namespace MaxWorlds.Tests.EditMode
                 "p_dmg is THE RIG's one run-start exception");
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(0));
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), Is.EqualTo(0));
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.DepletionRate), Is.EqualTo(0));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Endurance), Is.EqualTo(0));
         }
 
         [Test]
         public void RangeAndFlowAreDraftableButNotPartsSpendableAtRunStart_MV436()
         {
-            // Schema 3 (MV-436) retired the old cap/stat split: p_rng and p_flw (DepletionRate) are
+            // Schema 3 (MV-436) retired the old cap/stat split: p_rng and p_flw (Endurance) are
             // both direct children of p_dmg, which is already at L1 at run start, so both are
             // REACHED immediately — but reached only gates what a Morphing Module draft may offer
             // now, it no longer confers spendability. A part can never perform either one's own
             // 0->1 unlock.
             Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.False,
                 "p_rng is reached but unowned — only a draft can unlock it");
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate), Is.False,
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance), Is.False,
                 "p_flw is reached but unowned — only a draft can unlock it");
             Assert.That(RigState.EligibleCapIds(), Does.Contain("p_rng"));
             Assert.That(RigState.EligibleCapIds(), Does.Contain("p_flw"));
@@ -116,17 +116,19 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageAndDepletionRateCapAtSixLevels_MV291()
+        public void DamageAndSpreadCapAtFourLevels_MV597()
         {
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(6));
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate), Is.EqualTo(6), "MV-299");
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Damage), Is.EqualTo(4),
+                "MV-597 cut Damage's cap from 6 to 4 (Lee's playtest: maxed Damage+Spread+Flow was over-powered)");
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(4),
+                "MV-597 cut Spread's cap from 9 to 4 — the biggest single lever on the over-power");
         }
 
         [Test]
-        public void RangeAndSpreadCapAtNineLevels_MV367()
+        public void RangeStaysAtNineLevels_EnduranceCapsAtEightLevels_MV597()
         {
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(9));
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Spread), Is.EqualTo(9));
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(9), "MV-597: Lee did not ask for Range to change");
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance), Is.EqualTo(8), "MV-597: Endurance (renamed from Flow) rose from 6 to 8");
         }
 
         // ---------------------------------------------------------------- Water Balloon tracks (MV-370/MV-422)
@@ -396,7 +398,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void AcquireByIdFailsForAnUnreachedOrUnknownId()
         {
-            Assert.That(WeaponSystemState.AcquireById("p_prc"), Is.False, "p_prc's parent (p_flw) isn't reached at run start");
+            Assert.That(WeaponSystemState.AcquireById("p_spr"), Is.False, "p_spr's parent (p_rng) isn't reached at run start");
             Assert.That(WeaponSystemState.AcquireById("not_a_real_id"), Is.False);
         }
 

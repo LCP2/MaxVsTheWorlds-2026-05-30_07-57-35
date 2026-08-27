@@ -23,7 +23,7 @@ namespace MaxWorlds.Combat
     /// MV-290 cut the tank entirely (always-on, no depletion); MV-299 reinstates it — the primary
     /// drains under continuous fire and auto-regenerates once the trigger is released, no cells, no
     /// pickups, no taps involved (that part of MV-290's cut, one currency/no cell-fuel, stays). See
-    /// <see cref="WaterNormalized"/> for the floating gauge and <see cref="WeaponTrackKind.DepletionRate"/>
+    /// <see cref="WaterNormalized"/> for the floating gauge and <see cref="WeaponTrackKind.Endurance"/>
     /// for the upgrade that slows the drain.
     ///
     /// All firing visuals live in <see cref="WaterVfx"/> (YT-47), which this attaches
@@ -138,7 +138,7 @@ namespace MaxWorlds.Combat
         /// correct if those tracks' own curves retune again.</summary>
         public float EnergyPerTick => WeaponCatalog.EffectiveDrainPerSecond(
             DevTuning.Or(DevTuning.PrimaryDepletionRate, BlasterTuning.EnergyPerSecond),
-            WeaponSystemState.TrackLevel(WeaponTrackKind.DepletionRate),
+            WeaponSystemState.TrackLevel(WeaponTrackKind.Endurance),
             WeaponCatalog.DefaultRcdaDepletionRatePerLevel,
             WeaponCatalog.DrainOutputScale(Range, DefaultRange, ConeHalfAngle, DefaultConeHalfAngle)) * fireInterval;
 
@@ -236,8 +236,9 @@ namespace MaxWorlds.Combat
         private void Awake()
         {
             // The water tank (MV-299, reinstating the tank MV-290 cut). Size is fixed — the
-            // Depletion Rate track (WeaponTrackKind.DepletionRate) only scales how fast it drains,
-            // never how big it is (that was the old, still-retired, Capacity track).
+            // Endurance track (WeaponTrackKind.Endurance, renamed from FLOW/DepletionRate by MV-597)
+            // only scales how fast it drains, never how big it is (that was the old, still-retired,
+            // Capacity track).
             _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
 
             // VFX attaches itself — no scene wiring, no prefab (code-driven scenes rule).

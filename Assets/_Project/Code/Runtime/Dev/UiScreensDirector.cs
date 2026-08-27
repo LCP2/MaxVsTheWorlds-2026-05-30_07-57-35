@@ -214,7 +214,7 @@ namespace MaxWorlds.Dev
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
         /// capture and the design image are directly comparable. Every node not spent here is left at
-        /// its <see cref="RigState.Reset"/> baseline — that alone gives p_prc/s_bal/e_mag/m_spd/m_tp
+        /// its <see cref="RigState.Reset"/> baseline — that alone gives s_bal/e_mag/m_spd/m_tp
         /// their "reached, not owned" states and u_slt its "not reached" one, off the same
         /// parent-level rule <see cref="RigState.IsReached"/> already enforces, with nothing extra to
         /// stage for them. Public (and static — no scene/canvas needed) so <c>UiScreensFixtureTests</c>

@@ -19,10 +19,11 @@ namespace MaxWorlds.Weapons
         /// <summary>How hard each tick hits. Levels 1-6 (MV-291).</summary>
         Damage,
 
-        /// <summary>How fast the water tank drains under continuous fire. Levels 1-6 (MV-299,
-        /// reinstating the tank MV-290 cut): higher levels slow the drain, so Max can fire longer
-        /// before the tank runs dry. Does NOT change the tank's SIZE — see
+        /// <summary>How fast the water tank drains under continuous fire. Levels 1-8 (MV-299,
+        /// reinstating the tank MV-290 cut; renamed from FLOW/DepletionRate and rebalanced to pay out
+        /// from level 1, MV-597): higher levels slow the drain, so Max can fire longer before the tank
+        /// runs dry. Does NOT change the tank's SIZE — see
         /// <see cref="WeaponCatalog.EffectiveDrainPerSecond"/>.</summary>
-        DepletionRate,
+        Endurance,
     }
 }

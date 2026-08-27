@@ -191,7 +191,7 @@
       "y": 420,
       "icon": "dmg",
       "label": "DAMAGE",
-      "maxLevel": 6,
+      "maxLevel": 4,
       "kind": "cap",
       "parent": null,
       "startLevel": 1
@@ -214,8 +214,8 @@
       "x": 345,
       "y": 580,
       "icon": "flw",
-      "label": "FLOW",
-      "maxLevel": 6,
+      "label": "ENDURANCE",
+      "maxLevel": 8,
       "kind": "cap",
       "parent": "p_dmg",
       "startLevel": 0
@@ -227,21 +227,9 @@
       "y": 740,
       "icon": "spr",
       "label": "SPREAD",
-      "maxLevel": 9,
+      "maxLevel": 4,
       "kind": "cap",
       "parent": "p_rng",
-      "startLevel": 0
-    },
-    {
-      "id": "p_prc",
-      "category": "PRIMARY",
-      "x": 345,
-      "y": 740,
-      "icon": "prc",
-      "label": "PIERCE",
-      "maxLevel": 3,
-      "kind": "cap",
-      "parent": "p_flw",
       "startLevel": 0
     },
     {

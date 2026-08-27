@@ -10,7 +10,8 @@ namespace MaxWorlds.Tests.EditMode
     /// THE RIG's unified node model, schema 3 (MV-436 — retires MV-422's cap/stat split): one gate,
     /// not two. A Morphing Module draft (<see cref="RigState.AcquireCap"/>) is the only way any node
     /// reaches level 1; <see cref="RigState.RaiseLevel"/> can raise an already-owned node further
-    /// but can never perform that 0-&gt;1 unlock, for any of the tree's 23 abilities — plus the
+    /// but can never perform that 0-&gt;1 unlock, for any of the tree's 22 abilities (MV-597 deleted
+    /// the never-wired-up PIERCE, 23 -&gt; 22) — plus the
     /// run-start baseline and the draft-candidate eligibility pool both derive from.
     /// </summary>
     public sealed class RigStateTests
@@ -57,17 +58,17 @@ namespace MaxWorlds.Tests.EditMode
 
             var wire = JsonUtility.FromJson<RigBoardSchemaWire>(asset.text);
             Assert.That(wire.schema, Is.EqualTo(3), "rig_board.json must be schema 3 (MV-436 — cap/stat split retired)");
-            Assert.That(wire.abilities.Length, Is.EqualTo(23));
+            Assert.That(wire.abilities.Length, Is.EqualTo(22), "MV-597 deleted the never-wired-up PIERCE (p_prc), 23 -> 22");
             foreach (var a in wire.abilities)
                 Assert.That(a.kind, Is.EqualTo("cap"), "every ability must be kind 'cap' under schema 3 — the 'stat' kind no longer exists");
         }
 
-        // ---------------------------------------------------------------- AC1: a part never performs the 0->1 unlock, for all 23 abilities
+        // ---------------------------------------------------------------- AC1: a part never performs the 0->1 unlock, for all 22 abilities
 
         [Test]
-        public void APartCanNeverRaiseAnAbilityFromZeroToOne_ForAllTwentyThreeAbilities()
+        public void APartCanNeverRaiseAnAbilityFromZeroToOne_ForAllTwentyTwoAbilities()
         {
-            Assert.That(RigBoard.AllIds.Count, Is.EqualTo(23), "the tree must name exactly 23 abilities");
+            Assert.That(RigBoard.AllIds.Count, Is.EqualTo(22), "MV-597: the tree must name exactly 22 abilities now PIERCE is gone");
 
             foreach (string id in RigBoard.AllIds)
             {
@@ -108,16 +109,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.AcquireCap("p_rng"), Is.True, "p_rng's own parent (p_dmg) is already >= 1, so it is a valid draft pick");
 
             Assert.That(RigState.IsReached("p_spr"), Is.True, "the instant p_rng hits level 1, p_spr becomes reached");
-        }
-
-        [Test]
-        public void PierceIsNotReachedUntilFlowIsAtLeastLevelOne()
-        {
-            Assert.That(RigState.IsReached("p_prc"), Is.False, "p_prc must not be reached before p_flw is >= 1");
-
-            Assert.That(RigState.AcquireCap("p_flw"), Is.True);
-
-            Assert.That(RigState.IsReached("p_prc"), Is.True, "the instant p_flw hits level 1, p_prc becomes reached");
         }
 
         /// <summary>MV-457's own regression: pre-ticket, a root (no-parent) node was reached from the
@@ -188,18 +179,6 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.EligibleCapIds(), Does.Contain("e_mag"),
                 "e_mag must become draftable the instant e_cd reaches level 1");
-        }
-
-        [Test]
-        public void PierceIsNotDraftableUntilFlowIsAtLeastLevelOne()
-        {
-            Assert.That(RigState.EligibleCapIds(), Does.Not.Contain("p_prc"),
-                "p_prc must not be a draft candidate before p_flw >= 1");
-
-            RigState.AcquireCap("p_flw");
-
-            Assert.That(RigState.EligibleCapIds(), Does.Contain("p_prc"),
-                "p_prc must become draftable the instant p_flw reaches level 1");
         }
 
         // ---------------------------------------------------------------- General model sanity

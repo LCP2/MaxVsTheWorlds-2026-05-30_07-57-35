@@ -61,7 +61,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void LevelingDepletionRate_OffsetsTheIncreasedDrainFromOutput_MV368AC3()
+        public void LevelingEndurance_OffsetsTheIncreasedDrainFromOutput_MV368AC3()
         {
             RigState.AcquireCap("p_rng");
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Range); i++)
@@ -73,8 +73,8 @@ namespace MaxWorlds.Tests.EditMode
             float noDepletionSpend = _blaster.EnergyPerTick;
 
             RigState.AcquireCap("p_flw");
-            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.DepletionRate); i++)
-                WeaponSystemState.LevelUpTrack(WeaponTrackKind.DepletionRate);
+            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance); i++)
+                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance);
 
             float maxedDepletionSpend = _blaster.EnergyPerTick;
 
