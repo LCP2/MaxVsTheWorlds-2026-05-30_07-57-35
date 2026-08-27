@@ -1,5 +1,6 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -95,51 +96,65 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(10f / 360f, DifficultyDirector.DerivedRatePerSecond, 1e-5);
         }
 
-        // --- MV-513: re-paced for the 18-area world (was authored for a ~6-minute single-arena
-        // slice and maxed out by area 5) ---
+        // --- MV-576: re-paced for the 30-area world (MV-513's model was pinned to a hardcoded 18
+        // areas / 8-shed list, so it kept silently passing after world1_config.json grew to 30) ---
 
         [Test]
         public void EscalationCurve_PacedAcrossFullRun_LandsMaxAndDominationInTargetAreas()
         {
-            // Models a player moving through all 18 areas at Lee's measured pace (area 5 at ~337s,
-            // i.e. ~67.4s/area) and destroying every factory shed on the authored schedule (areas
-            // 3, 6, 8, 9, 11, 14, 15, 17) as they reach it. A shed's skip is modelled as landing from
-            // the NEXT area onward (it is destroyed somewhere while traversing its own area, not
-            // before the area is entered), so the check for area N happens before that area's own
-            // shed (if any) is reported.
+            // Reads the LIVE shipped config rather than a hardcoded area count/shed list, so the next
+            // time world 1 grows again this test fails loudly instead of quietly asserting a stale
+            // shape (MV-576 AC1 — this is exactly what let MV-513's version keep "passing" against a
+            // world it no longer described).
+            //
+            // Models a player moving through every area at Lee's measured pace (area 5 at ~337s, i.e.
+            // ~67.4s/area) and destroying every factory shed on the authored schedule (every area whose
+            // config role is "shed") as they reach it. A shed's skip is modelled as landing from the
+            // NEXT area onward (it is destroyed somewhere while traversing its own area, not before the
+            // area is entered), so the check for area N happens before that area's own shed (if any) is
+            // reported.
             //
             // Asserts the AUTHORED defaults — no DevTuning overrides — so this is the arithmetic in
-            // DifficultyDirector.AuthoredRunLengthSeconds/AuthoredPerShedBump actually paying off,
-            // not a hand-rolled formula standing in for it.
+            // DifficultyDirector.AuthoredRunLengthSeconds/AuthoredPerShedBump actually paying off, not a
+            // hand-rolled formula standing in for it.
             //
             // ReportShedDestroyed divides the per-shed budget across FactoryCensus.Total (MV-261),
             // which falls back to 1 when nothing is registered — a bare EditMode test would otherwise
-            // hand out the WHOLE budget per shed instead of an eighth of it. Register 8 factories, the
-            // world 1 shed count this ticket's arithmetic is modelled against, so the divisor matches.
+            // hand out the WHOLE budget per shed instead of a nineteenth of it. Register one factory per
+            // shed-role area — the same "one clock-skip event per shed area" model MV-513 used — so the
+            // divisor matches the schedule below.
             DifficultyDirector.Reset();
             DevTuning.Reset();
             FactoryCensus.Reset();
 
             const float SecondsPerArea = 337f / 5f; // Lee's measured pace (MV-513)
-            const int AreaCount = 18;
-            const int ShedCount = 8;
-            var shedAreas = new System.Collections.Generic.HashSet<int> { 3, 6, 8, 9, 11, 14, 15, 17 };
-            Assert.AreEqual(ShedCount, shedAreas.Count, "test fixture's shed schedule must match ShedCount");
 
-            var hutches = new GameObject[ShedCount];
+            WorldConfig cfg = WorldLibrary.Load(WorldLibrary.World1);
+            Assert.IsNotNull(cfg, "the shipped world1_config.json failed to load");
+            Assert.IsNotNull(cfg.dials, "world1_config.json has no dials block");
+            int areaCount = cfg.dials.areaCount;
+            Assert.Greater(areaCount, 0, "world1_config.json's dials.areaCount must be authored");
+
+            var shedAreas = new System.Collections.Generic.HashSet<int>();
+            foreach (WorldArea a in cfg.areas)
+                if (a.role == "shed") shedAreas.Add(a.index);
+            int shedCount = shedAreas.Count;
+            Assert.Greater(shedCount, 0, "world1_config.json has no areas with role \"shed\"");
+
+            var hutches = new GameObject[shedCount];
             try
             {
-                for (int i = 0; i < ShedCount; i++)
+                for (int i = 0; i < shedCount; i++)
                 {
                     hutches[i] = new GameObject($"Hutch {i}");
                     FactoryCensus.Register(hutches[i].AddComponent<MowerHutch>());
                 }
-                Assert.AreEqual(ShedCount, FactoryCensus.Total, "test fixture must register all 8 sheds");
+                Assert.AreEqual(shedCount, FactoryCensus.Total, "test fixture must register every shed area");
 
                 int normalizedReachesMaxAtArea = -1;
                 int dominationFirstOpensAtArea = -1;
 
-                for (int area = 1; area <= AreaCount; area++)
+                for (int area = 1; area <= areaCount; area++)
                 {
                     DifficultyDirector.Tick(SecondsPerArea);
 
@@ -152,10 +167,10 @@ namespace MaxWorlds.Tests.EditMode
                     if (shedAreas.Contains(area)) DifficultyDirector.ReportShedDestroyed();
                 }
 
-                Assert.That(normalizedReachesMaxAtArea, Is.InRange(17, 18),
-                    $"Normalized must first reach 1.0 in area 17-18, landed at area {normalizedReachesMaxAtArea}");
-                Assert.That(dominationFirstOpensAtArea, Is.InRange(12, 14),
-                    $"Domination must first open in area 12-14, landed at area {dominationFirstOpensAtArea}");
+                Assert.That(normalizedReachesMaxAtArea, Is.InRange(28, 30),
+                    $"Normalized must first reach 1.0 in area 28-30, landed at area {normalizedReachesMaxAtArea}");
+                Assert.That(dominationFirstOpensAtArea, Is.InRange(20, 24),
+                    $"Domination must first open in area 20-24, landed at area {dominationFirstOpensAtArea}");
             }
             finally
             {

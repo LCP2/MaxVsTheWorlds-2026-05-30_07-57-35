@@ -45,10 +45,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(DifficultyDirector.AuthoredRatePerSecond,
                 Is.EqualTo(DifficultyDirector.AuthoredMax / DifficultyDirector.AuthoredRunLengthSeconds).Within(0.0001f),
                 "escalation rate");
-            // MV-513: re-paced for the 18-area world — was 360f/180f, authored for the ~6-minute
-            // YT-210 single-arena slice and never re-baked when world 1 grew to 18 areas.
-            Assert.That(DifficultyDirector.AuthoredRunLengthSeconds, Is.EqualTo(2750f).Within(0.001f), "run length");
-            Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(1571.43f).Within(0.01f), "shed clock skip");
+            // MV-576: re-paced for the 30-area world — was 2750f/1571.43f (MV-513's 4/7 of that),
+            // authored for 18 areas and never re-baked when world 1 grew to 30.
+            Assert.That(DifficultyDirector.AuthoredRunLengthSeconds, Is.EqualTo(2820f).Within(0.001f), "run length");
+            Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(940f).Within(0.01f), "shed clock skip");
             Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.26f).Within(0.001f), "robot health (MV-315)");
             Assert.That(CellEconomyTuning.DefaultCellsPerLargeKill, Is.EqualTo(1f).Within(0.001f),
                 "cells per large kill (WV-226)");

@@ -49,34 +49,31 @@ namespace MaxWorlds.Enemies
         /// Level's rate is derived from this and <see cref="AuthoredMax"/>, not hand-tuned, so the
         /// escalation curve and "the run is ~N minutes" can never quietly drift apart.
         ///
-        /// MV-513 re-pace: this was 360s (~6 minutes), authored for the YT-210 single-arena slice and
-        /// never re-baked when world 1 grew to 18 areas — a player moving at Lee's measured ~67s/area
-        /// (337s to reach area 5) hit this ceiling by area 5, with 13 of 18 areas played at the
-        /// permanent Domination cap. See <see cref="AuthoredPerShedBump"/> for the full worked
-        /// arithmetic; this value is 2750s so that, modelled against that pace and the 8-shed
-        /// destruction schedule (areas 3/6/8/9/11/14/15/17), <c>Normalized</c> first reaches 1.0 at
-        /// area 18 and Domination (the top third) first opens at area 13 — see
-        /// <c>DifficultyDirectorTests.EscalationCurve_PacedAcrossFullRun_...</c>.</summary>
-        public const float AuthoredRunLengthSeconds = 2750f;
+        /// MV-513 re-pace (2026-08-21): modelled against 18 areas, landed Normalized=1.0 at area 18.
+        /// MV-576 re-pace: <c>world1_config.json</c> grew to 30 areas without this being re-baked, so
+        /// a player at the same pace hit the ceiling around area 18-20 of 30 and played the last third
+        /// at the permanent cap. See <see cref="AuthoredPerShedBump"/> for the full worked arithmetic;
+        /// this value is 2820s so that, modelled against Lee's measured ~67.4s/area pace and world 1's
+        /// live 19-area shed schedule, <c>Normalized</c> first reaches 1.0 at area 29 and Domination
+        /// (the top third) first opens at area 20 — see
+        /// <c>DifficultyDirectorTests.EscalationCurve_PacedAcrossFullRun_...</c>, which derives both
+        /// the area count and the shed schedule from the live config rather than a hardcoded list.</summary>
+        public const float AuthoredRunLengthSeconds = 2820f;
 
         /// <summary>Seconds the clock SKIPS FORWARD when EVERY factory shed in the run has been
         /// destroyed. This is the TOTAL budget clearing every source is worth, not a flat per-shed
         /// number: <see cref="ReportShedDestroyed"/> divides it across however many sheds
         /// <see cref="FactoryCensus"/> says this run actually has (MV-261).
         ///
-        /// MV-513 re-pace: was half the run length (a carry-over from the old per-shed level bump's
-        /// own weight, half of a 10-point ceiling). Naively keeping that 0.5 fraction while raising
-        /// <see cref="AuthoredRunLengthSeconds"/> overshoots — the per-shed budget scales WITH the run
-        /// length, so a bigger run also hands out a bigger skip, and a thorough player (who fells
-        /// sheds on the way through) still arrives at the ceiling far earlier than a full 18-area
-        /// run. Solving for "Normalized hits 1.0 at area 17-18 AND Domination opens at area 12-14",
-        /// against Lee's ~67s/area pace and the 8-shed schedule (areas 3/6/8/9/11/14/15/17), pins the
-        /// fraction at 4/7 (~0.571): with <see cref="AuthoredRunLengthSeconds"/> = 2750s that is
-        /// ~1571.43s total, ~196.4s per shed across the 8. Worked areas (shed destroyed while
-        /// traversing its own area, contributing from the NEXT area onward):
-        /// area 12 → Normalized ≈0.651 (Infestation), area 13 → ≈0.676 (Domination opens),
-        /// area 17 → ≈0.917 (still short), area 18 → ≈1.013 → clamped to 1.0 (ceiling reached).</summary>
-        public const float AuthoredPerShedBump = AuthoredRunLengthSeconds * (4f / 7f);
+        /// MV-576 re-pace: world 1 now authors 19 "role: shed" areas (index 3, 6, 8, 9, 10, 11, 14, 15,
+        /// 16, 18, 19, 21, 22, 23, 24, 25, 26, 27, 29), up from MV-513's 8. Solving for "Normalized
+        /// hits 1.0 at area 28-30 AND Domination opens at area 20-24", against the ~67.4s/area pace and
+        /// that 19-area schedule, pins the fraction at 1/3: with <see cref="AuthoredRunLengthSeconds"/>
+        /// = 2820s that is 940s total, ~49.47s per shed across the 19. Worked areas (shed destroyed
+        /// while traversing its own area, contributing from the NEXT area onward):
+        /// area 19 → Normalized ≈0.630 (Infestation), area 20 → ≈0.671 (Domination opens),
+        /// area 28 → ≈0.985 (still short), area 29 → ≈1.009 → clamped to 1.0 (ceiling reached).</summary>
+        public const float AuthoredPerShedBump = AuthoredRunLengthSeconds * (1f / 3f);
 
         /// <summary>The rate implied by the authored curve: reach <see cref="AuthoredMax"/> at
         /// <see cref="AuthoredRunLengthSeconds"/> with zero shed kills. Kept as a named default for
