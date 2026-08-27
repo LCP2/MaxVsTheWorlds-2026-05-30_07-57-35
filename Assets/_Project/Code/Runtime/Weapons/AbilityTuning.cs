@@ -208,21 +208,26 @@ namespace MaxWorlds.Weapons
         // u_sen), then Move, Cost, Slots (children of Damage/Range/Health respectively). Every axis
         // below is keyed by its RIG id, not an enum — see RigState.
 
-        /// <summary>Power cells deploying the sentinel costs at u_cst Level 0 (not yet leveled) —
-        /// same flat 5-cell cost the old Wall/Gunner split shared (DECISION, 16 Aug 2026, MV-408).</summary>
-        public const int DefaultSentinelCost = 5;
+        /// <summary>Power cells deploying the sentinel costs at u_cst Level 0 (not yet leveled) — free
+        /// (DECISION, Lee 26 Aug 2026 playtest, MV-579): the old flat 5-cell cost (DECISION, 16 Aug
+        /// 2026, MV-408) made a wedged, unrecallable sentinel a real resource loss on top of a
+        /// permanently-blocked exit. Do not re-raise a non-zero cost — see MV-579.</summary>
+        public const int DefaultSentinelCost = 0;
 
         /// <summary>Fraction each Cost (u_cst) level CUTS the deploy cost — same inverse "spend a
         /// level, pay less" shape as <see cref="DefaultRcdaDepletionRatePerLevel"/>. Floored (see
-        /// <see cref="SentinelCost"/>) so a maxed track buys a much cheaper deploy, never a free one.</summary>
+        /// <see cref="SentinelCost"/>) so a maxed track buys a much cheaper deploy, never a free one —
+        /// meaningless now the base cost is 0 (MV-579), but left intact for when a future ticket wants
+        /// a non-zero base again.</summary>
         public const float DefaultSentinelCostReductionPerLevel = 0.15f;
 
         /// <summary>The sentinel's deploy cost, power cells, at a given Cost (u_cst) level — level 0
         /// (not yet leveled, u_cst is a stat so this is its un-owned starting point) is the
         /// unmodified base; each level above it shaves off <paramref name="perLevel"/>, floored at
-        /// 40% of base.</summary>
+        /// 40% of base. MV-579: no longer floored at a minimum of 1 — a 0 base cost must stay exactly
+        /// 0 at every level, not round up to a phantom charge.</summary>
         public static int SentinelCost(int level, int baseCost, float perLevel) =>
-            Mathf.Max(1, Mathf.RoundToInt(Mathf.Max(0, baseCost) * Mathf.Max(0.4f, 1f - perLevel * Mathf.Max(0, level))));
+            Mathf.RoundToInt(Mathf.Max(0, baseCost) * Mathf.Max(0.4f, 1f - perLevel * Mathf.Max(0, level)));
 
         /// <summary>The sentinel's HP at Health (u_hp) Level 0 (not yet leveled) — deliberately BELOW
         /// Max's own 200 max HP ("trades durability for damage", the old Gunner's own baseline): a
@@ -319,6 +324,44 @@ namespace MaxWorlds.Weapons
 
             float step = Mathf.Min(excess, speed * dt);
             return current + toTarget.normalized * step;
+        }
+
+        /// <summary>How close Max has to walk before a sentinel steps aside (MV-579, Lee's playtest
+        /// ask: "it should react to Max walking towards it"). Independent of the Move (u_mov) axis —
+        /// even a sentinel that hasn't earned the follow behaviour still owes Max a dodge; only actual
+        /// blocking is what <c>Physics.IgnoreCollision</c> at deploy time guarantees against.</summary>
+        public const float DefaultSentinelReactDistance = 1.5f;
+
+        /// <summary>How far a sentinel's reactive sidestep carries it — comfortably past
+        /// <see cref="DefaultSentinelReactDistance"/> so it doesn't immediately re-trigger the moment
+        /// the step finishes.</summary>
+        public const float DefaultSentinelSidestepDistance = 1.2f;
+
+        /// <summary>How fast the reactive sidestep itself plays out, m/s — quicker than the ordinary
+        /// follow speed (<see cref="DefaultSentinelMoveSpeedPerLevel"/>'s level-1 rate is 1.2 m/s) so
+        /// the dodge reads as a deliberate "get out of the way", not a lazy drift.</summary>
+        public const float DefaultSentinelSidestepSpeed = 4f;
+
+        /// <summary>Where a sidestep carries the sentinel to, clear of Max's path (MV-579) — pure so
+        /// the dodge direction is unit-testable without a live Transform. Steps perpendicular to
+        /// <paramref name="approacherForward"/> (Max's own facing — the direction he is walking INTO,
+        /// not merely the direction he happens to stand relative to the sentinel), toward whichever
+        /// side the sentinel already leans, so a sentinel standing slightly left of Max's path steps
+        /// further left rather than crossing in front of him. All maths flattened to the XZ plane —
+        /// this is a top-down game and Y is never meant to move.</summary>
+        public static Vector3 SentinelSidestepTarget(Vector3 sentinelPos, Vector3 approacherPos,
+            Vector3 approacherForward, float sidestepDistance)
+        {
+            Vector3 toSentinel = new Vector3(sentinelPos.x - approacherPos.x, 0f, sentinelPos.z - approacherPos.z);
+
+            Vector3 forward = new Vector3(approacherForward.x, 0f, approacherForward.z);
+            if (forward.sqrMagnitude < 1e-6f) forward = Vector3.forward;
+            forward.Normalize();
+
+            Vector3 right = new Vector3(forward.z, 0f, -forward.x); // 90 degrees clockwise, XZ plane
+            float side = Vector3.Dot(toSentinel, right) >= 0f ? 1f : -1f;
+
+            return sentinelPos + right * side * Mathf.Max(0f, sidestepDistance);
         }
 
         /// <summary>How many sentinels Max may have deployed at once, at a given Slots (u_slt) level —
