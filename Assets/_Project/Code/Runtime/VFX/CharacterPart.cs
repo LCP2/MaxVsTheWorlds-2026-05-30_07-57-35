@@ -22,9 +22,10 @@ namespace MaxWorlds.VFX
     public static class CharacterPart
     {
         public static Transform Add(Transform parent, Mesh mesh, Material mat,
-                                    Vector3 at, Quaternion rot, Vector3 scale)
+                                    Vector3 at, Quaternion rot, Vector3 scale, string name = "Part")
         {
             var go = New(parent, mesh, at, rot, scale);
+            go.name = name;
             var r = go.GetComponent<MeshRenderer>();
             r.sharedMaterial = mat;
             r.shadowCastingMode = ShadowCastingMode.Off;

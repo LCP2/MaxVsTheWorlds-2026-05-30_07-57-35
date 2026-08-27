@@ -18,6 +18,7 @@ namespace MaxWorlds.VFX
         Heavy,      // MV-303: the second later-area tier
         Brute,      // MV-303: the top of the composition ladder
         Gunner,     // MV-312: the ranged turret gets its own colour, not the rusher's teal
+        Bolter,     // MV-578: the rod-launcher gets its own colour, not the rusher's turquoise
     }
 
     /// <summary>
@@ -114,6 +115,19 @@ namespace MaxWorlds.VFX
         /// places, because the AC is "never reads as a rusher", not "reads as a different colour of
         /// rusher".</summary>
         private static readonly Color GunnerBody = new Color(0.18f, 0.58f, 0.24f);
+
+        /// <summary>The Bolter (MV-578): orange — the one hue family none of the other tiers occupy
+        /// (turquoise, violet, royal blue, charcoal, crimson, sentry green), so it never again reads as
+        /// a re-skinned Rusher. Before this it had no case in <see cref="RoleFor"/> at all and fell
+        /// through to <see cref="CharacterRole.Robot"/>, wearing the Rusher's turquoise outright.
+        ///
+        /// The ticket's own authored value was (0.90, 0.45, 0.10) — a peak channel a third over
+        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6), the exact defect MV-348/MV-328 already fixed on
+        /// the Rusher and the Bruiser: it would have clipped under the yard's 1.8x key and washed to a
+        /// drab, hue-less colour instead of the orange it was painted. Pulled proportionally (same
+        /// ratios, same hue — the ticket's own allowance is to tune the exact shade, never the colour)
+        /// to sit with headroom under the ceiling.</summary>
+        private static readonly Color BolterBody = new Color(0.55f, 0.275f, 0.061f);
 
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
@@ -213,6 +227,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Heavy: return HeavyBody;
                 case CharacterRole.Brute: return BruteBody;
                 case CharacterRole.Gunner: return GunnerBody;
+                case CharacterRole.Bolter: return BolterBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -232,6 +247,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Heavy: return CharacterRole.Heavy;
                 case EnemyKind.Brute: return CharacterRole.Brute;
                 case EnemyKind.Gunner: return CharacterRole.Gunner;
+                case EnemyKind.Bolter: return CharacterRole.Bolter;
                 default: return CharacterRole.Robot;
             }
         }
@@ -241,7 +257,7 @@ namespace MaxWorlds.VFX
         public static bool IsEnemy(CharacterRole r) =>
             r == CharacterRole.Robot || r == CharacterRole.Bruiser ||
             r == CharacterRole.Heavy || r == CharacterRole.Brute ||
-            r == CharacterRole.Gunner || r == CharacterRole.Boss;
+            r == CharacterRole.Gunner || r == CharacterRole.Bolter || r == CharacterRole.Boss;
 
         private void OnEnable()
         {

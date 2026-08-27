@@ -3,6 +3,7 @@ Rusher.png
 Launcher.png
 Blinker.png
 Gunner.png
+Bolter.png
 Bruiser.png
 Heavy.png
 Brute.png
