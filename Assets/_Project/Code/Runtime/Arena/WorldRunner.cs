@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Bosses;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -66,6 +67,12 @@ namespace MaxWorlds.Arena
         private Transform _player;
         private DeathOverlay _deathOverlay;
 
+        /// <summary>Guards <see cref="HudSignals.EmitRunComplete"/> so the final area firing it is a
+        /// one-shot (MV-591), the same one-shot shape every other terminal signal in this class uses.
+        /// Reset alongside every other per-run death/respawn field would be wrong here — a run only
+        /// ever completes once, so this is never cleared.</summary>
+        private bool _runCompleteRaised;
+
         /// <summary>MV-438: the deferred respawn a death worked out but hasn't run yet — set the
         /// instant Max falls, cleared (and acted on) only when <see cref="Continue"/> runs. Null
         /// whenever the overlay isn't up, so <see cref="HasPendingRespawn"/> also answers "is a death
@@ -86,6 +93,7 @@ namespace MaxWorlds.Arena
             _map = map;
             _areaDirector = areaDirector;
             _supply = new SupplyLineNetwork(cfg);
+            _runCompleteRaised = false;
 
             foreach (WorldArea area in cfg.areas)
             {
@@ -232,6 +240,21 @@ namespace MaxWorlds.Arena
             }
 
             UpdatePostDestructionStreamGating();
+
+            // MV-591: the run ends when the FINAL area is empty — every robot dead, none still queued
+            // to arrive, no boss alive. Not when a boss dies; a12 and a20 have bosses mid-run.
+            if (!_runCompleteRaised && _areaDirector != null && _cfg?.dials != null)
+            {
+                int finalArea = _cfg.dials.areaCount;
+                if (_areaDirector.CurrentArea >= finalArea
+                    && _areaDirector.ActiveCount == 0
+                    && _areaDirector.QueuedCount == 0
+                    && !BossCensus.AnyLivingIn(finalArea))
+                {
+                    _runCompleteRaised = true;
+                    HudSignals.EmitRunComplete();
+                }
+            }
         }
 
         /// <summary>Remember a destroyed shed's <see cref="EnemySpawner"/> against its 1-based area

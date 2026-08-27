@@ -23,6 +23,7 @@ namespace MaxWorlds.Bosses
         private static readonly List<BigBermudaBoss> Living = new List<BigBermudaBoss>(4);
         private static readonly Dictionary<BigBermudaBoss, float> CurrentByBoss = new Dictionary<BigBermudaBoss, float>(4);
         private static readonly Dictionary<BigBermudaBoss, float> MaxByBoss = new Dictionary<BigBermudaBoss, float>(4);
+        private static readonly Dictionary<BigBermudaBoss, int> AreaByBoss = new Dictionary<BigBermudaBoss, int>(4);
         private static bool _engaged;
 
         public static int LivingCount => Living.Count;
@@ -35,18 +36,21 @@ namespace MaxWorlds.Bosses
             Living.Clear();
             CurrentByBoss.Clear();
             MaxByBoss.Clear();
+            AreaByBoss.Clear();
             _engaged = false;
         }
 
         /// <summary>A boss has woken and joined the fight. The FIRST one engages the HUD boss bar;
         /// later ones (a 2+ boss fight) just add to the combined total — engaging a second time would
         /// snap the bar back to full and re-show the name card mid-fight.</summary>
-        public static void Register(BigBermudaBoss boss, string name, int phases, float current, float max)
+        public static void Register(BigBermudaBoss boss, string name, int phases, float current, float max,
+                                    int areaIndex)
         {
             if (boss == null || Living.Contains(boss)) return;
             Living.Add(boss);
             CurrentByBoss[boss] = current;
             MaxByBoss[boss] = max;
+            AreaByBoss[boss] = areaIndex;
 
             if (!_engaged)
             {
@@ -67,14 +71,19 @@ namespace MaxWorlds.Bosses
         }
 
         /// <summary>This boss died. Victory/death payoffs (<c>BossVictoryPayoff</c>, the exit door,
-        /// results) must wait for the LAST one — only defeat the HUD bar once none remain.</summary>
+        /// results) must wait for the LAST one IN ITS OWN AREA — not the last one scene-wide (MV-591).
+        /// Reading it scene-wide made a12's single boss the last boss in the game, which fired the
+        /// whole victory chain 18 areas early. a20 authors two and a30 three; each area's payoff waits
+        /// for its own last one.</summary>
         public static void ReportDefeated(BigBermudaBoss boss)
         {
             if (boss == null || !Living.Remove(boss)) return;
             CurrentByBoss.Remove(boss);
             MaxByBoss.Remove(boss);
+            int areaIndex = AreaByBoss.TryGetValue(boss, out int a) ? a : 0;
+            AreaByBoss.Remove(boss);
 
-            if (Living.Count == 0)
+            if (!AnyLivingIn(areaIndex))
             {
                 HudSignals.EmitBossHealth(0f);
                 HudSignals.EmitBossDefeated();
@@ -94,6 +103,17 @@ namespace MaxWorlds.Bosses
             Living.Remove(boss);
             CurrentByBoss.Remove(boss);
             MaxByBoss.Remove(boss);
+            AreaByBoss.Remove(boss);
+        }
+
+        /// <summary>Is any boss belonging to <paramref name="areaIndex"/> still alive? (MV-591) —
+        /// what <see cref="MaxWorlds.Arena.WorldRunner"/> checks before raising
+        /// <see cref="HudSignals.EmitRunComplete"/> for the final area.</summary>
+        public static bool AnyLivingIn(int areaIndex)
+        {
+            foreach (KeyValuePair<BigBermudaBoss, int> kv in AreaByBoss)
+                if (kv.Value == areaIndex && Living.Contains(kv.Key)) return true;
+            return false;
         }
 
         private static void EmitCombinedHealth()

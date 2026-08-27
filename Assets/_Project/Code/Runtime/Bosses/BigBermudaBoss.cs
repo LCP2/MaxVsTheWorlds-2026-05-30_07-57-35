@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -180,7 +181,17 @@ namespace MaxWorlds.Bosses
             _introTimer = introTime;
             // 2 phases -> HUD bar shows the 50% segment. MV-542: routed through BossCensus so a 2+
             // boss fight engages the bar once and shows the COMBINED health, not a per-boss re-engage.
-            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max);
+            BossCensus.Register(this, BossName, 2, _health.Current, _health.Max, ResolveAreaIndex());
+        }
+
+        /// <summary>Which area this boss stands in (MV-591). Resolved from its own world position, so
+        /// a boss knows its area whether or not Max has walked in yet.</summary>
+        private int ResolveAreaIndex()
+        {
+            MapData map = EnemyNavigation.Map;
+            MapZone zone = map?.ZoneAt(transform.position.x, transform.position.z);
+            if (zone == null) return 0;
+            return AreaAccumulationDirector.AreaIndexOf(zone.id);
         }
 
         /// <summary>Wakes the instant Max's planar position enters this boss's own authored area
