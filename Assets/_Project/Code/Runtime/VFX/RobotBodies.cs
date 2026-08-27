@@ -48,36 +48,49 @@ namespace MaxWorlds.VFX
         {
             var eyes = new List<MeshRenderer>(2);
             var wheels = new List<Transform>(6);
+            var legs = new List<Transform>(4);
             switch (kind)
             {
-                case EnemyKind.Launcher: BuildLauncher(root, p, eyes, wheels); break;
-                case EnemyKind.Blinker:  BuildBlinker(root, p, eyes, wheels); break;
-                case EnemyKind.Gunner:   BuildGunner(root, p, eyes, wheels); break;
-                case EnemyKind.Bolter:   BuildBolter(root, p, eyes, wheels); break;
-                case EnemyKind.Bruiser:  BuildBruiser(root, p, eyes, wheels); break;
-                case EnemyKind.Heavy:    BuildHeavy(root, p, eyes, wheels); break;
-                case EnemyKind.Brute:    BuildBrute(root, p, eyes, wheels); break;
-                default:                 BuildRusher(root, p, eyes, wheels); break;
+                case EnemyKind.Launcher: BuildLauncher(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Blinker:  BuildBlinker(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Gunner:   BuildGunner(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Bolter:   BuildBolter(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Bruiser:  BuildBruiser(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Heavy:    BuildHeavy(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Brute:    BuildBrute(root, p, eyes, wheels, legs); break;
+                default:                 BuildRusher(root, p, eyes, wheels, legs); break;
             }
-            return new Body(eyes.ToArray(), wheels.ToArray());
+            return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray());
         }
 
-        /// <summary>What a built body hands back: the lenses the eye tell drives, and the wheels the
-        /// rig spins. Wheels are returned rather than found by name because a name search is a
-        /// silent-failure mode — rename a part and the robot stops rolling with no error.</summary>
+        /// <summary>What a built body hands back: the lenses the eye tell drives, the wheels the rig
+        /// spins, and (MV-580) the legs a gait driver swings. Wheels/legs are returned rather than
+        /// found by name because a name search is a silent-failure mode — rename a part and the robot
+        /// stops rolling/walking with no error.</summary>
         public readonly struct Body
         {
             public readonly MeshRenderer[] Eyes;
             /// <summary>Every rolling part, already oriented so its LOCAL Y is the axle. Spin with
             /// <c>Rotate(Vector3.up, degrees, Space.Self)</c>.</summary>
             public readonly Transform[] Wheels;
+            /// <summary>Every leg's HIP pivot (MV-580) — empty for a wheeled kind. Each pivot's local
+            /// rotation is identity at rest, one rigid leg (every part authored for that leg) hanging
+            /// beneath it, so a gait driver can swing the whole leg by rotating the pivot alone; see
+            /// <see cref="MaxWorlds.VFX.LegGaitDriver"/>. Only <see cref="EnemyKind.Gunner"/> populates
+            /// this today (the kind Max's Sentinel borrows its body from, MV-580) — the other legged
+            /// kind, <see cref="EnemyKind.Blinker"/>, teleports rather than walking and so still has no
+            /// need of one; wire it the same way here if a future mover needs it.</summary>
+            public readonly Transform[] Legs;
 
-            public Body(MeshRenderer[] eyes, Transform[] wheels) { Eyes = eyes; Wheels = wheels; }
+            public Body(MeshRenderer[] eyes, Transform[] wheels, Transform[] legs)
+            {
+                Eyes = eyes; Wheels = wheels; Legs = legs;
+            }
         }
 
         /// <summary>Rusher — a low buggy on two outboard drive wheels with a front castor. Raked forward, body slung between the wheels. Rolls, because nothing animates a leg.</summary>
         private static void BuildRusher(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0705f, -0.0675f), new Vector2(0.2021f, -0.0675f), new Vector2(0.235f, -0.0405f), new Vector2(0.235f, 0.0405f), new Vector2(0.2021f, 0.0675f), new Vector2(0.0705f, 0.0675f) }, 22), p.Dark, new Vector3(0f, 0.235f, -0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1222f, -0.0243f), new Vector2(0.141f, 0f), new Vector2(0.1222f, 0.0243f) }, 16), p.Warm, new Vector3(0f, 0.235f, -0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
@@ -98,7 +111,7 @@ namespace MaxWorlds.VFX
 
         /// <summary>Launcher — formerly "Bomber". A six-cell launcher block on a two-wheel chassis, missile noses visible in the cells. Wheels outboard so it is wide at the bottom and the block reads as payload.</summary>
         private static void BuildLauncher(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.06f, -0.0575f), new Vector2(0.172f, -0.0575f), new Vector2(0.2f, -0.0345f), new Vector2(0.2f, 0.0345f), new Vector2(0.172f, 0.0575f), new Vector2(0.06f, 0.0575f) }, 22), p.Dark, new Vector3(-0.3f, 0.2f, 0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.104f, -0.0207f), new Vector2(0.12f, 0f), new Vector2(0.104f, 0.0207f) }, 16), p.Warm, new Vector3(-0.3f, 0.2f, 0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
@@ -131,7 +144,7 @@ namespace MaxWorlds.VFX
 
         /// <summary>Blinker — one of only two kinds that keeps legs, and it earns them: it teleports rather than closing on foot, so it never needs a walk cycle. A faceted crystal core crouched on tight crossed legs.</summary>
         private static void BuildBlinker(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             Add(root, CharacterMeshes.Beam(0.1541f, 0.03f, 0.024f, 7), p.Dark, new Vector3(-0.0575f, 0.228f, 0f), Quaternion.Euler(0f, 0f, 20.9041f), Vector3.one);
             Add(root, CharacterMeshes.Sphere(12), p.Dark, new Vector3(-0.03f, 0.156f, 0f), Quaternion.identity, new Vector3(0.069f, 0.069f, 0.069f));
@@ -154,16 +167,24 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Beam(0.14f, 0.016f, 0.007f, 5), p.Dark, new Vector3(0.1f, 1.19f, -0.05f), Quaternion.Euler(8f, 0f, -13f), Vector3.one);
         }
 
+        /// <summary>Half the leg-beam length (0.34f/2) — the Beam mesh is centred on its own local
+        /// origin (see <see cref="CharacterMeshes.Beam"/>/<c>Prism</c>), so this is how far along that
+        /// beam's local Y its two ends sit.</summary>
+        private const float GunnerLegBeamHalfLength = 0.17f;
+
         /// <summary>Gunner — the other legged kind, and it earns them the same way — LungeSpeed is 0, it is a planted emplacement. Big head on a thin mast over a tripod.</summary>
         private static void BuildGunner(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
-            Add(root, CharacterMeshes.Beam(0.34f, 0.036f, 0.022f, 6), p.Dark, new Vector3(0f, 0.17f, 0.165f), Quaternion.Euler(22f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.055f, 0f), new Vector2(0.038f, 0.03f), new Vector2(0.015f, 0.06f) }, 8), p.Dark, new Vector3(0f, 0.03f, 0.3f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.34f, 0.036f, 0.022f, 6), p.Dark, new Vector3(0.1429f, 0.17f, -0.0825f), Quaternion.Euler(-11f, 120f, -19.0526f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.055f, 0f), new Vector2(0.038f, 0.03f), new Vector2(0.015f, 0.06f) }, 8), p.Dark, new Vector3(0.2598f, 0.03f, -0.15f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.34f, 0.036f, 0.022f, 6), p.Dark, new Vector3(-0.1429f, 0.17f, -0.0825f), Quaternion.Euler(-11f, 240f, 19.0526f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.055f, 0f), new Vector2(0.038f, 0.03f), new Vector2(0.015f, 0.06f) }, 8), p.Dark, new Vector3(-0.2598f, 0.03f, -0.15f), Quaternion.identity, Vector3.one);
+            Transform leg1Beam = Add(root, CharacterMeshes.Beam(0.34f, 0.036f, 0.022f, 6), p.Dark, new Vector3(0f, 0.17f, 0.165f), Quaternion.Euler(22f, 0f, 0f), Vector3.one);
+            Transform leg1Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.055f, 0f), new Vector2(0.038f, 0.03f), new Vector2(0.015f, 0.06f) }, 8), p.Dark, new Vector3(0f, 0.03f, 0.3f), Quaternion.identity, Vector3.one);
+            legs.Add(AddLeg(root, leg1Beam, leg1Foot, GunnerLegBeamHalfLength));
+            Transform leg2Beam = Add(root, CharacterMeshes.Beam(0.34f, 0.036f, 0.022f, 6), p.Dark, new Vector3(0.1429f, 0.17f, -0.0825f), Quaternion.Euler(-11f, 120f, -19.0526f), Vector3.one);
+            Transform leg2Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.055f, 0f), new Vector2(0.038f, 0.03f), new Vector2(0.015f, 0.06f) }, 8), p.Dark, new Vector3(0.2598f, 0.03f, -0.15f), Quaternion.identity, Vector3.one);
+            legs.Add(AddLeg(root, leg2Beam, leg2Foot, GunnerLegBeamHalfLength));
+            Transform leg3Beam = Add(root, CharacterMeshes.Beam(0.34f, 0.036f, 0.022f, 6), p.Dark, new Vector3(-0.1429f, 0.17f, -0.0825f), Quaternion.Euler(-11f, 240f, 19.0526f), Vector3.one);
+            Transform leg3Foot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.055f, 0f), new Vector2(0.038f, 0.03f), new Vector2(0.015f, 0.06f) }, 8), p.Dark, new Vector3(-0.2598f, 0.03f, -0.15f), Quaternion.identity, Vector3.one);
+            legs.Add(AddLeg(root, leg3Beam, leg3Foot, GunnerLegBeamHalfLength));
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.16f, 0f), new Vector2(0.27f, 0.05f), new Vector2(0.285f, 0.11f) }, 28), p.Cool, new Vector3(0f, 0.34f, 0f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.285f, 0.11f), new Vector2(0.29f, 0.13f), new Vector2(0.24f, 0.2f), new Vector2(0.12f, 0.24f) }, 28), p.Warm, new Vector3(0f, 0.34f, 0f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Beam(0.26f, 0.042f, 0.055f, 7), p.Dark, new Vector3(0f, 0.7f, 0f), Quaternion.identity, Vector3.one);
@@ -192,7 +213,7 @@ namespace MaxWorlds.VFX
         /// head — plus a forward rod-launcher barrel as the weapon tell. One eye lens, per the roster's
         /// one-eye rule.</summary>
         private static void BuildBolter(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0705f, -0.0675f), new Vector2(0.2021f, -0.0675f), new Vector2(0.235f, -0.0405f), new Vector2(0.235f, 0.0405f), new Vector2(0.2021f, 0.0675f), new Vector2(0.0705f, 0.0675f) }, 22), p.Dark, new Vector3(0f, 0.235f, -0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1222f, -0.0243f), new Vector2(0.141f, 0f), new Vector2(0.1222f, 0.0243f) }, 16), p.Warm, new Vector3(0f, 0.235f, -0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
@@ -229,7 +250,7 @@ namespace MaxWorlds.VFX
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>
         private static void BuildBruiser(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             Add(root, CharacterMeshes.Prism(4, 0.155f, 0.155f, 0.72f, 0.02f, 0f), p.Dark, new Vector3(-0.4f, 0.155f, 0f), Quaternion.Euler(0f, 0f, 90f), new Vector3(1f, 0.6129f, 1f));
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0465f, -0.095f), new Vector2(0.1426f, -0.095f), new Vector2(0.155f, -0.0532f), new Vector2(0.155f, 0.0532f), new Vector2(0.1426f, 0.095f), new Vector2(0.0465f, 0.095f) }, 18), p.Dark, new Vector3(-0.4f, 0.155f, -0.36f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
@@ -263,7 +284,7 @@ namespace MaxWorlds.VFX
 
         /// <summary>Heavy — a barrel riding one huge garden-roller drum with trailing castors. The roller is the garden motif AND the thing that turns. Had no body of its own before this.</summary>
         private static void BuildHeavy(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1f, -0.24f), new Vector2(0.3f, -0.24f), new Vector2(0.325f, -0.2f), new Vector2(0.325f, 0.2f), new Vector2(0.3f, 0.24f), new Vector2(0.1f, 0.24f) }, 24), p.Cool, new Vector3(0f, 0.325f, -0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.14f, -0.245f), new Vector2(0.16f, -0.225f), new Vector2(0.14f, -0.205f) }, 14), p.Dark, new Vector3(0f, 0.325f, -0.02f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
@@ -289,7 +310,7 @@ namespace MaxWorlds.VFX
 
         /// <summary>Brute — a wall on four heavy road wheels. Nothing else in the roster has four, so it is identifiable by its undercarriage alone at twenty pixels. Also had no body of its own before this.</summary>
         private static void BuildBrute(Transform root, in RobotPalette p,
-                                    List<MeshRenderer> eyes, List<Transform> wheels)
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0645f, -0.0725f), new Vector2(0.1849f, -0.0725f), new Vector2(0.215f, -0.0435f), new Vector2(0.215f, 0.0435f), new Vector2(0.1849f, 0.0725f), new Vector2(0.0645f, 0.0725f) }, 22), p.Dark, new Vector3(-0.4f, 0.215f, -0.3f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
             wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1118f, -0.0261f), new Vector2(0.129f, 0f), new Vector2(0.1118f, 0.0261f) }, 16), p.Warm, new Vector3(-0.4f, 0.215f, -0.3f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
@@ -318,6 +339,34 @@ namespace MaxWorlds.VFX
         }
 
         // ------------------------------------------------------------------ plumbing
+
+        /// <summary>
+        /// Groups an already-placed rigid leg (<paramref name="beam"/> + <paramref name="foot"/>,
+        /// both already parented and positioned by <see cref="Add"/>) under a new HIP pivot, without
+        /// moving a single vertex (MV-580).
+        ///
+        /// The pivot goes at whichever end of the beam sits HIGHER in the world — the end nearer the
+        /// body, since every leg here attaches above and reaches down to a foot below — found via the
+        /// beam's own already-computed <see cref="Transform.TransformPoint"/>, not by hand-deriving the
+        /// Euler rotation each leg was authored with. <c>SetParent(pivot, worldPositionStays: true)</c>
+        /// then asks Unity to recompute each part's local offset so its WORLD transform is bit-for-bit
+        /// what <see cref="Add"/> already placed — the render is provably unchanged; only the hierarchy
+        /// gained a joint a gait driver can rotate. See <see cref="MaxWorlds.VFX.LegGaitDriver"/>.
+        /// </summary>
+        private static Transform AddLeg(Transform root, Transform beam, Transform foot, float beamHalfLength)
+        {
+            Vector3 endA = beam.TransformPoint(new Vector3(0f, beamHalfLength, 0f));
+            Vector3 endB = beam.TransformPoint(new Vector3(0f, -beamHalfLength, 0f));
+            Vector3 hip = endA.y >= endB.y ? endA : endB;
+
+            var pivot = new GameObject("Leg").transform;
+            pivot.SetParent(root, worldPositionStays: false);
+            pivot.position = hip;
+
+            beam.SetParent(pivot, worldPositionStays: true);
+            foot.SetParent(pivot, worldPositionStays: true);
+            return pivot;
+        }
 
         private static Transform Add(Transform root, Mesh mesh, Material mat,
                                      Vector3 at, Quaternion rot, Vector3 scale, string name = "Part")
