@@ -11,10 +11,22 @@ namespace MaxWorlds.UI
     /// </summary>
     public sealed class BossState
     {
+        /// <summary>How many segments the spawn-level bar always shows (MV-588) — a HUD-layer constant,
+        /// independent of any single boss's own escalation curve, same as <see cref="Phases"/> being a
+        /// stand-in number rather than something read off a real boss.</summary>
+        public const int MaxSpawnLevel = 4;
+
         public bool Active { get; private set; }
         public string Name { get; private set; } = string.Empty;
         public int Phases { get; private set; } = 1;
         public float HpNormalized { get; private set; }
+
+        /// <summary>1..<see cref="MaxSpawnLevel"/> — how far the brood volley's composition has
+        /// escalated (MV-588).</summary>
+        public int SpawnLevel { get; private set; } = 1;
+
+        /// <summary>Progress toward the next spawn level, 0..1.</summary>
+        public float SpawnLevelProgress01 { get; private set; }
 
         /// <summary>Fired when the boss engages (arg=true) or is defeated/cleared (arg=false).</summary>
         public event Action<bool> ActiveChanged;
@@ -28,8 +40,19 @@ namespace MaxWorlds.UI
             Name = name ?? string.Empty;
             Phases = Mathf.Max(1, phases);
             HpNormalized = 1f;
+            SpawnLevel = 1;
+            SpawnLevelProgress01 = 0f;
             Active = true;
             ActiveChanged?.Invoke(true);
+        }
+
+        /// <summary>Update the spawn-level bar from the real boss's escalation (MV-588). Ignored while
+        /// not active, same guard <see cref="SetNormalized"/>/<see cref="Damage"/> use.</summary>
+        public void SetSpawnLevel(int level, float progress01)
+        {
+            if (!Active) return;
+            SpawnLevel = Mathf.Clamp(level, 1, MaxSpawnLevel);
+            SpawnLevelProgress01 = Mathf.Clamp01(progress01);
         }
 
         /// <summary>Set the boss bar directly from a real boss's HP (YT-27). Defeats it at 0.</summary>

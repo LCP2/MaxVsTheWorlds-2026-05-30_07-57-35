@@ -43,6 +43,10 @@ namespace MaxWorlds.UI
         /// <summary>The boss's HP changed. (normalized 0..1)</summary>
         public static event Action<float> BossHealthChanged;
 
+        /// <summary>The boss's SPAWN LEVEL changed (MV-588) — how far the brood volley's composition
+        /// has escalated. (level 1..4, progress 0..1 toward the next level)</summary>
+        public static event Action<int, float> BossSpawnLevelChanged;
+
         /// <summary>The boss was defeated — hide the bar.</summary>
         public static event Action BossDefeated;
 
@@ -125,6 +129,9 @@ namespace MaxWorlds.UI
 
         public static void EmitBossHealth(float normalized)
             => BossHealthChanged?.Invoke(normalized);
+
+        public static void EmitBossSpawnLevel(int level, float progress01)
+            => BossSpawnLevelChanged?.Invoke(level, progress01);
 
         public static void EmitBossDefeated()
             => BossDefeated?.Invoke();

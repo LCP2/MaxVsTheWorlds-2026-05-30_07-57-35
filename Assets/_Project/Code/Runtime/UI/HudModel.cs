@@ -178,6 +178,12 @@ namespace MaxWorlds.UI
             if (Boss.Active) Boss.SetNormalized(normalized);
         }
 
+        /// <summary>Update the spawn-level bar from the real boss's escalation (MV-588).</summary>
+        public void SetBossSpawnLevel(int level, float progress01)
+        {
+            if (Boss.Active) Boss.SetSpawnLevel(level, progress01);
+        }
+
         /// <summary>Force-defeat the boss bar (real boss died).</summary>
         public void DefeatBossExternal()
         {

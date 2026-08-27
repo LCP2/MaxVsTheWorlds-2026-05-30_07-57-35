@@ -10,13 +10,15 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Bosses
 {
     /// <summary>
-    /// Big Bermuda — the Backyard boss (YT-27, slice version). A possessed industrial-mower
-    /// mech that stays dormant beyond the gate until the Mower Hutch dies, then engages: it
-    /// repositions, telegraphs, and charges across the arena leaving grass-clipping AoEs. At
-    /// low HP it enrages — faster, and it rains mower blades on top of the charges (the slice's
-    /// stand-in for the full M2 phase-2 choreography, spec §4.7). Takes Water-Blaster damage,
-    /// drives the HUD boss bar (name card + phase segments) via <see cref="HudSignals"/>, and
-    /// drops a guaranteed Rare gadget shard on death. Greybox body; VFX are code-driven.
+    /// Big Bermuda — the Backyard boss (YT-27, slice version). Stays dormant beyond the gate until the
+    /// Mower Hutch dies, then engages: it simply walks at Max and stops at a standoff (MV-588 removed
+    /// the ram/charge entirely — no more telegraphed cross-arena hit). Its real weapon is the brood
+    /// volley, which escalates in composition the longer the fight runs (see
+    /// <see cref="BigBermudaBrain.SpawnLevel"/> / <see cref="BroodSpawnLevels"/>): "kill it before its
+    /// army outgrows you". At low HP it enrages — faster, and it rains mower blades (the slice's
+    /// stand-in for the full M2 phase-2 choreography, spec §4.7). Takes Water-Blaster damage, drives
+    /// the HUD boss bar (name card + phase segments + spawn-level bar) via <see cref="HudSignals"/>,
+    /// and drops a guaranteed Rare gadget shard on death. Greybox body; VFX are code-driven.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class BigBermudaBoss : MonoBehaviour, IDamageable
@@ -38,8 +40,6 @@ namespace MaxWorlds.Bosses
 
         [Header("Tells")]
         [SerializeField] private Color idleColor = new Color(0.35f, 0.45f, 0.30f);
-        [SerializeField] private Color windupColor = new Color(1f, 0.35f, 0.1f);
-        [SerializeField] private Color grassColor = new Color(0.45f, 0.7f, 0.25f, 0.7f);
         [SerializeField] private Color bladeColor = new Color(0.8f, 0.8f, 0.85f, 0.8f);
 
         private Phase _phase = Phase.Dormant;
@@ -58,16 +58,21 @@ namespace MaxWorlds.Bosses
 
         private float _verticalVel;
         private float _introTimer;
-        private Vector3 _chargeDir;
-        private float _grassTimer;
         private float _bladeTimer;
-        private bool _contactThisCharge;
 
-        // --- the brood volley: the second attack (YT-157). Runs ALONGSIDE the charge cycle. ---
+        // The placeholder greybox tell flashes white on a hit (TakeDamage) and restores itself here —
+        // MV-588 removed the old "next phase tick restores it" cycle along with the charge, so the
+        // flash now times out on its own instead. Vestigial once BigBermudaRig attaches (it disables
+        // this renderer and owns the real tell), but kept correct for the window/tests before it does.
+        private float _flashTimer;
+
+        // --- the brood volley: the second attack (YT-157), and now the boss's ONLY attack (MV-588) —
+        // its composition escalates with time alive (BroodSpawnLevels), so it is pooled per-kind
+        // rather than assuming every add is the same archetype. ---
         private BroodVolley _volley;
         private Transform _addsRoot;                    // world-space, unit scale — NOT under the moving boss
         private readonly List<AddInFlight> _inFlight = new List<AddInFlight>(8);
-        private readonly Stack<RobotEnemy> _addPool = new Stack<RobotEnemy>(8);
+        private readonly Dictionary<EnemyKind, Stack<RobotEnemy>> _addPools = new Dictionary<EnemyKind, Stack<RobotEnemy>>();
         private int _liveAdds;                          // landed + chasing; capped by MaxConcurrentAdds
         private Collider[] _playerColliders;
 
@@ -105,11 +110,12 @@ namespace MaxWorlds.Bosses
         // Same shape as MowerHutch.Normalized, which is what lets FactoryLife run the factory without
         // reaching into it.
 
-        /// <summary>What the boss is doing this frame — drives the tells on the model (BigBermudaRig).</summary>
-        public BossAction Action => _brain != null ? _brain.Current : BossAction.Reposition;
-
         /// <summary>True below the enrage threshold: phase 2, blade-rain, everything faster.</summary>
         public bool Enraged => _brain != null && _brain.Enraged;
+
+        /// <summary>1..<see cref="BossTuning.MaxSpawnLevel"/> — how far the brood volley's composition
+        /// has escalated (MV-588). Drives the HUD's spawn-level bar via <see cref="BossCensus"/>.</summary>
+        public int SpawnLevel => _brain != null ? _brain.SpawnLevel : 1;
 
         /// <summary>True from the moment it wakes until it dies. Dormant beyond the gate before that —
         /// the machine is standing there the whole time, and it should look asleep, not switched off.</summary>
@@ -226,49 +232,63 @@ namespace MaxWorlds.Bosses
         {
             if (_target == null) { AcquireTarget(); return; }
             _brain.Tick(dt, _health.Normalized);
-            if (_brain.JustEntered) OnEnterPhase(_brain.Current);
+            BossCensus.ReportSpawnLevel(this, _brain.SpawnLevel, _brain.SpawnLevelProgress01);
 
             float speedScale = _brain.Enraged ? BossTuning.EnrageMoveScale : 1f;
-            switch (_brain.Current)
+            Approach(dt, speedScale);
+            FaceTarget();
+
+            if (_flashTimer > 0f)
             {
-                case BossAction.Reposition: Reposition(dt, speedScale); FaceTarget(); break;
-                case BossAction.ChargeWindup: FaceTarget(); break;
-                case BossAction.Charge: DoCharge(dt, speedScale); break;
-                case BossAction.Recover: break;
+                _flashTimer -= dt;
+                if (_flashTimer <= 0f) SetTell(idleColor);
             }
 
-            // Enrage overlay: rain blades around Max on top of the charge cycle.
+            // Enrage overlay: rain blades around Max. Untouched by MV-588 — the charge that dropped
+            // grass along its own path is gone with it, but this zone never depended on the charge.
             if (_brain.Enraged)
             {
                 _bladeTimer -= dt;
                 if (_bladeTimer <= 0f) { _bladeTimer = BossTuning.BladeInterval; RainBlades(); }
             }
 
-            // The second attack (YT-157): the brood volley, on its own cadence beside the charge cycle.
+            // The brood volley (YT-157) is now the boss's ONLY attack (MV-588 removed the ram).
             TickVolley(dt);
             AdvanceAdds(dt);
         }
 
+        /// <summary>Walk toward Max at <see cref="BossTuning.MoveSpeed"/> and stop at a fixed
+        /// <see cref="BossTuning.Standoff"/> (MV-588 — replaces the old charge-cycle circling
+        /// entirely).</summary>
+        private void Approach(float dt, float speedScale)
+        {
+            Vector3 to = PlanarToTarget();
+            if (to.magnitude <= BossTuning.Standoff) return;
+
+            float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
+            // MV-386: SafeMove, not cc.Move directly -- same stall-tunneling fix as PlayerController/RobotEnemy.
+            CharacterControllerMotion.SafeMove(_cc, to.normalized * move * speedScale * dt);
+        }
+
         /// <summary>
-        /// The brood volley — the boss's signature side-hatch add-spawner (YT-157). The pure
-        /// <see cref="BroodVolley"/> owns the cadence and the telegraph; this executes the fling on its
-        /// <see cref="BroodVolley.JustFired"/> edge, the same shape as the blade rain above.
+        /// The brood volley — the boss's signature side-hatch add-spawner (YT-157), and its only attack
+        /// since MV-588 removed the ram. The pure <see cref="BroodVolley"/> owns the cadence and the
+        /// telegraph; this executes the fling on its <see cref="BroodVolley.JustFired"/> edge, the same
+        /// shape as the blade rain above.
         ///
-        /// The volley is vetoed (<c>canVent = false</c>) while it is committing to a charge — so the
-        /// spawn read and the charge read never overlap — and while the arena already holds its cap of
+        /// The volley is vetoed (<c>canVent = false</c>) only while the arena already holds its cap of
         /// adds, which is the whole kiteability guarantee for a fight where no factory is left to bound
         /// the robot count.
         /// </summary>
         private void TickVolley(float dt)
         {
-            bool committing = _brain.Current == BossAction.ChargeWindup || _brain.Current == BossAction.Charge;
             bool enraged = _brain.Enraged;
             bool phaseAllows = enraged || BossTuning.VolleyFiresBeforeEnrage;
 
             int maxAdds = Mathf.Max(0, Mathf.RoundToInt(DevTuning.Or(DevTuning.BossMaxAdds, BossTuning.MaxConcurrentAdds)));
             int onField = _liveAdds + _inFlight.Count;
 
-            bool canVent = !committing && phaseAllows && onField < maxAdds;
+            bool canVent = phaseAllows && onField < maxAdds;
             _volley.Tick(dt, enraged, canVent);
 
             if (_volley.JustFired)
@@ -279,18 +299,22 @@ namespace MaxWorlds.Bosses
         }
 
         /// <summary>Throw <paramref name="count"/> robots out of the side hatches, alternating flanks so
-        /// both hatches disgorge and the wave fans out rather than stacking. Each starts at a hatch
-        /// mouth and begins its arc; it is not a live robot yet — see <see cref="AdvanceAdds"/>.</summary>
+        /// both hatches disgorge and the wave fans out rather than stacking. Each one draws its own kind
+        /// uniformly from the current spawn level's set (MV-588 — <see cref="BroodSpawnLevels"/>), so a
+        /// single volley can be a mixed wave once the level has escalated. Each starts at a hatch mouth
+        /// and begins its arc; it is not a live robot yet — see <see cref="AdvanceAdds"/>.</summary>
         private void LaunchVolley(int count)
         {
             if (count <= 0) return;
 
             Vector3 pos = transform.position;
             Quaternion facing = transform.rotation;
-            EnemyArchetype archetype = EnemyArchetype.Rusher;   // "reuse the standard robot" (YT-157)
+            EnemyKind[] kinds = BroodSpawnLevels.KindsFor(_brain.SpawnLevel);
 
             for (int i = 0; i < count; i++)
             {
+                EnemyArchetype archetype = EnemyArchetype.Of(kinds[Random.Range(0, kinds.Length)]);
+
                 float side = (i % 2 == 0) ? -1f : 1f;   // L, R, L, R…
                 float spread = (i / 2) * BossTuning.VolleyLandingSpread;
 
@@ -342,8 +366,16 @@ namespace MaxWorlds.Bosses
             }
         }
 
+        /// <summary>Pooled PER KIND (MV-588): once a volley can throw more than one archetype, a pool
+        /// keyed by nothing would hand back a Rusher-sized/rigged body and relabel it a Bruiser without
+        /// resizing the collider or rebuilding <see cref="RobotRig"/> — so each kind keeps its own
+        /// stack, and a reused instance is always exactly what it was built as.</summary>
         private RobotEnemy TakeAdd(in EnemyArchetype archetype)
-            => _addPool.Count > 0 ? _addPool.Pop() : CreateAdd(archetype);
+        {
+            if (_addPools.TryGetValue(archetype.Kind, out Stack<RobotEnemy> pool) && pool.Count > 0)
+                return pool.Pop();
+            return CreateAdd(archetype);
+        }
 
         /// <summary>Build one add, sized exactly the way <see cref="EnemySpawner"/> builds a factory
         /// robot (YT-74 metre-space collider un-scaling) but parented to the boss's own adds root rather
@@ -378,7 +410,9 @@ namespace MaxWorlds.Bosses
         private void OnAddDied(RobotEnemy e)
         {
             _liveAdds = Mathf.Max(0, _liveAdds - 1);
-            _addPool.Push(e);   // back to the pool, reused on the next volley — no GC churn
+            if (!_addPools.TryGetValue(e.Kind, out Stack<RobotEnemy> pool))
+                _addPools[e.Kind] = pool = new Stack<RobotEnemy>(4);
+            pool.Push(e);   // back to its own kind's pool, reused on the next volley — no GC churn
         }
 
         /// <summary>The container the adds live in. Top-level and unit-scaled ON PURPOSE: the boss MOVES,
@@ -422,61 +456,6 @@ namespace MaxWorlds.Bosses
             BossCensus.Forget(this);
         }
 
-        private void OnEnterPhase(BossAction action)
-        {
-            switch (action)
-            {
-                case BossAction.ChargeWindup:
-                    Vector3 to = PlanarToTarget();
-                    _chargeDir = to.sqrMagnitude > 0.001f ? to.normalized : transform.forward;
-                    SetTell(windupColor);
-                    break;
-                case BossAction.Charge:
-                    _contactThisCharge = false;
-                    _grassTimer = 0f;
-                    SetTell(windupColor);
-                    break;
-                default:
-                    SetTell(idleColor);
-                    break;
-            }
-        }
-
-        private void Reposition(float dt, float speedScale)
-        {
-            Vector3 to = PlanarToTarget();
-            float dist = to.magnitude;
-            if (dist < 0.1f) return;
-            Vector3 dir = to.normalized;
-            // Reposition speed only — the charge stays on the authored number, because the charge is
-            // a telegraphed attack whose dodge window is timed against it (YT-105).
-            float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
-            // Approach until at desiredRange, then hold — keeps the boss circling, not hugging.
-            // MV-386: SafeMove, not cc.Move directly -- same stall-tunneling fix as PlayerController/RobotEnemy.
-            if (dist > BossTuning.DesiredRange + 0.5f) CharacterControllerMotion.SafeMove(_cc, dir * move * speedScale * dt);
-            else if (dist < BossTuning.DesiredRange - 0.5f) CharacterControllerMotion.SafeMove(_cc, -dir * move * speedScale * dt);
-        }
-
-        private void DoCharge(float dt, float speedScale)
-        {
-            CharacterControllerMotion.SafeMove(_cc, _chargeDir * BossTuning.ChargeSpeed * speedScale * dt); // MV-386
-
-            _grassTimer -= dt;
-            if (_grassTimer <= 0f)
-            {
-                _grassTimer = BossTuning.GrassInterval;
-                DamageZone.Spawn(transform.position, BossTuning.GrassRadius, BossTuning.GrassDamage, BossTuning.GrassLife,
-                                 BossTuning.GrassArm, grassColor);
-            }
-
-            if (!_contactThisCharge && PlanarToTarget().magnitude <= BossTuning.ChargeContactRadius
-                && _target.TryGetComponent<IDamageable>(out var d) && d.IsAlive)
-            {
-                _contactThisCharge = true;
-                d.TakeDamage(new DamageInfo(BossTuning.ChargeContactDamage, transform.position, _chargeDir, Team.Enemy));
-            }
-        }
-
         private void RainBlades()
         {
             if (_target == null) return;
@@ -502,7 +481,8 @@ namespace MaxWorlds.Bosses
             HudSignals.EmitDamage(transform.position + Vector3.up * 2.5f, info.Amount);
             _health.TakeDamage(info.Amount);
             BossCensus.ReportHealth(this, _health.Current, _health.Max);
-            SetTell(Color.white); // brief hit flash; next phase tick restores
+            SetTell(Color.white); // brief hit flash; _flashTimer restores it in TickFight (MV-588)
+            _flashTimer = 0.15f;
         }
 
         private void OnDeath()

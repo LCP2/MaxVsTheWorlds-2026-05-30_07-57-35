@@ -24,6 +24,8 @@ namespace MaxWorlds.Bosses
         private static readonly Dictionary<BigBermudaBoss, float> CurrentByBoss = new Dictionary<BigBermudaBoss, float>(4);
         private static readonly Dictionary<BigBermudaBoss, float> MaxByBoss = new Dictionary<BigBermudaBoss, float>(4);
         private static readonly Dictionary<BigBermudaBoss, int> AreaByBoss = new Dictionary<BigBermudaBoss, int>(4);
+        private static readonly Dictionary<BigBermudaBoss, int> SpawnLevelByBoss = new Dictionary<BigBermudaBoss, int>(4);
+        private static readonly Dictionary<BigBermudaBoss, float> SpawnProgressByBoss = new Dictionary<BigBermudaBoss, float>(4);
         private static bool _engaged;
 
         public static int LivingCount => Living.Count;
@@ -37,6 +39,8 @@ namespace MaxWorlds.Bosses
             CurrentByBoss.Clear();
             MaxByBoss.Clear();
             AreaByBoss.Clear();
+            SpawnLevelByBoss.Clear();
+            SpawnProgressByBoss.Clear();
             _engaged = false;
         }
 
@@ -51,6 +55,8 @@ namespace MaxWorlds.Bosses
             CurrentByBoss[boss] = current;
             MaxByBoss[boss] = max;
             AreaByBoss[boss] = areaIndex;
+            SpawnLevelByBoss[boss] = 1;
+            SpawnProgressByBoss[boss] = 0f;
 
             if (!_engaged)
             {
@@ -58,6 +64,7 @@ namespace MaxWorlds.Bosses
                 HudSignals.EmitBossEngaged(name, phases);
             }
             EmitCombinedHealth();
+            EmitCombinedSpawnLevel();
         }
 
         /// <summary>This boss's own HP changed (damage, or a live Retune from the Settings slider).
@@ -70,6 +77,18 @@ namespace MaxWorlds.Bosses
             EmitCombinedHealth();
         }
 
+        /// <summary>This boss's spawn level (MV-588 — how far its brood volley composition has
+        /// escalated) changed. Pushes the HIGHEST level among every living boss, and that leader's own
+        /// progress, to the HUD's spawn-level bar — same "combine, don't last-write-wins" reasoning as
+        /// <see cref="ReportHealth"/>.</summary>
+        public static void ReportSpawnLevel(BigBermudaBoss boss, int level, float progress01)
+        {
+            if (boss == null || !Living.Contains(boss)) return;
+            SpawnLevelByBoss[boss] = level;
+            SpawnProgressByBoss[boss] = progress01;
+            EmitCombinedSpawnLevel();
+        }
+
         /// <summary>This boss died. Victory/death payoffs (<c>BossVictoryPayoff</c>, the exit door,
         /// results) must wait for the LAST one IN ITS OWN AREA — not the last one scene-wide (MV-591).
         /// Reading it scene-wide made a12's single boss the last boss in the game, which fired the
@@ -80,6 +99,8 @@ namespace MaxWorlds.Bosses
             if (boss == null || !Living.Remove(boss)) return;
             CurrentByBoss.Remove(boss);
             MaxByBoss.Remove(boss);
+            SpawnLevelByBoss.Remove(boss);
+            SpawnProgressByBoss.Remove(boss);
             int areaIndex = AreaByBoss.TryGetValue(boss, out int a) ? a : 0;
             AreaByBoss.Remove(boss);
 
@@ -91,6 +112,7 @@ namespace MaxWorlds.Bosses
             else
             {
                 EmitCombinedHealth();
+                EmitCombinedSpawnLevel();
             }
         }
 
@@ -104,6 +126,8 @@ namespace MaxWorlds.Bosses
             CurrentByBoss.Remove(boss);
             MaxByBoss.Remove(boss);
             AreaByBoss.Remove(boss);
+            SpawnLevelByBoss.Remove(boss);
+            SpawnProgressByBoss.Remove(boss);
         }
 
         /// <summary>Is any boss belonging to <paramref name="areaIndex"/> still alive? (MV-591) —
@@ -125,6 +149,22 @@ namespace MaxWorlds.Bosses
                 max += MaxByBoss[b];
             }
             HudSignals.EmitBossHealth(max > 0f ? current / max : 0f);
+        }
+
+        /// <summary>The HUD's spawn-level bar shows the HIGHEST level among every living boss (MV-588) —
+        /// same "don't let the wrong one win" reasoning as the combined health bar, but max rather than
+        /// sum: a level is a milestone, not a quantity to add up across bosses.</summary>
+        private static void EmitCombinedSpawnLevel()
+        {
+            int level = 1;
+            float progress = 0f;
+            foreach (BigBermudaBoss b in Living)
+            {
+                int l = SpawnLevelByBoss.TryGetValue(b, out int lv) ? lv : 1;
+                float p = SpawnProgressByBoss.TryGetValue(b, out float pr) ? pr : 0f;
+                if (l > level || (l == level && p > progress)) { level = l; progress = p; }
+            }
+            HudSignals.EmitBossSpawnLevel(level, progress);
         }
     }
 }

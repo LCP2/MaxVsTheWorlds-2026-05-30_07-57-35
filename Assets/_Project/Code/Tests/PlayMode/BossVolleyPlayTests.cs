@@ -139,23 +139,5 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.Greater(peak, 0, "no adds were ever flung, so the cap was never actually tested");
         }
 
-        [UnityTest]
-        public IEnumerator RammingStillHappens_TheVolleyIsAdditive()
-        {
-            // The signature attack is a SECOND attack, not a replacement: the charge cycle must still run.
-            yield return Wake();
-
-            var seen = new HashSet<BossAction>();
-            float t = 0f;
-            while (t < 12f && !(seen.Contains(BossAction.Charge) && seen.Contains(BossAction.Reposition)))
-            {
-                seen.Add(Boss.Action);
-                t += Time.deltaTime;
-                yield return null;
-            }
-
-            Assert.IsTrue(seen.Contains(BossAction.Charge),
-                "the boss never charged — the volley must be additive, not a replacement for ramming.");
-        }
     }
 }
