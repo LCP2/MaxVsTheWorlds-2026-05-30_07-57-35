@@ -366,7 +366,7 @@ namespace MaxWorlds.Tests.EditMode
         // composition (see RusherCap_StillClampsADialDerivedAreaFollowingAnAuthoredOne_ThroughTheDirector
         // above) — world1_config.json just doesn't have one, every one of its areas is authored.
         // MV-564's 30-area redraw raised the world total to 20; MV-568's a3 edit (3 -> 5 rusher) raised
-        // it again to 22.
+        // it again to 22; MV-598's v9 designer redraw dropped a5's Rusher 4 -> 2, landing it at 20.
 
         [Test]
         public void World1_AuthoredRusherTotalExceedsThePerLevelCap_AndIsNeverTrimmedForIt()
@@ -377,7 +377,7 @@ namespace MaxWorlds.Tests.EditMode
             for (int area = 1; area <= cfg.dials.areaCount; area++)
                 totalRushers += cfg.SolveComposition(area).Rusher;
 
-            Assert.AreEqual(22, totalRushers,
+            Assert.AreEqual(20, totalRushers,
                 "world1_config.json's authored Rusher total changed — if it dropped back under " +
                 $"RusherCap.PerLevel ({RusherCap.PerLevel}), update this expectation to match");
         }

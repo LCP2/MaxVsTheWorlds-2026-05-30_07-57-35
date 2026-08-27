@@ -407,12 +407,13 @@ namespace MaxWorlds.Tests.EditMode
 
             // MV-568: the designer's final composition edit dropped a2's blinkers 4 -> 2, moved a3
             // from 3 rusher/2 gunner to 5 rusher/0 gunner (bolter unchanged at 2), and dropped a5's
-            // bolters 4 -> 3.
+            // bolters 4 -> 3. MV-598's v9 redraw then raised a3's bolters 2 -> 4, a4's gunners 5 -> 6,
+            // and dropped a5's rusher 4 -> 2 while raising its bolters 3 -> 6.
             AssertComposition(cfg, 1, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 0);
             AssertComposition(cfg, 2, rusher: 4, bruiser: 0, gunner: 0, blinker: 2, bolter: 0);
-            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 2);
-            AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 5, blinker: 0, bolter: 0);
-            AssertComposition(cfg, 5, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 3);
+            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 4);
+            AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 6, blinker: 0, bolter: 0);
+            AssertComposition(cfg, 5, rusher: 2, bruiser: 0, gunner: 0, blinker: 0, bolter: 6);
         }
 
         private static void AssertComposition(WorldConfig cfg, int areaIndex, int rusher, int bruiser, int gunner, int blinker, int bolter)

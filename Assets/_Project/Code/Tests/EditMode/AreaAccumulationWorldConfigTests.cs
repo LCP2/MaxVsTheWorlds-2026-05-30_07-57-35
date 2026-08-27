@@ -105,7 +105,7 @@ namespace MaxWorlds.Tests.EditMode
             DifficultyEngine.Composition area4 = cfg.SolveComposition(4);
             DifficultyEngine.Composition area6 = cfg.SolveComposition(6);
             Assert.AreEqual(0, area4.Bruiser, "area 4's authored composition is Rusher+Gunner only");
-            Assert.AreEqual(3, area6.Bruiser, "MV-564: area 6's authored composition holds exactly three Bruiser");
+            Assert.AreEqual(5, area6.Bruiser, "MV-598: area 6's authored composition holds exactly five Bruiser");
 
             _directorGo = new GameObject("Area Accumulation");
             var director = _directorGo.AddComponent<AreaAccumulationDirector>();
@@ -119,7 +119,7 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(0, director.BruiserCountForArea(4),
                 "a Bruiser-less area must report exactly zero, not fall back to some other count");
-            Assert.AreEqual(3, director.BruiserCountForArea(6),
+            Assert.AreEqual(5, director.BruiserCountForArea(6),
                 "area 6's Bruiser count must match its solved composition");
             Assert.AreEqual(0, director.BruiserCountForArea(9),
                 "an area never filled must report zero rather than throwing");
