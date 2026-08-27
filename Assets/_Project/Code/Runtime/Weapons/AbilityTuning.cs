@@ -136,19 +136,26 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Radius of the bubble at Level 1, metres (DECISION #3, MV-361) — originally pinned
         /// to the live world's normal gate width (3 m diameter) and never leveled; MV-422 ("Force
-        /// Field radius now levels... levels raise absorb AND radius together") makes this the
+        /// Field radius now levels... levels raise absorb AND radius together") made this the
         /// Level-1 starting point of a leveled axis instead of a permanent hard lock — see
-        /// <see cref="ForceFieldRadius"/>.</summary>
-        public const float DefaultForceFieldRadius = 1.5f;
+        /// <see cref="ForceFieldRadius"/>. MV-583 (Lee, 26 Aug 2026 DECISION: "smaller than SG2, try
+        /// 50% of current size") halves it again, to 0.75 m (1.5 m diameter) — do not re-raise
+        /// whether 0.75 m is too small, Lee will judge it in play.</summary>
+        public const float DefaultForceFieldRadius = 0.75f;
 
-        /// <summary>Extra bubble radius each Force Field level beyond L1 adds (MV-422) — same
-        /// additive "level = bigger number" shape as <see cref="DefaultForceFieldAbsorbCapPerLevel"/>,
-        /// small enough that even a maxed L5 bubble (2.5 m) still reads as a personal shield, not a
-        /// room-swallowing dome.</summary>
-        public const float DefaultForceFieldRadiusPerLevel = 0.25f;
+        /// <summary>Extra bubble radius each Force Field level beyond L1 adds — MV-422 originally set
+        /// this to 0.25 (so a maxed L5 bubble read as 2.5 m); MV-583 (Lee: "it should not grow in
+        /// size... as it gets more powerful, increase the shimmer speed") zeroes it. The field no
+        /// longer widens with level at all — <see cref="ForceFieldBubble.ApplyShimmerOverrides"/>'s
+        /// leveled shimmer speed is the replacement "more powerful" cue. Do not re-raise growth-by-
+        /// level; kept as a live parameter (not deleted) only because <see cref="ForceFieldRadius"/>
+        /// itself stays intact.</summary>
+        public const float DefaultForceFieldRadiusPerLevel = 0f;
 
         /// <summary>The bubble's radius at a given Force Field level — level 1 is the DECISION's
-        /// originally-pinned 1.5 m, each level above it widens it further (MV-422).</summary>
+        /// pinned 0.75 m (MV-583); with <see cref="DefaultForceFieldRadiusPerLevel"/> now 0, every
+        /// level returns the same base radius, but the per-level term is kept live (rather than
+        /// deleted) in case a future ticket revives leveled growth.</summary>
         public static float ForceFieldRadius(int level, float baseRadius, float perLevel) =>
             Mathf.Max(0f, baseRadius) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
 
@@ -178,6 +185,32 @@ namespace MaxWorlds.Weapons
         /// everything touching the bubble (DECISION #4: "stays exactly where the Upgrade track already
         /// scoped it, level 3").</summary>
         public static bool ForceFieldPopDealsDamage(int level) => level >= 3;
+
+        /// <summary>Shimmer band speed at Force Field Level 1 (MV-583, SG1's baseline reading) — same
+        /// value as <c>ForceFieldShield.shader</c>'s compiled-in <c>_ShimmerBandSpeed</c> default and
+        /// <c>SettingsPanel</c>'s "Shimmer speed" knob default, all three left unchanged by MV-583's
+        /// bake (SG1 read 99%, i.e. "unchanged").</summary>
+        public const float DefaultForceFieldShimmerBandSpeed = 0.35f;
+
+        /// <summary>Hard ceiling a leveled shimmer speed may reach (MV-583) — mirrors the shader's own
+        /// declared <c>_ShimmerBandSpeed ("Shimmer Band Speed", Range(0, 2))</c>; raising this without
+        /// also widening that Range would clamp silently at the shader instead of the formula.</summary>
+        public const float ForceFieldShimmerBandSpeedCeiling = 2f;
+
+        /// <summary>The bubble's shimmer band speed at a given Force Field level (MV-583: "as it gets
+        /// more powerful, increase the shimmer speed" — the visual language that replaces the retired
+        /// per-level radius growth, see <see cref="DefaultForceFieldRadiusPerLevel"/>). Level 1 reads
+        /// exactly <paramref name="baselineAtLevel1"/>, rising linearly to <paramref name="ceiling"/>
+        /// at <paramref name="maxLevel"/> — never above it, since a maxed track lands exactly on the
+        /// ceiling rather than overshooting.</summary>
+        public static float ForceFieldShimmerBandSpeed(int level, float baselineAtLevel1, float ceiling, int maxLevel)
+        {
+            int clampedMax = Mathf.Max(1, maxLevel);
+            if (clampedMax <= 1) return baselineAtLevel1;
+            int clampedLevel = Mathf.Clamp(level, 1, clampedMax);
+            float t = (clampedLevel - 1) / (float)(clampedMax - 1);
+            return Mathf.Lerp(baselineAtLevel1, ceiling, t);
+        }
 
         /// <summary>BLINKGUARD (MV-426 fusion <c>f_bgd</c>, Energy+Move, HUD slot B): "Teleport leaves
         /// the Force Field behind you, and it pops where you left" — seconds the stationary bubble left

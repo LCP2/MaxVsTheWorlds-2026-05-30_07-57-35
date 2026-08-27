@@ -306,44 +306,61 @@ namespace MaxWorlds.UI
             // provisional defaults by eye rather than this ticket guessing them. Every setter
             // pushes straight onto any bubble that's already up, so a slider moved mid-tune is
             // visible immediately rather than only on the next activation.
+            //
+            // MV-583 bakes Lee's 26 Aug 2026 tuning session (SG1) as the new authored defaults —
+            // Rim power/Seam width/Shimmer speed read 100%/100%/99% (i.e. unchanged) and are left
+            // alone; the other six below are baked via the panel's own PosToValue(min, max, OLD
+            // default, SG1-reading/200) per the ticket's own instruction to trust that over any
+            // hand-derived cross-check.
             Add("Shield rim power", "x", 0.5f, 8f, 2.4f,
                 () => DevTuning.Or(DevTuning.ForceFieldRimPower, 2.4f),
                 v => { DevTuning.ForceFieldRimPower = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield rim strength", "x", 0f, 6f, 2.6f,
-                () => DevTuning.Or(DevTuning.ForceFieldRimStrength, 2.6f),
+            // SG1: 0% (slider minimum) -> PosToValue(0, 6, 2.6, 0) = 0.
+            Add("Shield rim strength", "x", 0f, 6f, 0f,
+                () => DevTuning.Or(DevTuning.ForceFieldRimStrength, 0f),
                 v => { DevTuning.ForceFieldRimStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield panel scale", "x", 2f, 20f, 7f,
-                () => DevTuning.Or(DevTuning.ForceFieldPanelScale, 7f),
+            // SG1: 0% (slider minimum) -> PosToValue(2, 20, 7, 0) = 2.
+            Add("Shield panel scale", "x", 2f, 20f, 2f,
+                () => DevTuning.Or(DevTuning.ForceFieldPanelScale, 2f),
                 v => { DevTuning.ForceFieldPanelScale = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             Add("Shield seam width", "x", 0.02f, 0.5f, 0.1f,
                 () => DevTuning.Or(DevTuning.ForceFieldPanelSeamWidth, 0.1f),
                 v => { DevTuning.ForceFieldPanelSeamWidth = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield seam boost", "x", 0f, 4f, 0.35f,
-                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamBoost, 0.35f),
+            // SG1: 31% -> PosToValue(0, 4, 0.35, 0.31) = Lerp(0, 0.35, 0.31) = 0.1085.
+            Add("Shield seam boost", "x", 0f, 4f, 0.1085f,
+                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamBoost, 0.1085f),
                 v => { DevTuning.ForceFieldPanelSeamBoost = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield pulse speed", "x", 0f, 4f, 1.2f,
-                () => DevTuning.Or(DevTuning.ForceFieldPulseSpeed, 1.2f),
+            // SG1: 200% (slider maximum) -> PosToValue(0, 4, 1.2, 1) = 4.
+            Add("Shield pulse speed", "x", 0f, 4f, 4f,
+                () => DevTuning.Or(DevTuning.ForceFieldPulseSpeed, 4f),
                 v => { DevTuning.ForceFieldPulseSpeed = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield pulse strength", "x", 0f, 1f, 0.08f,
-                () => DevTuning.Or(DevTuning.ForceFieldPulseStrength, 0.08f),
+            // SG1: 200% (slider maximum) -> PosToValue(0, 1, 0.08, 1) = 1.
+            Add("Shield pulse strength", "x", 0f, 1f, 1f,
+                () => DevTuning.Or(DevTuning.ForceFieldPulseStrength, 1f),
                 v => { DevTuning.ForceFieldPulseStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
+            // MV-583 change 4: shimmer speed now scales with Force Field's level instead of reading
+            // this fixed default (see AbilityTuning.ForceFieldShimmerBandSpeed /
+            // ForceFieldBubble.ApplyShimmerOverrides) — SG1's 0.35 becomes the level-1 baseline, so
+            // the knob itself (a manual override, same as every other slider here) is left unchanged.
             Add("Shimmer speed", "x", 0f, 2f, 0.35f,
                 () => DevTuning.Or(DevTuning.ForceFieldShimmerBandSpeed, 0.35f),
                 v => { DevTuning.ForceFieldShimmerBandSpeed = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shimmer width", "x", 0.02f, 1f, 0.18f,
-                () => DevTuning.Or(DevTuning.ForceFieldShimmerBandWidth, 0.18f),
+            // SG1: 27% -> PosToValue(0.02, 1, 0.18, 0.27) = Lerp(0.02, 0.18, 0.27) = 0.0632.
+            Add("Shimmer width", "x", 0.02f, 1f, 0.0632f,
+                () => DevTuning.Or(DevTuning.ForceFieldShimmerBandWidth, 0.0632f),
                 v => { DevTuning.ForceFieldShimmerBandWidth = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield alpha ceiling", "x", 0f, 1f, 0.35f,
-                () => DevTuning.Or(DevTuning.ForceFieldAlphaCeiling, 0.35f),
+            // SG1: 50% (half the old default) -> PosToValue(0, 1, 0.35, 0.5) = Lerp(0, 0.35, 0.5) = 0.175.
+            Add("Shield alpha ceiling", "x", 0f, 1f, 0.175f,
+                () => DevTuning.Or(DevTuning.ForceFieldAlphaCeiling, 0.175f),
                 v => { DevTuning.ForceFieldAlphaCeiling = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // The tuning affordance itself: force the bubble up (bypassing acquisition/cooldown/

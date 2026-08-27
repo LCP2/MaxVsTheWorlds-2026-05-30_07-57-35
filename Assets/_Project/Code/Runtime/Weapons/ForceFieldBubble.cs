@@ -69,14 +69,18 @@ namespace MaxWorlds.Weapons
 
         private MeshRenderer _visual;
         private MaterialPropertyBlock _mpb;
+        private int _forceFieldLevel = 1;
 
         /// <summary>The solid, non-trigger collider that blocks robot bodies.</summary>
         public SphereCollider Collider { get; private set; }
 
         /// <summary>Builds the bubble as a child of <paramref name="owner"/> — following Max
-        /// automatically via the parent transform, no per-frame position copy needed.</summary>
-        public void Init(Transform owner, CharacterController ownerCc, float radius)
+        /// automatically via the parent transform, no per-frame position copy needed.
+        /// <paramref name="forceFieldLevel"/> (MV-583) drives the shimmer's speed — see
+        /// <see cref="ApplyShimmerOverrides"/> — since the bubble no longer grows with level.</summary>
+        public void Init(Transform owner, CharacterController ownerCc, float radius, int forceFieldLevel = 1)
         {
+            _forceFieldLevel = Mathf.Max(1, forceFieldLevel);
             transform.SetParent(owner, worldPositionStays: false);
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;
@@ -138,7 +142,12 @@ namespace MaxWorlds.Weapons
         /// than needing to be re-triggered. Every parameter left at null keeps the shader's own
         /// compiled-in default. No-op against the flat-fill fallback material (it has none of
         /// these properties; <see cref="Material.SetFloat(int, float)"/> against a missing
-        /// property is a harmless no-op).</summary>
+        /// property is a harmless no-op).
+        ///
+        /// Shimmer band speed (MV-583) is the one exception: it is ALWAYS set, dev override or not,
+        /// because it now carries the "how powerful is this field" cue that used to be size —
+        /// <see cref="AbilityTuning.ForceFieldShimmerBandSpeed"/> derives it from this bubble's own
+        /// <see cref="_forceFieldLevel"/>, and a moved "Shimmer speed" slider still overrides that.</summary>
         public void ApplyShimmerOverrides()
         {
             var mat = _visual != null ? _visual.sharedMaterial : null;
@@ -150,7 +159,10 @@ namespace MaxWorlds.Weapons
             SetIfOverridden(mat, PanelSeamBoostId, DevTuning.ForceFieldPanelSeamBoost);
             SetIfOverridden(mat, PulseSpeedId, DevTuning.ForceFieldPulseSpeed);
             SetIfOverridden(mat, PulseStrengthId, DevTuning.ForceFieldPulseStrength);
-            SetIfOverridden(mat, ShimmerBandSpeedId, DevTuning.ForceFieldShimmerBandSpeed);
+            float leveledShimmerSpeed = AbilityTuning.ForceFieldShimmerBandSpeed(_forceFieldLevel,
+                AbilityTuning.DefaultForceFieldShimmerBandSpeed, AbilityTuning.ForceFieldShimmerBandSpeedCeiling,
+                WeaponCatalog.MaxLevel(AbilityKind.ForceField));
+            mat.SetFloat(ShimmerBandSpeedId, DevTuning.Or(DevTuning.ForceFieldShimmerBandSpeed, leveledShimmerSpeed));
             SetIfOverridden(mat, ShimmerBandWidthId, DevTuning.ForceFieldShimmerBandWidth);
             SetIfOverridden(mat, AlphaCeilingId, DevTuning.ForceFieldAlphaCeiling);
         }
