@@ -204,7 +204,11 @@ namespace MaxWorlds.UI
         // YT-178/MV-358 built up on it). _weaponsButtonRing is the state-coloured stroke (grey/amber/
         // module-cyan); _weaponsModuleHalo* are the module-captured state's double halo
         // (GlowRadiusMultiplier-style, only ever active for ModuleCaptured/Both); the two corner
-        // badges are built and animated separately below.
+        // badges are built and animated separately below. MV-581: the single tap target (and Button)
+        // is now _weaponsTapRoot, an invisible parent sized to enclose both the hex mark AND the cell
+        // readout beneath it (see BuildWeaponsButton) — _weaponsButtonRoot nests inside it, unchanged
+        // in size, carrying only the visible sprites.
+        private RectTransform _weaponsTapRoot;
         private RectTransform _weaponsButtonRoot;
         private Image _weaponsButtonRing;
         private Image _weaponsButtonMark;
@@ -1989,6 +1993,12 @@ namespace MaxWorlds.UI
         /// clear of the 44pt floor, so this doesn't re-litigate AC1 either.</summary>
         private const float WeaponsButtonSize = 173f;
 
+        /// <summary>The mark's own vertical placement — right edge, above the aim stick. Named so
+        /// <see cref="BuildWeaponsButton"/>'s tap-target math (MV-581) can derive the enclosing rect's
+        /// centre from the same number the visible mark has always used, instead of a second, possibly
+        /// drifting literal.</summary>
+        private const float WeaponsButtonRise = 120f;
+
         private const float WeaponsButtonRightInset = 8f;
 
         /// <summary>MV-510 round 2: a hair of buffer past <see cref="WeaponsButtonRightInset"/> so the
@@ -2002,13 +2012,38 @@ namespace MaxWorlds.UI
         /// strokes, no art asset, no font glyph (<c>HudFont</c> has no coverage for this symbol). The
         /// ring/halo are driven every frame in <see cref="UpdateWeaponsButton"/> off
         /// <see cref="WeaponsButtonAlert"/>; the two corner badges are a separate build,
-        /// <see cref="BuildWeaponsButtonBadges"/>.</summary>
+        /// <see cref="BuildWeaponsButtonBadges"/>.
+        ///
+        /// MV-581: the tap target used to be just this hex (raycastTarget + Button on the mark's own
+        /// background image), so tapping the cell readout <see cref="BuildPowerCellCounter"/> sits
+        /// beneath it did nothing even though the two read as one control. <see cref="_weaponsTapRoot"/>
+        /// is now the sole raycastable/Button — an invisible rect sized to the union of the hex and the
+        /// cell readout below it — and <see cref="_weaponsButtonRoot"/> nests inside it at the same
+        /// absolute size and position it always had (AC3: the visible mark must not change), anchored
+        /// to the wrapper's top edge so the hex's own geometry is untouched by the wrapper's height.</summary>
         private void BuildWeaponsButton()
         {
-            _weaponsButtonRoot = NewRect("Weapons Button", Root);
-            Anchor(_weaponsButtonRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            _weaponsTapRoot = NewRect("Weapons Tap Target", Root);
+            Anchor(_weaponsTapRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            float tapHeight = WeaponsButtonSize + CellReadoutGap + CellCounterHeight;
+            // The wrapper's top edge must land exactly where the mark's own top edge always sat
+            // (WeaponsButtonRise + half its size) — its centre is that top edge minus half the taller
+            // wrapper height, so the extra room only ever grows downward, over the cell readout.
+            float tapCenterY = WeaponsButtonRise + WeaponsButtonSize * 0.5f - tapHeight * 0.5f;
+            _weaponsTapRoot.sizeDelta = new Vector2(WeaponsButtonSize, tapHeight);
+            _weaponsTapRoot.anchoredPosition = new Vector2(-WeaponsButtonRightInset, tapCenterY);
+
+            var tapTarget = AddImage(_weaponsTapRoot, null, Color.clear, "Tap Target");
+            Stretch(tapTarget.rectTransform);
+            tapTarget.raycastTarget = true;
+            var tapButton = tapTarget.gameObject.AddComponent<Button>();
+            tapButton.transition = Selectable.Transition.None;
+            tapButton.onClick.AddListener(OnWeaponsButtonTapped);
+
+            _weaponsButtonRoot = NewRect("Weapons Button", _weaponsTapRoot);
+            Anchor(_weaponsButtonRoot, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             _weaponsButtonRoot.sizeDelta = new Vector2(WeaponsButtonSize, WeaponsButtonSize);
-            _weaponsButtonRoot.anchoredPosition = new Vector2(-WeaponsButtonRightInset, 120f); // right edge, above the aim stick
+            _weaponsButtonRoot.anchoredPosition = Vector2.zero; // pinned to the wrapper's top edge — same absolute spot the mark always occupied
 
             // Module-captured halo (double ring, MV-425 spec): behind everything else, only ever active
             // for ModuleCaptured/Both (RefreshWeaponsButtonAlert). Sized as multiples of the button's
@@ -2033,11 +2068,7 @@ namespace MaxWorlds.UI
 
             var bg = AddImage(_weaponsButtonRoot, HudTextures.Polygon(6, -90f, WeaponsButtonHexTex, WeaponsButtonHexTex), PanelColor, "Weapons BG");
             Stretch(bg.rectTransform);
-            bg.raycastTarget = true;
-
-            var button = bg.gameObject.AddComponent<Button>();
-            button.transition = Selectable.Transition.None;
-            button.onClick.AddListener(OnWeaponsButtonTapped);
+            bg.raycastTarget = false; // MV-581: _weaponsTapRoot's own Tap Target image is the sole raycastable/Button now
 
             _weaponsButtonRing = AddImage(_weaponsButtonRoot, HudTextures.PolygonOutline(6, -90f, WeaponsButtonHexTex, WeaponsButtonHexTex, 4f), WeaponsButtonIdleRingColor, "Ring");
             Stretch(_weaponsButtonRing.rectTransform);
