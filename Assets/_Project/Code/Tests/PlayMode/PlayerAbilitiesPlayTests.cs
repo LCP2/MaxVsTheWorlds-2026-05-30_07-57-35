@@ -96,7 +96,7 @@ namespace MaxWorlds.Tests.PlayMode
         }
 
         [UnityTest]
-        public IEnumerator LandingSplashesHalfTheBruisersMaxHealthAndHaltsIt()
+        public IEnumerator LandingSplashesTheSpecPercentOfTheBruisersMaxHealthAndHaltsIt()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             PickupWallet.SetPowerCells(10);

@@ -247,7 +247,7 @@
     {
       "id": "s_spl",
       "category": "SECONDARY",
-      "x": 490,
+      "x": 730,
       "y": 580,
       "icon": "spl",
       "label": "SPLASH",
@@ -271,7 +271,7 @@
     {
       "id": "s_aut",
       "category": "SECONDARY",
-      "x": 730,
+      "x": 490,
       "y": 580,
       "icon": "af",
       "label": "AUTO-FIRE",

@@ -208,7 +208,7 @@ namespace MaxWorlds.Weapons
             SplashVfx.Init(radius);
             SplashVfx.Play(point);
 
-            float pct = 0.01f * DevTuning.Or(DevTuning.WaterBalloonDamagePct, AbilityTuning.DefaultWaterBalloonDamagePct);
+            float damagePct = DevTuning.Or(DevTuning.WaterBalloonDamagePct, AbilityTuning.DefaultWaterBalloonDamagePct);
             float stopSeconds = DevTuning.Or(DevTuning.WaterBalloonStopDurationSeconds, AbilityTuning.DefaultWaterBalloonStopDurationSeconds);
 
             // A greybox robot (EnemySpawner's stand-in path, which is what ships today) carries BOTH
@@ -228,7 +228,7 @@ namespace MaxWorlds.Weapons
                 // damage from the splash — spec §6a says "robots in the splash", not everything.
                 if (s_hits[i].TryGetComponent<RobotEnemy>(out var robot))
                 {
-                    float damage = robot.MaxHealth * pct;
+                    float damage = AbilityTuning.WaterBalloonDamage(robot.MaxHealth, damagePct);
                     if (damage > 0f)
                         d.TakeDamage(new DamageInfo(damage, point, Vector3.up, Team.Player, soak: true));
                 }
