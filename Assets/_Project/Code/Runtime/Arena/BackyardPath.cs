@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
-using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -95,16 +94,17 @@ namespace MaxWorlds.Arena
             _areaDirector.ConfigureWorld(cfg);
             _areaDirector.Configure(_map, _build.Cover);
 
-            // MV-362/MV-396: sentinels "do not travel between areas... passing a gate clears them and
-            // refunds the slots" — "passing" means Max has actually walked through, not merely that the
-            // gate broke, so this hangs off the position-driven PlayerCrossedIntoArea, not any AreaGate's
-            // Opened (which fires early, for population, well before Max is through the doorway).
-            // MV-426 SKIRMISH (f_skr): "Sentinels survive an area change" once Move+Support is forged —
-            // the only exception to the teardown above.
-            _areaDirector.PlayerCrossedIntoArea += _ =>
-            {
-                if (!RigFusionState.IsForged("f_skr")) Sentinel.DestroyAllActive();
-            };
+            // MV-579 (DECISION, Lee 26 Aug 2026 playtest): sentinels now persist across an area
+            // crossing by default — a wedged, unrecallable sentinel used to also vanish and refund on
+            // crossing (MV-362/MV-396), which was tolerable when it merely cost a redeploy; once it
+            // could permanently block Max's only exit (the bug this ticket fixes), losing it on every
+            // crossing stopped being a fair trade. This USED to be gated behind the f_skr (SKIRMISH)
+            // fusion's IsForged("f_skr") check (MV-426: "Sentinels survive an area change" was its
+            // whole perk) — removed here because it is now the default for every player, not a fusion
+            // reward. f_skr keeps its OTHER effect (Teleport snaps to a live sentinel, see
+            // PlayerAbilities.TryBlink) untouched; MV-582 is the linked follow-up proposing a
+            // replacement for the half this deletes. Do not re-add a teardown here to give it
+            // something to do again.
 
             _worldRunner = new GameObject("World Runner").AddComponent<WorldRunner>();
             _worldRunner.transform.SetParent(transform, false);

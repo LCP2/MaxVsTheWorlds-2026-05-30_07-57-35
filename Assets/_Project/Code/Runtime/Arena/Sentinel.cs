@@ -60,11 +60,13 @@ namespace MaxWorlds.Arena
         /// <summary>Destroys every deployed sentinel and empties the registry. Sentinels aren't
         /// pooled (unlike robots), so a full reset has to tear the GameObjects down too, not just
         /// forget them. Two call sites: <see cref="MaxWorlds.Arena.Map.MapRuntime"/> on a fresh level
-        /// build, and <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.PlayerCrossedIntoArea"/>
-        /// (MV-362 spec: "they do not travel between areas... passing a gate clears them and refunds
-        /// the slots" — MV-396 fixed "passing" to mean Max has actually walked through, not merely that
-        /// the gate broke) — the "refund" is automatic here, since the Slots cap is always checked
-        /// live against <see cref="Active"/>.Count, never a separately-tracked balance.</summary>
+        /// build, and <see cref="WorldRunner"/> on player death/restore. MV-579 (26 Aug 2026 DECISION)
+        /// removed the third call site this used to have — <c>BackyardPath</c>'s
+        /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.PlayerCrossedIntoArea"/> handler,
+        /// which used to wipe every sentinel on an area crossing (MV-362/MV-396) unless the f_skr
+        /// fusion was forged. Sentinels now persist across an area crossing unconditionally; the
+        /// "refund" is still automatic wherever this IS still called, since the Slots cap is always
+        /// checked live against <see cref="Active"/>.Count, never a separately-tracked balance.</summary>
         public static void DestroyAllActive()
         {
             if (_active.Count == 0) return;
@@ -105,6 +107,12 @@ namespace MaxWorlds.Arena
         private float _standoffDistance;
         private Transform _followTarget;
 
+        private Collider _bodyCollider;
+
+        /// <summary>Set while the sentinel is mid-dodge (MV-579) — null the rest of the time, including
+        /// while the ordinary standoff-follow step below is running.</summary>
+        private Vector3? _sidestepTarget;
+
         private DestructibleHealth _health;
         private float _timeSinceDamage;
 
@@ -137,6 +145,7 @@ namespace MaxWorlds.Arena
             _followTarget = followTarget;
             InitHealth(maxHp);
             BuildBody();
+            IgnorePlayerCollision();
             WorldHealthBar.Attach(gameObject, this, 1.9f, 1.2f, alwaysShow: true);
             Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (see GateSolidityTests)
         }
@@ -158,8 +167,30 @@ namespace MaxWorlds.Arena
                 rend.SetPropertyBlock(mpb);
             }
 
-            var col = vis.GetComponent<Collider>();
-            if (col != null) col.isTrigger = false; // solid — robots route around it like any wall
+            _bodyCollider = vis.GetComponent<Collider>();
+            // Solid — robots route around it like any wall (ObstacleSteering). Max himself is carved
+            // back out of that below (IgnorePlayerCollision, MV-579): being a wall to ROBOTS is the
+            // whole point of the ability, but blocking MAX was always a bug, per the same ForceFieldBubble
+            // precedent (MV-361) — a solid collider that a CharacterController must still not treat as
+            // a wall for its own owner.
+            if (_bodyCollider != null) _bodyCollider.isTrigger = false;
+        }
+
+        /// <summary>MV-579: a deployed sentinel must never physically block Max, however it got in his
+        /// way — standing in a doorway, following him into a gate mouth (there is no recall — see the
+        /// class doc), or simply placed on his path. <see cref="Physics.IgnoreCollision(Collider,Collider,bool)"/>
+        /// against Max's own <see cref="CharacterController"/> is the same fix
+        /// <see cref="MaxWorlds.Weapons.ForceFieldBubble.Init"/> already uses for exactly this shape of
+        /// problem (a solid collider that must stop everyone EXCEPT its owner) — a per-pair exemption,
+        /// not a physics-layer change, so nothing else the sentinel's layer touches (robots) is
+        /// affected. <see cref="_followTarget"/> is Max's own transform (see <see cref="Init"/>'s
+        /// caller, <c>PlayerAbilities.TryDeploySentinel</c>) regardless of whether the Move (u_mov)
+        /// axis has been leveled — this guard must hold even for a sentinel that never moves at all.</summary>
+        private void IgnorePlayerCollision()
+        {
+            if (_bodyCollider == null || _followTarget == null) return;
+            if (_followTarget.TryGetComponent<CharacterController>(out var playerCc))
+                Physics.IgnoreCollision(_bodyCollider, playerCc, true);
         }
 
         protected void InitHealth(float maxHp)
@@ -208,7 +239,32 @@ namespace MaxWorlds.Arena
             float healAmount = next - _health.Current;
             if (healAmount > 0f) _health.Heal(healAmount);
 
-            if (_followTarget != null && _moveSpeed > 0f)
+            if (_followTarget != null)
+            {
+                float reactDistSq = AbilityTuning.DefaultSentinelReactDistance * AbilityTuning.DefaultSentinelReactDistance;
+                if (_sidestepTarget == null && (transform.position - _followTarget.position).sqrMagnitude < reactDistSq)
+                {
+                    // MV-579: this reaction is independent of the Move (u_mov) axis and of
+                    // IgnorePlayerCollision above — Max can never be BLOCKED either way, but a static
+                    // turret standing there while he walks straight through it still reads as broken,
+                    // so it visibly gets out of his way every time regardless of whether it can follow.
+                    _sidestepTarget = AbilityTuning.SentinelSidestepTarget(transform.position,
+                        _followTarget.position, _followTarget.forward, AbilityTuning.DefaultSentinelSidestepDistance);
+                }
+            }
+
+            if (_sidestepTarget.HasValue)
+            {
+                Vector3 next2 = Vector3.MoveTowards(transform.position, _sidestepTarget.Value,
+                    AbilityTuning.DefaultSentinelSidestepSpeed * dt);
+                if (next2 != transform.position)
+                {
+                    transform.position = next2;
+                    Physics.SyncTransforms();
+                }
+                if ((transform.position - _sidestepTarget.Value).sqrMagnitude < 0.0025f) _sidestepTarget = null;
+            }
+            else if (_followTarget != null && _moveSpeed > 0f)
             {
                 Vector3 next3 = AbilityTuning.SentinelStandoffStep(
                     transform.position, _followTarget.position, _standoffDistance, _moveSpeed, dt);

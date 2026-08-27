@@ -507,11 +507,22 @@ namespace MaxWorlds.Weapons
         /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC).</summary>
         public const float SentinelPlacementClearance = 1.5f;
 
-        /// <summary>Whether an aimed point is clear of every other deployed sentinel and live robot.
-        /// Room/wall containment is the joystick reticle's own job (<see cref="MaxWorlds.Arena.MapZone.Clamp"/>,
-        /// MV-399 AC1: the reticle stays "constrained to the current arena" before a point is ever
-        /// chosen), so this — the deploy-time gate — only needs to catch what a reticle clamp can't:
-        /// something already standing where the player aimed.</summary>
+        /// <summary>How far a deploy point must clear a wall or a gate/doorway span (MV-579 item 4):
+        /// the sentinel's own body radius (0.25 m, see <see cref="Sentinel"/>'s CreatePrimitive
+        /// Cylinder) plus margin, so it is never dropped straddling a threshold to begin with — the
+        /// non-blocking fix (<see cref="Sentinel"/>'s <c>IgnorePlayerCollision</c>) is Max's guarantee
+        /// against a sentinel already there; this is about not creating a fresh chokepoint in the
+        /// first place.</summary>
+        private const float SentinelWallClearance = 0.6f;
+
+        /// <summary>Whether an aimed point is clear of every other deployed sentinel and live robot,
+        /// AND clear of any wall/gate/doorway-threshold geometry. Room/wall CONTAINMENT is the
+        /// joystick reticle's own job (<see cref="MaxWorlds.Arena.MapZone.Clamp"/>, MV-399 AC1: the
+        /// reticle stays "constrained to the current arena" before a point is ever chosen), but a point
+        /// well inside the arena can still land ON a wall's own footprint or in a doorway's threshold
+        /// span — reusing <see cref="CoverLayer"/> here rather than re-deriving map geometry, since
+        /// every one of those (walls, gate leaves, and — per <c>MapRuntime.BuildAreaGate</c> — a
+        /// gate's own threshold collider) is already on it.</summary>
         public bool IsValidSentinelPlacement(Vector3 point)
         {
             foreach (Sentinel s in Sentinel.Active)
@@ -524,6 +535,12 @@ namespace MaxWorlds.Weapons
             {
                 if (robot == null) continue;
                 if (FlatDistance(robot.transform.position, point) < SentinelPlacementClearance) return false;
+            }
+
+            if (CoverLayer.Exists &&
+                Physics.CheckSphere(point, SentinelWallClearance, CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+            {
+                return false;
             }
 
             return true;

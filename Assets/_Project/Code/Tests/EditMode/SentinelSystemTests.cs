@@ -149,6 +149,20 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(cost, Is.GreaterThanOrEqualTo(Mathf.RoundToInt(5 * 0.4f)));
         }
 
+        /// <summary>MV-579 AC1 (DECISION, Lee 26 Aug 2026 playtest: "Cost should be 0"). Proven to fail
+        /// on the pre-fix commit: <c>SentinelCost</c> used to end in <c>Mathf.Max(1, ...)</c>, a hard
+        /// floor of 1 that made a 0 base cost impossible — <c>SentinelCost(level, 0, perLevel)</c> came
+        /// back 1 at every level, never 0. Failure quoted in the MV-579 fix comment.</summary>
+        [Test]
+        public void CostIsExactlyZeroAtEveryLevelWhenTheBaseCostIsZero()
+        {
+            for (int level = 0; level <= RigBoard.MaxLevel("u_cst"); level++)
+            {
+                int cost = AbilityTuning.SentinelCost(level, 0, AbilityTuning.DefaultSentinelCostReductionPerLevel);
+                Assert.That(cost, Is.EqualTo(0), $"level {level}: a 0 base cost must stay 0, never floor up to a phantom charge");
+            }
+        }
+
         [Test]
         public void MoveSpeedIsZeroUntilTheAxisIsLeveled()
         {
