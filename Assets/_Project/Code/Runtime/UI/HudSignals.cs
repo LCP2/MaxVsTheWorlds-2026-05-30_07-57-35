@@ -52,6 +52,11 @@ namespace MaxWorlds.UI
         /// first instead of the run cutting straight to results.</summary>
         public static event Action BossPayoffFinished;
 
+        /// <summary>The final area has been cleared of everything (MV-591) — every robot dead, none
+        /// still queued to arrive, and no boss there alive. This — not a boss dying — is what ends the
+        /// run; a boss can fall mid-run (a12, a20) without this ever firing.</summary>
+        public static event Action RunComplete;
+
         /// <summary>A Blinker just teleported (MV-330). (fromWorldPos, toWorldPos) — the reposition in
         /// <c>RobotEnemy.TickTeleport</c> is a same-frame snap, so this carries BOTH points rather than
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
@@ -126,6 +131,9 @@ namespace MaxWorlds.UI
 
         public static void EmitBossPayoffFinished()
             => BossPayoffFinished?.Invoke();
+
+        public static void EmitRunComplete()
+            => RunComplete?.Invoke();
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);

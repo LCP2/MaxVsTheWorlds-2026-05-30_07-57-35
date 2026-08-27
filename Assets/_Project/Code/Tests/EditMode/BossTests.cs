@@ -110,8 +110,8 @@ namespace MaxWorlds.Tests.EditMode
             HudSignals.BossDefeated += onDefeated;
             try
             {
-                BossCensus.Register(boss1, "BIG BERMUDA", 2, current: 100f, max: 100f);
-                BossCensus.Register(boss2, "BIG BERMUDA", 2, current: 100f, max: 100f);
+                BossCensus.Register(boss1, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 1);
+                BossCensus.Register(boss2, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 1);
                 Assert.AreEqual(1f, lastHealth, 1e-4f, "two full-health bosses must combine to a full bar");
 
                 BossCensus.ReportHealth(boss1, current: 0f, max: 100f); // boss1 fully drained, still standing
@@ -132,6 +132,56 @@ namespace MaxWorlds.Tests.EditMode
                 HudSignals.BossDefeated -= onDefeated;
                 Object.DestroyImmediate(go1);
                 Object.DestroyImmediate(go2);
+            }
+        }
+
+        // ---- MV-591: "no boss left" must be per-area, not scene-wide ----
+
+        /// <summary>The pre-fix code kept <see cref="BossCensus"/>'s Living list scene-global, so a12's
+        /// one authored boss being the only one registered read as the LAST boss in the entire game —
+        /// defeating it fired <c>BossDefeated</c> (and, downstream, the whole victory chain) 18 areas
+        /// early. World 1 v4 authors bosses at a12 (x1), a20 (x2) and a30 (x3); each area's payoff must
+        /// wait for its OWN last boss, never the whole scene's, and areas must not cross-contaminate.</summary>
+        [Test]
+        public void ReportDefeated_GatesOnBossesRemainingInTheSameArea_NotSceneWide()
+        {
+            GameObject go12 = NewBossHandle();
+            GameObject go20A = NewBossHandle();
+            GameObject go20B = NewBossHandle();
+            var boss12 = go12.GetComponent<BigBermudaBoss>();
+            var boss20A = go20A.GetComponent<BigBermudaBoss>();
+            var boss20B = go20B.GetComponent<BigBermudaBoss>();
+
+            int defeatedCount = 0;
+            System.Action onDefeated = () => defeatedCount++;
+            HudSignals.BossDefeated += onDefeated;
+            try
+            {
+                BossCensus.Register(boss12, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 12);
+                BossCensus.Register(boss20A, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 20);
+                BossCensus.Register(boss20B, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 20);
+
+                BossCensus.ReportDefeated(boss12);
+                Assert.AreEqual(1, defeatedCount,
+                    "a12's only boss dying must clear ITS OWN area and fire BossDefeated for it");
+                Assert.IsTrue(BossCensus.AnyLivingIn(20),
+                    "a20's bosses must be entirely unaffected by a12's boss dying");
+
+                BossCensus.ReportDefeated(boss20A);
+                Assert.AreEqual(1, defeatedCount,
+                    "one of a20's TWO bosses dying must NOT fire BossDefeated -- a20's other boss is still up");
+                Assert.IsTrue(BossCensus.AnyLivingIn(20), "a20's second boss is still standing");
+
+                BossCensus.ReportDefeated(boss20B);
+                Assert.AreEqual(2, defeatedCount, "a20's LAST boss dying must fire BossDefeated for a20");
+                Assert.IsFalse(BossCensus.AnyLivingIn(20), "a20 must now read as clear of bosses");
+            }
+            finally
+            {
+                HudSignals.BossDefeated -= onDefeated;
+                Object.DestroyImmediate(go12);
+                Object.DestroyImmediate(go20A);
+                Object.DestroyImmediate(go20B);
             }
         }
 
