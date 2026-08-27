@@ -42,40 +42,37 @@ namespace MaxWorlds.Bosses
         /// <summary>Below this fraction it enrages: faster, and it starts raining blades.</summary>
         public const float EnrageThreshold = 0.5f;
 
-        /// <summary>How much the enrage speeds its cycle up. It used to be 0.65 — which sped up the
-        /// TELL as well as the attack, and a tell that shortens as the fight gets harder is the
-        /// definition of unfair. It still winds up faster; it no longer winds up faster than you can
-        /// read.</summary>
-        public const float EnrageTimeScale = 0.85f;
-
         // ---------------------------------------------------------------- movement
 
         /// <summary>MV-410: quartered from 3.6 — Lee's live-build report was "let's make it 1/4 the
-        /// speed". Reposition/approach speed only; <see cref="ChargeSpeed"/> is untouched on purpose,
-        /// it is an attack parameter with its own dodge-window balance, not locomotion.</summary>
+        /// speed".</summary>
         public const float MoveSpeed = 0.9f;
-        public const float DesiredRange = 6f;
+
+        /// <summary>MV-588: the ram/charge is gone — the boss just walks at Max and stops this far
+        /// out. Replaces the old <c>DesiredRange</c> circling.</summary>
+        public const float Standoff = 3f;
+
         public const float EnrageMoveScale = 1.2f;   // was 1.4
 
-        /// <summary>How fast it crosses the arena at you. Was 16 (22.4 enraged), which at a 2.4 m
-        /// contact radius is a hit you cannot step out of.</summary>
-        public const float ChargeSpeed = 12f;
+        // ---------------------------------------------------------------- the fight escalates on its own clock
+        //
+        // MV-588: the charge is gone entirely — "kill it before its army outgrows you" replaces it. The
+        // brood volley's composition escalates purely with time alive since Wake, never with anything
+        // the player does (see BigBermudaBrain.SpawnLevel / BroodSpawnLevels).
 
-        // ---------------------------------------------------------------- the charge
+        /// <summary>Seconds alive before the spawn level steps up. Level = 1 + floor(aliveSeconds /
+        /// this), capped at <see cref="MaxSpawnLevel"/>.</summary>
+        public const float SpawnLevelInterval = 30f;
 
-        /// <summary>The dodge window: how long the tell burns before it commits. The single most
-        /// important number in the fight, and it was the smallest.</summary>
-        public const float ChargeWindup = 1.15f;     // was 0.75
+        /// <summary>The ceiling the spawn level climbs to — L4 draws from the whole roster.</summary>
+        public const int MaxSpawnLevel = 4;
 
-        public const float Reposition = 1.3f;
-        public const float ChargeTime = 0.9f;
-        public const float Recover = 1.0f;
+        // ---------------------------------------------------------------- the blade rain (enrage) —
+        // untouched by MV-588: the charge that USED to drop grass along its path is gone, but the
+        // zone mechanics and their tuning are not this ticket's to move.
 
-        public const float ChargeContactDamage = 13f;   // was 18
-        public const float ChargeContactRadius = 2.4f;
-
-        /// <summary>Clippings dropped along the charge. A trail to walk out of, not a second attack:
-        /// it ticks, so its LIFE is as much of its damage as its damage is.</summary>
+        /// <summary>Clippings the OLD charge used to drop along its path. Left authored, untouched
+        /// (MV-588), even though nothing spawns one any more now the charge itself is gone.</summary>
         public const float GrassDamage = 4f;            // was 6
         public const float GrassInterval = 0.18f;
         public const float GrassRadius = 1.7f;
@@ -94,10 +91,11 @@ namespace MaxWorlds.Bosses
 
         // ---------------------------------------------------------------- the brood volley (YT-157)
         //
-        // Big Bermuda's SIGNATURE second attack: it opens the side hatches and flings a volley of robots
-        // out onto the lawn, so the fight becomes "the boss AND the swarm it keeps launching", not just
-        // dodge-the-charge. Ramming stays; this is additive. Every number here is a feel call and lives
-        // in one place, exposed on the Settings panel's BOSS tab (YT-138) so it can be swept live.
+        // Big Bermuda's SIGNATURE attack: it opens the side hatches and flings a volley of robots out
+        // onto the lawn, so the fight is "kill it before its army outgrows you" (MV-588 removed the ram
+        // entirely — this is now the boss's ONLY attack, not an addition to one). Every number here is a
+        // feel call and lives in one place, exposed on the Settings panel's BOSS tab (YT-138) so it can
+        // be swept live.
 
         /// <summary>Seconds between volleys before it enrages. The breather between waves — long enough
         /// that a volley is an event you brace for, not a constant drizzle.
@@ -107,13 +105,11 @@ namespace MaxWorlds.Bosses
         public const float VolleyInterval = 3.5f;
 
         /// <summary>Interval multiplier once enraged: the waves come ~40% faster as it reddens, so phase
-        /// two is the boss leaning on the swarm harder. Same &lt;1 "faster when angry" shape as
-        /// <see cref="EnrageTimeScale"/>.</summary>
+        /// two is the boss leaning on the swarm harder — a &lt;1 "faster when angry" shape.</summary>
         public const float VolleyEnrageScale = 0.6f;
 
         /// <summary>The spawn TELL: how long the hatches crack and the cavity floods BEFORE the robots
-        /// are flung. This is the read — the player's window to reposition — so it is deliberately close
-        /// to the charge wind-up (<see cref="ChargeWindup"/>), long enough to see and act on.</summary>
+        /// are flung — the player's window to reposition, long enough to see and act on.</summary>
         public const float VolleyWindup = 1.2f;
 
         /// <summary>How long the hatches stay gaping after the fling, as the swarm spills — the "it is
@@ -157,11 +153,6 @@ namespace MaxWorlds.Bosses
         public const float VolleyLandingForward = 1.5f;
 
         // ---------------------------------------------------------------- derived
-
-        /// <summary>The tell before an ENRAGED charge — the number that made the fight unfair.</summary>
-        public static float EnragedChargeWindup => ChargeWindup * EnrageTimeScale;
-
-        public static float EnragedChargeSpeed => ChargeSpeed * EnrageMoveScale;
 
         /// <summary>Worst case a single blade can do: it ticks for its whole life.</summary>
         public static float BladeWorstCase => BladeDamage * TicksIn(BladeLife);

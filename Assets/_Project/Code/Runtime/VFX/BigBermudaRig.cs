@@ -59,11 +59,11 @@ namespace MaxWorlds.VFX
     ///
     ///   ASLEEP      core dark. It stands beyond the gate from the first frame; a dead thing that opens
     ///               its eye when the last factory falls is worth more than one that fades in.
-    ///   AWAKE       AMBER — the brood-glow. It pops hard on the cold chitin, and the telegraph survives
-    ///               because the warn cools the gold OUT toward red.
-    ///   WINDING UP  hot ORANGE, the whole shell glows, the spine flares and it coils on its legs — the
-    ///               charge wind-up. This is <see cref="WarnColor"/>, the same orange every telegraph uses.
-    ///   ENRAGED     RED, and it holds red between attacks, so phase 2 is legible at a glance.
+    ///   AWAKE       AMBER — the brood-glow. It pops hard on the cold chitin.
+    ///   ENRAGED     RED, and it holds red the whole of phase 2, so "it got worse" is legible at a glance.
+    ///
+    /// MV-588 removed the ram/charge entirely — there is no more wind-up to telegraph, no more coil-and-
+    /// lean commit. What is left to read is simpler: awake or enraged, plus the hit-flash below.
     ///
     /// ---------------------------------------------------------------------------------------------
     /// THE SPAWN TELL — the L/R brood-hatches (YT-150 + YT-157)
@@ -118,38 +118,22 @@ namespace MaxWorlds.VFX
         private static readonly Color Iridescent = new Color(0.29f, 0.44f, 0.42f);    // seam/edge sheen — the one cold non-black
         private static readonly Color XenoTeal = new Color(0.33f, 0.88f, 0.88f);      // the brood-glow rim + the disgorged motes
 
-        /// <summary>Awake and idle: AMBER — the brood-glow. It pops hard on the cold chitin, and the
-        /// telegraph still reads because the warn/rage cool the gold OUT toward red.</summary>
+        /// <summary>Awake and idle: AMBER — the brood-glow. It pops hard on the cold chitin.</summary>
         private static readonly Color EyeIdle = new Color(1f, 0.66f, 0.12f);
 
-        /// <summary>Winding up. The gold cools to a hot orange — the green channel drops out, a clear
-        /// shift from the idle even though both are warm.</summary>
-        private static readonly Color EyeWarn = new Color(1f, 0.30f, 0.04f);
-
-        /// <summary>Phase 2. Full red, held between attacks, so "it got worse" reads at a glance.</summary>
+        /// <summary>Phase 2. Full red, held the whole of phase 2, so "it got worse" reads at a glance.</summary>
         private static readonly Color EyeRage = new Color(0.95f, 0.10f, 0.05f);
-
-        /// <summary>Committed to a charge, enraged. A white-hot flare — nowhere hotter to go.</summary>
-        private static readonly Color EyeRageWarn = new Color(1f, 0.55f, 0.30f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
         // ---------------------------------------------------------------- tuning
 
-        [Header("Pressure (the coil + the glow)")]
-        [Tooltip("How fast it builds toward a charge, and bleeds off after. Up fast, down slow — the slow " +
-                 "bleed is what makes the recover read as 'it is spent' rather than 'it switched off'.")]
-        [SerializeField] private float pressureRise = 5.5f;
-        [SerializeField] private float pressureFall = 1.6f;
-
         [Header("The eyes")]
-        [Tooltip("How fast the core reaches the colour the phase calls for. Fast: a telegraph that eases " +
-                 "in is a telegraph that arrives after the charge does.")]
+        [Tooltip("How fast the core reaches the colour the phase calls for.")]
         [SerializeField] private float eyeResponse = 9f;
 
-        [Tooltip("How much of the tell colour bleeds into the shell as it heats. Kept modest so the chitin " +
-                 "stays dark until it actually commits.")]
+        [Tooltip("How much of the hit-flash bleeds into the shell as it whites out.")]
         [Range(0f, 1f)]
         [SerializeField] private float chassisHeat = 0.5f;
 
@@ -157,9 +141,6 @@ namespace MaxWorlds.VFX
         [Tooltip("How far the legs swing, in metres, per metre the boss travels. The walk is driven by " +
                  "distance moved, not a clock, so it never has to know the boss's speed or be re-tuned.")]
         [SerializeField] private float strideScale = 0.9f;
-
-        [Tooltip("How deep it coils as it winds up — the crouch before the charge. Metres.")]
-        [SerializeField] private float crouchDepth = 0.35f;
 
         [Header("Brood hatches (the spawn tell)")]
         [Tooltip("How far each wing-case hinges open, in degrees. Big enough that 'the shell is open' " +
@@ -191,12 +172,10 @@ namespace MaxWorlds.VFX
         private readonly float[] _legPhase = new float[LegCount];
 
         private Color _eyeColor = Color.black;   // starts DARK: asleep beyond the gate
-        private float _pressure;                 // 0..1 — spikes on commit
         private float _flash;                    // 1 the frame it takes a hit, decays
         private float _lastHealth = 1f;
         private float _wakeTimer;                // >0 while the core stutters on
         private float _gaitPhase;                // advanced by distance travelled
-        private float _crouch;                   // current crouch offset, eased
         private Vector3 _lastPos;
         private bool _awake;
         private bool _dying;
@@ -210,10 +189,6 @@ namespace MaxWorlds.VFX
 
         /// <summary>The colour the core is burning — the tell in one value, for a test to read.</summary>
         public Color EyeColor => _eyeColor;
-
-        /// <summary>The coil, 0 idle … 1 about to charge. Spikes through a wind-up and charge; the numeric
-        /// a test can watch commit.</summary>
-        public float Pressure => _pressure;
 
         /// <summary>The hatches, 0 shut … 1 fully open. The spawn tell, in one value a test can read.</summary>
         public float HatchOpen => _hatchOpen;
@@ -612,7 +587,6 @@ namespace MaxWorlds.VFX
             _flash = Mathf.Max(0f, _flash - dt * 7f);
             if (_wakeTimer > 0f) _wakeTimer = Mathf.Max(0f, _wakeTimer - dt);
 
-            TickPressure(dt);
             TickTells(dt);
             TickHatches(dt);
             TickGait(dt);
@@ -636,20 +610,6 @@ namespace MaxWorlds.VFX
             transform.SetPositionAndRotation(at, facing);
         }
 
-        /// <summary>Winding up or charging: the two states where being near the front of this thing is
-        /// fatal, and the two it has to shout about.</summary>
-        private bool Committed =>
-            _awake && (_boss.Action == BossAction.ChargeWindup || _boss.Action == BossAction.Charge);
-
-        /// <summary>Pressure builds toward 1 while committed and bleeds off after — up fast, down slow. It
-        /// drives the glow and the crouch, so both move as one system.</summary>
-        private void TickPressure(float dt)
-        {
-            float target = Committed ? 1f : 0f;
-            float rate = target > _pressure ? pressureRise : pressureFall;
-            _pressure = Mathf.Lerp(_pressure, target, 1f - Mathf.Exp(-rate * dt));
-        }
-
         private void TickTells(float dt)
         {
             Color target = TargetEyeColor();
@@ -661,20 +621,20 @@ namespace MaxWorlds.VFX
             _eyeColor = Color.Lerp(_eyeColor, target, 1f - Mathf.Exp(-eyeResponse * dt));
             ApplyEyes(_eyeColor);
 
-            // The brood-seam down the spine burns the tell, and brighter as pressure builds — the hot line
-            // the cold body is split by.
+            // The brood-seam down the spine burns the tell, brighter on a hit flash — the hot line the
+            // cold body is split by.
             if (_spine != null)
             {
-                Color seam = _eyeColor * (0.55f + _pressure * 0.8f);
+                Color seam = _eyeColor * (0.55f + _flash * 0.8f);
                 seam.a = 1f;
                 _spine.GetPropertyBlock(_portMpb);
                 _portMpb.SetColor(BaseColorId, seam);
                 _spine.SetPropertyBlock(_portMpb);
             }
 
-            // The shell glows with the tell as pressure builds — the chitin takes the heat as emission, so
-            // the body reads as heating without losing its cold colour until it actually commits.
-            float heat = Mathf.Max(_pressure, _flash) * chassisHeat;
+            // The shell whites out on a hit flash — the chitin takes the heat as emission, so the body
+            // visibly reacts to being shot even though it stays cold and dark the rest of the time.
+            float heat = _flash * chassisHeat;
             Color glow = _eyeColor * heat;
             if (_chitinMat != null && _chitinMat.HasProperty(EmissionId)) _chitinMat.SetColor(EmissionId, glow);
             if (_plateMat != null && _plateMat.HasProperty(EmissionId)) _plateMat.SetColor(EmissionId, glow * 0.6f);
@@ -692,9 +652,7 @@ namespace MaxWorlds.VFX
                 return EyeIdle * (flicker > 0.45f ? 1f : 0.05f);
             }
 
-            bool rage = _boss.Enraged;
-            if (Committed) return rage ? EyeRageWarn : EyeWarn;
-            return rage ? EyeRage : EyeIdle;
+            return _boss.Enraged ? EyeRage : EyeIdle;
         }
 
         /// <summary>The three ports never quite agree — the big ocular core burns full, the flank glands
@@ -750,7 +708,7 @@ namespace MaxWorlds.VFX
             // rim) as it gapes.
             if (_brood != null)
             {
-                Color cavity = Color.Lerp(EyeWarn, XenoTeal, 0.25f) * _hatchOpen;
+                Color cavity = Color.Lerp(EyeIdle, XenoTeal, 0.25f) * _hatchOpen;
                 cavity.a = 1f;
                 _brood.GetPropertyBlock(_portMpb);
                 _portMpb.SetColor(BaseColorId, cavity);
@@ -759,13 +717,12 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// The walk, and the coil before a charge.
+        /// The walk.
         ///
         /// The gait is driven by DISTANCE the boss actually moved, not a clock — so the legs swing in step
         /// with real motion and nothing here has to know its speed or be re-tuned when gameplay changes it.
-        /// Legs on opposite diagonals alternate, a stable four-beat walk. When it is standing still the
-        /// legs settle; when it winds up the whole chassis coils over planted feet — the crouch that says a
-        /// charge is coming, on top of the eye-heat.
+        /// Legs on opposite diagonals alternate, a stable four-beat walk. MV-588 removed the charge, so
+        /// there is no more coil-and-lean commit on top of it — this is just the walk now.
         /// </summary>
         private void TickGait(float dt)
         {
@@ -782,17 +739,6 @@ namespace MaxWorlds.VFX
                 float moving = Mathf.Clamp01(travelled / (0.02f + Time.deltaTime * 3f));
                 float pitch = swing * 16f * moving;
                 _legLift[i].localRotation = Quaternion.Euler(pitch, 0f, 0f);
-            }
-
-            // Coil on wind-up: ease the chassis down over the feet, and lean into the charge.
-            float wantCrouch = _boss.Action == BossAction.ChargeWindup ? crouchDepth : 0f;
-            _crouch = Mathf.Lerp(_crouch, wantCrouch, 1f - Mathf.Exp(-8f * dt));
-            if (_chassis != null)
-            {
-                _chassis.localPosition = new Vector3(0f, -_crouch, 0f);
-                float lean = _boss.Action == BossAction.Charge ? 6f : 0f;
-                _chassis.localRotation = Quaternion.Lerp(
-                    _chassis.localRotation, Quaternion.Euler(lean, 0f, 0f), 1f - Mathf.Exp(-6f * dt));
             }
         }
 
@@ -869,7 +815,7 @@ namespace MaxWorlds.VFX
             if (_brood != null)
             {
                 _brood.GetPropertyBlock(_portMpb);
-                _portMpb.SetColor(BaseColorId, Color.Lerp(EyeWarn, Color.black, t) * _hatchOpen);
+                _portMpb.SetColor(BaseColorId, Color.Lerp(EyeIdle, Color.black, t) * _hatchOpen);
                 _brood.SetPropertyBlock(_portMpb);
             }
 

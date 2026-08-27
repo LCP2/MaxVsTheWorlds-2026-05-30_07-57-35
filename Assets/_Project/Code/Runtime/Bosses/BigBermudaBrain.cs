@@ -2,75 +2,51 @@ using UnityEngine;
 
 namespace MaxWorlds.Bosses
 {
-    /// <summary>The Big Bermuda attack cycle phases (YT-27, slice).</summary>
-    public enum BossAction { Reposition, ChargeWindup, Charge, Recover }
-
     /// <summary>
-    /// Pure attack-cycle sequencer for the slice Big Bermuda boss (YT-27). Cycles
-    /// Reposition → ChargeWindup → Charge → Recover on tunable timers; the MonoBehaviour
-    /// executes the physical effect of whatever phase is <see cref="Current"/> and reacts to
-    /// <see cref="JustEntered"/> transitions. Below the enrage threshold it reports
-    /// <see cref="Enraged"/> and scales every timer down (faster, angrier) — the slice's
-    /// "enrage at low health" in place of the full M2 two-phase choreography (spec §4.7).
-    /// No MonoBehaviour, so the sequence and timings are unit-testable.
+    /// Pure fight-state ticker for the slice Big Bermuda boss (MV-588). The old attack cycle
+    /// (Reposition → ChargeWindup → Charge → Recover) is gone entirely — the boss just walks at Max and
+    /// stops at a standoff (<see cref="BigBermudaBoss"/>) — so what is left to track is time-based:
+    ///
+    ///   * <see cref="Enraged"/> — HP threshold, unchanged from before.
+    ///   * <see cref="SpawnLevel"/> — how far the brood volley's composition has escalated, purely off
+    ///     seconds alive since the fight started ticking (never off anything the player does; see
+    ///     <see cref="BroodSpawnLevels"/> for what each level actually flings).
+    ///
+    /// No MonoBehaviour, so both are unit-testable without a scene.
     /// </summary>
     public sealed class BigBermudaBrain
     {
-        private static readonly BossAction[] Cycle =
-            { BossAction.Reposition, BossAction.ChargeWindup, BossAction.Charge, BossAction.Recover };
-
-        // Base seconds per phase (index matches Cycle), from BossTuning (YT-94) — the wind-up is the
-        // dodge window, and it is not a number that should live in two places.
-        private static readonly float[] BaseDuration =
-        {
-            BossTuning.Reposition, BossTuning.ChargeWindup, BossTuning.ChargeTime, BossTuning.Recover,
-        };
-
         private readonly float _enrageThreshold;
-        private readonly float _enrageTimeScale;
-
-        private int _index;
-        private float _timer;
-
-        public BossAction Current => Cycle[_index];
-
-        /// <summary>True on the first Tick after a phase change (the MonoBehaviour fires the
-        /// phase's effect — start a charge, drop a telegraph — on this edge).</summary>
-        public bool JustEntered { get; private set; }
+        private float _aliveSeconds;
 
         /// <summary>True while HP is at/below the enrage threshold — drives blade-rain + speed.</summary>
         public bool Enraged { get; private set; }
 
-        /// <summary>Defaults come from <see cref="BossTuning"/> — the enrage used to scale the TELL
-        /// down along with the attack (0.65), which made the fight harder to read exactly as it got
-        /// harder to survive (YT-94).</summary>
-        public BigBermudaBrain(float enrageThreshold = BossTuning.EnrageThreshold,
-                               float enrageTimeScale = BossTuning.EnrageTimeScale)
+        /// <summary>1..<see cref="BossTuning.MaxSpawnLevel"/>. Escalates by
+        /// <see cref="BossTuning.SpawnLevelInterval"/> seconds alive, capped.</summary>
+        public int SpawnLevel { get; private set; } = 1;
+
+        /// <summary>Progress toward the NEXT level, 0..1 — pinned at 1 once <see cref="SpawnLevel"/> is
+        /// capped, so the HUD bar's active segment can show a fully-lit last segment rather than one
+        /// that looks stuck mid-fill.</summary>
+        public float SpawnLevelProgress01 { get; private set; }
+
+        public BigBermudaBrain(float enrageThreshold = BossTuning.EnrageThreshold)
         {
             _enrageThreshold = Mathf.Clamp01(enrageThreshold);
-            _enrageTimeScale = Mathf.Clamp(enrageTimeScale, 0.2f, 1f);
-            _index = 0;
-            _timer = ScaledDuration(0);
-            JustEntered = true; // the opening phase must be executed
         }
 
-        /// <summary>Advance the cycle. Call once per frame with deltaTime and current HP fraction.</summary>
+        /// <summary>Advance the clock. Call once per frame with deltaTime and current HP fraction.</summary>
         public void Tick(float dt, float hpNormalized)
         {
-            JustEntered = false;
             Enraged = hpNormalized <= _enrageThreshold;
+            _aliveSeconds += Mathf.Max(0f, dt);
 
-            _timer -= Mathf.Max(0f, dt);
-            if (_timer <= 0f)
-            {
-                _index = (_index + 1) % Cycle.Length;
-                _timer += ScaledDuration(_index);
-                if (_timer <= 0f) _timer = ScaledDuration(_index); // guard against huge dt
-                JustEntered = true;
-            }
+            float raw = _aliveSeconds / Mathf.Max(0.01f, BossTuning.SpawnLevelInterval);
+            SpawnLevel = Mathf.Clamp(1 + Mathf.FloorToInt(raw), 1, BossTuning.MaxSpawnLevel);
+            SpawnLevelProgress01 = SpawnLevel >= BossTuning.MaxSpawnLevel
+                ? 1f
+                : Mathf.Clamp01(raw - (SpawnLevel - 1));
         }
-
-        private float ScaledDuration(int index)
-            => BaseDuration[index] * (Enraged ? _enrageTimeScale : 1f);
     }
 }

@@ -45,6 +45,9 @@ namespace MaxWorlds.UI
         private static readonly Color ReadyGlow = new Color(1f, 0.85f, 0.35f);
         private static readonly Color BiomeTint = new Color(0.96f, 0.62f, 0.20f, 0.06f); // warm orange overlay
         private static readonly Color BossColor = new Color(0.85f, 0.12f, 0.12f);
+        // MV-588: amber, distinct from the boss's own red — reads as a separate readout, not a second
+        // health bar.
+        private static readonly Color SpawnLevelColor = new Color(0.95f, 0.65f, 0.15f);
         private static readonly Color BoneWhite = new Color(0.96f, 0.94f, 0.86f);
         // Robot-drop colours (YT-131): cyan power cell — matched to the world pickup's cyan core.
         private static readonly Color CellColor = new Color(0.31f, 0.86f, 0.98f);
@@ -184,6 +187,10 @@ namespace MaxWorlds.UI
         private RectTransform _bossSegments;
         private Text _bossName;
 
+        // Spawn-level bar (MV-588) — a second, thinner bar directly above the boss health bar
+        private RectTransform _spawnLevelRoot;
+        private Image _spawnLevelFill;
+
         // Warnings
         private Text _warning;
         private float _warningTimer;
@@ -254,6 +261,7 @@ namespace MaxWorlds.UI
             BuildArenaIndicator();
             BuildInvasionDial();
             BuildBossBar();
+            BuildSpawnLevelBar();
             BuildWarning();
             BuildWeaponsButton();
             BuildMapButton();
@@ -277,6 +285,7 @@ namespace MaxWorlds.UI
             HudSignals.BossRegistered += OnBossRegistered;
             HudSignals.BossEngaged += OnBossEngaged;
             HudSignals.BossHealthChanged += OnBossHealth;
+            HudSignals.BossSpawnLevelChanged += OnBossSpawnLevel;
             HudSignals.BossDefeated += OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
@@ -297,6 +306,7 @@ namespace MaxWorlds.UI
             HudSignals.BossRegistered -= OnBossRegistered;
             HudSignals.BossEngaged -= OnBossEngaged;
             HudSignals.BossHealthChanged -= OnBossHealth;
+            HudSignals.BossSpawnLevelChanged -= OnBossSpawnLevel;
             HudSignals.BossDefeated -= OnBossDefeated;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
@@ -457,6 +467,7 @@ namespace MaxWorlds.UI
         private void OnBossRegistered() => _model.UseExternalBoss();
         private void OnBossEngaged(string name, int phases) => _model.EngageBossExternal(name, phases);
         private void OnBossHealth(float normalized) => _model.SetBossHealth(normalized);
+        private void OnBossSpawnLevel(int level, float progress01) => _model.SetBossSpawnLevel(level, progress01);
         private void OnBossDefeated() => _model.DefeatBossExternal();
 
         private void OnFactoryRegistered() => _model.RegisterFactory();
@@ -506,6 +517,7 @@ namespace MaxWorlds.UI
         private void OnBossActiveChanged(bool active)
         {
             _bossRoot.gameObject.SetActive(active);
+            _spawnLevelRoot.gameObject.SetActive(active);
             if (active)
             {
                 _bossName.text = _model.Boss.Name;
@@ -1013,6 +1025,9 @@ namespace MaxWorlds.UI
             if (!_model.Boss.Active) return;
             _bossFill.fillAmount = _model.Boss.HpNormalized;
             RebuildBossSegments(_model.Boss.Phases);
+
+            float spawnFill = _model.Boss.SpawnLevel - 1 + _model.Boss.SpawnLevelProgress01;
+            _spawnLevelFill.fillAmount = Mathf.Clamp01(spawnFill / BossState.MaxSpawnLevel);
         }
 
         private void UpdateWarnings(float dt)
@@ -1872,6 +1887,46 @@ namespace MaxWorlds.UI
                 tick.rectTransform.sizeDelta = new Vector2(3f, 34f);
                 tick.raycastTarget = false;
             }
+        }
+
+        /// <summary>How far off the boss bar's own thickness the spawn-level bar sits, plus its own half
+        /// height — so it reads as attached to the boss bar rather than floating above it.</summary>
+        private const float SpawnBarHeight = 8f;
+        private const float SpawnBarGap = 4f;
+
+        /// <summary>The spawn-level bar (MV-588) — a second, thinner bar directly above the boss health
+        /// bar, showing how far the brood volley's composition has escalated. <see cref="BossState.MaxSpawnLevel"/>
+        /// fixed segments, same continuous-fill-plus-divider-ticks idiom <see cref="BuildBossBar"/> uses
+        /// for phases, so the fill sweeps smoothly and still reads as discrete segments.</summary>
+        private void BuildSpawnLevelBar()
+        {
+            _spawnLevelRoot = NewRect("Spawn Level Bar", Root);
+            Anchor(_spawnLevelRoot, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
+            _spawnLevelRoot.sizeDelta = new Vector2(BossBarWidth, SpawnBarHeight);
+            _spawnLevelRoot.anchoredPosition =
+                new Vector2(0f, 300f + BossBarHeight * 0.5f + SpawnBarGap + SpawnBarHeight * 0.5f);
+
+            var bg = AddImage(_spawnLevelRoot, HudTextures.RoundedBox(24, 0.4f), PanelColor, "BG");
+            Stretch(bg.rectTransform, -2f); bg.type = Image.Type.Sliced;
+
+            _spawnLevelFill = AddImage(_spawnLevelRoot, HudTextures.RoundedBox(24, 0.4f), SpawnLevelColor, "Fill");
+            Stretch(_spawnLevelFill.rectTransform); _spawnLevelFill.type = Image.Type.Filled;
+            _spawnLevelFill.fillMethod = Image.FillMethod.Horizontal;
+            _spawnLevelFill.fillOrigin = (int)Image.OriginHorizontal.Left;
+            _spawnLevelFill.fillAmount = 0f;
+
+            var segments = NewRect("Segments", _spawnLevelRoot);
+            Stretch(segments);
+            for (int i = 1; i < BossState.MaxSpawnLevel; i++)
+            {
+                var tick = AddImage(segments, HudTextures.Solid(), new Color(0, 0, 0, 0.75f), $"Seg {i}");
+                float frac = (float)i / BossState.MaxSpawnLevel;
+                Anchor(tick.rectTransform, new Vector2(frac, 0.5f), new Vector2(frac, 0.5f), new Vector2(0.5f, 0.5f));
+                tick.rectTransform.sizeDelta = new Vector2(2f, SpawnBarHeight);
+                tick.raycastTarget = false;
+            }
+
+            _spawnLevelRoot.gameObject.SetActive(false);
         }
 
         private void BuildWarning()

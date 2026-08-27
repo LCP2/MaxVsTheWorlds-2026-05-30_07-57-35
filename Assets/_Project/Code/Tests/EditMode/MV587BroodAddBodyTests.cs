@@ -45,7 +45,7 @@ namespace MaxWorlds.Tests.EditMode
                 if (stray != null) Object.DestroyImmediate(stray);
                 var boss = bossGo.AddComponent<BigBermudaBoss>();
 
-                EnemyArchetype archetype = EnemyArchetype.Rusher;   // the kind LaunchVolley actually flings (YT-157)
+                EnemyArchetype archetype = EnemyArchetype.Rusher;   // one of the kinds LaunchVolley can fling (YT-157/MV-588)
 
                 // --- build one brood add through the real, private BigBermudaBoss.CreateAdd ----------
                 MethodInfo createAdd = typeof(BigBermudaBoss).GetMethod(
@@ -98,12 +98,14 @@ namespace MaxWorlds.Tests.EditMode
                 AssertColorApprox(factoryRig.CurrentBodyColor, addRig.CurrentBodyColor,
                     "a flung Rusher's resolved body colour must match a shed Rusher's exactly");
 
-                // --- pooled reuse: the boss pushes a dead add back into _addPool and TakeAdd pops it
-                // straight back out (never through CreateAdd a second time). A re-activated pooled add
-                // must keep the body it already built, not rebuild or lose it.
-                var poolField = typeof(BigBermudaBoss).GetField(
-                    "_addPool", BindingFlags.NonPublic | BindingFlags.Instance);
-                var pool = (Stack<RobotEnemy>)poolField.GetValue(boss);
+                // --- pooled reuse: the boss pushes a dead add back into its kind's pool in _addPools and
+                // TakeAdd pops it straight back out (never through CreateAdd a second time). A
+                // re-activated pooled add must keep the body it already built, not rebuild or lose it.
+                var poolsField = typeof(BigBermudaBoss).GetField(
+                    "_addPools", BindingFlags.NonPublic | BindingFlags.Instance);
+                var pools = (Dictionary<EnemyKind, Stack<RobotEnemy>>)poolsField.GetValue(boss);
+                if (!pools.TryGetValue(archetype.Kind, out Stack<RobotEnemy> pool))
+                    pools[archetype.Kind] = pool = new Stack<RobotEnemy>();
                 pool.Push(add);
 
                 MethodInfo takeAdd = typeof(BigBermudaBoss).GetMethod(

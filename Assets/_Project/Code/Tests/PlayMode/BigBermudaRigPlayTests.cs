@@ -108,21 +108,15 @@ namespace MaxWorlds.Tests.PlayMode
             boss.TakeDamage(new DamageInfo(amount, Vector3.zero, Vector3.forward, Team.Player));
 
         /// <summary>
-        /// Run until the fight enters <paramref name="action"/>, hold there, and report the colour the
-        /// ports had SETTLED on — not the brightest frame seen, because the ports ease into a phase and
-        /// the green they idle in is brighter than the orange they head for (luma 0.74 vs 0.52).
+        /// Hold for half a second and report the colour the ports SETTLED on — not the brightest frame
+        /// seen, because the ports ease toward a target and an overshoot can briefly read brighter than
+        /// where they land.
         /// </summary>
-        private IEnumerator SampleDuring(BossAction action, System.Action<Color> report, float timeout = 8f)
+        private IEnumerator SampleFor(System.Action<Color> report, float hold = 0.5f)
         {
-            var boss = Boss;
-            float t = 0f;
-
-            while (boss.Action != action && t < timeout) { t += Time.deltaTime; yield return null; }
-            Assert.Less(t, timeout, $"the fight never reached {action} — the tell could not be sampled.");
-
             Color settled = Rig.EyeColor;
             float held = 0f;
-            while (boss.Action == action && held < 0.5f)
+            while (held < hold)
             {
                 held += Time.deltaTime;
                 settled = Rig.EyeColor;
@@ -329,44 +323,8 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.Greater(Luma(Rig.EyeColor), 0.15f, "it woke up with its ports still out.");
         }
 
-        /// <summary>
-        /// THE REGRESSION GUARD. The charge wind-up has to reach the screen.
-        ///
-        /// The boss wrote an orange warn colour into its property block on every phase change since
-        /// YT-27, and CharacterSkin overwrote that same block every frame with the flat body colour. The
-        /// single most important read in the fight — "it is about to charge, MOVE" — never rendered a
-        /// pixel until YT-90. This proves it survives the boiler re-theme.
-        /// </summary>
-        [UnityTest]
-        public IEnumerator TheChargeWindUp_ActuallyReachesTheScreen()
-        {
-            yield return InstallRig();
-            yield return Wake();
-
-            Color idle = Color.black;
-            yield return SampleDuring(BossAction.Reposition, c => idle = c);
-
-            Color windup = Color.black;
-            yield return SampleDuring(BossAction.ChargeWindup, c => windup = c);
-
-            Assert.Greater(windup.r, windup.g + 0.25f,
-                "the wind-up is not warm. It is the one telegraph in the fight that costs you health to " +
-                "miss, and it has to be the orange every robot already taught the player.");
-            Assert.Greater(windup.r, windup.b + 0.4f, "the wind-up is not warm.");
-
-            // Idle is AMBER now, not green, so the wind-up cannot be told apart by 'r rose'. The tell is
-            // the gold COOLING toward orange — the green channel drops out.
-            Assert.Greater(idle.g - windup.g, 0.2f,
-                "the machine looks the same winding up as idling. The amber idle has to cool to a hotter " +
-                "orange on the wind-up — a telegraph you cannot tell apart from doing nothing is none.");
-
-            Assert.Greater(Rig.Pressure, 0.5f,
-                "the boiler is barely building pressure as it commits to a charge. The pressure IS the " +
-                "threat — the governor screaming and the boiler glowing is a boiler about to blow.");
-        }
-
-        /// <summary>Phase 2 has to be legible BETWEEN attacks, not only in the half-second it is
-        /// committing to one. The player needs to know the fight got worse while deciding what to do.</summary>
+        /// <summary>Phase 2 has to be legible at a glance, the whole time it holds. The player needs to
+        /// know the fight got worse while deciding what to do.</summary>
         [UnityTest]
         public IEnumerator PhaseTwo_IsLegibleEvenWhenItIsNotAttacking()
         {
@@ -374,7 +332,7 @@ namespace MaxWorlds.Tests.PlayMode
             yield return Wake();
 
             Color idle = Color.black;
-            yield return SampleDuring(BossAction.Reposition, c => idle = c);
+            yield return SampleFor(c => idle = c);
             Assert.Greater(idle.g, 0.4f, "it is not idling in its own amber — the furnace glow is gone.");
 
             // Past the enrage threshold — asked of the tuning, because the fight's health is a knob now
@@ -385,7 +343,7 @@ namespace MaxWorlds.Tests.PlayMode
             Assert.IsTrue(Boss.Enraged, "the boss did not enrage on a hit that took it past the threshold.");
 
             Color enragedIdle = Color.black;
-            yield return SampleDuring(BossAction.Reposition, c => enragedIdle = c);
+            yield return SampleFor(c => enragedIdle = c);
 
             // Phase 1 idles amber (high g); phase 2 idles RED (low g). Discriminate on the green channel
             // dropping out — that is what "it got worse" looks like at a glance.

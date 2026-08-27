@@ -1,13 +1,16 @@
+using System.Linq;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Bosses;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.EditMode
 {
-    /// <summary>Unit tests for the Big Bermuda boss (YT-27): the pure attack-cycle sequencer
-    /// and the HUD boss bar being driven by a real boss instead of the kill stand-in.</summary>
+    /// <summary>Unit tests for the Big Bermuda boss (YT-27): the pure fight-state ticker (MV-588 —
+    /// enrage + time-based spawn escalation, no more attack-cycle phases) and the HUD boss bar being
+    /// driven by a real boss instead of the kill stand-in.</summary>
     public sealed class BossTests
     {
         [SetUp]
@@ -45,15 +48,12 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>MV-410: "let's make it 1/4 the speed" — reposition speed only, not the charge
-        /// (an attack parameter, not locomotion).</summary>
+        /// <summary>MV-410: "let's make it 1/4 the speed" — reposition speed.</summary>
         [Test]
         public void MoveSpeed_IsAQuarterOfTheOldValue()
         {
             const float oldMoveSpeed = 3.6f;
             Assert.AreEqual(oldMoveSpeed * 0.25f, BossTuning.MoveSpeed, 1e-4f);
-            Assert.Less(BossTuning.MoveSpeed, BossTuning.ChargeSpeed,
-                "the charge must stay dramatically faster than the approach speed");
         }
 
         /// <summary>MV-410: "make it spawn robots much fast[er]" — halved from 7s to 3.5s.</summary>
@@ -194,35 +194,7 @@ namespace MaxWorlds.Tests.EditMode
             return go;
         }
 
-        // ---- BigBermudaBrain ----
-
-        [Test]
-        public void Brain_StartsInRepositionAndEntered()
-        {
-            var b = new BigBermudaBrain();
-            Assert.AreEqual(BossAction.Reposition, b.Current);
-            Assert.IsTrue(b.JustEntered);
-            Assert.IsFalse(b.Enraged);
-        }
-
-        [Test]
-        public void Brain_CyclesInOrder()
-        {
-            var b = new BigBermudaBrain();
-            // Drive well past the first phase; step small so only one transition per tick.
-            var seen = new System.Collections.Generic.List<BossAction>();
-            seen.Add(b.Current);
-            for (int i = 0; i < 2000 && seen.Count < 5; i++)
-            {
-                b.Tick(0.05f, 1f);
-                if (b.JustEntered) seen.Add(b.Current);
-            }
-            Assert.AreEqual(BossAction.Reposition, seen[0]);
-            Assert.AreEqual(BossAction.ChargeWindup, seen[1]);
-            Assert.AreEqual(BossAction.Charge, seen[2]);
-            Assert.AreEqual(BossAction.Recover, seen[3]);
-            Assert.AreEqual(BossAction.Reposition, seen[4]); // wraps around
-        }
+        // ---- BigBermudaBrain (MV-588: the attack-cycle phases are gone; enrage is unchanged) ----
 
         [Test]
         public void Brain_EnragesBelowThreshold()
@@ -234,28 +206,49 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(b.Enraged);
         }
 
-        [Test]
-        public void Brain_EnrageShortensPhases()
+        /// <summary>
+        /// MV-588's whole spec in one parameterized test: ticking a woken boss's brain, the spawn level
+        /// escalates purely by seconds alive (1 + floor(aliveSeconds / 30), capped at 4) — never by
+        /// anything the player does — each level's brood volley composition draws only from that
+        /// level's own set, and the brain's public surface no longer carries anything named "Charge" at
+        /// all (not merely unreachable — gone).
+        /// </summary>
+        [TestCase(0f, 1)]
+        [TestCase(29f, 1)]
+        [TestCase(30f, 2)]
+        [TestCase(59f, 2)]
+        [TestCase(60f, 3)]
+        [TestCase(89f, 3)]
+        [TestCase(90f, 4)]
+        [TestCase(150f, 4)]   // past the cap — must hold at 4, not keep climbing
+        public void Brain_SpawnLevelEscalatesByTimeAlive_CompositionStaysWithinLevel_AndTheChargeIsGone(
+            float aliveSeconds, int expectedLevel)
         {
-            // Measure across several transitions: the opening phase length is fixed at
-            // construction (enrage unknown yet), but every phase after enrage kicks in is
-            // scaled down, so the cumulative time to the Nth transition is clearly shorter.
-            float TimeToNthTransition(float hp, int n)
+            var b = new BigBermudaBrain();
+            const float dt = 0.1f;
+            for (float t = 0f; t < aliveSeconds; t += dt) b.Tick(dt, hpNormalized: 1f);
+
+            Assert.AreEqual(expectedLevel, b.SpawnLevel,
+                $"{aliveSeconds}s alive should read spawn level {expectedLevel}, not {b.SpawnLevel}");
+
+            EnemyKind[] allowedByLevel = expectedLevel switch
             {
-                var b = new BigBermudaBrain(enrageThreshold: 0.5f, enrageTimeScale: 0.5f);
-                float t = 0f;
-                int transitions = 0;
-                for (int i = 0; i < 100000; i++)
+                1 => new[] { EnemyKind.Rusher },
+                2 => new[] { EnemyKind.Rusher, EnemyKind.Bruiser },
+                3 => new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker },
+                _ => new[]
                 {
-                    b.Tick(0.01f, hp);
-                    t += 0.01f;
-                    if (b.JustEntered && ++transitions >= n) return t;
-                }
-                return t;
-            }
-            float calm = TimeToNthTransition(1f, 4);
-            float enraged = TimeToNthTransition(0.2f, 4);
-            Assert.Less(enraged, calm); // enraged reaches later phases sooner
+                    EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker,
+                    EnemyKind.Heavy, EnemyKind.Bolter,
+                },
+            };
+            CollectionAssert.AreEquivalent(allowedByLevel, BroodSpawnLevels.KindsFor(b.SpawnLevel),
+                $"level {expectedLevel}'s volley must draw from exactly its own set, no more and no less");
+
+            Assert.IsFalse(
+                typeof(BigBermudaBrain).GetMembers()
+                    .Any(m => m.Name.IndexOf("Charge", System.StringComparison.OrdinalIgnoreCase) >= 0),
+                "the charge is meant to be gone from the brain entirely, not just unreachable");
         }
 
         // ---- HUD boss bar driven by a real boss ----

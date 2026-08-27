@@ -4,56 +4,17 @@ using MaxWorlds.Bosses;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// Is the Big Bermuda fight fair? (YT-94)
+    /// How long does the Big Bermuda fight last? (YT-94, re-scoped MV-588)
     ///
-    /// Lee's report was "the boss is too difficult", which is a feeling — and you cannot tune against a
-    /// feeling, you tune against it and wait a day to find out. So these tests are the feeling turned
-    /// into arithmetic: how long you get to react, how much lands on you if you react well, and how
-    /// long the thing takes to fall.
-    ///
-    /// They are a model, and <see cref="BossFight"/> states every assumption it makes. They cannot tell
-    /// anyone the fight is FUN. What they can do is make the unfair fight — the one where the tell is
-    /// shorter than a human reaction — impossible to ship again, which is the one we shipped.
+    /// MV-588 removed the ram/charge entirely, and with it the dodge-window model these tests used to
+    /// carry ("the enraged charge could not be dodged" — literally the bug that started YT-94). That
+    /// model described an attack that no longer exists, so its tests were culled along with the code
+    /// they asserted on (culling policy, CC_AUTONOMY.md — a ticket's own changes making a test redundant
+    /// is exactly this case). What survives is the fight-length half of the model: how long the boss
+    /// takes to fall, at the gun's un-ramped base output.
     /// </summary>
     public sealed class BossFightTests
     {
-        // ---------------------------------------------------------------- the charge you couldn't dodge
-
-        /// <summary>
-        /// THE bug, in one assertion: the enraged charge could not be dodged.
-        ///
-        /// The tell burned for 0.49 s (0.75 base, scaled 0.65 by the enrage — the enrage sped up the
-        /// WARNING as well as the attack) and the boss then crossed the gap at 22 m/s. A human needs a
-        /// quarter of a second to react and about half a second to walk clear of a 2.4 m contact
-        /// radius. The window was smaller than the reaction. It was not a fight you could lose by
-        /// playing badly; it was one you could not win by playing well.
-        /// </summary>
-        [Test]
-        public void TheChargeCanBeDodged_EvenWhenItIsEnraged()
-        {
-            Assert.Greater(BossFight.DodgeMargin(enraged: false), 0.35f,
-                "there is not enough time to read the charge and get out of it");
-
-            Assert.Greater(BossFight.DodgeMargin(enraged: true), 0.25f,
-                $"the ENRAGED charge gives {BossFight.DodgeWindow(true):0.00}s and getting out of it " +
-                $"takes {BossFight.TimeToDodge:0.00}s. The player cannot dodge it — they can only be " +
-                "hit by it, which is not a fight, it is a toll.");
-        }
-
-        /// <summary>The enrage must never shorten the TELL below what a human can read. It may make
-        /// the boss faster, angrier and more frequent — that is what an enrage is for — but the moment
-        /// it eats the warning, the fight stops being readable, and readability outranks game feel
-        /// (Craft Bible).</summary>
-        [Test]
-        public void TheEnrageMakesItFaster_NotUnreadable()
-        {
-            Assert.Greater(BossTuning.EnragedChargeWindup, BossFight.ReactionSeconds * 2f,
-                $"an enraged wind-up of {BossTuning.EnragedChargeWindup:0.00}s is barely a human " +
-                "reaction time — the tell is gone before it has been seen");
-
-            Assert.Less(BossTuning.EnrageTimeScale, 1f, "the enrage does not speed anything up");
-        }
-
         // ---------------------------------------------------------------- the length of the fight
 
         /// <summary>~2–3 minutes, which is the YT-27 target this ticket asks to return to. MV-287
@@ -102,36 +63,6 @@ namespace MaxWorlds.Tests.EditMode
                     $"a player firing {engagement:P0} of the time is still hosing the boss " +
                     $"{seconds:0}s later — that is a health bar, not a fight");
             }
-        }
-
-        // ---------------------------------------------------------------- can you win it?
-
-        /// <summary>
-        /// A competent player wins — and has something left, but not much. That is the whole ask:
-        /// "challenging but fair", "beatable without invincibility".
-        /// </summary>
-        [Test]
-        public void ACompetentPlayer_WinsIt_WithoutInvincibility()
-        {
-            float left = BossFight.HealthLeft(BossFight.CompetentDodge);
-
-            Assert.Greater(left, 0f,
-                $"a competent player ends the fight on {left:0} HP — he is dead, and he did nothing " +
-                "wrong. This is the report: the boss is too difficult.");
-
-            Assert.Less(left, 75f,
-                $"a competent player strolls it, ending on {left:0} of 100 HP. A boss you can ignore " +
-                "is not a boss.");
-        }
-
-        /// <summary>…and a careless one still dies. A fight nobody can lose is not challenging, and
-        /// this ticket says "challenging but fair", not "fair".</summary>
-        [Test]
-        public void ACarelessPlayer_StillDies()
-        {
-            Assert.IsFalse(BossFight.Survives(BossFight.CarelessDodge),
-                "standing in the blades and eating every charge gets you through the fight — there is " +
-                "nothing here to be good at");
         }
 
         // ---------------------------------------------------------------- the zones that tick
