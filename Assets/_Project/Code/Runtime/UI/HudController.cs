@@ -1290,9 +1290,17 @@ namespace MaxWorlds.UI
             // label can't clear 4.5:1 against it (peaks near 2:1 even at pure white) — only a dark ink
             // does the maths. The BoneWhite outline supplies the "near-white" treatment instead, framing
             // the digits rather than filling them.
-            _forceFieldLabel = AddText(root, 20f, ForceFieldLabelInk, TextAnchor.MiddleCenter);
+            // MV-585: AddText's base fontSize (its own field, distinct from resizeTextMaxSize) is itself
+            // an upper bound on what best-fit will ever resolve to — the exact MV-489 trap
+            // (WeaponsScreen's base fontSize silently outranking resizeTextMaxSize). Base size must track
+            // the raised cap below or it re-imposes the old 20pt ceiling on its own.
+            _forceFieldLabel = AddText(root, 32f, ForceFieldLabelInk, TextAnchor.MiddleCenter);
             Anchor(_forceFieldLabel.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            _forceFieldLabel.rectTransform.sizeDelta = new Vector2(84f, 40f);
+            // Was 84x40 with resizeTextMaxSize 22 — the max was the binding constraint (best-fit
+            // never draws past it regardless of box size), so it read unreadably small on an iPhone. Both
+            // move together: the box widened enough to let the raised cap actually resolve, sized to clear
+            // 1%/100%/FIELD (the widest case) against the ring's inner radius (see MV585ForceFieldLabelFontSizeTests).
+            _forceFieldLabel.rectTransform.sizeDelta = new Vector2(96f, 52f);
             _forceFieldLabel.rectTransform.anchoredPosition = Vector2.zero;
             _forceFieldLabel.text = "FIELD";
             _forceFieldLabel.fontStyle = FontStyle.Bold;
@@ -1302,7 +1310,7 @@ namespace MaxWorlds.UI
             var forceFieldLabelOutline = _forceFieldLabel.gameObject.AddComponent<Outline>();
             forceFieldLabelOutline.effectColor = BoneWhite;
             forceFieldLabelOutline.effectDistance = new Vector2(1.2f, -1.2f);
-            _forceFieldLabel.resizeTextMaxSize = 22;
+            _forceFieldLabel.resizeTextMaxSize = 32;
 
             var radial = AddImage(root, HudTextures.Disc(160), new Color(0f, 0f, 0f, 0.5f), "Radial");
             Stretch(radial.rectTransform, -6f);
