@@ -8,6 +8,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
+using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
@@ -81,6 +82,40 @@ namespace MaxWorlds.Arena
         }
 
         private static readonly Color BodyColor = new Color(0.35f, 0.55f, 0.75f); // the primary's blue
+
+        /// <summary>MV-580: the second of the sentinel's own two body tones (the Warm slot in
+        /// <see cref="RobotPalette"/>) — a lighter, cooler tint of <see cref="BodyColor"/> rather than
+        /// the enemy roster's shared <see cref="CharacterSkin.RobotCool"/>, so the sentinel reads as
+        /// one machine built in Max's own colour family, not a robot wearing the enemy shed's grey.</summary>
+        private static readonly Color BodyAccent = new Color(0.62f, 0.78f, 0.90f);
+
+        /// <summary>MV-580: the eye. Deliberately the SAME cyan family as <see cref="BeamColor"/> below
+        /// (Max's own primary weapon colour) and nowhere near the enemy roster's tell colours — gold
+        /// idle, warn orange, white flash (see <see cref="RobotRig"/>) — so the one glowing lens on
+        /// this body never reads as "about to hit you". "Friendly eye colour rather than the enemies'
+        /// [tell]", per the ticket.</summary>
+        private static readonly Color EyeColor = new Color(0.55f, 0.9f, 1f);
+
+        /// <summary>MV-580: the body's silhouette is <see cref="RobotBodies.Build"/>'s Gunner — the
+        /// closest existing body to Lee's reference (a squat, domed, multi-legged walker) of anything
+        /// already in the shared builder, per the ticket's "do not author new geometry" instruction.
+        /// Never <see cref="RobotBodies.Build"/> a wheeled kind here — the sentinel must WALK (see
+        /// <see cref="_gait"/>), and giving it wheels instead was explicitly rejected on the ticket.</summary>
+        private const MaxWorlds.Enemies.EnemyKind BodyKind = MaxWorlds.Enemies.EnemyKind.Gunner;
+
+        /// <summary>The old primitive's exact footprint (0.5 x 0.6 x 0.5 local scale on a unit
+        /// cylinder), rebuilt as a plain collider so removing <c>CreatePrimitive</c> (MV-580) changes
+        /// nothing about how a robot or Max collides with a deployed sentinel — the linked
+        /// sentinel-behaviour ticket owns retuning this shape, not this one (see the class doc on
+        /// <see cref="BuildBody"/>).</summary>
+        private const float ColliderRadius = 0.25f;
+        private const float ColliderHeight = 1.2f;
+
+        private RobotBodies.Body _body;
+        private LegGaitDriver _gait;
+        private Transform _model;
+        private Material[] _ownedMaterials;
+
         private static readonly Collider[] s_hits = new Collider[16];
 
         // MV-395: the shot itself was invisible — damage landed but nothing was ever drawn from the
@@ -89,7 +124,7 @@ namespace MaxWorlds.Arena
         // (BodyColor above) per MV-362's "reuses the primary weapon's visual language".
         private static readonly Color BeamColor = new Color(0.55f, 0.85f, 1f, 1f);
         private const float BeamHalfWidth = 0.06f;
-        private const float MuzzleHeight = 1.1f; // near the top of the Body cylinder (see BuildBody)
+        private const float MuzzleHeight = 1.1f; // near the top of the built body (see BuildBody)
 
         /// <summary>How long the tracer stays on screen per shot. Capped below the fire interval so a
         /// fast-firing turret's beam never runs into the next shot's own flash.</summary>
@@ -150,30 +185,82 @@ namespace MaxWorlds.Arena
             Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (see GateSolidityTests)
         }
 
+        /// <summary>
+        /// MV-580: was a raw <c>GameObject.CreatePrimitive(PrimitiveType.Cylinder)</c> — Unity's
+        /// built-in default material, no URP subshader, so a player build drew a magenta capsule (see
+        /// <see cref="RuntimeSurfaceDirector"/>'s doc for why the corrective sweep can never reach it:
+        /// it explicitly skips anything under an <see cref="IDamageable"/>, and <see cref="Sentinel"/>
+        /// is one). Now built from the same shared, hand-authored body geometry every Backyard robot
+        /// uses (<see cref="RobotBodies.Build"/>) — reusing the Gunner's tripod silhouette, the closest
+        /// thing already in that builder to Lee's reference (a squat, domed, multi-legged walker) — in
+        /// a distinct palette (<see cref="BodyColor"/>/<see cref="BodyAccent"/>, <see cref="EyeColor"/>)
+        /// so it reads as Max's own machine, never as one more robot. Every part gets a real URP
+        /// material explicitly, because <see cref="RuntimeSurfaceDirector"/> never dresses an
+        /// <see cref="IDamageable"/> and nothing else will.
+        ///
+        /// Legged AND mobile — the first body in the roster that is both (see
+        /// <see cref="_gait"/>/<see cref="LegGaitDriver"/>) — so the collider is rebuilt as a plain
+        /// primitive-free <see cref="CapsuleCollider"/> matching the old cylinder's exact footprint,
+        /// not left to whatever <see cref="RobotBodies.Build"/> happens to produce (it builds visual
+        /// meshes only, never a collider — see <see cref="CharacterPart"/>). Collision TUNING belongs
+        /// to the linked sentinel-behaviour ticket; this only keeps today's collision unchanged.
+        /// </summary>
         private void BuildBody()
         {
-            var vis = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            vis.name = "Body";
-            vis.transform.SetParent(transform, worldPositionStays: false);
-            vis.transform.localPosition = new Vector3(0f, 0.6f, 0f);
-            vis.transform.localScale = new Vector3(0.5f, 0.6f, 0.5f);
+            _model = ParentScale.MakeMetreSpace(new GameObject("Model").transform, transform);
 
-            var rend = vis.GetComponent<Renderer>();
-            if (rend != null)
+            var warm = NewMaterial("Sentinel_Warm", BodyColor);
+            var accent = NewMaterial("Sentinel_Accent", BodyAccent);
+            var dark = NewMaterial("Sentinel_Dark", CharacterSkin.RobotDark);
+            var gold = NewMaterial("Sentinel_Gold", CharacterSkin.RobotGold);
+            _ownedMaterials = new[] { warm, accent, dark, gold };
+            var palette = new RobotPalette(warm, accent, dark, gold);
+
+            _body = RobotBodies.Build(BodyKind, _model, palette);
+            ApplyEyeColor();
+            _gait = new LegGaitDriver();
+
+            var col = gameObject.AddComponent<CapsuleCollider>();
+            col.center = new Vector3(0f, ColliderHeight * 0.5f, 0f);
+            col.height = ColliderHeight;
+            col.radius = ColliderRadius;
+            col.isTrigger = false; // solid — robots route around it like any wall (ObstacleSteering);
+                                    // Max himself is carved back out of that below (IgnorePlayerCollision).
+            _bodyCollider = col;
+        }
+
+        /// <summary>A material instance this sentinel owns and destroys — never the shared template
+        /// <see cref="MaterialLibrary.Character()"/> itself, which every character in the yard wears;
+        /// tinting this one machine would tint the whole cast. Falls back to the plain surface shader
+        /// (a look regression, never a magenta one) if the stylised character shader is unavailable —
+        /// the same degrade <see cref="RobotRig"/> uses.</summary>
+        private static Material NewMaterial(string name, Color color)
+        {
+            var template = MaterialLibrary.Character();
+            var m = template != null ? new Material(template) : new Material(MaterialLibrary.SurfaceShader);
+            m.name = name;
+            m.hideFlags = HideFlags.HideAndDontSave;
+            if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
+            if (m.HasProperty("_Color")) m.SetColor("_Color", color);
+            if (m.HasProperty("_EmissionColor")) m.SetColor("_EmissionColor", Color.black);
+            return m;
+        }
+
+        /// <summary>Tints every lens <see cref="RobotBodies.Build"/> handed back — set once, at build
+        /// time: unlike an enemy's tell (<see cref="RobotRig.TellColorFor"/>), a deployed sentinel has
+        /// no wind-up to telegraph, so a single friendly colour is the whole story.</summary>
+        private void ApplyEyeColor()
+        {
+            if (_body.Eyes == null) return;
+            var mpb = new MaterialPropertyBlock();
+            for (int i = 0; i < _body.Eyes.Length; i++)
             {
-                var mpb = new MaterialPropertyBlock();
-                rend.GetPropertyBlock(mpb);
-                mpb.SetColor("_BaseColor", BodyColor);
-                rend.SetPropertyBlock(mpb);
+                var eye = _body.Eyes[i];
+                if (eye == null) continue;
+                eye.GetPropertyBlock(mpb);
+                mpb.SetColor("_BaseColor", EyeColor);
+                eye.SetPropertyBlock(mpb);
             }
-
-            _bodyCollider = vis.GetComponent<Collider>();
-            // Solid — robots route around it like any wall (ObstacleSteering). Max himself is carved
-            // back out of that below (IgnorePlayerCollision, MV-579): being a wall to ROBOTS is the
-            // whole point of the ability, but blocking MAX was always a bug, per the same ForceFieldBubble
-            // precedent (MV-361) — a solid collider that a CharacterController must still not treat as
-            // a wall for its own owner.
-            if (_bodyCollider != null) _bodyCollider.isTrigger = false;
         }
 
         /// <summary>MV-579: a deployed sentinel must never physically block Max, however it got in his
@@ -273,6 +360,18 @@ namespace MaxWorlds.Arena
                     transform.position = next3;
                     Physics.SyncTransforms();
                 }
+            }
+
+            // MV-580: the walk cycle. Driven off the sentinel's OWN world position, after the movement
+            // above has already updated it this frame — so a mover that just stepped shows legs that
+            // moved, and one that didn't (no follow target, or already at its standoff distance) shows
+            // legs settling, on the very same frame that decided which case it was.
+            if (_gait != null && _model != null)
+            {
+                _gait.Tick(_body.Legs, transform.position, dt);
+                Vector3 modelPos = _model.localPosition;
+                modelPos.y = _gait.BobHeight();
+                _model.localPosition = modelPos;
             }
 
             if (_beamTimer > 0f)
@@ -383,6 +482,24 @@ namespace MaxWorlds.Arena
             Died?.Invoke(this);
             if (Application.isPlaying) Destroy(gameObject);
             else DestroyImmediate(gameObject);
+        }
+
+        /// <summary>MV-580: the four palette instances <see cref="NewMaterial"/> made are ours and
+        /// nothing else points at them — same reasoning as <see cref="RobotRig.OnDestroy"/> for the
+        /// enemy roster's own material instances. Play/edit-gated like every other teardown in this
+        /// class (<see cref="Die"/>, <see cref="DestroyAllActive"/>) rather than a bare <c>Destroy</c>:
+        /// this fires from <c>OnDestroy</c> itself, which a test's own <c>DestroyImmediate(gameObject)</c>
+        /// reaches in edit mode, and a bare <c>Destroy</c> there logs "may not be called from edit
+        /// mode" and fails every EXISTING Sentinel test's teardown, not just this ticket's own.</summary>
+        private void OnDestroy()
+        {
+            if (_ownedMaterials == null) return;
+            for (int i = 0; i < _ownedMaterials.Length; i++)
+            {
+                if (_ownedMaterials[i] == null) continue;
+                if (Application.isPlaying) Destroy(_ownedMaterials[i]);
+                else DestroyImmediate(_ownedMaterials[i]);
+            }
         }
     }
 }
