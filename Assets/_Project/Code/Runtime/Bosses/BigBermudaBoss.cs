@@ -50,6 +50,14 @@ namespace MaxWorlds.Bosses
         private Renderer _renderer;
         private MaterialPropertyBlock _mpb;
 
+        // MV-590: the boss was a raw beeline through SafeMove with no wall/prop awareness at all —
+        // unlike RobotEnemy (YT-68/MV-447), it never picked up ObstacleSteering/WallLatch when those
+        // landed for the robots. Same wiring here: OnControllerColliderHit feeds WallLatch, which
+        // slides Approach's desired direction along whatever it's latched onto instead of grinding
+        // into it.
+        private readonly WallLatch _wallLatch = new WallLatch();
+        private float _preferSign;
+
         // The area whose floor wakes this boss (MV-572) — MapRuntime.BuildBoss hands this in right
         // after AddComponent, from the same WorldArea/MapZone footprint the boss was authored inside.
         // Defaults to an empty Rect, which Contains() never satisfies, so a boss nobody assigns one to
@@ -137,6 +145,7 @@ namespace MaxWorlds.Bosses
             _cc = GetComponent<CharacterController>();
             _renderer = GetComponent<Renderer>();
             FitColliderToRenderedBody();
+            _preferSign = ObstacleSteering.PreferSignFor(GetInstanceID());
             _mpb = new MaterialPropertyBlock();
             _health = new DestructibleHealth(DevTuning.Or(DevTuning.BossHealth, BossTuning.Health));
             _health.Destroyed += OnDeath;
@@ -262,12 +271,41 @@ namespace MaxWorlds.Bosses
         /// entirely).</summary>
         private void Approach(float dt, float speedScale)
         {
-            Vector3 to = PlanarToTarget();
+            if (_target == null) return;
+            TickApproach(dt, _target.position, speedScale);
+        }
+
+        /// <summary>The actual approach-and-steer step, target/dt-parameterized like
+        /// <see cref="MowerHutch.TickMobility"/> so an EditMode test can drive it directly
+        /// against a synthetic target instead of needing a live Update loop. MV-590: routed through
+        /// <see cref="WallLatch"/> so a wall/prop in the way is walked around, the same as robots,
+        /// instead of ground into.</summary>
+        public void TickApproach(float dt, Vector3 targetPosition, float speedScale = 1f)
+        {
+            Vector3 to = targetPosition - transform.position;
+            to.y = 0f;
             if (to.magnitude <= BossTuning.Standoff) return;
 
             float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
+            Vector3 desired = _wallLatch.Tick(to.normalized, transform.position, dt, _preferSign);
             // MV-386: SafeMove, not cc.Move directly -- same stall-tunneling fix as PlayerController/RobotEnemy.
-            CharacterControllerMotion.SafeMove(_cc, to.normalized * move * speedScale * dt);
+            CharacterControllerMotion.SafeMove(_cc, desired * move * speedScale * dt);
+        }
+
+        private void OnControllerColliderHit(ControllerColliderHit hit) => HandleWallContact(hit.collider, hit.normal);
+
+        /// <summary>Feeds every non-floor, non-character contact into <see cref="_wallLatch"/> (MV-590),
+        /// same convention as <see cref="RobotEnemy"/>'s wall handling: a character hit (Max, a robot,
+        /// another boss) is not something to route around — physical collision already stops the boss
+        /// from overlapping it, and treating it as a "wall" to slide along would fight that. Split out
+        /// of <see cref="OnControllerColliderHit"/>, same reasoning as
+        /// <see cref="RobotEnemy.HandleWallContact"/> (MV-586): <see cref="ControllerColliderHit"/> has
+        /// no public constructor, so a test drives this seam directly.</summary>
+        private void HandleWallContact(Collider collider, Vector3 normal)
+        {
+            if (Mathf.Abs(normal.y) >= 0.5f) return; // floor/ramp, not a wall
+            if (collider.TryGetComponent<CharacterController>(out _)) return; // a character
+            _wallLatch.NoteHit(normal);
         }
 
         /// <summary>
