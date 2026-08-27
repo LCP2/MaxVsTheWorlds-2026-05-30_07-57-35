@@ -15,7 +15,7 @@ rig-phone.png (2340x1080)
 -- conformance: rig-phone (2340x1080) --
 PASS node-position: 27/27 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.185 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.183 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 18px-at-ref floor
@@ -24,7 +24,7 @@ rig-ipad-mini.png (1078x815)
 -- conformance: rig-ipad-mini (1078x815) --
 PASS node-position: 27/27 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.169 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.17 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor

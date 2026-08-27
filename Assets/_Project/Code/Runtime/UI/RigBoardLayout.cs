@@ -730,5 +730,19 @@ namespace MaxWorlds.UI
 
         /// <summary>Reloads from Resources on the next access — test isolation only.</summary>
         public static void ResetForTests() { s_loaded = false; s_phoneLoaded = false; }
+
+        /// <summary>MV-594 test-only: overrides the loaded <see cref="RegionRectPadX"/> value in place,
+        /// without touching the JSON file. The authored value (88) saturates the panel builder's own
+        /// neighbour-midpoint clamp at every boundary in the real data set (every family sits closer to
+        /// its neighbour than 2x88), so a test proving the panel builder genuinely reads this value
+        /// (rather than asserting a width that would be identical either way) needs to see it respond to
+        /// a smaller, unclamped value. Call <see cref="ResetForTests"/> afterward to restore the real
+        /// authored value from the JSON.</summary>
+        public static void SetRegionRectPadXForTests(float value)
+        {
+            EnsureLoaded();
+            s_geometry.regionRect ??= new RegionRectWire();
+            s_geometry.regionRect.padX = value;
+        }
     }
 }
