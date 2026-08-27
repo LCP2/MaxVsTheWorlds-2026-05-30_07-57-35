@@ -340,12 +340,13 @@ namespace MaxWorlds.Pickups
                     break;
                 case PickupKind.Device:
                     // MV-424 drew THE RIG's candidate pool and routed straight to the draft outcome on
-                    // walk-over. MV-425 keeps the 0/1-candidate outcomes instant (nothing to show, or a
-                    // silent grant) but stops 2-3 candidates from force-opening the board mid-fight —
-                    // that pool now banks in PendingMorphingModule and waits for the player to tap
-                    // WEAPONS on their own schedule (see that class's doc comment). MV-457: the pool is
-                    // now up to 2 locked CATEGORY ids, not up to 3 ability ids — WeaponsScreen's draft
-                    // flow handles either id shape the same way (see GrantDraftCandidate).
+                    // walk-over. MV-425 kept the 0-candidate outcome instant (nothing to show) but stops
+                    // 2-3 candidates from force-opening the board mid-fight — that pool banks in
+                    // PendingMorphingModule and waits for the player to tap WEAPONS on their own
+                    // schedule (see that class's doc comment). MV-595: a shed now draws exactly the next
+                    // locked CATEGORY id in board order (never 2+), so the PendingMorphingModule branch
+                    // below is effectively unreachable from here today — it stays live for the
+                    // node-level draft (RigDraft.DrawCandidates), which still samples up to 3.
                     var candidates = RigDraft.DrawCandidateCategories();
                     if (candidates.Length <= 1)
                     {

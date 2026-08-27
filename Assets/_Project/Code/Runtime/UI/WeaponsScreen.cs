@@ -625,17 +625,19 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>A Morphing Module was collected (MV-424, replacing the old shed → badge → BUILD
-        /// ABILITY modal chain): 0 candidates consumes the module with nothing granted, 1 grants it
-        /// directly with no screen, 2(-3) opens THE RIG with just those candidates lit on the board —
-        /// numbered, TAKE-labelled — and everything else dimmed. MV-521: one tap takes it and resolves
-        /// the pick IN PLACE (<see cref="ResolveDraftPick"/>) — it no longer closes the screen; the
-        /// player does that themselves once they're done looking at what just unlocked. MV-457: a shed
-        /// now draws up to 2 locked CATEGORY ids instead of up to 3 ability ids
-        /// — <paramref name="candidateIds"/> takes either shape unchanged, since
-        /// <see cref="GrantDraftCandidate"/> and the board's own <c>_categoryNodes</c>/<c>_abilityNodes</c>
-        /// lookups both key off the same disjoint id namespaces (all-caps category ids vs lowercase
-        /// ability ids). Whichever candidate is left behind simply stays locked/unowned for a later
-        /// module.</summary>
+        /// ABILITY modal chain): 0 candidates consumes the module with nothing granted; 1 grants it
+        /// outright (there is nothing to pick between) but still opens THE RIG with the family reveal
+        /// playing, exactly as a multi-candidate pick does once resolved (MV-521, MV-595) — the reveal
+        /// is the reward, so a single candidate is never a silent grant; 2(-3) opens THE RIG with just
+        /// those candidates lit on the board — numbered, TAKE-labelled — and everything else dimmed.
+        /// MV-521: a multi-candidate tap resolves the pick IN PLACE (<see cref="ResolveDraftPick"/>) —
+        /// it no longer closes the screen; the player does that themselves once they're done looking at
+        /// what just unlocked. A shed's own draw is a locked CATEGORY id (MV-457, now MV-595's single
+        /// next-in-order id, not a 2-of-N sample) — <paramref name="candidateIds"/> takes either a
+        /// category or ability id shape unchanged, since <see cref="GrantDraftCandidate"/> and the
+        /// board's own <c>_categoryNodes</c>/<c>_abilityNodes</c> lookups both key off the same disjoint
+        /// id namespaces (all-caps category ids vs lowercase ability ids). Whichever candidate is left
+        /// behind in a 2+ draw simply stays locked/unowned for a later module.</summary>
         public void OpenMorphingModuleDraft(string[] candidateIds)
         {
             if (candidateIds == null || candidateIds.Length == 0)
@@ -645,7 +647,22 @@ namespace MaxWorlds.UI
             }
             if (candidateIds.Length == 1)
             {
-                GrantDraftCandidate(candidateIds[0]);
+                string id = candidateIds[0];
+                string categoryId = RigBoard.Exists(id) ? RigBoard.Category(id) : id;
+                GrantDraftCandidate(id);
+
+                if (_canvas == null) Build();
+                if (!_open)
+                {
+                    _open = true;
+                    _prevTimeScale = TimeScaleCapture.ClampForCapture(Time.timeScale);
+                    Time.timeScale = 0f;
+                    ModalFrameRateGate.Enter();   // MV-574: idle the frame rate while this modal is up
+                }
+
+                Refresh();
+                _screenRoot.gameObject.SetActive(true);
+                StartCategoryReveal(categoryId);
                 return;
             }
 
