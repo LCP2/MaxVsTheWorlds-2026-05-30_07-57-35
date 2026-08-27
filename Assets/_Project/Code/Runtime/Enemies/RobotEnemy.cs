@@ -4,6 +4,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.UI;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Enemies
 {
@@ -251,6 +252,22 @@ namespace MaxWorlds.Enemies
         /// so <see cref="Die"/>/<see cref="Despawn"/> can hand the token back even if death interrupts
         /// the attack before it reaches Recover.</summary>
         private bool _holdsAttackToken;
+
+        /// <summary>Counts down to the next Force Field ram-drain (MV-586) — a robot body blocked by
+        /// the bubble never reaches <see cref="TryContactDamage"/>/<see cref="TickContactTouch"/>, so
+        /// without this the shield cost nothing to grind on forever. Rate-limited to this robot's own
+        /// <see cref="recoverTime"/> (floored at <see cref="MinForceFieldRamInterval"/>), ticked down
+        /// unconditionally in <see cref="Update"/> — same "no free first hit" seeding as
+        /// <see cref="_contactCooldownTimer"/> would give, but zero here is correct: the very first
+        /// contact with a freshly-raised bubble should cost it immediately, the same as ramming Max
+        /// himself would.</summary>
+        private float _forceFieldRamCooldownTimer;
+
+        /// <summary>Floor on the ram rate limit (MV-586 spec) — a robot pushing against the bubble
+        /// ticks the shield down at its own attack cadence, never faster than this even if its
+        /// archetype's <see cref="recoverTime"/> is shorter.</summary>
+        private const float MinForceFieldRamInterval = 0.5f;
+
         private MaterialPropertyBlock _mpb;
         private Vector3 _knockback;
         [Tooltip("How fast a spray shove bleeds off (m/s²). Higher = a shorter shove (YT-64).")]
@@ -431,6 +448,9 @@ namespace MaxWorlds.Enemies
             // A pooled robot must never hand back a token it doesn't hold — Die()/Despawn() already
             // released whatever this body was carrying in its last life before it got here.
             _holdsAttackToken = false;
+            // A pooled robot must never inherit the last life's ram cooldown (MV-586) — its first
+            // contact with a fresh bubble this life should cost it immediately.
+            _forceFieldRamCooldownTimer = 0f;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -506,6 +526,8 @@ namespace MaxWorlds.Enemies
         {
             if (Current == State.Dead) return;
             float dt = Time.deltaTime;
+
+            _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
 
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
@@ -1217,7 +1239,27 @@ namespace MaxWorlds.Enemies
         {
             if (Mathf.Abs(hit.normal.y) >= 0.5f) return;                       // floor/ramp, not a wall
             if (hit.collider.TryGetComponent<CharacterController>(out _)) return; // a character
-            _wallLatch.NoteHit(hit.normal);
+            HandleWallContact(hit.collider, hit.normal);
+        }
+
+        /// <summary>The actual wall-contact reaction, split out from <see cref="OnControllerColliderHit"/>
+        /// so an EditMode test can drive it directly with a bare <see cref="Collider"/> — Unity's
+        /// <see cref="ControllerColliderHit"/> has no public constructor. MV-586: a robot's body blocked
+        /// by the active Force Field bubble never reaches Max's contact radius, so it never drains the
+        /// shield through the ordinary damage path — the bubble is the wall, so this is the only seam
+        /// that ever sees the ram. Rate-limited to this robot's own attack cadence
+        /// (<see cref="_forceFieldRamCooldownTimer"/>) so a robot pressed against the bubble ticks it
+        /// down at that pace, not per frame. Steering (<see cref="_wallLatch"/>) is unaffected either
+        /// way — the bubble keeps physically blocking exactly as before.</summary>
+        private void HandleWallContact(Collider collider, Vector3 normal)
+        {
+            if (_forceFieldRamCooldownTimer <= 0f &&
+                collider.TryGetComponent<ForceFieldBubble>(out var bubble))
+            {
+                bubble.ReportRam(contactDamage);
+                _forceFieldRamCooldownTimer = Mathf.Max(recoverTime, MinForceFieldRamInterval);
+            }
+            _wallLatch.NoteHit(normal);
         }
 
         private void ApplyGravity(float dt)
