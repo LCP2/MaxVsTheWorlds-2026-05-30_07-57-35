@@ -158,18 +158,15 @@ namespace MaxWorlds.Arena
                 if (link == null || string.IsNullOrEmpty(link.gate)) continue;
 
                 int intoArea = AreaAccumulationDirector.AreaIndexOf(link.to);
-                if (intoArea <= 0) continue;   // e.g. area18 -> boss: keyed separately, below
+                if (intoArea <= 0) continue;   // a link into the entry stub itself — no death ever restores there
 
                 if (!build.Actors.TryGetValue(link.gate, out GameObject gateGo) || gateGo == null) continue;
                 AreaGate gate = gateGo.GetComponent<AreaGate>();
+                // MV-575: this already covers boss areas too — WorldMapLoader translates a boss area's
+                // id to "area<N>" exactly like every other combat area, so the loop above keys its gate
+                // at its real index without needing a separate synthetic-index case here.
                 if (gate != null) _gateIntoArea[intoArea] = gate;
             }
-
-            // The boss room itself is never named "area<N>" (AreaIndexOf returns 0 for "boss"), so the
-            // loop above can't key it — key it explicitly at areaCount + 1, the same index
-            // RespawnPlanner.Resolve uses for the boss room.
-            if (_bossGate != null && _cfg?.dials != null)
-                _gateIntoArea[_cfg.dials.areaCount + 1] = _bossGate;
         }
 
         private void OnDestroy()
@@ -181,8 +178,8 @@ namespace MaxWorlds.Arena
         /// same set <see cref="SupplyLineNetwork.AllShedsDestroyed"/> counts, unlike a mid-run gate's
         /// local <see cref="SupplyLineNetwork.ShedsDestroyedBefore"/> boundary. Reuses
         /// <see cref="SupplyLineNetwork.ShedProgressBefore"/> with an area-index bound past every
-        /// authored area so nothing before it is excluded (<c>_cfg.dials.areaCount + 1</c> is the same
-        /// synthetic index <see cref="BuildGateIntoAreaMap"/> already uses for the boss room).</summary>
+        /// authored area (<c>_cfg.dials.areaCount + 1</c>) so nothing before it is excluded — an
+        /// exclusive bound, unrelated to any area's own index.</summary>
         private void PushBossGateProgress()
         {
             if (_bossGate == null) return;
@@ -286,7 +283,11 @@ namespace MaxWorlds.Arena
             int deathArea = ResolveDeathArea();
             if (deathArea <= 0) return;   // no live area context (a headless fixture) — nothing to respawn into
 
-            RespawnPlan plan = RespawnPlanner.Resolve(deathArea, _cfg.dials.areaCount);
+            // MV-575: whether the gate into the death area re-closes is a property of the area (its
+            // role), not of where it sits in the sequence — a boss area's gate opens on a shed
+            // condition, never combat, and re-closing it would be unreopenable (a softlock).
+            bool deathGateIsConditionGated = _cfg.AreaByIndex(deathArea)?.IsBossRole ?? false;
+            RespawnPlan plan = RespawnPlanner.Resolve(deathArea, deathGateIsConditionGated);
 
             DeathRunState.RecordDeath();
             _pendingRespawn = plan;
@@ -345,22 +346,21 @@ namespace MaxWorlds.Arena
             if (p != null) _player = p.transform;
         }
 
-        /// <summary>Where Max is standing RIGHT NOW, in <see cref="RespawnPlanner.Resolve"/> terms — a
-        /// normal area's 1-based index, or <c>areaCount + 1</c> for the boss room. Deliberately reads
-        /// live position (<see cref="MapData.ZoneAt"/>), not <see cref="AreaAccumulationDirector.CurrentArea"/>:
-        /// that tracker is advanced ahead of the player for population purposes (MV-245) and, more to
-        /// the point, never reaches the boss room at all — the boss zone's id is "boss", not
-        /// "area&lt;N&gt;", so <see cref="AreaAccumulationDirector.AreaIndexOf"/> can't parse it and
-        /// nothing ever calls <c>EnterArea</c> for it (<c>BackyardPath.WireAreaGatesToPopulation</c>
-        /// explicitly skips it). A death fought against the boss needs its own zone-kind check.</summary>
+        /// <summary>Where Max is standing RIGHT NOW, in <see cref="RespawnPlanner.Resolve"/> terms —
+        /// the area's real 1-based index, whether it's an ordinary area or a boss (MV-575: a boss area
+        /// is a real numbered entry in <see cref="WorldConfig.areas"/>, translated to the same
+        /// "area&lt;N&gt;" zone id as everything else by <see cref="WorldMapLoader"/> — there is no
+        /// synthetic index past the end of the sequence for "the boss room"). Deliberately reads live
+        /// position (<see cref="MapData.ZoneAt"/>), not <see cref="AreaAccumulationDirector.CurrentArea"/>:
+        /// that tracker is advanced ahead of the player for population purposes (MV-245) and never
+        /// enters a boss zone at all (<c>BackyardPath.WireAreaGatesToPopulation</c> explicitly skips
+        /// it), so a death fought against a boss still needs to read where Max actually is.</summary>
         private int ResolveDeathArea()
         {
             if (_player == null || _map == null) return 0;
 
             MapZone zone = _map.ZoneAt(_player.position.x, _player.position.z);
-            if (zone == null) return 0;
-            if (zone.Kind == ZoneKind.Boss) return _cfg.dials.areaCount + 1;
-            return AreaAccumulationDirector.AreaIndexOf(zone.id);
+            return zone == null ? 0 : AreaAccumulationDirector.AreaIndexOf(zone.id);
         }
 
         private void RespawnPlayer(in RespawnPlan plan)
