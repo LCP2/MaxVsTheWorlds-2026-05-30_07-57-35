@@ -220,5 +220,27 @@ namespace MaxWorlds.Tests.EditMode
             // MV-422's RIG restructure raised e_ff's own maxLevel from 3 to 5 (radius now levels too).
             Assert.That(WeaponCatalog.MaxLevel(AbilityKind.ForceField), Is.EqualTo(5));
         }
+
+        [Test]
+        public void ForceFieldRadiusIsHalvedAndNeverGrowsWithLevel_MV583()
+        {
+            // MV-583 (Lee, 26 Aug 2026 DECISION: "smaller than SG2, try 50% of current size... it
+            // should not grow in size") halves the DECISION #3 radius (1.5m -> 0.75m) and zeroes the
+            // MV-422 per-level growth that used to widen it to 2.5m at L5 — shimmer speed carries
+            // "more powerful" now instead (see ForceFieldBubble.ApplyShimmerOverrides).
+            Assert.That(AbilityTuning.DefaultForceFieldRadius, Is.EqualTo(0.75f).Within(1e-5f),
+                "radius must be halved from the old 1.5m to 0.75m");
+            Assert.That(AbilityTuning.DefaultForceFieldRadiusPerLevel, Is.EqualTo(0f).Within(1e-5f),
+                "the field must stop growing with level — power now reads as shimmer speed");
+
+            int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.ForceField);
+            for (int level = 1; level <= maxLevel; level++)
+            {
+                float radius = AbilityTuning.ForceFieldRadius(level, AbilityTuning.DefaultForceFieldRadius,
+                    AbilityTuning.DefaultForceFieldRadiusPerLevel);
+                Assert.That(radius, Is.EqualTo(0.75f).Within(1e-5f),
+                    $"level {level}'s radius drifted away from the pinned 0.75m — the field must never grow");
+            }
+        }
     }
 }

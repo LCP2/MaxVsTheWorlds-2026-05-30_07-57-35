@@ -333,7 +333,7 @@ namespace MaxWorlds.Weapons
         {
             var go = new GameObject("Blinkguard Force Field Bubble");
             var bubble = go.AddComponent<ForceFieldBubble>();
-            bubble.Init(null, null, ForceFieldRadius);
+            bubble.Init(null, null, ForceFieldRadius, WeaponSystemState.AbilityLevel(AbilityKind.ForceField));
             go.transform.position = position;   // Init() re-centres on its (null) owner; set after
             if (Application.isPlaying) Destroy(go, AbilityTuning.DefaultBlinkguardBubbleDurationSeconds);
         }
@@ -383,7 +383,7 @@ namespace MaxWorlds.Weapons
             if (_forceFieldBubble != null) Destroy(_forceFieldBubble.gameObject);
             var go = new GameObject("Force Field Bubble");
             _forceFieldBubble = go.AddComponent<ForceFieldBubble>();
-            _forceFieldBubble.Init(transform, _cc, ForceFieldRadius);
+            _forceFieldBubble.Init(transform, _cc, ForceFieldRadius, level);
 
             return true;
         }
@@ -406,7 +406,7 @@ namespace MaxWorlds.Weapons
             if (_forceFieldBubble != null) Destroy(_forceFieldBubble.gameObject);
             var go = new GameObject("Force Field Bubble (tuning)");
             _forceFieldBubble = go.AddComponent<ForceFieldBubble>();
-            _forceFieldBubble.Init(transform, _cc, ForceFieldRadius);
+            _forceFieldBubble.Init(transform, _cc, ForceFieldRadius, level);
         }
 
         /// <summary>Eat as much of an incoming hit as the bubble's remaining budget allows — the single
