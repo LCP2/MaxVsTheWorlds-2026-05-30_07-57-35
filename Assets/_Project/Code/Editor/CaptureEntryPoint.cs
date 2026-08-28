@@ -49,6 +49,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv606Phone() => RunFromMenu(CapturePresets.All["mv606phone"]);
         public static void CaptureMv606Phone() => Run(CapturePresets.All["mv606phone"]);
 
+        [MenuItem("MaxWorlds/Capture/Water Reach (MV-617)")]
+        public static void MenuMv617WaterReach() => RunFromMenu(CapturePresets.All["mv617waterreach"]);
+        public static void CaptureMv617WaterReach() => Run(CapturePresets.All["mv617waterreach"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

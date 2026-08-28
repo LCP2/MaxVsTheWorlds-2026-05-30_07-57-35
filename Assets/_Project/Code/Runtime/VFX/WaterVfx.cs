@@ -63,15 +63,18 @@ namespace MaxWorlds.VFX
         /// <summary>
         /// How much of the blaster's cone the visible water fills.
         ///
-        /// The full cone (YT-187) — the water's widest visible edge must sit on the aim outline's
-        /// SIDE edge, the same way <see cref="WaterVfxTuning.ReachForCone"/> already puts it on the
-        /// outline's far arc. YT-110 originally shipped this at half the cone (a narrower jet inside
-        /// a wider indicator), but at the base/wide hose that read as the outline lying about width:
-        /// the spray looked like a thin jet inside a broad fan, and only matched once a narrow-beam
-        /// nozzle shrank the cone down near the jet's own width. Water, outline, and damage cone must
-        /// describe the same weapon at every setting, not just the narrow ones.
+        /// YT-187 shipped this at the FULL cone — the water's widest visible edge sitting on the aim
+        /// outline's SIDE edge, matching <see cref="WaterVfxTuning.ReachForCone"/>'s own placement on
+        /// the outline's far arc — because at half the cone (YT-110's original value) the base/wide
+        /// hose read as the outline lying about width. MV-617 narrows it again: Lee wants the WATER
+        /// itself visually tight regardless of angle ("I don't want it spreading out as it gets
+        /// further away"), while the FUNCTIONAL cone (<see cref="MaxWorlds.Weapons.WeaponCatalog.EffectiveConeHalfAngle"/>,
+        /// and therefore what SPREAD buys) stays exactly what it was — this dial only narrows the
+        /// PARTICLES, never the hit test. The ground outline still draws the true functional cone (see
+        /// <see cref="BuildGroundTrail"/>/<see cref="Refit"/>), so the player can still see the width
+        /// the water no longer visually fills.
         /// </summary>
-        public const float SprayFillsFractionOfCone = 1f;
+        public const float SprayFillsFractionOfCone = 0.35f;
 
         /// <summary>The visible stream's cone half-angle for a weapon with this spread.</summary>
         public static float SprayHalfAngleFor(float coneHalfAngle) =>
@@ -90,6 +93,27 @@ namespace MaxWorlds.VFX
         /// lifetime is fixed), so a longer beam is a faster jet — this is how a test proves the
         /// emitter's REACH grew, not only the aim outline's. 0 before the stream is built.</summary>
         public float EmitterSpeed => _stream != null ? _stream.main.startSpeed.constantMax : 0f;
+
+        /// <summary>Where the stream's widest visible edge actually lands, measured from the weapon's
+        /// ORIGIN (not the muzzle) — read off the emitter's live transform, not a cached field, so a
+        /// stale post-<see cref="Refit"/> position (MV-617) shows up here exactly like it would on
+        /// screen. Reconstructs the same triangle <see cref="WaterVfxTuning.ReachForCone"/> solves:
+        /// the edge particle leaves the muzzle's ACTUAL world offset at <see cref="streamAngle"/> and
+        /// travels <see cref="Reach"/> in a straight line. Must land within a few percent of the
+        /// reticle's own range, or the water is visibly lying about how far the weapon reaches. 0
+        /// before the stream is built.</summary>
+        public float ComputedLandingDistance
+        {
+            get
+            {
+                if (_stream == null) return 0f;
+                float offset = _stream.transform.localPosition.z;
+                float rad = streamAngle * Mathf.Deg2Rad;
+                var muzzle = new Vector3(0f, 0f, offset);
+                var dir = new Vector3(Mathf.Sin(rad), 0f, Mathf.Cos(rad));
+                return (muzzle + dir * Reach).magnitude;
+            }
+        }
         [Tooltip("How far in front of the blaster's origin the water leaves the nozzle, in " +
                  "multiples of the stream radius. Stretched particles trail a tail behind " +
                  "themselves, so emitting at the origin makes the jet appear to pass through " +
@@ -101,6 +125,11 @@ namespace MaxWorlds.VFX
         [SerializeField] private float splashLifetime = 0.45f;
         [Tooltip("Cone half-angle the splash droplets scatter through, degrees.")]
         [SerializeField] private float splashSpread = 42f;
+
+        /// <summary>The stream's own gravity pull — "a touch of droop, water not a laser" (see
+        /// BuildStream). Named so <see cref="Reach"/> can compensate for exactly the droop this value
+        /// causes (MV-617) rather than a copy that could drift out of sync with it.</summary>
+        private const float StreamGravityModifier = 0.4f;
 
         [Header("Visual-only level scaling (MV-379)")]
         [Tooltip("Stream/core/muzzle-burst size at the weapon's weakest visual strength (0), as a " +
@@ -194,6 +223,15 @@ namespace MaxWorlds.VFX
         /// </summary>
         private void Refit()
         {
+            // MV-617: the nozzle sits at `_radius * muzzleOffset` out along local Z (see NewSystem) —
+            // Reach's own geometry assumes the emitter is AT that offset, so a _radius change (a
+            // SizeScale swing, MV-379) has to move the emitter itself, not just rescale what it fires.
+            // Without this the nozzle kept firing from its OLD position while Reach was solved for the
+            // NEW one, and the stream's tip fell short of the outline.
+            RepositionMuzzle(_stream);
+            RepositionMuzzle(_core);
+            RepositionMuzzle(_muzzle);
+
             if (_stream != null)
             {
                 float speed = Reach / Mathf.Max(0.05f, travelTime);   // mirrors BuildStream
@@ -318,8 +356,11 @@ namespace MaxWorlds.VFX
 
         /// <summary>Distance the water still has to cover once it has left the nozzle — solved so
         /// the widest visible edge of the spray (not just the centre line) still lands on the aim
-        /// outline (YT-177). See <see cref="WaterVfxTuning.ReachForCone"/> for the geometry.</summary>
-        private float Reach => WaterVfxTuning.ReachForCone(_range, _radius * muzzleOffset, streamAngle);
+        /// outline (YT-177), plus a droop compensation (MV-617) so <see cref="StreamGravityModifier"/>
+        /// pulling the droplets down over their flight doesn't leave the visible tip short of it. See
+        /// <see cref="WaterVfxTuning.ReachForCone"/> for the geometry.</summary>
+        private float Reach => WaterVfxTuning.ReachForCone(_range, _radius * muzzleOffset, streamAngle,
+            WaterVfxTuning.DroopCompensation(travelTime, StreamGravityModifier));
 
         private ParticleSystem BuildStream()
         {
@@ -335,7 +376,7 @@ namespace MaxWorlds.VFX
             main.startSize = new ParticleSystem.MinMaxCurve(_radius * 0.22f, _radius * 0.55f);
             main.startColor = waterColor;
             main.maxParticles = 700;
-            main.gravityModifier = 0.4f;           // a touch of droop — water, not a laser
+            main.gravityModifier = StreamGravityModifier;   // a touch of droop — water, not a laser
 
             var emission = ps.emission;
             emission.rateOverTime = streamRate * RateScale * DensityScale;
@@ -512,6 +553,15 @@ namespace MaxWorlds.VFX
 
             go.SetActive(false);
             return go;
+        }
+
+        /// <summary>Move a parented emitter back onto the nozzle at the CURRENT <see cref="_radius"/>
+        /// (MV-617) — mirrors the local position <see cref="NewSystem"/> gives it at build time. A
+        /// no-op for the unparented splash/flash systems (world-positioned, no muzzle to sit on).</summary>
+        private void RepositionMuzzle(ParticleSystem ps)
+        {
+            if (ps == null || ps.transform.parent != transform) return;
+            ps.transform.localPosition = new Vector3(0f, 0f, _radius * muzzleOffset);
         }
 
         /// <summary>A stopped, world-simulated, material-assigned ParticleSystem. Assigning the

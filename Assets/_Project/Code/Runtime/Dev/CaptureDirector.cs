@@ -304,6 +304,7 @@ namespace MaxWorlds.Dev
                 "_mv6061920_done.txt", "MV-606-1920", 1920, 1080));
             Add(BuildMv606Hud("mv606phone", "-mv606phoneshot", "Temp/mv606phone.arm", "Temp/mv606phone.headless",
                 "_mv606phone_done.txt", "MV-606-phone", 852, 393)); // 852x393: the project's own iPhone-landscape convention (see UiScreensDirector)
+            Add(BuildMv617WaterReach());
             return d;
         }
 
@@ -692,6 +693,76 @@ namespace MaxWorlds.Dev
                     RigState.AcquireCap("s_bal"); // Water Balloon
                 },
                 Shots = new List<CaptureShot> { new CaptureShot(shotName, Setup) },
+            };
+        }
+
+        // ---- MV617WaterReach (MV-617 AC5) -----------------------------------------------------
+
+        /// <summary>Fires the primary dead ahead, auto-firing (DevMode), long enough for the stream,
+        /// the ground outline and its splashes to settle, then frames wide enough to show the whole
+        /// reach — proof the stream's visible tip, the outline, and the splash all land at the same
+        /// distance, the thing MV-617 fixed.</summary>
+        private static CapturePreset BuildMv617WaterReach()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+            const float pitch = 60f;
+            const int maxSettleFrames = 90;
+
+            GameObject maxGo = null;
+            WaterBlaster blaster = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                DevMode.Enabled = true;
+                DevMode.Invincible = true;
+                DevMode.InfiniteEnergy = true;
+                DevMode.AutoFire = true;
+
+                for (int i = 0; i < 4; i++) yield return null;
+
+                maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+                var facingField = typeof(PlayerController).GetField("_facing", BindingFlags.NonPublic | BindingFlags.Instance);
+                var player = maxGo.GetComponent<PlayerController>();
+                blaster = maxGo.GetComponent<WaterBlaster>();
+                // Same firing direction MV-555's capture settled on: clear of the Entry room's
+                // fences/hedges that sit in front of Max's spawn facing.
+                if (player != null && facingField != null) facingField.SetValue(player, Vector3.left);
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                int frame = 0;
+                while (frame < maxSettleFrames && Vector3.Angle(maxGo.transform.forward, Vector3.left) > 1f)
+                {
+                    yield return null;
+                    frame++;
+                }
+                for (int i = 0; i < 12; i++) yield return null;   // let the stream, outline and splashes settle
+
+                float range = blaster != null ? blaster.Range : WaterBlaster.DefaultRange;
+                Vector3 focus = maxGo.transform.position; focus.y = 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                float distance = Mathf.Max(8f, range * 1.8f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv617waterreach",
+                LogTag = "[MV617Capture]",
+                Flag = "-mv617shot",
+                ArmFile = "Temp/mv617.arm",
+                HeadlessMarker = "Temp/mv617.headless",
+                DoneFileName = "_mv617_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-617", NoSetup) },
             };
         }
     }
