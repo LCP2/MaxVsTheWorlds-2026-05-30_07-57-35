@@ -122,6 +122,10 @@ namespace MaxWorlds.Arena
 
         private static readonly Collider[] s_hits = new Collider[16];
 
+        /// <summary>Scratch buffer for <see cref="SeparateFromOtherSentinels"/> — cleared and refilled
+        /// every Update rather than allocated fresh, same idiom as <see cref="s_hits"/>.</summary>
+        private static readonly List<Vector3> s_otherSentinelPositions = new List<Vector3>(8);
+
         // MV-395: the shot itself was invisible — damage landed but nothing was ever drawn from the
         // turret to its target. A LineRenderer flash tracer, built the same way RobotRig builds the
         // enemy Gunner's beam (see RobotRig.BuildBeamLine), tinted with the primary's own blue
@@ -422,6 +426,8 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            SeparateFromOtherSentinels(dt);
+
             // MV-580: the walk cycle. Driven off the sentinel's OWN world position, after the movement
             // above has already updated it this frame — so a mover that just stepped shows legs that
             // moved, and one that didn't (no follow target, or already at its standoff distance) shows
@@ -473,6 +479,31 @@ namespace MaxWorlds.Arena
                 target.TakeDamage(new DamageInfo(damage, target.transform.position, dir, Team,
                     source: DamageSource.Ability));
                 FireBeam(target.transform.position);
+            }
+        }
+
+        /// <summary>MV-615: keeps this sentinel at least <see cref="PlayerAbilities.SentinelPlacementClearance"/>
+        /// from every OTHER active sentinel, every frame — not just at deploy time. The standoff-follow
+        /// step above walks every following sentinel onto the same ring around Max with no regard for
+        /// its neighbours, so two placed close together used to converge onto the same point on that
+        /// ring; this runs after that step to push them back apart, using
+        /// <see cref="AbilityTuning.SentinelSeparationStep"/>'s nearest-neighbour repulsion.</summary>
+        private void SeparateFromOtherSentinels(float dt)
+        {
+            s_otherSentinelPositions.Clear();
+            foreach (Sentinel s in _active)
+            {
+                if (s == null || s == this || !s.IsAlive) continue;
+                s_otherSentinelPositions.Add(s.transform.position);
+            }
+            if (s_otherSentinelPositions.Count == 0) return;
+
+            Vector3 next = AbilityTuning.SentinelSeparationStep(transform.position, s_otherSentinelPositions,
+                PlayerAbilities.SentinelPlacementClearance, AbilityTuning.DefaultSentinelSidestepSpeed, dt);
+            if (next != transform.position)
+            {
+                transform.position = next;
+                Physics.SyncTransforms();
             }
         }
 
