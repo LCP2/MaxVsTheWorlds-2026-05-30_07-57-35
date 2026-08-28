@@ -174,14 +174,37 @@ namespace MaxWorlds.UI
         private bool _draftActive;
         private readonly List<string> _draftCandidateIds = new List<string>();
 
-        // MV-521: the just-unlocked-family reveal that plays in place of closing the screen on a draft
-        // pick — a short, self-terminating glow over the category panel that just lit. Built once per
-        // BuildBoardContent() pass (rebuilt/cleared exactly like _draftScrim) and entirely independent
-        // of the draft chrome above — a reveal can still be playing after _draftActive has gone false.
-        private const float RevealDuration = 0.6f;
-        private RectTransform _revealGlow;
-        private Image _revealGlowImage;
-        private float _revealStartUnscaledTime = float.NegativeInfinity;
+        // MV-605: supersedes MV-521's near-instant (0.6s) reveal glow with a staged ~3s ceremony that
+        // plays when the player OPENS THE RIG with a module pending, not on pickup and not on close.
+        // The family is still granted immediately, at the same call sites MV-521 already granted from
+        // (see GrantDraftCandidate's own callers) — every existing grant-timing test keeps holding. The
+        // ceremony only ever gates two things while it plays: what the player SEES (the rest of the
+        // board dims back, the category node lights and its label resolves from a locked placeholder,
+        // its children light in sequence top row down) and what they can SPEND (RefreshAbilityNode/
+        // Update() suppress a node's own spendable state for the category the ceremony is still playing
+        // over, via IsCeremonySuppressing — see AC4, "not spendable until it settles"). Skippable — a
+        // tap anywhere fast-forwards straight to the settled state through the exact same EndCeremony()
+        // a natural timeout takes, so "let it finish" and "tap through it" can never land in different
+        // end states (AC5). Built once per BuildBoardContent() pass (rebuilt/cleared exactly like
+        // _draftScrim). Every timing constant lives here so retiming later — Lee's own "starting value,
+        // put the timings in one place" note — is a one-line change.
+        private const float CeremonyDuration = 3.0f;
+        private const float CeremonyPreUnlockEnd = CeremonyDuration * 0.12f;      // a: locked column, untouched
+        private const float CeremonyDimEnd = CeremonyDuration * 0.28f;            // b: rest of the board dims back
+        private const float CeremonyCategoryLightEnd = CeremonyDuration * 0.55f;  // c: category lights, label resolves
+        private const float CeremonyChildLightEnd = CeremonyDuration * 0.92f;     // d: children light in sequence
+        private const int CeremonyMaxChildGlows = 6;   // generous cap — no board family has this many children
+
+        private bool _ceremonyActive;
+        private string _ceremonyCategoryId;
+        private float _ceremonyStartUnscaledTime = float.NegativeInfinity;
+        private readonly List<string> _ceremonyChildIds = new List<string>();
+        private Image _ceremonyScrim;                  // stage b: dims every other category back
+        private RectTransform _ceremonyCategoryGlow;
+        private Image _ceremonyCategoryGlowImage;       // stage c: highlight over the lit category's own panel
+        private Text _ceremonyCategoryLabelOverlay;     // stage c: locked placeholder, fades out to reveal the real label beneath
+        private readonly List<Image> _ceremonyChildGlows = new List<Image>();   // stage d: one per child, pooled
+        private Button _ceremonySkipCatcher;            // full-board invisible tap target while a ceremony plays
 
         private bool _open;
         private float _prevTimeScale = 1f;
@@ -202,9 +225,11 @@ namespace MaxWorlds.UI
         /// rather than inferring it through a child's own activeInHierarchy.</summary>
         public GameObject ScreenRoot => _screenRoot != null ? _screenRoot.gameObject : null;
 
-        /// <summary>MV-521: is the just-unlocked-family reveal glow currently showing? — test-only
-        /// access, same idiom as <see cref="IsOpen"/>.</summary>
-        public bool IsRevealActive => _revealGlow != null && _revealGlow.gameObject.activeSelf;
+        /// <summary>MV-605: is the just-unlocked-family reveal ceremony currently playing? — test-only
+        /// access, same idiom as <see cref="IsOpen"/>. Superseded MV-521's identically-named glow-only
+        /// check; kept the same property name since the question a caller asks ("is a reveal up right
+        /// now?") hasn't changed, only what answers it.</summary>
+        public bool IsCeremonyActive => _ceremonyActive;
 
         /// <summary>A built node's root RectTransform by its <c>rig_board.json</c> id — the layout
         /// test's only way in, so it never has to guess GameObject names.</summary>
@@ -360,34 +385,173 @@ namespace MaxWorlds.UI
             return baseAlpha * t;
         }
 
-        /// <summary>MV-521: does the just-unlocked-family reveal glow still have time left, given
-        /// <paramref name="elapsedUnscaledSeconds"/> since it started? Pure so it's pinned by an
-        /// EditMode test without needing <see cref="Update"/> to actually tick — EditMode never runs a
-        /// MonoBehaviour's Update(), same reasoning as <see cref="NodeActionPulseAlpha"/>'s own explicit
-        /// time parameter.</summary>
-        public static bool RevealStillActive(float elapsedUnscaledSeconds) => elapsedUnscaledSeconds < RevealDuration;
+        /// <summary>MV-605 AC4: is <paramref name="categoryId"/>'s family still mid-ceremony — i.e. must
+        /// its nodes read as NOT spendable regardless of what <see cref="IsAbilityNodeSpendable"/> alone
+        /// would say? The family is granted immediately (unchanged since MV-424/521), so this is the
+        /// ONE gate standing between "granted" and "the player can actually spend into it" while the
+        /// reveal is still playing.</summary>
+        private bool IsCeremonySuppressing(string categoryId) =>
+            _ceremonyActive && _ceremonyCategoryId == categoryId;
 
-        /// <summary>Applies the reveal glow's state for a given elapsed unscaled time since it started —
-        /// called every frame from <see cref="Update"/> with the real elapsed time, and callable
-        /// directly (test-only) with a fabricated value, same idiom as <see cref="RevealStillActive"/>,
-        /// so "no reveal object remains active N seconds later" can be asserted without Update() ever
-        /// running.</summary>
-        public void ApplyRevealTiming(float elapsedUnscaledSeconds)
+        /// <summary>Same gate as <see cref="IsCeremonySuppressing"/>, keyed off an ABILITY id instead of
+        /// its category — the two call sites (<see cref="Update"/>'s per-frame pulse,
+        /// <see cref="RefreshAbilityNode"/>'s own spendable computation) only ever have the ability id to
+        /// hand, same reasoning as the existing <see cref="CategoryUnlockedForAbility"/> helper.</summary>
+        private bool IsCeremonySuppressingAbility(string abilityId)
         {
-            if (_revealGlow == null || !_revealGlow.gameObject.activeSelf) return;
-            if (!RevealStillActive(elapsedUnscaledSeconds))
+            if (!_ceremonyActive) return false;
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Id == abilityId) return ab.Category == _ceremonyCategoryId;
+            return false;
+        }
+
+        /// <summary>Starts the reveal ceremony over <paramref name="categoryId"/>'s own panel — staged,
+        /// skippable, ~<see cref="CeremonyDuration"/>s (see the field block's own doc comment for the
+        /// full stage breakdown). A no-op if the category has no built panel (nothing to highlight).</summary>
+        private void StartCeremony(string categoryId)
+        {
+            if (_ceremonyScrim == null || string.IsNullOrEmpty(categoryId)) return;
+
+            _ceremonyActive = true;
+            _ceremonyCategoryId = categoryId;
+            _ceremonyStartUnscaledTime = Time.unscaledTime;
+
+            // d: "children light in sequence, top row down" — RigBoardLayout's own Y is image-like
+            // (top of board = smallest Y; see BuildNodeShell's own `anchoredPosition = (x, -y)`), so
+            // ascending Y is top-to-bottom on screen.
+            _ceremonyChildIds.Clear();
+            var children = new List<RigAbilityLayout>();
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Category == categoryId) children.Add(ab);
+            children.Sort((a, b) => a.Y.CompareTo(b.Y));
+            foreach (var ab in children) _ceremonyChildIds.Add(ab.Id);
+
+            if (_ceremonySkipCatcher != null) _ceremonySkipCatcher.gameObject.SetActive(true);
+            if (_ceremonyScrim != null) _ceremonyScrim.gameObject.SetActive(true);   // b's dim fade needs the scrim actually on to show
+            ApplyCeremonyTiming(0f);
+            Refresh();   // AC4: the newly-granted family must render inert until IsCeremonySuppressing clears
+        }
+
+        /// <summary>Applies the ceremony's staged visuals for a given elapsed unscaled time since it
+        /// started — called every frame from <see cref="Update"/> with the real elapsed time, and
+        /// callable directly (test-only) with a fabricated value, same idiom the old MV-521 reveal glow
+        /// established (<c>ApplyRevealTiming</c>/<c>RevealStillActive</c>), so "the ceremony has ended N
+        /// seconds later" can be asserted without <see cref="Update"/> ever running.</summary>
+        public void ApplyCeremonyTiming(float elapsedUnscaledSeconds)
+        {
+            if (!_ceremonyActive) return;
+            if (elapsedUnscaledSeconds >= CeremonyDuration) { EndCeremony(); return; }
+
+            // b: the rest of the board dims back.
+            float dimT = Mathf.Clamp01(Mathf.InverseLerp(CeremonyPreUnlockEnd, CeremonyDimEnd, elapsedUnscaledSeconds));
+            if (_ceremonyScrim != null)
             {
-                _revealGlow.gameObject.SetActive(false);
-                return;
+                var c = _ceremonyScrim.color;
+                c.a = 0.72f * dimT;
+                _ceremonyScrim.color = c;
             }
 
-            float t = Mathf.Clamp01(elapsedUnscaledSeconds / RevealDuration);
-            float pulse = Mathf.Sin(t * Mathf.PI);   // rises then fades back to 0 by the end — never lingers at full
-            var c = _revealGlowImage.color;
-            c.a = pulse * 0.65f;
-            _revealGlowImage.color = c;
-            float scale = 1f + 0.08f * pulse;
-            _revealGlow.localScale = new Vector3(scale, scale, 1f);
+            // c: the category node's own highlight glow, and its label resolving from a locked
+            // placeholder to the real family name.
+            float catT = Mathf.Clamp01(Mathf.InverseLerp(CeremonyDimEnd, CeremonyCategoryLightEnd, elapsedUnscaledSeconds));
+            if (_ceremonyCategoryGlow != null && _categoryPanels.TryGetValue(_ceremonyCategoryId, out var panel))
+            {
+                RectTransform panelRect = panel.rectTransform;
+                _ceremonyCategoryGlow.anchorMin = panelRect.anchorMin;
+                _ceremonyCategoryGlow.anchorMax = panelRect.anchorMax;
+                _ceremonyCategoryGlow.pivot = panelRect.pivot;
+                _ceremonyCategoryGlow.sizeDelta = panelRect.sizeDelta;
+                _ceremonyCategoryGlow.anchoredPosition = panelRect.anchoredPosition;
+                _ceremonyCategoryGlow.SetAsLastSibling();
+                _ceremonyCategoryGlow.gameObject.SetActive(catT > 0f);
+
+                Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(_ceremonyCategoryId));
+                _ceremonyCategoryGlowImage.color = new Color(family.r, family.g, family.b, 0.55f * catT);
+            }
+            if (_ceremonyCategoryLabelOverlay != null && _categoryNodes.TryGetValue(_ceremonyCategoryId, out var catVisual))
+            {
+                bool resolved = elapsedUnscaledSeconds >= CeremonyCategoryLightEnd;
+                RectTransform realLabelRect = catVisual.Label.rectTransform;
+                RectTransform overlayRect = _ceremonyCategoryLabelOverlay.rectTransform;
+                overlayRect.SetParent(realLabelRect.parent, false);
+                overlayRect.anchorMin = realLabelRect.anchorMin;
+                overlayRect.anchorMax = realLabelRect.anchorMax;
+                overlayRect.pivot = realLabelRect.pivot;
+                overlayRect.sizeDelta = realLabelRect.sizeDelta;
+                overlayRect.anchoredPosition = realLabelRect.anchoredPosition;
+                overlayRect.SetAsLastSibling();
+                _ceremonyCategoryLabelOverlay.gameObject.SetActive(!resolved);
+                var oc = _ceremonyCategoryLabelOverlay.color;
+                oc.a = 1f - catT;
+                _ceremonyCategoryLabelOverlay.color = oc;
+            }
+
+            // d: child nodes light in sequence, one short beat apart.
+            if (_ceremonyChildIds.Count > 0)
+            {
+                float span = Mathf.Max(0.01f, CeremonyChildLightEnd - CeremonyCategoryLightEnd);
+                float perChild = span / _ceremonyChildIds.Count;
+                Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(_ceremonyCategoryId));
+                for (int i = 0; i < _ceremonyChildIds.Count && i < _ceremonyChildGlows.Count; i++)
+                {
+                    var img = _ceremonyChildGlows[i];
+                    if (!_abilityNodes.TryGetValue(_ceremonyChildIds[i], out var childVisual)) { img.gameObject.SetActive(false); continue; }
+
+                    float childStart = CeremonyCategoryLightEnd + perChild * i;
+                    float t = Mathf.Clamp01(Mathf.InverseLerp(childStart, childStart + perChild * 0.6f, elapsedUnscaledSeconds));
+
+                    RectTransform nodeRect = childVisual.Root;
+                    var glowRect = img.rectTransform;
+                    glowRect.SetParent(nodeRect.parent, false);
+                    glowRect.anchorMin = nodeRect.anchorMin;
+                    glowRect.anchorMax = nodeRect.anchorMax;
+                    glowRect.pivot = nodeRect.pivot;
+                    glowRect.anchoredPosition = nodeRect.anchoredPosition;
+                    glowRect.sizeDelta = nodeRect.sizeDelta * 1.3f;
+                    glowRect.SetAsLastSibling();
+
+                    img.gameObject.SetActive(t > 0f);
+                    img.color = new Color(family.r, family.g, family.b, 0.6f * t);
+                }
+            }
+        }
+
+        /// <summary>Ends the ceremony — the SAME code path whether it ran out its full
+        /// <see cref="CeremonyDuration"/> (<see cref="Update"/>/<see cref="ApplyCeremonyTiming"/> calling
+        /// this once elapsed time runs out) or the player tapped to skip it
+        /// (<see cref="_ceremonySkipCatcher"/>'s own listener), so "let it finish" and "tap through it"
+        /// (AC5) can never land in different end states. AC7/8: chains straight into the next banked
+        /// module, back to back, within this same rig visit — never from <see cref="Close"/>, which
+        /// cancels the visuals instead (see <see cref="CancelCeremony"/>) and leaves anything still
+        /// pending banked for the player's next open.</summary>
+        private void EndCeremony()
+        {
+            if (!_ceremonyActive) return;
+            CancelCeremony();
+            Refresh();   // the suppression this ceremony was applying is gone now — spendable/pulse read live
+
+            if (_open && PendingMorphingModule.HasPending)
+                OpenMorphingModuleDraft(PendingMorphingModule.Take());
+        }
+
+        /// <summary>Clears the ceremony's own state and hides every visual it was driving, without
+        /// granting anything (the family was already granted at <see cref="StartCeremony"/> time — see
+        /// its callers) and without chaining into whatever else might still be pending — that's
+        /// <see cref="EndCeremony"/>'s job, not this one's. Used both by a normal completion and by
+        /// <see cref="Close"/> catching one mid-flight (MV-605 AC7's "does not replay" — a cancelled
+        /// ceremony leaves nothing of itself behind to resume).</summary>
+        private void CancelCeremony()
+        {
+            if (!_ceremonyActive) return;
+            _ceremonyActive = false;
+            _ceremonyCategoryId = null;
+            _ceremonyChildIds.Clear();
+
+            if (_ceremonyScrim != null) _ceremonyScrim.gameObject.SetActive(false);
+            if (_ceremonyCategoryGlow != null) _ceremonyCategoryGlow.gameObject.SetActive(false);
+            if (_ceremonyCategoryLabelOverlay != null) _ceremonyCategoryLabelOverlay.gameObject.SetActive(false);
+            if (_ceremonySkipCatcher != null) _ceremonySkipCatcher.gameObject.SetActive(false);
+            foreach (var img in _ceremonyChildGlows) img.gameObject.SetActive(false);
         }
 
         /// <summary>MV-433: the board's scale-to-fit factor for a given screen aspect ratio (width /
@@ -513,10 +677,10 @@ namespace MaxWorlds.UI
                 ApplyBoardScale();
             }
 
-            // MV-521: the just-unlocked-family reveal — self-terminating, so this only ever does
-            // anything while _revealGlow is actually showing.
-            if (_revealGlow != null && _revealGlow.gameObject.activeSelf)
-                ApplyRevealTiming(Time.unscaledTime - _revealStartUnscaledTime);
+            // MV-605: the just-unlocked-family reveal ceremony — self-terminating, so this only ever
+            // does anything while one is actually playing.
+            if (_ceremonyActive)
+                ApplyCeremonyTiming(Time.unscaledTime - _ceremonyStartUnscaledTime);
 
             // The draftable-capability dashed ring pulses (ticket: "Left to you — the pulse rate on a
             // draftable capability"). Chosen: same family the SUPERCELL glow uses, twice as slow, so the
@@ -534,8 +698,9 @@ namespace MaxWorlds.UI
                 // the hex body, AND (in RefreshAbilityNode) Button.interactable. MV-470's own
                 // CellSpend.IsCellActionAffordable read cells alone; IsAbilityNodeSpendable is the exact
                 // gate the button itself is set from, so a node can never again pulse/invite a tap it
-                // then refuses.
-                bool spendable = IsAbilityNodeSpendable(kv.Key, cellsBanked);
+                // then refuses. MV-605 AC4: a node whose family is still mid-ceremony must stay inert
+                // too — the same suppression RefreshAbilityNode's own Button.interactable applies.
+                bool spendable = IsAbilityNodeSpendable(kv.Key, cellsBanked) && !IsCeremonySuppressingAbility(kv.Key);
 
                 if (v.OuterRing != null && v.OuterRing.gameObject.activeSelf)
                 {
@@ -615,10 +780,10 @@ namespace MaxWorlds.UI
             _open = false;
             _draftActive = false;
             _draftCandidateIds.Clear();
-            // MV-521: a reveal caught mid-flight by the player closing early must not linger — "do not
-            // leave any persistent state behind" applies just as much to an early exit as to letting it
-            // play out.
-            if (_revealGlow != null) _revealGlow.gameObject.SetActive(false);
+            // MV-605 AC7: a ceremony caught mid-flight by the player closing early must not linger, must
+            // not replay on the next open, and must not grant anything a second time — CancelCeremony
+            // only ever clears/hides; the grant itself already happened at StartCeremony time.
+            CancelCeremony();
             Time.timeScale = _prevTimeScale;
             ModalFrameRateGate.Exit();
             _screenRoot.gameObject.SetActive(false);
@@ -662,7 +827,7 @@ namespace MaxWorlds.UI
 
                 Refresh();
                 _screenRoot.gameObject.SetActive(true);
-                StartCategoryReveal(categoryId);
+                StartCeremony(categoryId);
                 return;
             }
 
@@ -1003,7 +1168,9 @@ namespace MaxWorlds.UI
             // shows one, including family-locked and parent-gated nodes. Only owned-and-maxed has
             // nothing left to buy.
             bool hasCostToShow = !(owned && maxed);
-            bool spendable = IsAbilityNodeSpendable(ab.Id, cellsBanked);
+            // MV-605 AC4: a family still mid-ceremony must not be spendable yet, even though the grant
+            // itself already landed — see IsCeremonySuppressing's own doc comment.
+            bool spendable = IsAbilityNodeSpendable(ab.Id, cellsBanked) && !IsCeremonySuppressing(ab.Category);
             // MV-470: whether CELLS alone would pay for this node's action right now — drives the
             // afford-dot (CapMarker) and, via Update(), whether the dashed ring pulses live or sits inert.
             bool cellAffordable = CellSpend.IsCellActionAffordable(ab.Id, cellsBanked);
@@ -1301,7 +1468,7 @@ namespace MaxWorlds.UI
             _draftActive = false;
             _draftCandidateIds.Clear();
 
-            StartCategoryReveal(categoryId);
+            StartCeremony(categoryId);
 
             // OpenMorphingModuleDraft already does exactly "arm the next draft in place" when the screen
             // is already open (its own !_open guard skips the pause/timescale work) — reusing it here is
@@ -1309,32 +1476,6 @@ namespace MaxWorlds.UI
             if (PendingMorphingModule.HasPending) OpenMorphingModuleDraft(PendingMorphingModule.Take());
 
             Refresh();
-        }
-
-        /// <summary>MV-521: starts the just-unlocked-family reveal over <paramref name="categoryId"/>'s
-        /// own panel — a short, self-terminating glow (<see cref="ApplyRevealTiming"/>) drawing the eye
-        /// to the column that just lit, since staying on the board is only worth it if the player
-        /// actually notices what changed. A no-op if the category has no built panel (nothing to
-        /// highlight).</summary>
-        private void StartCategoryReveal(string categoryId)
-        {
-            if (_revealGlow == null || string.IsNullOrEmpty(categoryId)) return;
-            if (!_categoryPanels.TryGetValue(categoryId, out var panel)) return;
-
-            RectTransform panelRect = panel.rectTransform;
-            _revealGlow.anchorMin = panelRect.anchorMin;
-            _revealGlow.anchorMax = panelRect.anchorMax;
-            _revealGlow.pivot = panelRect.pivot;
-            _revealGlow.sizeDelta = panelRect.sizeDelta;
-            _revealGlow.anchoredPosition = panelRect.anchoredPosition;
-            _revealGlow.SetAsLastSibling();
-            _revealGlow.localScale = Vector3.one;
-
-            Color family = RigBoardLayout.Colour(RigBoardLayout.CategoryFamily(categoryId));
-            _revealGlowImage.color = new Color(family.r, family.g, family.b, 0f);
-
-            _revealStartUnscaledTime = Time.unscaledTime;
-            _revealGlow.gameObject.SetActive(true);
         }
 
         /// <summary>MV-458: e_cel is no longer special-cased — tapping the CELLS chip is just a
@@ -1523,7 +1664,7 @@ namespace MaxWorlds.UI
 
             BuildDraftScrim(_nodeParent);   // MV-424: last board child so it dims everything built above,
             BuildDraftBand(_nodeParent);    // then the draft nodes come back on top of it (RefreshMorphingModuleDraft)
-            BuildRevealGlow(_nodeParent);   // MV-521: built last too, so it renders above the panel it targets
+            BuildCeremonyVisuals(_nodeParent);   // MV-605: built last too, so it renders above everything else
         }
 
         /// <summary>Standard mode's node parent (MV-472, current spec, defect 3): a masked vertical
@@ -1664,9 +1805,16 @@ namespace MaxWorlds.UI
             _draftBandTitle = null;
             _draftBandSubtitle = null;
             _draftBandReason = null;
-            _revealGlow = null;
-            _revealGlowImage = null;
-            _revealStartUnscaledTime = float.NegativeInfinity;
+            _ceremonyActive = false;
+            _ceremonyCategoryId = null;
+            _ceremonyChildIds.Clear();
+            _ceremonyStartUnscaledTime = float.NegativeInfinity;
+            _ceremonyScrim = null;
+            _ceremonyCategoryGlow = null;
+            _ceremonyCategoryGlowImage = null;
+            _ceremonyCategoryLabelOverlay = null;
+            _ceremonyChildGlows.Clear();
+            _ceremonySkipCatcher = null;
         }
 
         /// <summary>The five tinted backdrop columns behind each category's tree (MV-423.png) — one
@@ -1884,18 +2032,54 @@ namespace MaxWorlds.UI
             band.gameObject.SetActive(false);
         }
 
-        /// <summary>MV-521: the just-unlocked-family reveal glow's static shell — one reusable
-        /// soft-edged panel-sized overlay, built inactive and repositioned/retinted over whichever
-        /// category <see cref="StartCategoryReveal"/> targets. Raycast off: unlike the draft scrim, this
-        /// must never block a tap.</summary>
-        private void BuildRevealGlow(RectTransform boardRoot)
+        /// <summary>MV-605: the reveal ceremony's static shell, all built inactive and repositioned/
+        /// retinted by <see cref="StartCeremony"/>/<see cref="ApplyCeremonyTiming"/> — a full-board dim
+        /// scrim (stage b), a reusable soft-edged panel-sized glow over the lit category (stage c, same
+        /// idiom MV-521's own single reveal glow used), a locked-placeholder label overlay that fades to
+        /// reveal the real name beneath it (also stage c), a small pool of per-child highlight chips
+        /// (stage d), and a full-board invisible tap target that skips straight to the settled state.
+        /// Raycast off on everything except the skip catcher — the decoration itself must never block a
+        /// tap.</summary>
+        private void BuildCeremonyVisuals(RectTransform boardRoot)
         {
-            var glow = AddImage(boardRoot, HudTextures.RoundedBox(64, 0.08f), Color.clear, "Reveal Glow");
+            var scrim = AddImage(boardRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Scrim");
+            Stretch(scrim.rectTransform);
+            scrim.raycastTarget = false;
+            scrim.gameObject.SetActive(false);
+            _ceremonyScrim = scrim;
+
+            var glow = AddImage(boardRoot, HudTextures.RoundedBox(64, 0.08f), Color.clear, "Ceremony Category Glow");
             glow.type = Image.Type.Sliced;   // the panel it's sized to match is almost never a 64px square
             glow.raycastTarget = false;
             glow.gameObject.SetActive(false);
-            _revealGlow = glow.rectTransform;
-            _revealGlowImage = glow;
+            _ceremonyCategoryGlow = glow.rectTransform;
+            _ceremonyCategoryGlowImage = glow;
+
+            var labelOverlay = AddText(boardRoot, 30, TextColor, TextAnchor.MiddleCenter);
+            labelOverlay.gameObject.name = "Ceremony Category Label";
+            labelOverlay.text = "? ? ?";
+            labelOverlay.raycastTarget = false;
+            labelOverlay.gameObject.SetActive(false);
+            _ceremonyCategoryLabelOverlay = labelOverlay;
+
+            _ceremonyChildGlows.Clear();
+            for (int i = 0; i < CeremonyMaxChildGlows; i++)
+            {
+                var childGlow = AddImage(boardRoot, HudTextures.RoundedBox(64, 0.5f), Color.clear, $"Ceremony Child Glow {i}");
+                childGlow.type = Image.Type.Sliced;
+                childGlow.raycastTarget = false;
+                childGlow.gameObject.SetActive(false);
+                _ceremonyChildGlows.Add(childGlow);
+            }
+
+            var skip = AddImage(boardRoot, HudTextures.Solid(), new Color(0f, 0f, 0f, 0f), "Ceremony Skip Catcher");
+            Stretch(skip.rectTransform);
+            skip.raycastTarget = true;
+            var skipButton = skip.gameObject.AddComponent<Button>();
+            skipButton.transition = Selectable.Transition.None;
+            skipButton.onClick.AddListener(EndCeremony);
+            skip.gameObject.SetActive(false);
+            _ceremonySkipCatcher = skipButton;
         }
 
         /// <summary>FORGE row — divider, caption, and the four fusion diamonds. MV-423 (2/5) placed and

@@ -137,7 +137,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(_screen.DraftCandidateIds, Is.Empty, "AC1: no leftover candidates once a draft resolves");
             Assert.That(RigState.IsCategoryUnlocked(revealedCategory), Is.True, "fixture: the taken category must be granted");
             Assert.That(RigState.IsCategoryUnlocked(leftBehindCategory), Is.False, "fixture: the untaken category must stay locked");
-            Assert.That(_screen.IsRevealActive, Is.True, "fixture (feeds AC5): a reveal must start when a pick resolves");
+            Assert.That(_screen.IsCeremonyActive, Is.True, "fixture (feeds AC5): a reveal ceremony must start when a pick resolves");
 
             // ---------------------------------------------------------------- AC2: no longer family-locked
             // MV-538: the category's own panel border alpha now carries ONLY "lit" (RigState.IsCategoryUnlocked,
@@ -176,10 +176,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.Level("s_bal"), Is.EqualTo(levelAfterGrant), "AC4: a second tap must not raise the level again");
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsAfterGrant), "AC4: a second tap must not touch the wallet either");
 
-            // ---------------------------------------------------------------- AC5: the reveal is gone well before 1.5s
-            Assert.That(_screen.IsRevealActive, Is.True, "fixture: the AC3 picks above must have re-started a reveal");
-            _screen.ApplyRevealTiming(1.5f);
-            Assert.That(_screen.IsRevealActive, Is.False, "AC5: no reveal object may remain active 1.5s after a draft pick");
+            // ---------------------------------------------------------------- AC5: the ceremony is gone once its own duration has passed
+            // MV-605 supersedes MV-521's own ~0.6s reveal glow with a staged ~3s ceremony — this used to
+            // assert nothing remained 1.5s later (trivially true for a 0.6s glow); now it asserts the
+            // ceremony HAS ended once its own (longer) duration has elapsed, same idiom, new timescale.
+            Assert.That(_screen.IsCeremonyActive, Is.True, "fixture: the AC3 picks above must have re-started a ceremony");
+            _screen.ApplyCeremonyTiming(3.5f);
+            Assert.That(_screen.IsCeremonyActive, Is.False, "AC5: no ceremony may remain active well after its own duration has elapsed");
         }
 
         // ---------------------------------------------------------------- 0 candidates: no screen; 1: grants AND reveals
@@ -210,7 +213,148 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.That(RigState.Level("e_cel"), Is.EqualTo(1), "the sole candidate must be granted outright");
             Assert.That(_screen.IsOpen, Is.True, "MV-595: a single candidate must open THE RIG, never grant silently");
-            Assert.That(_screen.IsRevealActive, Is.True, "MV-595: the newly granted family's reveal must play");
+            Assert.That(_screen.IsCeremonyActive, Is.True, "MV-595: the newly granted family's reveal ceremony must play");
+        }
+
+        // ---------------------------------------------------------------- MV-605: the reveal ceremony
+
+        /// <summary>MV-605, one test walking every AC in order (CC_AUTONOMY's own "at most one new test
+        /// per ticket" — this is that one, same convention <c>TakingADraftPickStaysOpenAndRevealsTheFamily_MV521</c>
+        /// already used for MV-521). Covers AC4-8 end to end: spend suppressed mid-ceremony but not
+        /// before/after (AC4), a skipped ceremony and a naturally-timed-out one landing in the identical
+        /// settled state, proven by direct comparison rather than just "it ended" (AC5), the pending
+        /// queue clearing and never replaying (AC6), a MID-ceremony close neither replaying nor granting
+        /// twice — pinned on a literal <c>RigState.Level(...) == 1</c>, the AC's own wording (AC7), and
+        /// two banked modules both surviving and chaining ceremonies back to back in one visit (AC8).
+        /// Proven to fail before this ticket: <c>PendingMorphingModule.PendingCount</c> and
+        /// <c>WeaponsScreen.IsCeremonyActive</c>/<c>ApplyCeremonyTiming</c> did not exist on the pre-605
+        /// tree (a compile failure, the most decisive proof available) — and even reasoning past that,
+        /// the old <c>PendingMorphingModule.Set</c> OVERWROTE its single slot (AC7/8's own "must not
+        /// silently drop one" defect) and the old grant path made a node interactable the instant
+        /// <c>OpenMorphingModuleDraft</c>/<c>ResolveDraftPick</c> granted it, with no ceremony window at
+        /// all to gate spend during (AC4's own defect).</summary>
+        [Test]
+        public void RevealCeremonyGatesSpendUntilSettleAndChainsTwoBankedModulesBackToBack_MV605()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PendingMorphingModule.Reset();
+            PickupWallet.SetPowerCells(50);   // comfortably affords every unlock this test touches
+
+            var locked = new System.Collections.Generic.List<string>(RigState.LockedCategoryIds());
+            Assert.That(locked.Count, Is.GreaterThanOrEqualTo(2), "fixture: needs 2+ locked categories to bank two modules against");
+            string firstCategory = locked[0];
+            string secondCategory = locked[1];
+
+            RigAbilityLayout firstRoot = null, secondRoot = null;
+            foreach (var ab in RigBoardLayout.Abilities)
+            {
+                if (ab.Category == firstCategory && string.IsNullOrEmpty(ab.Parent)) firstRoot = ab;
+                if (ab.Category == secondCategory && string.IsNullOrEmpty(ab.Parent)) secondRoot = ab;
+            }
+            Assert.That(firstRoot, Is.Not.Null, "fixture: the first category needs a root ability");
+            Assert.That(secondRoot, Is.Not.Null, "fixture: the second category needs a root ability");
+
+            // ---------------------------------------------------------------- AC7/8: two banked modules must both survive
+            PendingMorphingModule.Set(new[] { firstCategory });
+            PendingMorphingModule.Set(new[] { secondCategory });
+            Assert.That(PendingMorphingModule.PendingCount, Is.EqualTo(2), "AC7: a second banked module must not silently overwrite the first");
+
+            _screen.Open();   // consumes the OLDEST banked draw and starts its ceremony
+
+            Assert.That(_screen.IsOpen, Is.True);
+            Assert.That(_screen.IsCeremonyActive, Is.True, "AC4: opening with a module pending must start a ceremony");
+            Assert.That(RigState.IsCategoryUnlocked(firstCategory), Is.True, "the family is still granted immediately, same as MV-521");
+
+            // ---------------------------------------------------------------- AC4: granted != spendable while it plays
+            Assert.That(WeaponsScreen.IsAbilityNodeSpendable(firstRoot.Id, PickupWallet.PowerCells), Is.True,
+                "fixture: the pure affordability predicate alone must already say yes — proves the gate below is the ceremony, not cost");
+            var firstButton = _screen.BoardNode(firstRoot.Id).GetComponentInChildren<Button>();
+            Assert.That(firstButton.interactable, Is.False, "AC4: the family must not be spendable until the ceremony settles");
+
+            _screen.ApplyCeremonyTiming(0.5f);
+            Assert.That(_screen.IsCeremonyActive, Is.True, "AC4: sampled mid-ceremony (0.5s), it must still be playing");
+            Assert.That(firstButton.interactable, Is.False, "AC4: still not spendable mid-ceremony");
+
+            // ---------------------------------------------------------------- AC5: skip lands in the SAME settled state a natural finish would
+            Button skipCatcher = null;
+            foreach (var b in _screen.ScreenRoot.GetComponentsInChildren<Button>(true))
+                if (b.gameObject.name == "Ceremony Skip Catcher") { skipCatcher = b; break; }
+            Assert.That(skipCatcher, Is.Not.Null, "fixture: the ceremony must build its own skip catcher");
+            skipCatcher.onClick.Invoke();
+
+            // AC5's own settled state, proven directly on the family the skip just resolved — NOT
+            // IsCeremonyActive itself, which AC7/8 immediately flips true again by chaining straight into
+            // the second banked module's own ceremony (see below); skip therefore lands in the same
+            // settled state a natural finish would (spendable), it just doesn't imply the SCREEN goes idle
+            // when something else is still queued.
+            Assert.That(firstButton.interactable, Is.True, "AC5: skipping must reach the exact same settled (spendable) state a natural finish would");
+
+            // ---------------------------------------------------------------- AC7/8: the second banked module chains in, back to back
+            Assert.That(PendingMorphingModule.HasPending, Is.False, "AC6: consumed once taken — nothing left banked");
+            Assert.That(_screen.IsCeremonyActive, Is.True, "AC7/8: the second module's own ceremony must start immediately, in the same rig visit");
+            Assert.That(RigState.IsCategoryUnlocked(secondCategory), Is.True, "AC8: the second family must also end up unlocked");
+            var secondButton = _screen.BoardNode(secondRoot.Id).GetComponentInChildren<Button>();
+            Assert.That(secondButton.interactable, Is.False, "AC4 again: the SECOND family must not be spendable until ITS ceremony settles either");
+
+            skipCatcher.onClick.Invoke();   // same catcher GameObject, reused for the second ceremony
+
+            Assert.That(_screen.IsCeremonyActive, Is.False, "AC6: with nothing left pending, no further ceremony should start");
+            Assert.That(secondButton.interactable, Is.True, "AC8: both families must end up spendable, not just unlocked");
+
+            // ---------------------------------------------------------------- AC6: reopening plays no ceremony
+            _screen.Close();
+            _screen.Open();
+            Assert.That(_screen.IsCeremonyActive, Is.False, "AC6: reopening THE RIG with nothing pending must not replay a ceremony");
+
+            // ---------------------------------------------------------------- AC5: a natural finish and a skipped finish reach the IDENTICAL settled state
+            // Run 1: the SAME category as above (locked again after RigState.Reset), let out to its own
+            // full CeremonyDuration naturally instead of skipped.
+            RigState.Reset();
+            PendingMorphingModule.Reset();
+            PendingMorphingModule.Set(new[] { firstCategory });
+            _screen.Close();
+            _screen.Open();
+            _screen.ApplyCeremonyTiming(10f);   // well past CeremonyDuration — the timeout branch itself ends it
+            bool naturalCeremonyActive = _screen.IsCeremonyActive;
+            bool naturalSpendable = _screen.BoardNode(firstRoot.Id).GetComponentInChildren<Button>().interactable;
+            _screen.Close();
+
+            // Run 2: an identical starting state, resolved by a tap instead of waiting it out.
+            RigState.Reset();
+            PendingMorphingModule.Reset();
+            PendingMorphingModule.Set(new[] { firstCategory });
+            _screen.Open();
+            skipCatcher.onClick.Invoke();
+            bool skippedCeremonyActive = _screen.IsCeremonyActive;
+            bool skippedSpendable = _screen.BoardNode(firstRoot.Id).GetComponentInChildren<Button>().interactable;
+
+            Assert.That(skippedSpendable, Is.True, "fixture: the skip run must actually reach the settled (spendable) state, not just agree while broken");
+            Assert.That(skippedCeremonyActive, Is.EqualTo(naturalCeremonyActive), "AC5: skip must leave IsCeremonyActive in EXACTLY the state a natural finish would");
+            Assert.That(skippedSpendable, Is.EqualTo(naturalSpendable), "AC5: skip must leave the family exactly as spendable as a natural finish would — the two end states must be equal, not just both 'ended'");
+
+            // ---------------------------------------------------------------- AC7: closing MID-ceremony must not replay it or grant the family twice
+            // An ability-id candidate (not a category id) so there's a literal Level() to pin at exactly
+            // 1, matching the AC's own wording — routes through ResolveDraftPick, the ceremony's other
+            // call site (StartCeremony is shared by both, see WeaponsScreen.cs).
+            RigState.Reset();
+            PickupWallet.Reset();
+            PendingMorphingModule.Reset();
+            UnlockAllCategories();   // this scenario is about ceremony/close mechanics, not the category-lock gate — same convention this file's own SetUp uses
+            _screen.Close();
+
+            _screen.OpenMorphingModuleDraft(new[] { "u_sen", "m_spd" });
+            _screen.BoardNode("u_sen").GetComponentInChildren<Button>().onClick.Invoke();
+
+            Assert.That(_screen.IsCeremonyActive, Is.True, "fixture: needs a ceremony actually playing to close mid-flight");
+            Assert.That(RigState.Level("u_sen"), Is.EqualTo(1), "fixture: the family is still granted immediately, same as before this ticket");
+
+            _screen.Close();   // MID-ceremony close
+            Assert.That(RigState.Level("u_sen"), Is.EqualTo(1), "AC7: closing mid-ceremony must not grant the family a second time");
+
+            _screen.Open();   // nothing pending — an ordinary reopen
+            Assert.That(_screen.IsCeremonyActive, Is.False, "AC7: closing mid-ceremony must not replay it on the next open");
+            Assert.That(RigState.Level("u_sen"), Is.EqualTo(1), "AC7: reopening must not grant the family a second time either");
         }
 
         // ---------------------------------------------------------------- MV-425: 2-3 candidates wait, not force-open

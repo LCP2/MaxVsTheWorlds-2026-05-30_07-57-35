@@ -340,23 +340,17 @@ namespace MaxWorlds.Pickups
                     break;
                 case PickupKind.Device:
                     // MV-424 drew THE RIG's candidate pool and routed straight to the draft outcome on
-                    // walk-over. MV-425 kept the 0-candidate outcome instant (nothing to show) but stops
-                    // 2-3 candidates from force-opening the board mid-fight — that pool banks in
-                    // PendingMorphingModule and waits for the player to tap WEAPONS on their own
-                    // schedule (see that class's doc comment). MV-595: a shed now draws exactly the next
-                    // locked CATEGORY id in board order (never 2+), so the PendingMorphingModule branch
-                    // below is effectively unreachable from here today — it stays live for the
-                    // node-level draft (RigDraft.DrawCandidates), which still samples up to 3.
+                    // walk-over. MV-425 stopped 2-3 candidates from force-opening the board mid-fight —
+                    // that pool banks in PendingMorphingModule and waits for the player to tap WEAPONS on
+                    // their own schedule (see that class's doc comment). MV-605: the 0/1-candidate
+                    // auto-open branch this used to keep for "nothing to show/pick between" is gone too —
+                    // MV-595 made a shed's own draw always exactly one locked CATEGORY id, so that branch
+                    // had quietly become the ONLY path a shed pickup ever took, yanking the player into
+                    // THE RIG every single time. Collecting a module now only ever banks it, unconditionally
+                    // — the flash on the RIG mark is the invitation; the reveal is a ceremony that plays
+                    // when the player opens THE RIG themselves, not a method this file calls directly.
                     var candidates = RigDraft.DrawCandidateCategories();
-                    if (candidates.Length <= 1)
-                    {
-                        var rig = FindFirstObjectByType<WeaponsScreen>();
-                        if (rig != null) rig.OpenMorphingModuleDraft(candidates);
-                    }
-                    else
-                    {
-                        PendingMorphingModule.Set(candidates);
-                    }
+                    PendingMorphingModule.Set(candidates);
                     HudSignals.EmitPickup(p.transform.position, "MORPHING MODULE",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
