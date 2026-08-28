@@ -62,7 +62,7 @@ namespace MaxWorlds.Bosses
 
         /// <summary>Seconds alive before the spawn level steps up. Level = 1 + floor(aliveSeconds /
         /// this), capped at <see cref="MaxSpawnLevel"/>.</summary>
-        public const float SpawnLevelInterval = 30f;
+        public const float SpawnLevelInterval = 60f;
 
         /// <summary>The ceiling the spawn level climbs to — L4 draws from the whole roster.</summary>
         public const int MaxSpawnLevel = 4;

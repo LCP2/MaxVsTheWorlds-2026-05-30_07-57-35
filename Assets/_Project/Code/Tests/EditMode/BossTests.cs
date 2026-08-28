@@ -208,19 +208,19 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>
         /// MV-588's whole spec in one parameterized test: ticking a woken boss's brain, the spawn level
-        /// escalates purely by seconds alive (1 + floor(aliveSeconds / 30), capped at 4) — never by
-        /// anything the player does — each level's brood volley composition draws only from that
-        /// level's own set, and the brain's public surface no longer carries anything named "Charge" at
-        /// all (not merely unreachable — gone).
+        /// escalates purely by seconds alive (1 + floor(aliveSeconds / 60), capped at 4 — MV-614 halved
+        /// the climb rate) — never by anything the player does — each level's brood volley composition
+        /// draws only from that level's own set, and the brain's public surface no longer carries
+        /// anything named "Charge" at all (not merely unreachable — gone).
         /// </summary>
         [TestCase(0f, 1)]
-        [TestCase(29f, 1)]
-        [TestCase(30f, 2)]
-        [TestCase(59f, 2)]
-        [TestCase(60f, 3)]
-        [TestCase(89f, 3)]
-        [TestCase(90f, 4)]
-        [TestCase(150f, 4)]   // past the cap — must hold at 4, not keep climbing
+        [TestCase(59f, 1)]
+        [TestCase(60f, 2)]
+        [TestCase(119f, 2)]
+        [TestCase(120f, 3)]
+        [TestCase(179f, 3)]
+        [TestCase(180f, 4)]
+        [TestCase(300f, 4)]   // past the cap — must hold at 4, not keep climbing
         public void Brain_SpawnLevelEscalatesByTimeAlive_CompositionStaysWithinLevel_AndTheChargeIsGone(
             float aliveSeconds, int expectedLevel)
         {
