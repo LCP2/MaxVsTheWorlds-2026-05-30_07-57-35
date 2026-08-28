@@ -1,7 +1,9 @@
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -420,6 +422,73 @@ namespace MaxWorlds.Tests.EditMode
                 "the trail must draw over the wedge it's tied to, or it reads as buried under it");
             Assert.Less(WaterVfx.GroundTrailLift, GroundAnchorTuning.ShadowLift,
                 "the trail must never be able to cover an actor's contact shadow, anchor ring, or telegraph");
+        }
+
+        // --- MV-617: the visible stream must still land on the outline after a nozzle/track refit ---
+
+        // Awake/OnEnable aren't reliably invoked for AddComponent outside Play mode (confirmed
+        // empirically for AreaGate — see WaterBlasterGateDamageTests's MV-386 note) — drive Awake
+        // directly, then call the same public RefreshUpgrades() a real RCDA/nozzle spend calls
+        // (normally wired through WeaponSystemState.Changed, which needs OnEnable to subscribe).
+        private static void InvokeAwake(Object component)
+        {
+            component.GetType().GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance)
+                .Invoke(component, null);
+        }
+
+        [Test]
+        public void ComputedLandingDistance_MatchesRange_BeforeAndAfterASizeScaleRefit_MV617()
+        {
+            // Reproduces Lee's report end-to-end via the real WaterBlaster/RigState path (same idiom
+            // as WaterBlasterConeWidthTests): at both the base and maxed Range track level, the
+            // stream's own emitter must still land on the aim outline after a SizeScale change
+            // (driven by a Spread spend, MV-379) forces a live Refit() — WaterVfx.Refit() previously
+            // rescaled the emitter's speed/lifetime but never moved its transform, so after any
+            // _radius change the nozzle kept firing from its OLD position while the reach math
+            // assumed the NEW one.
+            foreach (bool maxRange in new[] { false, true })
+            {
+                WeaponSystemState.Reset();
+                RigState.Reset();
+                var go = new GameObject("blaster-vfx-landing");
+                try
+                {
+                    var blaster = go.AddComponent<WaterBlaster>();
+                    InvokeAwake(blaster);
+
+                    if (maxRange)
+                    {
+                        RigState.AcquireCap("p_rng");
+                        for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Range); i++)
+                            WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range);
+                    }
+                    blaster.RefreshUpgrades();
+
+                    var vfx = go.GetComponent<WaterVfx>();
+                    float tolerance = blaster.Range * 0.05f;
+                    string level = maxRange ? "max" : "1";
+
+                    Assert.That(vfx.ComputedLandingDistance, Is.EqualTo(blaster.Range).Within(tolerance),
+                        $"stream must land on the outline before any SizeScale refit (p_rng level {level})");
+
+                    // Trigger a live Refit() via a SizeScale change — a Spread spend (MV-379), the
+                    // same path a real RCDA/nozzle upgrade takes.
+                    RigState.AcquireCap("p_rng");
+                    RigState.AcquireCap("p_spr");
+                    WeaponSystemState.LevelUpTrack(WeaponTrackKind.Spread);
+                    blaster.RefreshUpgrades();
+
+                    Assert.That(vfx.ComputedLandingDistance, Is.EqualTo(blaster.Range).Within(tolerance),
+                        $"stream must still land on the outline AFTER a SizeScale-triggered Refit " +
+                        $"(p_rng level {level}) — Refit() must reposition the emitter, not just its speed/lifetime");
+                }
+                finally
+                {
+                    Object.DestroyImmediate(go);
+                    WeaponSystemState.Reset();
+                    RigState.Reset();
+                }
+            }
         }
     }
 }

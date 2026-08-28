@@ -5,17 +5,20 @@ using MaxWorlds.VFX;
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
-    /// The aim indicator and the water under it have to describe the same weapon (YT-110/YT-187).
+    /// The aim indicator and the water under it have to describe the same weapon (YT-110/YT-187),
+    /// and the ground outline keeps doing that job even after MV-617 below.
     ///
     /// They had drifted twice. First a 6° jet drawn beneath a 35° indicator (YT-110) — fixed by
     /// deriving the spray from the cone, but only at half its width, which read fine narrow and
     /// read as a lie at the wide/base hose: the outline promised a broad fan and the water was a
-    /// thin jet inside it (YT-187). Now the water fills the FULL cone half-angle at every setting,
-    /// so the spray's own widest edge sits on the outline's side edge, not inset from it.
+    /// thin jet inside it (YT-187). YT-187 then made the water fill the FULL cone half-angle at
+    /// every setting so the spray's own widest edge sat on the outline's side edge.
     ///
-    /// These assert the RELATIONSHIP rather than the two numbers. Retuning the blaster's cone is a
-    /// game-feel call somebody will make later, and when they do the spray must follow it without
-    /// anyone remembering this file exists.
+    /// MV-617 narrows it again, deliberately: Lee wants the visible WATER tight and non-widening
+    /// regardless of angle, while the FUNCTIONAL cone (what SPREAD buys, what the hit test and the
+    /// ground outline both still use) is untouched — see <see cref="WaterVfx.SprayFillsFractionOfCone"/>.
+    /// These assert the RELATIONSHIP (spray is always that fixed fraction of the cone) rather than
+    /// the two numbers, so a future retune of either dial doesn't need anyone to remember this file.
     /// </summary>
     public sealed class SprayIndicatorWidthTests
     {
@@ -23,13 +26,13 @@ namespace MaxWorlds.Tests.EditMode
         private const float BlasterConeHalfAngle = 35f;
 
         [Test]
-        public void TheVisibleSprayFillsTheFullWidthOfTheIndicator()
+        public void TheVisibleSprayIsTheAuthoredFractionOfTheIndicatorsWidth()
         {
             float spray = WaterVfx.SprayHalfAngleFor(BlasterConeHalfAngle);
 
-            Assert.That(spray, Is.EqualTo(BlasterConeHalfAngle).Within(0.01f),
-                        "YT-187: the water's widest edge must sit on the outline's side edge, not " +
-                        "inset from it — no setting where the outline is visibly wider than the water");
+            Assert.That(spray, Is.EqualTo(BlasterConeHalfAngle * WaterVfx.SprayFillsFractionOfCone).Within(0.01f),
+                        "MV-617: the water must fill exactly SprayFillsFractionOfCone of the outline's " +
+                        "half-angle, not the full arc — the ground outline alone still shows the true cone");
         }
 
         [Test]
@@ -37,8 +40,9 @@ namespace MaxWorlds.Tests.EditMode
         {
             foreach (float cone in new[] { 12f, 20f, 35f, 60f })
             {
-                Assert.That(WaterVfx.SprayHalfAngleFor(cone), Is.EqualTo(cone).Within(0.01f),
-                            $"a {cone}° weapon must draw a {cone}° stream");
+                float expected = cone * WaterVfx.SprayFillsFractionOfCone;
+                Assert.That(WaterVfx.SprayHalfAngleFor(cone), Is.EqualTo(expected).Within(0.01f),
+                            $"a {cone}° weapon must draw a {expected}° stream");
             }
         }
 

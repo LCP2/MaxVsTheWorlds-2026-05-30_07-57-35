@@ -66,7 +66,11 @@ namespace MaxWorlds.VFX
         /// narrow one never showed enough to notice. Solving that triangle for the edge particle's
         /// travel distance is what keeps every angle on the outline, not just the centre.
         /// </summary>
-        public static float ReachForCone(float range, float muzzleOffset, float halfAngleDeg)
+        /// <paramref name="droopCompensation"/> (MV-617, see <see cref="DroopCompensation"/>) is added
+        /// on top of the solved straight-line distance, so a droplet still visibly reaches the outline
+        /// despite gravity curving its actual path down over its flight. Zero by default — every
+        /// existing ballistic-free caller is unaffected.
+        public static float ReachForCone(float range, float muzzleOffset, float halfAngleDeg, float droopCompensation = 0f)
         {
             range = Mathf.Max(0.01f, range);
             muzzleOffset = Mathf.Max(0f, muzzleOffset);
@@ -74,8 +78,27 @@ namespace MaxWorlds.VFX
             float cos = Mathf.Cos(rad);
             float sin = Mathf.Sin(rad);
             float underRoot = Mathf.Max(0f, range * range - muzzleOffset * muzzleOffset * sin * sin);
-            float reach = Mathf.Sqrt(underRoot) - muzzleOffset * cos;
+            float reach = Mathf.Sqrt(underRoot) - muzzleOffset * cos + Mathf.Max(0f, droopCompensation);
             return Mathf.Max(0.1f, reach);
+        }
+
+        /// <summary>
+        /// Extra straight-line travel distance a droplet needs so it still reads as reaching the
+        /// intended distance despite gravity pulling it toward the ground over its flight (MV-617,
+        /// Lee: "the water stream... are far less" than the weapon's real range). The stream's shape
+        /// cone distributes emission across a true 3D cone, not a flat plane, so most droplets leave
+        /// with some pitch as well as yaw — gravity curves those down over <paramref name="travelTime"/>,
+        /// so a droplet launched at the nominal (pitch-zero) speed visibly droops short of the target
+        /// distance. Scales with gravity's own droop term (1/2 g t²), so a bigger
+        /// <paramref name="gravityModifier"/> or a longer flight asks for proportionally more
+        /// compensation, and is exactly zero with no droop at all.
+        /// </summary>
+        public static float DroopCompensation(float travelTime, float gravityModifier)
+        {
+            const float EarthGravity = 9.81f;
+            float t = Mathf.Max(0f, travelTime);
+            float g = EarthGravity * Mathf.Max(0f, gravityModifier);
+            return 0.5f * g * t * t;
         }
 
         /// <summary>
