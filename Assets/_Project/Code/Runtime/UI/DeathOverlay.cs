@@ -60,7 +60,7 @@ namespace MaxWorlds.UI
         /// did (<paramref name="gateRecloses"/> is false for a boss-room death, RespawnPlanner's own
         /// edge case 2) — saying so anyway would tell the player something false about the boss gate.</summary>
         public static string BodyText(string areaName, bool gateRecloses) => gateRecloses
-            ? $"{areaName} has reset. The gate is shut again — break it open."
+            ? $"{areaName} has reset. The gate is shut again - break it open."   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage (MV-600)
             : $"{areaName} has reset.";
 
         /// <summary>The deaths-taken line — pure for the same reason as <see cref="BodyText"/>.</summary>
