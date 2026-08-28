@@ -1,11 +1,12 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
-using MaxWorlds.Player;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Factories
 {
@@ -66,8 +67,23 @@ namespace MaxWorlds.Factories
         private const float MobilityTriggerRadius = 10f;  // Max within this range wakes a grounded mobile shed
         private const float LiftHeight = 0.75f;            // metres hovered once fully risen
         private const float LiftDuration = 2.5f;           // seconds to rise from grounded to full hover
-        private const float PursuitSpeedFraction = 0.6f;   // of Max's own walk speed
         private const float PursuitStandoff = 2f;          // metres kept from Max once in range
+
+        // --- MV-618: Lee's playtest read — "much too fast, do no damage, stack on each other".
+        // Fixed to Brute pace/contact damage rather than derived from PlayerController.moveSpeed, so a
+        // Speed upgrade on Max can never make the sheds faster too (EnemyArchetype.Brute: moveSpeed
+        // 0.75, contactDamage 38). ---
+        private const float PursuitSpeed = 0.75f;          // m/s, absolute — Brute's own pace
+        private const float ContactDamage = 38f;           // per tick, Brute's own contactDamage
+
+        // --- MV-618: several hutches converging on the same standoff ring used to merge into one
+        // stack. Same nearest-neighbour repulsion Sentinel.SeparateFromOtherSentinels already gives
+        // deployed sentinels (MV-615, AbilityTuning.SentinelSeparationStep) — reused rather than a
+        // second copy of the maths. 3 m clears two ~2.25 m-wide hutch bodies with daylight between
+        // them, comfortably past the "at least 2 m apart" ask. Faster than the 0.75 m/s pursuit crawl
+        // so the spread-out reads as a deliberate step, not a slow drift. ---
+        private const float MinHutchSeparation = 3f;
+        private const float PursuitSeparationSpeed = 2f;
 
         private bool _mobile;
         private CharacterController _cc;
@@ -76,8 +92,19 @@ namespace MaxWorlds.Factories
         private float _liftTimer;
         private bool _tookDamage;
         private Transform _pursuitTarget;
-        private PlayerController _pursuitPlayer;
+        private IDamageable _pursuitDamageable;
         private MaterialPropertyBlock _bodyMpb;
+
+        /// <summary>Counts down to this hutch's next contact-damage tick while pursuing (MV-618) —
+        /// same "no free first hit" seeding as <see cref="RobotEnemy"/>'s own
+        /// <c>_contactCooldownTimer</c>, on the same <see cref="RobotCompositionTuning.DefaultContactCooldown"/>
+        /// cadence the robots use.</summary>
+        private float _contactCooldownTimer;
+
+        /// <summary>Scratch buffer for <see cref="SeparateFromOtherPursuingHutches"/> — cleared and
+        /// refilled every Pursuit tick rather than allocated fresh, same idiom as <see cref="Sentinel"/>'s
+        /// own separation buffer.</summary>
+        private static readonly List<Vector3> s_otherPursuerPositions = new List<Vector3>(4);
 
         /// <summary>Where a mobile shed's own state machine currently sits. Always
         /// <see cref="ShedMobility.Grounded"/> for a static shed.</summary>
@@ -127,6 +154,9 @@ namespace MaxWorlds.Factories
             if (!_mobile) return;
             _cc = GetComponent<CharacterController>();
             _groundY = transform.position.y;
+            // MV-618: seeded full so the very first contact ever made isn't an instant free hit —
+            // same convention RobotEnemy's own _contactCooldownTimer uses.
+            _contactCooldownTimer = RobotCompositionTuning.DefaultContactCooldown;
         }
 
         private void Awake() => Build();
@@ -267,19 +297,21 @@ namespace MaxWorlds.Factories
                 var p = GameObject.FindGameObjectWithTag("Player");
                 if (p == null) return;
                 _pursuitTarget = p.transform;
-                _pursuitPlayer = p.GetComponent<PlayerController>();
+                _pursuitDamageable = p.GetComponent<IDamageable>();
             }
 
-            float walkSpeed = _pursuitPlayer != null ? _pursuitPlayer.WalkSpeed : 0f;
-            TickMobility(Time.deltaTime, _pursuitTarget.position, walkSpeed);
+            TickMobility(Time.deltaTime, _pursuitTarget.position, _pursuitDamageable);
         }
 
         /// <summary>Advances the mobile-shed state machine one step (MV-548). Public and explicitly
         /// dt/target-parameterized — like <see cref="Build"/>/<see cref="RefreshMax"/> — so an EditMode
         /// test can drive it directly with a synthetic Max and an explicit <paramref name="dt"/> rather
         /// than needing a live scene and <see cref="Time.deltaTime"/>. A no-op for a static shed
-        /// (<see cref="ConfigureMobility"/> never called with <c>true</c>) or a dead one.</summary>
-        public void TickMobility(float dt, Vector3 targetPosition, float targetWalkSpeed)
+        /// (<see cref="ConfigureMobility"/> never called with <c>true</c>) or a dead one.
+        /// <paramref name="target"/> is who Pursuit's contact damage lands on — optional, since Grounded
+        /// and LiftOff never read it; a test exercising only lift-off/standoff timing can leave it
+        /// null.</summary>
+        public void TickMobility(float dt, Vector3 targetPosition, IDamageable target = null)
         {
             if (!_mobile || !IsAlive) return;
 
@@ -297,7 +329,7 @@ namespace MaxWorlds.Factories
                     TickLiftOff(dt);
                     break;
                 case ShedMobility.Pursuit:
-                    TickPursuit(dt, targetPosition, targetWalkSpeed);
+                    TickPursuit(dt, targetPosition, target);
                     break;
             }
         }
@@ -328,16 +360,68 @@ namespace MaxWorlds.Factories
             if (_liftTimer >= LiftDuration) _mobilityState = ShedMobility.Pursuit;
         }
 
-        private void TickPursuit(float dt, Vector3 targetPosition, float targetWalkSpeed)
+        private void TickPursuit(float dt, Vector3 targetPosition, IDamageable target)
         {
+            // MV-618: every Pursuit tick, not just once at standoff — an approaching hutch still
+            // needs to stay clear of one already parked on the ring, same as the follow-then-separate
+            // order Sentinel.SeparateFromOtherSentinels uses.
+            SeparateFromOtherPursuingHutches(dt);
+
             Vector3 to = targetPosition - transform.position; to.y = 0f;
             float dist = to.magnitude;
-            if (dist <= PursuitStandoff) return;
+
+            // Ticked every Pursuit frame regardless of range (MV-618, same as RobotEnemy's
+            // TickContactTouch) so the cooldown keeps counting down while it's still closing in.
+            _contactCooldownTimer -= dt;
+
+            if (dist <= PursuitStandoff)
+            {
+                TryDealContactDamage(to, target);
+                return;
+            }
 
             Vector3 dir = to.normalized;
-            float speed = targetWalkSpeed * PursuitSpeedFraction;
-            float step = Mathf.Min(speed * dt, dist - PursuitStandoff);
+            float step = Mathf.Min(PursuitSpeed * dt, dist - PursuitStandoff);
             if (step > 0f) MoveBody(dir * step);
+        }
+
+        /// <summary>Brute-pace contact damage (MV-618, Lee: "they don't do any damage... as much
+        /// damage as a brute") — a hutch parked at its standoff ring hits for <see cref="ContactDamage"/>
+        /// once per <see cref="RobotCompositionTuning.DefaultContactCooldown"/>, the same one-hit-per-
+        /// second cadence the robots' own touch damage uses. No-op with <paramref name="target"/> null
+        /// (a test exercising only movement/timing) or dead.</summary>
+        private void TryDealContactDamage(Vector3 to, IDamageable target)
+        {
+            if (target == null || !target.IsAlive || _contactCooldownTimer > 0f) return;
+            _contactCooldownTimer = RobotCompositionTuning.DefaultContactCooldown;
+            Vector3 dir = to.sqrMagnitude > 1e-8f ? to.normalized : Vector3.forward;
+            target.TakeDamage(new DamageInfo(ContactDamage, transform.position, dir, Team.Enemy));
+        }
+
+        /// <summary>MV-618: keeps this hutch at least <see cref="MinHutchSeparation"/> from every OTHER
+        /// pursuing hutch, every Pursuit tick — not just at deploy time. TickPursuit's own standoff-close
+        /// step walks every pursuing hutch onto the same ring around Max with no regard for its
+        /// neighbours, so several converging at once used to merge into one stack; this pushes them back
+        /// apart using <see cref="AbilityTuning.SentinelSeparationStep"/>'s nearest-neighbour repulsion —
+        /// the same approach already landed for deployed sentinels (MV-615) — rather than a second copy
+        /// of the maths. Grounded/lifting/dead hutches, and hutches other than this one, are excluded so a
+        /// shed that hasn't woken yet never shoves a pursuing one off its line.</summary>
+        private void SeparateFromOtherPursuingHutches(float dt)
+        {
+            s_otherPursuerPositions.Clear();
+            IReadOnlyList<MowerHutch> all = FactoryCensus.All;
+            for (int i = 0; i < all.Count; i++)
+            {
+                MowerHutch h = all[i];
+                if (h == null || h == this || !h.IsAlive) continue;
+                if (!h._mobile || h._mobilityState != ShedMobility.Pursuit) continue;
+                s_otherPursuerPositions.Add(h.transform.position);
+            }
+            if (s_otherPursuerPositions.Count == 0) return;
+
+            Vector3 next = AbilityTuning.SentinelSeparationStep(transform.position, s_otherPursuerPositions,
+                MinHutchSeparation, PursuitSeparationSpeed, dt);
+            if (next != transform.position) MoveBody(next - transform.position);
         }
 
         /// <summary>MV-386's own hardening, not a raw <c>cc.Move</c> — the shed must never tunnel through
