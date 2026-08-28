@@ -229,6 +229,12 @@ namespace MaxWorlds.VFX
             var placeholder = _boss.GetComponent<MeshRenderer>();
             if (placeholder != null) placeholder.enabled = false;
 
+            // Scale the whole rig to the boss it binds (MV-613): the part dimensions above were authored
+            // for a 6-metre-wide boss, so a boss authored any other width — 3 today — must render, and
+            // collide, at that same fraction. Every child (chassis, legs, hatches, motes) is parented
+            // under this root, so one scale here carries the gait swing and the particle sizes with it.
+            transform.localScale = Vector3.one * (_boss.transform.localScale.x / LegacyAuthoredBodyWidth);
+
             Build();
 
             // Stand it on the boss BEFORE the first frame, or the body spends frame one at the world origin
@@ -237,7 +243,34 @@ namespace MaxWorlds.VFX
             Follow();
             _lastPos = transform.position;
 
+            // The visible mower and the physical mower must be the same object footprint (MV-613): fit
+            // the boss's CharacterController to what THIS rig actually draws, replacing the Awake-time
+            // fit against the hidden placeholder cube.
+            _boss.FitColliderTo(RenderedBoundsRelativeTo(_boss.transform));
+
             ApplyEyes(Color.black);   // asleep
+        }
+
+        /// <summary>The combined world bounds of every renderer this rig owns, converted into
+        /// <paramref name="reference"/>'s local space. An axis-aligned box rotated into another frame is
+        /// no longer axis-aligned there, so this rebuilds the tightest AXIS-ALIGNED box that still
+        /// contains all eight corners of the world box — exactly what a CharacterController's local
+        /// centre/height/radius need (MV-613).</summary>
+        private Bounds RenderedBoundsRelativeTo(Transform reference)
+        {
+            var renderers = GetComponentsInChildren<MeshRenderer>();
+            Bounds world = renderers.Length > 0
+                ? renderers[0].bounds
+                : new Bounds(transform.position, Vector3.one);
+            for (int i = 1; i < renderers.Length; i++) world.Encapsulate(renderers[i].bounds);
+
+            Vector3 c = world.center, e = world.extents;
+            var local = new Bounds(reference.InverseTransformPoint(c), Vector3.zero);
+            for (int xi = -1; xi <= 1; xi += 2)
+                for (int yi = -1; yi <= 1; yi += 2)
+                    for (int zi = -1; zi <= 1; zi += 2)
+                        local.Encapsulate(reference.InverseTransformPoint(c + Vector3.Scale(e, new Vector3(xi, yi, zi))));
+            return local;
         }
 
         /// <summary>
@@ -288,6 +321,12 @@ namespace MaxWorlds.VFX
         private const float ShellHalfX = 0.85f;                                // each wing-case centre, off the spine
         private const float HeadY = 1.2f, HeadZ = 1.35f;                       // the front segment carrying the core
         private const float LegSpreadX = 2.05f, LegSpreadZ = 1.75f, HipY = 1.0f;   // planted wide
+
+        /// <summary>The boss body width every dimension above was authored for (MV-613's predecessor —
+        /// the old single-size boss). A boss authored any other width scales the whole rig by (authored
+        /// width / this), uniformly, at <see cref="Bind"/> — so the render tracks whatever width a map
+        /// entity actually authors (0.5 for today's 3x3 world1_config bosses), not just this legacy one.</summary>
+        private const float LegacyAuthoredBodyWidth = 6f;
 
         private void Build()
         {
@@ -531,6 +570,10 @@ namespace MaxWorlds.VFX
             var main = ps.main;
             main.playOnAwake = false;
             main.simulationSpace = ParticleSystemSimulationSpace.World;   // motes are left BEHIND as it moves
+            // Hierarchy, not the default Local: a particle system only respects its OWN transform's scale
+            // under Local, and BroodMotes never sets one — Hierarchy pulls in the rig root's scale too, so
+            // the disgorged motes shrink with a smaller-authored boss the same as everything else (MV-613).
+            main.scalingMode = ParticleSystemScalingMode.Hierarchy;
             main.startLifetime = new ParticleSystem.MinMaxCurve(0.5f, 1.1f);
             main.startSpeed = new ParticleSystem.MinMaxCurve(2.5f, 4.5f);
             main.startSize = new ParticleSystem.MinMaxCurve(0.18f, 0.34f);
