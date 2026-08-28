@@ -11,9 +11,9 @@ namespace MaxWorlds.Tests.EditMode
     /// <summary>
     /// MV-548 (shed roadmap stage 3): a mobile shed (<see cref="MaxWorlds.Arena.Map.WorldShed.mobile"/>,
     /// MV-562) stays grounded until triggered, then rises to a 0.75 m hover over 2.5 s and pursues Max
-    /// at 60% of his walk speed, stopping at a 2 m standoff — via
-    /// <see cref="CharacterControllerMotion.SafeMove"/> (MV-386), so it can never tunnel through a wall
-    /// the way a raw <c>cc.Move()</c> could.
+    /// at a fixed Brute pace (MV-618: 0.75 m/s, no longer a fraction of his walk speed), stopping at a
+    /// 2 m standoff — via <see cref="CharacterControllerMotion.SafeMove"/> (MV-386), so it can never
+    /// tunnel through a wall the way a raw <c>cc.Move()</c> could.
     /// </summary>
     public sealed class MV548MobileShedTests
     {
@@ -83,7 +83,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 // --- Grounded: Max far away, no damage taken — must not move or leave Grounded. ---
                 Vector3 farMax = groundedCenter + Vector3.forward * 50f;
-                hutch.TickMobility(1f, farMax, 6f);
+                hutch.TickMobility(1f, farMax);
                 Assert.AreEqual(MowerHutch.ShedMobility.Grounded, hutch.MobilityState,
                     "a mobile shed must stay grounded until its trigger fires");
                 Assert.AreEqual(groundedCenter.y, go.transform.position.y, 0.001f,
@@ -91,23 +91,23 @@ namespace MaxWorlds.Tests.EditMode
 
                 // --- Trigger: Max closes to within the 10 m radius — must enter LiftOff. ---
                 Vector3 nearMax = groundedCenter + Vector3.forward * 8f;
-                hutch.TickMobility(0f, nearMax, 6f);
+                hutch.TickMobility(0f, nearMax);
                 Assert.AreEqual(MowerHutch.ShedMobility.LiftOff, hutch.MobilityState,
                     "Max within 10 m of a grounded mobile shed must trigger lift-off");
 
                 // --- Lift-off: 2.5 s of ticks must resolve to a 0.75 m hover, then hand off to Pursuit. ---
                 for (float elapsed = 0f; elapsed < 2.5f; elapsed += Dt)
-                    hutch.TickMobility(Dt, nearMax, 6f);
+                    hutch.TickMobility(Dt, nearMax);
                 Assert.AreEqual(MowerHutch.ShedMobility.Pursuit, hutch.MobilityState,
                     "2.5 s of lift-off ticks must complete into Pursuit");
                 Assert.AreEqual(groundedCenter.y + 0.75f, go.transform.position.y, 0.02f,
                     "lift-off must resolve to exactly a 0.75 m hover above the shed's own grounded Y");
 
-                // --- Pursuit, open ground: must close at 60% of Max's 6 m/s walk speed (3.6 m/s) and
+                // --- Pursuit, open ground: must close at a fixed Brute pace (MV-618: 0.75 m/s) and
                 // hold exactly the 2 m standoff, never colliding with Max or stalling short of it. ---
                 Vector3 openMax = new Vector3(RigOrigin.x, go.transform.position.y, RigOrigin.z + 20f);
-                for (int i = 0; i < 900; i++) // 15 s -- closes the ~18 m gap to standoff in ~5 s at 3.6 m/s
-                    hutch.TickMobility(Dt, openMax, 6f);
+                for (int i = 0; i < 1800; i++) // 30 s -- closes the ~18 m gap to standoff in ~24 s at 0.75 m/s
+                    hutch.TickMobility(Dt, openMax);
 
                 float planarDistance = new Vector2(
                     go.transform.position.x - openMax.x, go.transform.position.z - openMax.z).magnitude;
@@ -152,16 +152,16 @@ namespace MaxWorlds.Tests.EditMode
 
                 // Force the trigger via first damage (distance alone won't reach here from -4 to 20).
                 wallHutch.TakeDamage(new DamageInfo(1f, Vector3.zero, Vector3.forward, Team.Player));
-                wallHutch.TickMobility(0f, beyondWallMax, 6f);
+                wallHutch.TickMobility(0f, beyondWallMax);
                 Assert.AreEqual(MowerHutch.ShedMobility.LiftOff, wallHutch.MobilityState,
                     "first damage must trigger lift-off even with Max well outside the 10 m radius");
 
                 for (float elapsed = 0f; elapsed < 2.5f; elapsed += Dt)
-                    wallHutch.TickMobility(Dt, beyondWallMax, 6f);
+                    wallHutch.TickMobility(Dt, beyondWallMax);
                 Assert.AreEqual(MowerHutch.ShedMobility.Pursuit, wallHutch.MobilityState);
 
                 for (int i = 0; i < 900; i++)
-                    wallHutch.TickMobility(Dt, beyondWallMax, 6f);
+                    wallHutch.TickMobility(Dt, beyondWallMax);
 
                 Assert.Less(wallGo.transform.position.z, wallZ,
                     "the shed must never penetrate the wall standing between it and Max, even after 15 s " +
