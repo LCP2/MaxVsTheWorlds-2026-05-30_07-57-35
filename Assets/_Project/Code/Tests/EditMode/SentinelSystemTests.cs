@@ -108,19 +108,28 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageFractionNeverReachesOrExceedsOne()
+        public void DamageFractionNeverExceedsOneAndOnlyReachesItAtTheMaxLevel()
         {
-            for (int level = 0; level <= RigBoard.MaxLevel("u_dmg"); level++)
+            int maxLevel = RigBoard.MaxLevel("u_dmg");
+            for (int level = 0; level <= maxLevel; level++)
             {
                 float fraction = AbilityTuning.SentinelDamageFraction(
                     level, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
-                Assert.That(fraction, Is.LessThan(1f),
-                    $"level {level} must stay strictly below Max's own current primary output");
+                Assert.That(fraction, Is.LessThanOrEqualTo(1f),
+                    $"level {level} must never exceed Max's own current primary output");
+                if (level < maxLevel)
+                    Assert.That(fraction, Is.LessThan(1f), $"level {level} must stay strictly below the max level");
             }
+            // MV-610: a maxed u_dmg track now matches Max's current primary output exactly, rather
+            // than always staying strictly below it — the DECISION's floor moved from "always weaker"
+            // to "never stronger".
+            Assert.That(AbilityTuning.SentinelDamageFraction(
+                maxLevel, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel),
+                Is.EqualTo(1f).Within(1e-4f), "the max level must land exactly on 1.0, matching Max's output when fully invested");
         }
 
         [Test]
-        public void DamagePerShotIsAlwaysBelowThePrimaryItIsAFractionOf()
+        public void DamagePerShotNeverExceedsThePrimaryItIsAFractionOf()
         {
             const float primaryDamage = 8f; // an arbitrary "Max's current primary tick damage"
             for (int level = 0; level <= RigBoard.MaxLevel("u_dmg"); level++)
@@ -128,8 +137,8 @@ namespace MaxWorlds.Tests.EditMode
                 float shot = AbilityTuning.SentinelDamagePerShot(
                     primaryDamage, level,
                     AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
-                Assert.That(shot, Is.LessThan(primaryDamage),
-                    "the DECISION: sentinel damage must never catch up to Max's own current primary");
+                Assert.That(shot, Is.LessThanOrEqualTo(primaryDamage),
+                    "MV-610: sentinel damage may now match Max's own current primary at the max level, but never exceed it");
             }
         }
 
