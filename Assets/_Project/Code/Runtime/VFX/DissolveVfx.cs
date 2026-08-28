@@ -58,6 +58,17 @@ namespace MaxWorlds.VFX
         private readonly List<Snapshot> _snapshots = new List<Snapshot>(48);
         private readonly List<Ghost> _ghosts = new List<Ghost>(16);
 
+        /// <summary>Per-robot MeshFilter lookup, cached once (MV-611) — a robot's body never changes
+        /// shape once spawned (the spawner pools strictly by kind, RobotEnemy's own doc comment), so
+        /// the GetComponentInChildren walk in <see cref="CachedMeshFilter"/> only ever needs to run
+        /// once per instance, not once per live enemy every LateUpdate.</summary>
+        private readonly Dictionary<RobotEnemy, MeshFilter> _meshFilterCache =
+            new Dictionary<RobotEnemy, MeshFilter>(48);
+
+        /// <summary>How many times <see cref="CachedMeshFilter"/> actually missed the cache — test-only
+        /// instrumentation (MV-611) proving the lookup is cached, not repeated every frame.</summary>
+        private int _meshFilterCacheMisses;
+
         private void OnEnable() => HudSignals.EnemyKilled += OnEnemyKilled;
         private void OnDisable() => HudSignals.EnemyKilled -= OnEnemyKilled;
 
@@ -88,7 +99,7 @@ namespace MaxWorlds.VFX
                 var e = active[i];
                 if (!e.IsAlive) continue;
 
-                var filter = e.GetComponentInChildren<MeshFilter>();
+                var filter = CachedMeshFilter(e);
                 if (filter == null || filter.sharedMesh == null) continue;
 
                 var t = filter.transform;
@@ -100,6 +111,18 @@ namespace MaxWorlds.VFX
                     Scale = t.lossyScale,
                 });
             }
+        }
+
+        /// <summary>See <see cref="_meshFilterCache"/>'s own doc comment. <c>cached != null</c> also
+        /// covers Unity's fake-null (a destroyed component still boxes as a non-null reference) by
+        /// falling back to a fresh lookup rather than handing back a dead reference.</summary>
+        private MeshFilter CachedMeshFilter(RobotEnemy e)
+        {
+            if (_meshFilterCache.TryGetValue(e, out MeshFilter cached) && cached != null) return cached;
+            MeshFilter filter = e.GetComponentInChildren<MeshFilter>();
+            _meshFilterCache[e] = filter;
+            _meshFilterCacheMisses++;
+            return filter;
         }
 
         private void OnEnemyKilled(Vector3 pos)

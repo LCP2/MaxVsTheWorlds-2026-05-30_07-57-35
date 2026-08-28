@@ -145,12 +145,28 @@ namespace MaxWorlds.Enemies
         /// <summary>Empties the registry. Called when a level starts building, alongside
         /// <see cref="MaxWorlds.Factories.FactoryCensus.Reset"/> — belt-and-braces against a robot
         /// whose OnDisable hasn't run yet when the next level (or test) starts counting.</summary>
-        public static void ResetRegistry() => _active.Clear();
+        public static void ResetRegistry()
+        {
+            _active.Clear();
+            _separationGrid.Clear();   // MV-611: test/level-reset hygiene — see SeparationGrid's own doc comment
+        }
 
         /// <summary>Scratch buffer for <see cref="EnemySeparation"/>'s neighbour lookup (MV-321) — one
         /// shared list, cleared and refilled per robot per tick, instead of a fresh allocation every
-        /// frame for every chaser in a ~20-30 robot swarm.</summary>
+        /// frame for every chaser in a ~20-30 robot swarm. MV-611: now filled by
+        /// <see cref="_separationGrid"/>'s <see cref="SeparationGrid.CollectNearby"/>, so it only ever
+        /// holds this robot's own local neighbours, not the whole field-wide roster.</summary>
         private static readonly List<Vector3> _separationScratch = new List<Vector3>(32);
+
+        /// <summary>Buckets the field-wide roster by position so a chasing robot's own neighbour lookup
+        /// costs only as much as its own neighbourhood, not the whole accumulated population (MV-611) —
+        /// see <see cref="SeparationGrid"/>'s own doc comment for why this is maintained incrementally
+        /// (every active robot's own <see cref="Update"/> keeps its entry current) rather than rebuilt
+        /// from scratch once a frame. Cell size is <see cref="EnemySeparation.DefaultMinDistance"/>, not
+        /// the live dev-tuned <see cref="EffectiveMinSeparation"/>: a debug slider pushed well past the
+        /// default could in principle widen a robot's search past one cell, but that's a dev-only
+        /// steering nicety, not a shipped-gameplay correctness concern.</summary>
+        private static readonly SeparationGrid _separationGrid = new SeparationGrid(EnemySeparation.DefaultMinDistance);
 
         public State Current { get; private set; } = State.Chase;
         public bool IsAlive => Current != State.Dead && _health > 0f;
@@ -287,6 +303,12 @@ namespace MaxWorlds.Enemies
         /// </summary>
         private int _routeEpoch;
 
+        /// <summary>Throttles how often this robot's in-room <see cref="ZoneRouteGrid"/> step is
+        /// re-solved (MV-611) — see <see cref="ZoneRouteBudget"/>'s own doc comment. Irrelevant for a
+        /// kind that never sets <c>useZoneRoute</c> (<see cref="UsesGridRoute"/> false), which never
+        /// touches it.</summary>
+        private readonly ZoneRouteBudget _zoneRouteBudget = new ZoneRouteBudget();
+
         /// <summary>Below this fraction of <see cref="standoffRange"/>, a ranged kind backs off
         /// (MV-447 cause 4). Tuned against <see cref="StandoffCloseInFraction"/> to leave a band wide
         /// enough that ordinary chase jitter can't cross it twice in one tick.</summary>
@@ -414,7 +436,11 @@ namespace MaxWorlds.Enemies
             ResetState(); // reset for pooling reuse
         }
 
-        private void OnDisable() => _active.Remove(this);
+        private void OnDisable()
+        {
+            _active.Remove(this);
+            _separationGrid.Remove(GetInstanceID());   // MV-611: else a dead/pooled robot stays a phantom neighbour forever
+        }
 
         /// <summary>Reset to a fresh, alive Chase state. Called from Awake/OnEnable and
         /// directly by tests (which don't get Unity lifecycle callbacks).</summary>
@@ -427,6 +453,7 @@ namespace MaxWorlds.Enemies
             _zoneHysteresis.Reset();  // ...nor its idea of which room it was routing from
             _pursuitStall.NoteSightHeld(); // ...nor its idea of how well the last one was doing
             _routeDwell.Reset();       // ...nor its committed route decision (MV-477)
+            _zoneRouteBudget.Reset();  // ...nor its cached in-room ZoneRouteGrid step (MV-611)
             _routeEpoch = EnemyNavigation.RouteEpoch;
             _knockback = Vector3.zero;
             _haltTimer = 0f;
@@ -522,7 +549,14 @@ namespace MaxWorlds.Enemies
 
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
-            if (target != null)
+            //
+            // MV-611: a DORMANT robot whose own area is well behind the player can never see him or be
+            // seen — the raycast is dead weight for exactly the residue population (concealed knots,
+            // garrison never looked at, stragglers run past) that accumulates as the player advances.
+            // Every other state still ticks sight live every frame; cover/chase correctness depends on
+            // it being fresh, and only a robot standing still, unaware, and behind is ever this stale.
+            bool skipSightForFarDormant = Current == State.Dormant && IsWellBehindPlayer();
+            if (target != null && !skipSightForFarDormant)
                 _sight.Tick(LineOfSight.Between(transform, target), target.position, dt);
 
             // Water Balloon's halt (WV-231): a true freeze, not just a movement stop — the state
@@ -551,6 +585,13 @@ namespace MaxWorlds.Enemies
 
             ApplyKnockback(dt);
             ApplyGravity(dt);
+
+            // MV-611: keeps this robot's own entry in the shared neighbour grid current every tick,
+            // REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found by another
+            // robot's separation query exactly as it was when _active was scanned directly; only
+            // TickChase's own QUERY is state-gated (nothing but a chaser needs to ask). O(1) amortized —
+            // see SeparationGrid.UpdatePosition's own doc comment.
+            _separationGrid.UpdatePosition(GetInstanceID(), transform.position);
         }
 
         /// <summary>Spray knockback (YT-64): a shove that decays over ~0.2s. Applied on top of the
@@ -651,7 +692,39 @@ namespace MaxWorlds.Enemies
         /// frustum too is what makes waking mean "the player's own view fell on it".</summary>
         private void TickDormant()
         {
+            // MV-611: a robot two or more areas behind the player's own can never be the one the
+            // camera falls on (the fixed ~72 degree top-down rig never reaches back that far) — skip
+            // the frustum test entirely rather than run it every frame only to read false forever.
+            if (IsWellBehindPlayer()) return;
             if (AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) Activate();
+        }
+
+        /// <summary>How many areas behind the player's own a robot's area must be before it counts as
+        /// "well behind" (MV-611) — one area of slack for a robot standing near a just-crossed doorway,
+        /// which the player could plausibly still glance back through.</summary>
+        private const int WellBehindAreaSlack = 2;
+
+        /// <summary>True when this robot's own area is <see cref="WellBehindAreaSlack"/> or more areas
+        /// earlier than wherever the player is standing RIGHT NOW (MV-611) — read from live position on
+        /// both sides, the same "not AreaAccumulationDirector.CurrentArea" idiom
+        /// <c>WorldRunner.ResolveDeathArea</c> uses, since that tracker advances ahead of the player for
+        /// population purposes and would gate this off a room the player hasn't actually reached yet.
+        /// Fails CLOSED (false) whenever the area can't be resolved — no map, no player, an unrecognised
+        /// zone — so a missing signal never freezes a robot that might otherwise need to wake.</summary>
+        private bool IsWellBehindPlayer()
+        {
+            MapData map = EnemyNavigation.Map;
+            if (map == null || _playerTarget == null) return false;
+
+            MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.z);
+            MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.z);
+            if (robotZone == null || playerZone == null) return false;
+
+            int robotArea = AreaAccumulationDirector.AreaIndexOf(robotZone.id);
+            int playerArea = AreaAccumulationDirector.AreaIndexOf(playerZone.id);
+            if (robotArea <= 0 || playerArea <= 0) return false;
+
+            return robotArea <= playerArea - WellBehindAreaSlack;
         }
 
         /// <summary>Reused every call (MV-527) — <see cref="GeometryUtility.CalculateFrustumPlanes(Camera)"/>
@@ -667,11 +740,17 @@ namespace MaxWorlds.Enemies
         /// frustum-test idiom as <see cref="AreaAccumulationDirector"/>'s own on-screen check.</summary>
         private bool IsOnScreen()
         {
+            _frustumTestCount++;   // MV-611 test instrumentation — see IsWellBehindPlayer's own doc comment
             Camera cam = Camera.main;
             if (cam == null) return true;
             GeometryUtility.CalculateFrustumPlanes(cam, s_frustumPlanes);
             return GeometryUtility.TestPlanesAABB(s_frustumPlanes, new Bounds(transform.position, Vector3.one));
         }
+
+        /// <summary>How many times THIS robot's own <see cref="IsOnScreen"/> has run — test-only
+        /// instrumentation (MV-611) proving <see cref="TickDormant"/> skips the frustum test entirely
+        /// for a robot well behind the player, rather than merely reading it as false.</summary>
+        private int _frustumTestCount;
 
         /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
         /// before it joins the chase for real. Idempotent — a robot no longer Dormant ignores a
@@ -745,7 +824,7 @@ namespace MaxWorlds.Enemies
             MapZone rawZone = EnemyNavigation.Map?.ZoneAt(transform.position.x, transform.position.z);
             string routedZoneId = _zoneHysteresis.Resolve(rawZone?.id, dt);
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, goal, routedZoneId,
-                UsesGridRoute(Kind));
+                UsesGridRoute(Kind), _zoneRouteBudget, dt);
 
             // MV-477 AC3: the un-fanned route point, so "reached the waypoint" means reached the
             // actual doorway/goal the level routed at, not wherever EnemyFormation happened to fan this
@@ -784,12 +863,15 @@ namespace MaxWorlds.Enemies
             // robots converge on together, that is exactly what queued neighbours pushing back along
             // the wall face produced: every robot's along-wall progress cancelled by the one behind
             // it, the whole line reading as stuck against the barrier instead of routing around it.
-            _separationScratch.Clear();
-            for (int i = 0; i < _active.Count; i++)
-            {
-                RobotEnemy other = _active[i];
-                if (other != this) _separationScratch.Add(other.transform.position);
-            }
+            // MV-611: the old copy here was unconditional — every chaser copied the WHOLE field-wide
+            // roster (residue included: concealed knots, garrison never looked at, stragglers run
+            // past), then Push() ran its own magnitude pass a second time over that same full copy to
+            // find the few that were actually close — O(n) work per chaser, O(n^2) total across the
+            // field. _separationGrid is maintained incrementally (every active robot's own Update, not
+            // just chasers) so this query only ever visits the 3x3 cell block around this robot — both
+            // the scan AND Push()'s more expensive per-neighbour work below are bounded by local
+            // density, not by how large the level's accumulated population has grown.
+            _separationGrid.CollectNearby(GetInstanceID(), transform.position, EffectiveMinSeparation, _separationScratch);
             Vector3 separation = EnemySeparation.Push(transform.position, _separationScratch, EffectiveMinSeparation);
             dir = EnemySeparation.Steer(dir, separation);
 
