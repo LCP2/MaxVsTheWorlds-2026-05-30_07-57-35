@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Player;
 
@@ -415,6 +416,46 @@ namespace MaxWorlds.Weapons
             float side = Vector3.Dot(toSentinel, right) >= 0f ? 1f : -1f;
 
             return sentinelPos + right * side * Mathf.Max(0f, sidestepDistance);
+        }
+
+        /// <summary>One frame of mutual separation among sentinels (MV-615): the standoff-follow step
+        /// (<see cref="SentinelStandoffStep"/>) puts every following sentinel on the SAME ring around
+        /// Max with no regard for where its neighbours already are, so two placed close together
+        /// converge onto the same point on that ring — the placement clearance check only ever ran at
+        /// spawn time. If <paramref name="current"/> is closer than <paramref name="minSeparation"/> to
+        /// any position in <paramref name="others"/>, steps directly away from the NEAREST such
+        /// neighbour at <paramref name="speed"/> m/s — nearest first, one at a time, rather than summing
+        /// every neighbour's push, so a sentinel boxed in by two others still moves toward daylight
+        /// instead of stalling on a cancelling sum. Two exactly-coincident positions (distance 0, no
+        /// direction to normalize) push along a fixed <see cref="Vector3.right"/> rather than producing
+        /// a NaN. Pure so it's testable without a live Transform, same shape as
+        /// <see cref="SentinelStandoffStep"/>.</summary>
+        public static Vector3 SentinelSeparationStep(Vector3 current, IReadOnlyList<Vector3> others,
+            float minSeparation, float speed, float dt)
+        {
+            if (speed <= 0f || dt <= 0f || others == null) return current;
+
+            Vector3 nearestAway = Vector3.zero;
+            float nearestDist = float.MaxValue;
+            bool tooClose = false;
+
+            for (int i = 0; i < others.Count; i++)
+            {
+                Vector3 away = current - others[i]; away.y = 0f;
+                float dist = away.magnitude;
+                if (dist >= minSeparation) continue;
+                if (dist < nearestDist)
+                {
+                    nearestDist = dist;
+                    nearestAway = dist > 1e-4f ? away.normalized : Vector3.right;
+                    tooClose = true;
+                }
+            }
+
+            if (!tooClose) return current;
+
+            float step = Mathf.Min(minSeparation - nearestDist, speed * dt);
+            return current + nearestAway * step;
         }
 
         /// <summary>How many sentinels Max may have deployed at once, at a given Slots (u_slt) level —

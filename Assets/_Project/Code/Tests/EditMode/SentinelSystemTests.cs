@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
@@ -193,6 +194,31 @@ namespace MaxWorlds.Tests.EditMode
                 new Vector3(8f, 0f, 0f), target, standoff: 2.5f, speed: 3f, dt: 1f);
             Assert.That(alreadyClose.x, Is.EqualTo(8f).Within(1e-3f),
                 "already within the standoff band — must not creep into Max's own feet");
+        }
+
+        // ---------------------------------------------------------------- MV-615 SentinelSeparationStep
+
+        [Test]
+        public void SeparationStepPushesCoincidentSentinelsApartButLeavesClearOnesUntouched()
+        {
+            // MV-615: this is exactly what the old standoff-follow step produced — two sentinels
+            // converging onto the SAME point on Max's standoff ring, "effectively merged into one" per
+            // Lee's report. Running the step repeatedly (as Update() does, one frame at a time) must
+            // walk them back apart to at least the clearance distance, never leave them stuck together.
+            Vector3 current = Vector3.zero;
+            var others = new List<Vector3> { Vector3.zero };
+
+            for (int i = 0; i < 60; i++)
+                current = AbilityTuning.SentinelSeparationStep(current, others, minSeparation: 1.5f, speed: 4f, dt: 1f / 60f);
+
+            Assert.That(Vector3.Distance(current, others[0]), Is.GreaterThanOrEqualTo(1.5f - 1e-2f),
+                "two coincident sentinels must separate back out to at least the 1.5m placement clearance");
+
+            Vector3 farCurrent = new Vector3(10f, 0f, 0f);
+            var farOthers = new List<Vector3> { Vector3.zero }; // 10m away, nowhere near the 1.5m clearance
+            Vector3 next = AbilityTuning.SentinelSeparationStep(farCurrent, farOthers, minSeparation: 1.5f, speed: 4f, dt: 1f);
+            Assert.That(next, Is.EqualTo(farCurrent),
+                "sentinels already clear of every neighbour must not be nudged at all");
         }
 
         [Test]

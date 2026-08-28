@@ -53,14 +53,16 @@ namespace MaxWorlds.UI
 
         protected override bool AbilityReady => _abilities != null && _abilities.SentinelReady;
 
-        /// <summary>Deploys at the ability's full authored range in the dragged direction — same "the
-        /// drag aims a DIRECTION, it doesn't shorten the throw" shape Teleport's blink already uses,
-        /// not whatever fraction the drag happened to reach at release.</summary>
+        /// <summary>Deploys at the SAME point the reticle just previewed (MV-615 fix — this used to
+        /// deploy at the full authored range regardless of how far the drag actually reached, so a
+        /// half-pulled drag showed a green marker at half range and deployed at full range instead — a
+        /// point that was never clearance-checked). Shares <see cref="PreviewDistance"/> with
+        /// <see cref="RebuildAimVisual"/> so the two can never disagree.</summary>
         protected override void Fire(Vector3 direction)
         {
             if (_abilities == null || _origin == null) return;
 
-            Vector3 point = PlacementPoint(direction, AbilityTuning.DefaultSentinelPlacementRange);
+            Vector3 point = PlacementPoint(direction, PreviewDistance());
             _abilities.TryDeploySentinel(point);
         }
 
@@ -107,6 +109,12 @@ namespace MaxWorlds.UI
             return zone != null ? zone.Clamp(raw, ZoneEdgeMargin) : raw;
         }
 
+        /// <summary>The aimed point's distance from Max for the CURRENT drag — a fraction of the full
+        /// placement range, floored so even a barely-armed drag still previews (and would deploy)
+        /// somewhere visibly off Max's feet. <see cref="Fire"/> reuses this exact formula (MV-615) so
+        /// the deployed point is always the same one the reticle just showed.</summary>
+        private float PreviewDistance() => Mathf.Max(0.15f, AbilityTuning.DefaultSentinelPlacementRange * DistanceFraction);
+
         /// <summary>Rebuilds the placement reticle for the current drag — distance previews toward the
         /// full placement range as the drag comes out (same shape as Teleport's own landing circle),
         /// clamped into the current room, and tinted red (via <see cref="AbilityJoystickControlBase.ApplyArmedTint"/>'s
@@ -116,8 +124,7 @@ namespace MaxWorlds.UI
         {
             if (_origin == null || _circleGo == null) return;
 
-            float distance = Mathf.Max(0.15f, AbilityTuning.DefaultSentinelPlacementRange * DistanceFraction);
-            Vector3 point = PlacementPoint(Direction, distance);
+            Vector3 point = PlacementPoint(Direction, PreviewDistance());
 
             _circleGo.transform.SetPositionAndRotation(
                 new Vector3(point.x, 0.01f, point.z), Quaternion.identity);
