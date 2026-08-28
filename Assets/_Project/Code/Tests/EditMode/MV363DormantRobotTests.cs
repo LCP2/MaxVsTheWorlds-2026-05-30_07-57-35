@@ -9,8 +9,9 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-363 — robots concealed behind cover stay dormant (no path, no fire, no telegraph) until
-    /// they see Max, then a whole knot wakes together. EditMode only (contract: PlayMode tests are
-    /// never authored in this repo): the dormant/alert transitions are driven directly through
+    /// each individually sees Max (MV-603 retired the group chain-wake this file used to also cover).
+    /// EditMode only (contract: PlayMode tests are never authored in this repo): the dormant/alert
+    /// transitions are driven directly through
     /// RobotEnemy's public API plus reflection into its private Tick* methods, the same idiom
     /// <c>WaterBlasterGateDamageTests</c> uses for <c>FireTick</c> — Unity does not invoke
     /// Awake/OnEnable/Update for a plain MonoBehaviour outside Play mode (see
@@ -141,8 +142,8 @@ namespace MaxWorlds.Tests.EditMode
             {
                 e.Activate();
                 Assert.AreEqual(RobotEnemy.State.Chase, e.Current,
-                    "Activate() must be idempotent so DormantGroup can call it on every member " +
-                    "without checking who woke it first");
+                    "Activate() must be idempotent so a caller can call it unconditionally " +
+                    "(e.g. ActivateGarrisonFor on every pre-placed member) without checking who's still asleep");
             }
             finally { Object.DestroyImmediate(e.gameObject); }
         }
@@ -160,56 +161,6 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(RobotEnemy.State.Chase, e.Current);
             }
             finally { Object.DestroyImmediate(e.gameObject); }
-        }
-
-        // ------------------------------------------------------------------- DormantGroup
-
-        [Test]
-        public void DormantGroup_WakingOneMember_WakesEveryStillDormantMember()
-        {
-            RobotEnemy a = NewEnemy("A"), b = NewEnemy("B"), c = NewEnemy("C");
-            try
-            {
-                a.BeginDormant(); b.BeginDormant(); c.BeginDormant();
-
-                var group = new DormantGroup();
-                group.Add(a); group.Add(b); group.Add(c);
-
-                a.Activate(); // only 'a' actually saw Max
-
-                Assert.AreEqual(RobotEnemy.State.Alert, a.Current);
-                Assert.AreEqual(RobotEnemy.State.Alert, b.Current, "AC5: activation is per-group");
-                Assert.AreEqual(RobotEnemy.State.Alert, c.Current, "AC5: activation is per-group");
-            }
-            finally
-            {
-                Object.DestroyImmediate(a.gameObject);
-                Object.DestroyImmediate(b.gameObject);
-                Object.DestroyImmediate(c.gameObject);
-            }
-        }
-
-        [Test]
-        public void DormantGroup_NeverActivatesAMemberThatIsAlreadyDead()
-        {
-            RobotEnemy a = NewEnemy("A"), b = NewEnemy("B");
-            try
-            {
-                a.BeginDormant(); b.BeginDormant();
-                var group = new DormantGroup();
-                group.Add(a); group.Add(b);
-
-                b.TakeDamage(new DamageInfo(999f, b.transform.position, Vector3.forward, Team.Player));
-                Assert.AreEqual(RobotEnemy.State.Dead, b.Current);
-
-                a.Activate();
-                Assert.AreEqual(RobotEnemy.State.Dead, b.Current, "a dead groupmate must stay dead");
-            }
-            finally
-            {
-                Object.DestroyImmediate(a.gameObject);
-                Object.DestroyImmediate(b.gameObject);
-            }
         }
 
         // ------------------------------------------------------------------- ConcealmentBias (pure)

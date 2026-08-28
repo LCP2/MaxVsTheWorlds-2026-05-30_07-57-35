@@ -156,15 +156,9 @@ namespace MaxWorlds.Enemies
         public bool IsAlive => Current != State.Dead && _health > 0f;
 
         /// <summary>Concealed and unaware (MV-363) — placed behind cover, world-present from area
-        /// load, but not yet chasing, firing or telegraphing. Ends the moment it (or a groupmate,
-        /// via <see cref="DormantGroup"/>) sees Max.</summary>
+        /// load, but not yet chasing, firing or telegraphing. Ends the moment IT sees Max (MV-603:
+        /// individually, never off another robot waking).</summary>
         public bool IsDormant => Current == State.Dormant;
-
-        /// <summary>Fired the instant a dormant robot wakes (MV-363) — what <see cref="DormantGroup"/>
-        /// listens to so the rest of a concealed knot wakes with it, reading as an ambush rather than
-        /// a trickle. Cleared on every <see cref="ResetState"/> so a pooled robot never carries a
-        /// stale group's subscription into its next life.</summary>
-        public event Action<RobotEnemy> WokeFromDormant;
 
         /// <summary>Which robot this is (YT-66). Set by <see cref="Apply"/>; the spawner pools by it,
         /// so a dead bruiser is never recycled as a rusher wearing the wrong body.</summary>
@@ -436,9 +430,6 @@ namespace MaxWorlds.Enemies
             _routeEpoch = EnemyNavigation.RouteEpoch;
             _knockback = Vector3.zero;
             _haltTimer = 0f;
-            // A pooled robot must never wake a group it no longer belongs to (MV-363) — the
-            // DormantGroup that subscribed here is for the LAST life this body had.
-            WokeFromDormant = null;
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
             _teleportTimer = teleportCooldown;
@@ -602,12 +593,13 @@ namespace MaxWorlds.Enemies
             to.y = 0f;
 
             // Out of the doorway, or it has taken long enough that something is in the way — a piece
-            // of cover, another robot, a corner of the shed. Either way it stops pushing and gets on
-            // with the fight, because a robot stuck emerging is a robot that never attacks.
+            // of cover, another robot, a corner of the shed. Either way it stops pushing and hands off
+            // to Dormant (MV-603), not straight into Chase: a shed spawn is still unseen the instant
+            // it clears the door, and it must wait for its own AmbushWake tick exactly like a placed
+            // garrison/concealed member does, rather than start hunting Max unseen.
             if (to.sqrMagnitude <= EmergeArriveRadius * EmergeArriveRadius || _stateTimer >= EmergeTimeout)
             {
-                Current = State.Chase;
-                _stateTimer = 0f;
+                BeginDormant();
                 return;
             }
 
@@ -648,8 +640,9 @@ namespace MaxWorlds.Enemies
         /// <summary>Nothing: the whole point (AC2) is that a dormant robot does not path toward Max,
         /// does not fire, and does not telegraph its position. The only way out is <see cref="Activate"/>
         /// — called here the instant <see cref="AmbushWake"/> says both the camera and the sight-line
-        /// agree (ticked unconditionally above, same as every other state), or by a groupmate's via
-        /// <see cref="DormantGroup"/>.
+        /// agree (ticked unconditionally above, same as every other state). MV-603: this is the ONLY
+        /// way a robot wakes now — the MV-363 group chain-wake that used to also call this on a
+        /// groupmate's behalf is retired; each robot answers for its own sighting alone.
         ///
         /// MV-478: sight alone used to be the whole test, but <see cref="MaxWorlds.Arena.LineOfSight"/>
         /// is symmetric geometry — "this robot can see Max" and "Max can see this robot" are the same
@@ -682,15 +675,15 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Wakes a dormant robot into the short "waking up" beat (<see cref="TickAlert"/>)
         /// before it joins the chase for real. Idempotent — a robot no longer Dormant ignores a
-        /// second call, which is what lets <see cref="DormantGroup"/> call this on every member of a
-        /// concealed knot without first checking which one actually saw Max.</summary>
+        /// second call, which is what lets <see cref="AreaAccumulationDirector.ActivateGarrisonFor"/>
+        /// call this unconditionally on every pre-placed garrison member when the area's own gate
+        /// breaks, without first checking which ones are still asleep.</summary>
         public void Activate()
         {
             if (Current != State.Dormant) return;
             Current = State.Alert;
             _stateTimer = 0f;
             SetTell(windupTell);
-            WokeFromDormant?.Invoke(this);
         }
 
         /// <summary>The beat itself: a pulsing tell (same idiom as <see cref="TickTelegraph"/>'s
