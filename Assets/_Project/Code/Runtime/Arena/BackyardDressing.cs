@@ -16,11 +16,13 @@ namespace MaxWorlds.Arena
     /// yard with nothing hand-wired. If there's no path in the scene there's no yard to dress and
     /// this does nothing, which is what keeps it out of the test fixtures that build a bare arena.
     ///
-    /// Two things it never does, and both are the point:
+    /// Two things it (almost) never does, and both are the point:
     ///
-    ///   * It adds no colliders. Every prop here is scenery. What stops the player is still the
-    ///     greybox — the walls, the gate, the three cover blocks — and it is untouched. So the yard
-    ///     can be dressed as densely as it likes without a single re-tuned fight.
+    ///   * With ONE exception (<see cref="GivePotsACollider"/>, MV-613), it adds no colliders. Every
+    ///     other prop here is scenery. What stops the player, the boss and the robots is still the
+    ///     greybox — the walls, the gate, the three cover blocks — plus now the planted pots, and it
+    ///     is otherwise untouched. So the yard can be dressed as densely as it likes without a single
+    ///     re-tuned fight.
     ///
     ///   * It doesn't build ANYTHING if the set fails <see cref="BackyardDressingSet.Validate"/>.
     ///     An undressed yard is a cosmetic problem; a hedge across the mission line is a broken run.
@@ -160,8 +162,31 @@ namespace MaxWorlds.Arena
             go.isStatic = true;
 
             Strip(go);
+            GivePotsACollider(go, prop);
             PropCount++;
             return go;
+        }
+
+        /// <summary>
+        /// The one deliberate exception to "dressing never blocks" (MV-613, Lee's call — not a design
+        /// question to re-raise): a planted pot reads solid enough that a boss or robot visibly gliding
+        /// through one reads as broken, the same complaint that motivated this ticket. Static and sized
+        /// to the prop's own kit-unit footprint, so <see cref="Strip"/>'s promise still holds for every
+        /// OTHER prop in the yard, and Unity's own transform scaling does the rest — the same
+        /// local-bounds-not-world-bounds convention <see cref="BigBermudaBoss.FitColliderTo"/> uses.
+        /// Both a pot and a robot/boss already know how to react to it: <c>WallLatch</c> routes around
+        /// any collider that isn't a floor or another character (MV-590), so nothing else has to learn
+        /// pots exist.
+        /// </summary>
+        private static void GivePotsACollider(GameObject go, in DressingProp prop)
+        {
+            if (prop.Key != PropCatalog.PotSmall && prop.Key != PropCatalog.PotLarge) return;
+
+            Vector3 kit = PropCatalog.Size(prop.Key);   // LOCAL (kit-unit) — go's own scale carries prop.Scale
+            var col = go.AddComponent<CapsuleCollider>();
+            col.radius = Mathf.Max(0.05f, (kit.x + kit.z) * 0.25f);
+            col.height = Mathf.Max(col.radius * 2f, kit.y);
+            col.center = new Vector3(0f, kit.y * 0.5f, 0f);
         }
 
         // ---------------------------------------------------------------- cover

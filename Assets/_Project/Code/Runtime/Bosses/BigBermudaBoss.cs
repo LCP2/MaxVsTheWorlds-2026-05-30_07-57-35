@@ -176,6 +176,22 @@ namespace MaxWorlds.Bosses
             _cc.radius = Mathf.Max(local.extents.x, local.extents.z);
         }
 
+        /// <summary>
+        /// Re-fits the CharacterController to <paramref name="localBounds"/> — the bound
+        /// <see cref="BigBermudaRig"/>'s own combined renderer bounds, already expressed in this boss's
+        /// local space (see <see cref="BigBermudaRig.Bind"/>). MV-613: the Awake-time fit above sizes the
+        /// collider to the hidden placeholder cube, but once a rig attaches IT is what the player sees —
+        /// a scaled-down rig left standing next to a stale, unscaled collider is exactly the "looks
+        /// unchanged, wedges in doors" bug this replaces. Called once, right after the rig builds itself.
+        /// </summary>
+        public void FitColliderTo(Bounds localBounds)
+        {
+            if (_cc == null) return;
+            _cc.center = localBounds.center;
+            _cc.height = Mathf.Max(0.01f, localBounds.size.y);
+            _cc.radius = Mathf.Max(0.01f, Mathf.Max(localBounds.extents.x, localBounds.extents.z));
+        }
+
         private void Start()
         {
             // Tell the HUD a real boss exists so it never engages/drains its stand-in boss.
