@@ -543,7 +543,7 @@
   {
    "id": "a1",
    "index": 1,
-   "name": "Area 1 \u2014 The Carport",
+   "name": "Area 1 - The Carport",
    "role": "normal",
    "origin": {
     "x": 5,
@@ -742,7 +742,7 @@
   {
    "id": "a3",
    "index": 3,
-   "name": "Area 3 \u2014 The Shed",
+   "name": "Area 3 - The Shed",
    "role": "shed",
    "origin": {
     "x": 31,
@@ -1152,7 +1152,7 @@
   {
    "id": "a6",
    "index": 6,
-   "name": "Area 6 \u2014 The Greenhouse",
+   "name": "Area 6 - The Greenhouse",
    "role": "shed",
    "origin": {
     "x": 57,
@@ -1405,7 +1405,7 @@
   {
    "id": "a8",
    "index": 8,
-   "name": "Area 8 \u2014 The Toolshed",
+   "name": "Area 8 - The Toolshed",
    "role": "shed",
    "origin": {
     "x": 78,
@@ -1566,7 +1566,7 @@
   {
    "id": "a9",
    "index": 9,
-   "name": "Area 9 \u2014 The Workshop",
+   "name": "Area 9 - The Workshop",
    "role": "shed",
    "origin": {
     "x": 102,
