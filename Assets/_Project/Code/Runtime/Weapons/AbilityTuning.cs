@@ -287,13 +287,13 @@ namespace MaxWorlds.Weapons
         /// couple of Bruiser hits (28 dmg each, <see cref="MaxWorlds.Enemies.EnemyArchetype.Bruiser"/>)
         /// or a single Launcher splash (<see cref="MaxWorlds.Enemies.EnemyArchetype.Launcher"/>) puts a
         /// real dent in it.</summary>
-        public const float DefaultSentinelBaseHp = 60f;
+        public const float DefaultSentinelBaseHp = 120f;
 
         /// <summary>Extra HP each Health (u_hp) level adds — same additive "level = bigger number"
         /// shape as <see cref="DefaultForceFieldAbsorbCapPerLevel"/>. u_hp is a stat (spendable from
         /// level 0), unlike the old Wall Strength cap, so level 0 is a real, un-upgraded state, not
         /// an unreachable one.</summary>
-        public const float DefaultSentinelHpPerLevel = 20f;
+        public const float DefaultSentinelHpPerLevel = 30f;
 
         /// <summary>The sentinel's max HP at a given Health (u_hp) level.</summary>
         public static float SentinelMaxHp(int level, float baseHp, float perLevel) =>
@@ -304,12 +304,12 @@ namespace MaxWorlds.Weapons
         /// <see cref="SentinelDamagePerShot"/>), same "always weaker than Max's CURRENT primary...
         /// it must stay below Max's current power as he upgrades" rule the old Gunner Power track
         /// enforced.</summary>
-        public const float DefaultSentinelDamageFraction = 0.4f;
+        public const float DefaultSentinelDamageFraction = 0.6f;
 
         /// <summary>Extra fraction each Damage (u_dmg) level adds — capped so even a maxed track
         /// (<see cref="SentinelDamageFraction"/> clamps to 1.0) can never reach, let alone exceed,
         /// Max's own current output.</summary>
-        public const float DefaultSentinelDamageFractionPerLevel = 0.1f;
+        public const float DefaultSentinelDamageFractionPerLevel = 0.08f;
 
         /// <summary>Fraction of Max's current primary damage-per-tick the sentinel deals per shot at
         /// a given Damage (u_dmg) level — clamped below 1.0, so whatever <paramref
@@ -335,7 +335,7 @@ namespace MaxWorlds.Weapons
             Mathf.Max(0f, baseRange) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level);
 
         /// <summary>Seconds between sentinel shots — fixed, not one of the six leveled axes.</summary>
-        public const float DefaultSentinelFireInterval = 0.6f;
+        public const float DefaultSentinelFireInterval = 0.35f;
 
         /// <summary>OVERCHARGE (MV-426 fusion <c>f_ovc</c>, Energy+Support, HUD slot U): "the Sentinel
         /// runs off your cells: double rate of fire while you have charge to spend" — half the normal
