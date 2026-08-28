@@ -161,13 +161,23 @@ namespace MaxWorlds.UI
             // left-destructive/right-primary layout WeaponsScreen's top bar already reads (CLOSE then
             // QUIT built right-to-left from the bar's right edge puts QUIT further left of CLOSE; here
             // the two sit on their own row so the convention is spelled out directly instead).
+            //
+            // MV-599: these were built with STRETCH anchors (anchorMin.x != anchorMax.x) and a positive
+            // sizeDelta.x — in stretch mode Unity adds sizeDelta.x to the anchor span rather than
+            // treating it as a width, so each button came out at (half the panel width) + 360, massively
+            // overflowing the panel and overlapping at the centre. Point anchors (anchorMin == anchorMax)
+            // make sizeDelta a real pixel size, so 360x76 means what it says. Centred as a pair with a
+            // 40px gutter between them, each button ends up 70px in from its own panel edge (panelW=900).
+            const float buttonW = 360f, buttonH = 76f, halfGutter = 20f;
+            float buttonCenterX = buttonW / 2f + halfGutter;
+
             _quitButton = BuildButton(panel.rectTransform, "QUIT TO MAIN MENU", QuitColor, TextColor,
-                new Vector2(0f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-10f, 60f),
-                new Vector2(360f, 76f), OnQuitTapped);
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(-buttonCenterX, 60f),
+                new Vector2(buttonW, buttonH), OnQuitTapped);
 
             _continueButton = BuildButton(panel.rectTransform, "CONTINUE", ContinueColor, PanelColor,
-                new Vector2(0.5f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0f), new Vector2(10f, 60f),
-                new Vector2(360f, 76f), OnContinueTapped);
+                new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(buttonCenterX, 60f),
+                new Vector2(buttonW, buttonH), OnContinueTapped);
 
             _root.SetActive(false);
         }
