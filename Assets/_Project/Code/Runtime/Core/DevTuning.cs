@@ -306,6 +306,13 @@ namespace MaxWorlds.Core
         /// <summary>Concurrent robots on screen, field-wide (<c>maxActiveRobots</c>).</summary>
         public static float? MaxActiveRobots { get; set; }
 
+        /// <summary>The one field-wide live-robot budget every spawn AND placement path shares
+        /// (MV-612) — see <see cref="MaxWorlds.Enemies.RobotCompositionTuning.DefaultGlobalRobotBudget"/>
+        /// for the authored default and why it's set where it is. Unlike <see cref="MaxActiveRobots"/>
+        /// (a PER-AREA concurrent cap), this bounds the TOTAL live count across every area and every
+        /// factory shed at once.</summary>
+        public static float? GlobalRobotBudget { get; set; }
+
         /// <summary>Per-area robot-HP multiplier, on top of the base archetype HP
         /// (<c>robotHpPerAreaMult</c>).</summary>
         public static float? RobotHpPerAreaMult { get; set; }
@@ -414,6 +421,7 @@ namespace MaxWorlds.Core
             ForceFieldAlphaCeiling.HasValue || ForceFieldHoldUp.HasValue ||
             StartLargeCount.HasValue || StartSmallCount.HasValue || AreaGrowthPct.HasValue ||
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
+            GlobalRobotBudget.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
             ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue ||
             GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
@@ -496,6 +504,7 @@ namespace MaxWorlds.Core
             LargeToSmallRatio = null;
             LargeShareDriftPerArea = null;
             MaxActiveRobots = null;
+            GlobalRobotBudget = null;
             RobotHpPerAreaMult = null;
             HeavyIntroArea = null;
             BruteIntroArea = null;
@@ -594,6 +603,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(LargeToSmallRatio), () => LargeToSmallRatio, v => LargeToSmallRatio = v),
             (PrefsPrefix + nameof(LargeShareDriftPerArea), () => LargeShareDriftPerArea, v => LargeShareDriftPerArea = v),
             (PrefsPrefix + nameof(MaxActiveRobots), () => MaxActiveRobots, v => MaxActiveRobots = v),
+            (PrefsPrefix + nameof(GlobalRobotBudget), () => GlobalRobotBudget, v => GlobalRobotBudget = v),
             (PrefsPrefix + nameof(RobotHpPerAreaMult), () => RobotHpPerAreaMult, v => RobotHpPerAreaMult = v),
             (PrefsPrefix + nameof(HeavyIntroArea), () => HeavyIntroArea, v => HeavyIntroArea = v),
             (PrefsPrefix + nameof(BruteIntroArea), () => BruteIntroArea, v => BruteIntroArea = v),
