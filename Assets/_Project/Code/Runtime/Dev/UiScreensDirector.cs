@@ -184,12 +184,14 @@ namespace MaxWorlds.Dev
             // capture is directly comparable to it.
             yield return CaptureFixtureScreen("rig-mv520-16x9", 1920, 1080, ApplyRigFixtureMv520, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
 
-            // MV-521 AC7's human-check shot: THE RIG immediately after a category draft pick resolves —
-            // SECONDARY freshly unlocked (its reveal glow still mid-flight, real time keeps advancing it
-            // even while paused) and the screen still open, ENERGY left behind still dark. The "open"
-            // action both opens the board (consuming the banked draft) AND takes the pick, since
-            // CaptureFixtureScreen has no separate post-open hook — same trick as any capture that needs
-            // more than open+wait before the shot.
+            // MV-521 AC7's human-check shot (name kept for continuity with that ticket): THE RIG right
+            // after a category draft pick resolves — SECONDARY freshly granted and its reveal CEREMONY
+            // just starting (MV-605 replaced the old ~0.6s glow with a staged, skippable one; a capture
+            // taken this same frame lands in the ceremony's own opening beat — the board still reads
+            // close to its pre-unlock state, which is the point of that stage), screen still open, ENERGY
+            // left behind still dark. The "open" action both opens the board (consuming the banked draft)
+            // AND takes the pick, since CaptureFixtureScreen has no separate post-open hook — same trick
+            // as any capture that needs more than open+wait before the shot.
             yield return CaptureFixtureScreen("rig-mv521-reveal-16x9", 1920, 1080, ApplyRigFixtureMv521,
                 () =>
                 {
@@ -210,6 +212,15 @@ namespace MaxWorlds.Dev
             // AC8 names these two exact files — see ApplyRigFixtureMv538Unlocked/Progress's own docs.
             yield return CaptureFixtureScreen("MV-538-unlocked", 1920, 1080, ApplyRigFixtureMv538Unlocked, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
             yield return CaptureFixtureScreen("MV-538-progress", 1920, 1080, ApplyRigFixtureMv538Progress, weapons.Open, weapons.Close, canvas, ScaleBoardTo);
+
+            // MV-605 AC10's human-check shot: the reveal ceremony actually mid-flight — the fixture banks
+            // SECONDARY (locked at RigState.Reset's own baseline) as a pending single-category module;
+            // "open" both consumes the bank (granting immediately, same as MV-521) and starts its
+            // ceremony; the extra 1.8s real-time wait (CaptureFixtureScreen's own extraWaitSeconds, on
+            // top of the standard 0.1f settle) lands the shot inside stage c/d — board dimmed back,
+            // SECONDARY's own highlight lit, its children lighting in sequence — instead of the ceremony's
+            // barely-visible opening beat a bare open+0.1s would catch.
+            yield return CaptureFixtureScreen("MV-605", 1920, 1080, ApplyRigFixtureMv605, weapons.Open, weapons.Close, canvas, ScaleBoardTo, extraWaitSeconds: 1.8f);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -277,6 +288,19 @@ namespace MaxWorlds.Dev
             RigState.Reset();
             PickupWallet.Reset();
             PendingMorphingModule.Set(new[] { "SECONDARY", "ENERGY" });
+        }
+
+        /// <summary>MV-605 AC10: a fresh run (only PRIMARY unlocked) with a single-category Morphing
+        /// Module banked for SECONDARY — the shape a live shed pickup always draws today (MV-595 fixed
+        /// shed draws to exactly one locked category id). Cells set well past every cost this fixture
+        /// touches so the "not spendable" read the capture ought to show is about the ceremony gate, not
+        /// a coincidentally-poor player.</summary>
+        public static void ApplyRigFixtureMv605()
+        {
+            RigState.Reset();
+            PickupWallet.Reset();
+            PickupWallet.SetPowerCells(30);
+            PendingMorphingModule.Set(new[] { "SECONDARY" });
         }
 
         /// <summary>MV-519 AC9: the same board state as <see cref="ApplyRigFixture"/>, but landed over
@@ -509,7 +533,7 @@ namespace MaxWorlds.Dev
         /// <see cref="CaptureRigBoard"/> uses it to drive <c>WeaponsScreen.ApplyBoardScale(float)</c>
         /// with this shot's real aspect instead of the ambient one, which otherwise shrank and recentred
         /// the board on a headless capture whose batchmode window isn't actually 16:9.</summary>
-        private IEnumerator CaptureFixtureScreen(string name, int w, int h, Action applyFixture, Action open, Action close, Canvas canvas, Action<int, int> onSizeKnown = null)
+        private IEnumerator CaptureFixtureScreen(string name, int w, int h, Action applyFixture, Action open, Action close, Canvas canvas, Action<int, int> onSizeKnown = null, float extraWaitSeconds = 0f)
         {
             Exception staged = null;
             try
@@ -523,6 +547,10 @@ namespace MaxWorlds.Dev
             yield return null;
             yield return null;
             yield return new WaitForSecondsRealtime(0.1f);   // paused (timeScale 0) — real time only
+            // MV-605: some fixtures (the reveal ceremony) need real time to actually advance past the
+            // standard 0.1f settle above before the shot means anything — Update() keeps driving it via
+            // Time.unscaledTime while this coroutine yields, same as the standard wait just longer.
+            if (extraWaitSeconds > 0f) yield return new WaitForSecondsRealtime(extraWaitSeconds);
 
             // MV-441: the shot must be the ONLY high-sorting-order screen up — HomeScreen's own
             // sortingOrder=220 canvas sat over every ui-screens capture uncaught until this ran.
