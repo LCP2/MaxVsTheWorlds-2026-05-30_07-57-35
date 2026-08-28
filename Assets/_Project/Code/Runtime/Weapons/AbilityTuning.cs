@@ -149,9 +149,19 @@ namespace MaxWorlds.Weapons
         /// Field radius now levels... levels raise absorb AND radius together") made this the
         /// Level-1 starting point of a leveled axis instead of a permanent hard lock — see
         /// <see cref="ForceFieldRadius"/>. MV-583 (Lee, 26 Aug 2026 DECISION: "smaller than SG2, try
-        /// 50% of current size") halves it again, to 0.75 m (1.5 m diameter) — do not re-raise
-        /// whether 0.75 m is too small, Lee will judge it in play.</summary>
-        public const float DefaultForceFieldRadius = 0.75f;
+        /// 50% of current size") halved it to 0.75 m (1.5 m diameter), which then read as too small.
+        /// MV-602 (Lee, 26 Aug 2026, after MV-583 shipped: "force field is now tiny... Make it 2.5x
+        /// [Max's body width]") re-expresses it as a ratio to Max instead of a bare number. Max's
+        /// measured world body width is 1.0 m: "Max (Greybox)" in Backyard_Slice.unity carries a
+        /// CharacterController with m_Radius 0.5 on a root transform (no parent scale) at localScale
+        /// (1,1,1) — world radius 0.5 m, doubled = 1.0 m; its CapsuleCollider (also m_Radius 0.5,
+        /// m_Height 2) and the default Capsule primitive mesh corroborate the same figure from the
+        /// renderer side. That is materially different from Lee's own ~0.83 m estimate, so per the
+        /// ticket's own "trust the measurement" instruction: 1.25 * 1.0 m = 1.25 m (2.5 m diameter),
+        /// not the ~1.04 m the estimate implied. Measured 28 Aug 2026 — do not compute this at
+        /// runtime from Max's live bounds; a stable authored number must not shift if Max's model is
+        /// ever retouched.</summary>
+        public const float DefaultForceFieldRadius = 1.25f;
 
         /// <summary>Extra bubble radius each Force Field level beyond L1 adds — MV-422 originally set
         /// this to 0.25 (so a maxed L5 bubble read as 2.5 m); MV-583 (Lee: "it should not grow in

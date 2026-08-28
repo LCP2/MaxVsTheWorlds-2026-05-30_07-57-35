@@ -1,4 +1,5 @@
 using NUnit.Framework;
+using UnityEngine;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -222,14 +223,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ForceFieldRadiusIsHalvedAndNeverGrowsWithLevel_MV583()
+        public void ForceFieldRadiusNeverGrowsWithLevel_MV583()
         {
-            // MV-583 (Lee, 26 Aug 2026 DECISION: "smaller than SG2, try 50% of current size... it
-            // should not grow in size") halves the DECISION #3 radius (1.5m -> 0.75m) and zeroes the
-            // MV-422 per-level growth that used to widen it to 2.5m at L5 — shimmer speed carries
-            // "more powerful" now instead (see ForceFieldBubble.ApplyShimmerOverrides).
-            Assert.That(AbilityTuning.DefaultForceFieldRadius, Is.EqualTo(0.75f).Within(1e-5f),
-                "radius must be halved from the old 1.5m to 0.75m");
+            // MV-583 (Lee, 26 Aug 2026 DECISION: "it should not grow in size") zeroed the MV-422
+            // per-level growth that used to widen the bubble with level — shimmer speed carries
+            // "more powerful" now instead (see ForceFieldBubble.ApplyShimmerOverrides). MV-602 later
+            // changed the pinned base radius itself (see
+            // ForceFieldDiameterIsTwoPointFiveTimesMaxsBodyWidth_MV602 for that derivation), so this
+            // test asserts the invariant against whatever the base is, not a historical literal.
             Assert.That(AbilityTuning.DefaultForceFieldRadiusPerLevel, Is.EqualTo(0f).Within(1e-5f),
                 "the field must stop growing with level — power now reads as shimmer speed");
 
@@ -238,8 +239,62 @@ namespace MaxWorlds.Tests.EditMode
             {
                 float radius = AbilityTuning.ForceFieldRadius(level, AbilityTuning.DefaultForceFieldRadius,
                     AbilityTuning.DefaultForceFieldRadiusPerLevel);
-                Assert.That(radius, Is.EqualTo(0.75f).Within(1e-5f),
-                    $"level {level}'s radius drifted away from the pinned 0.75m — the field must never grow");
+                Assert.That(radius, Is.EqualTo(AbilityTuning.DefaultForceFieldRadius).Within(1e-5f),
+                    $"level {level}'s radius drifted away from the base — the field must never grow");
+            }
+        }
+
+        /// <summary>MV-602 (Lee, 26 Aug 2026, after MV-583 shipped: "force field is now tiny... Make
+        /// it 2.5x [Max's body width]"). Max's measured world body width is 1.0 m: "Max (Greybox)" in
+        /// Backyard_Slice.unity carries a CharacterController with m_Radius 0.5 on a root transform
+        /// (no parent scale) at localScale (1,1,1) — world radius 0.5m, doubled = 1.0m. Its
+        /// CapsuleCollider (also m_Radius 0.5, m_Height 2) and the default Capsule primitive mesh
+        /// corroborate the same figure from the renderer side. That is materially different from
+        /// Lee's own ~0.83m estimate (the ticket says trust the measurement), so
+        /// DefaultForceFieldRadius = 1.25 * 1.0m = 1.25m (2.5m diameter), not the ~1.04m the estimate
+        /// implied.</summary>
+        [Test]
+        public void ForceFieldDiameterIsTwoPointFiveTimesMaxsBodyWidth_MV602()
+        {
+            const float bodyWidth = 1.0f;
+            float expectedRadius = 1.25f * bodyWidth;
+
+            Assert.That(AbilityTuning.DefaultForceFieldRadius, Is.EqualTo(expectedRadius).Within(0.01f),
+                "the base radius must be 1.25x Max's measured body width (half of the 2.5x diameter)");
+
+            int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.ForceField);
+            for (int level = 1; level <= maxLevel; level++)
+            {
+                float radius = AbilityTuning.ForceFieldRadius(level, AbilityTuning.DefaultForceFieldRadius,
+                    AbilityTuning.DefaultForceFieldRadiusPerLevel);
+                Assert.That(radius, Is.EqualTo(expectedRadius).Within(0.01f),
+                    $"level {level}'s radius must stay at 1.25x body width — the field never grows with level");
+            }
+
+            var owner = new GameObject("Owner");
+            var ownerCc = owner.AddComponent<CharacterController>();
+            var bubbleGo = new GameObject("Force Field Bubble");
+            var bubble = bubbleGo.AddComponent<ForceFieldBubble>();
+            try
+            {
+                bubble.Init(owner.transform, ownerCc, AbilityTuning.DefaultForceFieldRadius);
+                var visual = bubbleGo.transform.Find("Visual");
+                float expectedDiameter = 2.5f * bodyWidth;
+
+                Assert.That(visual.localScale.x, Is.EqualTo(expectedDiameter).Within(0.01f), "visual X scale");
+                Assert.That(visual.localScale.y, Is.EqualTo(expectedDiameter).Within(0.01f), "visual Y scale");
+                Assert.That(visual.localScale.z, Is.EqualTo(expectedDiameter).Within(0.01f), "visual Z scale");
+                Assert.That(bubble.Collider.radius, Is.EqualTo(expectedDiameter / 2f).Within(0.01f),
+                    "the collider radius must be half the visual diameter");
+
+                float ratio = visual.localScale.x / bodyWidth;
+                Assert.That(ratio, Is.EqualTo(2.5f).Within(0.02f),
+                    "assert the RATIO, not the absolute metres, so this stays true if Max is ever resized");
+            }
+            finally
+            {
+                Object.DestroyImmediate(bubbleGo);
+                Object.DestroyImmediate(owner);
             }
         }
     }

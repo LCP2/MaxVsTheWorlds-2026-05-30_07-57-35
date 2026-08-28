@@ -628,7 +628,9 @@ namespace MaxWorlds.Dev
                     foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
                     RigState.AcquireCap("e_ff");
                 },
-                Shots = new List<CaptureShot> { new CaptureShot("MV-585", Setup) },
+                // MV-602 reuses this same armed run to also drop its own hand-off PNG (the field's
+                // still raised on Max from the identical Setup) rather than adding a second preset.
+                Shots = new List<CaptureShot> { new CaptureShot("MV-585", Setup), new CaptureShot("MV-602", Setup) },
             };
         }
     }
