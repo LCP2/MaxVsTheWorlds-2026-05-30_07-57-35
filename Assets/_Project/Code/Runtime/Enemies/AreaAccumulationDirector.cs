@@ -102,11 +102,6 @@ namespace MaxWorlds.Enemies
         /// <see cref="FillArea"/>; 0 for a room too small to spare a hidden knot.</summary>
         private int _concealedRemainingThisArea;
 
-        /// <summary>The concealed knot currently being filled — every member wakes together the
-        /// instant any one of them sees Max (see <see cref="DormantGroup"/>). Rebuilt fresh per area
-        /// in <see cref="FillArea"/>; null while <see cref="_concealedRemainingThisArea"/> is 0.</summary>
-        private DormantGroup _currentConcealedGroup;
-
         /// <summary>Robots pre-placed for an area not yet entered (MV-514) — already standing at their
         /// authored <see cref="Garrison.SeedPositions"/>, dormant, the moment the PREVIOUS area was
         /// filled (see <see cref="PlacePendingGarrison"/>), awaiting <see cref="ActivateGarrisonFor"/>
@@ -401,9 +396,10 @@ namespace MaxWorlds.Enemies
 
             // MV-363: a big enough room spares a small knot of robots to start concealed behind
             // cover instead of joining the fight the instant it fills — see Spawn() and
-            // ConcealedSpawnPointInArea(). One knot per room, not a blanket policy.
+            // ConcealedSpawnPointInArea(). One knot per room, not a blanket policy. MV-603: each
+            // member wakes purely off its own AmbushWake tick now — there is no group wiring left to
+            // wake the rest of the knot early.
             _concealedRemainingThisArea = totalForArea >= MinCompositionForConcealment ? ConcealedGroupSize : 0;
-            _currentConcealedGroup = _concealedRemainingThisArea > 0 ? new DormantGroup() : null;
 
             // Instantly, not paced — this room's population must already be standing by the time the
             // player can see it (MV-245). Targeted at this area specifically (MV-417) rather than plain
@@ -543,10 +539,9 @@ namespace MaxWorlds.Enemies
         /// to read <c>garrisonDensity</c>/positions from) or when <paramref name="area"/> is null (area
         /// never filled / unrecognised).
         ///
-        /// MV-478: every robot this places starts <see cref="RobotEnemy.BeginDormant"/>, wired into one
-        /// shared <see cref="DormantGroup"/> so the whole ring wakes together (AC1/AC2) — a
-        /// Garrison-seeded knot is meant to read as an ambush the player walks into, not a mob that
-        /// starts running the instant the area loads.</summary>
+        /// MV-478: every robot this places starts <see cref="RobotEnemy.BeginDormant"/> — each one
+        /// wakes purely off its own <c>AmbushWake</c> tick (MV-603 retired the shared-group chain-wake
+        /// that used to pop the whole ring the instant one member was seen).</summary>
         private void SeedGarrison(int areaIndex, WorldArea area)
         {
             if (_worldCfg == null || area == null) return;
@@ -555,7 +550,6 @@ namespace MaxWorlds.Enemies
             if (seedCount <= 0) return;
 
             Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount);
-            var group = new DormantGroup();
             for (int i = 0; i < slots.Length; i++)
             {
                 if (!_queue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
@@ -575,7 +569,6 @@ namespace MaxWorlds.Enemies
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
                 // would otherwise stamp this robot back to a fresh Chase state and wipe the call below.
                 e.BeginDormant();
-                group.Add(e);
 
                 LetThePlayerThrough(e.gameObject);
             }
@@ -663,7 +656,6 @@ namespace MaxWorlds.Enemies
             {
                 _concealedRemainingThisArea--;
                 e.BeginDormant();
-                _currentConcealedGroup.Add(e);
             }
 
             // Re-applied on every spawn, not just on creation — Unity drops an ignored collider pair
