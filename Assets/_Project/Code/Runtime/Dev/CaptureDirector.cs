@@ -300,6 +300,10 @@ namespace MaxWorlds.Dev
             Add(BuildMissileTrail());
             Add(BuildWaterGroundTrail());
             Add(BuildMv585ForceField());
+            Add(BuildMv606Hud("mv6061920", "-mv6061920shot", "Temp/mv6061920.arm", "Temp/mv6061920.headless",
+                "_mv6061920_done.txt", "MV-606-1920", 1920, 1080));
+            Add(BuildMv606Hud("mv606phone", "-mv606phoneshot", "Temp/mv606phone.arm", "Temp/mv606phone.headless",
+                "_mv606phone_done.txt", "MV-606-phone", 852, 393)); // 852x393: the project's own iPhone-landscape convention (see UiScreensDirector)
             return d;
         }
 
@@ -631,6 +635,63 @@ namespace MaxWorlds.Dev
                 // MV-602 reuses this same armed run to also drop its own hand-off PNG (the field's
                 // still raised on Max from the identical Setup) rather than adding a second preset.
                 Shots = new List<CaptureShot> { new CaptureShot("MV-585", Setup), new CaptureShot("MV-602", Setup) },
+            };
+        }
+
+        // ---- MV606Hud (MV-606 AC8) -----------------------------------------------------------
+
+        /// <summary>The reshuffled HUD only reads as intended once Force Field, Teleport and Water
+        /// Balloon are all on screen at once alongside the RIG's own move — one shared preset builder,
+        /// called twice below for the desktop (1920x1080) and iPhone-landscape (852x393) hand-off
+        /// shots the ticket's human-check AC asks for.</summary>
+        private static CapturePreset BuildMv606Hud(string key, string flag, string armFile, string headlessMarker,
+            string doneFileName, string shotName, int width, int height)
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            IEnumerator Setup(Camera cam)
+            {
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud == null) throw new CaptureAbortException("no HudController in the scene");
+
+                hud.gameObject.SetActive(true);
+                int ui = LayerMask.NameToLayer("UI");
+                if (ui >= 0) cam.cullingMask |= (1 << ui);
+                var hudCanvas = hud.GetComponentInChildren<Canvas>(true);
+                if (hudCanvas != null)
+                {
+                    hudCanvas.renderMode = RenderMode.ScreenSpaceCamera;
+                    hudCanvas.worldCamera = cam;
+                    hudCanvas.planeDistance = 1f;
+                }
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = key,
+                LogTag = "[MV606Capture]",
+                Flag = flag,
+                ArmFile = armFile,
+                HeadlessMarker = headlessMarker,
+                DoneFileName = doneFileName,
+                Width = width,
+                Height = height,
+                DisableBrain = false,   // the shot never repositions the camera — Cinemachine keeps driving it
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // HudController.Awake bakes each control's visibility from RigState once, before
+                    // AfterSceneLoad — the unlocks have to land before that Awake runs.
+                    RigState.Reset();
+                    foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
+                    RigState.AcquireCap("e_ff");  // Force Field
+                    RigState.AcquireCap("m_tp");  // Teleport
+                    RigState.AcquireCap("s_bal"); // Water Balloon
+                },
+                Shots = new List<CaptureShot> { new CaptureShot(shotName, Setup) },
             };
         }
     }

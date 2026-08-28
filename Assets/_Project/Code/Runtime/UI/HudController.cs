@@ -80,6 +80,30 @@ namespace MaxWorlds.UI
         private static readonly Color WeaponsButtonIdleRingColor = new Color(0.55f, 0.58f, 0.62f, 1f);
         private const float RefW = 1920f, RefH = 1080f;
 
+        // ---------- MV-606 HUD layout ----------
+        // Central block for the handful of elements this reshuffle repositions (RIG, Teleport, Force
+        // Field), so the next move of any one of them is a one-line change here instead of touching
+        // several builder methods. Deliberately NOT a migration of the rest of the HUD — everything
+        // else keeps its own inline literals until it, too, is next touched.
+
+        /// <summary>RIG tap root (<see cref="BuildWeaponsButton"/>): top-right corner inset, replacing
+        /// the retired B/U ability slots that used to occupy this corner.</summary>
+        private const float RigCornerInset = 24f;
+
+        /// <summary>Force Field button (<see cref="BuildForceFieldButton"/>): far-left column, sitting
+        /// in the vertical gap between the MAP button (top edge 720) and the P/?/S + HOME column
+        /// (bottom edge 856) — 13px clear of each at the button's own 110px size.</summary>
+        private const float ForceFieldX = 150f;
+        private const float ForceFieldRise = 788f;
+
+        /// <summary>Teleport joystick (<see cref="RebuildTeleportJoystick"/>): tracks the right edge,
+        /// horizontally centred on the aim stick's own centre line (same -150 offset — see
+        /// <see cref="BuildJoysticks"/>), risen clear of the aim stick's full touch pad (half-size 100
+        /// + 30px fat-finger margin = top edge 280) plus a visible gap, with margin to spare across the
+        /// joystick's own level-driven size range.</summary>
+        private const float TeleportX = -150f;
+        private const float TeleportRise = 430f;
+
         private HudModel _model;
         private PlayerHealth _health;
         private PlayerController _player;
@@ -94,16 +118,6 @@ namespace MaxWorlds.UI
         private readonly DamageNumberAggregator _damageNumbers = new DamageNumberAggregator();
         private readonly System.Collections.Generic.List<DamageNumberAggregator.Entry> _damageBuffer =
             new System.Collections.Generic.List<DamageNumberAggregator.Entry>(16);
-        private readonly float[] _slotReadyFlash = new float[2];
-        private readonly bool[] _slotWasReady = new bool[2];
-
-        // Ability slots (0 Bomb, 1 Ultimate — "B"/"U", also the two FORGE HUD slot ids, MV-426)
-        private readonly Image[] _slotRadial = new Image[2];
-        private readonly Image[] _slotGlow = new Image[2];
-        private readonly Image[] _slotIcon = new Image[2];
-        private readonly Text[] _slotLetter = new Text[2];
-        private readonly Text[] _slotLocked = new Text[2];
-
         // The Hydro burst button (YT-215): hidden until UpgradeState.HydroAssembled, same TechRings
         // visual language the other ability controls use.
         private RectTransform _hydroButtonRoot;
@@ -250,7 +264,6 @@ namespace MaxWorlds.UI
             BuildBiomeTint();
             BuildUtilityIcons();
             BuildHomeButton();
-            BuildAbilitySlots();
             BuildHydroButton();
             BuildForceFieldButton();
             BuildSentinelJoystick();
@@ -545,7 +558,6 @@ namespace MaxWorlds.UI
             _model.Bomb.Tick(dt);
             if (_model.Bomb.Ready) _model.Bomb.Trigger();
 
-            UpdateAbilitySlots(dt);
             UpdateHydroButton(dt);
             UpdateForceFieldButton(dt);
             UpdateSentinelJoystick();
@@ -795,61 +807,6 @@ namespace MaxWorlds.UI
                 float gs = 1f + 0.18f * t;
                 glow.rectTransform.localScale = new Vector3(gs, gs, 1f);
             }
-        }
-
-        private static readonly string[] AbilitySlotGlyphs = { "B", "U" };
-
-        /// <summary>MV-426: a forged FORGE fusion permanently occupies its named slot ("B"/"U"),
-        /// replacing the LOCKED placeholder with its icon and a steady ready-glow — none of the four
-        /// fusion effects (DELUGE/BLINKGUARD/OVERCHARGE/SKIRMISH) are player-activated, so there is no
-        /// cooldown to wipe; the slot simply reads as permanently equipped. An unforged slot keeps the
-        /// pre-RIG Bomb/Ultimate placeholder behaviour untouched.</summary>
-        private void UpdateAbilitySlots(float dt)
-        {
-            UpdateAbilitySlot(0, _model.Bomb.RadialFill, _model.Bomb.Ready);
-            UpdateAbilitySlot(1, _model.UltimateRadialFill, _model.UltimateReady);
-        }
-
-        private void UpdateAbilitySlot(int i, float placeholderRadialFill, bool placeholderReady)
-        {
-            string fusionId = RigFusionState.ForgedInSlot(AbilitySlotGlyphs[i]);
-            bool forged = fusionId != null;
-
-            _slotLocked[i].gameObject.SetActive(!forged);
-            _slotLetter[i].gameObject.SetActive(!forged);
-            _slotIcon[i].gameObject.SetActive(forged);
-
-            if (forged)
-            {
-                _slotIcon[i].sprite = HudTextures.VectorIcon(RigBoardLayout.Icon("fuse"), 40);
-                _slotIcon[i].color = BoneWhite;
-                _slotRadial[i].fillAmount = 0f;
-                SetSlot(i, 0f, true);
-            }
-            else
-            {
-                SetSlot(i, placeholderRadialFill, placeholderReady);
-            }
-        }
-
-        private void SetSlot(int i, float radialFill, bool ready)
-        {
-            _slotRadial[i].fillAmount = radialFill;
-
-            // A one-shot bright flash at the MOMENT the slot comes off cooldown, decaying into the
-            // steady ready-pulse. The steady glow alone tells you the slot is ready; it doesn't tell
-            // you that it *just became* ready, which is the moment the player is waiting for.
-            if (ready && !_slotWasReady[i]) _slotReadyFlash[i] = 1f;
-            _slotWasReady[i] = ready;
-            _slotReadyFlash[i] = Mathf.Max(0f, _slotReadyFlash[i] - Time.deltaTime * 3.2f);
-
-            float pulse = 0.55f + 0.45f * Mathf.Abs(Mathf.Sin(Time.time * 4f));
-            var c = Color.Lerp(ReadyGlow, Color.white, _slotReadyFlash[i] * 0.7f);
-            c.a = ready ? Mathf.Clamp01(pulse + _slotReadyFlash[i]) : 0f;
-            _slotGlow[i].color = c;
-
-            float pop = 1f + 0.12f * _slotReadyFlash[i];
-            _slotGlow[i].rectTransform.localScale = new Vector3(pop, pop, 1f);
         }
 
         /// <summary>
@@ -1161,72 +1118,6 @@ namespace MaxWorlds.UI
         private void OnHomeButtonTapped() => RunFlow.QuitToMenu();
 
         /// <summary>
-        /// The top-right slots — Bomb and Ultimate, and they stay honest: neither is implemented, so
-        /// both are drawn dimmed with a LOCKED caption rather than glowing as though they were a
-        /// button you were failing to find.
-        /// </summary>
-        private void BuildAbilitySlots()
-        {
-            string[] glyphs = { "B", "U" };      // Bomb, Ultimate — index 0 and 1
-            var col = NewRect("Ability Slots", Root);
-            Anchor(col, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-            col.anchoredPosition = new Vector2(-24f, -24f);
-            col.sizeDelta = new Vector2(72f, 160f);
-            for (int i = 0; i < glyphs.Length; i++)
-            {
-                var slot = AddImage(col, HudTextures.RoundedBox(72, 0.24f), PanelColor, $"Slot {glyphs[i]}");
-                Anchor(slot.rectTransform, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
-                slot.rectTransform.sizeDelta = new Vector2(72f, 72f);
-                slot.rectTransform.anchoredPosition = new Vector2(0f, -i * 80f);
-                slot.type = Image.Type.Sliced;
-
-                // Ready glow (behind everything else in the slot).
-                var glow = AddImage(slot.rectTransform, HudTextures.RoundedBox(80, 0.24f), Color.clear, "Glow");
-                Stretch(glow.rectTransform, 6f); // expands 6px beyond the slot as a border ring
-                glow.type = Image.Type.Sliced;
-                glow.raycastTarget = false;
-                _slotGlow[i] = glow;
-
-                // Dimmed, and captioned. These were reported as buttons of unknown purpose (YT-116);
-                // the truth is they are placeholders for abilities nobody has built, and a slot that
-                // looks live is the thing that made them worth asking about.
-                var letter = AddText(slot.rectTransform, 30f,
-                                     new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.45f),
-                                     TextAnchor.MiddleCenter);
-                Stretch(letter.rectTransform);
-                letter.text = glyphs[i];
-                _slotLetter[i] = letter;
-
-                var locked = AddText(slot.rectTransform, 15f,
-                                     new Color(BoneWhite.r, BoneWhite.g, BoneWhite.b, 0.5f),
-                                     TextAnchor.LowerCenter);
-                Stretch(locked.rectTransform);
-                locked.text = "LOCKED";
-                _slotLocked[i] = locked;
-
-                // A forged FORGE fusion's icon (MV-426) — hidden until RigFusionState.ForgedInSlot
-                // says this slot is occupied; see UpdateAbilitySlots.
-                var icon = new GameObject("Fusion Icon", typeof(RectTransform), typeof(Image)).GetComponent<Image>();
-                icon.transform.SetParent(slot.rectTransform, false);
-                Stretch(icon.rectTransform, 14f);
-                icon.raycastTarget = false;
-                icon.gameObject.SetActive(false);
-                _slotIcon[i] = icon;
-
-                // Cooldown radial wipe overlay (darkens the covered fraction).
-                var radial = AddImage(slot.rectTransform, HudTextures.Disc(96), new Color(0f, 0f, 0f, 0.62f), "Radial");
-                Stretch(radial.rectTransform, -8f); // sits just inside the slot box
-                radial.type = Image.Type.Filled;
-                radial.fillMethod = Image.FillMethod.Radial360;
-                radial.fillOrigin = (int)Image.Origin360.Top;
-                radial.fillClockwise = true;
-                radial.fillAmount = 0f;
-                radial.raycastTarget = false;
-                _slotRadial[i] = radial;
-            }
-        }
-
-        /// <summary>
         /// The Hydro burst button (YT-215) — a round action button up and to the left of the aim
         /// stick, where the right thumb already is (the Brawl-Stars placement Dash occupied before
         /// MV-359 removed it: the action button sits inside the arc the aiming thumb already sweeps).
@@ -1287,14 +1178,16 @@ namespace MaxWorlds.UI
         private const float HydroButtonRise = 330f;
 
         /// <summary>
-        /// The Force Field button (MV-361) — stacked above Hydro in the same right-hand column, same
-        /// round action-button shape. Hidden until <see cref="AbilityKind.ForceField"/> is acquired.
+        /// The Force Field button (MV-361, moved to the far left MV-606) — same round action-button
+        /// shape as Hydro, now its own left-edge column via <see cref="ForceFieldX"/>/
+        /// <see cref="ForceFieldRise"/>, sitting in the vertical gap between the MAP button and the
+        /// P/?/S + HOME column. Hidden until <see cref="AbilityKind.ForceField"/> is acquired.
         /// </summary>
         private void BuildForceFieldButton()
         {
             var root = NewRect("Force Field Button", Root);
-            Anchor(root, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
-            root.anchoredPosition = new Vector2(-HydroButtonInset, HydroButtonRise + HydroButtonSize + ForceFieldButtonGap);
+            Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
+            root.anchoredPosition = new Vector2(ForceFieldX, ForceFieldRise);
             root.sizeDelta = new Vector2(HydroButtonSize, HydroButtonSize);
             _forceFieldButtonRoot = root;
 
@@ -1354,12 +1247,11 @@ namespace MaxWorlds.UI
         /// there is nothing to gate here beyond the button existing at all.</summary>
         private void OnForceFieldButtonTapped() => _abilities?.TryActivateForceField();
 
-        private const float ForceFieldButtonGap = 16f;   // clearance above the Hydro button below it
-
         // The Sentinel deploy joystick (MV-362, aimed placement MV-399, one sentinel only MV-422):
-        // well clear of the Hydro/Force Field column's own stack below (top edge ~620) and the boss
-        // bar's y-band (rise 300, half 8) beneath that — same "half-extent-plus-margin clearance"
-        // reasoning the Water Balloon/Teleport column below uses for itself.
+        // well clear of Hydro's own stack below (top edge 385, MV-606: Force Field moved off this
+        // column onto its own left-edge spot) and the boss bar's y-band (rise 300, half 8) beneath
+        // that — same "half-extent-plus-margin clearance" reasoning the Water Balloon/Teleport column
+        // below uses for itself.
         private const float SentinelJoystickRise = 820f;
         private const float SentinelJoystickX = 360f;
 
@@ -1428,11 +1320,10 @@ namespace MaxWorlds.UI
             RebuildSentinelJoystick();
         }
 
-        // The left-hand mirror of the Hydro column (WV-240, spec §6a): Water Balloon's joystick sits
-        // above the Move stick the same way Hydro sits above the Aim stick, so aiming a throw never
-        // costs the player their movement thumb. Teleport stacks above it, with extra clearance for
-        // the joystick's own oversized invisible touch pad (matches AddOnScreenStick's ±30 px
-        // fat-finger margin), not just its artwork.
+        // Water Balloon's joystick sits above the Move stick (WV-240, spec §6a), so aiming a throw
+        // never costs the player their movement thumb. MV-606 moved Teleport off this column onto its
+        // own right-edge spot above the aim stick (see TeleportX/TeleportRise) — Lee's brief put
+        // teleport with the hand that aims, not the hand that moves.
         // Raised clear of the boss bar's y-band (rise 300, half 8) so a boss fight never crosses it.
         // Expressed as a shared Root-local X so the two controls line up visually even though
         // AbilityControlArt.BuildJoystick anchors to the parent's bottom-CENTER while BuildButton
@@ -1440,12 +1331,6 @@ namespace MaxWorlds.UI
         private const float AbilityControlColumnX = 450f;
         private const float WaterBalloonJoystickRise = 480f;
         private const float WaterBalloonJoystickMaxHalfSize = 100f;   // half of BuildJoystick's 200 px cap
-        private const float WaterBalloonTouchPadMargin = 30f;
-        // MV-338: Teleport is now a joystick too (same shape as Water Balloon's, including its own
-        // fat-finger touch pad), so it stacks above Water Balloon with the same half-extent-plus-margin
-        // clearance on both sides rather than a button's smaller footprint.
-        private const float TeleportJoystickRise = WaterBalloonJoystickRise
-            + (WaterBalloonJoystickMaxHalfSize + WaterBalloonTouchPadMargin) * 2f + 24f;
 
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
         private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
@@ -1530,8 +1415,8 @@ namespace MaxWorlds.UI
             var root = NewRect("Water Balloon Auto-fire Toggle", Root);
             Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
             root.sizeDelta = new Vector2(140f, 44f);
-            // Sits just above the joystick's own rings, clear of the Teleport joystick's touch pad
-            // stacked above it (TeleportJoystickRise's own margin math starts higher still).
+            // Sits just above the joystick's own rings — nothing stacked above it on this column since
+            // MV-606 moved Teleport to the right-edge column above the aim stick.
             root.anchoredPosition = new Vector2(
                 AbilityControlColumnX - RefW * 0.5f,
                 WaterBalloonJoystickRise + WaterBalloonJoystickMaxHalfSize + 20f);
@@ -1581,7 +1466,10 @@ namespace MaxWorlds.UI
         /// <summary>The Teleport joystick (MV-338: "needs to work the same way as Water Balloon — a
         /// direction and distance joystick"), appearing once acquired and growing a detail pip at its
         /// aimed-blink second level. Its own <see cref="TeleportJoystickControl"/> drives the
-        /// press/drag/release aim + blink, the same hand-off shape Water Balloon's joystick uses.</summary>
+        /// press/drag/release aim + blink, the same hand-off shape Water Balloon's joystick uses.
+        /// MV-606: lives above the aim stick now (<see cref="TeleportX"/>/<see cref="TeleportRise"/>),
+        /// re-anchored to the right edge after <see cref="AbilityControlArt.BuildJoystick"/> builds it
+        /// (that helper always anchors bottom-centre).</summary>
         private void BuildTeleportJoystick() => RebuildTeleportJoystick();
 
         private void RebuildTeleportJoystick()
@@ -1590,10 +1478,11 @@ namespace MaxWorlds.UI
 
             int level = Mathf.Max(1, WeaponSystemState.AbilityLevel(AbilityKind.Teleport));
             int maxLevel = WeaponCatalog.MaxLevel(AbilityKind.Teleport);
-            Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, TeleportJoystickRise);
             _teleportVisual = AbilityControlArt.BuildJoystick(
-                Root, "Teleport Joystick", anchoredPos, TeleportColor, "Teleport", level, maxLevel);
+                Root, "Teleport Joystick", Vector2.zero, TeleportColor, "Teleport", level, maxLevel);
             _teleportRoot = _teleportVisual.Root;
+            Anchor(_teleportRoot, new Vector2(1f, 0f), new Vector2(1f, 0f), new Vector2(0.5f, 0.5f));
+            _teleportRoot.anchoredPosition = new Vector2(TeleportX, TeleportRise);
 
             // Cooldown wipe, identical treatment to Water Balloon's own (spec §6a: "every control shows
             // a cooldown sweep").
@@ -2065,22 +1954,14 @@ namespace MaxWorlds.UI
         /// clear of the 44pt floor, so this doesn't re-litigate AC1 either.</summary>
         private const float WeaponsButtonSize = 173f;
 
-        /// <summary>The mark's own vertical placement — right edge, above the aim stick. Named so
-        /// <see cref="BuildWeaponsButton"/>'s tap-target math (MV-581) can derive the enclosing rect's
-        /// centre from the same number the visible mark has always used, instead of a second, possibly
-        /// drifting literal.</summary>
-        private const float WeaponsButtonRise = 120f;
-
-        private const float WeaponsButtonRightInset = 8f;
-
-        /// <summary>MV-510 round 2: a hair of buffer past <see cref="WeaponsButtonRightInset"/> so the
+        /// <summary>MV-510 round 2: a hair of buffer past <see cref="RigCornerInset"/> so the
         /// module-captured halo's own antialiasing doesn't touch the exact safe-area edge (AC3).</summary>
         private const float HaloRightSafetyMargin = 2f;
 
         /// <summary>The always-available WEAPONS button (YT-178, redrawn MV-425): a hexagonal mark —
         /// three linked nodes, a miniature of THE RIG board itself — replacing the old ABILITIES pill
-        /// in place (same anchor; the (-28, 120) position MV-425 gave it moved to
-        /// <see cref="WeaponsButtonRightInset"/> in MV-510 round 2). All procedural: hexagons, circles,
+        /// in place. Corner-anchored (MV-606: top-right, was right-edge/vertically-centred) via
+        /// <see cref="RigCornerInset"/>. All procedural: hexagons, circles,
         /// strokes, no art asset, no font glyph (<c>HudFont</c> has no coverage for this symbol). The
         /// ring/halo are driven every frame in <see cref="UpdateWeaponsButton"/> off
         /// <see cref="WeaponsButtonAlert"/>; the two corner badges are a separate build,
@@ -2096,14 +1977,13 @@ namespace MaxWorlds.UI
         private void BuildWeaponsButton()
         {
             _weaponsTapRoot = NewRect("Weapons Tap Target", Root);
-            Anchor(_weaponsTapRoot, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+            // MV-606: top-right corner (was right-edge, vertically centred) — the hex now sits in the
+            // corner the retired B/U ability slots vacated, with the cell readout filling the rest of
+            // the wrapper's height below it.
+            Anchor(_weaponsTapRoot, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             float tapHeight = WeaponsButtonSize + CellReadoutGap + CellCounterHeight;
-            // The wrapper's top edge must land exactly where the mark's own top edge always sat
-            // (WeaponsButtonRise + half its size) — its centre is that top edge minus half the taller
-            // wrapper height, so the extra room only ever grows downward, over the cell readout.
-            float tapCenterY = WeaponsButtonRise + WeaponsButtonSize * 0.5f - tapHeight * 0.5f;
             _weaponsTapRoot.sizeDelta = new Vector2(WeaponsButtonSize, tapHeight);
-            _weaponsTapRoot.anchoredPosition = new Vector2(-WeaponsButtonRightInset, tapCenterY);
+            _weaponsTapRoot.anchoredPosition = new Vector2(-RigCornerInset, -RigCornerInset);
 
             var tapTarget = AddImage(_weaponsTapRoot, null, Color.clear, "Tap Target");
             Stretch(tapTarget.rectTransform);
@@ -2122,14 +2002,14 @@ namespace MaxWorlds.UI
             // own radius, same GlowRadiusMultiplier-style idiom THE RIG board's own node glow uses.
             //
             // MV-510 round 2: uncapped, the outer ring's own padding (halfSize * 0.42f) bleeds past the
-            // safe area's right edge by a wide margin once the mark sits only WeaponsButtonRightInset
-            // units from it (this was already true at the old 28f inset, by a smaller amount - AC3
-            // requires it actually held, not just eyeballed). The right side alone is capped to the
-            // room the mark's own position leaves; left/top/bottom keep the full authored bloom.
+            // safe area's right edge by a wide margin once the mark sits only RigCornerInset
+            // units from it (AC3 requires it actually held, not just eyeballed). The right side alone
+            // is capped to the room the mark's own position leaves; left/top/bottom keep the full
+            // authored bloom.
             _weaponsModuleHaloRoot = NewRect("Module Halo", _weaponsButtonRoot);
             Stretch(_weaponsModuleHaloRoot);
             float halfSize = WeaponsButtonSize * 0.5f;
-            float haloRightPad = Mathf.Max(0f, WeaponsButtonRightInset - HaloRightSafetyMargin);
+            float haloRightPad = Mathf.Max(0f, RigCornerInset - HaloRightSafetyMargin);
             _weaponsModuleHaloOuter = AddImage(_weaponsModuleHaloRoot, HudTextures.Glow(128), Color.clear, "Halo Outer");
             StretchCapRight(_weaponsModuleHaloOuter.rectTransform, halfSize * 0.42f, haloRightPad); // r*1.42
             _weaponsModuleHaloOuter.raycastTarget = false;
