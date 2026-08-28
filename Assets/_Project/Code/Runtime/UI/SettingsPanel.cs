@@ -1093,7 +1093,7 @@ namespace MaxWorlds.UI
             // The block for the clipboard and the log — one line per knob on the CURRENT tab, header
             // first. Per-tab (YT-138) so seventeen knobs across two tabs never overrun the on-panel
             // dump: you copy the page you're tuning.
-            var lines = new List<string> { $"# MAX tuning ({TabNames[_tab]}) — " + Application.version };
+            var lines = new List<string> { $"# MAX tuning ({TabNames[_tab]}) - " + Application.version };   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage (MV-600)
             foreach (var k in _knobs)
             {
                 if (k.Tab != _tab) continue;

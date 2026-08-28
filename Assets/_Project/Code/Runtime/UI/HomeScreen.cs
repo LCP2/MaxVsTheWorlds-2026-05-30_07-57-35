@@ -385,9 +385,9 @@ namespace MaxWorlds.UI
         /// between runs, so the personal best is the whole story a slot card has to tell.</summary>
         private static string Summarise(SaveSlotData data)
         {
-            if (data.BestDeathsToVictory < 0) return $"{data.DisplayName} — no finished run yet";
+            if (data.BestDeathsToVictory < 0) return $"{data.DisplayName} - no finished run yet";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage (MV-600)
             string deaths = data.BestDeathsToVictory == 1 ? "1 death" : $"{data.BestDeathsToVictory} deaths";
-            return $"{data.DisplayName} — best: {deaths}";
+            return $"{data.DisplayName} - best: {deaths}";   // ASCII hyphen: LegacyRuntime.ttf has no em-dash coverage (MV-600)
         }
 
         // ------------------------------------------------------------------ helpers (ResultScreen/UpgradeScreen idiom)
