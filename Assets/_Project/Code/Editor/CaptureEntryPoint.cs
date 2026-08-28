@@ -41,6 +41,14 @@ namespace MaxWorlds.Editor
         public static void MenuMv585ForceField() => RunFromMenu(CapturePresets.All["mv585forcefield"]);
         public static void CaptureMv585ForceField() => Run(CapturePresets.All["mv585forcefield"]);
 
+        [MenuItem("MaxWorlds/Capture/HUD Reshuffle 1920x1080 (MV-606)")]
+        public static void MenuMv6061920() => RunFromMenu(CapturePresets.All["mv6061920"]);
+        public static void CaptureMv6061920() => Run(CapturePresets.All["mv6061920"]);
+
+        [MenuItem("MaxWorlds/Capture/HUD Reshuffle Phone (MV-606)")]
+        public static void MenuMv606Phone() => RunFromMenu(CapturePresets.All["mv606phone"]);
+        public static void CaptureMv606Phone() => Run(CapturePresets.All["mv606phone"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
