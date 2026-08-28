@@ -31,13 +31,17 @@ namespace MaxWorlds.Arena
     /// Damage-track output, read fresh from <see cref="WeaponSystemState"/>/<see cref="WeaponCatalog"/>
     /// on every shot.
     ///
-    /// Deployed sentinels are permanent until destroyed — no recall, no player-triggered repair
-    /// (DECISION, Lee 15 Aug 2026) — so unlike <see cref="MaxWorlds.Enemies.RobotEnemy"/> it is never
-    /// pooled; <see cref="Die"/> destroys the GameObject outright, the same one-shot lifecycle
+    /// Deployed sentinels are permanent until destroyed — no player-triggered repair (DECISION, Lee
+    /// 15 Aug 2026) — so unlike <see cref="MaxWorlds.Enemies.RobotEnemy"/> it is never pooled;
+    /// <see cref="Die"/> destroys the GameObject outright, the same one-shot lifecycle
     /// <see cref="MaxWorlds.Factories.MowerHutch"/> uses for its own death. MV-398 (same day)
     /// reversed only the "no repair" half: a damaged-but-alive sentinel now passively regens HP once
     /// left unhit for a while — see <see cref="Update"/> — but a destroyed one still never comes
-    /// back, and there is still no manual repair action.
+    /// back, and there is still no manual repair action. MV-604 later added the one exception to "no
+    /// recall": redeploying at the Slots cap recalls whichever sentinel is furthest from Max rather
+    /// than refusing — see <see cref="Recall"/>. A recall is deliberately NOT routed through
+    /// <see cref="Die"/> — it must never count as a death (no kill counter, no death VFX, no on-death
+    /// payout).
     ///
     /// <see cref="Team"/> is <see cref="Team.Player"/> — Max's own device. <see cref="DamageRules"/>'s
     /// same-team rejection means a robot (Team.Enemy) CAN hit it, and Max's own primary (Team.Player)
@@ -159,6 +163,18 @@ namespace MaxWorlds.Arena
         public float HealthNormalized => Normalized;
         public float HealthCurrent => _health?.Current ?? 0f;
 
+        /// <summary>The health ceiling in effect right now (MV-604: live off Health/u_hp — see
+        /// <see cref="RefreshFromRigState"/>), not just whatever was passed to <see cref="Init"/>.</summary>
+        public float HealthMax => _health?.Max ?? 0f;
+
+        /// <summary>The auto-fire reach in effect right now (MV-604: live off Range/u_rng — see
+        /// <see cref="RefreshFromRigState"/>), not just whatever was passed to <see cref="Init"/>.</summary>
+        public float Range => _range;
+
+        /// <summary>The follow speed in effect right now (MV-604: live off Move/u_mov — see
+        /// <see cref="RefreshFromRigState"/>), not just whatever was passed to <see cref="Init"/>.</summary>
+        public float MoveSpeed => _moveSpeed;
+
         /// <summary>Fired once, the instant this sentinel is destroyed.</summary>
         public event Action<Sentinel> Died;
 
@@ -183,6 +199,12 @@ namespace MaxWorlds.Arena
             IgnorePlayerCollision();
             WorldHealthBar.Attach(gameObject, this, 1.9f, 1.2f, alwaysShow: true);
             Physics.SyncTransforms(); // autoSyncTransforms is off project-wide (see GateSolidityTests)
+
+            // MV-604: subscribed here, not in OnEnable — Unity does not reliably call OnEnable for a
+            // freshly-scripted GameObject outside Play mode (the same reason InitHealth's _active.Add
+            // above is belt-and-braces rather than relying on OnEnable alone). OnDestroy is the
+            // matching, PROVEN-reliable teardown point in edit mode (see its own doc).
+            RigState.Changed += RefreshFromRigState;
         }
 
         /// <summary>
@@ -298,6 +320,44 @@ namespace MaxWorlds.Arena
         }
 
         private void OnDisable() => _active.Remove(this);
+
+        /// <summary>MV-604: keeps an already-deployed sentinel's Move/Range/Health axes current with
+        /// their RIG levels — the same "read fresh, never cache across an upgrade" rule the firing
+        /// path's Damage read (<c>u_dmg</c>, see <see cref="Update"/>) already followed; Move and
+        /// Range were the two that didn't, which is why buying <c>u_mov</c> after deployment used to
+        /// do nothing for a sentinel already on the field. Refreshes on <see cref="RigState.Changed"/>
+        /// rather than every frame — this runs on iOS. No-op before <see cref="Init"/> has run.</summary>
+        private void RefreshFromRigState()
+        {
+            if (_health == null) return;
+
+            _range = AbilityTuning.SentinelRange(
+                RigState.Level("u_rng"), AbilityTuning.DefaultSentinelRange, AbilityTuning.DefaultSentinelRangePerLevel);
+            _moveSpeed = AbilityTuning.SentinelMoveSpeed(
+                RigState.Level("u_mov"), AbilityTuning.DefaultSentinelMoveSpeedPerLevel);
+
+            // Retune raises the ceiling only — Current is left exactly where it was, never refilled
+            // (MV-604 item 5: raising the cap must not be a free heal).
+            float newMaxHp = AbilityTuning.SentinelMaxHp(
+                RigState.Level("u_hp"), AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel);
+            _health.Retune(newMaxHp);
+        }
+
+        /// <summary>MV-604: reclaims this sentinel's deployment slot because a redeploy at the Slots
+        /// cap chose it as the furthest from Max — NOT because it died. Mirrors
+        /// <see cref="DestroyAllActive"/>'s per-item teardown (registry removal + GameObject destroy)
+        /// rather than going through <see cref="Die"/>: no <see cref="Died"/> event, no
+        /// <see cref="DestructibleHealth.Destroyed"/> event, so nothing wired to "a sentinel died" —
+        /// a kill counter, death VFX, an on-death payout — ever fires for a recall. Emits
+        /// <see cref="HudSignals.SentinelRecalled"/> instead, so the vanish still reads as an event
+        /// rather than a silent pop, however far off-screen it happens.</summary>
+        public void Recall()
+        {
+            _active.Remove(this);
+            HudSignals.EmitSentinelRecalled(transform.position);
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
+        }
 
         public void TakeDamage(in DamageInfo info)
         {
@@ -493,6 +553,12 @@ namespace MaxWorlds.Arena
         /// mode" and fails every EXISTING Sentinel test's teardown, not just this ticket's own.</summary>
         private void OnDestroy()
         {
+            // MV-604: unsubscribes the live-upgrade refresh Init() wired up — the matching half of
+            // that subscription, and the one teardown point proven to fire reliably in edit mode (see
+            // the comment on that subscription). A no-op if Init() never ran (RigState.Changed -= a
+            // handler that was never added is harmless).
+            RigState.Changed -= RefreshFromRigState;
+
             if (_ownedMaterials == null) return;
             for (int i = 0; i < _ownedMaterials.Length; i++)
             {

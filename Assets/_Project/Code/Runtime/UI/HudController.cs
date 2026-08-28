@@ -287,6 +287,7 @@ namespace MaxWorlds.UI
             HudSignals.BossHealthChanged += OnBossHealth;
             HudSignals.BossSpawnLevelChanged += OnBossSpawnLevel;
             HudSignals.BossDefeated += OnBossDefeated;
+            HudSignals.SentinelRecalled += OnSentinelRecalled;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
             UpgradeState.Changed += OnUpgradesChanged;
@@ -308,6 +309,7 @@ namespace MaxWorlds.UI
             HudSignals.BossHealthChanged -= OnBossHealth;
             HudSignals.BossSpawnLevelChanged -= OnBossSpawnLevel;
             HudSignals.BossDefeated -= OnBossDefeated;
+            HudSignals.SentinelRecalled -= OnSentinelRecalled;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
             UpgradeState.Changed -= OnUpgradesChanged;
@@ -507,6 +509,13 @@ namespace MaxWorlds.UI
 
         private void OnPickup(Vector3 pos, string label, Color color)
             => _floating?.Spawn(pos + Vector3.up * 1.6f, label, color, false, 1.0f, 30f);
+
+        /// <summary>MV-604 item 2: a sentinel vanishing several areas away, off-screen, would read as
+        /// a bug with no HUD acknowledgement at all — this is the "a player who never sees the despawn
+        /// still understands the slot was reclaimed" half; <see cref="MaxWorlds.VFX.CombatVfx"/>'s own
+        /// recall burst is the other half, for whoever IS looking at it.</summary>
+        private void OnSentinelRecalled(Vector3 pos)
+            => _floating?.Spawn(pos + Vector3.up * 1.8f, "SENTINEL RECALLED", SentinelColor, false, 1.1f, 22f);
 
         private void OnEnemyKilled(Vector3 pos)
         {

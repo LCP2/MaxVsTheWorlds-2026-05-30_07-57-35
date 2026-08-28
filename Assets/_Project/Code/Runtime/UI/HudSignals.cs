@@ -100,6 +100,12 @@ namespace MaxWorlds.UI
         /// pulse directly, no particle system yet.</summary>
         public static event Action<Vector3> ShedLiftOff;
 
+        /// <summary>A deployed Sentinel was recalled — a redeploy at the Slots cap freed its slot by
+        /// recalling the furthest one instead of refusing (MV-604). (worldPos) — deliberately NOT
+        /// <see cref="EnemyKilled"/>'s shape or any death signal: a recall is not a death, so listeners
+        /// must give it its own despawn beat rather than reusing the kill/death VFX.</summary>
+        public static event Action<Vector3> SentinelRecalled;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -120,6 +126,9 @@ namespace MaxWorlds.UI
 
         public static void EmitShedLiftOff(Vector3 worldPos)
             => ShedLiftOff?.Invoke(worldPos);
+
+        public static void EmitSentinelRecalled(Vector3 worldPos)
+            => SentinelRecalled?.Invoke(worldPos);
 
         public static void EmitBossRegistered()
             => BossRegistered?.Invoke();
