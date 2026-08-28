@@ -69,6 +69,12 @@ namespace MaxWorlds.VFX
         private static readonly Color MissileAfterSmoke = new Color(0.12f, 0.11f, 0.10f, 0.6f);
         private static readonly Color MissileShockColor = new Color(1f, 0.85f, 0.5f, 1f);
 
+        // The Sentinel's recall (MV-604): its own blue family (matches Sentinel.cs's BodyColor/
+        // BeamColor) so the despawn reads as "the machine itself, quietly folding away" rather than
+        // borrowed death/teleport feedback — deliberately not the golds/violets above.
+        private static readonly Color SentinelRecallCore = new Color(0.55f, 0.9f, 1f, 1f);
+        private static readonly Color SentinelRecallDeep = new Color(0.35f, 0.55f, 0.75f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -88,6 +94,7 @@ namespace MaxWorlds.VFX
         private VfxBurst _missileAfterSmoke; // missile: dark plume that lingers after the flash (MV-351)
         private VfxBurst _missileSputter;   // missile: dying thrust, just before it drops
         private VfxBurst _missileBounceDust; // missile: a kick of dust each time it hits the ground
+        private VfxBurst _sentinelRecall;   // sentinel: the recall despawn (MV-604)
 
         private void Awake()
         {
@@ -119,6 +126,9 @@ namespace MaxWorlds.VFX
             _missileAfterSmoke = new VfxBurst("MissileAfterSmoke", soft, 90, -0.2f, perFrameCap: 6);
             _missileSputter = new VfxBurst("MissileSputter", soft, 60, 0.4f, perFrameCap: 6);
             _missileBounceDust = new VfxBurst("MissileBounceDust", soft, 80, 1f, perFrameCap: 8);
+            // Cheap and self-terminating by construction (MV-604 item 2): a single Emit() into the
+            // shared, already-running ParticleSystem above, no GameObject of its own spawned per event.
+            _sentinelRecall = new VfxBurst("SentinelRecall", additive, 60, 0f, perFrameCap: 4, stretched: true);
         }
 
         private void OnEnable()
@@ -131,6 +141,7 @@ namespace MaxWorlds.VFX
             HudSignals.MissileImpact += OnMissileImpact;
             HudSignals.MissileSputtering += OnMissileSputtering;
             HudSignals.MissileBounced += OnMissileBounced;
+            HudSignals.SentinelRecalled += OnSentinelRecalled;
         }
 
         private void OnDisable()
@@ -145,6 +156,7 @@ namespace MaxWorlds.VFX
             HudSignals.MissileImpact -= OnMissileImpact;
             HudSignals.MissileSputtering -= OnMissileSputtering;
             HudSignals.MissileBounced -= OnMissileBounced;
+            HudSignals.SentinelRecalled -= OnSentinelRecalled;
         }
 
         private void OnDestroy()
@@ -156,6 +168,7 @@ namespace MaxWorlds.VFX
             Dispose(_missileFlash); Dispose(_missileBlast); Dispose(_missileDebris);
             Dispose(_missileScorch); Dispose(_missileShock); Dispose(_missileAfterSmoke);
             Dispose(_missileSputter); Dispose(_missileBounceDust);
+            Dispose(_sentinelRecall);
         }
 
         // --- events ---
@@ -443,6 +456,18 @@ namespace MaxWorlds.VFX
             lifeMin: 0.2f, lifeMax: 0.35f,
             colorA: MissileBounceDust, colorB: Debris);
 
+        // --- the Sentinel's recall (MV-604) ---
+
+        /// <summary>The despawn beat for a redeploy-at-cap recall — deliberately NOT
+        /// <see cref="OnEnemyKilled"/>'s shape (no debris, no second burst): a recall is a machine
+        /// quietly folding away, not a kill, and reusing the death beat would read as one.</summary>
+        private void OnSentinelRecalled(Vector3 pos) => _sentinelRecall.Emit(pos + Vector3.up * 0.9f, 16,
+            axis: Vector3.up, spreadDegrees: 95f,
+            speedMin: 1.2f, speedMax: 3.2f,
+            sizeMin: 0.1f, sizeMax: 0.26f,
+            lifeMin: 0.2f, lifeMax: 0.38f,
+            colorA: SentinelRecallCore, colorB: SentinelRecallDeep);
+
         private void LateUpdate()
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
@@ -451,6 +476,7 @@ namespace MaxWorlds.VFX
             _missileFlash.EndFrame(); _missileBlast.EndFrame(); _missileDebris.EndFrame();
             _missileScorch.EndFrame(); _missileShock.EndFrame(); _missileAfterSmoke.EndFrame();
             _missileSputter.EndFrame(); _missileBounceDust.EndFrame();
+            _sentinelRecall.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)

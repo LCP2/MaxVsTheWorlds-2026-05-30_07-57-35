@@ -496,11 +496,13 @@ namespace MaxWorlds.Weapons
         public static int SentinelCost => AbilityTuning.SentinelCost(
             RigState.Level("u_cst"), AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel);
 
-        /// <summary>Owned, a deployment slot free, AND enough cells banked — what an on-screen deploy
-        /// control gates its press on (same shape as <see cref="ForceFieldReady"/>).</summary>
+        /// <summary>Owned AND enough cells banked — what an on-screen deploy control gates its press
+        /// on (same shape as <see cref="ForceFieldReady"/>). MV-604 (DECISION, Lee 26 Aug 2026
+        /// playtest): deliberately does NOT check the Slots cap any more — deployment must never be
+        /// refused for lack of a slot, since redeploying at the cap now recalls the furthest sentinel
+        /// instead (see <see cref="TryDeploySentinel(Vector3)"/>).</summary>
         public bool SentinelReady =>
             WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
-            SentinelDeployedCount < SentinelDeploymentCap &&
             PickupWallet.PowerCells >= SentinelCost;
 
         /// <summary>How close an aimed placement point must stay to an existing sentinel or a live
@@ -559,15 +561,22 @@ namespace MaxWorlds.Weapons
         public bool TryDeploySentinel() => TryDeploySentinel(transform.position);
 
         /// <summary>Deploy the sentinel at an aimed <paramref name="position"/> (MV-399's placement
-        /// joystick). Returns false (nothing spent, nothing deployed) if unowned, the deployment cap
-        /// is full, the bank can't cover the cost, or the point is already occupied
-        /// (<see cref="IsValidSentinelPlacement"/>). Reads every RIG axis (Health/Range/Move) fresh at
-        /// deploy time (MV-422).</summary>
+        /// joystick). Returns false (nothing spent, nothing deployed) if unowned, the bank can't cover
+        /// the cost, or the point is already occupied (<see cref="IsValidSentinelPlacement"/>). Reads
+        /// every RIG axis (Health/Range/Move) fresh at deploy time (MV-422).
+        ///
+        /// MV-604 (DECISION, Lee 26 Aug 2026 playtest): deployment is never refused for lack of a
+        /// slot any more. At the Slots cap, this recalls whichever deployed sentinel is currently
+        /// FURTHEST from Max — <see cref="RecallFurthestSentinel"/> — THEN places the new one, so the
+        /// slot always frees rather than locking the ability out once every sentinel is standing in
+        /// a cleared area with nothing left to kill it.</summary>
         public bool TryDeploySentinel(Vector3 position)
         {
             if (!SentinelReady) return false;
             if (!IsValidSentinelPlacement(position)) return false;
             if (!PickupWallet.TrySpendPowerCells(SentinelCost)) return false;
+
+            if (SentinelDeployedCount >= SentinelDeploymentCap) RecallFurthestSentinel();
 
             float maxHp = AbilityTuning.SentinelMaxHp(
                 RigState.Level("u_hp"), AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel);
@@ -580,6 +589,22 @@ namespace MaxWorlds.Weapons
             sentinel.Init(position, maxHp, range, AbilityTuning.DefaultSentinelFireInterval,
                 moveSpeed, AbilityTuning.DefaultSentinelStandoffDistance, transform);
             return true;
+        }
+
+        /// <summary>MV-604: recalls whichever deployed sentinel is furthest from Max right now (world
+        /// distance, measured at the moment of THIS deploy — not cached, not the oldest, not the
+        /// nearest). <see cref="Sentinel.Recall"/> is not a death — see its own doc.</summary>
+        private void RecallFurthestSentinel()
+        {
+            Sentinel furthest = null;
+            float bestSq = -1f;
+            foreach (Sentinel s in Sentinel.Active)
+            {
+                if (s == null) continue;
+                float d = (s.transform.position - transform.position).sqrMagnitude;
+                if (d > bestSq) { bestSq = d; furthest = s; }
+            }
+            furthest?.Recall();
         }
     }
 }

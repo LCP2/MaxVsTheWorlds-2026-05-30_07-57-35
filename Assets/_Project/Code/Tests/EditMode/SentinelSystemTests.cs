@@ -208,7 +208,10 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Assert.That(abilities.TryDeploySentinel(), Is.True, "first deploy should succeed");
                 Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(1));
-                Assert.That(abilities.SentinelReady, Is.False, "the single slot is now full");
+                // MV-604: SentinelReady no longer checks the Slots cap — a full slot recalls the
+                // furthest sentinel on redeploy rather than refusing (see SentinelSystemTests'
+                // RedeployAtCap... test), so "ready" now means owned + affordable, nothing more.
+                Assert.That(abilities.SentinelReady, Is.True, "a full slot no longer blocks readiness");
 
                 Sentinel deployed = Sentinel.Active[0];
                 deployed.TakeDamage(new DamageInfo(
@@ -219,6 +222,97 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(abilities.TryDeploySentinel(), Is.True,
                     "a fresh sentinel should be deployable again once the old one is destroyed");
                 Assert.That(PlayerAbilities.SentinelDeployedCount, Is.EqualTo(1));
+            }
+            finally
+            {
+                Sentinel.DestroyAllActive();
+                Object.DestroyImmediate(maxGo);
+            }
+        }
+
+        /// <summary>MV-604 (Lee, 26 Aug 2026 playtest): "If I add a sentinel before I've enabled
+        /// move... the only situation in which I gain the slot back... is if enemies destroy it...
+        /// Once I do upgrade to Move... it's not given the move ability anyway." Two compounding
+        /// defects in one test, since together they made the ability dead the moment every sentinel
+        /// was standing in a cleared area:
+        ///  (a) redeploying at the Slots cap must recall the FURTHEST sentinel from Max and place the
+        ///      new one — never refuse for lack of a slot, and the recall must not be a death;
+        ///  (b) an already-deployed sentinel must pick up a later Move/Range/Health upgrade live, and
+        ///      a raised Health cap must not heal it.
+        ///
+        /// Proven to fail on the pre-fix commit: <c>TryDeploySentinel</c> returned false once
+        /// <c>Sentinel.Active.Count</c> reached the cap (<c>SentinelReady</c> required
+        /// <c>SentinelDeployedCount &lt; SentinelDeploymentCap</c>) — <c>Expected: True, But was:
+        /// False</c> on the final deploy below — and <c>live.MoveSpeed</c>/<c>live.Range</c> stayed
+        /// pinned at their deploy-time values after the RigState upgrades — <c>Expected: greater than
+        /// 0, But was: 0</c> for MoveSpeed.</summary>
+        [Test]
+        public void RedeployAtCapRecallsFurthestWithoutADeathAndLiveUpgradesReachAnAlreadyDeployedSentinel_MV604()
+        {
+            WeaponSystemState.Acquire(AbilityKind.Sentinels);
+            PickupWallet.SetPowerCells(999);
+
+            RigState.AcquireCap("u_hp");  // reaches u_slt (u_hp's own RIG child)
+            RigState.AcquireCap("u_slt"); // level 1 -> cap 1
+            RigState.RaiseLevel("u_slt"); // level 2 -> cap 2
+            RigState.RaiseLevel("u_slt"); // level 3 -> cap 3
+            Assert.That(PlayerAbilities.SentinelDeploymentCap, Is.EqualTo(3));
+
+            var maxGo = new GameObject("Max");
+            var abilities = maxGo.AddComponent<PlayerAbilities>();
+            try
+            {
+                // --- (a) redeploy at the cap recalls the FURTHEST sentinel, never refuses ---
+                Assert.That(abilities.TryDeploySentinel(new Vector3(5f, 0f, 0f)), Is.True);
+                Assert.That(abilities.TryDeploySentinel(new Vector3(20f, 0f, 0f)), Is.True);
+                Assert.That(abilities.TryDeploySentinel(new Vector3(50f, 0f, 0f)), Is.True);
+                Assert.That(Sentinel.Active.Count, Is.EqualTo(3), "precondition: cap reached exactly");
+
+                Sentinel furthest = Sentinel.Active[2]; // the 50m one, deployed last
+                Assert.That(furthest.transform.position.x, Is.EqualTo(50f).Within(1e-3f));
+                bool recalledFiredDied = false;
+                furthest.Died += _ => recalledFiredDied = true;
+
+                bool deployedAtCap = abilities.TryDeploySentinel(new Vector3(1f, 0f, 0f));
+
+                Assert.That(deployedAtCap, Is.True, "deployment must never be refused for lack of a slot");
+                Assert.That(Sentinel.Active.Count, Is.EqualTo(3), "must stay at the cap, never grow past it");
+                foreach (Sentinel s in Sentinel.Active)
+                    Assert.That(Mathf.Abs(s.transform.position.x - 50f), Is.GreaterThan(1e-3f),
+                        "the 50m sentinel specifically must be gone — not the oldest, not the nearest");
+                Assert.That(recalledFiredDied, Is.False, "a recall must never fire Died — it is not a death");
+
+                // --- (b) an already-deployed sentinel picks up Move/Range/Health upgrades LIVE ---
+                Sentinel live = Sentinel.Active[0]; // the 5m one, untouched since its own deploy
+                Assert.That(live.MoveSpeed, Is.EqualTo(0f), "u_mov is unowned — must start stationary");
+
+                live.TakeDamage(new DamageInfo(15f, Vector3.zero, Vector3.forward, Team.Enemy));
+                float hpAfterDamage = live.HealthCurrent;
+                float maxHpBeforeRaise = live.HealthMax;
+
+                RigState.AcquireCap("u_dmg"); // reaches u_mov (u_dmg's own RIG child)
+                RigState.AcquireCap("u_mov"); // u_mov -> level 1
+                RigState.AcquireCap("u_rng"); // u_rng -> level 1 (direct child, already reached)
+                RigState.RaiseLevel("u_hp");  // already owned from the cap setup above -> level 2
+
+                float expectedRange = AbilityTuning.SentinelRange(
+                    RigState.Level("u_rng"), AbilityTuning.DefaultSentinelRange, AbilityTuning.DefaultSentinelRangePerLevel);
+                float expectedMoveSpeed = AbilityTuning.SentinelMoveSpeed(
+                    RigState.Level("u_mov"), AbilityTuning.DefaultSentinelMoveSpeedPerLevel);
+                float expectedMaxHp = AbilityTuning.SentinelMaxHp(
+                    RigState.Level("u_hp"), AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel);
+
+                Assert.That(live.Range, Is.EqualTo(expectedRange).Within(1e-3f),
+                    "u_rng upgrade must reach the SAME already-deployed sentinel, not just a future one");
+                Assert.That(live.MoveSpeed, Is.EqualTo(expectedMoveSpeed).Within(1e-3f),
+                    "the exact Lee repro: a sentinel deployed before u_mov must start following the moment it's bought");
+                Assert.That(live.MoveSpeed, Is.GreaterThan(0f));
+
+                Assert.That(live.HealthMax, Is.EqualTo(expectedMaxHp).Within(1e-3f));
+                Assert.That(live.HealthMax, Is.GreaterThan(maxHpBeforeRaise),
+                    "the ceiling must actually rise, not just stay put while Current happens to match");
+                Assert.That(live.HealthCurrent, Is.EqualTo(hpAfterDamage).Within(1e-3f),
+                    "raising the HP cap must not be a free heal — Current stays exactly where the damage left it");
             }
             finally
             {
