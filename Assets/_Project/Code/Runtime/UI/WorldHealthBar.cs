@@ -315,10 +315,22 @@ namespace MaxWorlds.UI
         /// MV-473: nudge SHOWING bars apart when several robots cluster (a hedge choke-point, a
         /// death-surge pile) instead of letting their fixed-height bars stack on top of each other.
         /// O(n²) over only the currently-showing bars — not every pooled robot in the scene, most of
-        /// which are inactive or off-screen — so the live population cap (~25) bounds it to at most a
-        /// few hundred XZ distance checks a frame. <paramref name="clusterRadius"/>/<paramref name="stackStep"/>
+        /// which are inactive or off-screen. <paramref name="clusterRadius"/>/<paramref name="stackStep"/>
         /// are passed in rather than hard-coded here so the one call site (<see cref="WorldHealthBarDeclutter"/>)
         /// is the single place that owns the tuning.
+        ///
+        /// MV-611: this comment used to bound the pass at "the live population cap (~25)" — that stopped
+        /// being true once <c>AreaSpawnQueue</c>'s live-count cap became PER-AREA rather than field-wide
+        /// (robots behind the player are never despawned, only ever killed) and every bar here is
+        /// <c>alwaysShow</c>, so N is really the field-wide ALIVE count, which can reach the full
+        /// accumulated population (~180 by area 15). Left O(n²) rather than reached for a spatial
+        /// partition: this pass is a cosmetic bar-declutter nudge, not gameplay, and even that worst
+        /// case is tens of thousands of cheap squared-distance compares — comfortably inside a 60fps
+        /// budget on its own (see <see cref="LastShowingCount"/> /
+        /// <see cref="WorldHealthBarDeclutter.LastResolveMicroseconds"/> for the actual measured cost,
+        /// not this comment's word for it). If the despawn-behind-the-player question (explicitly out
+        /// of MV-611's scope) is ever resolved the other way, this pass shrinks back down on its own —
+        /// nothing here would need to change.
         ///
         /// Rank, not a physical shove: each bar counts how many OTHER showing bars within
         /// <paramref name="clusterRadius"/> have a lower <see cref="Object.GetInstanceID"/>, and lifts

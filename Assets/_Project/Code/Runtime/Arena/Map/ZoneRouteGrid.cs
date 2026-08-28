@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -38,6 +39,13 @@ namespace MaxWorlds.Arena
         /// A* itself still runs fresh per call (the start is a moving robot, so there is nothing to
         /// cache there) — this counts only the expensive part, building the grid.</summary>
         public static int GridBuilds { get; private set; }
+
+        /// <summary>How many times <see cref="ZoneGrid.FindPath"/> has actually run the A* search
+        /// (MV-611) — incremented once per call that reaches it (a call resolved by
+        /// <see cref="ZoneGrid.LineClear"/> alone never reaches this, so it doesn't count). What proves
+        /// a caller is budgeting its re-solves rather than asking fresh every Chase tick — see
+        /// <see cref="ZoneRouteBudget"/>.</summary>
+        public static int PathSolves { get; private set; }
 
         private static MapData _solvedFor;
         private static readonly Dictionary<string, ZoneGrid> _grids = new Dictionary<string, ZoneGrid>(8);
@@ -87,6 +95,7 @@ namespace MaxWorlds.Arena
             Vector3 clamped = zone.Clamp(new Vector3(target.x, 0f, target.y), 0f);
             var approach = new Vector2(clamped.x, clamped.z);
 
+            PathSolves++;
             List<Vector2Int> path = grid.FindPath(from, approach);
             if (path == null || path.Count == 0) return null;
 
@@ -122,9 +131,23 @@ namespace MaxWorlds.Arena
             private readonly float _originZ;
             private readonly bool[] _blocked;
 
+            /// <summary>MV-611: reused across every <see cref="FindPath"/> call on this instance instead
+            /// of allocated fresh each time — a robot navigating around this zone's own cover called
+            /// FindPath every single Chase tick pre-fix, each call allocating ~15 KB of scratch
+            /// (<c>CellSize = 0.5f</c> makes a 20x24 m room 1920 cells) that became garbage the instant
+            /// the method returned. Sized once, in <see cref="Build"/>, and never resized after — this
+            /// instance's own <see cref="_cols"/>/<see cref="_rows"/> never change once built.</summary>
+            private readonly float[] _gScoreScratch;
+            private readonly int[] _cameFromScratch;
+            private readonly bool[] _visitedScratch;
+
             private ZoneGrid(int cols, int rows, float originX, float originZ, bool[] blocked)
             {
                 _cols = cols; _rows = rows; _originX = originX; _originZ = originZ; _blocked = blocked;
+                int count = cols * rows;
+                _gScoreScratch = new float[count];
+                _cameFromScratch = new int[count];
+                _visitedScratch = new bool[count];
             }
 
             public static ZoneGrid Build(MapData map, MapZone zone)
@@ -209,9 +232,10 @@ namespace MaxWorlds.Arena
                 if (IsBlocked(goal.x, goal.y)) return null;
 
                 int count = _cols * _rows;
-                var gScore = new float[count];
-                var cameFrom = new int[count];
-                var visited = new bool[count];
+                float[] gScore = _gScoreScratch;
+                int[] cameFrom = _cameFromScratch;
+                bool[] visited = _visitedScratch;
+                Array.Clear(visited, 0, count);
                 for (int i = 0; i < count; i++) { gScore[i] = float.PositiveInfinity; cameFrom[i] = -1; }
 
                 int startIdx = Index(start.x, start.y);

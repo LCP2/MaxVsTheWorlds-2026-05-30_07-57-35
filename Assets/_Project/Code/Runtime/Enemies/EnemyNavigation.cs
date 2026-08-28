@@ -177,8 +177,17 @@ namespace MaxWorlds.Enemies
         /// beeline behaviour this class always had — the touch-damage archetypes are the only ones
         /// that opt in (<c>RobotEnemy.UsesGridRoute</c>), because Gunner/Launcher/Blinker are explicitly
         /// out of this ticket's scope.</param>
+        /// <param name="budget">Throttles how often the in-room <see cref="ZoneRouteGrid"/> step is
+        /// actually re-solved (MV-611) — null (the default, and every test caller today) always
+        /// resolves fresh, exactly as before; a caller that hands in its own persistent
+        /// <see cref="ZoneRouteBudget"/> (<c>RobotEnemy</c>, one per robot) gets the cached step back
+        /// instead on a tick <see cref="ZoneRouteBudget.ShouldResolve"/> says to skip. No effect at all
+        /// when <paramref name="useZoneRoute"/> is false.</param>
+        /// <param name="dt">Seconds since this caller's last call — only read to advance
+        /// <paramref name="budget"/>'s own clock; ignored when <paramref name="budget"/> is null.</param>
         public static Vector3 Waypoint(Vector3 from, Vector3 goal, string fromZoneId = null,
-                                       bool useZoneRoute = false)
+                                       bool useZoneRoute = false, ZoneRouteBudget budget = null,
+                                       float dt = 0f)
         {
             MapData map = Map;
             if (map == null) return goal;
@@ -194,8 +203,16 @@ namespace MaxWorlds.Enemies
 
             if (useZoneRoute && hereZone != null)
             {
-                Vector2? step = ZoneRouteGrid.NextStep(map, hereZone, new Vector2(from.x, from.z), next);
-                if (step.HasValue) next = step.Value;
+                if (budget == null || budget.ShouldResolve(RouteEpoch, dt))
+                {
+                    Vector2? step = ZoneRouteGrid.NextStep(map, hereZone, new Vector2(from.x, from.z), next);
+                    budget?.Commit(step, RouteEpoch);
+                    if (step.HasValue) next = step.Value;
+                }
+                else if (budget.CachedStep.HasValue)
+                {
+                    next = budget.CachedStep.Value;
+                }
             }
 
             return new Vector3(next.x, goal.y, next.y);
