@@ -44,16 +44,23 @@ namespace MaxWorlds.Enemies
         [SerializeField] private int startingRobots = 0;
 
         /// <summary>
-        /// The FIELD-WIDE budget, across every factory (YT-186). <see cref="maxLiveEnemies"/> only
-        /// ever capped ONE factory's own count; nothing capped the sum, so when the yard had one or
-        /// two sources the effective ceiling was small by accident. YT-185 gave the yard a fourth
+        /// The FIELD-WIDE budget, across every factory AND every area's ambient/garrison population
+        /// (YT-186, generalised to every spawn/placement path by MV-612). <see cref="maxLiveEnemies"/>
+        /// only ever capped ONE factory's own count; nothing capped the sum, so when the yard had one
+        /// or two sources the effective ceiling was small by accident. YT-185 gave the yard a fourth
         /// factory (mower/greenhouse/toolshed/central), which raised the field's worst-case
         /// concurrent-robot count from 24 (3 x 8) to 32 with no compensating limit — more agents,
         /// more nav, more telegraph/VFX draws, more shadow-casting bodies, all live at the same
         /// instant. This restores the original 24-robot ceiling regardless of how many factories a
         /// level has, so adding sources spreads the swarm across more doors rather than growing it.
+        ///
+        /// The authored default now lives on <see cref="RobotCompositionTuning.DefaultGlobalRobotBudget"/>,
+        /// with a <see cref="DevTuning.GlobalRobotBudget"/> override (Settings panel), so this reads
+        /// the SAME shared number <see cref="AreaSpawnQueue.GlobalBudget"/> enforces on the ambient/
+        /// garrison side (MV-612) — one budget, not two independent ones that can drift apart.
         /// </summary>
-        public const int GlobalMaxLiveEnemies = 24;
+        public static int GlobalMaxLiveEnemies =>
+            Mathf.RoundToInt(DevTuning.Or(DevTuning.GlobalRobotBudget, RobotCompositionTuning.DefaultGlobalRobotBudget));
 
         /// <summary>Room for one more robot ANYWHERE on the field, not just from this factory.</summary>
         private static bool GlobalHasRoom => RobotEnemy.ActiveCount < GlobalMaxLiveEnemies;

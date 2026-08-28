@@ -30,6 +30,21 @@ namespace MaxWorlds.Enemies
         /// (<c>maxActiveRobots</c>).</summary>
         public const float DefaultMaxActiveRobots = 18f;
 
+        /// <summary>The one field-wide live-robot ceiling every spawn AND placement path shares
+        /// (MV-612) — EnemySpawner's shed streams (<see cref="MaxWorlds.Enemies.EnemySpawner.GlobalMaxLiveEnemies"/>)
+        /// and <see cref="AreaSpawnQueue"/>'s ambient release both read this same authored default
+        /// (and the same <c>DevTuning.GlobalRobotBudget</c> override). Validated against
+        /// <see cref="DefaultMaxActiveRobots"/> (18): up to three areas can be concurrently live at
+        /// once — the current area, a previous area's still-draining overflow tail, and MV-514's
+        /// pre-placed next area — so a purely per-area cap alone permits a worst case of 3 x 18 = 54
+        /// concurrent robots. This sits above one area's own full cap (so a single dense room's
+        /// ambient population is never itself starved by the field-wide budget) but well under that
+        /// 54-robot worst case — the same 24 EnemySpawner already enforced field-wide (YT-186) before
+        /// this ticket generalised it to every path. Garrison placement is the one deliberate
+        /// exception: it counts toward this budget but is never blocked by it (<see cref="AreaSpawnQueue.TryTakeForGarrison(int, out EnemyKind)"/>),
+        /// because a room's authored garrison must always be present the instant it's entered.</summary>
+        public const float DefaultGlobalRobotBudget = 24f;
+
         /// <summary>Per-area robot-HP multiplier, off by default (<c>robotHpPerAreaMult</c>).</summary>
         public const float DefaultRobotHpPerAreaMult = 1f;
 

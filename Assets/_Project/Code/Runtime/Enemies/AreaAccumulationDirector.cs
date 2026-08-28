@@ -189,8 +189,9 @@ namespace MaxWorlds.Enemies
         {
             _map = map;
             _cover = cover ?? System.Array.Empty<CoverPiece>();
-            _queue = new AreaSpawnQueue(Mathf.RoundToInt(
-                DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots)));
+            _queue = new AreaSpawnQueue(
+                Mathf.RoundToInt(DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots)),
+                Mathf.RoundToInt(DevTuning.Or(DevTuning.GlobalRobotBudget, RobotCompositionTuning.DefaultGlobalRobotBudget)));
             _filledAreas.Clear();
             _largeCountByArea.Clear();
             _areaByRobot.Clear();
@@ -315,9 +316,10 @@ namespace MaxWorlds.Enemies
 
             // Overflow only, by now — FillArea already released everything a fresh room could fit
             // under its own area's cap. This is what lets the rest in as that area's live count drops,
-            // spaced out rather than dumped all at once. Gated on the queue's per-area cap only (MV-417)
-            // — no longer on RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies, a field-wide
-            // count that let a robot alive three rooms back starve the room the player is standing in.
+            // spaced out rather than dumped all at once. Gated on the queue's own per-area cap AND its
+            // GlobalBudget (MV-417, MV-612) — never on RobotEnemy.ActiveCount < EnemySpawner.GlobalMaxLiveEnemies,
+            // a field-wide count that let a robot alive three rooms back starve the room the player is
+            // standing in AND that OnEnable never populates outside Play mode, making it untestable here.
             _timer += Time.deltaTime;
             if (_timer < ReleaseInterval) return;
             _timer = 0f;

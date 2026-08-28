@@ -555,6 +555,12 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.MaxActiveRobots, RobotCompositionTuning.DefaultMaxActiveRobots),
                 v => DevTuning.MaxActiveRobots = v, tab: TabEnemies);
 
+            // MV-612: the FIELD-WIDE ceiling — every shed AND every area's ambient/garrison population
+            // shares this one budget, unlike "Max active robots" above (a PER-AREA cap).
+            Add("Global robot budget", "bots", 8f, 60f, RobotCompositionTuning.DefaultGlobalRobotBudget,
+                () => DevTuning.Or(DevTuning.GlobalRobotBudget, RobotCompositionTuning.DefaultGlobalRobotBudget),
+                v => DevTuning.GlobalRobotBudget = v, tab: TabEnemies);
+
             // MV-428 Change 2: how many Rusher/Blinker-kind robots may be mid-Telegraph or mid-Lunge
             // at once — the readability fix's attack-token cap.
             Add("Lunge token cap", "bots", 0f, 8f, RobotCompositionTuning.DefaultLungeTokenCap,

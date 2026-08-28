@@ -39,6 +39,18 @@ namespace MaxWorlds.Enemies
         /// MV-417: was field-wide before this ticket - see <see cref="_activeByArea"/>).</summary>
         public int MaxActive { get; }
 
+        /// <summary>The field-wide live-robot ceiling this queue enforces on top of <see cref="MaxActive"/>
+        /// (MV-612) — checked against <see cref="ActiveCount"/> (every area this queue tracks, combined),
+        /// not <see cref="ActiveCountForArea"/>. Defaults to "no cap" (<see cref="int.MaxValue"/>) so
+        /// every caller from before this ticket — which only ever cared about <see cref="MaxActive"/> —
+        /// keeps behaving exactly as it did; only a caller that explicitly passes a real budget (production:
+        /// <see cref="MaxWorlds.Enemies.RobotCompositionTuning.DefaultGlobalRobotBudget"/> via
+        /// <c>AreaAccumulationDirector.Configure</c>) opts in. Deliberately NOT consulted by
+        /// <see cref="TryTakeForGarrison(int, out EnemyKind)"/> — a garrison must always be placed the
+        /// instant its room is entered, so it counts toward this budget (via <see cref="Activate"/>)
+        /// without ever being blocked by it.</summary>
+        public int GlobalBudget { get; }
+
         /// <summary>Robots this queue currently considers active - released but not yet reported
         /// destroyed. Field-wide total; see <see cref="ActiveCountForArea"/> for the per-area count
         /// <see cref="MaxActive"/> is actually checked against.</summary>
@@ -55,9 +67,10 @@ namespace MaxWorlds.Enemies
         /// <summary>Everything this area still has left to put on the field, active or not.</summary>
         public int TotalRemaining => ActiveCount + _queued.Count;
 
-        public AreaSpawnQueue(int maxActive)
+        public AreaSpawnQueue(int maxActive, int globalBudget = int.MaxValue)
         {
             MaxActive = Mathf.Max(1, maxActive);
+            GlobalBudget = Mathf.Max(1, globalBudget);
         }
 
         /// <summary>Queues one area's worth of population, tagged with <paramref name="areaIndex"/>
@@ -147,16 +160,21 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Scans the queue in FIFO order for the first entry that is both a match for
         /// <paramref name="filterArea"/> (any area, if null) AND whose own area is currently under
-        /// <see cref="MaxActive"/>, extracts it, and marks it active for that area. Entries skipped
-        /// along the way (wrong area, or a match whose area is capped) are put back in their original
-        /// relative order - this is a targeted extraction, not a reorder of the queue.</summary>
+        /// <see cref="MaxActive"/> AND the field-wide <see cref="GlobalBudget"/> (MV-612) still has
+        /// room, extracts it, and marks it active for that area. Entries skipped along the way (wrong
+        /// area, that area capped, or the field-wide budget spent) are put back in their original
+        /// relative order - this is a targeted extraction, not a reorder of the queue, and a robot that
+        /// can't release this pass is deferred, never dropped (it stays queued for the next release
+        /// interval to retry).</summary>
         private bool TryExtractEligible(int? filterArea, out int area, out EnemyKind kind)
         {
             int count = _queued.Count;
             for (int i = 0; i < count; i++)
             {
                 QueuedSpawn next = _queued.Dequeue();
-                if ((filterArea == null || next.Area == filterArea.Value) && ActiveCountForArea(next.Area) < MaxActive)
+                if ((filterArea == null || next.Area == filterArea.Value)
+                    && ActiveCountForArea(next.Area) < MaxActive
+                    && ActiveCount < GlobalBudget)
                 {
                     area = next.Area;
                     kind = next.Kind;
@@ -172,12 +190,14 @@ namespace MaxWorlds.Enemies
         }
 
         /// <summary>Takes the next queued robot for <paramref name="areaIndex"/> straight out of the
-        /// queue and marks it active, ignoring <see cref="MaxActive"/> entirely (MV-417) - a garrison
-        /// seed must be guaranteed present the instant an area is first entered (or restored),
-        /// independent of whatever concurrent-cap state the ambient top-up queue happens to be in. The
-        /// caller is expected to place exactly <see cref="Garrison.SeedCount"/> of these per area, which
-        /// is always at most that area's authored total, so this can never run the queue dry on its
-        /// own.</summary>
+        /// queue and marks it active, ignoring <see cref="MaxActive"/> AND <see cref="GlobalBudget"/>
+        /// entirely (MV-417, MV-612) - a garrison seed must be guaranteed present the instant an area is
+        /// first entered (or restored), independent of whatever concurrent-cap or field-wide-budget
+        /// state the ambient top-up queue happens to be in. It still counts toward <see cref="GlobalBudget"/>
+        /// afterward, via the same <see cref="Activate"/> every other release goes through - it just
+        /// never has to wait for room first. The caller is expected to place exactly
+        /// <see cref="Garrison.SeedCount"/> of these per area, which is always at most that area's
+        /// authored total, so this can never run the queue dry on its own.</summary>
         public bool TryTakeForGarrison(int areaIndex, out EnemyKind kind)
         {
             int count = _queued.Count;
