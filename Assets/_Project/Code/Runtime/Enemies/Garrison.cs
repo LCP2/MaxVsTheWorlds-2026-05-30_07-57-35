@@ -53,22 +53,29 @@ namespace MaxWorlds.Enemies
             public Seed(Vector3 position, EnemyKind? kind) { Position = position; Kind = kind; }
         }
 
-        /// <summary>Deterministic, authored-not-random placement for <paramref name="count"/> garrison
-        /// slots in <paramref name="area"/> (MV-559): <see cref="WorldArea.garrison"/>'s authored
-        /// entries fill the first slots, in authored order, each carrying its own authored kind; any
-        /// slots beyond that — all of them, when nothing is authored — fill from the same evenly-spaced
-        /// ring <see cref="SeedPositions"/> always used, each with no kind preference. An area that
-        /// authors more entries than <paramref name="count"/> only uses the first <paramref name="count"/>
-        /// of them.</summary>
+        /// <summary>Deterministic, authored-not-random placement for garrison slots in
+        /// <paramref name="area"/> (MV-559, MV-601): every <see cref="WorldArea.garrison"/> authored
+        /// entry is placed, in authored order, each carrying its own authored kind, even past
+        /// <paramref name="count"/> — an authored entry is the designer saying "this robot stands
+        /// HERE", not subject to the density dial. Any slots beyond the authored ones — all of them,
+        /// when nothing is authored — fill from the same evenly-spaced ring <see cref="SeedPositions"/>
+        /// always used, each with no kind preference.</summary>
         public static Seed[] SeedSlots(WorldArea area, int count)
         {
-            if (area == null || count <= 0) return Array.Empty<Seed>();
+            if (area == null) return Array.Empty<Seed>();
+            if (count <= 0 && (area.garrison == null || area.garrison.Length == 0)) return Array.Empty<Seed>();
 
             WorldGarrisonEntry[] authored = area.garrison ?? Array.Empty<WorldGarrisonEntry>();
-            int authoredUsed = Mathf.Min(authored.Length, count);
-            int remaining = count - authoredUsed;
+            // Every authored entry is placed, even past SeedCount. An authored garrison is a
+            // designer saying "this robot stands HERE"; the density dial decides how many the RING
+            // seeds, not how much of the authored design survives. DensityShare tops out at 0.85, so
+            // truncating here meant an area could never have all of its authored robots pre-placed -
+            // the remainder silently became arrivals at a random cell in the far-side band.
+            int authoredUsed = authored.Length;
+            int total = Mathf.Max(count, authoredUsed);
+            int remaining = total - authoredUsed;
 
-            var slots = new Seed[count];
+            var slots = new Seed[total];
             for (int i = 0; i < authoredUsed; i++)
             {
                 WorldGarrisonEntry entry = authored[i];
