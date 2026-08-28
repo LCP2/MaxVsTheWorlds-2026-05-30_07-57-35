@@ -12,6 +12,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
+using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
@@ -305,6 +306,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv606Hud("mv606phone", "-mv606phoneshot", "Temp/mv606phone.arm", "Temp/mv606phone.headless",
                 "_mv606phone_done.txt", "MV-606-phone", 852, 393)); // 852x393: the project's own iPhone-landscape convention (see UiScreensDirector)
             Add(BuildMv617WaterReach());
+            Add(BuildMv616SentinelBeam());
             return d;
         }
 
@@ -763,6 +765,122 @@ namespace MaxWorlds.Dev
                 TimeoutSeconds = 90,
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-617", NoSetup) },
+            };
+        }
+
+        // ---- MV616SentinelBeam (MV-616 AC5) ---------------------------------------------------
+
+        /// <summary>Deploys one sentinel and a stationary target robot, waits for the sentinel's own
+        /// auto-fire (no forced/scripted shot — this proves the REAL firing path, the same one
+        /// <see cref="Sentinel.Update"/> drives every frame), then frames and captures the instant a
+        /// shot is actually live (polls the private <c>_beamTimer</c> the same way
+        /// <see cref="MaxWorlds.Tests.EditMode.SentinelBeamVfxTests"/> does, since the beam is only
+        /// visible for a sub-0.12s window and a fixed frame delay could easily miss it).</summary>
+        private static CapturePreset BuildMv616SentinelBeam()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+            const float pitch = 60f;
+            const float distance = 9f;
+            const int maxWaitFrames = 240;
+            const int maxFireAttempts = 8;
+
+            Sentinel sentinel = null;
+            GameObject sentinelGo = null;
+            GameObject targetGo = null;
+            FieldInfo beamTimerField = typeof(Sentinel).GetField("_beamTimer", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                Vector3 sentinelPos = focus + new Vector3(-1.5f, 0f, 0f);
+                Vector3 targetPos = focus + new Vector3(2.5f, 0f, 0f);
+
+                sentinelGo = new GameObject("MV616CaptureSentinel");
+                sentinel = sentinelGo.AddComponent<Sentinel>();
+                sentinel.Init(sentinelPos, maxHp: 60f, range: 8f, fireInterval: 0.5f,
+                    moveSpeed: 0f, standoffDistance: 2.5f, followTarget: null);
+
+                targetGo = BuildClusterRobot(EnemyKind.Gunner, targetPos);
+                Physics.SyncTransforms();
+
+                // Aim the camera at the pair BEFORE waiting for a shot — ParticleSystem's default
+                // culling mode only simulates a system while it's visible to a camera, so leaving the
+                // camera at its untouched default position during the wait silently starved every
+                // particle of simulation (isPlaying stayed true, particleCount stayed 0 the whole time).
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = Vector3.Lerp(sentinelPos, targetPos, 0.5f); camFocus.y = 1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+                yield return null;
+
+                // Wait for the sentinel's own auto-fire (real path, no scripted shot) to go live, then
+                // let several more frames of real particle simulation accumulate before capturing — a
+                // render on the very frame Play() fires catches the stream at zero live droplets
+                // (emission hasn't been simulated yet), and even one frame later is only a handful.
+                // The droplets' own lifetime (WaterVfx.travelTime, 0.32s) far outlives BeamVisibleSeconds
+                // (<=0.12s), so waiting past the beam's own active window still shows a live, settled jet.
+                bool captured = false;
+                int frame = 0;
+                for (int attempt = 0; attempt < maxFireAttempts && !captured; attempt++)
+                {
+                    while (frame < maxWaitFrames && (float)beamTimerField.GetValue(sentinel) <= 0f)
+                    {
+                        yield return null;
+                        frame++;
+                    }
+                    if ((float)beamTimerField.GetValue(sentinel) <= 0f) break; // ran out of frames entirely
+
+                    // Belt-and-braces against the same starvation the BeforeSceneLoad fix above solves
+                    // for the frozen-time case: force every system to simulate regardless of whether
+                    // it's currently inside the camera's frustum.
+                    var liveOrigin = sentinelGo.transform.Find("BeamOrigin");
+                    if (liveOrigin != null)
+                    {
+                        foreach (var livePs in liveOrigin.GetComponentsInChildren<ParticleSystem>(true))
+                        {
+                            var m = livePs.main;
+                            m.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+                        }
+                    }
+
+                    for (int settle = 0; settle < 6; settle++) yield return null;
+                    captured = true;
+                }
+                if (!captured)
+                    throw new CaptureAbortException("never caught a live beam frame within the capture window");
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv616sentinelbeam",
+                LogTag = "[MV616Capture]",
+                Flag = "-mv616shot",
+                ArmFile = "Temp/mv616.arm",
+                HeadlessMarker = "Temp/mv616.headless",
+                DoneFileName = "_mv616_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // HomeScreen's pick-a-slot modal only skips itself for PressKitDirector/
+                    // UiScreensDirector/PerfCaptureDirector — it doesn't know about this shared
+                    // CapturePresets system (MV-592 postdates it) — so on a clean profile (no slot
+                    // picked yet) it opens and freezes Time.timeScale at 0 for the whole session,
+                    // which silently starves every ParticleSystem of simulation (isPlaying stays
+                    // true, particleCount stays 0 forever). Marking a slot active here trips
+                    // HomeScreen's OWN existing "a slot is already live" skip (its first check,
+                    // before the capture-director checks), so time is never paused in the first place.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-616", Setup) },
+                Cleanup = () =>
+                {
+                    if (sentinelGo != null) Destroy(sentinelGo);
+                    if (targetGo != null) Destroy(targetGo);
+                },
             };
         }
     }

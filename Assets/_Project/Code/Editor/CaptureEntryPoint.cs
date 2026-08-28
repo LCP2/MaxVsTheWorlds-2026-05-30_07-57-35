@@ -53,6 +53,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv617WaterReach() => RunFromMenu(CapturePresets.All["mv617waterreach"]);
         public static void CaptureMv617WaterReach() => Run(CapturePresets.All["mv617waterreach"]);
 
+        [MenuItem("MaxWorlds/Capture/Sentinel Beam (MV-616)")]
+        public static void MenuMv616SentinelBeam() => RunFromMenu(CapturePresets.All["mv616sentinelbeam"]);
+        public static void CaptureMv616SentinelBeam() => Run(CapturePresets.All["mv616sentinelbeam"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

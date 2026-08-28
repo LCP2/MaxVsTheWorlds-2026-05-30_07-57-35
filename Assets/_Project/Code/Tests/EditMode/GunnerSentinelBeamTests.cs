@@ -3,14 +3,18 @@ using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Enemies;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-395: the sentinel was damaging robots with no visible beam/stream at all — the targeting and
     /// damage logic (<see cref="Sentinel"/>'s Update) never drew anything, it only called
-    /// <c>TakeDamage</c>. This proves a shot now actually draws a tracer from the turret to the robot
+    /// <c>TakeDamage</c>. This proves a shot now actually fires a visible from the turret to the robot
     /// it just hit, not just that the robot takes damage (already covered by <see cref="SentinelTests"/>).
+    /// MV-616 replaced the original bare LineRenderer tracer with a reused, scaled-down
+    /// <see cref="WaterVfx"/> — this test was updated to match; see <see cref="SentinelBeamVfxTests"/>
+    /// for the new VFX-specific acceptance criteria (particle presence, cleanup, particle budget).
     /// </summary>
     public sealed class GunnerSentinelBeamTests
     {
@@ -35,7 +39,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void FiringAtARobotDrawsAVisibleTracerFromTheTurretToTheHit()
+        public void FiringAtARobotBuildsTheWaterVfxAtTheTurretsMuzzleFacingTheHit()
         {
             var sentinelGo = new GameObject("Sentinel");
             var sentinel = sentinelGo.AddComponent<Sentinel>();
@@ -52,19 +56,19 @@ namespace MaxWorlds.Tests.EditMode
 
                 InvokeUpdate(sentinel);
 
-                var beamGo = sentinel.transform.Find("Beam");
-                Assert.IsNotNull(beamGo, "no Beam child was built — the shot is still invisible");
+                var originGo = sentinel.transform.Find("BeamOrigin");
+                Assert.IsNotNull(originGo, "no BeamOrigin child was built — the shot is still invisible");
 
-                var beam = beamGo.GetComponent<LineRenderer>();
-                Assert.IsNotNull(beam);
-                Assert.IsTrue(beam.enabled, "the tracer must be visible the instant a shot lands");
+                var vfx = originGo.GetComponent<WaterVfx>();
+                Assert.IsNotNull(vfx, "BeamOrigin must carry the reused WaterVfx, not a hand-authored effect");
 
-                Vector3 start = beam.GetPosition(0);
-                Vector3 end = beam.GetPosition(1);
-                Assert.That(start.x, Is.EqualTo(0f).Within(1e-3f), "the tracer must originate at the turret");
-                Assert.That(start.z, Is.EqualTo(0f).Within(1e-3f));
-                Assert.That(end.x, Is.EqualTo(2f).Within(1e-3f), "the tracer must end at the target it hit");
-                Assert.That(end.z, Is.EqualTo(0f).Within(1e-3f));
+                // The turret's own root rotation (set in Update, right before FireBeam) is what aims the
+                // water — BeamOrigin sits at identity local rotation, so its world forward already
+                // points at the hit.
+                Vector3 toTarget = target.transform.position - sentinel.transform.position;
+                toTarget.y = 0f;
+                float angle = Vector3.Angle(sentinel.transform.forward, toTarget.normalized);
+                Assert.That(angle, Is.LessThan(1f), "the turret must be aimed at the robot it just hit");
             }
             finally
             {
