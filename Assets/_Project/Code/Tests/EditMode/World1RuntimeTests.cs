@@ -233,24 +233,25 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void World1_BossBodyResolvesToHalfTheOldAuthoredSize()
+        public void World1_BossBodyResolvesToTheAuthoredSize()
         {
-            // MV-589: world1_config.json's six authored boss entries shrank from 6x6 to 3x3. Asserts
-            // the RESOLVED, constructed body — not the JSON — because a config edit that never reached
-            // MapRuntime.BuildBoss would pass a JSON-only assertion while the scene still spawned a 6 m cube.
+            // MV-621: world1_config.json's six authored boss entries doubled back from 3x3 to 6x6, now
+            // that MV-613 makes the rig actually follow authored size. Asserts the RESOLVED, constructed
+            // body — not the JSON — because a config edit that never reached MapRuntime.BuildBoss would
+            // pass a JSON-only assertion while the scene still spawned a mis-sized cube.
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
-            var root = new GameObject("MV-589 Boss Size Probe Root");
+            var root = new GameObject("MV-621 Boss Size Probe Root");
             try
             {
                 MapBuild built = MapRuntime.Build(map, root.transform);
                 Assert.IsTrue(built.Actors.TryGetValue("a12_boss1", out GameObject boss) && boss != null,
                     "world1_config.json's 'a12_boss1' was not built");
 
-                Assert.AreEqual(3f, boss.transform.localScale.x, 1e-4f,
-                    "a12_boss1's built width must be half the old 6 m authored size");
-                Assert.AreEqual(3f, boss.transform.localScale.z, 1e-4f,
-                    "a12_boss1's built depth must be half the old 6 m authored size");
+                Assert.AreEqual(6f, boss.transform.localScale.x, 1e-4f,
+                    "a12_boss1's built width must match its authored 6 m size");
+                Assert.AreEqual(6f, boss.transform.localScale.z, 1e-4f,
+                    "a12_boss1's built depth must match its authored 6 m size");
             }
             finally
             {
