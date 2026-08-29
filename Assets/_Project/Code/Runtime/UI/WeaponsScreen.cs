@@ -318,6 +318,11 @@ namespace MaxWorlds.UI
         /// same idiom as <see cref="NodeHexFill"/>.</summary>
         public Image NodeProgressTrack(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.ProgressTrack : null;
 
+        /// <summary>MV-620: an ability node's own level-pill backdrop — test-only access, same idiom as
+        /// <see cref="NodeHexFill"/>, so a legibility test can read the pill's real bottom edge rather
+        /// than re-deriving it from <see cref="RigBoardLayout"/> formulas independently.</summary>
+        public Image NodePillBg(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillBg : null;
+
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
         /// space regardless of this wrapper's scale) — test-only access to confirm the clamp applied.</summary>
@@ -655,6 +660,8 @@ namespace MaxWorlds.UI
         private float LevelPillH => _phoneMode ? RigBoardLayout.LevelPillHPhone : RigBoardLayout.LevelPillH;
         private float FusionSubFontSize => _phoneMode ? RigBoardLayout.FusionSubFontSizePhone : RigBoardLayout.FusionSubFontSize;
         private float ForgeCaptionFontSize => _phoneMode ? RigBoardLayout.ForgeCaptionFontSizePhone : RigBoardLayout.ForgeCaptionFontSize;
+        private float CostFontSize => _phoneMode ? RigBoardLayout.CostFontSizePhone : RigBoardLayout.CostFontSize;
+        private float CostIconSize => _phoneMode ? RigBoardLayout.CostIconSizePhone : RigBoardLayout.CostIconSize;
         private float ForgeDividerY => _phoneMode ? RigBoardLayout.ForgeDividerYPhone : RigBoardLayout.ForgeDividerY;
         private float RegionRectY => _phoneMode ? RigBoardLayout.RegionRectYPhone : RigBoardLayout.RegionRectY;
 
@@ -2227,6 +2234,15 @@ namespace MaxWorlds.UI
             float r = RadiusAbility;
             BuildNodeShell(boardRoot, ab.Id, ab.X, ab.Y, r, HexSides, out var shell);
 
+            // MV-620: phone mode's own label sits further down than the shared BuildNodeShell default
+            // (RigBoardLayout.LabelOffsetYPhone, not LabelOffsetY) — opens the collar the enlarged cost
+            // tag below needs. Category nodes make their own equivalent override with CategoryLabelOffsetY;
+            // this is the ability-node one.
+            if (_phoneMode)
+            {
+                shell.Label.rectTransform.anchoredPosition = new Vector2(0f, -RigBoardLayout.LabelOffsetYPhone(r));
+            }
+
             shell.HexOutline.sprite = SolidHexOutlineSprite(r);
             int abIconSize = Mathf.RoundToInt(r * RigBoardLayout.IconScaleAbility);
             shell.Icon.sprite = HudTextures.VectorIcon(RigBoardLayout.Icon(ab.Icon), abIconSize);
@@ -2273,27 +2289,41 @@ namespace MaxWorlds.UI
             shell.ProgressRing.fillAmount = 0f;
             shell.ProgressRing.gameObject.SetActive(false);
 
-            // MV-470: the cost tag — a small cell-glyph icon + number sitting in the real vertical gap
-            // between the level pill (bottom edge at LevelPillOffsetY - h/2) and the label (top edge at
-            // LabelOffsetY - 12), so it never fights the pill's own "{level}/{max}" text or the label's
-            // ability name. Same PowerCell glyph the CELLS header chip and the world HUD's own counter
-            // use, so a node's cost reads as CELLS on sight, not a naked integer.
+            // MV-470/MV-620: the cost tag — a small cell-glyph icon + number sitting in the real vertical
+            // gap between the level pill (bottom edge at LevelPillOffsetY - h/2) and the label (top edge
+            // at LabelOffsetY[Phone] - 12), so it never fights the pill's own "{level}/{max}" text or the
+            // label's ability name. Same PowerCell glyph the CELLS header chip and the world HUD's own
+            // counter use, so a node's cost reads as CELLS on sight, not a naked integer. Font/icon size
+            // and box geometry are on the phone/standard ladder (RigBoardLayout.CostFontSize[Phone] /
+            // CostIconSize[Phone]) rather than hardcoded — MV-620's fix, the tag used to render at 5.1pt
+            // on phone and 9.6pt on tablet, both under the project's 11pt legibility floor.
             float pillBottom = -RigBoardLayout.LevelPillOffsetY(r) - LevelPillH * 0.5f;
-            float labelTop = -RigBoardLayout.LabelOffsetY(r) + 12f;
+            float labelTop = -(_phoneMode ? RigBoardLayout.LabelOffsetYPhone(r) : RigBoardLayout.LabelOffsetY(r)) + 12f;
             float costTagY = (pillBottom + labelTop) * 0.5f;
             Color moduleColour = RigBoardLayout.Colour("module");
+            float costIconSize = CostIconSize;
+            float costFontSize = CostFontSize;
 
-            shell.CostIcon = AddImage(shell.Root, WeaponHudIcons.PowerCell(24), Color.clear, "Cost Icon");
+            // MV-620: the icon and text boxes are centre-pivoted (both AddImage/AddText below use a
+            // (0.5,0.5) pivot), so each box extends half its own width on EITHER side of its anchored x —
+            // offsetting purely by the ICON's own half-width (the pre-fix idiom) left the much wider text
+            // box's own left edge bleeding back past centre and into the icon once CostFontSize grew past
+            // ~14. Half a gap is added to each side of centre instead, off each box's own half-width, so
+            // the two can never overlap regardless of font size.
+            const float TagGap = 4f;
+            float textHalfWidth = costFontSize * 1.1f;
+
+            shell.CostIcon = AddImage(shell.Root, WeaponHudIcons.PowerCell(Mathf.RoundToInt(costIconSize)), Color.clear, "Cost Icon");
             Anchor(shell.CostIcon.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            shell.CostIcon.rectTransform.sizeDelta = new Vector2(14f, 14f);
-            shell.CostIcon.rectTransform.anchoredPosition = new Vector2(-9f, costTagY);
+            shell.CostIcon.rectTransform.sizeDelta = new Vector2(costIconSize, costIconSize);
+            shell.CostIcon.rectTransform.anchoredPosition = new Vector2(-(costIconSize * 0.5f + TagGap * 0.5f), costTagY);
             shell.CostIcon.raycastTarget = false;
             shell.CostIcon.gameObject.SetActive(false);
 
-            shell.CostText = AddText(shell.Root, 14, moduleColour, TextAnchor.MiddleLeft);
+            shell.CostText = AddText(shell.Root, Mathf.RoundToInt(costFontSize), moduleColour, TextAnchor.MiddleLeft);
             Anchor(shell.CostText.rectTransform, new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f));
-            shell.CostText.rectTransform.sizeDelta = new Vector2(30f, 18f);
-            shell.CostText.rectTransform.anchoredPosition = new Vector2(9f, costTagY);
+            shell.CostText.rectTransform.sizeDelta = new Vector2(textHalfWidth * 2f, costFontSize * 1.2f);
+            shell.CostText.rectTransform.anchoredPosition = new Vector2(textHalfWidth + TagGap * 0.5f, costTagY);
             shell.CostText.fontStyle = FontStyle.Bold;
             shell.CostText.raycastTarget = false;
             shell.CostText.gameObject.SetActive(false);

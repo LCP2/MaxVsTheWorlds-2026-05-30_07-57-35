@@ -475,6 +475,20 @@ namespace MaxWorlds.UI
         public static float FusionSubFontSizePhone => 32f;
         public static float ForgeCaptionFontSizePhone => 32f;
 
+        /// <summary>MV-620: the node cost tag (icon + number) was the one label on the board never
+        /// routed through this ladder — hardcoded at 14 in <c>WeaponsScreen.BuildAbilityNode</c>, which
+        /// renders at 5.1pt at a real iPhone's physical scale (14*0.3639) and 9.6pt at iPad mini
+        /// (14*0.689), both under the project's 11pt floor and the reason Lee couldn't read either the
+        /// number or its glyph in the 29 Aug playtest. Phone 36 -> 36*0.3639 = 13.1pt, matching
+        /// <see cref="CategoryLabelFontSizePhone"/> — the price drives every spend decision on the
+        /// board, so it is never smaller than the category heading beside it. Standard 20 clears the
+        /// floor on every supported tablet (iPad mini 20*0.689 = 13.8pt, 16:9 tablet 20*(768/1080) =
+        /// 14.2pt). Icon sized ~1.1x the font so the glyph optically matches the digits.</summary>
+        public static float CostFontSize => 20f;
+        public static float CostFontSizePhone => 36f;
+        public static float CostIconSize => 22f;
+        public static float CostIconSizePhone => 40f;
+
         /// <summary>MV-472: the box <c>WeaponsScreen.BuildNodeShell</c> best-fit-shrinks a phone-mode
         /// label into instead of the standard mode's fixed <c>r*3</c> box — sized so two ADJACENT
         /// siblings' labels (e.g. e_ff "FORCE FIELD" next to e_cel "CELL STORAGE", <see cref="PhoneNodeSpacing"/>
@@ -595,6 +609,21 @@ namespace MaxWorlds.UI
 
         public static float LabelOffsetY(float r) { EnsureLoaded(); return ResolveOffset(s_geometry.labelOffsetY, r); }
         public static float LabelFontSize { get { EnsureLoaded(); return s_geometry.labelFontSize; } }
+
+        /// <summary>MV-620: ability nodes only, phone mode only — the shared <see cref="LabelOffsetY"/>
+        /// collar (level pill bottom to label top) is 22 ref-px at <see cref="RadiusAbilityPhone"/>, too
+        /// tight for the enlarged <see cref="CostFontSizePhone"/> tag (needs ~55). Pushes the ability
+        /// label <see cref="CostTagLabelPushPhone"/> further down than the shared formula so the tag has
+        /// room; category nodes reposition via <see cref="CategoryLabelOffsetY"/> afterward and are
+        /// unaffected, fusion nodes carry no cost tag and keep the shared <see cref="LabelOffsetY"/>
+        /// unchanged. See <c>WeaponsScreen.BuildAbilityNode</c> for the one call site.</summary>
+        public static float LabelOffsetYPhone(float r) { EnsureLoaded(); return ResolveOffset(s_geometry.labelOffsetY, r) + CostTagLabelPushPhone; }
+
+        /// <summary>Leaves ~6 ref-px of the pre-existing ~36 ref-px gap to the next tier's node after the
+        /// push above (36 minus this 30) — tight but still clear, chosen instead of also touching the
+        /// phone row schedule (out of scope per MV-620 unless AC3 forces it) since a positive margin is
+        /// enough to satisfy AC3's own no-overlap requirement, which only covers the cost tag itself.</summary>
+        public static float CostTagLabelPushPhone => 30f;
         public static float CategoryLabelOffsetY(float r) { EnsureLoaded(); return ResolveOffset(s_geometry.categoryLabelOffsetY, r); }
         public static float CategoryLabelFontSize { get { EnsureLoaded(); return s_geometry.categoryLabelFontSize; } }
 
