@@ -222,11 +222,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DeploymentSlotsEqualsTheAxisLevel_FlooredAtOne()
+        public void DeploymentSlotsIsOnePlusLevelWithNoDeadStep()
         {
+            // MV-623: replaces the old Mathf.Max(1, level) shape, whose level 0->1 step bought nothing
+            // (the unlock already granted 1 slot, so level 1 also read as 1 — a dead level).
             Assert.That(AbilityTuning.SentinelDeploymentSlots(0), Is.EqualTo(1),
                 "u_slt starts at level 0 (a stat, not the old cap-1-from-run-start track) — still floors at 1 slot");
-            Assert.That(AbilityTuning.SentinelDeploymentSlots(4), Is.EqualTo(4));
+            Assert.That(AbilityTuning.SentinelDeploymentSlots(1), Is.EqualTo(2), "MV-623: level 1 must buy a real second slot, not stay dead at 1");
+            Assert.That(AbilityTuning.SentinelDeploymentSlots(4), Is.EqualTo(5));
         }
 
         [Test]

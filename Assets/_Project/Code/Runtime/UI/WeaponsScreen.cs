@@ -367,8 +367,8 @@ namespace MaxWorlds.UI
         {
             bool draftable = RigState.IsCellUnlockable(id) && !RigState.IsOwned(id);
             bool canLevelUp = RigState.CanSpendPart(id); // owned, below max — TryUpgradeNode's own gate
-            if (canLevelUp) return cellsBanked >= CellSpend.UpgradeCostFor(RigState.Level(id));
-            if (draftable) return cellsBanked >= CellSpend.UnlockCostCells;
+            if (canLevelUp) return cellsBanked >= CellSpend.UpgradeCostFor(id, RigState.Level(id));
+            if (draftable) return cellsBanked >= CellSpend.UnlockCostFor(id);
             return false;
         }
 
@@ -880,7 +880,7 @@ namespace MaxWorlds.UI
             bool capacityActionable = cellsOwned
                 ? PickupWallet.PowerCellCapacityLevel < PickupWallet.PowerCellCapacityMaxLevel
                 : RigState.IsCellUnlockable("e_cel");
-            int capacityCostCells = cellsOwned ? CellSpend.UpgradeCostFor(RigState.Level("e_cel")) : CellSpend.UnlockCostCells;
+            int capacityCostCells = cellsOwned ? CellSpend.UpgradeCostFor("e_cel", RigState.Level("e_cel")) : CellSpend.UnlockCostFor("e_cel");
             bool capacitySpendable = capacityActionable && PickupWallet.PowerCells >= capacityCostCells;
             _cellsChipButton.interactable = capacitySpendable;
             // MV-446 defect 1: was tinting the BG SupercellColor/amber when a capacity level-up is
@@ -1284,7 +1284,7 @@ namespace MaxWorlds.UI
                 v.CapMarker.color = DimIfUnlit(module, categoryUnlocked);
                 // MV-458: was "SHED" — a shed now only ever unlocks a whole CATEGORY (MV-457), never an
                 // individual node, so a draftable node's own unlock is this cell cost, tapped directly.
-                v.PillText.text = CellSpend.UnlockCostCells.ToString();
+                v.PillText.text = CellSpend.UnlockCostFor(ab.Id).ToString();
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
                 v.PillText.color = DimIfUnlit(module, categoryUnlocked);

@@ -262,11 +262,14 @@ namespace MaxWorlds.Weapons
         // u_sen), then Move, Cost, Slots (children of Damage/Range/Health respectively). Every axis
         // below is keyed by its RIG id, not an enum — see RigState.
 
-        /// <summary>Power cells deploying the sentinel costs at u_cst Level 0 (not yet leveled) — free
-        /// (DECISION, Lee 26 Aug 2026 playtest, MV-579): the old flat 5-cell cost (DECISION, 16 Aug
-        /// 2026, MV-408) made a wedged, unrecallable sentinel a real resource loss on top of a
-        /// permanently-blocked exit. Do not re-raise a non-zero cost — see MV-579.</summary>
-        public const int DefaultSentinelCost = 0;
+        /// <summary>Power cells deploying the sentinel costs at u_cst Level 0 (not yet leveled) — 5
+        /// again (DECISION, Lee 29 Aug 2026, MV-623), re-raising MV-579's (26 Aug 2026 playtest) 0-cost
+        /// exception. MV-579's stated reason was that a wedged, unrecallable sentinel was a real
+        /// resource loss on top of a permanently-blocked exit; MV-604 has since removed that failure
+        /// mode entirely — <see cref="MaxWorlds.Weapons.PlayerAbilities.TryDeploySentinel(Vector3)"/>
+        /// now recalls the furthest sentinel at the slot cap instead of refusing, so a deploy can never
+        /// be an unrecoverable loss. MV-579's "do not re-raise" no longer applies.</summary>
+        public const int DefaultSentinelCost = 5;
 
         /// <summary>Fraction each Cost (u_cst) level CUTS the deploy cost — same inverse "spend a
         /// level, pay less" shape as <see cref="DefaultRcdaDepletionRatePerLevel"/>. Floored (see
@@ -458,9 +461,11 @@ namespace MaxWorlds.Weapons
             return current + nearestAway * step;
         }
 
-        /// <summary>How many sentinels Max may have deployed at once, at a given Slots (u_slt) level —
-        /// same "the level IS the slot count, floored at 1" shape the old Deployment Count track used.</summary>
-        public static int SentinelDeploymentSlots(int level) => Mathf.Max(1, level);
+        /// <summary>How many sentinels Max may have deployed at once, at a given Slots (u_slt) level.
+        /// MV-623: <c>1 + max(0, level)</c>, replacing the old <c>Mathf.Max(1, level)</c> shape whose
+        /// level 0-&gt;1 step bought nothing (the unlock itself already granted 1 slot, so level 1 also
+        /// read as 1). Every level now buys exactly one slot, no dead step.</summary>
+        public static int SentinelDeploymentSlots(int level) => 1 + Mathf.Max(0, level);
 
         /// <summary>How far the aimed placement joystick's reticle reaches, metres (MV-399, reversing
         /// MV-362's "deployed at Max's position" DECISION per Lee's 15 Aug 2026 request). Fixed, not

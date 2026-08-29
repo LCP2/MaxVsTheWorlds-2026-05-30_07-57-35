@@ -73,8 +73,10 @@ namespace MaxWorlds.Tests.EditMode
                 Is.EqualTo(0.175f).Within(1e-4f));
 
             // ---------------------------------------------------------------- AC6: deployment slots, range and the SentinelMaxHp/SentinelDamagePerShot shapes are unchanged
+            // MV-623 changed SentinelDeploymentSlots' own formula (1 + level, no dead level) — updated
+            // to match rather than pin the pre-MV-623 numbers this ticket deliberately supersedes.
             Assert.That(AbilityTuning.SentinelDeploymentSlots(0), Is.EqualTo(1), "slot floor must still be 1 at level 0");
-            Assert.That(AbilityTuning.SentinelDeploymentSlots(4), Is.EqualTo(4), "slots must still equal the axis level");
+            Assert.That(AbilityTuning.SentinelDeploymentSlots(4), Is.EqualTo(5), "MV-623: every level now buys exactly one slot, no dead step");
             Assert.That(AbilityTuning.DefaultSentinelRange, Is.EqualTo(7f).Within(1e-4f), "targeting range base must be untouched by this ticket");
             Assert.That(AbilityTuning.DefaultSentinelRangePerLevel, Is.EqualTo(1.5f).Within(1e-4f), "targeting range per-level must be untouched by this ticket");
             // shape check with arbitrary base/perLevel, independent of the new defaults above
