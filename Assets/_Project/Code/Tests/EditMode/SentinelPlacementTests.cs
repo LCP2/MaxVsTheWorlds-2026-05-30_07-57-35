@@ -117,7 +117,7 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             RigState.AcquireCap("u_hp"); // reaches u_slt (its own RIG child)
             RigState.AcquireCap("u_slt"); // u_slt to L1
-            RigState.RaiseLevel("u_slt"); // u_slt to L2 -> 2 slots free (Mathf.Max(1, level)) — proves this is an overlap rejection, not a cap rejection
+            RigState.RaiseLevel("u_slt"); // u_slt to L2 -> 3 slots free (MV-623: 1 + level) — proves this is an overlap rejection, not a cap rejection
             PickupWallet.SetPowerCells(100);
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();

@@ -43,7 +43,7 @@ namespace MaxWorlds.Tests.EditMode
             else
                 RaiseToLevel(parent, Math.Min(2, RigBoard.MaxLevel(parent)));
 
-            PickupWallet.SetPowerCells(CellSpend.UnlockCostCells);
+            PickupWallet.SetPowerCells(CellSpend.UnlockCostFor(id));
             Assert.That(CellSpend.TryUnlockNode(id), Is.True, $"setup: '{id}' must unlock via cells");
         }
 
@@ -55,7 +55,7 @@ namespace MaxWorlds.Tests.EditMode
             UnlockViaCells(id);
             while (RigState.Level(id) < target)
             {
-                PickupWallet.SetPowerCells(CellSpend.UpgradeCostFor(RigState.Level(id)));
+                PickupWallet.SetPowerCells(CellSpend.UpgradeCostFor(id, RigState.Level(id)));
                 Assert.That(CellSpend.TryUpgradeNode(id), Is.True, $"setup: '{id}' must upgrade toward level {target}");
             }
         }
@@ -92,7 +92,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(RigState.IsCellUnlockable(id), Is.True,
                     $"'{id}' must be cell-unlockable once its ancestor chain is satisfied");
 
-                PickupWallet.SetPowerCells(CellSpend.UnlockCostCells);
+                PickupWallet.SetPowerCells(CellSpend.UnlockCostFor(id));
                 Assert.That(CellSpend.TryUnlockNode(id), Is.True,
                     $"'{id}' must be reachable by a real player action sequence from a fresh run");
             }

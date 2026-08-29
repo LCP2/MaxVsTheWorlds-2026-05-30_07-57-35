@@ -20,10 +20,10 @@ namespace MaxWorlds.Tests.EditMode
     /// </summary>
     public sealed class SentinelBeamVfxTests
     {
-        /// <summary>The maximum number of sentinels Max can have deployed at once — u_slt's authored
-        /// cap level (<c>maxLevel: 4</c> in rig_board.json) fed through
-        /// <see cref="MaxWorlds.Weapons.AbilityTuning.SentinelDeploymentSlots"/>. This is the "sentinel
-        /// slot cap" the ticket's budget is stated against.</summary>
+        /// <summary>The particle-budget scenario's own sentinel count — kept at MV-616's original 4
+        /// (this test builds each <see cref="Sentinel"/> directly via <c>AddComponent</c>/<c>Init</c>,
+        /// never through RigState/u_slt, so it is untouched by MV-623's u_slt cap change from 4 to 3
+        /// deployable). Not a live read of the slot cap — just this test's own fixed scenario size.</summary>
         private const int MaxDeployableSentinels = 4;
 
         /// <summary>Budget (PR-stated, per the ticket's requirement to scale particle counts down from

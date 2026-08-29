@@ -443,7 +443,7 @@
       "y": 740,
       "icon": "slt",
       "label": "SLOTS",
-      "maxLevel": 4,
+      "maxLevel": 2,
       "kind": "cap",
       "parent": "u_hp",
       "startLevel": 0
