@@ -1,4 +1,5 @@
 using UnityEngine;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
@@ -15,17 +16,20 @@ namespace MaxWorlds.Enemies
     ///
     /// Damage is deliberately NOT a number this class is handed at <see cref="Fire"/> time (contrast
     /// <see cref="HomingMissile"/>'s <c>damage</c> parameter, straight off the Launcher archetype's
-    /// <see cref="EnemyArchetype.ContactDamage"/>): the ticket's AC1 requires 5% of the player's
-    /// resolved max health AT THE MOMENT OF IMPACT, so it is read live off <see cref="PlayerHealth.Max"/>
-    /// inside <see cref="Detonate"/> instead of being baked in at spawn — and only ever applied to a
-    /// <see cref="PlayerHealth"/> receiver specifically, never a robot, a shed or a Sentinel, whatever
-    /// <see cref="IDamageable"/> happens to sit at the point of impact.
+    /// <see cref="EnemyArchetype.ContactDamage"/>): the ticket's AC1 requires 5% of the resolved max
+    /// health of whichever receiver it actually hits AT THE MOMENT OF IMPACT, so it is read live off
+    /// that receiver's own max health inside <see cref="Detonate"/> instead of being baked in at spawn.
+    /// A bolt only ever damages the receiver it was fired at (MV-622: <see cref="PlayerHealth"/> or a
+    /// <see cref="Sentinel"/>, whichever <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own MV-362
+    /// retargeting was aimed at) — still never a robot or a shed, whatever <see cref="IDamageable"/>
+    /// happens to sit at the point of impact.
     /// </summary>
     public sealed class BolterBolt : MonoBehaviour
     {
-        /// <summary>Fraction of the player's max health one bolt deals (MV-539 AC1) — 10 damage at
-        /// today's 200 max HP, but never hardcoded as 10: this multiplies whatever
-        /// <see cref="PlayerHealth.Max"/> resolves to at the instant of impact.</summary>
+        /// <summary>Fraction of the target's own max health one bolt deals (MV-539 AC1, extended to a
+        /// Sentinel receiver by MV-622) — 10 damage against Max at today's 200 max HP, but never
+        /// hardcoded as 10: this multiplies whatever the hit receiver's own max health resolves to at
+        /// the instant of impact.</summary>
         public const float DamagePercentOfMaxHealth = 0.05f;
 
         /// <summary>Past the archetype's max fire range, plus this much slack (the ticket's own spec),
@@ -152,23 +156,29 @@ namespace MaxWorlds.Enemies
             return dx * dx + dz * dz <= hitRadius * hitRadius;
         }
 
-        /// <summary>The hit amount (AC1): 5% of the player's OWN max health, resolved here rather than
-        /// carried as a number since <see cref="Fire"/> — pure, so a test can prove this scales with
-        /// whatever <see cref="PlayerHealth.Max"/> resolves to instead of ever reading a hardcoded 10.</summary>
-        public static float DamageFor(float playerMaxHealth) =>
-            Mathf.Max(0f, playerMaxHealth) * DamagePercentOfMaxHealth;
+        /// <summary>The hit amount (AC1, extended MV-622): 5% of the hit receiver's OWN max health,
+        /// resolved here rather than carried as a number since <see cref="Fire"/> — pure, so a test can
+        /// prove this scales with whatever that receiver's own max health resolves to instead of ever
+        /// reading a hardcoded 10.</summary>
+        public static float DamageFor(float receiverMaxHealth) =>
+            Mathf.Max(0f, receiverMaxHealth) * DamagePercentOfMaxHealth;
 
-        /// <summary>A hit: damage is resolved live off the player's OWN max health (AC1) via
-        /// <see cref="DamageFor"/>, and only ever applied to a <see cref="PlayerHealth"/> receiver, so a
-        /// bolt can never damage a robot, a shed or a Sentinel even though all three can implement
-        /// <see cref="IDamageable"/> under the same <c>Team.Player</c> the friendly-fire rule alone would
-        /// let through.</summary>
+        /// <summary>A hit: damage is resolved live off the hit receiver's OWN max health (AC1) via
+        /// <see cref="DamageFor"/>, and only ever applied to a <see cref="PlayerHealth"/> or
+        /// <see cref="Sentinel"/> receiver (MV-622) — still never a robot or a shed, even though both can
+        /// implement <see cref="IDamageable"/> under the same <c>Team.Player</c> the friendly-fire rule
+        /// alone would let through.</summary>
         private void Detonate()
         {
             if (_targetDamageable is PlayerHealth player && player.IsAlive)
             {
                 player.TakeDamage(new DamageInfo(
                     DamageFor(player.Max), transform.position, _direction, Team.Enemy));
+            }
+            else if (_targetDamageable is Sentinel sentinel && sentinel.IsAlive)
+            {
+                sentinel.TakeDamage(new DamageInfo(
+                    DamageFor(sentinel.HealthMax), transform.position, _direction, Team.Enemy));
             }
 
             Destroy(gameObject);
