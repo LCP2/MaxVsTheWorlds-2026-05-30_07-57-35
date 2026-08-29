@@ -16,10 +16,13 @@ namespace MaxWorlds.UI
 {
     /// <summary>
     /// The game's Home screen (YT-151; profiles per YT-218): the first thing up on boot, three
-    /// player-profile slots wide. Every slot — empty or already played — offers exactly one action,
-    /// PLAY: a profile is an identity plus a personal best, not a paused game, so there is no
-    /// Continue/resume and picking one always drops the player into a fresh run. Picking a slot hands
-    /// off to <see cref="SaveSystem.ActiveSlot"/>, which is also what stops this screen reopening on a
+    /// player-profile slots wide. Every slot offers PLAY, which always drops the player into a fresh
+    /// run and clears any captured run on that slot (<see cref="SaveSystem.ClearCheckpoint"/>). Since
+    /// MV-524 a slot that carries a mid-run checkpoint (<see cref="SaveSlotData.HasRunInProgress"/> —
+    /// an area-entry snapshot, not a world snapshot) ALSO offers RESUME, which restores it and drops
+    /// the player back at that area's entry (<see cref="OnResume"/>,
+    /// <see cref="MaxWorlds.Arena.WorldRunner.ResumeCheckpoint"/>). Picking a slot hands off to
+    /// <see cref="SaveSystem.ActiveSlot"/>, which is also what stops this screen reopening on a
     /// Replay-triggered scene reload — once a slot is live, <see cref="MaxWorlds.Core.SceneInstallers"/>
     /// re-running <see cref="Install"/> after a death/Replay finds the slot already set and leaves the
     /// run alone.
@@ -172,13 +175,15 @@ namespace MaxWorlds.UI
 
         /// <summary>Picking a profile: create it if this is the first time (YT-218 — its identity
         /// and personal best, seeded once, never reset by a later play), then drop the player into a
-        /// fresh run. There is no mid-run state to restore — no resume, no overwrite. Returns true if
-        /// this pick started <see cref="IntroCinematic"/> (MV-550) — the caller uses that to decide who
-        /// marks <c>BootTiming</c>'s "controllable".</summary>
+        /// fresh run. MV-524: PLAY always clears any checkpoint the slot was carrying
+        /// (<see cref="SaveSystem.ClearCheckpoint"/>) — RESUME is the only path that restores one (see
+        /// <see cref="OnResume"/>). Returns true if this pick started <see cref="IntroCinematic"/>
+        /// (MV-550) — the caller uses that to decide who marks <c>BootTiming</c>'s "controllable".</summary>
         private bool StartSlot(int slot, bool playIntro)
         {
             SaveSystem.ActiveSlot = slot;
             SaveSystem.EnsureProfile(slot);
+            SaveSystem.ClearCheckpoint(slot);
 
             UpgradeState.Reset();
             HydroBurst.Reset();   // a fresh run must not inherit a burst/cooldown in progress (YT-215)
@@ -223,6 +228,43 @@ namespace MaxWorlds.UI
             bool playIntro = IntroCinematic.Enabled || ShouldPlayIntroOnFirstLaunch();
             bool introStarted = StartSlot(slot, playIntro);
             Close(introStarted);
+        }
+
+        /// <summary>RESUME tapped on a slot carrying a checkpoint (MV-524 part 3) — restores it and
+        /// drops the player back at that area's entry, rather than the fresh run <see cref="OnPlay"/>
+        /// always starts. Never runs <see cref="IntroCinematic"/> (an in-progress profile is by
+        /// definition not a first launch).</summary>
+        private void OnResume(int slot)
+        {
+            SaveSlotData data = SaveSystem.Load(slot);
+            if (!data.HasRunInProgress) return;   // guards a stray tap on what should be non-interactable
+
+            SaveSystem.ActiveSlot = slot;
+
+            // The same transient-state wipe StartSlot does for a fresh PLAY — arena-scoped state a
+            // checkpoint never captures, plus a guard against DeathRunState's granted-part flags or
+            // UpgradeState's installed set leaking in from a DIFFERENT slot played earlier this same
+            // process (e.g. Quit to menu, then pick another slot). Deliberately NOT PickupWallet/
+            // WeaponSystemState: those would just be reset here and immediately overwritten below, and
+            // both wipe RigState, which RestoreCheckpoint is about to repopulate from the checkpoint.
+            UpgradeState.Reset();
+            HydroBurst.Reset();
+            AbilityCreditBank.Reset();
+            MaxWorlds.Weapons.PendingMorphingModule.Reset();
+            MaxWorlds.Arena.DeathRunState.Reset();
+
+            SaveSystem.RestoreCheckpoint(slot);
+            // RestoreCheckpoint sets RigState directly, which never touches WeaponSystemState's own
+            // acquisition-order list — without this every restored ability reads as unacquired on the
+            // Weapons screen despite working correctly in combat (RigState is what AbilityLevel/
+            // IsAcquired actually read).
+            WeaponSystemState.RebuildAcquiredFromRigState();
+
+            int areaIndex = data.CheckpointAreaIndex;
+            Close();
+
+            var runner = FindFirstObjectByType<MaxWorlds.Arena.WorldRunner>();
+            runner?.ResumeCheckpoint(areaIndex);
         }
 
         /// <summary>RESET tapped on an occupied slot (MV-282) — asks for confirmation before wiping
@@ -327,12 +369,34 @@ namespace MaxWorlds.UI
             Anchor(status.rectTransform, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             status.rectTransform.sizeDelta = new Vector2(620f, 100f);
             status.rectTransform.anchoredPosition = new Vector2(34f, -66f);
-            status.text = data.HasData ? Summarise(data) : "Empty";
+            // MV-524: a slot carrying a checkpoint names which area it's parked in — the ticket's own
+            // fallback naming (no WorldConfig loaded here to resolve the area's authored display name).
+            string summary = data.HasData ? Summarise(data) : "Empty";
+            status.text = data.HasRunInProgress
+                ? $"{summary}\nRun in progress - Area {data.CheckpointAreaIndex}"   // ASCII hyphen, see Summarise
+                : summary;
 
-            var playBtn = AddButton(row.rectTransform, "PLAY", MaxOrange, true, () => OnPlay(slot));
-            Anchor(playBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
-            playBtn.sizeDelta = new Vector2(280f, 64f);
-            playBtn.anchoredPosition = new Vector2(-110f, 0f);
+            if (data.HasRunInProgress)
+            {
+                // MV-524: RESUME restores the checkpoint; PLAY still starts fresh and clears it (AC4) —
+                // both stay on-screen so the fresh-start option is never hidden behind the resume one.
+                var resumeBtn = AddButton(row.rectTransform, "RESUME", MaxOrange, true, () => OnResume(slot));
+                Anchor(resumeBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+                resumeBtn.sizeDelta = new Vector2(260f, 56f);
+                resumeBtn.anchoredPosition = new Vector2(-110f, 20f);
+
+                var playBtn = AddButton(row.rectTransform, "PLAY", CardRim, true, () => OnPlay(slot));
+                Anchor(playBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+                playBtn.sizeDelta = new Vector2(260f, 40f);
+                playBtn.anchoredPosition = new Vector2(-110f, -46f);
+            }
+            else
+            {
+                var playBtn = AddButton(row.rectTransform, "PLAY", MaxOrange, true, () => OnPlay(slot));
+                Anchor(playBtn, new Vector2(1f, 0.5f), new Vector2(1f, 0.5f), new Vector2(1f, 0.5f));
+                playBtn.sizeDelta = new Vector2(280f, 64f);
+                playBtn.anchoredPosition = new Vector2(-110f, 0f);
+            }
 
             // Visible on every slot (AC1) but only tappable on an occupied one — there is nothing to
             // wipe on an already-empty slot (MV-282).
@@ -361,7 +425,12 @@ namespace MaxWorlds.UI
 
             var msg = AddText(dialog.rectTransform, 26f, Bone, TextAnchor.MiddleCenter, FontStyle.Bold);
             Top(msg.rectTransform, 0f, -30f, 580f, 150f);
-            msg.text = $"Reset {name}?\nThis erases all progress on this slot.";
+            // MV-524 AC5: RESET is a full profile wipe — identity, personal best, AND any run in
+            // progress. Named explicitly when there's a run to lose, so it never reads as "just clears
+            // the paused run" the way RESUME/PLAY's split might otherwise imply.
+            msg.text = data.HasRunInProgress
+                ? $"Reset {name}?\nThis erases all progress on this slot, including your run in progress."
+                : $"Reset {name}?\nThis erases all progress on this slot.";
 
             var cancelBtn = AddButton(dialog.rectTransform, "CANCEL", CardRim, true, HideResetConfirm);
             Anchor(cancelBtn, Vector2.zero, Vector2.zero, Vector2.zero);

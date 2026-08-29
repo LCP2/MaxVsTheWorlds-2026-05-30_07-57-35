@@ -248,6 +248,25 @@ namespace MaxWorlds.Weapons
             WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
             WaterBalloonRepeatFirePerLevel);
 
+        /// <summary>Rebuilds <see cref="Acquired"/> from <see cref="RigState"/>'s CURRENT ownership
+        /// (MV-524 part 3) — a mid-run resume restores <c>RigState</c> directly
+        /// (<c>SaveSystem.RestoreCheckpoint</c>), which never touches <see cref="s_acquisitionOrder"/>;
+        /// without this, every owned ability would read as unacquired on the Weapons screen despite
+        /// working correctly in combat (<see cref="AbilityLevel"/>/<see cref="IsAcquired"/> already read
+        /// <c>RigState</c> directly). Order falls back to <see cref="WeaponCatalog"/>'s own catalog
+        /// order — a checkpoint doesn't capture the original acquisition order — but slots are stable
+        /// from here on, exactly as after any fresh grant. Fires <see cref="Changed"/>.</summary>
+        public static void RebuildAcquiredFromRigState()
+        {
+            s_acquisitionOrder.Clear();
+            foreach (AbilityKind kind in WeaponCatalog.AllAbilityKinds)
+            {
+                string id = MapId(kind);
+                if (id != null && RigState.IsOwned(id)) s_acquisitionOrder.Add(kind);
+            }
+            Changed?.Invoke();
+        }
+
         /// <summary>Back to a fresh run's baseline: THE RIG's own start levels (today, every node 0
         /// except <c>p_dmg</c> at 1), no abilities owned, acquisition order cleared. Fires
         /// <see cref="Changed"/> so the live systems (the blaster's track reads, the weapons screen)
