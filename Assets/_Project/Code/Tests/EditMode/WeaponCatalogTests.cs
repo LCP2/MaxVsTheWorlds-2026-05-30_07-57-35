@@ -226,7 +226,7 @@ namespace MaxWorlds.Tests.EditMode
             float undraftedEndurance = WeaponCatalog.EffectiveDrainPerSecond(
                 BlasterTuning.EnergyPerSecond, 0, WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
             float maxedDepletionSpend = WeaponCatalog.EffectiveDrainPerSecond(
-                BlasterTuning.EnergyPerSecond, WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance),
+                BlasterTuning.EnergyPerSecond, WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity),
                 WeaponCatalog.DefaultRcdaDepletionRatePerLevel, outputScale);
 
             Assert.Less(maxedDepletionSpend, undraftedEndurance, "Endurance must still buy back sustain against a maxed-output weapon");

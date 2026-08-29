@@ -65,7 +65,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void PierceIsGone_EnduranceCurveHasNoDeadLevel_SavesDropOrClampStaleLevels_AndNoScreenStillSaysFlow()
+        public void PierceIsGone_CapacityCurveHasNoDeadLevel_SavesDropOrClampStaleLevels_AndNoScreenStillSaysFlow()
         {
             // ---------------------------------------------------------------- AC1: PIERCE deleted, board loads with no orphan/mis-parent
             Assert.That(RigBoard.Exists("p_prc"), Is.False, "p_prc must no longer exist in rig_board.json");
@@ -95,7 +95,7 @@ namespace MaxWorlds.Tests.EditMode
 
             // ---------------------------------------------------------------- AC3: the drain multiplier pays out from level 1 with no dead level
             float previous = float.PositiveInfinity;
-            for (int level = 1; level <= WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance); level++)
+            for (int level = 1; level <= WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity); level++)
             {
                 float drain = WeaponCatalog.EffectiveDrainPerSecond(10f, level, WeaponCatalog.DefaultRcdaDepletionRatePerLevel);
                 Assert.That(drain, Is.LessThan(previous), $"level {level} must drain strictly slower than level {level - 1} — no dead level");
@@ -123,15 +123,15 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(node, Is.Not.Null, "p_flw must still have a built board node");
                 var label = node.Find("Text")?.GetComponent<Text>();
                 Assert.That(label, Is.Not.Null, "p_flw's board node must carry a label Text component");
-                Assert.That(label.text, Is.EqualTo("ENDURANCE"), "the board's own built Text must read ENDURANCE, not FLOW");
+                Assert.That(label.text, Is.EqualTo("CAPACITY"), "MV-609: the board's own built Text must read CAPACITY, not ENDURANCE or FLOW");
             }
             finally
             {
                 Object.DestroyImmediate(go);
             }
 
-            Assert.That(WeaponCatalog.DisplayName(WeaponTrackKind.Endurance), Is.EqualTo("ENDURANCE"),
-                "WeaponCatalog.DisplayName must also read ENDURANCE, not DEPLETION RATE");
+            Assert.That(WeaponCatalog.DisplayName(WeaponTrackKind.Capacity), Is.EqualTo("CAPACITY"),
+                "MV-609: WeaponCatalog.DisplayName must also read CAPACITY, not ENDURANCE or DEPLETION RATE");
 
             // The always-compiled, real in-game Settings panel (SettingsPanel.cs doc: "ALWAYS compiled
             // into every build") has its own live "Depletion rate" knob tuning the tank's BASE drain —

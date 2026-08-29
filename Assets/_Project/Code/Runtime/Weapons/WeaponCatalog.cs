@@ -42,7 +42,7 @@ namespace MaxWorlds.Weapons
             WeaponTrackKind.Range,
             WeaponTrackKind.Spread,
             WeaponTrackKind.Damage,
-            WeaponTrackKind.Endurance,
+            WeaponTrackKind.Capacity,
         };
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
@@ -78,9 +78,10 @@ namespace MaxWorlds.Weapons
 
         /// <summary>The level cap for an RCDA track. Range keeps MV-367's 9-level cap. Damage and
         /// Spread were both cut to 4 levels (MV-597, Lee's playtest: 6/6 Damage + 5/9 Spread + 6/6 Flow
-        /// was "obliterating everything" — the wide, full-power cone was the main lever). Endurance
-        /// (renamed from Flow/Depletion Rate) rose from 6 to 8 levels, paired with a shallower per-level
-        /// step so level 8 lands exactly on the drain floor with no dead level in between (MV-597, see
+        /// was "obliterating everything" — the wide, full-power cone was the main lever). CAPACITY
+        /// (renamed from Flow/Depletion Rate by MV-597, renamed again to CAPACITY by MV-609) rose from
+        /// 6 to 8 levels, paired with a shallower per-level step so level 8 lands exactly on the drain
+        /// floor with no dead level in between (MV-597, see
         /// <see cref="EffectiveDrainPerSecond"/>). These caps must stay in lockstep with
         /// <c>rig_board.json</c>'s own per-node <c>maxLevel</c> — the RIG board's real gameplay gate
         /// (<see cref="RigState.RaiseLevel"/> reads <see cref="RigBoard.MaxLevel"/> directly) — this
@@ -93,7 +94,7 @@ namespace MaxWorlds.Weapons
                 case WeaponTrackKind.Range: return 9;
                 case WeaponTrackKind.Spread: return 4;
                 case WeaponTrackKind.Damage: return 4;
-                case WeaponTrackKind.Endurance: return 8;
+                case WeaponTrackKind.Capacity: return 8;
                 default: return 6;
             }
         }
@@ -123,7 +124,7 @@ namespace MaxWorlds.Weapons
         /// land at 1.6x base (4 -&gt; 6.4 damage per tick, 64 DPS) instead of the old 2x/80 DPS.</summary>
         public const float DefaultRcdaDamagePerLevel = 0.2f;
 
-        /// <summary>Fraction each Endurance track level CUTS the tank's drain per second (MV-299,
+        /// <summary>Fraction each Capacity track level CUTS the tank's drain per second (MV-299,
         /// reinstating the tank MV-290 cut; renamed from Flow/Depletion Rate and rebalanced by MV-597)
         /// — the inverse shape of the other tracks: they scale a number UP, this scales the drain DOWN
         /// so a spend buys longer sustained fire, not a bigger number in a combat log. 8 steps at
@@ -157,7 +158,7 @@ namespace MaxWorlds.Weapons
         public static float EffectiveDamagePerTick(float baseDamage, int damageLevel, float perLevel) =>
             baseDamage * (1f + perLevel * (Mathf.Max(1, damageLevel) - 1));
 
-        /// <summary>Effective tank drain per second at a given Endurance track level, given the
+        /// <summary>Effective tank drain per second at a given Capacity track level, given the
         /// weapon's authored base drain (MV-299) — level 0 (undrafted) is the unmodified base, and
         /// EVERY owned level cuts the drain further, level 1 included (MV-597: the old formula's
         /// <c>Mathf.Max(1, depletionLevel) - 1</c> made level 0 and level 1 identical, so the node's own
@@ -165,7 +166,7 @@ namespace MaxWorlds.Weapons
         /// of base so a maxed track buys a much longer tank, never a literally free one.
         /// <paramref name="outputScale"/> (MV-368, default 1x) layers the weapon's current output — see
         /// <see cref="DrainOutputScale"/> — on TOP of the track's own reduction, so upgrading
-        /// Range/Spread makes the tank drain faster again even at a maxed Endurance track.</summary>
+        /// Range/Spread makes the tank drain faster again even at a maxed Capacity track.</summary>
         public static float EffectiveDrainPerSecond(float baseDrainPerSecond, int depletionLevel, float perLevel, float outputScale = 1f) =>
             baseDrainPerSecond * outputScale * Mathf.Max(0.2f, 1f - perLevel * depletionLevel);
 
@@ -243,7 +244,7 @@ namespace MaxWorlds.Weapons
                 case WeaponTrackKind.Range: return "RANGE";
                 case WeaponTrackKind.Spread: return "SPREAD";
                 case WeaponTrackKind.Damage: return "DAMAGE";
-                case WeaponTrackKind.Endurance: return "ENDURANCE";
+                case WeaponTrackKind.Capacity: return "CAPACITY";
                 default: return kind.ToString();
             }
         }
