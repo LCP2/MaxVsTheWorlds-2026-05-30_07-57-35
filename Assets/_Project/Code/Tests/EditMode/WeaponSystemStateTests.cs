@@ -44,20 +44,20 @@ namespace MaxWorlds.Tests.EditMode
                 "p_dmg is THE RIG's one run-start exception");
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(0));
             Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Spread), Is.EqualTo(0));
-            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Endurance), Is.EqualTo(0));
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Capacity), Is.EqualTo(0));
         }
 
         [Test]
         public void RangeAndFlowAreDraftableButNotPartsSpendableAtRunStart_MV436()
         {
-            // Schema 3 (MV-436) retired the old cap/stat split: p_rng and p_flw (Endurance) are
+            // Schema 3 (MV-436) retired the old cap/stat split: p_rng and p_flw (Capacity) are
             // both direct children of p_dmg, which is already at L1 at run start, so both are
             // REACHED immediately — but reached only gates what a Morphing Module draft may offer
             // now, it no longer confers spendability. A part can never perform either one's own
             // 0->1 unlock.
             Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Range), Is.False,
                 "p_rng is reached but unowned — only a draft can unlock it");
-            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance), Is.False,
+            Assert.That(WeaponSystemState.LevelUpTrack(WeaponTrackKind.Capacity), Is.False,
                 "p_flw is reached but unowned — only a draft can unlock it");
             Assert.That(RigState.EligibleCapIds(), Does.Contain("p_rng"));
             Assert.That(RigState.EligibleCapIds(), Does.Contain("p_flw"));
@@ -125,10 +125,10 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeStaysAtNineLevels_EnduranceCapsAtEightLevels_MV597()
+        public void RangeStaysAtNineLevels_CapacityCapsAtEightLevels_MV597()
         {
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(9), "MV-597: Lee did not ask for Range to change");
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance), Is.EqualTo(8), "MV-597: Endurance (renamed from Flow) rose from 6 to 8");
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity), Is.EqualTo(8), "MV-597: Capacity (renamed from Flow, then Endurance) rose from 6 to 8");
         }
 
         // ---------------------------------------------------------------- Water Balloon tracks (MV-370/MV-422)

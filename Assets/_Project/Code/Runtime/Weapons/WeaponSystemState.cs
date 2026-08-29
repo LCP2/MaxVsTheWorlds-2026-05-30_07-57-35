@@ -39,7 +39,7 @@ namespace MaxWorlds.Weapons
             WeaponTrackKind.Range => "p_rng",
             WeaponTrackKind.Spread => "p_spr",
             WeaponTrackKind.Damage => "p_dmg",
-            WeaponTrackKind.Endurance => "p_flw",
+            WeaponTrackKind.Capacity => "p_flw",
             _ => null,
         };
 

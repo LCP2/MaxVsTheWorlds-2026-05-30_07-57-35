@@ -73,8 +73,8 @@ namespace MaxWorlds.Tests.EditMode
             float noDepletionSpend = _blaster.EnergyPerTick;
 
             RigState.AcquireCap("p_flw");
-            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance); i++)
-                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance);
+            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity); i++)
+                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Capacity);
 
             float maxedDepletionSpend = _blaster.EnergyPerTick;
 

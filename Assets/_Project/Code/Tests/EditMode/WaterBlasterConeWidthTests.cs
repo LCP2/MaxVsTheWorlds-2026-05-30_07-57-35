@@ -64,8 +64,8 @@ namespace MaxWorlds.Tests.EditMode
             float coneBefore = _blaster.ConeHalfAngle;
 
             RigState.AcquireCap("p_flw"); // MV-436: Flow only reaches level 1 via a Morphing Module draft now
-            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance); i++)
-                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance);
+            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity); i++)
+                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Capacity);
 
             Assert.That(_blaster.ConeHalfAngle, Is.EqualTo(coneBefore).Within(1e-5f),
                 "Depletion Rate must never touch cone width either");
@@ -82,8 +82,8 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Damage); i++)
                 WeaponSystemState.LevelUpTrack(WeaponTrackKind.Damage);
             RigState.AcquireCap("p_flw");
-            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Endurance); i++)
-                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Endurance);
+            for (int i = 1; i < WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity); i++)
+                WeaponSystemState.LevelUpTrack(WeaponTrackKind.Capacity);
 
             Assert.That(_blaster.ConeHalfAngle, Is.EqualTo(WaterBlaster.DefaultConeHalfAngle).Within(1e-5f),
                 "with Spread untouched, the cone must read exactly the authored base half-angle " +

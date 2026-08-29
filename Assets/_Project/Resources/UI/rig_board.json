@@ -214,7 +214,7 @@
       "x": 345,
       "y": 580,
       "icon": "flw",
-      "label": "ENDURANCE",
+      "label": "CAPACITY",
       "maxLevel": 8,
       "kind": "cap",
       "parent": "p_dmg",

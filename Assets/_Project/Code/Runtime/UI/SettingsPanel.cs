@@ -613,10 +613,10 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.HarnessCapacity, UpgradeCatalog.HarnessCapacityBonus),
                 v => { DevTuning.HarnessCapacity = v; RefreshUpgrades(); }, tab: TabWeapons);
 
-            // Primary depletion rate (MV-319): the base drain the Endurance RCDA track
-            // (WeaponTrackKind.Endurance) scales down from. Read live by WaterBlaster.EnergyPerTick.
+            // Primary depletion rate (MV-319): the base drain the Capacity RCDA track
+            // (WeaponTrackKind.Capacity) scales down from. Read live by WaterBlaster.EnergyPerTick.
             // MV-597: labelled "Tank drain rate", not "Depletion rate" — this tunes the tank's BASE
-            // drain (BlasterTuning.EnergyPerSecond), not the Endurance track's own per-level curve, and
+            // drain (BlasterTuning.EnergyPerSecond), not the Capacity track's own per-level curve, and
             // the old label collided with FLOW's retired internal name (WeaponTrackKind.DepletionRate).
             Add("Tank drain rate", "wtr/s", 2f, 30f, BlasterTuning.EnergyPerSecond,
                 () => DevTuning.Or(DevTuning.PrimaryDepletionRate, BlasterTuning.EnergyPerSecond),

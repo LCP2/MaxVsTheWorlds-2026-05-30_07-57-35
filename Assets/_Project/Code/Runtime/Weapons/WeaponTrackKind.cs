@@ -21,9 +21,8 @@ namespace MaxWorlds.Weapons
 
         /// <summary>How fast the water tank drains under continuous fire. Levels 1-8 (MV-299,
         /// reinstating the tank MV-290 cut; renamed from FLOW/DepletionRate and rebalanced to pay out
-        /// from level 1, MV-597): higher levels slow the drain, so Max can fire longer before the tank
-        /// runs dry. Does NOT change the tank's SIZE — see
-        /// <see cref="WeaponCatalog.EffectiveDrainPerSecond"/>.</summary>
-        Endurance,
+        /// from level 1, MV-597; renamed again to CAPACITY by MV-609, Lee's call). Does NOT change the
+        /// tank's SIZE — see <see cref="WeaponCatalog.EffectiveDrainPerSecond"/>.</summary>
+        Capacity,
     }
 }
