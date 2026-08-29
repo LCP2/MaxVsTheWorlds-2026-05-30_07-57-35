@@ -1169,19 +1169,18 @@ namespace MaxWorlds.Enemies
             if (_stateTimer >= lungeTime) EnterRecover();
         }
 
-        /// <summary>Bolter's straight-line bolt (MV-539): fired once, on the first tick of the state —
-        /// the same "already acted this cycle" gate <see cref="TickMissileFire"/> uses to gate its own
-        /// launch to one shot. Aimed at <see cref="_playerTarget"/>, not <see cref="target"/> — a Bolter
-        /// fires at Max's own position even while mid-Sentinel-engagement, since <see cref="BolterBolt"/>
-        /// only ever damages a <see cref="MaxWorlds.Player.PlayerHealth"/> receiver regardless of what it
-        /// was aimed at.</summary>
+        /// <summary>Bolter's straight-line bolt (MV-539, retargeting fixed MV-622): fired once, on the
+        /// first tick of the state — the same "already acted this cycle" gate <see cref="TickMissileFire"/>
+        /// uses to gate its own launch to one shot. Aimed at <see cref="target"/>, the MV-362 retargeting
+        /// rule's own current answer — the engaged Sentinel while <see cref="_engagedSentinel"/> is set,
+        /// Max otherwise — exactly like every other kind's ranged fire already follows it.</summary>
         private void TickBolt(float dt)
         {
             if (!_dealtThisLunge)
             {
                 _dealtThisLunge = true;
-                if (_playerTarget != null)
-                    BolterBolt.Fire(transform.position, _playerTarget, lungeSpeed, lungeRange, contactRadius);
+                if (target != null)
+                    BolterBolt.Fire(transform.position, target, lungeSpeed, lungeRange, contactRadius);
             }
 
             if (_stateTimer >= lungeTime) EnterRecover();
