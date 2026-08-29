@@ -7,6 +7,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
+using MaxWorlds.Save;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Arena
@@ -180,6 +181,62 @@ namespace MaxWorlds.Arena
         private void OnDestroy()
         {
             if (_playerHealth != null) _playerHealth.Died -= OnPlayerDied;
+        }
+
+        /// <summary>MV-524 part 2: iOS can suspend-then-terminate a backgrounded app with no further
+        /// callback, so the checkpoint write has to happen here, not at quit.</summary>
+        private void OnApplicationPause(bool pauseStatus)
+        {
+            if (pauseStatus) CapturePauseCheckpoint();
+        }
+
+        /// <summary>Same trigger as <see cref="OnApplicationPause"/>, from the other signal Unity gives
+        /// a backgrounding app (MV-524's own ticket text names both) — <see cref="SaveSystem.CaptureActiveCheckpoint"/>
+        /// is a plain overwrite, so a device that fires both costs nothing beyond a redundant write.</summary>
+        private void OnApplicationFocus(bool hasFocus)
+        {
+            if (!hasFocus) CapturePauseCheckpoint();
+        }
+
+        /// <summary>The actual write, pulled out of <see cref="OnApplicationPause"/>/<see cref="OnApplicationFocus"/>
+        /// (MV-524 AC6's documented fallback): Unity never invokes either outside Play mode, so an
+        /// EditMode test can't drive this method itself, only the plain <see cref="SaveSystem.CaptureActiveCheckpoint"/>
+        /// call inside it — which it does, directly.</summary>
+        private void CapturePauseCheckpoint()
+        {
+            if (_areaDirector == null) return;
+            SaveSystem.CaptureActiveCheckpoint(_areaDirector.CurrentArea);
+        }
+
+        /// <summary>RESUME tapped on the Home screen (MV-524 part 3): drop the player at
+        /// <paramref name="areaIndex"/>'s entry using the exact same restore/reposition pipeline a
+        /// death's <see cref="Continue"/> already uses — the checkpoint captures only an area index (no
+        /// world snapshot, per the ticket's own decision), so landing back in that area means re-solving
+        /// and re-populating its authored composition fresh, exactly like a death respawn into that same
+        /// area would. Deliberately skips <see cref="DeathRunState.RecordDeath"/> and the
+        /// <see cref="_pendingRespawn"/>/overlay machinery entirely — this is a cold boot landing mid-run,
+        /// not a death. A no-op before <see cref="Configure"/> has wired this runner up, or for the entry
+        /// stub (<paramref name="areaIndex"/> &lt;= 0 — nothing to restore/respawn into).</summary>
+        public void ResumeCheckpoint(int areaIndex)
+        {
+            if (_areaDirector == null || _cfg?.dials == null || areaIndex <= 0) return;
+
+            bool gateIsConditionGated = _cfg.AreaByIndex(areaIndex)?.IsBossRole ?? false;
+            RespawnPlan plan = RespawnPlanner.Resolve(areaIndex, gateIsConditionGated);
+
+            _areaDirector.RestoreArea(plan.RestoreAreaIndex);
+
+            if (_pickupDirector == null) _pickupDirector = FindFirstObjectByType<PickupDirector>();
+            _pickupDirector?.ResetBruiserCountdown(plan.RestoreAreaIndex);
+
+            if (plan.RecloseGate && _gateIntoArea.TryGetValue(plan.RestoreAreaIndex, out AreaGate gate) && gate != null)
+                gate.Reclose();
+
+            Sentinel.DestroyAllActive();
+
+            EnsurePlayer();
+            RespawnPlayer(plan);
+            _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
         }
 
         /// <summary>Pushes the final boss gate's shed count (MV-571) — every shed in the world, the

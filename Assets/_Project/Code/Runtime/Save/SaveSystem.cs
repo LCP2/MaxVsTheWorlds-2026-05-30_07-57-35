@@ -13,12 +13,18 @@ namespace MaxWorlds.Save
     /// Reads/writes JSON under <c>Application.persistentDataPath</c> (overridable —
     /// <see cref="DirectoryOverride"/> — so tests never touch a real device's save data).
     ///
-    /// A profile is an identity plus a personal best, not a paused run: selecting one always drops
-    /// the player into a fresh fight. Static, same idiom as <see cref="MaxWorlds.Upgrades.UpgradeState"/>/
-    /// <see cref="MaxWorlds.Pickups.PickupWallet"/>: one live game, no reference-threading.
-    /// <see cref="ActiveSlot"/> is the process's "which profile did the player pick" flag — -1
-    /// means the Home screen hasn't handed off yet, which is also what gates the Home screen
-    /// reopening on a Replay-triggered scene reload.
+    /// A profile is an identity plus a personal best AND, since MV-524, an optional mid-run
+    /// checkpoint: an area-entry snapshot (RIG node levels/unlocked categories, power cells, deaths
+    /// taken — no world state) captured on area entry and on backgrounding
+    /// (<see cref="CaptureActiveCheckpoint"/>, wired from <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.EnterArea"/>
+    /// and <see cref="MaxWorlds.Arena.WorldRunner"/>'s pause/focus handlers) and restored by RESUME
+    /// on the Home screen (<see cref="RestoreCheckpoint"/>). PLAY still always drops the player into
+    /// a fresh fight and clears any captured run (<see cref="ClearCheckpoint"/>) — there is still no
+    /// world snapshot and no full-fidelity resume, just an area checkpoint. Static, same idiom as
+    /// <see cref="MaxWorlds.Upgrades.UpgradeState"/>/<see cref="MaxWorlds.Pickups.PickupWallet"/>: one
+    /// live game, no reference-threading. <see cref="ActiveSlot"/> is the process's "which profile
+    /// did the player pick" flag — -1 means the Home screen hasn't handed off yet, which is also what
+    /// gates the Home screen reopening on a Replay-triggered scene reload.
     /// </summary>
     public static class SaveSystem
     {
@@ -160,6 +166,38 @@ namespace MaxWorlds.Save
             PickupWallet.SetPowerCells(data.CheckpointPowerCells);
             DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
             return true;
+        }
+
+        /// <summary>Capture a checkpoint for whichever slot is currently active (MV-524 parts 2/3) —
+        /// the plain, EditMode-testable method both real triggers call: <see cref="MaxWorlds.Enemies.AreaAccumulationDirector.EnterArea"/>
+        /// on area entry, and <see cref="MaxWorlds.Arena.WorldRunner"/>'s <c>OnApplicationPause</c>/
+        /// <c>OnApplicationFocus</c> handlers on backgrounding (neither of which Unity ever invokes
+        /// outside Play mode, hence extracting the actual write out to here). A no-op with no active
+        /// slot (<see cref="ActiveSlot"/> &lt; 0 — a capture/press-kit/perf-capture run, or a test) or
+        /// for the empty entry stub (<paramref name="areaIndex"/> &lt;= 0 — nothing worth
+        /// checkpointing yet).</summary>
+        public static void CaptureActiveCheckpoint(int areaIndex)
+        {
+            if (ActiveSlot < 0 || areaIndex <= 0) return;
+            CaptureCheckpoint(ActiveSlot, areaIndex);
+        }
+
+        /// <summary>Clear <paramref name="slot"/>'s captured run (MV-524 part 3) — what choosing PLAY
+        /// on a slot holding one calls, so starting fresh never leaves a stale RESUME behind.
+        /// Preserves the slot's identity/personal-best fields; a no-op if the slot carries no run.</summary>
+        public static void ClearCheckpoint(int slot)
+        {
+            SaveSlotData data = Load(slot);
+            if (!data.HasRunInProgress) return;
+
+            data.HasRunInProgress = false;
+            data.CheckpointAreaIndex = 0;
+            data.CheckpointRigNodeIds = Array.Empty<string>();
+            data.CheckpointRigNodeLevels = Array.Empty<int>();
+            data.CheckpointUnlockedCategories = Array.Empty<string>();
+            data.CheckpointPowerCells = 0;
+            data.CheckpointDeathsTaken = 0;
+            Save(slot, data);
         }
 
         /// <summary>Test isolation / a fresh process: forget which slot is live and stop pointing at a

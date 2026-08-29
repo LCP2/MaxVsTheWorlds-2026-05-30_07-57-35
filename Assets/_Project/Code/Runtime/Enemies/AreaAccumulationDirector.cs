@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Save;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Enemies
@@ -215,12 +216,18 @@ namespace MaxWorlds.Enemies
         /// <summary>Grants a room's population a head start: called the instant the gate into it breaks
         /// (<see cref="AreaGate.Opened"/>), which is before the player has actually walked through the
         /// doorway. Idempotent — <see cref="FillArea"/> only ever queues a given area once, so a late
-        /// position-crossing fallback call can never double-populate it.</summary>
+        /// position-crossing fallback call can never double-populate it.
+        ///
+        /// MV-524 part 2: also where a mid-run checkpoint is captured — the ticket's own choice of hook
+        /// ("capture a checkpoint on area entry"). <see cref="SaveSystem.CaptureActiveCheckpoint"/> is a
+        /// no-op with no active profile (capture/press-kit/perf-capture runs, tests), so this is safe to
+        /// call unconditionally.</summary>
         public void EnterArea(int areaIndex)
         {
             if (areaIndex <= CurrentArea) return;
             CurrentArea = areaIndex;
             FillArea(areaIndex);
+            SaveSystem.CaptureActiveCheckpoint(areaIndex);
         }
 
         /// <summary>The 1-based area number of an "area&lt;N&gt;" zone id, or 0 for anything else
