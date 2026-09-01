@@ -238,12 +238,13 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Launcher => new EnemyArchetype(
             EnemyKind.Launcher, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
             colliderHeight: 1.45f, colliderRadius: 0.42f,
-            // 30 -> 45 per Lee's V12 workbook (2026-09-01) — deliberately lifted ABOVE the rusher's
-            // 32 HP, same reversal MV-404 already gave the Gunner: it no longer belongs in the
+            // 30 -> 45 per Lee's V12 workbook (2026-09-01, MV-638), then 45 -> 40 per Lee's V12c
+            // workbook (2026-09-02, MV-642) — still deliberately lifted ABOVE the rusher's 32 HP,
+            // same reversal MV-404 already gave the Gunner: it no longer belongs in the
             // "one-rusher-shot kill" invariant (see EnemyArchetypeTests, updated the same day).
             // MV-325: speed must invert with power too — a Launcher has less HP than the rusher, so it
             // has to be at least as quick, not slower (was 1.8, below the rusher's 2.04).
-            moveSpeed: 2.1f, maxHealth: 45f,
+            moveSpeed: 2.1f, maxHealth: 40f,
             contactDamage: 22f,   // splash damage
             contactRadius: 2.0f,  // splash radius
             lungeRange: 10f,      // max fire range
@@ -270,9 +271,10 @@ namespace MaxWorlds.Enemies
             // MV-325: was 2.4 — faster than the Gunner despite having more HP (26 vs 30), which
             // inverted the "weakest is fastest" rule. Its mobility edge is the teleport, not raw
             // speed ("Otherwise a rusher"), so it sits with the Launcher just above the rusher.
-            // 30 -> 45 per Lee's V12 workbook (2026-09-01) — see Launcher's comment above; the
-            // "one-rusher-shot kill" invariant no longer applies to Blinker either.
-            moveSpeed: 2.1f, maxHealth: 45f,
+            // 30 -> 45 per Lee's V12 workbook (2026-09-01, MV-638), then 45 -> 40 per Lee's V12c
+            // workbook (2026-09-02, MV-642) — see Launcher's comment above; the "one-rusher-shot
+            // kill" invariant no longer applies to Blinker either.
+            moveSpeed: 2.1f, maxHealth: 40f,
             contactDamage: 14f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.5f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -296,7 +298,9 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Bolter => new EnemyArchetype(
             EnemyKind.Bolter, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 2.1f, maxHealth: 45f,
+            // 30 -> 45 per Lee's V12 workbook (2026-09-01, MV-638), then 45 -> 40 per Lee's V12c
+            // workbook (2026-09-02, MV-642) — same reversal as Launcher/Blinker above.
+            moveSpeed: 2.1f, maxHealth: 40f,
             contactDamage: 0f,    // unread — bolt damage is resolved live off PlayerHealth.Max (AC1)
             contactRadius: 0.35f, // bolt hit-check radius against the player
             lungeRange: 9f,       // max fire range

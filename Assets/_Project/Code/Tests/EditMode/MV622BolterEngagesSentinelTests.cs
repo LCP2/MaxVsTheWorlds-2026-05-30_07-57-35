@@ -14,8 +14,8 @@ namespace MaxWorlds.Tests.EditMode
     /// own live answer (<c>target</c>) — and even a bolt that DID reach a Sentinel could never damage
     /// it, since <c>BolterBolt.Detonate</c> only ever resolved a <see cref="PlayerHealth"/> receiver.
     /// Both halves fixed together: <c>TickBolt</c> now fires at <c>target</c>, and <c>Detonate</c> now
-    /// also resolves a <see cref="Sentinel"/> hit at a fraction of ITS OWN max health (10% as of Lee's
-    /// V12 workbook, 2026-09-01) — the same
+    /// also resolves a <see cref="Sentinel"/> hit at a fraction of ITS OWN max health (7% as of Lee's
+    /// V12c workbook, 2026-09-02, MV-642; was 10% per the V12 workbook, 2026-09-01, MV-638) — the same
     /// fraction-of-target design the player hit already used. Drives the real MV-362 retargeting
     /// (<c>RetargetIfNeeded</c>) rather than forcing the engagement field directly, so the test proves
     /// the actual production decision path, not a hand-picked state.
@@ -97,10 +97,10 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.Less(Vector3.Angle(firstBoltGo.transform.forward, toSentinel.normalized), 1f,
                     "an engaged Bolter's bolt must be aimed at the Sentinel it's engaged on, not Max");
 
-                // --- AC1 part 2: a bolt reaching the Sentinel deals exactly 10% of ITS OWN max health.
+                // --- AC1 part 2: a bolt reaching the Sentinel deals exactly 7% of ITS OWN max health.
                 InvokeDetonate(firstBoltGo.GetComponent<BolterBolt>());
-                Assert.AreEqual(72f, sentinel.HealthCurrent, 1e-3f,
-                    "a bolt reaching an engaged Sentinel must deal exactly 10% of ITS OWN max health (80 * 0.10 = 8)");
+                Assert.AreEqual(74.4f, sentinel.HealthCurrent, 1e-3f,
+                    "a bolt reaching an engaged Sentinel must deal exactly 7% of ITS OWN max health (80 * 0.07 = 5.6)");
                 Assert.AreEqual(playerHealth.Max, playerHealth.Current, 1e-3f,
                     "a bolt that hit the Sentinel must never also damage Max");
 
@@ -128,7 +128,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 InvokeDetonate(secondBoltGo.GetComponent<BolterBolt>());
                 Assert.AreEqual(playerHealth.Max - BolterBolt.DamageFor(playerHealth.Max), playerHealth.Current, 1e-3f,
-                    "the existing player-damage behaviour (10% of Max's own resolved max health) must be unchanged");
+                    "the existing player-damage behaviour (7% of Max's own resolved max health) must be unchanged");
             }
             finally
             {
