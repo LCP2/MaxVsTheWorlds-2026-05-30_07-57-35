@@ -59,6 +59,23 @@ namespace MaxWorlds.Pickups
 
         private const float ScatterRadius = 0.9f;
 
+        /// <summary>MV-626, change 2: uncollected power cells allowed live on the ground at once,
+        /// oldest recycled first once this is hit — the actual bound on the accumulation this ticket
+        /// fixes, independent of the reserve-full gate in <see cref="SpawnDrop"/> (which only stops
+        /// growth once the wallet itself is full; a fast enough kill streak could otherwise still pile
+        /// cells up below that ceiling). 24 sits well under the ~70-cell pile Lee's report measured at
+        /// 19fps, and change 4 below removes the per-frame render cost each surviving cell pays anyway.
+        /// Same bounded-population idiom as <c>AmbienceVfx.maxDecals</c> (40) and
+        /// <c>DissolveVfx.maxGhosts</c> (12).</summary>
+        private const int MaxLiveCells = 24;
+
+        /// <summary>MV-626, change 3: how long an uncollected power cell survives before expiring back
+        /// to the pool. A backstop, not the mechanism — <see cref="MaxLiveCells"/> above is what
+        /// actually bounds the population, since steady state at Domination kill rates (drop-rate ×
+        /// lifetime) can exceed it on its own. Generous on purpose: a player still working their way
+        /// toward a cell should not see it vanish out from under them.</summary>
+        private const float CellLifetimeSeconds = 30f;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
@@ -76,6 +93,20 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _supercellPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
+
+        /// <summary>Live power cells in spawn order, oldest first (MV-626). <see
+        /// cref="RecycleOldestCellIfAtCap"/> needs O(1) oldest-lookup, and an ordinary walk-over
+        /// collect can remove any cell — not just the oldest — so <see cref="_cellNodes"/> gives O(1)
+        /// removal from the middle too, which <see cref="_live"/> alone can't without an index scan
+        /// per kill.</summary>
+        private readonly LinkedList<Pickup> _cellOrder = new LinkedList<Pickup>();
+        private readonly Dictionary<Pickup, LinkedListNode<Pickup>> _cellNodes = new Dictionary<Pickup, LinkedListNode<Pickup>>(32);
+
+        /// <summary>Seconds since each live power cell was dropped (MV-626, change 3). Cells only —
+        /// Supercell/Device grants never fail to collect (see <see cref="SpawnDrop"/>), so they never
+        /// pile up and are a different population (this ticket's own "Relationship" note).</summary>
+        private readonly Dictionary<Pickup, float> _cellAge = new Dictionary<Pickup, float>(32);
+
         private Transform _max;
         private int _largeKills;
 
@@ -258,6 +289,16 @@ namespace MaxWorlds.Pickups
         private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
                                AbilityKind ability = default)
         {
+            if (kind == PickupKind.PowerCell)
+            {
+                // MV-626, change 1: a cell dropped once the reserve is already full can never be
+                // collected — AddPowerCell refuses it in Collect below, and nothing ever removed a
+                // refused pickup from _live, so every subsequent cell sat on the lawn forever. Not
+                // spawning it costs the player nothing they could have had anyway.
+                if (PickupWallet.PowerCells >= PickupWallet.Capacity) return;
+                RecycleOldestCellIfAtCap();
+            }
+
             Stack<Pickup> pool = kind switch
             {
                 PickupKind.Supercell => _supercellPool,
@@ -270,10 +311,75 @@ namespace MaxWorlds.Pickups
             p.transform.SetParent(transform, worldPositionStays: false);
             p.Place(pos);
             _live.Add(p);
+
+            if (kind == PickupKind.PowerCell)
+            {
+                _cellNodes[p] = _cellOrder.AddLast(p);
+                _cellAge[p] = 0f;
+            }
+        }
+
+        /// <summary>MV-626, change 2: evicts the single oldest live cell when the cap is about to be
+        /// exceeded — the actual accumulation bound, independent of the reserve-full gate above.</summary>
+        private void RecycleOldestCellIfAtCap()
+        {
+            if (_cellOrder.Count < MaxLiveCells) return;
+            Pickup oldest = _cellOrder.First.Value;
+            int index = _live.IndexOf(oldest);
+            if (index >= 0) RetireCell(index, oldest);
+        }
+
+        /// <summary>Drops <paramref name="p"/>'s cap/lifetime bookkeeping — a no-op for a non-cell kind,
+        /// and for a cell that's already untracked. Called from every path that removes a cell from
+        /// <see cref="_live"/> (an ordinary walk-over <see cref="Collect"/>, a cap eviction, a lifetime
+        /// expiry) so none of them can leave a stale entry pointing at a pooled-and-reused instance.</summary>
+        private void UntrackCell(Pickup p)
+        {
+            if (_cellNodes.TryGetValue(p, out var node))
+            {
+                _cellOrder.Remove(node);
+                _cellNodes.Remove(p);
+            }
+            _cellAge.Remove(p);
+        }
+
+        /// <summary>Forcibly returns a live cell to the pool without collecting it — used by the cap
+        /// eviction and the lifetime backstop below, neither of which is a walk-over (see
+        /// <see cref="Collect"/> for that path).</summary>
+        private void RetireCell(int index, Pickup p)
+        {
+            UntrackCell(p);
+            _reserveFullTold.Remove(p);
+            p.gameObject.SetActive(false);
+            _live.RemoveAt(index);
+            _cellPool.Push(p);
+        }
+
+        /// <summary>MV-626, change 3: ages every live power cell and expires the ones past
+        /// <see cref="CellLifetimeSeconds"/>. Pulled out of <see cref="Update"/>'s main collect/Magneto
+        /// loop (which only concerns itself with cells near Max) so it always runs regardless of
+        /// whether Max has been found yet, and so it's directly testable with an explicit
+        /// <paramref name="dt"/> — same idiom as <c>DissolveVfx.TickGhosts</c>. Walks <see cref="_live"/>
+        /// backward so RemoveAt during the walk is safe.</summary>
+        private void TickCellLifetimes(float dt)
+        {
+            for (int i = _live.Count - 1; i >= 0; i--)
+            {
+                Pickup p = _live[i];
+                if (p.Kind != PickupKind.PowerCell) continue;
+                if (!_cellAge.TryGetValue(p, out float age)) continue;
+
+                age += dt;
+                if (age >= CellLifetimeSeconds) { RetireCell(i, p); continue; }
+                _cellAge[p] = age;
+            }
         }
 
         private void Update()
         {
+            float dt = Time.deltaTime;
+            TickCellLifetimes(dt);
+
             if (_max == null)
             {
                 var g = GameObject.FindGameObjectWithTag("Player");
@@ -287,7 +393,6 @@ namespace MaxWorlds.Pickups
                 MaxWorlds.Weapons.RigState.Level("e_mag"),
                 MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusBase,
                 MaxWorlds.Weapons.AbilityTuning.DefaultMagnetoPullRadiusPerLevel);
-            float dt = Time.deltaTime;
 
             for (int i = _live.Count - 1; i >= 0; i--)
             {
@@ -374,6 +479,7 @@ namespace MaxWorlds.Pickups
                 _ => _cellPool,
             };
             pool.Push(p);
+            UntrackCell(p);   // MV-626: drop cap/lifetime bookkeeping — a no-op for a non-cell kind
         }
     }
 }
