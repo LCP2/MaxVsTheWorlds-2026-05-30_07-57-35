@@ -124,6 +124,21 @@ namespace MaxWorlds.Arena
         private const float ColliderRadius = 0.25f;
         private const float ColliderHeight = 1.2f;
 
+        /// <summary>MV-624: Unity's 0.3 default step offset would let the sentinel climb small props
+        /// (pots/crates) instead of being stopped by them — which fails this ticket's AC2 while
+        /// appearing to pass a "does it collide at all" check. Half the default, well under the
+        /// smallest prop this needs to be blocked by.</summary>
+        private const float ControllerStepOffset = 0.1f;
+
+        /// <summary>MV-624: bounds a sidestep whose target sits inside a solid — with collision now
+        /// live, <see cref="_sidestepTarget"/>'s arrival test can never fire if the target is
+        /// unreachable, which would otherwise latch the sentinel mid-dodge forever (worse than the bug
+        /// this ticket fixes). A fixed timeout, several times the ~0.3s an unobstructed sidestep
+        /// (<see cref="AbilityTuning.DefaultSentinelSidestepDistance"/> at
+        /// <see cref="AbilityTuning.DefaultSentinelSidestepSpeed"/>) normally takes, so it never cuts a
+        /// real dodge short.</summary>
+        private const float SidestepTimeoutSeconds = 1f;
+
         private RobotBodies.Body _body;
         private LegGaitDriver _gait;
         private Transform _model;
@@ -181,9 +196,22 @@ namespace MaxWorlds.Arena
 
         private Collider _bodyCollider;
 
+        /// <summary>MV-624: what every movement write now routes through (<see cref="CharacterControllerMotion.SafeMove"/>)
+        /// instead of assigning <c>transform.position</c> directly — the fix for the sentinel walking
+        /// straight through walls/pots/crates it should collide with, the same way Max already does
+        /// (see <see cref="MaxWorlds.Player.PlayerController"/>). Matches <see cref="_bodyCollider"/>'s
+        /// footprint exactly (built alongside it in <see cref="BuildBody"/>) so the silhouette doesn't
+        /// change.</summary>
+        private CharacterController _controller;
+
         /// <summary>Set while the sentinel is mid-dodge (MV-579) — null the rest of the time, including
         /// while the ordinary standoff-follow step below is running.</summary>
         private Vector3? _sidestepTarget;
+
+        /// <summary>MV-624: seconds spent on the CURRENT <see cref="_sidestepTarget"/> — reset to 0 the
+        /// instant a new one is set, bounds a sidestep that collision has made unreachable (see
+        /// <see cref="SidestepTimeoutSeconds"/>).</summary>
+        private float _sidestepElapsed;
 
         private DestructibleHealth _health;
         private float _timeSinceDamage;
@@ -282,6 +310,22 @@ namespace MaxWorlds.Arena
             col.isTrigger = false; // solid — robots route around it like any wall (ObstacleSteering);
                                     // Max himself is carved back out of that below (IgnorePlayerCollision).
             _bodyCollider = col;
+
+            // MV-624: same footprint as the capsule above, so movement can go through a swept, blocking
+            // CharacterController.Move (via CharacterControllerMotion.SafeMove) instead of the direct
+            // transform.position writes that let the sentinel walk through walls and pots. stepOffset
+            // is deliberately lower than PlayerController's own (Unity's 0.3 default) so a small prop
+            // stops it rather than lets it climb over; slopeLimit/skinWidth are left at Unity's default,
+            // matching PlayerController, which never sets either.
+            _controller = gameObject.AddComponent<CharacterController>();
+            _controller.center = col.center;
+            _controller.height = col.height;
+            _controller.radius = col.radius;
+            _controller.stepOffset = ControllerStepOffset;
+
+            // The capsule (what robots steer around, and what damage resolves against) and the
+            // controller (itself a Collider) would otherwise catch on each other's own body.
+            Physics.IgnoreCollision(_bodyCollider, _controller, true);
         }
 
         /// <summary>A material instance this sentinel owns and destroys — never the shared template
@@ -330,9 +374,14 @@ namespace MaxWorlds.Arena
         /// axis has been leveled — this guard must hold even for a sentinel that never moves at all.</summary>
         private void IgnorePlayerCollision()
         {
-            if (_bodyCollider == null || _followTarget == null) return;
-            if (_followTarget.TryGetComponent<CharacterController>(out var playerCc))
-                Physics.IgnoreCollision(_bodyCollider, playerCc, true);
+            if (_followTarget == null) return;
+            if (!_followTarget.TryGetComponent<CharacterController>(out var playerCc)) return;
+
+            // MV-624: the new CharacterController is itself a Collider that must be exempted too —
+            // exempting only _bodyCollider (the pre-MV-624 fix) would leave Max blocked by the very
+            // component that now actually drives the sentinel's movement, reintroducing MV-579.
+            if (_bodyCollider != null) Physics.IgnoreCollision(_bodyCollider, playerCc, true);
+            if (_controller != null) Physics.IgnoreCollision(_controller, playerCc, true);
         }
 
         protected void InitHealth(float maxHp)
@@ -422,46 +471,7 @@ namespace MaxWorlds.Arena
             float healAmount = next - _health.Current;
             if (healAmount > 0f) _health.Heal(healAmount);
 
-            if (_followTarget != null)
-            {
-                float reactDistSq = AbilityTuning.DefaultSentinelReactDistance * AbilityTuning.DefaultSentinelReactDistance;
-                if (_sidestepTarget == null && (transform.position - _followTarget.position).sqrMagnitude < reactDistSq)
-                {
-                    // MV-579: this reaction is independent of the Move (u_mov) axis and of
-                    // IgnorePlayerCollision above — Max can never be BLOCKED either way, but a static
-                    // turret standing there while he walks straight through it still reads as broken,
-                    // so it visibly gets out of his way every time regardless of whether it can follow.
-                    _sidestepTarget = AbilityTuning.SentinelSidestepTarget(transform.position,
-                        _followTarget.position, _followTarget.forward, AbilityTuning.DefaultSentinelSidestepDistance);
-                }
-            }
-
-            if (_sidestepTarget.HasValue)
-            {
-                Vector3 next2 = Vector3.MoveTowards(transform.position, _sidestepTarget.Value,
-                    AbilityTuning.DefaultSentinelSidestepSpeed * dt);
-                if (next2 != transform.position)
-                {
-                    transform.position = next2;
-                    Physics.SyncTransforms();
-                }
-                if ((transform.position - _sidestepTarget.Value).sqrMagnitude < 0.0025f) _sidestepTarget = null;
-            }
-            else if (_followTarget != null && _moveSpeed > 0f)
-            {
-                (Vector3 goalPoint, float goalStandoff) = AbilityTuning.SentinelFollowGoal(
-                    AttackModeEnabled, _followTarget.position, _followTarget.forward,
-                    _standoffDistance, AbilityTuning.DefaultSentinelAttackModeAheadDistance);
-                Vector3 next3 = AbilityTuning.SentinelStandoffStep(
-                    transform.position, goalPoint, goalStandoff, _moveSpeed, dt);
-                if (next3 != transform.position)
-                {
-                    transform.position = next3;
-                    Physics.SyncTransforms();
-                }
-            }
-
-            SeparateFromOtherSentinels(dt);
+            TickMovement(dt);
 
             // MV-580: the walk cycle. Driven off the sentinel's OWN world position, after the movement
             // above has already updated it this frame — so a mover that just stepped shows legs that
@@ -517,6 +527,59 @@ namespace MaxWorlds.Arena
             }
         }
 
+        /// <summary>MV-624: the sidestep/standoff-follow/separation movement, split out of <see cref="Update"/>
+        /// so it can be driven with an explicit <paramref name="dt"/> under test — the same shape
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own <c>TickChase</c> already uses, since
+        /// <see cref="Time.deltaTime"/> is not reliably non-zero outside Play mode. Behaviour is
+        /// unchanged from the inline version this replaces.</summary>
+        private void TickMovement(float dt)
+        {
+            if (_followTarget != null)
+            {
+                float reactDistSq = AbilityTuning.DefaultSentinelReactDistance * AbilityTuning.DefaultSentinelReactDistance;
+                if (_sidestepTarget == null && (transform.position - _followTarget.position).sqrMagnitude < reactDistSq)
+                {
+                    // MV-579: this reaction is independent of the Move (u_mov) axis and of
+                    // IgnorePlayerCollision above — Max can never be BLOCKED either way, but a static
+                    // turret standing there while he walks straight through it still reads as broken,
+                    // so it visibly gets out of his way every time regardless of whether it can follow.
+                    _sidestepTarget = AbilityTuning.SentinelSidestepTarget(transform.position,
+                        _followTarget.position, _followTarget.forward, AbilityTuning.DefaultSentinelSidestepDistance);
+                    _sidestepElapsed = 0f;
+                }
+            }
+
+            if (_sidestepTarget.HasValue)
+            {
+                Vector3 next2 = Vector3.MoveTowards(transform.position, _sidestepTarget.Value,
+                    AbilityTuning.DefaultSentinelSidestepSpeed * dt);
+                // MV-624: SafeMove (a swept, blocking CharacterController.Move), not a direct
+                // transform.position write — that direct write was a teleport with no collision test,
+                // which is exactly how the sentinel walked through walls/pots despite carrying a solid
+                // collider (see _controller's own doc).
+                Vector3 displacement2 = next2 - transform.position;
+                if (displacement2 != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement2);
+
+                // MV-624: bound the latch — collision can now stop the sentinel short of a target that
+                // sits inside a solid, and the old arrival-only test would then never clear.
+                _sidestepElapsed += dt;
+                bool arrived = (transform.position - _sidestepTarget.Value).sqrMagnitude < 0.0025f;
+                if (arrived || _sidestepElapsed >= SidestepTimeoutSeconds) _sidestepTarget = null;
+            }
+            else if (_followTarget != null && _moveSpeed > 0f)
+            {
+                (Vector3 goalPoint, float goalStandoff) = AbilityTuning.SentinelFollowGoal(
+                    AttackModeEnabled, _followTarget.position, _followTarget.forward,
+                    _standoffDistance, AbilityTuning.DefaultSentinelAttackModeAheadDistance);
+                Vector3 next3 = AbilityTuning.SentinelStandoffStep(
+                    transform.position, goalPoint, goalStandoff, _moveSpeed, dt);
+                Vector3 displacement3 = next3 - transform.position;
+                if (displacement3 != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement3);
+            }
+
+            SeparateFromOtherSentinels(dt);
+        }
+
         /// <summary>MV-615: keeps this sentinel at least <see cref="PlayerAbilities.SentinelPlacementClearance"/>
         /// from every OTHER active sentinel, every frame — not just at deploy time. The standoff-follow
         /// step above walks every following sentinel onto the same ring around Max with no regard for
@@ -535,11 +598,10 @@ namespace MaxWorlds.Arena
 
             Vector3 next = AbilityTuning.SentinelSeparationStep(transform.position, s_otherSentinelPositions,
                 PlayerAbilities.SentinelPlacementClearance, AbilityTuning.DefaultSentinelSidestepSpeed, dt);
-            if (next != transform.position)
-            {
-                transform.position = next;
-                Physics.SyncTransforms();
-            }
+            // MV-624: SafeMove, not a direct transform.position write — see the note on the sidestep
+            // step above; this is the third and last of the sentinel's three direct-write movement paths.
+            Vector3 displacement = next - transform.position;
+            if (displacement != Vector3.zero) CharacterControllerMotion.SafeMove(_controller, displacement);
         }
 
         /// <summary>Fires the water VFX from the turret's muzzle to the point it just hit. Cosmetic
