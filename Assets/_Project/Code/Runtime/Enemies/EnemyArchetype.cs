@@ -156,8 +156,8 @@ namespace MaxWorlds.Enemies
             // whatever the rusher/panel default is to stay the slow tank (was 0.925 = half of YT-169's
             // 1.85, then 1.355 = half of MV-289's 2.71, now 1.02 = half of MV-315's 2.04). Flag: if
             // Lee wants ALL robots flat at the rusher's speed, this is the one line to change.
-            moveSpeed: 1.02f, maxHealth: 68f,   // MV-540: 135 -> 68, -50% per Lee's play feedback
-            // (was MV-512's 150 -> 135, before that YT-194's 100 -> 150, the same 1.5x as the rusher)
+            moveSpeed: 1.02f, maxHealth: 100f,   // 68 -> 100 per Lee's V12 workbook (2026-09-01)
+            // (MV-540 previously cut 135 -> 68; before that MV-512's 150 -> 135, before that YT-194's 100 -> 150)
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
@@ -174,7 +174,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Heavy => new EnemyArchetype(
             EnemyKind.Heavy, EnemyShape.Box, new Vector3(1.2f, 1.35f, 1.2f),
             colliderHeight: 1.55f, colliderRadius: 0.58f,
-            moveSpeed: 0.85f, maxHealth: 260f,   // ~3.82x the bruiser's 68 (MV-540)
+            moveSpeed: 0.85f, maxHealth: 260f,   // ~2.6x the bruiser's 100 (was ~3.82x the bruiser's 68 pre-V12)
             contactDamage: 32f, contactRadius: 1.5f,
             lungeRange: 2.6f, telegraphTime: 1.05f,
             lungeSpeed: 8.5f, lungeTime: 0.35f, recoverTime: 1.5f,
@@ -189,7 +189,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Brute => new EnemyArchetype(
             EnemyKind.Brute, EnemyShape.Box, new Vector3(1.25f, 1.5f, 1.25f),
             colliderHeight: 1.9f, colliderRadius: 0.6f,
-            moveSpeed: 0.75f, maxHealth: 420f,   // ~6.18x the bruiser's 68, well past the heavy's 260 (MV-540)
+            moveSpeed: 0.75f, maxHealth: 420f,   // ~4.2x the bruiser's 100, well past the heavy's 260 (was ~6.18x pre-V12)
             contactDamage: 38f, contactRadius: 1.6f,
             lungeRange: 2.6f, telegraphTime: 1.15f,
             lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
@@ -238,13 +238,12 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Launcher => new EnemyArchetype(
             EnemyKind.Launcher, EnemyShape.Capsule, new Vector3(0.85f, 0.75f, 0.85f),
             colliderHeight: 1.45f, colliderRadius: 0.42f,
-            // MV-293: kept BELOW the rusher's 32 HP on purpose — every new small-tier kind stays a
-            // one-rusher-shot kill (EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame
-            // pins that only the Bruiser survives a full-health rusher's-worth of damage). A Launcher's
-            // threat is its range, not its ability to soak fire once you close the gap on it.
+            // 30 -> 45 per Lee's V12 workbook (2026-09-01) — deliberately lifted ABOVE the rusher's
+            // 32 HP, same reversal MV-404 already gave the Gunner: it no longer belongs in the
+            // "one-rusher-shot kill" invariant (see EnemyArchetypeTests, updated the same day).
             // MV-325: speed must invert with power too — a Launcher has less HP than the rusher, so it
             // has to be at least as quick, not slower (was 1.8, below the rusher's 2.04).
-            moveSpeed: 2.1f, maxHealth: 30f,
+            moveSpeed: 2.1f, maxHealth: 45f,
             contactDamage: 22f,   // splash damage
             contactRadius: 2.0f,  // splash radius
             lungeRange: 10f,      // max fire range
@@ -271,7 +270,9 @@ namespace MaxWorlds.Enemies
             // MV-325: was 2.4 — faster than the Gunner despite having more HP (26 vs 30), which
             // inverted the "weakest is fastest" rule. Its mobility edge is the teleport, not raw
             // speed ("Otherwise a rusher"), so it sits with the Launcher just above the rusher.
-            moveSpeed: 2.1f, maxHealth: 30f,
+            // 30 -> 45 per Lee's V12 workbook (2026-09-01) — see Launcher's comment above; the
+            // "one-rusher-shot kill" invariant no longer applies to Blinker either.
+            moveSpeed: 2.1f, maxHealth: 45f,
             contactDamage: 14f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.5f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -288,13 +289,14 @@ namespace MaxWorlds.Enemies
         /// against the player. <see cref="ContactDamage"/> is deliberately left at 0 and unread — the
         /// ticket's own AC1 requires the hit amount to be resolved from the player's live max health at
         /// the moment of impact, not authored here as a flat number.
-        /// MV-293's "every small-tier kind stays a one-rusher-shot kill" invariant applies the same way
-        /// it did to <see cref="Launcher"/>/<see cref="Blinker"/>: kept below the Rusher's HP on purpose.
+        /// MV-293's "every small-tier kind stays a one-rusher-shot kill" invariant no longer applies to
+        /// the Bolter (nor to <see cref="Launcher"/>/<see cref="Blinker"/>) as of Lee's V12 workbook,
+        /// 2026-09-01 — all three now sit above the Rusher's HP on purpose.
         /// </summary>
         public static EnemyArchetype Bolter => new EnemyArchetype(
             EnemyKind.Bolter, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 2.1f, maxHealth: 30f,
+            moveSpeed: 2.1f, maxHealth: 45f,
             contactDamage: 0f,    // unread — bolt damage is resolved live off PlayerHealth.Max (AC1)
             contactRadius: 0.35f, // bolt hit-check radius against the player
             lungeRange: 9f,       // max fire range

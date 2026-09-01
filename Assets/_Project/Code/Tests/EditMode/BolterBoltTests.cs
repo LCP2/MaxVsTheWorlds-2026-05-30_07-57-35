@@ -72,11 +72,12 @@ namespace MaxWorlds.Tests.EditMode
                 $"{traveled} m travelled against an {maxDistance} m ceiling should give despawned={expectDespawned}");
         }
 
-        // ---------------------------------------------------------------- AC1: damage = 5% of the
+        // ---------------------------------------------------------------- AC1: damage = 10% of the
         // ---------------------------------------------------------------- player's RESOLVED max health
+        // (5% -> 10% per Lee's V12 workbook, 2026-09-01)
 
         [Test]
-        public void DamageFor_ScalesWithThePlayersResolvedMaxHealth_NeverHardcodedToTen()
+        public void DamageFor_ScalesWithThePlayersResolvedMaxHealth_NeverHardcodedToTwenty()
         {
             var go = new GameObject("MV-539 test Max", typeof(CharacterController));
             try
@@ -84,8 +85,8 @@ namespace MaxWorlds.Tests.EditMode
                 go.AddComponent<PlayerController>();
                 var health = go.AddComponent<PlayerHealth>();
 
-                // The authored default (200 max HP) DOES give 10 damage — but proving that alone can't
-                // tell a resolved 5% apart from a hardcoded 10. Overriding the max via the same dev-panel
+                // The authored default (200 max HP) DOES give 20 damage — but proving that alone can't
+                // tell a resolved 10% apart from a hardcoded 20. Overriding the max via the same dev-panel
                 // hook PlayerHealth.Max already reads through (DevTuning.PlayerMaxHealth) is what proves
                 // this derives from the live value instead.
                 DevTuning.PlayerMaxHealth = 340f;
@@ -95,10 +96,10 @@ namespace MaxWorlds.Tests.EditMode
 
                 float damage = BolterBolt.DamageFor(health.Max);
 
-                Assert.AreEqual(17f, damage, 1e-4f,
-                    "5% of a 340 max-health player should be 17, not a hardcoded 10 — the damage must " +
+                Assert.AreEqual(34f, damage, 1e-4f,
+                    "10% of a 340 max-health player should be 34, not a hardcoded 20 — the damage must " +
                     "derive from the player's resolved max health, not an authored constant");
-                Assert.AreNotEqual(10f, damage, "this would only pass by coincidence if 10 were hardcoded");
+                Assert.AreNotEqual(20f, damage, "this would only pass by coincidence if 20 were hardcoded");
             }
             finally
             {
