@@ -60,10 +60,12 @@ namespace MaxWorlds.Tests.EditMode
                 foreach (var r in UnityEngine.Object.FindObjectsByType<BigBermudaRig>(FindObjectsSortMode.None))
                     InvokeOnEnable(r);
 
+                // MV-641: V12c deletes a20's second boss and a30's middle boss, dropping World 1 to
+                // four authored bosses (a12_boss1, a20_boss1, a30_boss1, a30_boss2).
                 string[] allBossIds =
-                    { "a12_boss1", "a20_boss1", "a20_boss2", "a30_boss1", "a30_boss2", "a30_boss3" };
+                    { "a12_boss1", "a20_boss1", "a30_boss1", "a30_boss2" };
                 string[] stillLivingBossIds =
-                    { "a20_boss1", "a20_boss2", "a30_boss1", "a30_boss2", "a30_boss3" };
+                    { "a20_boss1", "a30_boss1", "a30_boss2" };
 
                 // --- baseline: every authored boss has exactly one bound, visible, correctly-scaled rig ---
                 foreach (string id in allBossIds)

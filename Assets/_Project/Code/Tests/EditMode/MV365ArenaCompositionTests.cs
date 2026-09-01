@@ -377,7 +377,7 @@ namespace MaxWorlds.Tests.EditMode
             for (int area = 1; area <= cfg.dials.areaCount; area++)
                 totalRushers += cfg.SolveComposition(area).Rusher;
 
-            Assert.AreEqual(26, totalRushers,
+            Assert.AreEqual(23, totalRushers,
                 "world1_config.json's authored Rusher total changed — if it dropped back under " +
                 $"RusherCap.PerLevel ({RusherCap.PerLevel}), update this expectation to match");
         }

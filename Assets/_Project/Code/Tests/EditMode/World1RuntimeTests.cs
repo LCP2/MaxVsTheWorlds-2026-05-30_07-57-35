@@ -87,7 +87,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(32, shedCount, "World 1 must carry exactly 32 authored sheds");
+            Assert.AreEqual(17, shedCount, "World 1 must carry exactly 17 authored sheds");
         }
 
         // --- MV-437: raised world 1 from 6 sheds to 9 so a full run can reach more than 6 of the ---
@@ -99,6 +99,9 @@ namespace MaxWorlds.Tests.EditMode
         // --- carrying two or more (a18/a20/a27 carry three each). ------------------------------------
         // --- MV-639: V12's batch-1 redraw (2026-09-01) moves a8's shed off, dropping the index list's
         // --- 8 to 7 and the total to 32. -------------------------------------------------------------
+        // --- MV-641: V12c removes every shed the design sheet does not draw (a6, a9 x2, a10 x2, plus
+        // --- one each in a12/a14/a15/a20/a22/a23/a25/a29) and caps every remaining shed area at one,
+        // --- dropping the index list to 17 areas and the total to 17 sheds. -------------------------
 
         [Test]
         public void World1_HasExactlyThirtySevenShedsAtTheAuthoredIndices()
@@ -111,14 +114,14 @@ namespace MaxWorlds.Tests.EditMode
             shedIndices.Sort();
 
             CollectionAssert.AreEqual(
-                new[] { 3, 6, 7, 9, 10, 11, 12, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29 },
+                new[] { 3, 7, 11, 12, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29 },
                 shedIndices,
-                "World 1 must carry shed areas at indices 3, 6, 7, 9, 10, 11, 12, 14, 15, 16, 18, 19, " +
-                "20, 21, 22, 23, 24, 25, 26, 27, 29 (21 areas, 32 sheds total)");
+                "World 1 must carry shed areas at indices 3, 7, 11, 12, 15, 16, 18, 19, 20, 21, 22, " +
+                "23, 24, 25, 26, 27, 29 (17 areas, 17 sheds total)");
 
             int shedTotal = 0;
             foreach (WorldArea area in cfg.areas) shedTotal += area.Sheds().Length;
-            Assert.AreEqual(32, shedTotal, "World 1 must carry exactly 32 sheds in total");
+            Assert.AreEqual(17, shedTotal, "World 1 must carry exactly 17 sheds in total");
         }
 
         [Test]
@@ -404,6 +407,7 @@ namespace MaxWorlds.Tests.EditMode
         // --- MV-640: the designer's a1-a30 drawing authors an exact position for every composed ------
         // --- robot — before this ticket, 14 of the 30 areas authored fewer garrison entries than -------
         // --- their composition, so some of each area's robots fell back to an unauthored ring spot. ---
+        // --- MV-641: V12c's composition edits (a2/a3/a5/a9 robot counts) drop the total to 687. -------
 
         [Test]
         public void World1_EveryAreasGarrisonCountMatchesItsComposedTotal()
@@ -427,7 +431,7 @@ namespace MaxWorlds.Tests.EditMode
                 totalGarrisoned += garrisoned;
             }
 
-            Assert.AreEqual(695, totalGarrisoned, "world1_config.json must author exactly 695 garrison positions across a1..a30");
+            Assert.AreEqual(687, totalGarrisoned, "world1_config.json must author exactly 687 garrison positions across a1..a30");
         }
 
         // --- AC5 (MV-564: v4's 30-area redraw re-authored areas 1-4's composition) --------------------
@@ -442,12 +446,14 @@ namespace MaxWorlds.Tests.EditMode
             // bolters 4 -> 3. MV-598's v9 redraw then raised a3's bolters 2 -> 4, a4's gunners 5 -> 6,
             // and dropped a5's rusher 4 -> 2 while raising its bolters 3 -> 6. MV-639's V12 redraw
             // (2026-09-01) then raised a2's rusher 4 -> 10 and blinker 2 -> 4. MV-640's V12b full
-            // redraw then raised a3's bolters 4 -> 6.
+            // redraw then raised a3's bolters 4 -> 6. MV-641's V12c edits then dropped a2's rusher
+            // 10 -> 7, a3's bolters 6 -> 5, and a5's bolters 6 -> 4 (a4's counts are unchanged — only
+            // its gunner/rusher positions were rearranged).
             AssertComposition(cfg, 1, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 0);
-            AssertComposition(cfg, 2, rusher: 10, bruiser: 0, gunner: 0, blinker: 4, bolter: 0);
-            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 6);
+            AssertComposition(cfg, 2, rusher: 7, bruiser: 0, gunner: 0, blinker: 4, bolter: 0);
+            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 5);
             AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 6, blinker: 0, bolter: 0);
-            AssertComposition(cfg, 5, rusher: 2, bruiser: 0, gunner: 0, blinker: 0, bolter: 6);
+            AssertComposition(cfg, 5, rusher: 2, bruiser: 0, gunner: 0, blinker: 0, bolter: 4);
         }
 
         private static void AssertComposition(WorldConfig cfg, int areaIndex, int rusher, int bruiser, int gunner, int blinker, int bolter)
@@ -605,6 +611,37 @@ namespace MaxWorlds.Tests.EditMode
                 $"composition key '{badKey}' does not match any WorldComposition field (rusher/bruiser/" +
                 "heavy/brute/gunner/launcher/blinker/bolter) — JsonUtility silently drops it and its " +
                 "authored robots never spawn (MV-500)");
+        }
+
+        // --- MV-641: gate g11 (a11 -> a12) opens on sheds-destroyed-before(12). Pre-V12c that set was
+        // --- 8 sheds across a3/a6/a7/a9(x2)/a10(x2)/a11, five of which no design sheet ever drew, so
+        // --- the gate read "SHEDS 4 / 8" and could never open. V12c's corrected sheds[] leaves exactly
+        // --- 3 sheds before area 12 — one each in a3, a7 and a11 — so the condition can actually be met.
+
+        [Test]
+        public void World1_ShedsDestroyedBeforeArea12_IsSatisfiedByExactlyA3A7AndA11()
+        {
+            WorldConfig cfg = LoadWorld1();
+            var net = new SupplyLineNetwork(cfg);
+
+            net.ShedProgressBefore(12, out int destroyedBefore, out int totalBefore);
+            Assert.AreEqual(3, totalBefore, "areas before index 12 must together author exactly 3 sheds");
+            Assert.AreEqual(0, destroyedBefore);
+            Assert.IsFalse(net.ShedsDestroyedBefore(12));
+
+            foreach (string areaId in new[] { "a3", "a7", "a11" })
+            {
+                WorldArea area = cfg.Area(areaId);
+                Assert.IsNotNull(area, $"world1_config.json has no area '{areaId}'");
+
+                WorldShed[] sheds = area.Sheds();
+                Assert.Greater(sheds.Length, 0, $"area '{areaId}' must author a shed");
+                for (int i = 0; i < sheds.Length; i++)
+                    net.DestroyShed(area.ShedId(i, sheds.Length));
+            }
+
+            Assert.IsTrue(net.ShedsDestroyedBefore(12),
+                "destroying every shed in a3, a7 and a11 must satisfy gate g11's sheds-destroyed-before(12) condition");
         }
     }
 }

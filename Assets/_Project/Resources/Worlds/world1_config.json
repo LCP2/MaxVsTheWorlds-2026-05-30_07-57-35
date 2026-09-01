@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 1 \u2014 Backyard",
- "revision": "WORLD 1 v12b 2026-09-01: areas a1-a30 rebuilt from MVW_World1_Level_Design_V12b.xlsx. Fence, cover, gates, robot counts and robot positions are the drawing. sheds[]/bosses[] are carried unchanged from main - the workbook renders only an area's legacy singleton shed/boss and cannot enumerate them. Cover cells the drawing places inside a shed spawn ring, a mobile shed's 7 m clearance, a boss's 12 m clear radius or 2 m of a doorway are removed cell-by-cell (MapValidation load gates); robots inside the 1 m cover gap or a shed ring are nudged the minimum distance. Nothing else is changed.",
+ "revision": "WORLD 1 v12c 2026-09-02: areas a1-a30 rebuilt from MVW_World1_Level_Design_V12c.xlsx. The sheet is the design: fence, cover, gates, robot counts, robot positions, sheds and bosses are all what is drawn. A shed or boss the sheet does not draw does not exist. Cover cells the drawing places inside a shed spawn ring, a mobile shed's 7 m clearance, a boss's 12 m clear radius or 2 m of a doorway are removed cell-by-cell, and robots inside the 1 m cover gap or a shed ring are nudged the minimum distance - those are MapValidation load gates, not design choices.",
  "note": "Authored in-chat to trial the World & Difficulty Framework (Confluence MVW 34439170). enemyTypes.thv were relative placeholders (1.0/2.5/4.5/7.0) at LOCK time; MV-270 replaced them with values derived from EnemyArchetype's real hp/contact-damage/speed via THV=(hp+shield)*dps*speedFactor*archetypeWeight (shield=0, archetypeWeight=1, dps=contactDamage/attackCycle) then scaled by x1.2 so R=MPL/EPL (PowerScoring) lands in the 0.85-1.4 band against the Water Blaster's real per-level DPS across Areas 1-7 \u2014 see World1CalibrationTests. The derived shape (1.0 : 2.6 : 4.49 : 7.11) came out almost identical to the original placeholder ratio, so the curve's SHAPE stood; only the magnitude moved.",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 1.5,
@@ -642,7 +642,7 @@
    "garrison": [
     {
      "kind": "rusher",
-     "x": 20.5,
+     "x": 12.5,
      "z": 158.5
     },
     {
@@ -681,7 +681,7 @@
    "targetThreatBudget": 0,
    "notes": "MV-479 series: cover only. No gate, origin, size, composition or dial changed. Entry (W wall) and exit (N wall) are adjacent, so the cover is what stops the corner cut: walkable route entry->exit is now 31.9 m against a 31.2 m diagonal (102%), up from 15.1 m (48%). Cover is held clear of the 4 Garrison.SeedPositions points, which the engine places blind to cover. | Designer instruction: the 4 Blinkers stand in TWO PAIRS in the east half, away from the west entry gate. Authored via area.garrison[] (MV-559).",
    "composition": {
-    "rusher": 10,
+    "rusher": 7,
     "bruiser": 0,
     "heavy": 0,
     "brute": 0,
@@ -770,21 +770,6 @@
     },
     {
      "kind": "rusher",
-     "x": 25.05,
-     "z": 128.5
-    },
-    {
-     "kind": "rusher",
-     "x": 27.5,
-     "z": 128.5
-    },
-    {
-     "kind": "rusher",
-     "x": 29.5,
-     "z": 128.5
-    },
-    {
-     "kind": "rusher",
      "x": 23.312,
      "z": 122.983
     },
@@ -846,7 +831,7 @@
     "gunner": 0,
     "launcher": 0,
     "blinker": 0,
-    "bolter": 6
+    "bolter": 5
    },
    "cover": [
     {
@@ -882,7 +867,7 @@
     {
      "id": "a3_h4",
      "x": 46.0,
-     "z": 121.5,
+     "z": 119.5,
      "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
@@ -892,10 +877,10 @@
     {
      "id": "a3_h5",
      "x": 43.5,
-     "z": 123.0,
+     "z": 122.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 2.0,
+     "depth": 4.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -941,6 +926,16 @@
     },
     {
      "id": "a3_h10",
+     "x": 48.5,
+     "z": 123.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a3_h11",
      "x": 50.5,
      "z": 129.5,
      "width": 1.0,
@@ -950,7 +945,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a3_h11",
+     "id": "a3_h12",
      "x": 50.5,
      "z": 133.5,
      "width": 1.0,
@@ -961,11 +956,6 @@
     }
    ],
    "garrison": [
-    {
-     "kind": "bolter",
-     "x": 48.983,
-     "z": 134.688
-    },
     {
      "kind": "rusher",
      "x": 33.5,
@@ -1008,13 +998,13 @@
     },
     {
      "kind": "bolter",
-     "x": 45.943,
-     "z": 126.011
+     "x": 45.312,
+     "z": 122.983
     },
     {
      "kind": "bolter",
-     "x": 46.943,
-     "z": 126.011
+     "x": 46.312,
+     "z": 122.983
     }
    ],
    "sheds": [
@@ -1087,17 +1077,7 @@
     },
     {
      "id": "a4_h4",
-     "x": 47.5,
-     "z": 152.0,
-     "width": 3.0,
-     "height": 1.8,
-     "depth": 4.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a4_h5",
-     "x": 49.5,
+     "x": 48.5,
      "z": 160.5,
      "width": 7.0,
      "height": 1.8,
@@ -1106,12 +1086,22 @@
      "dressing": "hedge"
     },
     {
-     "id": "a4_h6",
-     "x": 46.5,
+     "id": "a4_h5",
+     "x": 45.5,
      "z": 162.0,
      "width": 1.0,
      "height": 1.8,
      "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a4_h6",
+     "x": 47.5,
+     "z": 152.0,
+     "width": 3.0,
+     "height": 1.8,
+     "depth": 4.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -1139,7 +1129,7 @@
    "garrison": [
     {
      "kind": "gunner",
-     "x": 48.5,
+     "x": 47.5,
      "z": 163.5
     },
     {
@@ -1149,22 +1139,22 @@
     },
     {
      "kind": "gunner",
+     "x": 47.5,
+     "z": 162.5
+    },
+    {
+     "kind": "rusher",
      "x": 48.5,
      "z": 162.5
     },
     {
-     "kind": "rusher",
+     "kind": "gunner",
      "x": 49.5,
      "z": 162.5
     },
     {
-     "kind": "gunner",
-     "x": 50.5,
-     "z": 162.5
-    },
-    {
      "kind": "rusher",
-     "x": 51.5,
+     "x": 50.5,
      "z": 162.5
     },
     {
@@ -1192,7 +1182,8 @@
      "x": 42.312,
      "z": 146.983
     }
-   ]
+   ],
+   "sheds": []
   },
   {
    "id": "a5",
@@ -1219,7 +1210,7 @@
     "gunner": 0,
     "launcher": 0,
     "blinker": 0,
-    "bolter": 6
+    "bolter": 4
    },
    "cover": [
     {
@@ -1316,11 +1307,6 @@
    "garrison": [
     {
      "kind": "bolter",
-     "x": 63.05,
-     "z": 163.5
-    },
-    {
-     "kind": "bolter",
      "x": 62.988,
      "z": 160.804
     },
@@ -1331,8 +1317,8 @@
     },
     {
      "kind": "bolter",
-     "x": 67.03,
-     "z": 160.03
+     "x": 72.5,
+     "z": 158.5
     },
     {
      "kind": "rusher",
@@ -1346,15 +1332,11 @@
     },
     {
      "kind": "bolter",
-     "x": 63.5,
-     "z": 144.5
-    },
-    {
-     "kind": "bolter",
      "x": 63.97,
      "z": 144.03
     }
-   ]
+   ],
+   "sheds": []
   },
   {
    "id": "a6",
@@ -1369,14 +1351,9 @@
     "w": 22,
     "d": 28
    },
-   "hasShed": true,
+   "hasShed": false,
    "garrisonDensity": "heavy",
    "targetThreatBudget": 0,
-   "shed": {
-    "x": 68,
-    "z": 126,
-    "produces": "reinforcements + power-up on destroy"
-   },
    "notes": "Lee's workbook edit 2026-08-20: added a hedge across the north of the room, which merged with the existing piece at x 32..34 into one 10 m run. Shifted 1 m north (z 67..68 -> 68..69): as drawn it overlapped the shed's spawn ring (SpawnRadius 3.5 + SpawnClearance 0.8) by 0.3 m and MapValidation would have rejected the map. a6_h5 was trimmed at its south end (z 68..71 -> 69..71) so it abuts the shifted run instead of intersecting it. Gate g6 moved 12.4 m east to x=37.5 (drawn on a6's north wall; a7's south end propagated to match). NOTE: 2 of this area's 7 Garrison.SeedPositions points fall inside this hedge - the engine seeds blind to cover. Tracked separately. | Bolter pass 2026-08-25: 2 bolters - introduction: the most broken-up of the mid rooms (48% clear sightlines) and the one with the best hedge line, so 'break line of sight' is the visible answer the first time you meet it.",
    "composition": {
     "rusher": 0,
@@ -1552,15 +1529,7 @@
      "z": 115.5
     }
    ],
-   "sheds": [
-    {
-     "id": "a6_shed1",
-     "x": 68,
-     "z": 126,
-     "produces": "reinforcements + power-up on destroy",
-     "mobile": false
-    }
-   ]
+   "sheds": []
   },
   {
    "id": "a7",
@@ -1698,7 +1667,6 @@
     }
    ],
    "shed": {
-    "id": "a7_shed1",
     "x": 94.0,
     "z": 128.0,
     "produces": "reinforcements + power-up on destroy"
@@ -1925,14 +1893,9 @@
     "w": 22,
     "d": 30
    },
-   "hasShed": true,
+   "hasShed": false,
    "garrisonDensity": "normal",
    "targetThreatBudget": 0,
-   "shed": {
-    "x": 109,
-    "z": 93,
-    "produces": "reinforcements + power-up on destroy"
-   },
    "notes": "MV-411: post-climax breather after Area 8's pre-boss peak \u2014 pacing dips before rising again toward the new finale. MV-437: new shed, keeps the module cadence from stalling in the run's middle third. | Designer instruction: a second shed in the TOP RIGHT of the area as the sheet is drawn (rotated: top right = high Z, low X). Needs MV-475.",
    "composition": {
     "rusher": 0,
@@ -1942,7 +1905,7 @@
     "gunner": 0,
     "launcher": 0,
     "blinker": 0,
-    "bolter": 11
+    "bolter": 9
    },
    "cover": [
     {
@@ -2109,36 +2072,11 @@
     },
     {
      "kind": "bolter",
-     "x": 118.5,
-     "z": 91.5
-    },
-    {
-     "kind": "bolter",
-     "x": 118.5,
-     "z": 90.5
-    },
-    {
-     "kind": "bolter",
      "x": 120.5,
      "z": 89.5
     }
    ],
-   "sheds": [
-    {
-     "id": "a9_shed1",
-     "x": 109,
-     "z": 93,
-     "produces": "reinforcements + power-up on destroy",
-     "mobile": false
-    },
-    {
-     "id": "a9_shed2",
-     "x": 118.0,
-     "z": 110.0,
-     "produces": "mixed",
-     "mobile": false
-    }
-   ]
+   "sheds": []
   },
   {
    "id": "a10",
@@ -2153,23 +2091,8 @@
     "w": 20,
     "d": 40
    },
-   "hasShed": true,
-   "sheds": [
-    {
-     "id": "a10_shed1",
-     "x": 130.0,
-     "z": 104.8,
-     "produces": "mixed",
-     "mobile": false
-    },
-    {
-     "id": "a10_shed2",
-     "x": 133.0,
-     "z": 85.0,
-     "produces": "mixed",
-     "mobile": false
-    }
-   ],
+   "hasShed": false,
+   "sheds": [],
    "garrisonDensity": "normal",
    "targetThreatBudget": 10.76,
    "composition": {
@@ -2206,25 +2129,15 @@
     {
      "id": "a10_h3",
      "x": 126.5,
-     "z": 100.5,
+     "z": 108.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 16.0,
      "shape": "box",
      "dressing": "planter"
     },
     {
      "id": "a10_h4",
-     "x": 126.5,
-     "z": 112.0,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 8.0,
-     "shape": "box",
-     "dressing": "planter"
-    },
-    {
-     "id": "a10_h5",
      "x": 135.5,
      "z": 90.5,
      "width": 17.0,
@@ -2234,17 +2147,37 @@
      "dressing": "planter"
     },
     {
+     "id": "a10_h5",
+     "x": 130.0,
+     "z": 81.5,
+     "width": 2.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
      "id": "a10_h6",
      "x": 129.5,
-     "z": 99.0,
+     "z": 102.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 2.0,
+     "depth": 9.0,
      "shape": "box",
      "dressing": "planter"
     },
     {
      "id": "a10_h7",
+     "x": 130.5,
+     "z": 105.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 4.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a10_h8",
      "x": 134.0,
      "z": 113.5,
      "width": 4.0,
@@ -2254,7 +2187,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a10_h8",
+     "id": "a10_h9",
      "x": 133.5,
      "z": 97.0,
      "width": 1.0,
@@ -2264,17 +2197,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a10_h9",
+     "id": "a10_h10",
      "x": 134.5,
-     "z": 79.0,
+     "z": 80.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 2.0,
+     "depth": 4.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a10_h10",
+     "id": "a10_h11",
      "x": 135.0,
      "z": 99.5,
      "width": 2.0,
@@ -2284,7 +2217,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a10_h11",
+     "id": "a10_h12",
+     "x": 139.5,
+     "z": 81.5,
+     "width": 9.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
+     "id": "a10_h13",
      "x": 135.5,
      "z": 100.5,
      "width": 1.0,
@@ -2294,7 +2237,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a10_h12",
+     "id": "a10_h14",
      "x": 136.5,
      "z": 106.5,
      "width": 1.0,
@@ -2304,17 +2247,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a10_h13",
-     "x": 140.5,
-     "z": 81.5,
-     "width": 7.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
-     "id": "a10_h14",
+     "id": "a10_h15",
      "x": 137.5,
      "z": 113.5,
      "width": 1.0,
@@ -2324,7 +2257,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a10_h15",
+     "id": "a10_h16",
      "x": 141.0,
      "z": 80.5,
      "width": 6.0,
@@ -2335,11 +2268,6 @@
     }
    ],
    "notes": "long ranged beds: two shed lines feeding a corridor",
-   "shed": {
-    "x": 130.0,
-    "z": 104.8,
-    "produces": "mixed"
-   },
    "garrison": [
     {
      "kind": "gunner",
@@ -2378,8 +2306,8 @@
     },
     {
      "kind": "bolter",
-     "x": 131.317,
-     "z": 88.962
+     "x": 132.057,
+     "z": 88.989
     },
     {
      "kind": "bolter",
@@ -2388,13 +2316,13 @@
     },
     {
      "kind": "blinker",
-     "x": 131.371,
-     "z": 88.983
+     "x": 131.5,
+     "z": 88.5
     },
     {
      "kind": "blinker",
-     "x": 134.722,
-     "z": 88.945
+     "x": 133.5,
+     "z": 88.5
     },
     {
      "kind": "bolter",
@@ -2403,13 +2331,13 @@
     },
     {
      "kind": "heavy",
-     "x": 135.4,
-     "z": 88.572
+     "x": 134.5,
+     "z": 87.5
     },
     {
      "kind": "gunner",
-     "x": 136.193,
-     "z": 87.9
+     "x": 135.5,
+     "z": 87.5
     },
     {
      "kind": "bruiser",
@@ -2423,18 +2351,18 @@
     },
     {
      "kind": "blinker",
-     "x": 128.775,
-     "z": 85.838
+     "x": 129.5,
+     "z": 85.5
     },
     {
      "kind": "blinker",
-     "x": 129.118,
-     "z": 86.875
+     "x": 131.5,
+     "z": 85.5
     },
     {
      "kind": "blinker",
-     "x": 136.258,
-     "z": 87.814
+     "x": 133.5,
+     "z": 85.5
     },
     {
      "kind": "bolter",
@@ -2643,13 +2571,6 @@
      "id": "a12_shed1",
      "x": 135.4,
      "z": 41.1,
-     "produces": "mixed",
-     "mobile": false
-    },
-    {
-     "id": "a12_shed2",
-     "x": 150.6,
-     "z": 20.9,
      "produces": "mixed",
      "mobile": false
     }
@@ -3178,23 +3099,8 @@
     "w": 18,
     "d": 44
    },
-   "hasShed": true,
-   "sheds": [
-    {
-     "id": "a14_shed1",
-     "x": 174.0,
-     "z": 63.7,
-     "produces": "mixed",
-     "mobile": false
-    },
-    {
-     "id": "a14_shed2",
-     "x": 180.0,
-     "z": 44.5,
-     "produces": "mixed",
-     "mobile": false
-    }
-   ],
+   "hasShed": false,
+   "sheds": [],
    "garrisonDensity": "normal",
    "targetThreatBudget": 16.14,
    "composition": {
@@ -3310,11 +3216,6 @@
     }
    ],
    "notes": "corridor: ranged the whole way, cover is the only answer",
-   "shed": {
-    "x": 174.0,
-    "z": 63.7,
-    "produces": "mixed"
-   },
    "garrison": [
     {
      "kind": "gunner",
@@ -3343,8 +3244,8 @@
     },
     {
      "kind": "bolter",
-     "x": 172.522,
-     "z": 67.749
+     "x": 172.5,
+     "z": 67.5
     },
     {
      "kind": "bruiser",
@@ -3467,13 +3368,6 @@
      "id": "a15_shed1",
      "x": 171.0,
      "z": 100.5,
-     "produces": "mixed",
-     "mobile": false
-    },
-    {
-     "id": "a15_shed2",
-     "x": 183.0,
-     "z": 85.5,
      "produces": "mixed",
      "mobile": false
     }
@@ -4194,7 +4088,6 @@
    ],
    "notes": "machine yard - three sheds, first walking-shed ground",
    "shed": {
-    "id": "a18_shed1",
     "x": 205.0,
     "z": 105.9,
     "produces": "mixed"
@@ -4436,7 +4329,6 @@
    ],
    "notes": "rockery: broken sightlines, everything at once",
    "shed": {
-    "id": "a19_shed1",
     "x": 199.0,
     "z": 67.0,
     "produces": "mixed"
@@ -4560,20 +4452,6 @@
      "z": 31.5,
      "produces": "mixed",
      "mobile": true
-    },
-    {
-     "id": "a20_shed2",
-     "x": 204.0,
-     "z": 4.5,
-     "produces": "mixed",
-     "mobile": true
-    },
-    {
-     "id": "a20_shed3",
-     "x": 221.6,
-     "z": 18.0,
-     "produces": "mixed",
-     "mobile": true
     }
    ],
    "garrisonDensity": "heavy",
@@ -4611,9 +4489,9 @@
     },
     {
      "id": "a20_h3",
-     "x": 195.5,
+     "x": 202.5,
      "z": 5.5,
-     "width": 3.0,
+     "width": 17.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -4662,10 +4540,10 @@
     {
      "id": "a20_h8",
      "x": 205.5,
-     "z": -4.5,
+     "z": -0.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 11.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -4681,16 +4559,26 @@
     },
     {
      "id": "a20_h10",
+     "x": 223.0,
+     "z": 5.5,
+     "width": 18.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a20_h11",
      "x": 219.5,
-     "z": -6.5,
+     "z": -2.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 11.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a20_h11",
+     "id": "a20_h12",
      "x": 228.5,
      "z": 39.5,
      "width": 5.0,
@@ -4711,15 +4599,6 @@
      "id": "a20_boss1",
      "x": 220.0,
      "z": 28.4,
-     "size": {
-      "w": 6,
-      "d": 6
-     }
-    },
-    {
-     "id": "a20_boss2",
-     "x": 220.0,
-     "z": 7.6,
      "size": {
       "w": 6,
       "d": 6
@@ -4910,8 +4789,8 @@
    "sheds": [
     {
      "id": "a21_shed1",
-     "x": 245.0,
-     "z": 5.0,
+     "x": 240.0,
+     "z": 7.0,
      "produces": "mixed",
      "mobile": true
     }
@@ -4941,16 +4820,6 @@
     },
     {
      "id": "a21_h2",
-     "x": 237.5,
-     "z": 7.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 5.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a21_h3",
      "x": 240.5,
      "z": -7.5,
      "width": 5.0,
@@ -4960,10 +4829,20 @@
      "dressing": "tree"
     },
     {
-     "id": "a21_h4",
-     "x": 239.0,
+     "id": "a21_h3",
+     "x": 241.0,
      "z": -0.5,
-     "width": 2.0,
+     "width": 6.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a21_h4",
+     "x": 244.5,
+     "z": -1.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -4981,6 +4860,16 @@
     },
     {
      "id": "a21_h6",
+     "x": 246.5,
+     "z": 2.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a21_h7",
      "x": 249.0,
      "z": 14.5,
      "width": 6.0,
@@ -4990,40 +4879,50 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h7",
-     "x": 249.5,
-     "z": 11.5,
+     "id": "a21_h8",
+     "x": 247.5,
+     "z": 6.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a21_h8",
-     "x": 250.0,
-     "z": 12.5,
-     "width": 2.0,
-     "height": 1.8,
-     "depth": 1.0,
+     "depth": 4.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a21_h9",
-     "x": 250.5,
-     "z": 13.5,
+     "x": 248.5,
+     "z": 9.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 3.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a21_h10",
+     "x": 249.5,
+     "z": 11.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 3.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a21_h11",
+     "x": 250.5,
+     "z": 13.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     }
    ],
    "notes": "seed store: recover, but never for free",
    "shed": {
-    "x": 245.0,
-    "z": 5.0,
+    "x": 240.0,
+    "z": 7.0,
     "produces": "mixed"
    },
    "garrison": [
@@ -5079,8 +4978,8 @@
     },
     {
      "kind": "brute",
-     "x": 243.25,
-     "z": 1.067
+     "x": 243.5,
+     "z": 1.5
     },
     {
      "kind": "bruiser",
@@ -5094,8 +4993,8 @@
     },
     {
      "kind": "heavy",
-     "x": 240.746,
-     "z": 0.672
+     "x": 240.688,
+     "z": 1.017
     },
     {
      "kind": "brute",
@@ -5133,13 +5032,6 @@
      "id": "a22_shed1",
      "x": 246.0,
      "z": 52.6,
-     "produces": "mixed",
-     "mobile": true
-    },
-    {
-     "id": "a22_shed2",
-     "x": 246.0,
-     "z": 31.4,
      "produces": "mixed",
      "mobile": true
     }
@@ -5209,6 +5101,36 @@
     },
     {
      "id": "a22_h6",
+     "x": 246.0,
+     "z": 31.5,
+     "width": 4.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h7",
+     "x": 244.5,
+     "z": 32.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h8",
+     "x": 245.5,
+     "z": 33.5,
+     "width": 3.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h9",
      "x": 245.5,
      "z": 61.5,
      "width": 3.0,
@@ -5218,7 +5140,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a22_h7",
+     "id": "a22_h10",
+     "x": 248.0,
+     "z": 32.5,
+     "width": 4.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h11",
      "x": 246.5,
      "z": 44.0,
      "width": 1.0,
@@ -5228,22 +5160,82 @@
      "dressing": "hedge"
     },
     {
-     "id": "a22_h8",
-     "x": 252.0,
-     "z": 25.5,
-     "width": 2.0,
+     "id": "a22_h12",
+     "x": 249.5,
+     "z": 30.5,
+     "width": 5.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a22_h9",
-     "x": 252.5,
+     "id": "a22_h13",
+     "x": 249.5,
+     "z": 29.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h14",
+     "x": 249.5,
+     "z": 31.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h15",
+     "x": 251.5,
+     "z": 25.5,
+     "width": 3.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h16",
+     "x": 250.5,
      "z": 26.5,
      "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h17",
+     "x": 251.0,
+     "z": 28.0,
+     "width": 2.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h18",
+     "x": 251.5,
+     "z": 29.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h19",
+     "x": 252.5,
+     "z": 27.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     }
@@ -5407,23 +5399,23 @@
     },
     {
      "kind": "launcher",
-     "x": 244.44,
-     "z": 35.413
+     "x": 245.943,
+     "z": 35.011
     },
     {
      "kind": "launcher",
-     "x": 250.3,
-     "z": 31.5
+     "x": 248.943,
+     "z": 34.011
     },
     {
      "kind": "launcher",
-     "x": 250.5,
+     "x": 253.05,
      "z": 29.5
     },
     {
      "kind": "launcher",
-     "x": 250.97,
-     "z": 27.03
+     "x": 254.05,
+     "z": 26.5
     }
    ]
   },
@@ -5446,13 +5438,6 @@
      "id": "a23_shed1",
      "x": 241.0,
      "z": 91.9,
-     "produces": "mixed",
-     "mobile": true
-    },
-    {
-     "id": "a23_shed2",
-     "x": 251.0,
-     "z": 76.1,
      "produces": "mixed",
      "mobile": true
     }
@@ -5682,9 +5667,9 @@
     },
     {
      "id": "a23_h22",
-     "x": 241.5,
+     "x": 242.5,
      "z": 71.5,
-     "width": 7.0,
+     "width": 9.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5712,9 +5697,9 @@
     },
     {
      "id": "a23_h25",
-     "x": 247.0,
+     "x": 245.0,
      "z": 84.5,
-     "width": 8.0,
+     "width": 4.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5733,10 +5718,10 @@
     {
      "id": "a23_h27",
      "x": 247.5,
-     "z": 83.5,
+     "z": 78.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 14.0,
      "shape": "box",
      "dressing": "tree"
     },
@@ -5773,17 +5758,17 @@
     {
      "id": "a23_h31",
      "x": 249.5,
-     "z": 91.5,
+     "z": 84.5,
      "width": 3.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "tree"
     },
     {
      "id": "a23_h32",
      "x": 249.5,
-     "z": 93.5,
+     "z": 91.5,
      "width": 3.0,
      "height": 1.8,
      "depth": 1.0,
@@ -5793,6 +5778,16 @@
     {
      "id": "a23_h33",
      "x": 249.5,
+     "z": 93.5,
+     "width": 3.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h34",
+     "x": 249.5,
      "z": 85.5,
      "width": 1.0,
      "height": 1.8,
@@ -5801,7 +5796,7 @@
      "dressing": "tree"
     },
     {
-     "id": "a23_h34",
+     "id": "a23_h35",
      "x": 249.5,
      "z": 92.5,
      "width": 1.0,
@@ -5811,7 +5806,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a23_h35",
+     "id": "a23_h36",
      "x": 249.5,
      "z": 97.5,
      "width": 1.0,
@@ -5821,7 +5816,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a23_h36",
+     "id": "a23_h37",
      "x": 251.5,
      "z": 90.5,
      "width": 1.0,
@@ -5831,7 +5826,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a23_h37",
+     "id": "a23_h38",
      "x": 251.5,
      "z": 97.5,
      "width": 1.0,
@@ -5841,7 +5836,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a23_h38",
+     "id": "a23_h39",
      "x": 254.5,
      "z": 97.5,
      "width": 3.0,
@@ -6145,12 +6140,12 @@
     },
     {
      "kind": "blinker",
-     "x": 253.561,
-     "z": 79.561
+     "x": 252.5,
+     "z": 78.5
     },
     {
      "kind": "blinker",
-     "x": 254.6,
+     "x": 254.5,
      "z": 78.5
     },
     {
@@ -6190,12 +6185,12 @@
     },
     {
      "kind": "blinker",
-     "x": 255.156,
-     "z": 77.212
+     "x": 252.5,
+     "z": 76.5
     },
     {
      "kind": "blinker",
-     "x": 255.3,
+     "x": 254.5,
      "z": 76.5
     },
     {
@@ -6220,12 +6215,12 @@
     },
     {
      "kind": "blinker",
-     "x": 253.575,
-     "z": 72.638
+     "x": 252.5,
+     "z": 74.5
     },
     {
      "kind": "blinker",
-     "x": 255.0,
+     "x": 254.5,
      "z": 74.5
     },
     {
@@ -6498,15 +6493,8 @@
    "sheds": [
     {
      "id": "a25_shed1",
-     "x": 269.0,
-     "z": 113.4,
-     "produces": "mixed",
-     "mobile": true
-    },
-    {
-     "id": "a25_shed2",
-     "x": 277.0,
-     "z": 96.6,
+     "x": 270.0,
+     "z": 116.5,
      "produces": "mixed",
      "mobile": true
     }
@@ -6526,9 +6514,9 @@
    "cover": [
     {
      "id": "a25_h1",
-     "x": 263.0,
+     "x": 265.5,
      "z": 106.5,
-     "width": 6.0,
+     "width": 11.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -6546,9 +6534,9 @@
     },
     {
      "id": "a25_h3",
-     "x": 261.5,
+     "x": 265.5,
      "z": 108.5,
-     "width": 3.0,
+     "width": 11.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -6586,16 +6574,66 @@
     },
     {
      "id": "a25_h7",
-     "x": 269.5,
-     "z": 102.5,
-     "width": 5.0,
+     "x": 262.5,
+     "z": 114.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
+     "id": "a25_h8",
+     "x": 263.5,
+     "z": 111.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
+     "id": "a25_h9",
+     "x": 264.5,
+     "z": 107.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a25_h8",
+     "id": "a25_h10",
+     "x": 266.5,
+     "z": 107.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h11",
+     "x": 270.0,
+     "z": 102.5,
+     "width": 6.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h12",
+     "x": 268.5,
+     "z": 107.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h13",
      "x": 269.5,
      "z": 93.5,
      "width": 1.0,
@@ -6605,27 +6643,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h9",
-     "x": 275.0,
+     "id": "a25_h14",
+     "x": 270.5,
      "z": 105.5,
-     "width": 12.0,
+     "width": 3.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a25_h10",
-     "x": 278.0,
-     "z": 106.5,
-     "width": 12.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
-     "id": "a25_h11",
+     "id": "a25_h15",
      "x": 274.5,
      "z": 107.5,
      "width": 1.0,
@@ -6635,17 +6663,37 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h12",
-     "x": 279.0,
+     "id": "a25_h16",
+     "x": 278.5,
      "z": 108.5,
-     "width": 8.0,
+     "width": 9.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a25_h13",
+     "id": "a25_h17",
+     "x": 279.5,
+     "z": 106.5,
+     "width": 9.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
+     "id": "a25_h18",
+     "x": 278.5,
+     "z": 105.5,
+     "width": 5.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h19",
      "x": 276.5,
      "z": 107.5,
      "width": 1.0,
@@ -6655,7 +6703,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h14",
+     "id": "a25_h20",
      "x": 281.0,
      "z": 111.5,
      "width": 10.0,
@@ -6665,17 +6713,17 @@
      "dressing": "tree"
     },
     {
-     "id": "a25_h15",
-     "x": 278.5,
+     "id": "a25_h21",
+     "x": 279.0,
      "z": 114.5,
-     "width": 5.0,
+     "width": 4.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "tree"
     },
     {
-     "id": "a25_h16",
+     "id": "a25_h22",
      "x": 278.5,
      "z": 107.5,
      "width": 1.0,
@@ -6685,7 +6733,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h17",
+     "id": "a25_h23",
      "x": 280.5,
      "z": 107.5,
      "width": 1.0,
@@ -6695,7 +6743,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h18",
+     "id": "a25_h24",
      "x": 282.5,
      "z": 107.5,
      "width": 1.0,
@@ -6705,7 +6753,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h19",
+     "id": "a25_h25",
      "x": 283.5,
      "z": 105.5,
      "width": 1.0,
@@ -6715,7 +6763,7 @@
      "dressing": "tree"
     },
     {
-     "id": "a25_h20",
+     "id": "a25_h26",
      "x": 283.5,
      "z": 108.0,
      "width": 1.0,
@@ -6727,8 +6775,8 @@
    ],
    "notes": "orchard: long lanes between the trees",
    "shed": {
-    "x": 269.0,
-    "z": 113.4,
+    "x": 270.0,
+    "z": 116.5,
     "produces": "mixed"
    },
    "garrison": [
@@ -6779,38 +6827,38 @@
     },
     {
      "kind": "launcher",
-     "x": 264.03,
-     "z": 108.03
+     "x": 263.057,
+     "z": 104.989
     },
     {
      "kind": "launcher",
-     "x": 265.688,
-     "z": 108.017
+     "x": 265.943,
+     "z": 110.011
     },
     {
      "kind": "launcher",
-     "x": 267.5,
+     "x": 267.943,
+     "z": 110.011
+    },
+    {
+     "kind": "launcher",
+     "x": 271.9,
      "z": 107.5
     },
     {
      "kind": "launcher",
-     "x": 269.5,
+     "x": 271.9,
      "z": 107.5
     },
     {
      "kind": "launcher",
-     "x": 271.328,
-     "z": 107.746
-    },
-    {
-     "kind": "launcher",
-     "x": 272.97,
-     "z": 108.03
+     "x": 272.983,
+     "z": 107.688
     },
     {
      "kind": "launcher",
      "x": 273.98,
-     "z": 109.02
+     "z": 105.98
     },
     {
      "kind": "launcher",
@@ -6869,13 +6917,13 @@
     },
     {
      "kind": "launcher",
-     "x": 277.395,
-     "z": 92.305
+     "x": 277.5,
+     "z": 93.5
     },
     {
      "kind": "launcher",
-     "x": 279.591,
-     "z": 93.162
+     "x": 279.5,
+     "z": 93.5
     },
     {
      "kind": "launcher",
@@ -6926,8 +6974,8 @@
    "sheds": [
     {
      "id": "a26_shed1",
-     "x": 279.0,
-     "z": 72.0,
+     "x": 273.0,
+     "z": 76.0,
      "produces": "mixed",
      "mobile": true
     }
@@ -6958,30 +7006,30 @@
     {
      "id": "a26_h2",
      "x": 268.5,
-     "z": 68.0,
+     "z": 66.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 10.0,
+     "depth": 7.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a26_h3",
-     "x": 272.0,
-     "z": 79.5,
-     "width": 8.0,
+     "x": 268.5,
+     "z": 82.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
-     "dressing": "planter"
+     "dressing": "hedge"
     },
     {
      "id": "a26_h4",
      "x": 270.5,
-     "z": 84.0,
+     "z": 84.5,
      "width": 5.0,
      "height": 1.8,
-     "depth": 4.0,
+     "depth": 3.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -6998,10 +7046,10 @@
     {
      "id": "a26_h6",
      "x": 271.5,
-     "z": 68.0,
+     "z": 66.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 10.0,
+     "depth": 6.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -7018,28 +7066,28 @@
     {
      "id": "a26_h8",
      "x": 274.5,
-     "z": 64.5,
+     "z": 66.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 6.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a26_h9",
      "x": 276.5,
-     "z": 64.0,
+     "z": 66.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 2.0,
+     "depth": 6.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a26_h10",
-     "x": 282.0,
+     "x": 279.0,
      "z": 61.5,
-     "width": 8.0,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -7047,36 +7095,56 @@
     },
     {
      "id": "a26_h11",
-     "x": 281.0,
+     "x": 280.5,
+     "z": 67.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 13.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a26_h12",
+     "x": 281.5,
      "z": 79.5,
-     "width": 4.0,
+     "width": 3.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "planter"
     },
     {
-     "id": "a26_h12",
-     "x": 280.5,
-     "z": 63.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 3.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
      "id": "a26_h13",
-     "x": 282.5,
-     "z": 63.5,
+     "x": 281.5,
+     "z": 61.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a26_h14",
+     "x": 282.5,
+     "z": 67.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 12.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a26_h15",
+     "x": 284.5,
+     "z": 61.5,
+     "width": 3.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a26_h16",
      "x": 285.0,
      "z": 78.5,
      "width": 4.0,
@@ -7088,29 +7156,29 @@
    ],
    "notes": "the turn - blinkers own the corner",
    "shed": {
-    "x": 279.0,
-    "z": 72.0,
+    "x": 273.0,
+    "z": 76.0,
     "produces": "mixed"
    },
    "garrison": [
     {
      "kind": "blinker",
-     "x": 273.05,
+     "x": 272.5,
      "z": 71.5
     },
     {
      "kind": "blinker",
-     "x": 274.712,
-     "z": 71.639
-    },
-    {
-     "kind": "blinker",
-     "x": 283.3,
+     "x": 275.5,
      "z": 71.5
     },
     {
      "kind": "blinker",
-     "x": 283.5,
+     "x": 284.05,
+     "z": 71.5
+    },
+    {
+     "kind": "blinker",
+     "x": 284.05,
      "z": 71.5
     },
     {
@@ -7120,37 +7188,37 @@
     },
     {
      "kind": "bolter",
-     "x": 273.05,
-     "z": 69.5
+     "x": 270.535,
+     "z": 69.898
     },
     {
      "kind": "blinker",
-     "x": 273.05,
-     "z": 69.5
+     "x": 272.746,
+     "z": 69.672
     },
     {
      "kind": "blinker",
-     "x": 275.5,
-     "z": 69.5
+     "x": 275.535,
+     "z": 69.898
     },
     {
      "kind": "bolter",
-     "x": 276.6,
-     "z": 68.428
+     "x": 277.746,
+     "z": 69.672
     },
     {
      "kind": "bolter",
-     "x": 277.739,
-     "z": 67.869
+     "x": 278.5,
+     "z": 69.5
     },
     {
      "kind": "blinker",
-     "x": 281.9,
-     "z": 68.807
+     "x": 284.05,
+     "z": 69.5
     },
     {
      "kind": "blinker",
-     "x": 283.5,
+     "x": 284.05,
      "z": 69.5
     },
     {
@@ -7165,22 +7233,22 @@
     },
     {
      "kind": "bolter",
-     "x": 273.05,
-     "z": 67.5
+     "x": 270.5,
+     "z": 69.9
     },
     {
      "kind": "blinker",
-     "x": 273.05,
-     "z": 67.5
+     "x": 272.979,
+     "z": 69.287
     },
     {
      "kind": "blinker",
      "x": 275.5,
-     "z": 67.5
+     "z": 69.9
     },
     {
      "kind": "bolter",
-     "x": 277.5,
+     "x": 278.05,
      "z": 67.5
     },
     {
@@ -7190,12 +7258,12 @@
     },
     {
      "kind": "blinker",
-     "x": 281.5,
+     "x": 284.05,
      "z": 67.5
     },
     {
      "kind": "blinker",
-     "x": 283.5,
+     "x": 284.05,
      "z": 67.5
     },
     {
@@ -7210,23 +7278,23 @@
     },
     {
      "kind": "bolter",
-     "x": 273.011,
-     "z": 66.173
+     "x": 266.964,
+     "z": 65.809
     },
     {
      "kind": "blinker",
-     "x": 273.016,
-     "z": 66.237
+     "x": 272.853,
+     "z": 69.535
     },
     {
      "kind": "blinker",
-     "x": 276.03,
-     "z": 66.03
+     "x": 278.05,
+     "z": 65.5
     },
     {
      "kind": "bolter",
-     "x": 277.746,
-     "z": 65.672
+     "x": 278.05,
+     "z": 65.5
     },
     {
      "kind": "bolter",
@@ -7235,13 +7303,13 @@
     },
     {
      "kind": "blinker",
-     "x": 281.535,
-     "z": 65.898
+     "x": 284.05,
+     "z": 65.5
     },
     {
      "kind": "blinker",
-     "x": 283.746,
-     "z": 65.672
+     "x": 284.05,
+     "z": 65.5
     },
     {
      "kind": "bolter",
@@ -7414,7 +7482,6 @@
    ],
    "notes": "three sheds, all walking",
    "shed": {
-    "id": "a27_shed1",
     "x": 269.0,
     "z": 47.4,
     "produces": "mixed"
@@ -7841,13 +7908,6 @@
      "z": 66.8,
      "produces": "mixed",
      "mobile": true
-    },
-    {
-     "id": "a29_shed2",
-     "x": 321.0,
-     "z": 49.2,
-     "produces": "mixed",
-     "mobile": true
     }
    ],
    "garrisonDensity": "normal",
@@ -7975,9 +8035,9 @@
     },
     {
      "id": "a29_h12",
-     "x": 312.5,
+     "x": 314.0,
      "z": 47.5,
-     "width": 3.0,
+     "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -8025,6 +8085,16 @@
     },
     {
      "id": "a29_h17",
+     "x": 314.5,
+     "z": 51.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h18",
      "x": 315.5,
      "z": 41.5,
      "width": 1.0,
@@ -8034,7 +8104,67 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h18",
+     "id": "a29_h19",
+     "x": 315.5,
+     "z": 52.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h20",
+     "x": 316.5,
+     "z": 48.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h21",
+     "x": 316.5,
+     "z": 53.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h22",
+     "x": 317.5,
+     "z": 46.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h23",
+     "x": 317.5,
+     "z": 49.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h24",
+     "x": 317.5,
+     "z": 54.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h25",
      "x": 319.0,
      "z": 73.0,
      "width": 4.0,
@@ -8044,7 +8174,77 @@
      "dressing": "tree"
     },
     {
-     "id": "a29_h19",
+     "id": "a29_h26",
+     "x": 318.5,
+     "z": 45.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h27",
+     "x": 318.5,
+     "z": 50.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h28",
+     "x": 318.5,
+     "z": 55.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h29",
+     "x": 321.5,
+     "z": 43.5,
+     "width": 5.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h30",
+     "x": 319.5,
+     "z": 44.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h31",
+     "x": 319.5,
+     "z": 51.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h32",
+     "x": 319.5,
+     "z": 56.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h33",
      "x": 321.5,
      "z": 61.0,
      "width": 5.0,
@@ -8054,7 +8254,27 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h20",
+     "id": "a29_h34",
+     "x": 320.5,
+     "z": 42.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h35",
+     "x": 324.0,
+     "z": 52.5,
+     "width": 8.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h36",
      "x": 322.0,
      "z": 41.5,
      "width": 2.0,
@@ -8064,7 +8284,27 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h21",
+     "id": "a29_h37",
+     "x": 325.5,
+     "z": 47.5,
+     "width": 9.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h38",
+     "x": 324.0,
+     "z": 42.5,
+     "width": 2.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h39",
      "x": 326.5,
      "z": 56.5,
      "width": 7.0,
@@ -8074,19 +8314,9 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h22",
-     "x": 326.5,
+     "id": "a29_h40",
+     "x": 326.0,
      "z": 43.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a29_h23",
-     "x": 329.0,
-     "z": 47.5,
      "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
@@ -8273,22 +8503,22 @@
     },
     {
      "kind": "bolter",
-     "x": 318.5,
-     "z": 53.5
+     "x": 318.672,
+     "z": 53.254
     },
     {
      "kind": "bolter",
-     "x": 316.5,
-     "z": 51.5
+     "x": 316.672,
+     "z": 51.254
     },
     {
      "kind": "bolter",
-     "x": 324.535,
-     "z": 51.675
+     "x": 322.5,
+     "z": 50.5
     },
     {
      "kind": "bolter",
-     "x": 325.1,
+     "x": 324.5,
      "z": 50.5
     },
     {
@@ -8303,13 +8533,13 @@
     },
     {
      "kind": "bolter",
-     "x": 318.09,
-     "z": 52.373
+     "x": 320.5,
+     "z": 49.5
     },
     {
      "kind": "bolter",
-     "x": 317.93,
-     "z": 46.182
+     "x": 319.5,
+     "z": 47.5
     },
     {
      "kind": "bolter",
@@ -8323,8 +8553,8 @@
     },
     {
      "kind": "bolter",
-     "x": 321.396,
-     "z": 44.909
+     "x": 321.5,
+     "z": 45.5
     },
     {
      "kind": "bolter",
@@ -8363,8 +8593,8 @@
     },
     {
      "kind": "launcher",
-     "x": 321.688,
-     "z": 43.017
+     "x": 319.98,
+     "z": 40.98
     },
     {
      "kind": "bolter",
@@ -8468,9 +8698,9 @@
     },
     {
      "id": "a30_h5",
-     "x": 305.0,
+     "x": 304.5,
      "z": 80.5,
-     "width": 8.0,
+     "width": 7.0,
      "height": 1.8,
      "depth": 5.0,
      "shape": "box",
@@ -8478,9 +8708,9 @@
     },
     {
      "id": "a30_h6",
-     "x": 307.0,
+     "x": 306.0,
      "z": 94.5,
-     "width": 8.0,
+     "width": 6.0,
      "height": 1.8,
      "depth": 5.0,
      "shape": "box",
@@ -8518,9 +8748,79 @@
     },
     {
      "id": "a30_h10",
+     "x": 308.5,
+     "z": 79.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 3.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a30_h11",
+     "x": 309.5,
+     "z": 93.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h12",
+     "x": 310.0,
+     "z": 95.5,
+     "width": 2.0,
+     "height": 1.8,
+     "depth": 3.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h13",
      "x": 310.0,
      "z": 122.5,
      "width": 2.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h14",
+     "x": 312.0,
+     "z": 96.5,
+     "width": 2.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h15",
+     "x": 332.5,
+     "z": 96.5,
+     "width": 11.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h16",
+     "x": 334.5,
+     "z": 113.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h17",
+     "x": 335.5,
+     "z": 112.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -8540,17 +8840,8 @@
     },
     {
      "id": "a30_boss2",
-     "x": 329.2,
-     "z": 106.0,
-     "size": {
-      "w": 6,
-      "d": 6
-     }
-    },
-    {
-     "id": "a30_boss3",
-     "x": 323.0,
-     "z": 92.6,
+     "x": 320.0,
+     "z": 86.0,
      "size": {
       "w": 6,
       "d": 6

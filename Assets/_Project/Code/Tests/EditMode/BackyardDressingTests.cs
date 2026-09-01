@@ -276,8 +276,10 @@ namespace MaxWorlds.Tests.EditMode
                                                .Select(f => f.CenterXz).ToList();
 
             // MV-564: v4's redraw raises world 1 to 37 authored sheds across 21 areas. MV-639's V12
-            // batch-1 redraw (2026-09-01) drops a8's shed, lowering the total to 32.
-            Assert.AreEqual(32, rings.Count, "World1 ships thirty-two sheds");
+            // batch-1 redraw (2026-09-01) drops a8's shed, lowering the total to 32. MV-641's V12c
+            // correction removes every shed the design sheet does not draw, capping every area at
+            // one shed and lowering the total to 17.
+            Assert.AreEqual(17, rings.Count, "World1 ships seventeen sheds");
 
             var shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
             Assert.IsNotEmpty(shedProps, "no shed was dressed at all");
