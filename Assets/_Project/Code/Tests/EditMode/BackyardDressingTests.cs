@@ -275,8 +275,9 @@ namespace MaxWorlds.Tests.EditMode
             List<Vector2> rings = MapValidation.Kind(Map, EntityKind.Factory)
                                                .Select(f => f.CenterXz).ToList();
 
-            // MV-564: v4's redraw raises world 1 to 37 authored sheds across 21 areas.
-            Assert.AreEqual(37, rings.Count, "World1 ships thirty-seven sheds");
+            // MV-564: v4's redraw raises world 1 to 37 authored sheds across 21 areas. MV-639's V12
+            // batch-1 redraw (2026-09-01) drops a8's shed, lowering the total to 32.
+            Assert.AreEqual(32, rings.Count, "World1 ships thirty-two sheds");
 
             var shedProps = Set().Where(p => p.Zone == DressingZone.Factory).ToList();
             Assert.IsNotEmpty(shedProps, "no shed was dressed at all");
