@@ -109,7 +109,7 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageFractionNeverExceedsOneAndOnlyReachesItAtTheMaxLevel()
+        public void DamageFractionNeverExceedsOneAndCapsAtHalfAtTheMaxLevel()
         {
             int maxLevel = RigBoard.MaxLevel("u_dmg");
             for (int level = 0; level <= maxLevel; level++)
@@ -121,12 +121,11 @@ namespace MaxWorlds.Tests.EditMode
                 if (level < maxLevel)
                     Assert.That(fraction, Is.LessThan(1f), $"level {level} must stay strictly below the max level");
             }
-            // MV-610: a maxed u_dmg track now matches Max's current primary output exactly, rather
-            // than always staying strictly below it — the DECISION's floor moved from "always weaker"
-            // to "never stronger".
+            // MV-634: a maxed u_dmg track now lands at half of Max's own current primary output, down
+            // from MV-610's exact 1.0 — sentinels were still knocking out robots too quickly.
             Assert.That(AbilityTuning.SentinelDamageFraction(
                 maxLevel, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel),
-                Is.EqualTo(1f).Within(1e-4f), "the max level must land exactly on 1.0, matching Max's output when fully invested");
+                Is.EqualTo(0.5f).Within(1e-4f), "the max level must land exactly on 0.5, half of Max's output when fully invested");
         }
 
         [Test]
@@ -139,7 +138,7 @@ namespace MaxWorlds.Tests.EditMode
                     primaryDamage, level,
                     AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
                 Assert.That(shot, Is.LessThanOrEqualTo(primaryDamage),
-                    "MV-610: sentinel damage may now match Max's own current primary at the max level, but never exceed it");
+                    "sentinel damage per shot must never exceed Max's own current primary");
             }
         }
 
