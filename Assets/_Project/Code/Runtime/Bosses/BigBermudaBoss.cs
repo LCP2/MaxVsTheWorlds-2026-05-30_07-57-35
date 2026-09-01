@@ -129,6 +129,13 @@ namespace MaxWorlds.Bosses
         /// the machine is standing there the whole time, and it should look asleep, not switched off.</summary>
         public bool Engaged => _phase == Phase.Intro || _phase == Phase.Fight;
 
+        /// <summary>True once THIS boss has actually died (MV-625). <see cref="HudSignals.BossDefeated"/>
+        /// is a scene-wide signal with no boss identity on it — every bound <see cref="BigBermudaRig"/>
+        /// hears it whenever ANY boss anywhere dies — so a rig must check this before starting its own
+        /// death sequence, or every other still-living boss on the map (dormant or mid-fight) plays dead
+        /// and deactivates the instant the first one falls.</summary>
+        public bool IsDead => _phase == Phase.Dead;
+
         /// <summary>The brood-volley spawn telegraph, 0 shut … 1 flung (YT-157). This is the ONE getter
         /// <see cref="MaxWorlds.VFX.BigBermudaRig"/> reads to open the side hatches — the gameplay says
         /// when the swarm is coming, the rig shows it, and nothing writes back the other way. 0 whenever
