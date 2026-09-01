@@ -20,6 +20,13 @@ namespace MaxWorlds.Tests.EditMode
     /// Update outside Play mode. <c>SpawnDrop</c> is invoked directly too, rather than routing through
     /// <c>DropSignals.EmitRobotDied</c>'s scatter pattern, so each test places exactly one pickup at an
     /// exact, deterministic distance from Max instead of a random ring of them.
+    ///
+    /// MV-626: <c>SpawnDrop</c> now refuses to create a power cell at all once the reserve is already
+    /// full (change 1 — an uncollectable cell must never even be spawned). That means every fixture here
+    /// spawns its cell BEFORE calling <see cref="FillReserve"/>, not after — this suite is about what
+    /// happens to a cell that's already on the ground when the reserve fills up under it (a walk-over
+    /// racing a different pickup's collection), which is a real scenario MV-626's spawn-time gate doesn't
+    /// touch and doesn't obsolete.
     /// </summary>
     public sealed class MV439CellCapacityRefusalTests
     {
@@ -73,9 +80,9 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ACellWalkedOverAtCapacityStaysActiveAndInLive()
         {
+            SpawnCellAt(_director, Vector3.zero);   // MV-626: spawn while there's still room
             FillReserve();
             int before = PickupWallet.PowerCells;
-            SpawnCellAt(_director, Vector3.zero);
             _maxGo.transform.position = Vector3.zero;   // inside CollectRadius
 
             InvokeUpdate(_director);
@@ -89,13 +96,13 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void NoPlusOneCellHudEventFiresWhenTheReserveIsFull()
         {
+            SpawnCellAt(_director, Vector3.zero);   // MV-626: spawn while there's still room
             FillReserve();
             int fired = 0;
             void Handler(Vector3 pos, string label, Color c) { if (label == "+1 CELL") fired++; }
             HudSignals.Pickup += Handler;
             try
             {
-                SpawnCellAt(_director, Vector3.zero);
                 _maxGo.transform.position = Vector3.zero;
                 InvokeUpdate(_director);
                 Assert.That(fired, Is.EqualTo(0), "a refused pickup must never claim a gain that didn't happen");
@@ -106,13 +113,13 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void TheRefusedTellFiresAtMostOncePerEntryIntoRadius_NotPerFrame()
         {
+            SpawnCellAt(_director, Vector3.zero);   // MV-626: spawn while there's still room
             FillReserve();
             int fired = 0;
             void Handler(Vector3 pos, string label, Color c) { if (label == "RESERVE FULL") fired++; }
             HudSignals.Pickup += Handler;
             try
             {
-                SpawnCellAt(_director, Vector3.zero);
                 _maxGo.transform.position = Vector3.zero;
 
                 InvokeUpdate(_director);
@@ -132,8 +139,8 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void ARefusedCellIsCollectedNormallyOnceTheReserveDropsBelowTheCeiling()
         {
+            SpawnCellAt(_director, Vector3.zero);   // MV-626: spawn while there's still room
             FillReserve();
-            SpawnCellAt(_director, Vector3.zero);
             _maxGo.transform.position = Vector3.zero;
             InvokeUpdate(_director);
             Assert.That(LiveList(_director).Count, Is.EqualTo(1), "still refused, still on the ground");
@@ -157,11 +164,13 @@ namespace MaxWorlds.Tests.EditMode
             for (int level = 1; level <= maxLevel; level++)
             {
                 PickupWallet.SetPowerCells(0);
-                FillReserve();
 
                 // 2m out: inside every level's Magneto pull radius (3m base, up to 11m) but outside
                 // the 1.4m walk-over CollectRadius, so only the Magneto branch is under test here.
+                // MV-626: spawn while there's still room, then fill — SpawnDrop now refuses to create
+                // a cell into an already-full reserve.
                 SpawnCellAt(_director, new Vector3(2f, 0f, 0f));
+                FillReserve();
                 _maxGo.transform.position = Vector3.zero;
 
                 var cell = LiveList(_director)[0];

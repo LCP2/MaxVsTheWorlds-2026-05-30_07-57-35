@@ -58,6 +58,34 @@ namespace MaxWorlds.VFX
         // and a field initializer runs earlier than that, as part of the object's construction.
         private MaterialPropertyBlock _mpb;
 
+        // MV-626, change 4: Update used to re-resolve every live pickup's art child, glint dots and
+        // Core band by name — Transform.Find plus a TryGetComponent — every single frame, for every
+        // live pickup, even though none of that ever moves once built. ArtState caches what
+        // BuildArtState resolves on registration (once per placement, not once per frame) so Update
+        // only ever reads already-resolved references.
+        private sealed class ArtState
+        {
+            public Transform Art;
+            public MeshRenderer Core;
+            public MeshRenderer[] Glisten;
+            public GroundRing Ring;
+            public GroundRing RingOuter;
+            public GroundRing RingInner;
+        }
+
+        private readonly Dictionary<Pickup, ArtState> _artState = new Dictionary<Pickup, ArtState>();
+
+        /// <summary>The most glint dots any single prop wears (the power cell's four) — resolving up to
+        /// this many per build covers every kind; a design with fewer just leaves the extra slots null,
+        /// which <see cref="PulseGlisten"/> already treats as a harmless no-op.</summary>
+        private const int MaxGlistenSlots = 4;
+
+        /// <summary>How many times this director actually walked a pickup's children to resolve its art
+        /// (Transform.Find/GetComponent) — test-only instrumentation (MV-626) proving Update() reuses
+        /// the cache instead of re-resolving every frame, same idiom as
+        /// <c>DissolveVfx._meshFilterCacheMisses</c>.</summary>
+        private int _artResolveCount;
+
         private void Awake() => _mpb = new MaterialPropertyBlock();
 
         /// <summary>The collectible language colour: shared with the HUD part-ready chip so the tell
@@ -151,14 +179,24 @@ namespace MaxWorlds.VFX
         private void OnEnable() => Pickup.Registered += OnPickupRegistered;
         private void OnDisable() => Pickup.Registered -= OnPickupRegistered;
 
-        /// <summary>MV-527: the reroll that used to happen inline in <c>Update</c>'s Supercell branch,
-        /// diffed every frame off an active/inactive dictionary — now driven by the placement event
-        /// itself, once. A non-Supercell kind never rerolls (PowerCell/Device always wear the same fixed
-        /// key), so this is a no-op for them.</summary>
+        /// <summary>MV-527: driven once per placement instead of polling an active/inactive transition
+        /// every frame. MV-626: now resolves and caches this pickup's whole art state here too (a fresh
+        /// drop or a pooled reuse) instead of the per-frame Transform.Find/GetComponent walk Update used
+        /// to do for every live pickup. A Supercell rerolls its design (unchanged from before);
+        /// PowerCell/Device always wear the same fixed key, so on a pooled reuse this just re-finds the
+        /// art it built last time it wore that kind rather than rebuilding it.</summary>
         private void OnPickupRegistered(Pickup pickup)
         {
-            if (pickup.Kind != PickupKind.Supercell) return;
-            RollNewPartKey(pickup);
+            string key = pickup.Kind switch
+            {
+                PickupKind.PowerCell => WeaponPartArt.Keys.PowerCell,
+                PickupKind.Device => WeaponPartArt.Keys.HydroDevice,
+                PickupKind.Supercell => RollNewPartKey(pickup),
+                _ => null,
+            };
+            if (key == null) return;
+
+            BuildArtState(pickup, key);
         }
 
         /// <summary>Picks a fresh machine-internals design, remembers it, and clears out whatever design
@@ -171,115 +209,120 @@ namespace MaxWorlds.VFX
             return key;
         }
 
+        /// <summary>Resolves (building if this pooled instance has never worn this key before) and
+        /// caches the art Transform plus its Core/Glisten renderers — the one place this director is
+        /// allowed to call Transform.Find/GetComponent for a pickup's art (MV-626, change 4).</summary>
+        private void BuildArtState(Pickup pickup, string key)
+        {
+            _artResolveCount++;
+
+            string want = ArtPrefix + key;
+            Transform art = FindArt(pickup.transform, want);
+            if (art == null)
+            {
+                art = Build(pickup, want);
+                HideGreybox(pickup.transform);
+            }
+
+            if (!_artState.TryGetValue(pickup, out ArtState state))
+            {
+                state = new ArtState();
+                _artState[pickup] = state;
+            }
+
+            state.Art = art;
+            state.Core = null;
+            state.Glisten = null;
+
+            if (art != null)
+            {
+                state.Core = ResolveRenderer(art, CellCoreName);
+                state.Glisten = new MeshRenderer[MaxGlistenSlots];
+                for (int i = 0; i < MaxGlistenSlots; i++)
+                    state.Glisten[i] = ResolveRenderer(art, WeaponPartArt.GlistenPrefix + i);
+            }
+        }
+
+        private static MeshRenderer ResolveRenderer(Transform parent, string childName)
+        {
+            var child = parent.Find(childName);
+            return child != null && child.TryGetComponent<MeshRenderer>(out var r) ? r : null;
+        }
+
         private void Update()
         {
             // MV-527: Pickup.Active — every currently-placed pickup, self-registered on enable/disable —
-            // instead of a per-frame FindObjectsByType<Pickup>(Include) scan of the whole scene. A pooled,
-            // not-yet-dropped pickup sits inactive and out of this list, so it also stops being spun,
-            // pulsed and re-Find()'d for nothing every frame while it isn't even on the ground.
+            // instead of a per-frame FindObjectsByType<Pickup>(Include) scan of the whole scene. MV-626:
+            // every art/glint/ring lookup below used to re-resolve by name every frame too (change 4) —
+            // now everything here reads a cache BuildArtState/ShowRing already resolved on placement.
             foreach (var pickup in Pickup.Active)
             {
-                // The power cell always wears the same swapped-in prop; a PART wears one of the
-                // machine-internals designs, rerolled per drop in the branch below (MV-305).
-                if (pickup.Kind == PickupKind.PowerCell)
+                if (!_artState.TryGetValue(pickup, out ArtState state)) continue;
+
+                Transform art = state.Art;
+                if (art != null)
                 {
-                    string want = ArtPrefix + WeaponPartArt.Keys.PowerCell;
-                    Transform art = FindArt(pickup.transform, want);
-
-                    if (art == null)
-                    {
-                        art = Build(pickup, want);
-                        HideGreybox(pickup.transform);
-                    }
-
                     // Spin it here rather than lean on the pickup's own spin: the pickup spins its greybox
                     // child, which we hid, so the art needs its own turn. Unscaled so it keeps turning while
                     // the upgrade screen has the game paused with a cell still on the ground.
-                    if (art != null)
+                    art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
+
+                    if (pickup.Kind == PickupKind.PowerCell)
                     {
-                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
                         // The GLISTEN/SHIMMER (YT-167, extended WV-236): flicker whichever specular dots
-                        // WeaponPartArt built onto this prop — a missing index is a harmless no-op
-                        // (PulseGlisten below bails if it can't find the child). Combined with the spin
-                        // above, this is what sells "shiny" — a highlight that visibly travels the
-                        // surface and catches the light, not just a halo around it.
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "3", 4.6f);
+                        // WeaponPartArt built onto this prop — a missing slot is a harmless no-op.
+                        // Combined with the spin above, this is what sells "shiny" — a highlight that
+                        // visibly travels the surface and catches the light, not just a halo around it.
+                        PulseGlisten(state.Glisten[0], 0f);
+                        PulseGlisten(state.Glisten[1], 1.7f);
+                        PulseGlisten(state.Glisten[2], 3.1f);
+                        PulseGlisten(state.Glisten[3], 4.6f);
                         // The gentle RADIATE (MV-304): the "Core" charge band WeaponPartArt built is
                         // otherwise a static light — breathing it slowly sells "energy source", not
                         // "lamp". Deliberately calmer and slower than the ground ring's pulse (the
                         // ticket's own "far gentler than a radiant star") so the two don't compete —
                         // the cell's own charge is a quiet pulse above the "grab me" ring below it.
-                        PulseCellCore(art);
+                        PulseCellCore(state.Core);
                     }
-                }
-                else if (pickup.Kind == PickupKind.Supercell)
-                {
-                    // MV-305: every dropped Supercell wears one of the machine-internals designs, rerolled
-                    // per drop — MV-527: by OnPickupRegistered when it was placed, not here. Defensive
-                    // fallback if this pickup was somehow never seen registering (should not happen on the
-                    // live path — Pickup.Registered always fires before this frame's Update).
-                    if (!_partArtKey.TryGetValue(pickup, out string key)) key = RollNewPartKey(pickup);
-                    string want = ArtPrefix + key;
-                    Transform art = FindArt(pickup.transform, want);
-
-                    if (art == null)
+                    else if (pickup.Kind == PickupKind.Supercell)
                     {
-                        art = Build(pickup, want);
-                        HideGreybox(pickup.transform);
-                    }
-
-                    if (art != null)
-                    {
-                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
                         // Each machine-internals design carries one or two glint dots (WeaponPartArt);
-                        // a missing index is a harmless no-op, so one fixed loop covers every design
+                        // a missing slot is a harmless no-op, so one fixed loop covers every design
                         // without the director needing to know which one this pickup rolled.
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
+                        PulseGlisten(state.Glisten[0], 0f);
+                        PulseGlisten(state.Glisten[1], 1.7f);
                     }
-                }
-                else if (pickup.Kind == PickupKind.Device)
-                {
-                    // MV-308: the shed's ability grant wears the same always-the-same swapped prop the
-                    // power cell does (its kind, like the cell's, never changes once built).
-                    string want = ArtPrefix + WeaponPartArt.Keys.HydroDevice;
-                    Transform art = FindArt(pickup.transform, want);
-
-                    if (art == null)
+                    else if (pickup.Kind == PickupKind.Device)
                     {
-                        art = Build(pickup, want);
-                        HideGreybox(pickup.transform);
-                    }
-
-                    if (art != null)
-                    {
-                        art.Rotate(0f, SpinDegreesPerSecond * Time.unscaledDeltaTime, 0f, Space.Self);
                         // The prop's three built-in glisten dots (WeaponPartArt.BuildHydroDevice) —
                         // shimmer it the same "diamonds catching light" way the cell and parts get.
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "0", 0f);
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "1", 1.7f);
-                        PulseGlisten(art, WeaponPartArt.GlistenPrefix + "2", 3.1f);
+                        PulseGlisten(state.Glisten[0], 0f);
+                        PulseGlisten(state.Glisten[1], 1.7f);
+                        PulseGlisten(state.Glisten[2], 3.1f);
                         // MV-308 AC: "the glowing radiance the power cells have" — the same gentle
                         // MV-304 Core breathe, not just the shared "grab me" ring below it.
-                        PulseCellCore(art);
+                        PulseCellCore(state.Core);
                     }
                 }
 
-                DressGroundRing(pickup.transform, pickup.Kind);
+                DressGroundRing(pickup.transform, pickup.Kind, state);
             }
         }
 
         /// <summary>Removes any previously-built PartArt: child that isn't <paramref name="keep"/> — the
-        /// leftover from this pooled pickup's last drop, now that it's rerolled a different design.</summary>
+        /// leftover from this pooled pickup's last drop, now that it's rerolled a different design.
+        /// MV-626: <c>Destroy()</c> is illegal outside Play mode — same idiom as <c>Pickup.BuildVisual</c>
+        /// — which this only started hitting once <see cref="OnPickupRegistered"/> began building real
+        /// art eagerly (change 4); before that, art was only ever built lazily inside <c>Update</c>,
+        /// which no EditMode test actually reached for a Supercell reroll.</summary>
         private static void DestroyStaleArt(Transform pickup, string keep)
         {
             for (int i = pickup.childCount - 1; i >= 0; i--)
             {
                 var c = pickup.GetChild(i);
-                if (c.name.StartsWith(ArtPrefix) && c.name != keep) Destroy(c.gameObject);
+                if (!c.name.StartsWith(ArtPrefix) || c.name == keep) continue;
+                if (Application.isPlaying) Destroy(c.gameObject);
+                else DestroyImmediate(c.gameObject);
             }
         }
 
@@ -287,15 +330,15 @@ namespace MaxWorlds.VFX
         /// (outer + inner) for a device. Built once per name and reused, the same idiom the old aura
         /// used. Unscaled time so it keeps pulsing while a pickup sits on the ground under the paused
         /// upgrade screen, matching the art's spin.</summary>
-        private static void DressGroundRing(Transform pickup, PickupKind kind)
+        private static void DressGroundRing(Transform pickup, PickupKind kind, ArtState state)
         {
             float t = Mathf.Sin(Time.unscaledTime * RingPulseSpeed) * 0.5f + 0.5f;   // 0..1
             float pulse = RingPulseMin + RingPulseRange * t;
 
             if (kind == PickupKind.Device)
             {
-                ShowRing(pickup, RingOuterName, DeviceRingOuterRadius, DeviceRingColor, DeviceRingOuterAlpha * pulse);
-                ShowRing(pickup, RingInnerName, DeviceRingInnerRadius, DeviceRingColor, DeviceRingInnerAlpha * pulse);
+                state.RingOuter = ShowRing(pickup, state.RingOuter, RingOuterName, DeviceRingOuterRadius, DeviceRingColor, DeviceRingOuterAlpha * pulse);
+                state.RingInner = ShowRing(pickup, state.RingInner, RingInnerName, DeviceRingInnerRadius, DeviceRingColor, DeviceRingInnerAlpha * pulse);
                 return;
             }
 
@@ -303,27 +346,34 @@ namespace MaxWorlds.VFX
             float radius = cell ? PowerCellRingRadius : PartRingRadius;
             Color color = cell ? WeaponPartArt.CellCyan : WeaponPartArt.Chrome;
             float alpha = cell ? PowerCellRingAlpha : PartRingAlpha;
-            ShowRing(pickup, RingName, radius, color, alpha * pulse);
+            state.Ring = ShowRing(pickup, state.Ring, RingName, radius, color, alpha * pulse);
         }
 
         /// <summary>Builds (once) or reuses the named <see cref="GroundRing"/> child and places it at the
         /// pickup's XZ, pinned to the ground plane — <b>not</b> parented via local position, since
         /// <see cref="GroundRing.Show"/> writes an absolute world position every call, which is what
-        /// keeps the ring from inheriting the pickup's float/bob.</summary>
-        private static void ShowRing(Transform pickup, string name, float radius, Color color, float alpha)
+        /// keeps the ring from inheriting the pickup's float/bob. MV-626: <paramref name="cached"/> skips
+        /// the Transform.Find/GetComponent walk on every frame after the first — only a cache miss (a
+        /// fresh pickup, or one whose ring hasn't been resolved into <see cref="ArtState"/> yet) pays it.</summary>
+        private static GroundRing ShowRing(Transform pickup, GroundRing cached, string name, float radius, Color color, float alpha)
         {
-            var existing = pickup.Find(name);
-            GroundRing ring = existing != null ? existing.GetComponent<GroundRing>() : null;
+            GroundRing ring = cached;
             if (ring == null)
             {
-                ring = GroundRing.Create(name);
-                ring.transform.SetParent(pickup, worldPositionStays: false);
+                var existing = pickup.Find(name);
+                ring = existing != null ? existing.GetComponent<GroundRing>() : null;
+                if (ring == null)
+                {
+                    ring = GroundRing.Create(name);
+                    ring.transform.SetParent(pickup, worldPositionStays: false);
+                }
             }
             ring.Lift = RingLift;
 
             Vector3 groundPos = pickup.position;
             groundPos.y = 0f;   // the lawn plane (GroundAnchorTuning) — the ring never reads the bob
             ring.Show(groundPos, radius, new Color(color.r, color.g, color.b, alpha));
+            return ring;
         }
 
         // MV-304: the cell's own gentle radiance — slower and lower-amplitude than the ground ring's
@@ -336,11 +386,12 @@ namespace MaxWorlds.VFX
         /// <summary>Breathes the power cell's "Core" charge band (built by <see cref="WeaponPartArt.BuildPowerCell"/>)
         /// between a dim and a bright cyan so it reads as radiating energy rather than a fixed light.
         /// A no-op for any prop without a "Core" child (the Hydro device's own core glow is untouched —
-        /// it isn't reached from the PowerCell branch that calls this).</summary>
-        private void PulseCellCore(Transform art)
+        /// it isn't reached from the PowerCell branch that calls this). MV-626: takes the already-resolved
+        /// renderer instead of a Transform + child name — no Find/GetComponent left to do here, see
+        /// <see cref="BuildArtState"/>.</summary>
+        private void PulseCellCore(MeshRenderer r)
         {
-            var core = art.Find(CellCoreName);
-            if (core == null || !core.TryGetComponent<MeshRenderer>(out var r)) return;
+            if (r == null) return;
 
             float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
             r.GetPropertyBlock(_mpb);
@@ -351,11 +402,13 @@ namespace MaxWorlds.VFX
         /// <summary>Flickers one of a prop's specular glint dots (YT-167, WV-236) in a brief spike-and-fade,
         /// not the aura's slow breathing sine — a sparkle is light catching a facet for an instant, not a
         /// beacon glowing steadily. <paramref name="phase"/> offsets each dot's cycle so, together with the
-        /// prop's own spin, its glints twinkle independently rather than flashing in lockstep.</summary>
-        private void PulseGlisten(Transform art, string childName, float phase)
+        /// prop's own spin, its glints twinkle independently rather than flashing in lockstep. MV-626:
+        /// takes the already-resolved renderer instead of a Transform + child name — see
+        /// <see cref="BuildArtState"/>; a null slot (a design with fewer glints than the max) is a
+        /// harmless no-op.</summary>
+        private void PulseGlisten(MeshRenderer r, float phase)
         {
-            var glisten = art.Find(childName);
-            if (glisten == null || !glisten.TryGetComponent<MeshRenderer>(out var r)) return;
+            if (r == null) return;
 
             // Raising a sine to a high power narrows it from a smooth wave into a brief spike separated
             // by dark gaps — the shape of a glint, not a lamp. Additive, so the peak is pushed past 1 for
