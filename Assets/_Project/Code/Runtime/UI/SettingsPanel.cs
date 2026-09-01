@@ -94,6 +94,13 @@ namespace MaxWorlds.UI
         // header-plus-knobs line count in the tallest column from 6 to 7.
         private const float DumpH = 195f;
         private const float GearSize = 96f;
+        // MV-645: the gear now shares the HUD's left play-area column (X=150, same as MAP/Water
+        // Balloon/Force Field). BuildGearButton overrides its RectTransform's pivot to (0.5, 0.5), so
+        // anchoredPosition.x is already the button's CENTRE offset from the anchor's left edge — no
+        // half-width subtraction needed (unlike MAP, which keeps pivot (0,0.5) and does subtract).
+        // GearRise is an offset from the anchor's vertical mid-point (540): desired centre 708 - 540.
+        private const float GearColumnX = 150f;
+        private const float GearRise = 168f;
 
         private const int LabelFont = 30;
         private const int HeaderFont = 40;
@@ -778,12 +785,12 @@ namespace MaxWorlds.UI
 
         private void BuildGearButton()
         {
-            // Left edge, vertically centred: the one region nothing else claims. Top-left is the FPS
-            // readout and utility icons, top-right the ability slots, both bottom corners the sticks.
+            // Left edge, vertically centred, then offset onto the HUD's left play-area column
+            // (MV-645) — second from the bottom, between Water Balloon and MAP.
             var rt = NewRect("Gear", _safeRoot, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(GearSize, GearSize);
-            rt.anchoredPosition = new Vector2(Pad + GearSize * 0.5f, 0f);
+            rt.anchoredPosition = new Vector2(GearColumnX, GearRise);
 
             var img = rt.gameObject.AddComponent<Image>();
             img.sprite = HudTextures.Disc();

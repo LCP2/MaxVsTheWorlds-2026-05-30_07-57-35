@@ -91,11 +91,11 @@ namespace MaxWorlds.UI
         /// the retired B/U ability slots that used to occupy this corner.</summary>
         private const float RigCornerInset = 24f;
 
-        /// <summary>Force Field button (<see cref="BuildForceFieldButton"/>): far-left column, sitting
-        /// in the vertical gap between the MAP button (top edge 720) and the P/?/S + HOME column
-        /// (bottom edge 856) — 13px clear of each at the button's own 110px size.</summary>
+        /// <summary>Force Field button (<see cref="BuildForceFieldButton"/>): bottom of the left
+        /// play-area column (MV-645) — MAP, the Settings/Controls gear, Water Balloon and Force Field
+        /// all share X=150, stacked bottom-to-top directly above the Move stick.</summary>
         private const float ForceFieldX = 150f;
-        private const float ForceFieldRise = 788f;
+        private const float ForceFieldRise = 345f;
 
         /// <summary>Teleport joystick (<see cref="RebuildTeleportJoystick"/>): tracks the right edge,
         /// horizontally centred on the aim stick's own centre line (same -150 offset — see
@@ -1063,11 +1063,13 @@ namespace MaxWorlds.UI
 
         private void BuildUtilityIcons()
         {
-            string[] glyphs = { "P", "?", "S" }; // Pack/Journal, Help, Settings (greybox letters)
+            // MV-645: "P" (Pack/Journal) and "S" (Settings) were dead placeholders with no click
+            // handler; only "?" (the MV-503 diagnostic overlay toggle) ever did anything.
+            string[] glyphs = { "?" };
             var col = NewRect("Utility Icons", Root);
             Anchor(col, new Vector2(0f, 1f), new Vector2(0f, 1f), new Vector2(0f, 1f));
             col.anchoredPosition = new Vector2(24f, -24f);
-            col.sizeDelta = new Vector2(56f, 200f);
+            col.sizeDelta = new Vector2(56f, 56f);
             for (int i = 0; i < glyphs.Length; i++)
             {
                 var slot = AddImage(col, HudTextures.RoundedBox(64, 0.28f), PanelColor, $"Icon {glyphs[i]}");
@@ -1185,10 +1187,10 @@ namespace MaxWorlds.UI
         private const float HydroButtonRise = 330f;
 
         /// <summary>
-        /// The Force Field button (MV-361, moved to the far left MV-606) — same round action-button
-        /// shape as Hydro, now its own left-edge column via <see cref="ForceFieldX"/>/
-        /// <see cref="ForceFieldRise"/>, sitting in the vertical gap between the MAP button and the
-        /// P/?/S + HOME column. Hidden until <see cref="AbilityKind.ForceField"/> is acquired.
+        /// The Force Field button (MV-361, moved to the far left MV-606, reordered into the left
+        /// play-area column MV-645) — same round action-button shape as Hydro, sitting at the bottom
+        /// of the shared left column via <see cref="ForceFieldX"/>/<see cref="ForceFieldRise"/>,
+        /// closest to the Move stick. Hidden until <see cref="AbilityKind.ForceField"/> is acquired.
         /// </summary>
         private void BuildForceFieldButton()
         {
@@ -1389,12 +1391,11 @@ namespace MaxWorlds.UI
         // never costs the player their movement thumb. MV-606 moved Teleport off this column onto its
         // own right-edge spot above the aim stick (see TeleportX/TeleportRise) — Lee's brief put
         // teleport with the hand that aims, not the hand that moves.
-        // Raised clear of the boss bar's y-band (rise 300, half 8) so a boss fight never crosses it.
-        // Expressed as a shared Root-local X so the two controls line up visually even though
-        // AbilityControlArt.BuildJoystick anchors to the parent's bottom-CENTER while BuildButton
-        // anchors to bottom-RIGHT — each conversion below accounts for that.
-        private const float AbilityControlColumnX = 450f;
-        private const float WaterBalloonJoystickRise = 480f;
+        // MV-645: this X now shares the left play-area column with MAP/the Settings gear/Force
+        // Field (all at X=150) — RebuildWaterBalloonJoystick re-anchors its root to the left edge to
+        // apply it, same as RebuildTeleportJoystick already does on the right.
+        private const float AbilityControlColumnX = 150f;
+        private const float WaterBalloonJoystickRise = 530f;
         private const float WaterBalloonJoystickMaxHalfSize = 100f;   // half of BuildJoystick's 200 px cap
 
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
@@ -1421,10 +1422,18 @@ namespace MaxWorlds.UI
 
             int level = WaterBalloonJoystickLevel();
             int maxLevel = WeaponCatalog.MaxLevel(WaterBalloonTrackKind.Range);
-            Vector2 anchoredPos = new Vector2(AbilityControlColumnX - RefW * 0.5f, WaterBalloonJoystickRise);
             _waterBalloonVisual = AbilityControlArt.BuildJoystick(
-                Root, "Water Balloon Joystick", anchoredPos, WaterBalloonColor, "Balloon", level, maxLevel);
+                Root, "Water Balloon Joystick", Vector2.zero, WaterBalloonColor, "Balloon", level, maxLevel);
             _waterBalloonRoot = _waterBalloonVisual.Root;
+            // MV-645: re-anchored to the left edge, same idiom MV-606 already used to move Teleport's
+            // BuildJoystick (always bottom-CENTRE by default) onto the right edge above the aim
+            // stick. A bottom-CENTRE anchor's fixed offset drifts by half the gap between the actual
+            // and reference canvas width, which the old (450) column X had enough margin to survive
+            // at every tested aspect (MV606HudReshuffleTests) but the new, closer-to-the-edge column
+            // X=150 does not — re-anchoring to the left edge (like Force Field/MAP/the Move stick
+            // already do) makes the shared column X robust at any aspect instead of just 16:9.
+            Anchor(_waterBalloonRoot, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
+            _waterBalloonRoot.anchoredPosition = new Vector2(AbilityControlColumnX, WaterBalloonJoystickRise);
 
             // Cooldown wipe, identical treatment to the other controls so the three read as one
             // language (spec §6a: "every control shows a cooldown sweep").
@@ -2107,7 +2116,12 @@ namespace MaxWorlds.UI
         }
 
         private const float MapButtonSize = 120f;
-        private const float MapButtonLeftInset = 8f;
+        // MV-645: left edge X so the button's centre lands on the shared left play-area column
+        // (X=150, same as Force Field/Water Balloon/the Settings gear) — 150 minus half of 120.
+        private const float MapButtonLeftInset = 90f;
+        // Anchor is vertical-mid (Y=540), so this is an offset from there, not an absolute Y —
+        // desired centre 846 minus 540.
+        private const float MapButtonRise = 306f;
 
         /// <summary>The always-available MAP button (MV-563), replacing the old always-on minimap this
         /// ticket removes outright. Mirrors <see cref="BuildWeaponsButton"/>'s own placement — mid-left,
@@ -2119,7 +2133,7 @@ namespace MaxWorlds.UI
             var root = NewRect("Map Button", Root);
             Anchor(root, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0f, 0.5f));
             root.sizeDelta = new Vector2(MapButtonSize, MapButtonSize);
-            root.anchoredPosition = new Vector2(MapButtonLeftInset, 120f); // left edge, above the move stick
+            root.anchoredPosition = new Vector2(MapButtonLeftInset, MapButtonRise); // topmost of the left play-area column (MV-645)
 
             var bg = AddImage(root, HudTextures.RoundedBox(64, 0.28f), PanelColor, "Map BG");
             Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
