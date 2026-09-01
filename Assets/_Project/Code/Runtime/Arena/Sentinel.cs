@@ -399,8 +399,11 @@ namespace MaxWorlds.Arena
             float dt = Time.deltaTime;
             _timeSinceDamage += dt;
 
+            float regenPerSec = AbilityTuning.SentinelRegenPerSec(
+                RigState.Level("u_hp"), RigBoard.MaxLevel("u_hp"),
+                AbilityTuning.DefaultSentinelRegenPerSecAtLevel1, AbilityTuning.DefaultSentinelRegenPerSec);
             float next = Regenerate(_health.Current, _health.Max, _timeSinceDamage,
-                AbilityTuning.DefaultSentinelRegenDelaySeconds, AbilityTuning.DefaultSentinelRegenPerSec, dt);
+                AbilityTuning.DefaultSentinelRegenDelaySeconds, regenPerSec, dt);
             float healAmount = next - _health.Current;
             if (healAmount > 0f) _health.Heal(healAmount);
 
