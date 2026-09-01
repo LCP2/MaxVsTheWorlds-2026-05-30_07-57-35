@@ -268,8 +268,12 @@ namespace MaxWorlds.VFX
         ///
         /// MV-429: bumped again, 1.4 -> 1.6, now that the oversized <c>CollectibleGlow</c> aura that used
         /// to pad the cell's apparent size is gone (replaced by a ground-hugging ring) — the cell needs
-        /// its own geometry to carry more of the "read me" job the aura used to do for free.</summary>
-        public const float PowerCellGroundScale = 1.6f;
+        /// its own geometry to carry more of the "read me" job the aura used to do for free.
+        ///
+        /// MV-629: Lee wants the everyday cell pickup to read smaller on the ground — cut to 60% of the
+        /// above, 1.6 -> 0.96. <see cref="PartGroundScale"/> and <see cref="HydroDeviceGroundScale"/> are
+        /// untouched, so the rarer drops still read as the bigger finds.</summary>
+        public const float PowerCellGroundScale = 0.96f;
 
         /// <summary>A dropped part's machine-internals design (<see cref="MachineInternalsKeys"/>) was
         /// never given a ground multiplier at all — it stayed at its authored size while the power cell

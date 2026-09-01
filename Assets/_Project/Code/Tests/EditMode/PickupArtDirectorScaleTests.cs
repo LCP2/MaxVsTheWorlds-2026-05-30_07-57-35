@@ -45,6 +45,28 @@ namespace MaxWorlds.Tests.EditMode
             Object.DestroyImmediate(pickup.gameObject);
         }
 
+        /// <summary>
+        /// MV-629 — the everyday power-cell ground pickup read too large next to the rarer Part/Hydro
+        /// drops; Lee wants it scaled down to 60% of its previous 1.6x multiplier (0.96x). Asserts the
+        /// resolved local scale against the literal <c>0.96f</c> rather than against
+        /// <see cref="WeaponPartArt.PowerCellGroundScale"/> itself — comparing to the source constant
+        /// would pass no matter what value it holds, which is exactly the Tier-1 trap this ticket's
+        /// spec calls out.
+        /// </summary>
+        [Test]
+        public void PowerCell_BuiltArt_IsScaledTo96PercentOfAuthoredGeometry()
+        {
+            var pickup = BarePickup();
+
+            var art = InvokeBuild(pickup, WeaponPartArt.Keys.PowerCell);
+
+            Assert.IsNotNull(art, "the power cell prop failed to build");
+            Assert.AreEqual(0.96f, art.localScale.x, 1e-4f,
+                "the power cell's ground art should resolve to 60% of its previous 1.6x scale (MV-629).");
+
+            Object.DestroyImmediate(pickup.gameObject);
+        }
+
         [Test]
         public void HydroDevice_BuiltArt_StillUsesItsOwnScale_NotThePowerCells()
         {
