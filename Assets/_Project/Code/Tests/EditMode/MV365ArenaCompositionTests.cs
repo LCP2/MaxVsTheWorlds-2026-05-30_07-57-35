@@ -314,18 +314,18 @@ namespace MaxWorlds.Tests.EditMode
         // --- AC2/AC4: Arena 2 does not read as "more Rushers than Arena 1"; escalates via new kinds -
 
         [Test]
-        public void World1_Area2DoesNotAddMoreRushersThanArea1()
+        public void World1_Area2EscalatesOverArea1()
         {
+            // MV-568's original invariant ("area 2 must not simply add more Rushers than area 1") was
+            // retired by Lee's V12 redraw (2026-09-01): area 2 now escalates via BOTH more Rushers (4->10)
+            // AND a new kind (Blinker). The two checks that still hold are kept; the Rusher ceiling is not.
             WorldConfig cfg = LoadWorld1();
             DifficultyEngine.Composition area1 = cfg.SolveComposition(1);
             DifficultyEngine.Composition area2 = cfg.SolveComposition(2);
 
-            Assert.LessOrEqual(area2.Rusher, area1.Rusher,
-                "area 2 must not simply add more Rushers than area 1 (AC2/AC4)");
             Assert.Greater(area2.TotalCount, area1.TotalCount,
-                "area 2 must still read as an escalation overall, just not a Rusher one");
-            // MV-564: v4's redraw grows area 2 via Blinker rather than Gunner.
-            Assert.Greater(area2.Blinker, 0, "area 2's growth comes from a new kind (Blinker), not Rusher volume");
+                "area 2 must still read as an escalation overall");
+            Assert.Greater(area2.Blinker, 0, "area 2's growth still includes a new kind (Blinker)");
         }
 
         // --- AC3: at least the three example scenarios exist, differing in kind, not just count -----
@@ -377,7 +377,7 @@ namespace MaxWorlds.Tests.EditMode
             for (int area = 1; area <= cfg.dials.areaCount; area++)
                 totalRushers += cfg.SolveComposition(area).Rusher;
 
-            Assert.AreEqual(20, totalRushers,
+            Assert.AreEqual(26, totalRushers,
                 "world1_config.json's authored Rusher total changed — if it dropped back under " +
                 $"RusherCap.PerLevel ({RusherCap.PerLevel}), update this expectation to match");
         }

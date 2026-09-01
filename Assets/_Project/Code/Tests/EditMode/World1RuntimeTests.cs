@@ -87,7 +87,7 @@ namespace MaxWorlds.Tests.EditMode
                 }
             }
 
-            Assert.AreEqual(37, shedCount, "World 1 must carry exactly 37 authored sheds");
+            Assert.AreEqual(32, shedCount, "World 1 must carry exactly 32 authored sheds");
         }
 
         // --- MV-437: raised world 1 from 6 sheds to 9 so a full run can reach more than 6 of the ---
@@ -97,6 +97,8 @@ namespace MaxWorlds.Tests.EditMode
         // --- it, so world 1 is back to 8 sheds and the first Morphing Module is Area 3 again. --------
         // --- MV-564: v4's 30-area redraw raises world 1 to 37 sheds across 21 areas, most from a10 ---
         // --- carrying two or more (a18/a20/a27 carry three each). ------------------------------------
+        // --- MV-639: V12's batch-1 redraw (2026-09-01) moves a8's shed off, dropping the index list's
+        // --- 8 to 7 and the total to 32. -------------------------------------------------------------
 
         [Test]
         public void World1_HasExactlyThirtySevenShedsAtTheAuthoredIndices()
@@ -109,14 +111,14 @@ namespace MaxWorlds.Tests.EditMode
             shedIndices.Sort();
 
             CollectionAssert.AreEqual(
-                new[] { 3, 6, 8, 9, 10, 11, 12, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29 },
+                new[] { 3, 6, 7, 9, 10, 11, 12, 14, 15, 16, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 29 },
                 shedIndices,
-                "World 1 must carry shed areas at indices 3, 6, 8, 9, 10, 11, 12, 14, 15, 16, 18, 19, " +
-                "20, 21, 22, 23, 24, 25, 26, 27, 29 (21 areas, 37 sheds total)");
+                "World 1 must carry shed areas at indices 3, 6, 7, 9, 10, 11, 12, 14, 15, 16, 18, 19, " +
+                "20, 21, 22, 23, 24, 25, 26, 27, 29 (21 areas, 32 sheds total)");
 
             int shedTotal = 0;
             foreach (WorldArea area in cfg.areas) shedTotal += area.Sheds().Length;
-            Assert.AreEqual(37, shedTotal, "World 1 must carry exactly 37 sheds in total");
+            Assert.AreEqual(32, shedTotal, "World 1 must carry exactly 32 sheds in total");
         }
 
         [Test]
@@ -409,9 +411,10 @@ namespace MaxWorlds.Tests.EditMode
             // MV-568: the designer's final composition edit dropped a2's blinkers 4 -> 2, moved a3
             // from 3 rusher/2 gunner to 5 rusher/0 gunner (bolter unchanged at 2), and dropped a5's
             // bolters 4 -> 3. MV-598's v9 redraw then raised a3's bolters 2 -> 4, a4's gunners 5 -> 6,
-            // and dropped a5's rusher 4 -> 2 while raising its bolters 3 -> 6.
+            // and dropped a5's rusher 4 -> 2 while raising its bolters 3 -> 6. MV-639's V12 redraw
+            // (2026-09-01) then raised a2's rusher 4 -> 10 and blinker 2 -> 4.
             AssertComposition(cfg, 1, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 0);
-            AssertComposition(cfg, 2, rusher: 4, bruiser: 0, gunner: 0, blinker: 2, bolter: 0);
+            AssertComposition(cfg, 2, rusher: 10, bruiser: 0, gunner: 0, blinker: 4, bolter: 0);
             AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 4);
             AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 6, blinker: 0, bolter: 0);
             AssertComposition(cfg, 5, rusher: 2, bruiser: 0, gunner: 0, blinker: 0, bolter: 6);
