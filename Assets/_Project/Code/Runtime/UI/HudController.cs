@@ -4,6 +4,7 @@ using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.OnScreen;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Player;
+using MaxWorlds.Arena;
 using MaxWorlds.Combat;
 using MaxWorlds.Dev;
 using MaxWorlds.Enemies;
@@ -147,6 +148,10 @@ namespace MaxWorlds.UI
         private Image _sentinelRadial;
         private Image _sentinelDeniedIcon;
         private int _sentinelBuiltLevel = -1;
+
+        private RectTransform _attackModeToggleRoot;
+        private Image _attackModeToggleBg;
+        private Text _attackModeToggleLabel;
         private float _forceFieldSnapFlash;
 
         // Joysticks
@@ -267,6 +272,7 @@ namespace MaxWorlds.UI
             BuildHydroButton();
             BuildForceFieldButton();
             BuildSentinelJoystick();
+            BuildAttackModeToggle();
             BuildWaterBalloonJoystick();
             BuildWaterBalloonAutoFireToggle();
             BuildTeleportJoystick();
@@ -349,6 +355,7 @@ namespace MaxWorlds.UI
             RebuildTeleportJoystickIfNeeded();
             RebuildSentinelJoystickIfNeeded();
             RefreshWaterBalloonAutoFireToggle();
+            RefreshAttackModeToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
         }
@@ -1318,6 +1325,64 @@ namespace MaxWorlds.UI
                 return;
             }
             RebuildSentinelJoystick();
+        }
+
+        /// <summary>MV-636: a small pill sitting above the Sentinel joystick, reading "ATTACK ON"/
+        /// "ATTACK OFF" — the player's own switch for whether deployed sentinels hold ahead of Max and
+        /// prioritise clearing his path, or keep the existing standoff-follow/nearest-overall behaviour.
+        /// Same shape as <see cref="BuildWaterBalloonAutoFireToggle"/>'s own pill, gated on Move/u_mov
+        /// &gt;= 1 (per the ticket) rather than an <see cref="AbilityKind"/> acquisition. Built once and
+        /// left inactive; <see cref="RefreshAttackModeToggle"/> (driven off <see cref="WeaponSystemState.Changed"/>,
+        /// which already fires on a RIG level-up — see <see cref="OnAbilitiesChanged"/>) shows/hides and
+        /// relabels it live.</summary>
+        private void BuildAttackModeToggle()
+        {
+            var root = NewRect("Sentinel Attack Mode Toggle", Root);
+            Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
+            root.sizeDelta = new Vector2(140f, 44f);
+            root.anchoredPosition = new Vector2(SentinelJoystickX, SentinelJoystickRise + 120f);
+            _attackModeToggleRoot = root;
+
+            var bg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), SentinelColor, "BG");
+            Stretch(bg.rectTransform); bg.type = Image.Type.Sliced;
+            bg.raycastTarget = true;
+            _attackModeToggleBg = bg;
+
+            var button = bg.gameObject.AddComponent<Button>();
+            button.transition = Selectable.Transition.None;
+            button.onClick.AddListener(OnAttackModeToggleTapped);
+
+            _attackModeToggleLabel = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
+            Stretch(_attackModeToggleLabel.rectTransform);
+            _attackModeToggleLabel.fontStyle = FontStyle.Bold;
+            _attackModeToggleLabel.raycastTarget = false;
+
+            root.gameObject.SetActive(false);   // RefreshAttackModeToggle turns it on once u_mov >= 1
+            RefreshAttackModeToggle();
+        }
+
+        private void OnAttackModeToggleTapped()
+        {
+            Sentinel.AttackModeEnabled = !Sentinel.AttackModeEnabled;
+            RefreshAttackModeToggle();
+        }
+
+        private void RefreshAttackModeToggle()
+        {
+            if (_attackModeToggleRoot == null) return;
+
+            bool unlocked = AbilityTuning.SentinelCanMove(RigState.Level("u_mov"));
+            _attackModeToggleRoot.gameObject.SetActive(unlocked);
+            if (!unlocked) return;
+
+            bool on = Sentinel.AttackModeEnabled;
+            if (_attackModeToggleLabel != null) _attackModeToggleLabel.text = on ? "ATTACK ON" : "ATTACK OFF";
+            if (_attackModeToggleBg != null)
+            {
+                var c = SentinelColor;
+                c.a = on ? 1f : 0.4f;
+                _attackModeToggleBg.color = c;
+            }
         }
 
         // Water Balloon's joystick sits above the Move stick (WV-240, spec §6a), so aiming a throw

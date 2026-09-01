@@ -33,6 +33,7 @@ namespace MaxWorlds.Tests.EditMode
             foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             DevTuning.Reset();
             Sentinel.DestroyAllActive();
+            Sentinel.AttackModeEnabled = false;
         }
 
         // ---------------------------------------------------------------- RigState gating
@@ -218,6 +219,51 @@ namespace MaxWorlds.Tests.EditMode
             Vector3 next = AbilityTuning.SentinelSeparationStep(farCurrent, farOthers, minSeparation: 1.5f, speed: 4f, dt: 1f);
             Assert.That(next, Is.EqualTo(farCurrent),
                 "sentinels already clear of every neighbour must not be nudged at all");
+        }
+
+        // ---------------------------------------------------------------- MV-636 Attack Mode
+
+        /// <summary>MV-636's three "new EditMode test" ACs (off-mode regression, on-mode follow point,
+        /// on-mode forward-cone target priority) are one combined test per MV-465 Testing Policy Rule 1
+        /// ("at most one new test per ticket... a ticket that needs two genuinely independent
+        /// regressions covered is a ticket that should have been two tickets") — all three assertions
+        /// are about the SAME new decision surface (<see cref="Sentinel.AttackModeEnabled"/> feeding
+        /// <see cref="AbilityTuning.SentinelFollowGoal"/>/<see cref="SentinelTargeting.SelectAttackModeTargetIndex"/>),
+        /// not independent regressions, so they stay one test. Proven to fail on the pre-fix commit: none
+        /// of <c>SentinelFollowGoal</c>, <c>Sentinel.AttackModeEnabled</c> or
+        /// <c>SentinelTargeting.SelectAttackModeTargetIndex</c> existed, so this test failed to compile
+        /// (CS0117/CS1061 "does not contain a definition") — see the fix comment for the exact error.</summary>
+        [Test]
+        public void AttackModeChangesTheFollowPointAndPrioritisesTheForwardCone_MV636()
+        {
+            Vector3 maxPosition = Vector3.zero;
+            Vector3 maxForward = Vector3.forward;
+
+            // AC2 (regression): off, the resolved follow point/standoff is exactly the pre-MV-636 pair.
+            (Vector3 offTarget, float offStandoff) = AbilityTuning.SentinelFollowGoal(
+                attackModeEnabled: false, maxPosition, maxForward, standoffDistance: 2.5f,
+                aheadDistance: AbilityTuning.DefaultSentinelAttackModeAheadDistance);
+            Assert.That(offTarget, Is.EqualTo(maxPosition), "Attack Mode off must not change the follow point off Max's own position");
+            Assert.That(offStandoff, Is.EqualTo(2.5f).Within(1e-4f), "Attack Mode off must not change the standoff distance");
+
+            // AC3: on, the resolved follow point is 3m ahead of Max along his forward vector, held at
+            // zero standoff (the ahead point itself IS the held position).
+            (Vector3 onTarget, float onStandoff) = AbilityTuning.SentinelFollowGoal(
+                attackModeEnabled: true, maxPosition, maxForward, standoffDistance: 2.5f,
+                aheadDistance: AbilityTuning.DefaultSentinelAttackModeAheadDistance);
+            Assert.That(onTarget.x, Is.EqualTo(0f).Within(1e-4f));
+            Assert.That(onTarget.y, Is.EqualTo(0f).Within(1e-4f));
+            Assert.That(onTarget.z, Is.EqualTo(3f).Within(1e-4f), "Attack Mode on must hold 3m ahead of Max along his forward vector");
+            Assert.That(onStandoff, Is.EqualTo(0f), "Attack Mode on must hold exactly at the ahead point, not a standoff ring around it");
+
+            // AC4: given one robot within the forward cone (farther) and one outside it (closer to the
+            // sentinel), the in-cone robot must win over the globally-nearer one outside it.
+            var candidates = new List<Vector3> { new Vector3(3f, 0f, 0f), new Vector3(0f, 0f, 10f) };
+            int selected = SentinelTargeting.SelectAttackModeTargetIndex(
+                sentinelPosition: Vector3.zero, candidates, maxPosition, maxForward,
+                SentinelTargeting.AttackModeForwardConeHalfAngleDegrees);
+            Assert.That(selected, Is.EqualTo(1),
+                "the nearest robot WITHIN the forward cone must win over a globally-nearer robot outside it");
         }
 
         [Test]

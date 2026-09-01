@@ -384,6 +384,28 @@ namespace MaxWorlds.Weapons
             return current + toTarget.normalized * step;
         }
 
+        /// <summary>How far ahead of Max a sentinel holds position while Attack Mode (MV-636) is on,
+        /// metres — the ticket's chosen starting value; a tuning retune is a new ticket, not a reopen
+        /// of this one.</summary>
+        public const float DefaultSentinelAttackModeAheadDistance = 3f;
+
+        /// <summary>The follow point and standoff distance to feed <see cref="SentinelStandoffStep"/>
+        /// this frame, given whether Attack Mode (MV-636 HUD toggle, gated on Move/u_mov &gt;= 1) is
+        /// on. Off: unchanged pre-MV-636 behaviour — hold <paramref name="standoffDistance"/> from
+        /// Max's own position (regression coverage). On: hold station AT a point
+        /// <paramref name="aheadDistance"/> metres in front of Max along his own forward vector
+        /// instead of following behind him — zero standoff, since the ahead point itself IS the held
+        /// position, not a ring to stand off from.</summary>
+        public static (Vector3 TargetPoint, float Standoff) SentinelFollowGoal(
+            bool attackModeEnabled, Vector3 maxPosition, Vector3 maxForward, float standoffDistance, float aheadDistance)
+        {
+            if (!attackModeEnabled) return (maxPosition, standoffDistance);
+
+            Vector3 forward = new Vector3(maxForward.x, 0f, maxForward.z);
+            forward = forward.sqrMagnitude > 1e-6f ? forward.normalized : Vector3.forward;
+            return (maxPosition + forward * Mathf.Max(0f, aheadDistance), 0f);
+        }
+
         /// <summary>How close Max has to walk before a sentinel steps aside (MV-579, Lee's playtest
         /// ask: "it should react to Max walking towards it"). Independent of the Move (u_mov) axis —
         /// even a sentinel that hasn't earned the follow behaviour still owes Max a dodge; only actual
