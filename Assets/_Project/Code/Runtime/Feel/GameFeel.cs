@@ -39,7 +39,10 @@ namespace MaxWorlds.Feel
         [SerializeField] private float minStopInterval = 0.22f;
 
         [Header("Trauma")]
-        [SerializeField] private float hitTrauma = 0.055f;
+        [Tooltip("MV-637: was 0.055f — Lee liked the crowd/'earthquake' shake but called it too much, " +
+                 "so this is a flat 60% cut. Additive stacking, the crit doubling, and every other " +
+                 "trauma source are untouched.")]
+        [SerializeField] private float hitTrauma = 0.022f;
         [SerializeField] private float killTrauma = 0.2f;
         [SerializeField] private float factoryTrauma = 0.75f;
         [SerializeField] private float bossDefeatTrauma = 0.85f;
