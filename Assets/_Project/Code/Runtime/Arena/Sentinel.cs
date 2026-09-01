@@ -61,6 +61,16 @@ namespace MaxWorlds.Arena
         /// <see cref="DestroyAllActive"/> for the real teardown a fresh level or an area crossing needs.</summary>
         public static void ResetRegistry() => _active.Clear();
 
+        /// <summary>Player-facing toggle for Attack Mode (MV-636 HUD button, gated on Move/u_mov &gt;= 1
+        /// — same visibility gate <see cref="AbilityTuning.SentinelCanMove"/> already answers for the
+        /// Move ability itself). A single flag shared by every deployed sentinel, not per-instance, so a
+        /// multi-sentinel loadout acts in unison — same "one player choice, felt everywhere" shape
+        /// <see cref="MaxWorlds.Weapons.WeaponSystemState.WaterBalloonAutoFireEnabled"/> uses for its own
+        /// toggle. Read every frame by <see cref="Update"/> (movement) and <see cref="NearestRobotInRange"/>
+        /// (fire targeting). Defaults off — the existing standoff-follow/nearest-overall behaviour is
+        /// unchanged until the player actively opts in.</summary>
+        public static bool AttackModeEnabled { get; set; }
+
         /// <summary>Destroys every deployed sentinel and empties the registry. Sentinels aren't
         /// pooled (unlike robots), so a full reset has to tear the GameObjects down too, not just
         /// forget them. Two call sites: <see cref="MaxWorlds.Arena.Map.MapRuntime"/> on a fresh level
@@ -120,6 +130,11 @@ namespace MaxWorlds.Arena
         private Material[] _ownedMaterials;
 
         private static readonly Collider[] s_hits = new Collider[16];
+
+        /// <summary>Scratch buffers for <see cref="NearestRobotInRangeAttackMode"/> — cleared and
+        /// refilled every fire-eligible frame rather than allocated fresh, same idiom as <see cref="s_hits"/>.</summary>
+        private static readonly List<RobotEnemy> s_candidateRobots = new List<RobotEnemy>(16);
+        private static readonly List<Vector3> s_candidatePositions = new List<Vector3>(16);
 
         /// <summary>Scratch buffer for <see cref="SeparateFromOtherSentinels"/> — cleared and refilled
         /// every Update rather than allocated fresh, same idiom as <see cref="s_hits"/>.</summary>
@@ -434,8 +449,11 @@ namespace MaxWorlds.Arena
             }
             else if (_followTarget != null && _moveSpeed > 0f)
             {
+                (Vector3 goalPoint, float goalStandoff) = AbilityTuning.SentinelFollowGoal(
+                    AttackModeEnabled, _followTarget.position, _followTarget.forward,
+                    _standoffDistance, AbilityTuning.DefaultSentinelAttackModeAheadDistance);
                 Vector3 next3 = AbilityTuning.SentinelStandoffStep(
-                    transform.position, _followTarget.position, _standoffDistance, _moveSpeed, dt);
+                    transform.position, goalPoint, goalStandoff, _moveSpeed, dt);
                 if (next3 != transform.position)
                 {
                     transform.position = next3;
@@ -567,6 +585,8 @@ namespace MaxWorlds.Arena
             int count = Physics.OverlapSphereNonAlloc(
                 transform.position, _range, s_hits, ~0, QueryTriggerInteraction.Ignore);
 
+            if (AttackModeEnabled && _followTarget != null) return NearestRobotInRangeAttackMode(count);
+
             RobotEnemy best = null;
             float bestSq = float.MaxValue;
             for (int i = 0; i < count; i++)
@@ -577,6 +597,27 @@ namespace MaxWorlds.Arena
                 if (d < bestSq) { bestSq = d; best = robot; }
             }
             return best;
+        }
+
+        /// <summary>MV-636 Attack Mode: prioritises the nearest robot within Max's forward cone over the
+        /// globally-nearest one, wrapping <see cref="SentinelTargeting.SelectAttackModeTargetIndex"/>'s
+        /// pure priority rule around the live <see cref="s_hits"/> query <see cref="NearestRobotInRange"/>
+        /// already ran.</summary>
+        private RobotEnemy NearestRobotInRangeAttackMode(int hitCount)
+        {
+            s_candidateRobots.Clear();
+            s_candidatePositions.Clear();
+            for (int i = 0; i < hitCount; i++)
+            {
+                if (s_hits[i] == null) continue;
+                if (!s_hits[i].TryGetComponent<RobotEnemy>(out var robot) || !robot.IsAlive) continue;
+                s_candidateRobots.Add(robot);
+                s_candidatePositions.Add(robot.transform.position);
+            }
+
+            int index = SentinelTargeting.SelectAttackModeTargetIndex(transform.position, s_candidatePositions,
+                _followTarget.position, _followTarget.forward, SentinelTargeting.AttackModeForwardConeHalfAngleDegrees);
+            return index >= 0 ? s_candidateRobots[index] : null;
         }
 
         private void Die()

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace MaxWorlds.Arena
@@ -43,6 +44,57 @@ namespace MaxWorlds.Arena
                 if (d < bestSq) { bestSq = d; best = s; }
             }
             return best;
+        }
+
+        /// <summary>Attack Mode's (MV-636) forward-cone half-angle, degrees either side of Max's own
+        /// facing — the ticket's chosen starting value; a tuning retune is a new ticket, not a reopen
+        /// of this one.</summary>
+        public const float AttackModeForwardConeHalfAngleDegrees = 60f;
+
+        /// <summary>True if <paramref name="candidatePosition"/> lies within the forward cone of Max's
+        /// facing, measured from Max's own position (MV-636 Attack Mode target priority) — flattened to
+        /// the XZ plane, same "this is a top-down game" convention <see cref="Sentinel"/>'s own sidestep
+        /// maths uses. A candidate standing exactly on Max's own position has no defined direction and
+        /// reads as NOT in the cone rather than dividing by zero.</summary>
+        public static bool IsWithinForwardCone(Vector3 maxPosition, Vector3 maxForward, Vector3 candidatePosition, float halfAngleDegrees)
+        {
+            Vector3 toCandidate = new Vector3(candidatePosition.x - maxPosition.x, 0f, candidatePosition.z - maxPosition.z);
+            if (toCandidate.sqrMagnitude < 1e-6f) return false;
+
+            Vector3 forward = new Vector3(maxForward.x, 0f, maxForward.z);
+            if (forward.sqrMagnitude < 1e-6f) return false;
+
+            return Vector3.Angle(forward.normalized, toCandidate.normalized) <= halfAngleDegrees;
+        }
+
+        /// <summary>Attack Mode's (MV-636) fire-target priority: the nearest-to-<paramref name="sentinelPosition"/>
+        /// candidate that also lies within Max's forward cone wins over the globally-nearest candidate,
+        /// falling back to nearest-overall when none qualify (per the ticket: "falling back to the
+        /// globally-nearest robot if none are within that cone"). Returns the winning index into
+        /// <paramref name="candidatePositions"/>, or -1 if it's empty. Index-based and pure — deliberately
+        /// decoupled from <see cref="MaxWorlds.Enemies.RobotEnemy"/>/live physics, same reasoning as
+        /// <see cref="ShouldEngageSentinel"/>, so the priority rule is unit-testable off plain positions.</summary>
+        public static int SelectAttackModeTargetIndex(Vector3 sentinelPosition, IReadOnlyList<Vector3> candidatePositions,
+            Vector3 maxPosition, Vector3 maxForward, float coneHalfAngleDegrees)
+        {
+            int nearestOverallIndex = -1;
+            float nearestOverallSq = float.MaxValue;
+            int nearestInConeIndex = -1;
+            float nearestInConeSq = float.MaxValue;
+
+            for (int i = 0; i < candidatePositions.Count; i++)
+            {
+                float dSq = (candidatePositions[i] - sentinelPosition).sqrMagnitude;
+                if (dSq < nearestOverallSq) { nearestOverallSq = dSq; nearestOverallIndex = i; }
+
+                if (dSq < nearestInConeSq && IsWithinForwardCone(maxPosition, maxForward, candidatePositions[i], coneHalfAngleDegrees))
+                {
+                    nearestInConeSq = dSq;
+                    nearestInConeIndex = i;
+                }
+            }
+
+            return nearestInConeIndex >= 0 ? nearestInConeIndex : nearestOverallIndex;
         }
     }
 }
