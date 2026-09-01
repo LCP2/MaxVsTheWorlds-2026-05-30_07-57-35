@@ -72,12 +72,13 @@ namespace MaxWorlds.Tests.EditMode
                 $"{traveled} m travelled against an {maxDistance} m ceiling should give despawned={expectDespawned}");
         }
 
-        // ---------------------------------------------------------------- AC1: damage = 10% of the
+        // ---------------------------------------------------------------- AC1: damage = 7% of the
         // ---------------------------------------------------------------- player's RESOLVED max health
-        // (5% -> 10% per Lee's V12 workbook, 2026-09-01)
+        // (5% -> 10% per Lee's V12 workbook, 2026-09-01, MV-638; then 10% -> 7% per Lee's V12c
+        // workbook, 2026-09-02, MV-642)
 
         [Test]
-        public void DamageFor_ScalesWithThePlayersResolvedMaxHealth_NeverHardcodedToTwenty()
+        public void DamageFor_ScalesWithThePlayersResolvedMaxHealth_NeverHardcodedToFourteen()
         {
             var go = new GameObject("MV-539 test Max", typeof(CharacterController));
             try
@@ -85,8 +86,8 @@ namespace MaxWorlds.Tests.EditMode
                 go.AddComponent<PlayerController>();
                 var health = go.AddComponent<PlayerHealth>();
 
-                // The authored default (200 max HP) DOES give 20 damage — but proving that alone can't
-                // tell a resolved 10% apart from a hardcoded 20. Overriding the max via the same dev-panel
+                // The authored default (200 max HP) DOES give 14 damage — but proving that alone can't
+                // tell a resolved 7% apart from a hardcoded 14. Overriding the max via the same dev-panel
                 // hook PlayerHealth.Max already reads through (DevTuning.PlayerMaxHealth) is what proves
                 // this derives from the live value instead.
                 DevTuning.PlayerMaxHealth = 340f;
@@ -96,15 +97,29 @@ namespace MaxWorlds.Tests.EditMode
 
                 float damage = BolterBolt.DamageFor(health.Max);
 
-                Assert.AreEqual(34f, damage, 1e-4f,
-                    "10% of a 340 max-health player should be 34, not a hardcoded 20 — the damage must " +
+                Assert.AreEqual(23.8f, damage, 1e-4f,
+                    "7% of a 340 max-health player should be 23.8, not a hardcoded 14 — the damage must " +
                     "derive from the player's resolved max health, not an authored constant");
-                Assert.AreNotEqual(20f, damage, "this would only pass by coincidence if 20 were hardcoded");
+                Assert.AreNotEqual(14f, damage, "this would only pass by coincidence if 14 were hardcoded");
             }
             finally
             {
                 Object.DestroyImmediate(go);
             }
+        }
+
+        // ---------------------------------------------------------------- AC3 (MV-642): the new 7%
+        // ---------------------------------------------------------------- fraction resolves correctly
+        // against Max's authored 200 HP and a second receiver max health, proving the scale factor
+        // itself moved, not just that DamageFor scales (the test above already covers that).
+
+        [Test]
+        public void DamageFor_ResolvesAtTheNewSevenPercentFraction_MV642()
+        {
+            Assert.AreEqual(14f, BolterBolt.DamageFor(200f), 1e-4f,
+                "7% of 200 should be 14 — on base commit 5159d43 (10% fraction) this resolved to 20");
+            Assert.AreEqual(21f, BolterBolt.DamageFor(300f), 1e-4f,
+                "7% of 300 should be 21 — on base commit 5159d43 (10% fraction) this resolved to 30");
         }
     }
 }
