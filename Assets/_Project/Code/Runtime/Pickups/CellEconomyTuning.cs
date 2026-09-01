@@ -14,16 +14,16 @@ namespace MaxWorlds.Pickups
         /// <c>cellsPerLargeKill</c>) — small robots drop nothing at all. Used as the flat fallback rate
         /// when a per-area budget can't be resolved (no live area context, e.g. a test scene) or a
         /// dev-tuning override is active (<see cref="MaxWorlds.Core.DevTuning.CellsPerLargeKill"/>).</summary>
-        public const float DefaultCellsPerLargeKill = 1f;
+        public const float DefaultCellsPerLargeKill = 0.75f;
 
         /// <summary>Total power cells authored for area 1's full large-kill haul (MV-375) — the
         /// intercept of <see cref="CellsForArea"/>.</summary>
-        public const float CellsAreaIntercept = 4f;
+        public const float CellsAreaIntercept = 3f;
 
         /// <summary>Total power cells the per-area budget rises by for every area past the first
         /// (MV-375) — a straight line, deliberately NOT the compounding rate
         /// <see cref="MaxWorlds.Enemies.DifficultyEngine.TargetBudget"/> grows the robot population by.</summary>
-        public const float CellsAreaSlope = 2f;
+        public const float CellsAreaSlope = 1.5f;
 
         /// <summary>The authored total power cells for a full clear of 1-based <paramref name="areaIndex"/>
         /// (MV-375) — <c>intercept + slope × (area - 1)</c>, a straight line by construction so it can

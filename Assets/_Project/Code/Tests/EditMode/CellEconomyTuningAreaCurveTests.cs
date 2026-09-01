@@ -39,5 +39,15 @@ namespace MaxWorlds.Tests.EditMode
                     $"the cell curve's step into area {area} must match area 1→2's step — a straight line, not a compounding one");
             }
         }
+
+        /// <summary>MV-630: PowerCell drop rate scaled to 75% of its prior value — intercept 4→3,
+        /// slope 2→1.5. Pins the resolved curve at area 1 (the intercept alone) and area 10
+        /// (intercept + 9 steps), not the raw constants directly.</summary>
+        [Test]
+        public void CellsForArea_MatchesThe75PercentScaledCurve_MV630()
+        {
+            Assert.That(CellEconomyTuning.CellsForArea(1), Is.EqualTo(3f).Within(0.001f));
+            Assert.That(CellEconomyTuning.CellsForArea(10), Is.EqualTo(16.5f).Within(0.001f));
+        }
     }
 }

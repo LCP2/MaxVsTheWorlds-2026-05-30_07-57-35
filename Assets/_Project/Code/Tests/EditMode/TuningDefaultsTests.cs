@@ -50,8 +50,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(DifficultyDirector.AuthoredRunLengthSeconds, Is.EqualTo(2820f).Within(0.001f), "run length");
             Assert.That(DifficultyDirector.AuthoredPerShedBump, Is.EqualTo(940f).Within(0.01f), "shed clock skip");
             Assert.That(EnemySpawner.DefaultRobotHealthMultiplier, Is.EqualTo(1.26f).Within(0.001f), "robot health (MV-315)");
-            Assert.That(CellEconomyTuning.DefaultCellsPerLargeKill, Is.EqualTo(1f).Within(0.001f),
-                "cells per large kill (WV-226)");
+            Assert.That(CellEconomyTuning.DefaultCellsPerLargeKill, Is.EqualTo(0.75f).Within(0.001f),
+                "cells per large kill (WV-226, scaled to 75% by MV-630)");
             Assert.That(EnemySpawner.DefaultSpawnIntervalPin, Is.EqualTo(3.996f).Within(0.001f), "spawn interval");
         }
 
