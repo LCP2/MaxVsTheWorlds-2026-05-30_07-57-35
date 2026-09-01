@@ -1,4 +1,6 @@
+using System;
 using UnityEngine;
+using MaxWorlds.Arena;
 
 namespace MaxWorlds.Enemies
 {
@@ -405,5 +407,102 @@ namespace MaxWorlds.Enemies
 
         private static bool Matches(int emitted, int every, int firstAt) =>
             every > 0 && emitted >= firstAt && emitted % every == 0;
+
+        /// <summary>
+        /// A shed's own area-composition cadence (MV-643): the fixed global cadence above (every Nth
+        /// robot is a bruiser/gunner/...) never looked at which area it was standing in, so a shed in
+        /// a room authored with, say, 2 Bruisers and 5 Blinkers and NO Rushers still poured Rushers
+        /// into it for its first four releases. The designer's authored <see cref="WorldComposition"/>
+        /// is law: this only ever hands back a kind that area's own composition contains a non-zero
+        /// count of, by deterministic weighted round-robin — each release goes to the allowed kind
+        /// with the lowest emitted/authored ratio so far, so over a long run the shed's output
+        /// approaches the authored proportions. Ties (including the very first releases, all sitting
+        /// at 0/authored) break in <see cref="EnemyKind"/> declaration order.
+        ///
+        /// An area with nothing authored (no <see cref="WorldComposition"/>, or one with every count
+        /// at zero) is a content bug, not a case to invent robots for (MV-643): this hands back nothing
+        /// and logs a warning once rather than falling back to the old global cadence, which is exactly
+        /// the fallback this ticket exists to remove.
+        /// </summary>
+        public sealed class AreaCadence
+        {
+            private static readonly EnemyKind[] AllKinds = (EnemyKind[])Enum.GetValues(typeof(EnemyKind));
+
+            private readonly int[] _authored = new int[AllKinds.Length];
+            private readonly int[] _emitted = new int[AllKinds.Length];
+            private bool _warnedEmpty;
+
+            public AreaCadence(WorldComposition composition)
+            {
+                if (composition == null) return;
+                _authored[(int)EnemyKind.Rusher] = composition.rusher;
+                _authored[(int)EnemyKind.Bruiser] = composition.bruiser;
+                _authored[(int)EnemyKind.Heavy] = composition.heavy;
+                _authored[(int)EnemyKind.Brute] = composition.brute;
+                _authored[(int)EnemyKind.Gunner] = composition.gunner;
+                _authored[(int)EnemyKind.Launcher] = composition.launcher;
+                _authored[(int)EnemyKind.Blinker] = composition.blinker;
+                _authored[(int)EnemyKind.Bolter] = composition.bolter;
+            }
+
+            /// <summary>The next kind this shed should release — the allowed kind with the lowest
+            /// emitted/authored ratio, ties broken by declaration order. False (after logging a
+            /// one-time warning) if this area authors nothing at all.</summary>
+            public bool TryNextKind(out EnemyKind kind)
+            {
+                int best = FindBestRatioKind();
+                if (best < 0)
+                {
+                    WarnOnceIfEmpty();
+                    kind = default;
+                    return false;
+                }
+
+                kind = (EnemyKind)best;
+                _emitted[best]++;
+                return true;
+            }
+
+            /// <summary>The toughest kind this area authors, by base <see cref="EnemyArchetype.MaxHealth"/>
+            /// (MV-643) — what a death-throes surge's "elite" forces instead of an unconditional
+            /// Bruiser. Ties broken by declaration order, same as <see cref="TryNextKind"/>. False if
+            /// this area authors nothing at all.</summary>
+            public bool TryToughestAuthoredKind(out EnemyKind kind)
+            {
+                int best = -1;
+                float bestHealth = -1f;
+                for (int i = 0; i < _authored.Length; i++)
+                {
+                    if (_authored[i] <= 0) continue;
+                    float health = EnemyArchetype.Of((EnemyKind)i).MaxHealth;
+                    if (health > bestHealth) { bestHealth = health; best = i; }
+                }
+
+                if (best < 0) { WarnOnceIfEmpty(); kind = default; return false; }
+                kind = (EnemyKind)best;
+                return true;
+            }
+
+            private int FindBestRatioKind()
+            {
+                int best = -1;
+                float bestRatio = float.MaxValue;
+                for (int i = 0; i < _authored.Length; i++)
+                {
+                    if (_authored[i] <= 0) continue;
+                    float ratio = (float)_emitted[i] / _authored[i];
+                    if (ratio < bestRatio) { bestRatio = ratio; best = i; }
+                }
+                return best;
+            }
+
+            private void WarnOnceIfEmpty()
+            {
+                if (_warnedEmpty) return;
+                _warnedEmpty = true;
+                Debug.LogWarning("EnemyMix.AreaCadence: shed's area authors an empty composition — " +
+                                  "emitting nothing instead of inventing an unauthored kind (MV-643).");
+            }
+        }
     }
 }

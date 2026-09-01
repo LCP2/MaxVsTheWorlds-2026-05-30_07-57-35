@@ -105,7 +105,14 @@ namespace MaxWorlds.Arena
                     if (!build.Actors.TryGetValue(shedId, out GameObject shedGo) || shedGo == null) continue;
 
                     MowerHutch hutch = shedGo.GetComponent<MowerHutch>();
-                    if (hutch != null) _sheds.Add((area.id, shedId, hutch));
+                    if (hutch == null) continue;
+                    _sheds.Add((area.id, shedId, hutch));
+
+                    // MV-643: this shed may only ever emit a kind ITS OWN area's authored composition
+                    // contains — every world1 area with a shed authors one (WorldComposition), so this
+                    // is what actually replaces the old area-blind global cadence for every real shed.
+                    EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
+                    if (spawner != null) spawner.ConfigureAreaComposition(area.composition);
                 }
             }
 

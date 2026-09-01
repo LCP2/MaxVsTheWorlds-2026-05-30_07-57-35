@@ -142,6 +142,20 @@ namespace MaxWorlds.Enemies
             launcherEvery, firstLauncherAt,
             blinkerEvery, firstBlinkerAt);
 
+        /// <summary>This shed's own area-composition cadence (MV-643) — starts out authoring nothing
+        /// (see <see cref="EnemyMix.AreaCadence"/>) until <see cref="ConfigureAreaComposition"/> wires
+        /// it up, which <see cref="MaxWorlds.Arena.WorldRunner.Configure"/> does for every real shed.
+        /// Deliberately never falls back to <see cref="CurrentMixRates"/>'s global cadence — that
+        /// fallback is exactly the bug this ticket removes.</summary>
+        private EnemyMix.AreaCadence _areaCadence = new EnemyMix.AreaCadence(null);
+
+        /// <summary>Wires this shed to its own area's authored composition (MV-643): from now on it
+        /// only ever emits a kind that composition authors a non-zero count of. Safe to call more than
+        /// once (e.g. a hot-reloaded config) — the latest call wins and resets this shed's own
+        /// emitted/authored ratios.</summary>
+        public void ConfigureAreaComposition(MaxWorlds.Arena.WorldComposition composition) =>
+            _areaCadence = new EnemyMix.AreaCadence(composition);
+
         // --- Death-throes surge (YT-182) — the wreck's last wave. A shed dying shouldn't just go
         // quiet: it spits out a short burst, and on a roll one Bruiser standing in as the "elite"
         // crawling out of the wreck, so each kill is a spike of danger rather than the quietest
@@ -323,7 +337,10 @@ namespace MaxWorlds.Enemies
             // Guarded here too, not just in Update: SpawnOne is also called from outside (the press-kit
             // director reflects it to populate a shot). A dead factory must not emit down ANY path.
             if (!_running) return;
-            SpawnKind(EnemyMix.KindFor(_emitted, CurrentMixRates));
+            // MV-643: the area's own authored composition is law — an unconfigured/empty-composition
+            // area emits nothing (AreaCadence warns once) rather than falling back to a global cadence
+            // that could hand out a kind the area never authored.
+            if (_areaCadence.TryNextKind(out EnemyKind kind)) SpawnKind(kind);
         }
 
         /// <summary>
@@ -352,10 +369,20 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < burst && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom; i++)
             {
                 // At most one elite per surge — a wreck coughing up a single tough unit reads as a
-                // beat; a wreck coughing up a wall of them reads as a bug.
-                bool spawnElite = !eliteSpawned && eliteChance > 0f && Random.value < eliteChance;
-                SpawnKind(spawnElite ? EnemyKind.Bruiser : EnemyMix.KindFor(_emitted, CurrentMixRates));
-                if (spawnElite) eliteSpawned = true;
+                // beat; a wreck coughing up a wall of them reads as a bug. MV-643: the elite is the
+                // TOUGHEST kind this area actually authors, never an unconditional Bruiser — an area
+                // with nothing authored gets no elite (and, via TryNextKind below, no ordinary robot
+                // either) rather than one invented out of the old global cadence.
+                bool wantsElite = !eliteSpawned && eliteChance > 0f && Random.value < eliteChance;
+                if (wantsElite && _areaCadence.TryToughestAuthoredKind(out EnemyKind eliteKind))
+                {
+                    SpawnKind(eliteKind);
+                    eliteSpawned = true;
+                }
+                else if (_areaCadence.TryNextKind(out EnemyKind kind))
+                {
+                    SpawnKind(kind);
+                }
             }
         }
 
