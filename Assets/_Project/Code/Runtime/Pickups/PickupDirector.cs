@@ -77,10 +77,16 @@ namespace MaxWorlds.Pickups
         private const float CellLifetimeSeconds = 30f;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
-        private static void Install()
+        private static void Install() => EnsureInstalled();
+
+        /// <summary>The live director, self-installing one if a caller needs to place a pickup before
+        /// <see cref="Install"/>'s own AfterSceneLoad hook has run — an EditMode test (or any other
+        /// caller) building a map straight through <c>MapRuntime</c> with no scene load in between
+        /// (MV-644). Same find-or-create idiom <see cref="Install"/> always used.</summary>
+        public static PickupDirector EnsureInstalled()
         {
-            if (FindFirstObjectByType<PickupDirector>() != null) return;
-            new GameObject("PickupDirector").AddComponent<PickupDirector>();
+            var existing = FindFirstObjectByType<PickupDirector>();
+            return existing != null ? existing : new GameObject("PickupDirector").AddComponent<PickupDirector>();
         }
 
         private readonly List<Pickup> _live = new List<Pickup>(32);
@@ -266,6 +272,14 @@ namespace MaxWorlds.Pickups
         /// drop. MV-457: a shed unlocks a whole ability FAMILY now, not a single node — once every
         /// category is unlocked there is nothing left to open, so it falls back to a Supercell + a cell
         /// cache instead — the reward the shed no longer has a use for the family pool to give.</summary>
+        /// <summary>Static, map-authored counterpart to a shed's own drop (MV-644) — places the exact
+        /// same reward <see cref="OnFactoryDestroyed"/> would give, at <paramref name="pos"/>. This is
+        /// the runtime hook for <see cref="MaxWorlds.Enemies.PowerupCadence.EnsureCoverage"/>'s
+        /// guarantee: an area with no shed of its own to ever drop one still needs a reachable pickup
+        /// once the cadence dial is otherwise exceeded, and there is no factory death here to hook —
+        /// <c>MapRuntime</c> calls this directly while building the map's "pickup" entities instead.</summary>
+        public void PlacePartsCache(Vector3 pos) => OnFactoryDestroyed(pos);
+
         private void OnFactoryDestroyed(Vector3 pos)
         {
             bool anyLocked = false;
