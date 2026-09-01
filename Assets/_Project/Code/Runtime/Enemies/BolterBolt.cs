@@ -27,10 +27,10 @@ namespace MaxWorlds.Enemies
     public sealed class BolterBolt : MonoBehaviour
     {
         /// <summary>Fraction of the target's own max health one bolt deals (MV-539 AC1, extended to a
-        /// Sentinel receiver by MV-622) — 10 damage against Max at today's 200 max HP, but never
-        /// hardcoded as 10: this multiplies whatever the hit receiver's own max health resolves to at
-        /// the instant of impact.</summary>
-        public const float DamagePercentOfMaxHealth = 0.05f;
+        /// Sentinel receiver by MV-622) — 20 damage against Max at today's 200 max HP, but never
+        /// hardcoded as 20: this multiplies whatever the hit receiver's own max health resolves to at
+        /// the instant of impact. 5% -> 10% per Lee's V12 workbook, 2026-09-01.</summary>
+        public const float DamagePercentOfMaxHealth = 0.10f;
 
         /// <summary>Past the archetype's max fire range, plus this much slack (the ticket's own spec),
         /// the bolt gives up and despawns harmlessly rather than flying forever.</summary>

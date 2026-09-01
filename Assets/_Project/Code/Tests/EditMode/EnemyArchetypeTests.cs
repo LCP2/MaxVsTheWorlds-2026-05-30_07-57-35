@@ -175,17 +175,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(EnemyKind.Bolter, EnemyArchetype.Of(EnemyKind.Bolter).Kind);   // MV-539 AC3
         }
 
-        /// <summary>MV-539 AC2 — same small-tier "one-rusher-shot kill" invariant Launcher/Blinker pin
-        /// below (<see cref="LauncherAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish"/>):
-        /// <see cref="MaxWorlds.Tests.PlayMode.EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame"/>
-        /// pins the live-game half — a full-health rusher's-worth of damage kills every small-tier kind
-        /// but the Bruiser.</summary>
-        [Test]
-        public void Bolter_IsNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
-        {
-            Assert.LessOrEqual(Bolter.MaxHealth, Rusher.MaxHealth);
-        }
-
         // --- Archetypes (MV-293): Gunner (ranged laser) / Launcher (homing missile) / Blinker (teleport) ---
 
         [Test]
@@ -230,18 +219,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void LauncherAndBlinker_AreNoTougherThanARusher_SoClosingTheGapIsAlwaysThePunish()
+        public void LauncherBlinkerBolter_AreToughenedAboveTheRusherBand()
         {
-            // EnemyMixPlayTests.ABruiserIsTougherThanARusher_InTheActualGame pins that only the
-            // Bruiser survives a full-health rusher's-worth of damage — every small-tier kind must
-            // stay a one-shot-with-a-rusher's-DPS kill so that closing the distance on them is
-            // always a real answer, not a losing trade.
-            //
-            // MV-404 (16 Aug 2026, Lee) deliberately exempted the Gunner from this invariant: its
-            // health was raised ~50% above the rusher's on purpose, so it no longer belongs in this
-            // assertion — see EnemyArchetype.Gunner's doc comment for the reversal.
-            Assert.LessOrEqual(Launcher.MaxHealth, Rusher.MaxHealth);
-            Assert.LessOrEqual(Blinker.MaxHealth, Rusher.MaxHealth);
+            // Superseded by Lee's V12 workbook (2026-09-01): Launcher, Blinker and Bolter all moved
+            // above the Rusher's HP, the same reversal MV-404 already gave the Gunner
+            // (EnemyArchetype.Gunner's doc comment) — none of the three "one-rusher-shot kill" any more.
+            Assert.Greater(Launcher.MaxHealth, Rusher.MaxHealth);
+            Assert.Greater(Blinker.MaxHealth, Rusher.MaxHealth);
+            Assert.Greater(Bolter.MaxHealth, Rusher.MaxHealth);
         }
 
         [Test]
@@ -273,12 +258,11 @@ namespace MaxWorlds.Tests.EditMode
         // --- Heavy & Brute (v0.5 recut spec §2-3, MV-224) ---------------------------------------
 
         [Test]
-        public void Bruiser_HealthCutFiftyPercent_AndOrderingHolds_MV540()
+        public void Bruiser_HealthMatchesV12_AndOrderingHolds()
         {
-            // MV-540 (25 Aug 2026, Lee, from play): "Bruisers have too much health. Reduce by 50%."
-            // 135 -> 68 (67.5 rounded up), the only authored source (EnemyArchetype.Bruiser). Was
-            // MV-512's 150 -> 135 (-10%) before this.
-            Assert.AreEqual(68f, Bruiser.MaxHealth, 0.01f, "MV-540: Bruiser health must be cut 50% (135 -> 68)");
+            // Superseded by Lee's V12 workbook (2026-09-01): Bruiser's authored source moved 68 -> 100
+            // (MV-540's 25 Aug "-50%, 135 -> 68" is no longer live). Ordering below (MV-224) is unaffected.
+            Assert.AreEqual(100f, Bruiser.MaxHealth, 0.01f, "V12: Bruiser health 68 -> 100");
             Assert.Less(Rusher.MaxHealth, Bruiser.MaxHealth);
             Assert.Less(Bruiser.MaxHealth, Heavy.MaxHealth);
             Assert.Less(Heavy.MaxHealth, Brute.MaxHealth);
@@ -403,9 +387,10 @@ namespace MaxWorlds.Tests.EditMode
         // slower body — which breaks the MV-325 health/speed inversion for the Gunner specifically.
         // Speed is deliberately left alone (see EnemyArchetype.Toughened's own doc comment on the
         // same point), so the two invariant tests below exempt the Gunner rather than pin a speed
-        // nerf nobody asked for.
+        // nerf nobody asked for. Lee's V12 workbook (2026-09-01) gave Launcher and Blinker the same
+        // treatment — HP raised above the rusher's, speed left alone — so they join the exemption too.
         private static readonly EnemyArchetype[] ArchetypesRankedBySpeedVsHealth =
-            { Rusher, Bruiser, Heavy, Brute, Launcher, Blinker };
+            { Rusher, Bruiser, Heavy, Brute };
 
         [Test]
         public void WeakerArchetypesAreNeverSlowerThanToughterOnes()
