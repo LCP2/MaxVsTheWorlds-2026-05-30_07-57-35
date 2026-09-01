@@ -436,6 +436,11 @@ namespace MaxWorlds.Dev
             // self-terminated.
             yield return CaptureFixtureScreen("hud-mv519-pickup-1920x1080", 1920, 1080, ApplySupercellPickupFixture, null, null, canvas);
 
+            // MV-645 AC5: Force Field + Water Balloon force-acquired (Water Balloon's Range track
+            // maxed) so the left play-area column's full four-element stack is visible for the
+            // design-fidelity check.
+            yield return CaptureFixtureScreen("mv645-left-column-1920x1080", 1920, 1080, ApplyMv645LeftColumnFixture, null, null, canvas);
+
             ApplyWeaponsButtonIdleFixture();   // leave the scene in a clean state once the pass is done
         }
 
@@ -485,6 +490,23 @@ namespace MaxWorlds.Dev
         {
             ApplyWeaponsButtonIdleFixture();
             for (int i = 0; i < 12; i++) PickupWallet.AddPowerCell();
+        }
+
+        /// <summary>MV-645 AC5: forces Force Field and Water Balloon on (Water Balloon's Range track
+        /// maxed, matching the joystick's own largest 200px size) so the left play-area column's full
+        /// four-element stack — MAP, the Settings gear, Water Balloon, Force Field — is on screen at
+        /// once. RestoreSnapshot bypasses the draft/reach gating RigState.AcquireCap would otherwise
+        /// enforce, the same fixture shortcut MV645HudLeftColumnTests uses.</summary>
+        public static void ApplyMv645LeftColumnFixture()
+        {
+            ApplyWeaponsButtonIdleFixture();
+            RigState.RestoreSnapshot(new Dictionary<string, int>
+            {
+                { "s_bal", 1 },
+                { "e_ff", 1 },
+                { "s_lob", WeaponCatalog.MaxLevel(WaterBalloonTrackKind.Range) },
+            }, Array.Empty<string>());
+            WeaponSystemState.RebuildAcquiredFromRigState();
         }
 
         public static void ApplyWeaponsButtonIdleFixture()
