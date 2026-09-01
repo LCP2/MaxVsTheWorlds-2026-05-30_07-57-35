@@ -55,7 +55,7 @@
    "blinkerFromArea": 4,
    "specialSharePct": 12
   },
-  "powerupCadence": 2
+  "powerupCadence": 3
  },
  "enemyTypes": {
   "small": {
