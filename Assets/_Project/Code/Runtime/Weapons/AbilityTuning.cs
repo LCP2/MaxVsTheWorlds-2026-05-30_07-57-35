@@ -499,10 +499,34 @@ namespace MaxWorlds.Weapons
         /// outright — Max's own out-of-combat regen (YT-80) IS that pacing.</summary>
         public const float DefaultSentinelRegenDelaySeconds = PlayerTuning.RegenDelay;
 
-        /// <summary>HP/sec a sentinel heals once the delay has elapsed (MV-398) — same reuse as
-        /// <see cref="DefaultSentinelRegenDelaySeconds"/>, aliasing <see cref="PlayerTuning.RegenPerSec"/>.
-        /// A flat rate rather than a percentage means a beefier upgraded Wall takes longer to top up
-        /// than a fresh one — more HP costs more time to heal, same as it costs more to whittle down.</summary>
+        /// <summary>HP/sec a sentinel heals at Health (u_hp)'s own top level, once the delay has
+        /// elapsed (MV-398) — same reuse as <see cref="DefaultSentinelRegenDelaySeconds"/>, aliasing
+        /// <see cref="PlayerTuning.RegenPerSec"/>. MV-633 retargeted this from a flat, always-on rate
+        /// to the CEILING of <see cref="SentinelRegenPerSec"/>'s level scale — Lee: "They recover life
+        /// too quickly (even when the sentinel health ability has not been obtained)." A flat rate
+        /// rather than a percentage means a beefier upgraded Wall takes longer to top up than a fresh
+        /// one — more HP costs more time to heal, same as it costs more to whittle down.</summary>
         public const float DefaultSentinelRegenPerSec = PlayerTuning.RegenPerSec;
+
+        /// <summary>HP/sec a sentinel heals at Health (u_hp) Level 1 — the floor of
+        /// <see cref="SentinelRegenPerSec"/>'s level scale (MV-633).</summary>
+        public const float DefaultSentinelRegenPerSecAtLevel1 = 1.0f;
+
+        /// <summary>The sentinel's regen rate (HP/sec) at a given Health (u_hp) level (MV-633) — gated
+        /// behind actually having drafted the ability: an un-leveled (level 0) sentinel does not regen
+        /// at all, where before <see cref="MaxWorlds.Arena.Sentinel"/>'s <c>Update</c> passed the flat
+        /// <see cref="DefaultSentinelRegenPerSec"/> ceiling regardless of whether Health had ever been
+        /// picked. Scales linearly from <paramref name="atLevel1"/> at level 1 up to
+        /// <paramref name="atMaxLevel"/> at <paramref name="maxLevel"/> (u_hp's own cap from
+        /// <c>rig_board.json</c>, read live via <see cref="RigBoard.MaxLevel"/> rather than hardcoded,
+        /// so a future retune of u_hp's cap can't silently miss this ceiling) — same
+        /// "scale the per-level step to the board's own cap" shape the ticket asked for.</summary>
+        public static float SentinelRegenPerSec(int level, int maxLevel, float atLevel1, float atMaxLevel)
+        {
+            if (level <= 0) return 0f;
+            int levelSpan = Mathf.Max(1, maxLevel - 1);
+            float step = (atMaxLevel - atLevel1) / levelSpan;
+            return atLevel1 + step * Mathf.Max(0, level - 1);
+        }
     }
 }
