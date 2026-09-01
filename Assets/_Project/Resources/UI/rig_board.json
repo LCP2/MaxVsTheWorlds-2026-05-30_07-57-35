@@ -203,7 +203,7 @@
       "y": 580,
       "icon": "rng",
       "label": "RANGE",
-      "maxLevel": 9,
+      "maxLevel": 6,
       "kind": "cap",
       "parent": "p_dmg",
       "startLevel": 0

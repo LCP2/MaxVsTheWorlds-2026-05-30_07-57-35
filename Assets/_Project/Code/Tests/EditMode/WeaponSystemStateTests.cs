@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.IO;
 using NUnit.Framework;
 using UnityEngine;
@@ -125,10 +126,25 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeStaysAtNineLevels_CapacityCapsAtEightLevels_MV597()
+        public void RangeCapsAtSixLevels_CapacityCapsAtEightLevels_MV631()
         {
-            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(9), "MV-597: Lee did not ask for Range to change");
+            Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Range), Is.EqualTo(6), "MV-631: Lee cut Range's cap from 9 to 6 (\"at L9, range is too far\")");
             Assert.That(WeaponCatalog.MaxLevel(WeaponTrackKind.Capacity), Is.EqualTo(8), "MV-597: Capacity (renamed from Flow, then Endurance) rose from 6 to 8");
+        }
+
+        /// <summary>AC2/AC3: a save captured under the old 9-level cap (a pre-existing player who
+        /// leveled Range all the way up) must clamp to the new 6-level cap on restore, not persist the
+        /// stale raw level — same defensive path <see cref="RigState.RestoreSnapshot"/> already applies
+        /// for p_dmg/p_spr (MV-597). Proven to fail against the pre-fix cap of 9, where this asserted
+        /// 6 but the resolved level read back as 9.</summary>
+        [Test]
+        public void PreMV631SaveAtRangeLevelNineClampsToTheNewSixLevelCapOnRestore_MV631()
+        {
+            var staleCheckpoint = new Dictionary<string, int> { { "p_rng", 9 } };
+            RigState.RestoreSnapshot(staleCheckpoint, new[] { "PRIMARY" });
+
+            Assert.That(WeaponSystemState.TrackLevel(WeaponTrackKind.Range), Is.EqualTo(6),
+                "MV-631: a save from before the cap dropped from 9 to 6 must clamp on restore, not persist the old level");
         }
 
         // ---------------------------------------------------------------- Water Balloon tracks (MV-370/MV-422)
