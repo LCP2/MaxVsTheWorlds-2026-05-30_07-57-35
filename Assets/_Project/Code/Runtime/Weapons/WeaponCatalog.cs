@@ -76,7 +76,8 @@ namespace MaxWorlds.Weapons
             WaterBalloonTrackKind.RepeatFire,
         };
 
-        /// <summary>The level cap for an RCDA track. Range keeps MV-367's 9-level cap. Damage and
+        /// <summary>The level cap for an RCDA track. Range was cut from MV-367's 9-level cap to 6
+        /// (MV-631, Lee: "at L9, range is too far"). Damage and
         /// Spread were both cut to 4 levels (MV-597, Lee's playtest: 6/6 Damage + 5/9 Spread + 6/6 Flow
         /// was "obliterating everything" — the wide, full-power cone was the main lever). CAPACITY
         /// (renamed from Flow/Depletion Rate by MV-597, renamed again to CAPACITY by MV-609) rose from
@@ -91,7 +92,7 @@ namespace MaxWorlds.Weapons
         {
             switch (kind)
             {
-                case WeaponTrackKind.Range: return 9;
+                case WeaponTrackKind.Range: return 6;
                 case WeaponTrackKind.Spread: return 4;
                 case WeaponTrackKind.Damage: return 4;
                 case WeaponTrackKind.Capacity: return 8;

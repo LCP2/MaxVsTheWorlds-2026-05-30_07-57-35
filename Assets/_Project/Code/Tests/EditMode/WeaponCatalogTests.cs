@@ -29,16 +29,18 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void RangeTrack_MaxLevelReachIsTwiceBase_MV367()
+        public void RangeTrack_MaxLevelReachAtTheMV631Cap()
         {
-            // MV-367 cuts the max-level reach ~20% below MV-291's 2.5x-base ceiling (12.5 -> 10 for a
-            // 5m base), landing at an even 2x base over the new 8-step (levels 1-9) cap.
+            // MV-367's 2x-base ceiling was tied to its then-9-level cap; MV-631 cut the cap to 6
+            // levels (Lee: "at L9, range is too far") without retuning the per-level step, so the
+            // max-level reach is now 5 steps above base (levels 1-6), not 8 -- 1.625x base for a 5m
+            // base, no longer 2x.
             float baseReach = WaterBlaster.DefaultRange;
             float maxReach = WeaponCatalog.EffectiveRange(
                 baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
 
-            Assert.That(maxReach, Is.EqualTo(baseReach * 2f).Within(0.05f),
-                "MV-367: retuning the base reach or the per-level step must keep the max Range level at ~2x base (20% below MV-291's 2.5x)");
+            Assert.That(maxReach, Is.EqualTo(baseReach * 1.625f).Within(0.05f),
+                "MV-631: Range's cap dropped to 6 without a per-level retune, so max reach is 5 steps above base");
         }
 
         [Test]
