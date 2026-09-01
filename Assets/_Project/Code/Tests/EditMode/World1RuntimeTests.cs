@@ -264,24 +264,42 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        // --- AC2: power-up cadence (<=2 areas) holds across the whole world, using the world's own ---
-        // --- authored sources (sheds), not just the minimum PowerupCadence would force. ---
+        // --- MV-644: power-up cadence (<=2 areas), proven against the RUNTIME-BUILT map, not just ---
+        // --- the authored sheds — a shed-free area at the cadence limit must carry a placed parts- ---
+        // --- cache pickup (PowerupCadence.EnsureCoverage, wired into WorldMapLoader), since the ---
+        // --- authored sheds alone leave two legitimate 3-area shed-free stretches (a4-a5-a6, a8-a9-a10). ---
+        // --- Supersedes the old World1_PowerupCadenceNeverExceedsTwoAreas, which only ever asserted ---
+        // --- the authored sheds' own gap — a constraint on the level designer, not a system guarantee. ---
 
         [Test]
-        public void World1_PowerupCadenceNeverExceedsTwoAreas()
+        public void World1_RuntimePickupCoverageNeverExceedsTheCadenceDial()
         {
             WorldConfig cfg = LoadWorld1();
+            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
 
-            var hasSource = new bool[cfg.dials.areaCount];
-            for (int i = 0; i < cfg.dials.areaCount; i++)
+            int areaCount = cfg.dials.areaCount;
+            var hasCoverage = new bool[areaCount];
+            for (int i = 0; i < areaCount; i++)
             {
                 WorldArea area = cfg.AreaByIndex(i + 1);
-                hasSource[i] = area != null && area.hasShed;
+                Assert.IsNotNull(area, $"world1_config.json has no area at index {i + 1}");
+
+                MapZone zone = map.Zone($"area{i + 1}");
+                Assert.IsNotNull(zone, $"combat area {i + 1} did not translate to the 'area{i + 1}' id");
+
+                bool hasCache = false;
+                foreach (MapEntity pickup in MapValidation.Kind(map, EntityKind.Pickup))
+                {
+                    if (map.ZoneAt(pickup.x, pickup.z) == zone) { hasCache = true; break; }
+                }
+
+                hasCoverage[i] = area.hasShed || hasCache;
             }
 
-            int longestGap = PowerupCadence.LongestGap(hasSource);
-            Assert.LessOrEqual(longestGap, cfg.dials.powerupCadence,
-                "World 1's authored sheds leave a longer power-up gap than the powerupCadence dial allows");
+            int longestGap = PowerupCadence.LongestGap(hasCoverage);
+            Assert.LessOrEqual(longestGap, 2,
+                $"World 1's runtime-built map (sheds + placed parts caches) leaves a gap of " +
+                $"{longestGap} consecutive areas with no power-up source — over the powerupCadence=2 guarantee");
         }
 
         [Test]

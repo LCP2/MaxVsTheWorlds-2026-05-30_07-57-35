@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Bosses;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
+using MaxWorlds.Pickups;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Arena
@@ -121,8 +122,6 @@ namespace MaxWorlds.Arena
         /// body.</summary>
         private static void BuildProps(MapData map, Transform root, MapBuild built)
         {
-            bool saidPickup = false;
-
             foreach (MapEntity e in map.entities)
             {
                 if (e == null) continue;
@@ -140,14 +139,11 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Pickup:
-                        // The format carries pickups so a map can be authored for them, but the slice
-                        // has no pickup system yet. Say so once — do not spawn a lie.
-                        if (!saidPickup)
-                        {
-                            Debug.Log("[MapRuntime] this map authors pickups, but the slice has no " +
-                                      "pickup system yet — skipping them.");
-                            saidPickup = true;
-                        }
+                        // MV-644: currently only PowerupCadence.EnsureCoverage's guaranteed parts cache
+                        // authors this kind — the same walk-over reward a shed drop already knows how to
+                        // give (PickupDirector.PlacePartsCache), placed statically since there is no
+                        // factory death here to hook it off.
+                        PickupDirector.EnsureInstalled().PlacePartsCache(e.GroundedCenter);
                         break;
                 }
             }

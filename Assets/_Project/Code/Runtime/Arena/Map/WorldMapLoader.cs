@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Enemies;
 
 namespace MaxWorlds.Arena
 {
@@ -149,6 +150,38 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-644: PowerupCadence.EnsureCoverage (Confluence MVW 34439170 §5/§8.7) made real — an
+            // area with no shed of its own, sitting at the cadence limit, gets a reachable parts-cache
+            // pickup so the "never more than dials.powerupCadence unfed areas in a row" guarantee is
+            // something the game actually places, not just a property the authored sheds happen to have.
+            if (cfg.dials != null)
+            {
+                var hasShed = new bool[areaCount];
+                for (int i = 0; i < areaCount; i++)
+                    hasShed[i] = cfg.AreaByIndex(i + 1)?.hasShed ?? false;
+
+                bool[] coverage = PowerupCadence.EnsureCoverage(areaCount, hasShed, cfg.dials.powerupCadence);
+                for (int i = 0; i < areaCount; i++)
+                {
+                    if (hasShed[i] || !coverage[i]) continue; // already fed, or the cadence never forced one here
+
+                    WorldArea a = cfg.AreaByIndex(i + 1);
+                    if (a == null) continue;
+
+                    Vector2 pos = ResolveCachePosition(a);
+                    entities.Add(new MapEntity
+                    {
+                        id = $"{a.id}_partscache",
+                        kind = "pickup",
+                        x = pos.x,
+                        z = pos.y,
+                        width = PartsCacheBodySize,
+                        height = PartsCacheBodySize,
+                        depth = PartsCacheBodySize,
+                    });
+                }
+            }
+
             // Shrubbery authored per area (MV-318) — handed straight to the same Cover entity kind
             // backyard_slice.json's hand-placed hedges already build, validate and dress through, so an
             // area's shrub rows are obstacles the moment they're authored, not a parallel mechanic.
@@ -247,6 +280,70 @@ namespace MaxWorlds.Arena
 
             if (from.WallRunsAlongX(fromWall)) { x = along; z = fixedCoord; }
             else { x = fixedCoord; z = along; }
+        }
+
+        /// <summary>A guaranteed parts cache (MV-644) is treated as a 2 m x 2 m body for clearance
+        /// purposes — the AC's own reachability spec.</summary>
+        private const float PartsCacheBodySize = 2f;
+
+        /// <summary>How far apart, in radians, each dodge attempt tries next on the ring — small
+        /// enough that a few steps clears ordinary cover/garrison spacing without walking most of the
+        /// way round the room.</summary>
+        private const float CacheDodgeStep = 10f * Mathf.Deg2Rad;
+
+        /// <summary>Deterministic placement for a guaranteed parts cache (MV-644): the area's own
+        /// centre, unless that sits too close to authored cover or a garrison position, in which case
+        /// it walks out along the same evenly-spaced-ring idiom <see cref="MaxWorlds.Enemies.Garrison"/>'s
+        /// own cover-dodge uses — so the same config always produces the same layout. Falls back to the
+        /// centre if nothing on the ring clears, same as that ring's own "stand there anyway" fallback.</summary>
+        private static Vector2 ResolveCachePosition(WorldArea a)
+        {
+            Vector2 center = a.CenterXz;
+            if (IsClearForCache(center, a)) return center;
+
+            float radius = Mathf.Min(a.size.w, a.size.d) * 0.3f;
+            for (float angle = 0f; angle < Mathf.PI * 2f; angle += CacheDodgeStep)
+            {
+                Vector2 candidate = center + new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * radius;
+                if (IsClearForCache(candidate, a)) return candidate;
+            }
+
+            return center;
+        }
+
+        /// <summary>Reachable by a 2 m x 2 m body (margin off the area's own walls), and clear of
+        /// authored cover and of any garrison position by the same margins <see cref="MapValidation"/>
+        /// already enforces for a garrison entry (<see cref="MapValidation.MinGarrisonCoverGap"/> against
+        /// cover, <see cref="MapValidation.SpawnRadius"/>+<see cref="MapValidation.SpawnClearance"/>
+        /// against another placed body — the personal-space radius every spawn-adjacent placement in
+        /// this engine already uses).</summary>
+        private static bool IsClearForCache(Vector2 point, WorldArea a)
+        {
+            float half = PartsCacheBodySize * 0.5f;
+            if (point.x - a.XMin < half || a.XMax - point.x < half ||
+                point.y - a.ZMin < half || a.ZMax - point.y < half)
+                return false;
+
+            foreach (WorldCover c in a.cover)
+            {
+                if (c == null) continue;
+
+                ArenaCover body = new MapEntity
+                {
+                    x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
+                }.ToCover();
+
+                if (body.DistanceTo(point) < MapValidation.MinGarrisonCoverGap) return false;
+            }
+
+            foreach (WorldGarrisonEntry g in a.garrison)
+            {
+                if (g == null) continue;
+                if (Vector2.Distance(point, new Vector2(g.x, g.z)) < MapValidation.SpawnRadius + MapValidation.SpawnClearance)
+                    return false;
+            }
+
+            return true;
         }
 
         private static string ZoneType(WorldArea a)
