@@ -401,6 +401,35 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(posTo, Is.EqualTo(23.5f).Within(0.05f), "g1's a2-side endpoint does not resolve to x 23.5");
         }
 
+        // --- MV-640: the designer's a1-a30 drawing authors an exact position for every composed ------
+        // --- robot — before this ticket, 14 of the 30 areas authored fewer garrison entries than -------
+        // --- their composition, so some of each area's robots fell back to an unauthored ring spot. ---
+
+        [Test]
+        public void World1_EveryAreasGarrisonCountMatchesItsComposedTotal()
+        {
+            WorldConfig cfg = LoadWorld1();
+            Assert.IsTrue(MapValidation.ValidateWorldConfig(cfg, out string reason), reason);
+
+            int totalGarrisoned = 0;
+            for (int index = 1; index <= 30; index++)
+            {
+                WorldArea area = cfg.AreaByIndex(index);
+                Assert.IsNotNull(area, $"world1_config.json has no area at index {index}");
+
+                WorldComposition c = area.composition;
+                Assert.IsNotNull(c, $"area {area.id} has no authored composition");
+                int composed = c.rusher + c.bruiser + c.heavy + c.brute + c.gunner + c.launcher + c.blinker + c.bolter;
+                int garrisoned = area.garrison?.Length ?? 0;
+
+                Assert.AreEqual(composed, garrisoned,
+                    $"area {area.id} authors {composed} robots via composition but only {garrisoned} garrison position(s)");
+                totalGarrisoned += garrisoned;
+            }
+
+            Assert.AreEqual(695, totalGarrisoned, "world1_config.json must author exactly 695 garrison positions across a1..a30");
+        }
+
         // --- AC5 (MV-564: v4's 30-area redraw re-authored areas 1-4's composition) --------------------
 
         [Test]
@@ -412,10 +441,11 @@ namespace MaxWorlds.Tests.EditMode
             // from 3 rusher/2 gunner to 5 rusher/0 gunner (bolter unchanged at 2), and dropped a5's
             // bolters 4 -> 3. MV-598's v9 redraw then raised a3's bolters 2 -> 4, a4's gunners 5 -> 6,
             // and dropped a5's rusher 4 -> 2 while raising its bolters 3 -> 6. MV-639's V12 redraw
-            // (2026-09-01) then raised a2's rusher 4 -> 10 and blinker 2 -> 4.
+            // (2026-09-01) then raised a2's rusher 4 -> 10 and blinker 2 -> 4. MV-640's V12b full
+            // redraw then raised a3's bolters 4 -> 6.
             AssertComposition(cfg, 1, rusher: 4, bruiser: 0, gunner: 0, blinker: 0, bolter: 0);
             AssertComposition(cfg, 2, rusher: 10, bruiser: 0, gunner: 0, blinker: 4, bolter: 0);
-            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 4);
+            AssertComposition(cfg, 3, rusher: 5, bruiser: 0, gunner: 0, blinker: 0, bolter: 6);
             AssertComposition(cfg, 4, rusher: 5, bruiser: 0, gunner: 6, blinker: 0, bolter: 0);
             AssertComposition(cfg, 5, rusher: 2, bruiser: 0, gunner: 0, blinker: 0, bolter: 6);
         }
