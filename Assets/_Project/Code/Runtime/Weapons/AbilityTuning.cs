@@ -307,13 +307,14 @@ namespace MaxWorlds.Weapons
         /// Damage (u_dmg) Level 0 — always below 1.0 by construction (see
         /// <see cref="SentinelDamagePerShot"/>), same "always weaker than Max's CURRENT primary...
         /// it must stay below Max's current power as he upgrades" rule the old Gunner Power track
-        /// enforced.</summary>
-        public const float DefaultSentinelDamageFraction = 0.6f;
+        /// enforced. MV-634: lowered from 0.6 (sentinels were knocking out robots too quickly even at
+        /// a mid Damage level) so a maxed track now lands at 0.5, not 1.0, of Max's own output.</summary>
+        public const float DefaultSentinelDamageFraction = 0.3f;
 
         /// <summary>Extra fraction each Damage (u_dmg) level adds — capped so even a maxed track
         /// (<see cref="SentinelDamageFraction"/> clamps to 1.0) can never reach, let alone exceed,
-        /// Max's own current output.</summary>
-        public const float DefaultSentinelDamageFractionPerLevel = 0.08f;
+        /// Max's own current output. MV-634: halved from 0.08 alongside the base fraction.</summary>
+        public const float DefaultSentinelDamageFractionPerLevel = 0.04f;
 
         /// <summary>Fraction of Max's current primary damage-per-tick the sentinel deals per shot at
         /// a given Damage (u_dmg) level — clamped below 1.0, so whatever <paramref
