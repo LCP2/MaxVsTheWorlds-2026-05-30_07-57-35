@@ -806,6 +806,12 @@ namespace MaxWorlds.VFX
 
         private void OnDefeated()
         {
+            // MV-625: HudSignals.BossDefeated carries no boss identity — it fires whenever ANY boss on
+            // the map dies, and every rig built so far (the whole map is built at scene load, MV-573)
+            // is subscribed. Without this check, a12's boss dying played every OTHER boss's death
+            // animation too and deactivated their rigs (TickDeath's gameObject.SetActive(false)),
+            // leaving a20/a30's still-alive bosses invisible while their brood volleys kept firing.
+            if (_boss == null || !_boss.IsDead) return;
             if (_dying) return;
             _dying = true;
             _dieTimer = 0f;
