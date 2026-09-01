@@ -184,9 +184,13 @@ namespace MaxWorlds.Weapons
         /// the ticket explicitly warns against. Averaging keeps a maxed weapon's drain in the same
         /// order of magnitude as the Depletion Rate track's own 4x max buyback (see
         /// <see cref="EffectiveDrainPerSecond"/>), so investing in both roughly cancels out instead of
-        /// one swamping the other.</summary>
+        /// one swamping the other.
+        ///
+        /// The reach term is squared (MV-632, Lee's playtest: "usage rate needs to increase more as
+        /// range increases") so Range specifically drains the tank faster than a linear read of the
+        /// ratio would — Spread's own term is untouched, still linear.</summary>
         public static float DrainOutputScale(float reach, float baseReach, float coneHalfAngle, float baseConeHalfAngle) =>
-            ((reach / baseReach) + (coneHalfAngle / baseConeHalfAngle)) * 0.5f;
+            0.5f * (reach / baseReach) * (reach / baseReach) + 0.5f * (coneHalfAngle / baseConeHalfAngle);
 
         /// <summary>The level cap for an ability once acquired (spec §6, Teleport revised MV-339 —
         /// the v0.5 spec's 2 read as too thin, Max 0.7 feedback wants 4 distinct levels): Speed 4,

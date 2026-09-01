@@ -213,6 +213,29 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void DrainOutputScale_ReachTermIsQuadratic_MV632()
+        {
+            // Lee's playtest: usage rate must increase faster than linear as Range levels up (run out
+            // of water more quickly), while Spread's own contribution stays exactly as it was.
+            float baseReach = WaterBlaster.DefaultRange;
+            float baseCone = WaterBlaster.DefaultConeHalfAngle;
+
+            float atLevel1 = WeaponCatalog.DrainOutputScale(baseReach, baseReach, baseCone, baseCone);
+            Assert.That(atLevel1, Is.EqualTo(1f).Within(1e-5f),
+                "Range level 1 is base reach (ratio 1.0) — squaring a ratio of 1 must still land at the same 1x scale");
+
+            float maxReach = WeaponCatalog.EffectiveRange(
+                baseReach, WeaponCatalog.MaxLevel(WeaponTrackKind.Range), WeaponCatalog.DefaultRcdaRangePerLevel);
+            float atMaxRange = WeaponCatalog.DrainOutputScale(maxReach, baseReach, baseCone, baseCone);
+
+            // reach ratio at the Range cap: 8.125/5 = 1.625 (MV-631's 6-level cap)
+            float expected = 0.5f * 1.625f * 1.625f + 0.5f * 1f;
+            Assert.That(atMaxRange, Is.EqualTo(expected).Within(1e-4f),
+                "MV-632: the reach term must be squared (0.5*ratio^2 + 0.5*coneRatio) — the old linear " +
+                "average would read 1.3125 here instead of 1.8203125");
+        }
+
+        [Test]
         public void EnduranceTrack_StillOffsetsTheIncreasedDrainAtMaxedOutput_MV368()
         {
             // AC3: spending on Endurance must measurably cut the drain even when the weapon's
