@@ -12,9 +12,10 @@ namespace MaxWorlds.Tests.EditMode
     /// the ticket's AC1-AC6 (AC7 is <c>cc-verify.bat</c>, AC8 is Lee's own human check).
     ///
     /// Proven to fail on the pre-fix commit (old constants: <c>DefaultSentinelBaseHp</c> 60,
-    /// <c>DefaultSentinelHpPerLevel</c> 20, <c>DefaultSentinelDamageFraction</c> 0.4,
-    /// <c>DefaultSentinelDamageFractionPerLevel</c> 0.1, <c>DefaultSentinelFireInterval</c> 0.6) —
-    /// failure output quoted in the MV-610 fix comment.
+    /// <c>DefaultSentinelHpPerLevel</c> 20, <c>DefaultSentinelFireInterval</c> 0.6) —
+    /// failure output quoted in the MV-610 fix comment. MV-653 later removed the damage-fraction
+    /// assertions this test originally covered (AC1/AC2 above) along with the two fraction constants
+    /// themselves — sentinel damage is now flat, independent of Max's primary damage.
     /// </summary>
     public sealed class MV610SentinelRebalanceTests
     {
@@ -28,36 +29,6 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void SentinelRebalance_DpsFractionHealthSurvivalAndFireIntervalLandOnTheNewTargets_AndUnrelatedShapesAreUntouched()
         {
-            // ---------------------------------------------------------------- AC1 (superseded by MV-634): DPS at u_dmg 5, p_dmg 4 is 9.14 within 0.1
-            // MV-634 halved DefaultSentinelDamageFraction/PerLevel (sentinels were still knocking out
-            // robots too quickly at 18.3 DPS / 29% of Max), so this no longer lands at the original
-            // MV-610 target — updated to the new constants' resolved value rather than pinning the
-            // superseded number.
-            float primaryDamagePerTick = WeaponCatalog.EffectiveDamagePerTick(
-                WaterBlasterBaseDamage, damageLevel: 4, WeaponCatalog.DefaultRcdaDamagePerLevel);
-            float sentinelDamagePerShot = AbilityTuning.SentinelDamagePerShot(
-                primaryDamagePerTick, level: 5,
-                AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
-            float sentinelFireInterval = AbilityTuning.SentinelFireInterval(
-                AbilityTuning.DefaultSentinelFireInterval, overchargeActive: false);
-            float sentinelDps = sentinelDamagePerShot / sentinelFireInterval;
-            Assert.That(sentinelDps, Is.EqualTo(9.14f).Within(0.1f),
-                "u_dmg 5, p_dmg 4 must land at 9.14 DPS (14.5% of Max) post-MV-634, not the pre-MV-634 18.3 (29%)");
-
-            // ---------------------------------------------------------------- AC2 (superseded by MV-634): fraction strictly increasing, no dead level, caps at 0.5 (was 1.0) at level 5
-            float previous = float.NegativeInfinity;
-            for (int level = 0; level <= 5; level++)
-            {
-                float fraction = AbilityTuning.SentinelDamageFraction(
-                    level, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
-                Assert.That(fraction, Is.GreaterThan(previous), $"level {level} must strictly beat level {level - 1} — no dead level");
-                Assert.That(fraction, Is.LessThan(1f), $"level {level} must not be clamped to 1.0 under the MV-634 constants");
-                previous = fraction;
-            }
-            Assert.That(AbilityTuning.SentinelDamageFraction(
-                5, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel),
-                Is.EqualTo(0.5f).Within(1e-4f), "MV-634: level 5 must now land at 0.5, half of Max's own per-tick damage, not the pre-MV-634 1.0");
-
             // ---------------------------------------------------------------- AC3: max health 120 at u_hp 0, 270 at u_hp 5
             Assert.That(AbilityTuning.SentinelMaxHp(0, AbilityTuning.DefaultSentinelBaseHp, AbilityTuning.DefaultSentinelHpPerLevel),
                 Is.EqualTo(120f).Within(1e-4f));
@@ -84,11 +55,6 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(AbilityTuning.DefaultSentinelRangePerLevel, Is.EqualTo(1.5f).Within(1e-4f), "targeting range per-level must be untouched by this ticket");
             // shape check with arbitrary base/perLevel, independent of the new defaults above
             Assert.That(AbilityTuning.SentinelMaxHp(3, 60f, 20f), Is.EqualTo(120f).Within(1e-4f), "SentinelMaxHp must still be linear in level");
-            Assert.That(AbilityTuning.SentinelDamagePerShot(8f, 2, 0.4f, 0.1f), Is.EqualTo(8f * 0.6f).Within(1e-4f), "SentinelDamagePerShot must still be primaryDamage * fraction");
         }
-
-        // Mirrors MaxWorlds.Combat.WaterBlaster.DefaultDamagePerTick (4f) — kept as a local literal so
-        // this test doesn't need to touch UnityEngine.Component-derived WaterBlaster to read it.
-        private const float WaterBlasterBaseDamage = 4f;
     }
 }

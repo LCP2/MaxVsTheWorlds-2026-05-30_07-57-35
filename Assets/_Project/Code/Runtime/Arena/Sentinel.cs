@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
@@ -24,11 +23,11 @@ namespace MaxWorlds.Arena
     /// Six RIG axes (<c>u_sen</c>'s children, MV-422) replace the old three tracks: Damage
     /// (<c>u_dmg</c>), Range (<c>u_rng</c>), Health (<c>u_hp</c>) — all direct children of
     /// <c>u_sen</c> — then Move (<c>u_mov</c>), Cost (<c>u_cst</c>), Slots (<c>u_slt</c>) behind
-    /// Damage/Range/Health respectively. "Always weaker than Max's CURRENT primary" is enforced
-    /// structurally, not by a cap that could drift out of date: every shot's damage is a FRACTION
-    /// (&lt; 1.0, see <see cref="AbilityTuning.SentinelDamagePerShot"/>) of Max's own live RCDA
-    /// Damage-track output, read fresh from <see cref="WeaponSystemState"/>/<see cref="WeaponCatalog"/>
-    /// on every shot.
+    /// Damage/Range/Health respectively. MV-653 REPEALS the prior rule that a shot's damage must
+    /// stay below Max's CURRENT primary output: that fraction-of-Max's-live-output model made the
+    /// whole Damage track imperceptible once display rounding collapsed adjacent levels to the same
+    /// integer (Lee, device, 2026-09-02). Every shot's damage is now a flat, integer value
+    /// independent of Max's own primary damage — see <see cref="AbilityTuning.SentinelDamagePerShot"/>.
     ///
     /// Deployed sentinels are permanent until destroyed — no player-triggered repair (DECISION, Lee
     /// 15 Aug 2026) — so unlike <see cref="MaxWorlds.Enemies.RobotEnemy"/> it is never pooled;
@@ -502,18 +501,11 @@ namespace MaxWorlds.Arena
             bool overchargeActive = RigFusionState.IsForged("f_ovc") && PickupWallet.PowerCells > 0;
             _fireCooldown = AbilityTuning.SentinelFireInterval(_fireInterval, overchargeActive);
 
-            // Max's CURRENT primary per-tick damage, read live — this is what keeps the sentinel
-            // "always weaker" as Max's own Damage track climbs (see the class doc comment).
-            float primaryDamage = WeaponCatalog.EffectiveDamagePerTick(
-                WaterBlaster.DefaultDamagePerTick,
-                WeaponSystemState.TrackLevel(WeaponTrackKind.Damage),
-                WeaponCatalog.DefaultRcdaDamagePerLevel);
-
             int damageLevel = RigState.Level("u_dmg");
             float damage = AbilityTuning.SentinelDamagePerShot(
-                primaryDamage, damageLevel,
-                AbilityTuning.DefaultSentinelDamageFraction,
-                AbilityTuning.DefaultSentinelDamageFractionPerLevel);
+                damageLevel,
+                AbilityTuning.DefaultSentinelBaseDamage,
+                AbilityTuning.DefaultSentinelDamagePerLevel);
 
             Vector3 dir = target.transform.position - transform.position; dir.y = 0f;
             dir = dir.sqrMagnitude > 1e-4f ? dir.normalized : Vector3.forward;

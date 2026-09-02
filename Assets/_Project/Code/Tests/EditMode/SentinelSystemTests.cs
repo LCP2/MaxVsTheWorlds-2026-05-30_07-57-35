@@ -15,9 +15,9 @@ namespace MaxWorlds.Tests.EditMode
     /// a <c>cap</c> — reached once the <c>u_sen</c> cap (<see cref="AbilityKind.Sentinels"/>) is
     /// drafted, but each axis still needs its own Morphing Module draft (<see cref="RigState.AcquireCap"/>)
     /// before a part can raise it further, the same "unowned/locked items can't be upgraded" gate the
-    /// old <c>SentinelTrackKind</c> enforced. The sentinel's damage fraction always stays below 1.0
-    /// (the DECISION's "always weaker than Max's CURRENT primary" enforced structurally), and the
-    /// Slots axis's level IS the deployment cap.
+    /// old <c>SentinelTrackKind</c> enforced. MV-653 repealed the old "always weaker than Max's
+    /// CURRENT primary" rule — the sentinel's damage is now flat and independent of Max's own
+    /// primary damage — and the Slots axis's level IS the deployment cap.
     /// </summary>
     public sealed class SentinelSystemTests
     {
@@ -110,37 +110,14 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void DamageFractionNeverExceedsOneAndCapsAtHalfAtTheMaxLevel()
+        public void DamagePerShotGrowsLinearlyFromLevelZero()
         {
-            int maxLevel = RigBoard.MaxLevel("u_dmg");
-            for (int level = 0; level <= maxLevel; level++)
-            {
-                float fraction = AbilityTuning.SentinelDamageFraction(
-                    level, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
-                Assert.That(fraction, Is.LessThanOrEqualTo(1f),
-                    $"level {level} must never exceed Max's own current primary output");
-                if (level < maxLevel)
-                    Assert.That(fraction, Is.LessThan(1f), $"level {level} must stay strictly below the max level");
-            }
-            // MV-634: a maxed u_dmg track now lands at half of Max's own current primary output, down
-            // from MV-610's exact 1.0 — sentinels were still knocking out robots too quickly.
-            Assert.That(AbilityTuning.SentinelDamageFraction(
-                maxLevel, AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel),
-                Is.EqualTo(0.5f).Within(1e-4f), "the max level must land exactly on 0.5, half of Max's output when fully invested");
-        }
-
-        [Test]
-        public void DamagePerShotNeverExceedsThePrimaryItIsAFractionOf()
-        {
-            const float primaryDamage = 8f; // an arbitrary "Max's current primary tick damage"
-            for (int level = 0; level <= RigBoard.MaxLevel("u_dmg"); level++)
-            {
-                float shot = AbilityTuning.SentinelDamagePerShot(
-                    primaryDamage, level,
-                    AbilityTuning.DefaultSentinelDamageFraction, AbilityTuning.DefaultSentinelDamageFractionPerLevel);
-                Assert.That(shot, Is.LessThanOrEqualTo(primaryDamage),
-                    "sentinel damage per shot must never exceed Max's own current primary");
-            }
+            // MV-653: sentinel damage is now flat and independent of Max's own primary damage — the
+            // old "never exceeds the primary it is a fraction of" invariant is repealed, so this
+            // covers the replacement shape instead: a linear base-plus-per-level step, same pattern
+            // as MaxHpGrowsLinearlyFromLevelZero above.
+            Assert.That(AbilityTuning.SentinelDamagePerShot(0, 2f, 1f), Is.EqualTo(2f).Within(1e-4f));
+            Assert.That(AbilityTuning.SentinelDamagePerShot(5, 2f, 1f), Is.EqualTo(7f).Within(1e-4f));
         }
 
         [Test]
