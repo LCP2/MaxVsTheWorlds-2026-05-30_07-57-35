@@ -68,11 +68,14 @@ namespace MaxWorlds.Arena
         /// <summary>Closest a boss may sit to its own area's walls (MV-561).</summary>
         public const float MinBossWallMargin = 6f;
 
-        /// <summary>Closest cover may sit to a boss inside a boss arena (MV-565). A boss is 6x6 m, so
-        /// 12 m from its centre leaves roughly 9 m of clear ground round its edge — enough that the
-        /// boss and its telegraphs read from any approach. You must never lose a boss behind a hedge;
-        /// this is the radius that keeps that true without banning cover from the whole room.</summary>
-        public const float MinBossCoverClearance = 12f;
+        /// <summary>Closest cover may sit to a boss inside a boss arena (MV-565), measured
+        /// footprint-to-footprint between the cover's box and the boss's own authored size — not from
+        /// the boss's centre point (MV-649). The old centre-point rule was written when a boss was
+        /// 3x3 m; MV-621 doubled bosses to 6x6 m, which turned "12 m from centre" into a ~24 m ban that
+        /// ate a boss arena's own body along with it. 2 m of clear ground round the boss's edge is
+        /// enough that the boss and its telegraphs still read from any approach, while letting a
+        /// designer wall the rest of the arena.</summary>
+        public const float MinBossCoverClearance = 2f;
 
         /// <summary>Narrowest gap the player must always have to run through, at any depth of a
         /// room.</summary>
@@ -319,7 +322,7 @@ namespace MaxWorlds.Arena
 
                     foreach (MapEntity boss in zoneBosses)
                     {
-                        float dist = body.DistanceTo(boss.CenterXz);
+                        float dist = body.DistanceTo(boss.ToCover());
                         if (dist < MinBossCoverClearance)
                         {
                             reason = $"'{c.id}' is {dist:0.#} m from boss '{boss.id}' — a boss arena needs " +
