@@ -290,11 +290,27 @@ namespace MaxWorlds.VFX
             _iridMat = NewCharacterMaterial(character, "Brood_Irid", Iridescent);
         }
 
-        private static Material NewCharacterMaterial(Material template, string name, Color color)
+        private static Material NewCharacterMaterial(Material template, string name, Color color) =>
+            NewCharacterMaterial(template, MaterialLibrary.SurfaceShader, name, color);
+
+        /// <summary>The fallback shader is threaded in as a parameter (rather than read from
+        /// <see cref="MaterialLibrary.SurfaceShader"/> directly) so this stays a pure function a test can
+        /// drive through the null-fallback branch without needing every shader in the build to actually
+        /// be missing (MV-651 root cause — see below).</summary>
+        private static Material NewCharacterMaterial(Material template, Shader fallbackShader, string name, Color color)
         {
             // No character shader in this build is a look regression, never a magenta one (YT-58): a plain
-            // lit material still draws a correctly coloured body, just without the outline.
-            var m = template != null ? new Material(template) : new Material(MaterialLibrary.SurfaceShader);
+            // lit material still draws a correctly coloured body, just without the outline. But the
+            // fallback shader can ALSO be missing (MV-651: every shader in MaterialLibrary.ShaderChain
+            // resolves to null in a -batchmode -nographics standalone player, the exact config
+            // cc-verify's frame-time gate boots) — `new Material(null)` throws ArgumentNullException
+            // there, which unwinds BackyardPath.Awake() before it ever reaches WorldRunner.Configure(),
+            // so no shed's EnemySpawner is ever wired to its area composition and nothing spawns. Same
+            // null-shader-degrades-to-null-material contract MaterialLibrary.Character()/Build() already
+            // use; every caller of this method already tolerates a null material (sharedMaterial = null
+            // renders with no material, it does not throw).
+            if (template == null && fallbackShader == null) return null;
+            var m = template != null ? new Material(template) : new Material(fallbackShader);
 
             m.name = name;
             m.hideFlags = HideFlags.HideAndDontSave;
