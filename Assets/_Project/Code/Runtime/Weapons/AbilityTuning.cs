@@ -303,29 +303,24 @@ namespace MaxWorlds.Weapons
         public static float SentinelMaxHp(int level, float baseHp, float perLevel) =>
             Mathf.Max(1f, baseHp) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level);
 
-        /// <summary>Fraction of Max's CURRENT primary per-tick damage the sentinel's shot deals at
-        /// Damage (u_dmg) Level 0 — always below 1.0 by construction (see
-        /// <see cref="SentinelDamagePerShot"/>), same "always weaker than Max's CURRENT primary...
-        /// it must stay below Max's current power as he upgrades" rule the old Gunner Power track
-        /// enforced. MV-634: lowered from 0.6 (sentinels were knocking out robots too quickly even at
-        /// a mid Damage level) so a maxed track now lands at 0.5, not 1.0, of Max's own output.</summary>
-        public const float DefaultSentinelDamageFraction = 0.3f;
+        /// <summary>Sentinel damage per shot at Damage (u_dmg) Level 0 (MV-653) — REPEALS the prior
+        /// rule that sentinel damage was always a fraction of Max's CURRENT primary damage, "enforced
+        /// structurally, not by a cap that could drift out of date". That rule made the whole u_dmg
+        /// track imperceptible once <c>Mathf.RoundToInt</c> display rounded adjacent levels to the same
+        /// integer (Lee, device, 2026-09-02: primary reading 4.4, u_dmg maxed 5/5, sentinels still
+        /// landing 3). Sentinel damage is now flat and fully independent of Max's Damage track: 2 at
+        /// level 0 rising by <see cref="DefaultSentinelDamagePerLevel"/> per level to 7 at level 5.</summary>
+        public const float DefaultSentinelBaseDamage = 2f;
 
-        /// <summary>Extra fraction each Damage (u_dmg) level adds — capped so even a maxed track
-        /// (<see cref="SentinelDamageFraction"/> clamps to 1.0) can never reach, let alone exceed,
-        /// Max's own current output. MV-634: halved from 0.08 alongside the base fraction.</summary>
-        public const float DefaultSentinelDamageFractionPerLevel = 0.04f;
+        /// <summary>Extra damage each Damage (u_dmg) level adds (MV-653) — flat integer step, no cap
+        /// against Max's own output; see <see cref="DefaultSentinelBaseDamage"/>.</summary>
+        public const float DefaultSentinelDamagePerLevel = 1f;
 
-        /// <summary>Fraction of Max's current primary damage-per-tick the sentinel deals per shot at
-        /// a given Damage (u_dmg) level — clamped below 1.0, so whatever <paramref
-        /// name="currentPrimaryDamagePerTick"/> is (it already reflects Max's live RCDA Damage track,
-        /// see the sentinel's own call site), this can never equal or exceed it.</summary>
-        public static float SentinelDamageFraction(int level, float baseFraction, float perLevel) =>
-            Mathf.Clamp01(Mathf.Max(0f, baseFraction) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level));
-
-        /// <summary>The sentinel's actual per-shot damage right now.</summary>
-        public static float SentinelDamagePerShot(float currentPrimaryDamagePerTick, int level, float baseFraction, float perLevel) =>
-            Mathf.Max(0f, currentPrimaryDamagePerTick) * SentinelDamageFraction(level, baseFraction, perLevel);
+        /// <summary>The sentinel's actual per-shot damage right now (MV-653) — flat base plus a flat
+        /// per-level step, independent of Max's primary damage. Lands on an integer at every level so
+        /// the HUD's <c>Mathf.RoundToInt</c> display is lossless.</summary>
+        public static float SentinelDamagePerShot(int level, float baseDamage, float perLevel) =>
+            Mathf.Max(0f, baseDamage) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level);
 
         /// <summary>How far the sentinel's auto-fire reaches at Range (u_rng) Level 0 — a little past
         /// the primary's own authored base reach (<see cref="MaxWorlds.Combat.WaterBlaster.DefaultRange"/>,
