@@ -323,6 +323,11 @@ namespace MaxWorlds.UI
         /// than re-deriving it from <see cref="RigBoardLayout"/> formulas independently.</summary>
         public Image NodePillBg(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillBg : null;
 
+        /// <summary>MV-654: an ability node's own level-pill text — test-only access, same idiom as
+        /// <see cref="NodePillBg"/>, so a test can read the RESOLVED pill text (e.g. <c>u_slt</c>'s
+        /// deployable-sentinels read) rather than re-deriving it from the refresh formulas independently.</summary>
+        public Text NodePillText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillText : null;
+
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
         /// space regardless of this wrapper's scale) — test-only access to confirm the clamp applied.</summary>
@@ -1242,7 +1247,12 @@ namespace MaxWorlds.UI
                 v.Glow.sprite = NodeGlowSprite(v.Radius, HexSides, RigBoardLayout.GlowBlurOwned);
                 v.Glow.rectTransform.sizeDelta = NodeGlowSize(v.Radius, HexSides);
                 v.Glow.color = new Color(family.r, family.g, family.b, RigBoardLayout.GlowAlphaOwned);
-                v.PillText.text = $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
+                // MV-654: u_slt's own level number is never what the player cares about — its pill
+                // reads deployable sentinels (AbilityTuning.SentinelDeploymentSlots), not the raw
+                // node level, in both this owned branch and the draftable branch below.
+                v.PillText.text = ab.Id == "u_slt"
+                    ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
+                    : $"{RigState.Level(ab.Id)}/{ab.MaxLevel}";
                 v.PillBg.color = PillBackdrop;
                 v.PillBorder.color = new Color(family.r, family.g, family.b, 0.95f);
                 // MV-516 item 4: a mid-saturation family hue on PillBackdrop's near-black read as
@@ -1284,7 +1294,13 @@ namespace MaxWorlds.UI
                 v.CapMarker.color = DimIfUnlit(module, categoryUnlocked);
                 // MV-458: was "SHED" — a shed now only ever unlocks a whole CATEGORY (MV-457), never an
                 // individual node, so a draftable node's own unlock is this cell cost, tapped directly.
-                v.PillText.text = CellSpend.UnlockCostFor(ab.Id).ToString();
+                // MV-654: same u_slt special-case as the owned branch above — the draftable pill
+                // shows deployable sentinels (here 1/3, since the player already has one sentinel
+                // before ever spending on this node), not the unlock cost. MV-520's always-on cost
+                // tag already carries the price, so dropping it from this pill costs nothing.
+                v.PillText.text = ab.Id == "u_slt"
+                    ? $"{AbilityTuning.SentinelDeploymentSlots(RigState.Level(ab.Id))}/{AbilityTuning.SentinelDeploymentSlots(RigBoard.MaxLevel(ab.Id))}"
+                    : CellSpend.UnlockCostFor(ab.Id).ToString();
                 v.PillBg.color = DimIfUnlit(PillBackdrop, categoryUnlocked);
                 v.PillBorder.color = DimIfUnlit(module, categoryUnlocked);
                 v.PillText.color = DimIfUnlit(module, categoryUnlocked);
