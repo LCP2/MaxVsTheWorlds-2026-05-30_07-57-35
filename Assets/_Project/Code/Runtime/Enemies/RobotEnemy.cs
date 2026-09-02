@@ -547,6 +547,13 @@ namespace MaxWorlds.Enemies
 
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
 
+            // MV-657: target can go null in ANY state, not only at spawn — Unity's fake-null makes a
+            // destroyed target (a dead Sentinel this robot was retargeted to, MV-362) read as null here.
+            // Re-acquire immediately, before the sight tick below, or the tick below stays permanently
+            // skipped: _sight.HasSight freezes at whatever it last was, and a Dormant robot gated on it
+            // (TickDormant/AmbushWake) can never wake again for the rest of its life.
+            if (target == null) AcquireTarget();
+
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
             //
