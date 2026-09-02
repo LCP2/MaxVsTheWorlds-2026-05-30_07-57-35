@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 1 \u2014 Backyard",
- "revision": "WORLD 1 v12c 2026-09-02: areas a1-a30 rebuilt from MVW_World1_Level_Design_V12c.xlsx. The sheet is the design: fence, cover, gates, robot counts, robot positions, sheds and bosses are all what is drawn. A shed or boss the sheet does not draw does not exist. Cover cells the drawing places inside a shed spawn ring, a mobile shed's 7 m clearance, a boss's 12 m clear radius or 2 m of a doorway are removed cell-by-cell, and robots inside the 1 m cover gap or a shed ring are nudged the minimum distance - those are MapValidation load gates, not design choices.",
+ "revision": "WORLD 1 v12c-b 2026-09-02 (MV-647): areas a1-a30 rebuilt from MVW_World1_Level_Design_V12c.xlsx. The sheet is the design: fence, cover, gates, robot counts, robot positions, sheds and bosses are all what is drawn. A shed or boss the sheet does not draw does not exist. Cover cells the drawing places inside a shed spawn ring, a mobile shed's 7 m clearance, a boss's 12 m clear radius or 2 m of a doorway are removed cell-by-cell, and robots inside the 1 m cover gap or a shed ring are nudged the minimum distance - those are MapValidation load gates, not design choices.",
  "note": "Authored in-chat to trial the World & Difficulty Framework (Confluence MVW 34439170). enemyTypes.thv were relative placeholders (1.0/2.5/4.5/7.0) at LOCK time; MV-270 replaced them with values derived from EnemyArchetype's real hp/contact-damage/speed via THV=(hp+shield)*dps*speedFactor*archetypeWeight (shield=0, archetypeWeight=1, dps=contactDamage/attackCycle) then scaled by x1.2 so R=MPL/EPL (PowerScoring) lands in the 0.85-1.4 band against the Water Blaster's real per-level DPS across Areas 1-7 \u2014 see World1CalibrationTests. The derived shape (1.0 : 2.6 : 4.49 : 7.11) came out almost identical to the original placeholder ratio, so the curve's SHAPE stood; only the magnitude moved.",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 1.5,
@@ -2590,9 +2590,9 @@
    "cover": [
     {
      "id": "a12_h1",
-     "x": 132.0,
+     "x": 136.5,
      "z": 25.5,
-     "width": 16.0,
+     "width": 25.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -2640,6 +2640,16 @@
     },
     {
      "id": "a12_h6",
+     "x": 148.5,
+     "z": 22.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 5.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a12_h7",
      "x": 154.5,
      "z": 11.5,
      "width": 3.0,
@@ -2649,7 +2659,27 @@
      "dressing": "tree"
     },
     {
-     "id": "a12_h7",
+     "id": "a12_h8",
+     "x": 154.5,
+     "z": 23.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 4.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a12_h9",
+     "x": 158.0,
+     "z": 25.5,
+     "width": 8.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a12_h10",
      "x": 157.5,
      "z": 10.5,
      "width": 3.0,
@@ -2659,7 +2689,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a12_h8",
+     "id": "a12_h11",
      "x": 158.5,
      "z": 46.5,
      "width": 5.0,
@@ -2669,7 +2699,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a12_h9",
+     "id": "a12_h12",
      "x": 158.5,
      "z": 49.5,
      "width": 5.0,
@@ -2679,7 +2709,7 @@
      "dressing": "planter"
     },
     {
-     "id": "a12_h10",
+     "id": "a12_h13",
      "x": 159.5,
      "z": 19.5,
      "width": 5.0,
@@ -2689,7 +2719,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a12_h11",
+     "id": "a12_h14",
      "x": 158.5,
      "z": 15.5,
      "width": 1.0,
@@ -2699,7 +2729,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a12_h12",
+     "id": "a12_h15",
      "x": 159.5,
      "z": 16.5,
      "width": 1.0,
@@ -2758,13 +2788,13 @@
     },
     {
      "kind": "bolter",
-     "x": 158.5,
-     "z": 26.5
+     "x": 158.688,
+     "z": 27.017
     },
     {
      "kind": "bolter",
-     "x": 158.5,
-     "z": 24.5
+     "x": 158.312,
+     "z": 23.983
     },
     {
      "kind": "bolter",
@@ -2778,7 +2808,7 @@
     },
     {
      "kind": "launcher",
-     "x": 155.5,
+     "x": 156.05,
      "z": 23.5
     },
     {
@@ -8698,9 +8728,9 @@
     },
     {
      "id": "a30_h5",
-     "x": 304.5,
+     "x": 305.0,
      "z": 80.5,
-     "width": 7.0,
+     "width": 8.0,
      "height": 1.8,
      "depth": 5.0,
      "shape": "box",
@@ -8708,9 +8738,9 @@
     },
     {
      "id": "a30_h6",
-     "x": 306.0,
+     "x": 307.0,
      "z": 94.5,
-     "width": 6.0,
+     "width": 8.0,
      "height": 1.8,
      "depth": 5.0,
      "shape": "box",
@@ -8748,19 +8778,19 @@
     },
     {
      "id": "a30_h10",
-     "x": 308.5,
-     "z": 79.5,
-     "width": 1.0,
+     "x": 313.5,
+     "z": 122.5,
+     "width": 9.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 1.0,
      "shape": "box",
-     "dressing": "planter"
+     "dressing": "hedge"
     },
     {
      "id": "a30_h11",
-     "x": 309.5,
-     "z": 93.5,
-     "width": 1.0,
+     "x": 324.5,
+     "z": 96.5,
+     "width": 27.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -8768,19 +8798,19 @@
     },
     {
      "id": "a30_h12",
-     "x": 310.0,
-     "z": 95.5,
-     "width": 2.0,
+     "x": 328.5,
+     "z": 119.5,
+     "width": 1.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a30_h13",
-     "x": 310.0,
-     "z": 122.5,
-     "width": 2.0,
+     "x": 329.5,
+     "z": 118.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -8788,9 +8818,9 @@
     },
     {
      "id": "a30_h14",
-     "x": 312.0,
-     "z": 96.5,
-     "width": 2.0,
+     "x": 330.5,
+     "z": 117.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -8798,9 +8828,9 @@
     },
     {
      "id": "a30_h15",
-     "x": 332.5,
-     "z": 96.5,
-     "width": 11.0,
+     "x": 331.5,
+     "z": 116.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -8808,6 +8838,26 @@
     },
     {
      "id": "a30_h16",
+     "x": 332.5,
+     "z": 115.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h17",
+     "x": 333.5,
+     "z": 114.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a30_h18",
      "x": 334.5,
      "z": 113.5,
      "width": 1.0,
@@ -8817,7 +8867,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a30_h17",
+     "id": "a30_h19",
      "x": 335.5,
      "z": 112.5,
      "width": 1.0,

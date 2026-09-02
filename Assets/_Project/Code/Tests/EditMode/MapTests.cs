@@ -379,7 +379,9 @@ namespace MaxWorlds.Tests.EditMode
 
             var withCover = new List<MapEntity>(map.entities)
             {
-                new MapEntity { id = "Cover Compost", kind = "cover", x = 8f, z = 234f, width = 2f, height = 2f, depth = 2f },
+                // 'big_bermuda' is a 3.5x3.5 m boss at (0, 234) — its footprint reaches x=1.75, so this
+                // cover's own footprint (x=2..4) sits only 0.25 m clear, inside MV-649's 2 m minimum.
+                new MapEntity { id = "Cover Compost", kind = "cover", x = 3f, z = 234f, width = 2f, height = 2f, depth = 2f },
             };
             map.entities = withCover.ToArray();
 

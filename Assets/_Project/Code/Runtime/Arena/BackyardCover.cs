@@ -45,6 +45,17 @@ namespace MaxWorlds.Arena
             return Mathf.Sqrt(dx * dx + dy * dy);
         }
 
+        /// <summary>Shortest distance between this footprint and <paramref name="other"/>'s footprint
+        /// (0 if they touch or overlap) — rectangle to rectangle, not rectangle to a single point
+        /// (MV-649: measuring a boss's clearance from its centre punished a boss with a large body).</summary>
+        public float DistanceTo(ArenaCover other)
+        {
+            Rect a = Footprint, b = other.Footprint;
+            float dx = Mathf.Max(0f, Mathf.Max(a.xMin - b.xMax, b.xMin - a.xMax));
+            float dy = Mathf.Max(0f, Mathf.Max(a.yMin - b.yMax, b.yMin - a.yMax));
+            return Mathf.Sqrt(dx * dx + dy * dy);
+        }
+
         public bool Overlaps(ArenaCover other) => Footprint.Overlaps(other.Footprint);
     }
 
