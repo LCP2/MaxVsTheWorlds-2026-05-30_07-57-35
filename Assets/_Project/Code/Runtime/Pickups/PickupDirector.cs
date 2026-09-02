@@ -272,13 +272,18 @@ namespace MaxWorlds.Pickups
         /// drop. MV-457: a shed unlocks a whole ability FAMILY now, not a single node — once every
         /// category is unlocked there is nothing left to open, so it falls back to a Supercell + a cell
         /// cache instead — the reward the shed no longer has a use for the family pool to give.</summary>
-        /// <summary>Static, map-authored counterpart to a shed's own drop (MV-644) — places the exact
-        /// same reward <see cref="OnFactoryDestroyed"/> would give, at <paramref name="pos"/>. This is
-        /// the runtime hook for <see cref="MaxWorlds.Enemies.PowerupCadence.EnsureCoverage"/>'s
-        /// guarantee: an area with no shed of its own to ever drop one still needs a reachable pickup
-        /// once the cadence dial is otherwise exceeded, and there is no factory death here to hook —
-        /// <c>MapRuntime</c> calls this directly while building the map's "pickup" entities instead.</summary>
-        public void PlacePartsCache(Vector3 pos) => OnFactoryDestroyed(pos);
+        /// <summary>Static, map-authored counterpart to a shed's cell-cache fallback (MV-644; fixed to
+        /// never grant a Device by MV-646) — places the Supercell-plus-cell-ring reward at
+        /// <paramref name="pos"/>, unconditionally, whatever <see cref="RigState.LockedCategoryIds"/>
+        /// currently reports. This is the runtime hook for
+        /// <see cref="MaxWorlds.Enemies.PowerupCadence.EnsureCoverage"/>'s guarantee: an area with no
+        /// shed of its own to ever drop one still needs a reachable pickup once the cadence dial is
+        /// otherwise exceeded, and there is no factory death here to hook — <c>MapRuntime</c> calls this
+        /// directly while building the map's "pickup" entities instead. MV-646: this must NEVER spawn a
+        /// <see cref="PickupKind.Device"/> — a shed-free area has no shed to justify handing out an
+        /// ability FAMILY unlock, which is what a Device grants. Only a destroyed shed
+        /// (<see cref="OnFactoryDestroyed"/>) may do that.</summary>
+        public void PlacePartsCache(Vector3 pos) => SpawnCellCache(pos);
 
         private void OnFactoryDestroyed(Vector3 pos)
         {
@@ -287,17 +292,25 @@ namespace MaxWorlds.Pickups
 
             if (!anyLocked)
             {
-                SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
-                for (int i = 0; i < ShedCellCacheAmount; i++)
-                {
-                    float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
-                    Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
-                    SpawnDrop(PickupKind.PowerCell, pos + off);
-                }
+                SpawnCellCache(pos);
                 return;
             }
 
             SpawnDrop(PickupKind.Device, pos);
+        }
+
+        /// <summary>The "nothing left to unlock" cell-cache reward — one Supercell plus a
+        /// <see cref="ShedCellCacheAmount"/> ring of power cells — shared by <see cref="OnFactoryDestroyed"/>'s
+        /// own fallback branch and <see cref="PlacePartsCache"/> (MV-646). Never spawns a Device.</summary>
+        private void SpawnCellCache(Vector3 pos)
+        {
+            SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
+            for (int i = 0; i < ShedCellCacheAmount; i++)
+            {
+                float ang = i * (Mathf.PI * 2f / ShedCellCacheAmount);
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                SpawnDrop(PickupKind.PowerCell, pos + off);
+            }
         }
 
         private void SpawnDrop(PickupKind kind, Vector3 pos, MaxWorlds.Upgrades.PartKind part = default,
