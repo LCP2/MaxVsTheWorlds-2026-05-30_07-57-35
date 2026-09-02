@@ -5,11 +5,10 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// Walking sheds are coming (MV-562): the schema needs a <see cref="WorldShed.mobile"/> flag
-    /// before the movement behaviour lands, and a mobile shed needs more clearance than a static one
-    /// (<see cref="MapValidation.MinMobileShedClearance"/> 7 m vs <see cref="MapValidation.MinShedWallMargin"/>
-    /// 6 m) so it has room to stand up and move off. This pins both halves: the flag round-trips
-    /// through JSON, and validation catches a mobile shed authored too close to a wall or to cover —
-    /// naming the area and shed, per the AC.
+    /// before the movement behaviour lands. This pins the flag round-tripping through JSON and
+    /// validating like any other shed. MV-655 deleted the separate mobile-shed clearance rule this
+    /// class used to also cover (a mobile shed is now validated exactly like a static one), so the
+    /// wall/cover-violation assertions that pinned that rule were removed with it.
     /// </summary>
     public sealed class MV562MobileShedTests
     {
@@ -83,25 +82,16 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsTrue(MapValidation.ValidateWorldConfig(cfg, out string validReason), validReason);
 
             // --- AC4: a config with no `mobile` field behaves exactly as today — defaults to false,
-            // and a shed only 6 m from a wall (under the 7 m mobile clearance, but the only rule a
-            // single-shed area has ever been subject to) still validates.
+            // and a shed only 6 m from a wall (the only rule a single-shed area has ever been subject
+            // to, and only once it carries more than one shed) still validates.
             var staticArea = ShedArea(new WorldShed { id = "s1", x = 6f, z = 15f });
             Assert.IsFalse(staticArea.Sheds()[0].mobile);
             Assert.IsTrue(MapValidation.ValidateWorldConfig(OneAreaWorld(staticArea), out string staticReason), staticReason);
 
-            // --- AC3: a mobile shed within 7 m of a wall fails, naming the area and the shed.
-            var wallViolation = ShedArea(new WorldShed { id = "s1", x = 6f, z = 15f, mobile = true });
-            Assert.IsFalse(MapValidation.ValidateWorldConfig(OneAreaWorld(wallViolation), out string wallReason));
-            Assert.IsTrue(wallReason.Contains("a1") && wallReason.Contains("s1"),
-                $"expected the wall-clearance failure to name area 'a1' and shed 's1', got: {wallReason}");
-
-            // --- AC3: a mobile shed within 7 m of cover fails, naming the area and the shed.
-            var coverViolation = ShedArea(
-                new WorldShed { id = "s1", x = 15f, z = 15f, mobile = true },
-                new[] { new WorldCover { id = "hedge1", x = 17f, z = 15f, width = 1f, height = 1f, depth = 1f } });
-            Assert.IsFalse(MapValidation.ValidateWorldConfig(OneAreaWorld(coverViolation), out string coverReason));
-            Assert.IsTrue(coverReason.Contains("a1") && coverReason.Contains("s1"),
-                $"expected the cover-clearance failure to name area 'a1' and shed 's1', got: {coverReason}");
+            // --- MV-655: a mobile shed validates exactly like a static one now — same position, same
+            // single-shed area, `mobile: true` changes nothing about whether it passes.
+            var mobileArea = ShedArea(new WorldShed { id = "s1", x = 6f, z = 15f, mobile = true });
+            Assert.IsTrue(MapValidation.ValidateWorldConfig(OneAreaWorld(mobileArea), out string mobileReason), mobileReason);
         }
     }
 }

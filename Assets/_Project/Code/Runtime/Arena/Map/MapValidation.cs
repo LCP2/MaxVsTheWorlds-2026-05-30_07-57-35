@@ -52,14 +52,6 @@ namespace MaxWorlds.Arena
         /// plus clearance without crowding the boundary.</summary>
         public const float MinShedWallMargin = 6f;
 
-        /// <summary>Closest a MOBILE shed (MV-562, <see cref="WorldShed.mobile"/>) may sit to its
-        /// area's walls or to a piece of authored cover — wider than <see cref="MinShedWallMargin"/>'s
-        /// static 6 m because a walking shed needs room to stand up and move off, not just a spawn
-        /// ring. Applies to every mobile shed regardless of how many sheds share the area, unlike
-        /// <see cref="MinShedWallMargin"/>'s multi-shed-only gate — the clearance a mobile shed needs
-        /// does not depend on how many neighbours it has.</summary>
-        public const float MinMobileShedClearance = 7f;
-
         /// <summary>Closest two bosses authored in the SAME area may sit, centre to centre (MV-561) —
         /// room enough for a fight with two Big Bermudas to not have them standing on top of each
         /// other.</summary>
@@ -423,9 +415,19 @@ namespace MaxWorlds.Arena
         // openings" rather than merely "the numbers were self-consistent".
         // ---------------------------------------------------------------------------------------
 
-        /// <summary>Closest an authored garrison entry (MV-559) may sit to a piece of cover — a robot
-        /// authored inside a hedge is a content bug that should fail the build, not ship.</summary>
-        public const float MinGarrisonCoverGap = 1f;
+        /// <summary>Closest an authored garrison entry (MV-559) may sit to a piece of cover — the
+        /// entry's own collider radius plus a 0.1 m margin (MV-655): enough to refuse a robot authored
+        /// inside a hedge, while letting one stand in a gap it physically fits through. A flat 1 m
+        /// (pre-MV-655) was roughly double the widest body (the Brute's 0.6 m radius) and rejected ANY
+        /// robot the designer drew against cover, because a cell centre on the 1 m design grid sits
+        /// exactly 0.5 m from an adjacent hedge face.</summary>
+        private static float MinGarrisonCoverGap(EnemyKind kind) => EnemyArchetype.Of(kind).ColliderRadius + 0.1f;
+
+        /// <summary>Clearance a non-robot placement (<see cref="WorldMapLoader.IsClearForCache"/>'s
+        /// parts-cache pickup) must keep from cover — unrelated to any specific robot's collider, so
+        /// unlike <see cref="MinGarrisonCoverGap"/> it keeps the original flat 1 m rather than following
+        /// MV-655's per-robot gap.</summary>
+        public const float MinPickupCoverGap = 1f;
 
         public static bool ValidateWorldConfig(WorldConfig cfg, out string reason)
         {
@@ -433,7 +435,6 @@ namespace MaxWorlds.Arena
 
             return WorldAreas(cfg, out reason)
                 && WorldSheds(cfg, out reason)
-                && WorldMobileSheds(cfg, out reason)
                 && WorldBosses(cfg, out reason)
                 && WorldGarrison(cfg, out reason)
                 && WorldGates(cfg, out reason)
@@ -511,6 +512,13 @@ namespace MaxWorlds.Arena
                         return false;
                     }
 
+                    if (!EnemyKindNames.TryParse(entry.kind, out EnemyKind kind))
+                    {
+                        reason = $"area '{a.id}': garrison entry has an unrecognised kind '{entry.kind}'";
+                        return false;
+                    }
+
+                    float requiredGap = MinGarrisonCoverGap(kind);
                     foreach (WorldCover c in a.cover)
                     {
                         if (c == null) continue;
@@ -520,10 +528,11 @@ namespace MaxWorlds.Arena
                             x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
                         }.ToCover();
 
-                        if (body.DistanceTo(point) < MinGarrisonCoverGap)
+                        float gap = body.DistanceTo(point);
+                        if (gap < requiredGap)
                         {
-                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is within " +
-                                     $"{MinGarrisonCoverGap} m of cover '{c.id}'";
+                            reason = $"area '{a.id}': garrison entry ({entry.x:0.#}, {entry.z:0.#}) is {gap:0.#} m " +
+                                     $"from cover '{c.id}' — a {kind} needs {requiredGap:0.#} m clearance";
                             return false;
                         }
                     }
@@ -539,11 +548,6 @@ namespace MaxWorlds.Arena
                         }
                     }
 
-                    if (!EnemyKindNames.TryParse(entry.kind, out EnemyKind kind))
-                    {
-                        reason = $"area '{a.id}': garrison entry has an unrecognised kind '{entry.kind}'";
-                        return false;
-                    }
                     countByKind[kind] = countByKind.TryGetValue(kind, out int existing) ? existing + 1 : 1;
                 }
 
@@ -664,52 +668,6 @@ namespace MaxWorlds.Arena
                         reason = $"area '{a.id}' has two sheds {dist:0.#} m apart — under the " +
                                  $"{MinShedSeparation} m minimum shed separation";
                         return false;
-                    }
-                }
-            }
-
-            reason = null;
-            return true;
-        }
-
-        /// <summary>Every mobile shed (MV-562, <see cref="WorldShed.mobile"/>) must sit at least
-        /// <see cref="MinMobileShedClearance"/> from its own area's walls and from every piece of
-        /// authored cover — the room a walking shed needs to stand up and move off, enforced BEFORE
-        /// the walking behaviour exists so the map never has to be re-authored once it lands. Unlike
-        /// <see cref="WorldSheds"/>'s static-shed wall margin, this runs for every mobile shed
-        /// regardless of how many sheds the area has — a lone mobile shed still needs the room.</summary>
-        private static bool WorldMobileSheds(WorldConfig cfg, out string reason)
-        {
-            foreach (WorldArea a in cfg.areas)
-            {
-                foreach (WorldShed s in a.Sheds())
-                {
-                    if (!s.mobile) continue;
-
-                    if (s.x - a.XMin < MinMobileShedClearance || a.XMax - s.x < MinMobileShedClearance ||
-                        s.z - a.ZMin < MinMobileShedClearance || a.ZMax - s.z < MinMobileShedClearance)
-                    {
-                        reason = $"area '{a.id}': mobile shed '{s.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
-                                 $"{MinMobileShedClearance} m of its area's walls";
-                        return false;
-                    }
-
-                    var point = new Vector2(s.x, s.z);
-                    foreach (WorldCover c in a.cover)
-                    {
-                        if (c == null) continue;
-
-                        ArenaCover body = new MapEntity
-                        {
-                            x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
-                        }.ToCover();
-
-                        if (body.DistanceTo(point) < MinMobileShedClearance)
-                        {
-                            reason = $"area '{a.id}': mobile shed '{s.id}' at ({s.x:0.#}, {s.z:0.#}) is within " +
-                                     $"{MinMobileShedClearance} m of cover '{c.id}'";
-                            return false;
-                        }
                     }
                 }
             }

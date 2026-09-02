@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 1 \u2014 Backyard",
- "revision": "WORLD 1 v12c-b 2026-09-02 (MV-647): areas a1-a30 rebuilt from MVW_World1_Level_Design_V12c.xlsx. The sheet is the design: fence, cover, gates, robot counts, robot positions, sheds and bosses are all what is drawn. A shed or boss the sheet does not draw does not exist. Cover cells the drawing places inside a shed spawn ring, a mobile shed's 7 m clearance, a boss's 12 m clear radius or 2 m of a doorway are removed cell-by-cell, and robots inside the 1 m cover gap or a shed ring are nudged the minimum distance - those are MapValidation load gates, not design choices.",
+ "revision": "WORLD 1 v12d 2026-09-02: areas a1-a30 rebuilt from MVW_World1_Level_Design_V12d.xlsx. The sheet is the design: fence, cover, gates, robot counts, robot positions, sheds and bosses are all what is drawn. A shed or boss the sheet does not draw does not exist. Cover cells the drawing places inside a shed spawn ring, a mobile shed's 7 m clearance, a boss's 12 m clear radius or 2 m of a doorway are removed cell-by-cell, and robots inside the 1 m cover gap or a shed ring are nudged the minimum distance - those are MapValidation load gates, not design choices.",
  "note": "Authored in-chat to trial the World & Difficulty Framework (Confluence MVW 34439170). enemyTypes.thv were relative placeholders (1.0/2.5/4.5/7.0) at LOCK time; MV-270 replaced them with values derived from EnemyArchetype's real hp/contact-damage/speed via THV=(hp+shield)*dps*speedFactor*archetypeWeight (shield=0, archetypeWeight=1, dps=contactDamage/attackCycle) then scaled by x1.2 so R=MPL/EPL (PowerScoring) lands in the 0.85-1.4 band against the Water Blaster's real per-level DPS across Areas 1-7 \u2014 see World1CalibrationTests. The derived shape (1.0 : 2.6 : 4.49 : 7.11) came out almost identical to the original placeholder ratio, so the curve's SHAPE stood; only the magnitude moved.",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 1.5,
@@ -745,17 +745,17 @@
    "garrison": [
     {
      "kind": "blinker",
-     "x": 25.312,
-     "z": 130.983
+     "x": 25.45,
+     "z": 131.496
     },
     {
      "kind": "blinker",
-     "x": 27.312,
-     "z": 130.983
+     "x": 27.45,
+     "z": 131.496
     },
     {
      "kind": "rusher",
-     "x": 25.05,
+     "x": 24.55,
      "z": 130.5
     },
     {
@@ -770,8 +770,8 @@
     },
     {
      "kind": "rusher",
-     "x": 23.312,
-     "z": 122.983
+     "x": 23.45,
+     "z": 123.496
     },
     {
      "kind": "rusher",
@@ -790,13 +790,13 @@
     },
     {
      "kind": "blinker",
-     "x": 13.312,
-     "z": 117.983
+     "x": 13.45,
+     "z": 118.496
     },
     {
      "kind": "blinker",
-     "x": 15.312,
-     "z": 117.983
+     "x": 15.45,
+     "z": 118.496
     }
    ],
    "sheds": []
@@ -983,8 +983,8 @@
     },
     {
      "kind": "rusher",
-     "x": 50.312,
-     "z": 127.983
+     "x": 50.45,
+     "z": 128.496
     },
     {
      "kind": "rusher",
@@ -998,13 +998,13 @@
     },
     {
      "kind": "bolter",
-     "x": 45.312,
-     "z": 122.983
+     "x": 45.45,
+     "z": 123.496
     },
     {
      "kind": "bolter",
-     "x": 46.312,
-     "z": 122.983
+     "x": 46.45,
+     "z": 123.496
     }
    ],
    "sheds": [
@@ -1174,13 +1174,13 @@
     },
     {
      "kind": "gunner",
-     "x": 41.983,
-     "z": 153.688
+     "x": 42.496,
+     "z": 153.55
     },
     {
      "kind": "gunner",
-     "x": 42.312,
-     "z": 146.983
+     "x": 42.45,
+     "z": 147.496
     }
    ],
    "sheds": []
@@ -1307,12 +1307,12 @@
    "garrison": [
     {
      "kind": "bolter",
-     "x": 62.988,
-     "z": 160.804
+     "x": 62.55,
+     "z": 161.5
     },
     {
      "kind": "rusher",
-     "x": 67.05,
+     "x": 66.55,
      "z": 161.5
     },
     {
@@ -1327,13 +1327,13 @@
     },
     {
      "kind": "bolter",
-     "x": 63.03,
-     "z": 144.97
+     "x": 62.504,
+     "z": 145.45
     },
     {
      "kind": "bolter",
-     "x": 63.97,
-     "z": 144.03
+     "x": 64.496,
+     "z": 143.55
     }
    ],
    "sheds": []
@@ -1490,8 +1490,8 @@
     },
     {
      "kind": "bolter",
-     "x": 74.672,
-     "z": 118.254
+     "x": 74.5,
+     "z": 118.5
     },
     {
      "kind": "bolter",
@@ -1824,13 +1824,13 @@
    "garrison": [
     {
      "kind": "blinker",
-     "x": 93.312,
-     "z": 101.983
+     "x": 93.45,
+     "z": 102.496
     },
     {
      "kind": "blinker",
-     "x": 95.312,
-     "z": 101.983
+     "x": 95.45,
+     "z": 102.496
     },
     {
      "kind": "bruiser",
@@ -1849,8 +1849,8 @@
     },
     {
      "kind": "bruiser",
-     "x": 81.312,
-     "z": 82.983
+     "x": 81.371,
+     "z": 83.347
     },
     {
      "kind": "bruiser",
@@ -2042,8 +2042,8 @@
     },
     {
      "kind": "bolter",
-     "x": 118.983,
-     "z": 102.688
+     "x": 119.496,
+     "z": 102.55
     },
     {
      "kind": "bolter",
@@ -2052,13 +2052,13 @@
     },
     {
      "kind": "bolter",
-     "x": 108.254,
-     "z": 97.328
+     "x": 108.5,
+     "z": 97.5
     },
     {
      "kind": "bolter",
-     "x": 111.312,
-     "z": 96.983
+     "x": 111.45,
+     "z": 97.496
     },
     {
      "kind": "bolter",
@@ -2306,8 +2306,8 @@
     },
     {
      "kind": "bolter",
-     "x": 132.057,
-     "z": 88.989
+     "x": 132.55,
+     "z": 91.504
     },
     {
      "kind": "bolter",
@@ -2376,7 +2376,7 @@
     },
     {
      "kind": "gunner",
-     "x": 136.05,
+     "x": 135.55,
      "z": 79.5
     },
     {
@@ -2522,8 +2522,8 @@
     },
     {
      "kind": "bolter",
-     "x": 144.004,
-     "z": 60.047
+     "x": 143.297,
+     "z": 59.57
     },
     {
      "kind": "blinker",
@@ -2542,8 +2542,8 @@
     },
     {
      "kind": "bolter",
-     "x": 141.97,
-     "z": 56.97
+     "x": 142.45,
+     "z": 57.496
     },
     {
      "kind": "gunner",
@@ -2788,13 +2788,13 @@
     },
     {
      "kind": "bolter",
-     "x": 158.688,
-     "z": 27.017
+     "x": 158.55,
+     "z": 26.504
     },
     {
      "kind": "bolter",
-     "x": 158.312,
-     "z": 23.983
+     "x": 158.45,
+     "z": 24.496
     },
     {
      "kind": "bolter",
@@ -2808,7 +2808,7 @@
     },
     {
      "kind": "launcher",
-     "x": 156.05,
+     "x": 155.55,
      "z": 23.5
     },
     {
@@ -2903,8 +2903,8 @@
     },
     {
      "kind": "gunner",
-     "x": 159.196,
-     "z": 12.988
+     "x": 158.55,
+     "z": 12.504
     },
     {
      "kind": "gunner",
@@ -3066,8 +3066,8 @@
     },
     {
      "kind": "bolter",
-     "x": 174.312,
-     "z": 24.983
+     "x": 174.45,
+     "z": 25.496
     },
     {
      "kind": "bolter",
@@ -3166,6 +3166,16 @@
     },
     {
      "id": "a14_h3",
+     "x": 174.0,
+     "z": 63.5,
+     "width": 8.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a14_h4",
      "x": 171.5,
      "z": 40.0,
      "width": 1.0,
@@ -3175,7 +3185,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a14_h4",
+     "id": "a14_h5",
      "x": 173.5,
      "z": 38.5,
      "width": 3.0,
@@ -3185,17 +3195,17 @@
      "dressing": "tree"
     },
     {
-     "id": "a14_h5",
-     "x": 176.5,
+     "id": "a14_h6",
+     "x": 178.5,
      "z": 54.5,
-     "width": 7.0,
+     "width": 11.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a14_h6",
+     "id": "a14_h7",
      "x": 175.5,
      "z": 72.5,
      "width": 5.0,
@@ -3205,17 +3215,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a14_h7",
+     "id": "a14_h8",
      "x": 178.5,
-     "z": 73.0,
+     "z": 69.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 6.0,
+     "depth": 13.0,
      "shape": "box",
      "dressing": "planter"
     },
     {
-     "id": "a14_h8",
+     "id": "a14_h9",
      "x": 181.0,
      "z": 70.5,
      "width": 4.0,
@@ -3225,7 +3235,7 @@
      "dressing": "planter"
     },
     {
-     "id": "a14_h9",
+     "id": "a14_h10",
      "x": 182.5,
      "z": 73.5,
      "width": 5.0,
@@ -3235,7 +3245,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a14_h10",
+     "id": "a14_h11",
      "x": 184.5,
      "z": 38.5,
      "width": 3.0,
@@ -3243,6 +3253,16 @@
      "depth": 1.0,
      "shape": "box",
      "dressing": "tree"
+    },
+    {
+     "id": "a14_h12",
+     "x": 183.5,
+     "z": 59.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 8.0,
+     "shape": "box",
+     "dressing": "hedge"
     }
    ],
    "notes": "corridor: ranged the whole way, cover is the only answer",
@@ -3279,18 +3299,18 @@
     },
     {
      "kind": "bruiser",
-     "x": 182.5,
-     "z": 66.5
+     "x": 179.7,
+     "z": 63.5
     },
     {
      "kind": "heavy",
-     "x": 180.5,
-     "z": 64.5
+     "x": 177.5,
+     "z": 61.5
     },
     {
      "kind": "gunner",
-     "x": 182.5,
-     "z": 64.5
+     "x": 179.5,
+     "z": 61.5
     },
     {
      "kind": "bolter",
@@ -3309,8 +3329,8 @@
     },
     {
      "kind": "bolter",
-     "x": 180.746,
-     "z": 55.672
+     "x": 180.55,
+     "z": 55.504
     },
     {
      "kind": "gunner",
@@ -3329,8 +3349,8 @@
     },
     {
      "kind": "bolter",
-     "x": 169.983,
-     "z": 45.688
+     "x": 170.496,
+     "z": 45.55
     },
     {
      "kind": "bolter",
@@ -3339,8 +3359,8 @@
     },
     {
      "kind": "launcher",
-     "x": 169.983,
-     "z": 43.688
+     "x": 170.475,
+     "z": 43.543
     },
     {
      "kind": "launcher",
@@ -3349,8 +3369,8 @@
     },
     {
      "kind": "bolter",
-     "x": 169.983,
-     "z": 40.688
+     "x": 170.496,
+     "z": 40.55
     },
     {
      "kind": "bolter",
@@ -3359,8 +3379,8 @@
     },
     {
      "kind": "launcher",
-     "x": 169.983,
-     "z": 36.688
+     "x": 170.475,
+     "z": 36.543
     },
     {
      "kind": "launcher",
@@ -3369,8 +3389,8 @@
     },
     {
      "kind": "bolter",
-     "x": 169.983,
-     "z": 34.688
+     "x": 170.496,
+     "z": 34.55
     },
     {
      "kind": "bolter",
@@ -3525,7 +3545,7 @@
     },
     {
      "kind": "gunner",
-     "x": 185.05,
+     "x": 184.55,
      "z": 105.5
     },
     {
@@ -3540,8 +3560,8 @@
     },
     {
      "kind": "brute",
-     "x": 185.03,
-     "z": 104.03
+     "x": 184.705,
+     "z": 103.643
     },
     {
      "kind": "heavy",
@@ -3550,8 +3570,8 @@
     },
     {
      "kind": "heavy",
-     "x": 185.173,
-     "z": 104.011
+     "x": 184.687,
+     "z": 103.642
     },
     {
      "kind": "heavy",
@@ -3570,13 +3590,13 @@
     },
     {
      "kind": "launcher",
-     "x": 174.328,
-     "z": 93.746
+     "x": 174.5,
+     "z": 93.5
     },
     {
      "kind": "gunner",
-     "x": 179.688,
-     "z": 94.017
+     "x": 179.55,
+     "z": 93.504
     }
    ]
   },
@@ -3909,8 +3929,8 @@
     },
     {
      "kind": "gunner",
-     "x": 204.746,
-     "z": 127.672
+     "x": 204.5,
+     "z": 127.5
     },
     {
      "kind": "bruiser",
@@ -3919,13 +3939,13 @@
     },
     {
      "kind": "gunner",
-     "x": 205.03,
-     "z": 126.03
+     "x": 204.55,
+     "z": 125.504
     },
     {
      "kind": "brute",
-     "x": 205.03,
-     "z": 120.97
+     "x": 204.712,
+     "z": 121.288
     },
     {
      "kind": "bruiser",
@@ -3934,7 +3954,7 @@
     },
     {
      "kind": "brute",
-     "x": 205.05,
+     "x": 204.75,
      "z": 119.5
     },
     {
@@ -4125,8 +4145,8 @@
    "garrison": [
     {
      "kind": "launcher",
-     "x": 213.312,
-     "z": 92.983
+     "x": 213.455,
+     "z": 93.479
     },
     {
      "kind": "gunner",
@@ -4145,8 +4165,8 @@
     },
     {
      "kind": "bolter",
-     "x": 205.983,
-     "z": 85.688
+     "x": 206.496,
+     "z": 85.55
     },
     {
      "kind": "gunner",
@@ -4155,8 +4175,8 @@
     },
     {
      "kind": "bolter",
-     "x": 205.983,
-     "z": 83.688
+     "x": 206.496,
+     "z": 83.55
     },
     {
      "kind": "heavy",
@@ -4170,8 +4190,8 @@
     },
     {
      "kind": "bolter",
-     "x": 205.983,
-     "z": 81.688
+     "x": 206.496,
+     "z": 81.55
     },
     {
      "kind": "bruiser",
@@ -4190,8 +4210,8 @@
     },
     {
      "kind": "bolter",
-     "x": 205.983,
-     "z": 79.688
+     "x": 206.496,
+     "z": 79.55
     },
     {
      "kind": "heavy",
@@ -4210,8 +4230,8 @@
     },
     {
      "kind": "launcher",
-     "x": 205.983,
-     "z": 77.688
+     "x": 206.475,
+     "z": 77.543
     },
     {
      "kind": "heavy",
@@ -4371,18 +4391,18 @@
     },
     {
      "kind": "blinker",
-     "x": 203.312,
-     "z": 56.983
+     "x": 203.45,
+     "z": 57.496
     },
     {
      "kind": "blinker",
-     "x": 206.312,
-     "z": 56.983
+     "x": 206.45,
+     "z": 57.496
     },
     {
      "kind": "blinker",
-     "x": 208.312,
-     "z": 56.983
+     "x": 208.45,
+     "z": 57.496
     },
     {
      "kind": "bolter",
@@ -4401,7 +4421,7 @@
     },
     {
      "kind": "heavy",
-     "x": 213.05,
+     "x": 212.7,
      "z": 56.5
     },
     {
@@ -4416,7 +4436,7 @@
     },
     {
      "kind": "bruiser",
-     "x": 213.05,
+     "x": 212.7,
      "z": 54.5
     },
     {
@@ -4436,23 +4456,23 @@
     },
     {
      "kind": "brute",
-     "x": 203.688,
-     "z": 52.017
+     "x": 203.643,
+     "z": 51.705
     },
     {
      "kind": "gunner",
-     "x": 203.312,
-     "z": 48.983
+     "x": 203.45,
+     "z": 49.496
     },
     {
      "kind": "gunner",
-     "x": 205.312,
-     "z": 48.983
+     "x": 205.45,
+     "z": 49.496
     },
     {
      "kind": "gunner",
-     "x": 207.312,
-     "z": 48.983
+     "x": 207.45,
+     "z": 49.496
     },
     {
      "kind": "gunner",
@@ -4519,16 +4539,6 @@
     },
     {
      "id": "a20_h3",
-     "x": 202.5,
-     "z": 5.5,
-     "width": 17.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "planter"
-    },
-    {
-     "id": "a20_h4",
      "x": 196.5,
      "z": 12.5,
      "width": 5.0,
@@ -4538,7 +4548,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a20_h5",
+     "id": "a20_h4",
      "x": 194.5,
      "z": 28.5,
      "width": 1.0,
@@ -4546,6 +4556,16 @@
      "depth": 5.0,
      "shape": "box",
      "dressing": "tree"
+    },
+    {
+     "id": "a20_h5",
+     "x": 213.5,
+     "z": 5.5,
+     "width": 37.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "planter"
     },
     {
      "id": "a20_h6",
@@ -4589,16 +4609,6 @@
     },
     {
      "id": "a20_h10",
-     "x": 223.0,
-     "z": 5.5,
-     "width": 18.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "planter"
-    },
-    {
-     "id": "a20_h11",
      "x": 219.5,
      "z": -2.5,
      "width": 1.0,
@@ -4608,7 +4618,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a20_h12",
+     "id": "a20_h11",
      "x": 228.5,
      "z": 39.5,
      "width": 5.0,
@@ -4840,6 +4850,26 @@
    "cover": [
     {
      "id": "a21_h1",
+     "x": 240.0,
+     "z": -0.5,
+     "width": 8.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a21_h2",
+     "x": 237.0,
+     "z": 2.5,
+     "width": 2.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a21_h3",
      "x": 241.0,
      "z": -4.5,
      "width": 8.0,
@@ -4849,7 +4879,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h2",
+     "id": "a21_h4",
      "x": 240.5,
      "z": -7.5,
      "width": 5.0,
@@ -4859,17 +4889,17 @@
      "dressing": "tree"
     },
     {
-     "id": "a21_h3",
-     "x": 241.0,
-     "z": -0.5,
-     "width": 6.0,
+     "id": "a21_h5",
+     "x": 244.5,
+     "z": 2.5,
+     "width": 5.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a21_h4",
+     "id": "a21_h6",
      "x": 244.5,
      "z": -1.5,
      "width": 1.0,
@@ -4879,7 +4909,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h5",
+     "id": "a21_h7",
      "x": 244.5,
      "z": 15.5,
      "width": 1.0,
@@ -4889,17 +4919,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h6",
+     "id": "a21_h8",
      "x": 246.5,
-     "z": 2.5,
+     "z": 4.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a21_h7",
+     "id": "a21_h9",
      "x": 249.0,
      "z": 14.5,
      "width": 6.0,
@@ -4909,7 +4939,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h8",
+     "id": "a21_h10",
      "x": 247.5,
      "z": 6.0,
      "width": 1.0,
@@ -4919,7 +4949,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h9",
+     "id": "a21_h11",
      "x": 248.5,
      "z": 9.5,
      "width": 1.0,
@@ -4929,7 +4959,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h10",
+     "id": "a21_h12",
      "x": 249.5,
      "z": 11.5,
      "width": 1.0,
@@ -4939,7 +4969,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a21_h11",
+     "id": "a21_h13",
      "x": 250.5,
      "z": 13.0,
      "width": 1.0,
@@ -4973,12 +5003,12 @@
     },
     {
      "kind": "bolter",
-     "x": 252.672,
-     "z": 13.254
+     "x": 252.5,
+     "z": 13.5
     },
     {
      "kind": "bruiser",
-     "x": 252.05,
+     "x": 251.7,
      "z": 12.5
     },
     {
@@ -5008,23 +5038,23 @@
     },
     {
      "kind": "brute",
-     "x": 243.5,
-     "z": 1.5
+     "x": 243.357,
+     "z": 1.295
     },
     {
      "kind": "bruiser",
-     "x": 238.688,
-     "z": 1.017
+     "x": 238.629,
+     "z": 0.653
     },
     {
      "kind": "bruiser",
-     "x": 239.688,
-     "z": 1.017
+     "x": 239.629,
+     "z": 0.653
     },
     {
      "kind": "heavy",
-     "x": 240.688,
-     "z": 1.017
+     "x": 240.585,
+     "z": 0.681
     },
     {
      "kind": "brute",
@@ -5102,15 +5132,25 @@
     {
      "id": "a22_h3",
      "x": 242.5,
-     "z": 44.5,
+     "z": 44.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a22_h4",
+     "x": 244.5,
+     "z": 45.5,
+     "width": 5.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h5",
      "x": 247.0,
      "z": 39.5,
      "width": 8.0,
@@ -5120,7 +5160,7 @@
      "dressing": "tree"
     },
     {
-     "id": "a22_h5",
+     "id": "a22_h6",
      "x": 249.0,
      "z": 23.5,
      "width": 10.0,
@@ -5130,7 +5170,7 @@
      "dressing": "planter"
     },
     {
-     "id": "a22_h6",
+     "id": "a22_h7",
      "x": 246.0,
      "z": 31.5,
      "width": 4.0,
@@ -5140,42 +5180,32 @@
      "dressing": "hedge"
     },
     {
-     "id": "a22_h7",
+     "id": "a22_h8",
      "x": 244.5,
-     "z": 32.5,
+     "z": 33.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a22_h8",
-     "x": 245.5,
-     "z": 33.5,
-     "width": 3.0,
-     "height": 1.8,
-     "depth": 1.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a22_h9",
-     "x": 245.5,
-     "z": 61.5,
-     "width": 3.0,
+     "x": 246.0,
+     "z": 34.5,
+     "width": 4.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a22_h10",
-     "x": 248.0,
-     "z": 32.5,
-     "width": 4.0,
+     "x": 245.5,
+     "z": 61.5,
+     "width": 3.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 3.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -5191,9 +5221,9 @@
     },
     {
      "id": "a22_h12",
-     "x": 249.5,
+     "x": 250.0,
      "z": 30.5,
-     "width": 5.0,
+     "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5201,6 +5231,36 @@
     },
     {
      "id": "a22_h13",
+     "x": 247.5,
+     "z": 32.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h14",
+     "x": 249.0,
+     "z": 33.5,
+     "width": 4.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h15",
+     "x": 252.0,
+     "z": 27.5,
+     "width": 6.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h16",
      "x": 249.5,
      "z": 29.0,
      "width": 1.0,
@@ -5210,59 +5270,49 @@
      "dressing": "hedge"
     },
     {
-     "id": "a22_h14",
-     "x": 249.5,
-     "z": 31.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a22_h15",
-     "x": 251.5,
-     "z": 25.5,
-     "width": 3.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a22_h16",
-     "x": 250.5,
-     "z": 26.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
      "id": "a22_h17",
-     "x": 251.0,
-     "z": 28.0,
-     "width": 2.0,
+     "x": 252.5,
+     "z": 24.5,
+     "width": 5.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h18",
+     "x": 250.5,
+     "z": 26.0,
+     "width": 1.0,
      "height": 1.8,
      "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a22_h18",
-     "x": 251.5,
-     "z": 29.5,
+     "id": "a22_h19",
+     "x": 250.5,
+     "z": 32.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a22_h19",
+     "id": "a22_h20",
      "x": 252.5,
-     "z": 27.0,
+     "z": 29.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a22_h21",
+     "x": 254.5,
+     "z": 26.0,
      "width": 1.0,
      "height": 1.8,
      "depth": 2.0,
@@ -5374,38 +5424,38 @@
     },
     {
      "kind": "launcher",
-     "x": 244.05,
-     "z": 44.5
+     "x": 243.525,
+     "z": 44.457
     },
     {
      "kind": "launcher",
-     "x": 244.5,
-     "z": 44.5
+     "x": 244.455,
+     "z": 44.479
     },
     {
      "kind": "launcher",
-     "x": 244.983,
-     "z": 44.688
+     "x": 245.455,
+     "z": 44.479
     },
     {
      "kind": "launcher",
-     "x": 244.03,
-     "z": 44.03
+     "x": 243.545,
+     "z": 43.521
     },
     {
      "kind": "launcher",
-     "x": 244.688,
-     "z": 44.017
+     "x": 244.545,
+     "z": 43.521
     },
     {
      "kind": "launcher",
-     "x": 244.97,
-     "z": 44.03
+     "x": 245.475,
+     "z": 43.543
     },
     {
      "kind": "bolter",
-     "x": 249.672,
-     "z": 41.254
+     "x": 249.5,
+     "z": 41.5
     },
     {
      "kind": "gunner",
@@ -5429,23 +5479,23 @@
     },
     {
      "kind": "launcher",
-     "x": 245.943,
-     "z": 35.011
+     "x": 245.545,
+     "z": 32.521
     },
     {
      "kind": "launcher",
-     "x": 248.943,
-     "z": 34.011
+     "x": 248.545,
+     "z": 31.521
     },
     {
      "kind": "launcher",
-     "x": 253.05,
-     "z": 29.5
+     "x": 250.525,
+     "z": 29.457
     },
     {
      "kind": "launcher",
-     "x": 254.05,
-     "z": 26.5
+     "x": 251.525,
+     "z": 26.457
     }
    ]
   },
@@ -5466,8 +5516,8 @@
    "sheds": [
     {
      "id": "a23_shed1",
-     "x": 241.0,
-     "z": 91.9,
+     "x": 238.0,
+     "z": 91.5,
      "produces": "mixed",
      "mobile": true
     }
@@ -5479,10 +5529,10 @@
     "bruiser": 13,
     "heavy": 2,
     "brute": 6,
-    "gunner": 15,
+    "gunner": 11,
     "launcher": 0,
     "blinker": 17,
-    "bolter": 22
+    "bolter": 11
    },
    "cover": [
     {
@@ -5497,9 +5547,9 @@
     },
     {
      "id": "a23_h2",
-     "x": 232.5,
+     "x": 233.0,
      "z": 84.5,
-     "width": 1.0,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5507,9 +5557,9 @@
     },
     {
      "id": "a23_h3",
-     "x": 232.5,
-     "z": 86.5,
-     "width": 1.0,
+     "x": 233.0,
+     "z": 87.5,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5518,7 +5568,7 @@
     {
      "id": "a23_h4",
      "x": 232.5,
-     "z": 88.5,
+     "z": 90.5,
      "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
@@ -5528,96 +5578,6 @@
     {
      "id": "a23_h5",
      "x": 232.5,
-     "z": 90.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h6",
-     "x": 232.5,
-     "z": 92.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h7",
-     "x": 232.5,
-     "z": 94.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h8",
-     "x": 232.5,
-     "z": 96.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h9",
-     "x": 232.5,
-     "z": 98.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h10",
-     "x": 233.5,
-     "z": 85.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h11",
-     "x": 233.5,
-     "z": 87.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h12",
-     "x": 233.5,
-     "z": 89.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h13",
-     "x": 233.5,
-     "z": 91.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h14",
-     "x": 233.5,
      "z": 93.5,
      "width": 1.0,
      "height": 1.8,
@@ -5626,37 +5586,27 @@
      "dressing": "hedge"
     },
     {
-     "id": "a23_h15",
-     "x": 233.5,
-     "z": 95.5,
-     "width": 1.0,
+     "id": "a23_h6",
+     "x": 233.0,
+     "z": 96.5,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a23_h16",
-     "x": 233.5,
-     "z": 97.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h17",
-     "x": 233.5,
+     "id": "a23_h7",
+     "x": 233.0,
      "z": 99.5,
-     "width": 1.0,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a23_h18",
+     "id": "a23_h8",
      "x": 236.5,
      "z": 77.0,
      "width": 5.0,
@@ -5666,37 +5616,27 @@
      "dressing": "hedge"
     },
     {
-     "id": "a23_h19",
+     "id": "a23_h9",
      "x": 234.5,
-     "z": 86.5,
+     "z": 86.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 4.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a23_h20",
+     "id": "a23_h10",
      "x": 234.5,
-     "z": 96.5,
+     "z": 97.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 5.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a23_h21",
-     "x": 234.5,
-     "z": 98.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h22",
+     "id": "a23_h11",
      "x": 242.5,
      "z": 71.5,
      "width": 9.0,
@@ -5706,7 +5646,7 @@
      "dressing": "planter"
     },
     {
-     "id": "a23_h23",
+     "id": "a23_h12",
      "x": 238.5,
      "z": 72.5,
      "width": 1.0,
@@ -5716,9 +5656,9 @@
      "dressing": "planter"
     },
     {
-     "id": "a23_h24",
+     "id": "a23_h13",
      "x": 244.0,
-     "z": 83.5,
+     "z": 82.5,
      "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
@@ -5726,10 +5666,120 @@
      "dressing": "hedge"
     },
     {
+     "id": "a23_h14",
+     "x": 244.0,
+     "z": 83.5,
+     "width": 6.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
+     "id": "a23_h15",
+     "x": 242.5,
+     "z": 87.5,
+     "width": 3.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h16",
+     "x": 241.5,
+     "z": 95.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h17",
+     "x": 250.5,
+     "z": 96.5,
+     "width": 19.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h18",
+     "x": 241.5,
+     "z": 98.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h19",
+     "x": 250.5,
+     "z": 99.5,
+     "width": 19.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h20",
+     "x": 243.5,
+     "z": 90.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h21",
+     "x": 243.5,
+     "z": 93.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h22",
+     "x": 244.5,
+     "z": 91.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 9.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h23",
+     "x": 245.5,
+     "z": 98.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a23_h24",
+     "x": 247.5,
+     "z": 77.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 13.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
      "id": "a23_h25",
-     "x": 245.0,
-     "z": 84.5,
-     "width": 4.0,
+     "x": 248.0,
+     "z": 85.5,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5737,9 +5787,9 @@
     },
     {
      "id": "a23_h26",
-     "x": 250.5,
-     "z": 98.5,
-     "width": 11.0,
+     "x": 250.0,
+     "z": 90.5,
+     "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -5748,77 +5798,77 @@
     {
      "id": "a23_h27",
      "x": 247.5,
-     "z": 78.0,
+     "z": 92.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 14.0,
+     "depth": 2.0,
      "shape": "box",
-     "dressing": "tree"
+     "dressing": "hedge"
     },
     {
      "id": "a23_h28",
-     "x": 249.5,
-     "z": 86.5,
-     "width": 5.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
-     "id": "a23_h29",
-     "x": 253.5,
-     "z": 96.5,
-     "width": 13.0,
+     "x": 250.0,
+     "z": 93.5,
+     "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a23_h30",
-     "x": 247.5,
-     "z": 97.5,
+     "id": "a23_h29",
+     "x": 248.5,
+     "z": 83.5,
      "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
+    },
+    {
+     "id": "a23_h30",
+     "x": 248.5,
+     "z": 98.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a23_h31",
-     "x": 249.5,
+     "x": 250.5,
      "z": 84.5,
      "width": 3.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 3.0,
      "shape": "box",
      "dressing": "tree"
     },
     {
      "id": "a23_h32",
-     "x": 249.5,
-     "z": 91.5,
-     "width": 3.0,
+     "x": 250.5,
+     "z": 92.0,
+     "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a23_h33",
-     "x": 249.5,
-     "z": 93.5,
-     "width": 3.0,
+     "x": 251.5,
+     "z": 98.0,
+     "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a23_h34",
-     "x": 249.5,
-     "z": 85.5,
+     "x": 252.5,
+     "z": 83.5,
      "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
@@ -5827,291 +5877,206 @@
     },
     {
      "id": "a23_h35",
-     "x": 249.5,
-     "z": 92.5,
-     "width": 1.0,
+     "x": 253.0,
+     "z": 85.5,
+     "width": 2.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "tree"
     },
     {
      "id": "a23_h36",
-     "x": 249.5,
-     "z": 97.5,
+     "x": 253.5,
+     "z": 90.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
+     "depth": 8.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a23_h37",
-     "x": 251.5,
-     "z": 90.5,
+     "x": 254.5,
+     "z": 98.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 7.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a23_h38",
-     "x": 251.5,
-     "z": 97.5,
+     "x": 257.5,
+     "z": 98.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a23_h39",
-     "x": 254.5,
-     "z": 97.5,
-     "width": 3.0,
-     "height": 1.8,
-     "depth": 1.0,
+     "depth": 2.0,
      "shape": "box",
      "dressing": "hedge"
     }
    ],
    "notes": "cutting beds: the full roster, evenly",
    "shed": {
-    "x": 241.0,
-    "z": 91.9,
+    "x": 238.0,
+    "z": 91.5,
     "produces": "mixed"
    },
    "garrison": [
     {
      "kind": "bolter",
-     "x": 235.02,
-     "z": 100.02
+     "x": 232.55,
+     "z": 97.504
+    },
+    {
+     "kind": "gunner",
+     "x": 243.55,
+     "z": 97.504
+    },
+    {
+     "kind": "gunner",
+     "x": 246.55,
+     "z": 97.504
+    },
+    {
+     "kind": "gunner",
+     "x": 249.55,
+     "z": 97.504
+    },
+    {
+     "kind": "gunner",
+     "x": 252.55,
+     "z": 97.504
+    },
+    {
+     "kind": "gunner",
+     "x": 255.55,
+     "z": 97.504
+    },
+    {
+     "kind": "gunner",
+     "x": 258.55,
+     "z": 97.504
     },
     {
      "kind": "bolter",
-     "x": 232.014,
-     "z": 100.257
+     "x": 232.55,
+     "z": 94.504
     },
     {
      "kind": "gunner",
-     "x": 243.5,
-     "z": 97.5
+     "x": 243.496,
+     "z": 94.55
     },
     {
      "kind": "gunner",
-     "x": 245.312,
-     "z": 96.983
+     "x": 248.504,
+     "z": 92.45
     },
     {
      "kind": "gunner",
-     "x": 245.97,
-     "z": 96.97
+     "x": 252.45,
+     "z": 92.496
     },
     {
-     "kind": "gunner",
-     "x": 248.943,
-     "z": 100.011
-    },
-    {
-     "kind": "gunner",
-     "x": 250.943,
-     "z": 100.011
-    },
-    {
-     "kind": "gunner",
-     "x": 252.943,
-     "z": 100.011
-    },
-    {
-     "kind": "bolter",
-     "x": 235.02,
-     "z": 94.98
-    },
-    {
-     "kind": "gunner",
-     "x": 243.5,
-     "z": 96.5
-    },
-    {
-     "kind": "gunner",
-     "x": 244.5,
-     "z": 96.5
-    },
-    {
-     "kind": "bolter",
-     "x": 234.943,
-     "z": 94.611
-    },
-    {
-     "kind": "gunner",
-     "x": 243.5,
-     "z": 95.5
-    },
-    {
-     "kind": "bolter",
-     "x": 234.9,
-     "z": 94.5
-    },
-    {
-     "kind": "gunner",
-     "x": 244.036,
-     "z": 94.95
-    },
-    {
-     "kind": "bolter",
-     "x": 235.05,
-     "z": 93.5
-    },
-    {
-     "kind": "bolter",
-     "x": 234.9,
-     "z": 92.5
-    },
-    {
-     "kind": "gunner",
-     "x": 245.243,
-     "z": 92.653
-    },
-    {
-     "kind": "gunner",
-     "x": 247.1,
-     "z": 92.5
-    },
-    {
-     "kind": "gunner",
-     "x": 253.05,
+     "kind": "brute",
+     "x": 255.5,
      "z": 92.5
     },
     {
      "kind": "brute",
-     "x": 254.5,
-     "z": 92.5
-    },
-    {
-     "kind": "brute",
-     "x": 256.5,
+     "x": 257.5,
      "z": 92.5
     },
     {
      "kind": "bolter",
-     "x": 235.05,
+     "x": 232.55,
+     "z": 91.504
+    },
+    {
+     "kind": "gunner",
+     "x": 243.496,
+     "z": 91.55
+    },
+    {
+     "kind": "brute",
+     "x": 255.5,
      "z": 91.5
     },
     {
      "kind": "brute",
-     "x": 254.5,
+     "x": 257.5,
      "z": 91.5
     },
     {
      "kind": "brute",
-     "x": 256.5,
-     "z": 91.5
-    },
-    {
-     "kind": "bolter",
-     "x": 234.9,
-     "z": 90.5
-    },
-    {
-     "kind": "gunner",
-     "x": 244.688,
-     "z": 89.668
-    },
-    {
-     "kind": "bolter",
-     "x": 235.05,
+     "x": 255.5,
      "z": 89.5
+    },
+    {
+     "kind": "brute",
+     "x": 257.5,
+     "z": 89.5
+    },
+    {
+     "kind": "bolter",
+     "x": 232.55,
+     "z": 88.504
+    },
+    {
+     "kind": "gunner",
+     "x": 243.496,
+     "z": 88.55
     },
     {
      "kind": "bolter",
      "x": 247.5,
-     "z": 89.5
-    },
-    {
-     "kind": "bolter",
-     "x": 248.5,
-     "z": 89.5
-    },
-    {
-     "kind": "bolter",
-     "x": 249.5,
-     "z": 89.5
-    },
-    {
-     "kind": "bolter",
-     "x": 249.983,
-     "z": 89.688
-    },
-    {
-     "kind": "brute",
-     "x": 254.5,
-     "z": 89.5
-    },
-    {
-     "kind": "brute",
-     "x": 256.5,
-     "z": 89.5
-    },
-    {
-     "kind": "bolter",
-     "x": 234.9,
      "z": 88.5
     },
     {
-     "kind": "gunner",
-     "x": 243.5,
-     "z": 88.4
+     "kind": "bolter",
+     "x": 250.5,
+     "z": 88.5
     },
     {
      "kind": "bolter",
-     "x": 235.011,
-     "z": 88.173
+     "x": 252.496,
+     "z": 88.55
     },
     {
      "kind": "bolter",
-     "x": 247.688,
-     "z": 88.017
+     "x": 247.55,
+     "z": 86.504
     },
     {
      "kind": "bolter",
-     "x": 248.688,
-     "z": 88.017
+     "x": 250.55,
+     "z": 86.504
     },
     {
      "kind": "bolter",
-     "x": 249.688,
-     "z": 88.017
-    },
-    {
-     "kind": "bolter",
-     "x": 249.97,
-     "z": 88.03
-    },
-    {
-     "kind": "bolter",
-     "x": 235.02,
-     "z": 88.02
+     "x": 252.496,
+     "z": 86.55
     },
     {
      "kind": "heavy",
-     "x": 254.5,
+     "x": 255.5,
      "z": 86.5
     },
     {
      "kind": "heavy",
-     "x": 256.5,
+     "x": 257.5,
      "z": 86.5
     },
     {
      "kind": "bolter",
-     "x": 234.02,
-     "z": 83.98
+     "x": 232.55,
+     "z": 85.504
     },
     {
      "kind": "bruiser",
-     "x": 252.5,
-     "z": 82.5
+     "x": 252.371,
+     "z": 82.347
     },
     {
      "kind": "bruiser",
@@ -6130,27 +6095,7 @@
     },
     {
      "kind": "blinker",
-     "x": 239.746,
-     "z": 81.672
-    },
-    {
-     "kind": "blinker",
-     "x": 241.5,
-     "z": 81.5
-    },
-    {
-     "kind": "blinker",
-     "x": 243.5,
-     "z": 81.5
-    },
-    {
-     "kind": "blinker",
-     "x": 245.5,
-     "z": 81.5
-    },
-    {
-     "kind": "blinker",
-     "x": 240.05,
+     "x": 239.55,
      "z": 79.5
     },
     {
@@ -6184,34 +6129,24 @@
      "z": 78.5
     },
     {
-     "kind": "bruiser",
-     "x": 240.5,
+     "kind": "blinker",
+     "x": 239.55,
      "z": 77.5
     },
     {
-     "kind": "bruiser",
-     "x": 242.5,
+     "kind": "blinker",
+     "x": 241.5,
      "z": 77.5
     },
     {
-     "kind": "bruiser",
-     "x": 244.5,
+     "kind": "blinker",
+     "x": 243.5,
      "z": 77.5
     },
     {
-     "kind": "bruiser",
-     "x": 240.5,
-     "z": 76.5
-    },
-    {
-     "kind": "bruiser",
-     "x": 242.5,
-     "z": 76.5
-    },
-    {
-     "kind": "bruiser",
-     "x": 244.5,
-     "z": 76.5
+     "kind": "blinker",
+     "x": 245.5,
+     "z": 77.5
     },
     {
      "kind": "blinker",
@@ -6231,17 +6166,17 @@
     {
      "kind": "bruiser",
      "x": 240.5,
-     "z": 75.5
+     "z": 74.5
     },
     {
      "kind": "bruiser",
      "x": 242.5,
-     "z": 75.5
+     "z": 74.5
     },
     {
      "kind": "bruiser",
      "x": 244.5,
-     "z": 75.5
+     "z": 74.5
     },
     {
      "kind": "blinker",
@@ -6257,6 +6192,36 @@
      "kind": "blinker",
      "x": 256.5,
      "z": 74.5
+    },
+    {
+     "kind": "bruiser",
+     "x": 240.5,
+     "z": 73.5
+    },
+    {
+     "kind": "bruiser",
+     "x": 242.5,
+     "z": 73.5
+    },
+    {
+     "kind": "bruiser",
+     "x": 244.5,
+     "z": 73.5
+    },
+    {
+     "kind": "bruiser",
+     "x": 240.629,
+     "z": 72.653
+    },
+    {
+     "kind": "bruiser",
+     "x": 242.629,
+     "z": 72.653
+    },
+    {
+     "kind": "bruiser",
+     "x": 244.629,
+     "z": 72.653
     }
    ]
   },
@@ -6401,38 +6366,38 @@
     },
     {
      "kind": "bolter",
-     "x": 244.312,
-     "z": 119.983
+     "x": 244.45,
+     "z": 120.496
     },
     {
      "kind": "bolter",
-     "x": 245.312,
-     "z": 119.983
+     "x": 245.45,
+     "z": 120.496
     },
     {
      "kind": "bolter",
-     "x": 246.312,
-     "z": 119.983
+     "x": 246.45,
+     "z": 120.496
     },
     {
      "kind": "bolter",
-     "x": 247.312,
-     "z": 119.983
+     "x": 247.45,
+     "z": 120.496
     },
     {
      "kind": "heavy",
      "x": 253.5,
-     "z": 118.1
+     "z": 118.5
     },
     {
      "kind": "heavy",
-     "x": 256.312,
-     "z": 118.983
+     "x": 256.432,
+     "z": 119.312
     },
     {
      "kind": "heavy",
-     "x": 258.312,
-     "z": 118.983
+     "x": 258.432,
+     "z": 119.312
     },
     {
      "kind": "heavy",
@@ -6451,8 +6416,8 @@
     },
     {
      "kind": "heavy",
-     "x": 253.688,
-     "z": 118.017
+     "x": 253.568,
+     "z": 117.688
     },
     {
      "kind": "blinker",
@@ -6544,9 +6509,9 @@
    "cover": [
     {
      "id": "a25_h1",
-     "x": 265.5,
+     "x": 271.5,
      "z": 106.5,
-     "width": 11.0,
+     "width": 23.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -6564,9 +6529,9 @@
     },
     {
      "id": "a25_h3",
-     "x": 265.5,
+     "x": 271.5,
      "z": 108.5,
-     "width": 11.0,
+     "width": 23.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -6604,9 +6569,9 @@
     },
     {
      "id": "a25_h7",
-     "x": 262.5,
+     "x": 263.5,
      "z": 114.5,
-     "width": 1.0,
+     "width": 3.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -6614,16 +6579,6 @@
     },
     {
      "id": "a25_h8",
-     "x": 263.5,
-     "z": 111.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
-     "id": "a25_h9",
      "x": 264.5,
      "z": 107.5,
      "width": 1.0,
@@ -6631,6 +6586,16 @@
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
+    },
+    {
+     "id": "a25_h9",
+     "x": 275.0,
+     "z": 111.5,
+     "width": 22.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "tree"
     },
     {
      "id": "a25_h10",
@@ -6664,26 +6629,56 @@
     },
     {
      "id": "a25_h13",
-     "x": 269.5,
-     "z": 93.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 15.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a25_h14",
-     "x": 270.5,
-     "z": 105.5,
-     "width": 3.0,
+     "x": 277.5,
+     "z": 90.5,
+     "width": 17.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
+     "id": "a25_h14",
+     "x": 269.5,
+     "z": 95.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 9.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
      "id": "a25_h15",
+     "x": 275.0,
+     "z": 105.5,
+     "width": 12.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h16",
+     "x": 270.5,
+     "z": 107.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h17",
+     "x": 272.5,
+     "z": 107.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a25_h18",
      "x": 274.5,
      "z": 107.5,
      "width": 1.0,
@@ -6693,37 +6688,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h16",
-     "x": 278.5,
-     "z": 108.5,
-     "width": 9.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a25_h17",
-     "x": 279.5,
-     "z": 106.5,
-     "width": 9.0,
+     "id": "a25_h19",
+     "x": 278.0,
+     "z": 114.5,
+     "width": 6.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "tree"
     },
     {
-     "id": "a25_h18",
-     "x": 278.5,
-     "z": 105.5,
-     "width": 5.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a25_h19",
+     "id": "a25_h20",
      "x": 276.5,
      "z": 107.5,
      "width": 1.0,
@@ -6733,27 +6708,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h20",
-     "x": 281.0,
-     "z": 111.5,
-     "width": 10.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
      "id": "a25_h21",
-     "x": 279.0,
-     "z": 114.5,
-     "width": 4.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
-     "id": "a25_h22",
      "x": 278.5,
      "z": 107.5,
      "width": 1.0,
@@ -6763,7 +6718,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h23",
+     "id": "a25_h22",
      "x": 280.5,
      "z": 107.5,
      "width": 1.0,
@@ -6773,7 +6728,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a25_h24",
+     "id": "a25_h23",
      "x": 282.5,
      "z": 107.5,
      "width": 1.0,
@@ -6781,26 +6736,6 @@
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
-    },
-    {
-     "id": "a25_h25",
-     "x": 283.5,
-     "z": 105.5,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 1.0,
-     "shape": "box",
-     "dressing": "tree"
-    },
-    {
-     "id": "a25_h26",
-     "x": 283.5,
-     "z": 108.0,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 2.0,
-     "shape": "box",
-     "dressing": "tree"
     }
    ],
    "notes": "orchard: long lanes between the trees",
@@ -6852,58 +6787,58 @@
     },
     {
      "kind": "launcher",
-     "x": 261.943,
-     "z": 110.011
+     "x": 261.679,
+     "z": 109.542
     },
     {
      "kind": "launcher",
-     "x": 263.057,
-     "z": 104.989
+     "x": 263.679,
+     "z": 109.542
     },
     {
      "kind": "launcher",
-     "x": 265.943,
-     "z": 110.011
+     "x": 265.679,
+     "z": 109.542
     },
     {
      "kind": "launcher",
-     "x": 267.943,
-     "z": 110.011
+     "x": 267.679,
+     "z": 109.542
     },
     {
      "kind": "launcher",
-     "x": 271.9,
+     "x": 269.679,
+     "z": 109.542
+    },
+    {
+     "kind": "launcher",
+     "x": 271.679,
+     "z": 109.542
+    },
+    {
+     "kind": "launcher",
+     "x": 273.679,
+     "z": 109.542
+    },
+    {
+     "kind": "launcher",
+     "x": 275.679,
+     "z": 109.542
+    },
+    {
+     "kind": "launcher",
+     "x": 277.679,
+     "z": 109.542
+    },
+    {
+     "kind": "launcher",
+     "x": 279.679,
+     "z": 109.542
+    },
+    {
+     "kind": "launcher",
+     "x": 283.55,
      "z": 107.5
-    },
-    {
-     "kind": "launcher",
-     "x": 271.9,
-     "z": 107.5
-    },
-    {
-     "kind": "launcher",
-     "x": 272.983,
-     "z": 107.688
-    },
-    {
-     "kind": "launcher",
-     "x": 273.98,
-     "z": 105.98
-    },
-    {
-     "kind": "launcher",
-     "x": 275.379,
-     "z": 110.028
-    },
-    {
-     "kind": "launcher",
-     "x": 279.191,
-     "z": 103.964
-    },
-    {
-     "kind": "launcher",
-     "x": 281.986,
-     "z": 104.743
     },
     {
      "kind": "bolter",
@@ -6977,13 +6912,13 @@
     },
     {
      "kind": "gunner",
-     "x": 267.5,
-     "z": 89.5
+     "x": 263.5,
+     "z": 90.5
     },
     {
      "kind": "brute",
-     "x": 265.5,
-     "z": 87.5
+     "x": 261.5,
+     "z": 88.5
     }
    ]
   },
@@ -7004,8 +6939,8 @@
    "sheds": [
     {
      "id": "a26_shed1",
-     "x": 273.0,
-     "z": 76.0,
+     "x": 276.0,
+     "z": 83.0,
      "produces": "mixed",
      "mobile": true
     }
@@ -7025,9 +6960,9 @@
    "cover": [
     {
      "id": "a26_h1",
-     "x": 270.5,
+     "x": 271.0,
      "z": 62.5,
-     "width": 9.0,
+     "width": 10.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -7036,30 +6971,30 @@
     {
      "id": "a26_h2",
      "x": 268.5,
-     "z": 66.5,
+     "z": 70.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 7.0,
+     "depth": 14.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "planter"
     },
     {
      "id": "a26_h3",
-     "x": 268.5,
-     "z": 82.5,
-     "width": 1.0,
+     "x": 270.0,
+     "z": 79.5,
+     "width": 4.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "planter"
     },
     {
      "id": "a26_h4",
-     "x": 270.5,
-     "z": 84.5,
-     "width": 5.0,
+     "x": 269.5,
+     "z": 84.0,
+     "width": 3.0,
      "height": 1.8,
-     "depth": 3.0,
+     "depth": 4.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -7076,18 +7011,18 @@
     {
      "id": "a26_h6",
      "x": 271.5,
-     "z": 66.0,
+     "z": 70.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 6.0,
+     "depth": 14.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "planter"
     },
     {
      "id": "a26_h7",
-     "x": 274.0,
-     "z": 61.5,
-     "width": 2.0,
+     "x": 271.5,
+     "z": 85.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -7095,29 +7030,29 @@
     },
     {
      "id": "a26_h8",
-     "x": 274.5,
-     "z": 66.0,
-     "width": 1.0,
+     "x": 279.0,
+     "z": 61.5,
+     "width": 12.0,
      "height": 1.8,
-     "depth": 6.0,
+     "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
      "id": "a26_h9",
-     "x": 276.5,
-     "z": 66.0,
+     "x": 274.5,
+     "z": 70.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 6.0,
+     "depth": 14.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "planter"
     },
     {
      "id": "a26_h10",
-     "x": 279.0,
-     "z": 61.5,
-     "width": 2.0,
+     "x": 276.5,
+     "z": 62.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -7125,16 +7060,26 @@
     },
     {
      "id": "a26_h11",
-     "x": 280.5,
-     "z": 67.5,
+     "x": 276.5,
+     "z": 69.0,
      "width": 1.0,
      "height": 1.8,
-     "depth": 13.0,
+     "depth": 12.0,
      "shape": "box",
-     "dressing": "hedge"
+     "dressing": "planter"
     },
     {
      "id": "a26_h12",
+     "x": 280.5,
+     "z": 68.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 12.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a26_h13",
      "x": 281.5,
      "z": 79.5,
      "width": 3.0,
@@ -7144,40 +7089,40 @@
      "dressing": "planter"
     },
     {
-     "id": "a26_h13",
-     "x": 281.5,
-     "z": 61.5,
+     "id": "a26_h14",
+     "x": 282.5,
+     "z": 78.5,
      "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a26_h14",
-     "x": 282.5,
-     "z": 67.0,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 12.0,
-     "shape": "box",
-     "dressing": "hedge"
+     "dressing": "planter"
     },
     {
      "id": "a26_h15",
-     "x": 284.5,
-     "z": 61.5,
-     "width": 3.0,
+     "x": 283.5,
+     "z": 67.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 11.0,
+     "shape": "box",
+     "dressing": "planter"
+    },
+    {
+     "id": "a26_h16",
+     "x": 285.5,
+     "z": 78.5,
+     "width": 5.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a26_h16",
-     "x": 285.0,
-     "z": 78.5,
-     "width": 4.0,
+     "id": "a26_h17",
+     "x": 283.5,
+     "z": 79.5,
+     "width": 1.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
@@ -7186,55 +7131,55 @@
    ],
    "notes": "the turn - blinkers own the corner",
    "shed": {
-    "x": 273.0,
-    "z": 76.0,
+    "x": 276.0,
+    "z": 83.0,
     "produces": "mixed"
    },
    "garrison": [
     {
      "kind": "blinker",
-     "x": 272.5,
+     "x": 272.55,
      "z": 71.5
     },
     {
      "kind": "blinker",
-     "x": 275.5,
+     "x": 277.55,
      "z": 71.5
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 281.55,
      "z": 71.5
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 284.55,
      "z": 71.5
     },
     {
      "kind": "bolter",
-     "x": 266.983,
-     "z": 69.688
+     "x": 267.496,
+     "z": 69.55
     },
     {
      "kind": "bolter",
-     "x": 270.535,
-     "z": 69.898
+     "x": 270.496,
+     "z": 69.55
     },
     {
      "kind": "blinker",
-     "x": 272.746,
-     "z": 69.672
+     "x": 272.55,
+     "z": 69.5
     },
     {
      "kind": "blinker",
-     "x": 275.535,
-     "z": 69.898
+     "x": 277.55,
+     "z": 69.5
     },
     {
      "kind": "bolter",
-     "x": 277.746,
-     "z": 69.672
+     "x": 277.55,
+     "z": 69.5
     },
     {
      "kind": "bolter",
@@ -7243,42 +7188,42 @@
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 281.55,
      "z": 69.5
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 284.55,
      "z": 69.5
     },
     {
      "kind": "bolter",
-     "x": 284.5,
+     "x": 285.5,
      "z": 69.5
     },
     {
      "kind": "bolter",
-     "x": 266.983,
-     "z": 67.688
+     "x": 267.496,
+     "z": 67.55
     },
     {
      "kind": "bolter",
-     "x": 270.5,
-     "z": 69.9
+     "x": 270.334,
+     "z": 69.393
     },
     {
      "kind": "blinker",
-     "x": 272.979,
-     "z": 69.287
+     "x": 272.55,
+     "z": 67.5
     },
     {
      "kind": "blinker",
-     "x": 275.5,
-     "z": 69.9
+     "x": 277.55,
+     "z": 67.5
     },
     {
      "kind": "bolter",
-     "x": 278.05,
+     "x": 277.55,
      "z": 67.5
     },
     {
@@ -7288,42 +7233,42 @@
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 281.55,
      "z": 67.5
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 284.55,
      "z": 67.5
     },
     {
      "kind": "bolter",
-     "x": 284.5,
+     "x": 285.5,
      "z": 67.5
     },
     {
      "kind": "bolter",
-     "x": 266.983,
-     "z": 65.688
+     "x": 267.496,
+     "z": 65.55
     },
     {
      "kind": "bolter",
-     "x": 266.964,
-     "z": 65.809
+     "x": 270.496,
+     "z": 65.55
     },
     {
      "kind": "blinker",
-     "x": 272.853,
-     "z": 69.535
+     "x": 272.55,
+     "z": 65.5
     },
     {
      "kind": "blinker",
-     "x": 278.05,
+     "x": 277.55,
      "z": 65.5
     },
     {
      "kind": "bolter",
-     "x": 278.05,
+     "x": 277.55,
      "z": 65.5
     },
     {
@@ -7333,32 +7278,32 @@
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 281.55,
      "z": 65.5
     },
     {
      "kind": "blinker",
-     "x": 284.05,
+     "x": 284.55,
      "z": 65.5
     },
     {
      "kind": "bolter",
-     "x": 284.5,
+     "x": 285.5,
      "z": 65.5
     },
     {
      "kind": "bolter",
-     "x": 266.97,
-     "z": 64.03
+     "x": 267.496,
+     "z": 63.55
     },
     {
      "kind": "bolter",
-     "x": 270.057,
-     "z": 60.989
+     "x": 270.496,
+     "z": 63.55
     },
     {
      "kind": "bolter",
-     "x": 278.05,
+     "x": 277.55,
      "z": 63.5
     },
     {
@@ -7368,7 +7313,7 @@
     },
     {
      "kind": "bolter",
-     "x": 284.5,
+     "x": 285.5,
      "z": 63.5
     }
    ]
@@ -7411,6 +7356,16 @@
    "cover": [
     {
      "id": "a27_h1",
+     "x": 268.5,
+     "z": 20.5,
+     "width": 13.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a27_h2",
      "x": 268.0,
      "z": 16.5,
      "width": 2.0,
@@ -7420,47 +7375,67 @@
      "dressing": "planter"
     },
     {
-     "id": "a27_h2",
+     "id": "a27_h3",
      "x": 274.5,
-     "z": 22.0,
+     "z": 18.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 10.0,
+     "depth": 3.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a27_h3",
-     "x": 277.5,
+     "id": "a27_h4",
+     "x": 274.5,
+     "z": 23.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 5.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a27_h5",
+     "x": 279.0,
      "z": 26.5,
-     "width": 5.0,
+     "width": 10.0,
      "height": 1.8,
      "depth": 1.0,
      "shape": "box",
      "dressing": "hedge"
     },
     {
-     "id": "a27_h4",
-     "x": 280.5,
-     "z": 25.0,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 8.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
-     "id": "a27_h5",
-     "x": 283.5,
-     "z": 24.0,
-     "width": 1.0,
-     "height": 1.8,
-     "depth": 6.0,
-     "shape": "box",
-     "dressing": "hedge"
-    },
-    {
      "id": "a27_h6",
+     "x": 280.5,
+     "z": 23.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 5.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a27_h7",
+     "x": 280.5,
+     "z": 28.0,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 2.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a27_h8",
+     "x": 283.5,
+     "z": 23.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 5.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a27_h9",
      "x": 287.5,
      "z": 24.5,
      "width": 7.0,
@@ -7470,17 +7445,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a27_h7",
+     "id": "a27_h10",
      "x": 287.5,
-     "z": 19.0,
+     "z": 18.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 4.0,
+     "depth": 5.0,
      "shape": "box",
      "dressing": "tree"
     },
     {
-     "id": "a27_h8",
+     "id": "a27_h11",
      "x": 291.5,
      "z": 28.5,
      "width": 5.0,
@@ -7490,7 +7465,7 @@
      "dressing": "tree"
     },
     {
-     "id": "a27_h9",
+     "id": "a27_h12",
      "x": 289.5,
      "z": 51.5,
      "width": 1.0,
@@ -7500,7 +7475,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a27_h10",
+     "id": "a27_h13",
      "x": 292.5,
      "z": 43.5,
      "width": 1.0,
@@ -7554,8 +7529,8 @@
     },
     {
      "kind": "gunner",
-     "x": 277.688,
-     "z": 28.017
+     "x": 277.55,
+     "z": 27.504
     },
     {
      "kind": "bolter",
@@ -7564,8 +7539,8 @@
     },
     {
      "kind": "brute",
-     "x": 277.312,
-     "z": 24.983
+     "x": 277.357,
+     "z": 25.295
     },
     {
      "kind": "bolter",
@@ -7584,8 +7559,8 @@
     },
     {
      "kind": "bolter",
-     "x": 272.5,
-     "z": 21.5
+     "x": 272.55,
+     "z": 21.504
     },
     {
      "kind": "brute",
@@ -7594,7 +7569,7 @@
     },
     {
      "kind": "heavy",
-     "x": 276.05,
+     "x": 275.7,
      "z": 20.5
     },
     {
@@ -7604,23 +7579,23 @@
     },
     {
      "kind": "launcher",
-     "x": 289.312,
-     "z": 19.983
+     "x": 289.455,
+     "z": 20.479
     },
     {
      "kind": "bruiser",
-     "x": 263.5,
-     "z": 19.5
+     "x": 263.371,
+     "z": 19.347
     },
     {
      "kind": "heavy",
-     "x": 265.5,
-     "z": 19.5
+     "x": 265.415,
+     "z": 19.319
     },
     {
      "kind": "launcher",
-     "x": 272.5,
-     "z": 19.5
+     "x": 272.455,
+     "z": 19.479
     },
     {
      "kind": "brute",
@@ -7777,8 +7752,8 @@
    "garrison": [
     {
      "kind": "brute",
-     "x": 297.5,
-     "z": 36.5
+     "x": 295.5,
+     "z": 34.5
     },
     {
      "kind": "brute",
@@ -7802,8 +7777,8 @@
     },
     {
      "kind": "heavy",
-     "x": 296.983,
-     "z": 31.688
+     "x": 297.312,
+     "z": 31.568
     },
     {
      "kind": "heavy",
@@ -7812,18 +7787,18 @@
     },
     {
      "kind": "heavy",
-     "x": 296.983,
-     "z": 30.688
+     "x": 297.312,
+     "z": 30.568
     },
     {
      "kind": "bolter",
-     "x": 307.196,
-     "z": 30.012
+     "x": 306.504,
+     "z": 30.45
     },
     {
      "kind": "bolter",
-     "x": 307.672,
-     "z": 30.254
+     "x": 307.5,
+     "z": 30.5
     },
     {
      "kind": "bolter",
@@ -7832,28 +7807,28 @@
     },
     {
      "kind": "bolter",
-     "x": 308.983,
-     "z": 30.688
+     "x": 309.496,
+     "z": 30.55
     },
     {
      "kind": "bolter",
-     "x": 307.237,
-     "z": 30.016
+     "x": 306.55,
+     "z": 29.504
     },
     {
      "kind": "bolter",
-     "x": 307.688,
-     "z": 30.017
+     "x": 307.55,
+     "z": 29.504
     },
     {
      "kind": "bolter",
-     "x": 308.688,
-     "z": 30.017
+     "x": 308.55,
+     "z": 29.504
     },
     {
      "kind": "bolter",
-     "x": 308.97,
-     "z": 30.03
+     "x": 309.496,
+     "z": 29.55
     },
     {
      "kind": "bruiser",
@@ -7950,7 +7925,7 @@
     "gunner": 0,
     "launcher": 4,
     "blinker": 0,
-    "bolter": 38
+    "bolter": 25
    },
    "cover": [
     {
@@ -7976,10 +7951,10 @@
     {
      "id": "a29_h3",
      "x": 304.5,
-     "z": 44.0,
+     "z": 44.5,
      "width": 1.0,
      "height": 1.8,
-     "depth": 8.0,
+     "depth": 7.0,
      "shape": "box",
      "dressing": "hedge"
     },
@@ -8105,6 +8080,16 @@
     },
     {
      "id": "a29_h16",
+     "x": 313.5,
+     "z": 72.5,
+     "width": 1.0,
+     "height": 1.8,
+     "depth": 3.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h17",
      "x": 314.5,
      "z": 43.5,
      "width": 1.0,
@@ -8114,7 +8099,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h17",
+     "id": "a29_h18",
      "x": 314.5,
      "z": 51.5,
      "width": 1.0,
@@ -8124,7 +8109,17 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h18",
+     "id": "a29_h19",
+     "x": 316.0,
+     "z": 70.5,
+     "width": 4.0,
+     "height": 1.8,
+     "depth": 1.0,
+     "shape": "box",
+     "dressing": "hedge"
+    },
+    {
+     "id": "a29_h20",
      "x": 315.5,
      "z": 41.5,
      "width": 1.0,
@@ -8134,7 +8129,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h19",
+     "id": "a29_h21",
      "x": 315.5,
      "z": 52.5,
      "width": 1.0,
@@ -8144,7 +8139,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h20",
+     "id": "a29_h22",
      "x": 316.5,
      "z": 48.5,
      "width": 1.0,
@@ -8154,7 +8149,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h21",
+     "id": "a29_h23",
      "x": 316.5,
      "z": 53.5,
      "width": 1.0,
@@ -8164,7 +8159,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h22",
+     "id": "a29_h24",
      "x": 317.5,
      "z": 46.5,
      "width": 1.0,
@@ -8174,7 +8169,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h23",
+     "id": "a29_h25",
      "x": 317.5,
      "z": 49.5,
      "width": 1.0,
@@ -8184,7 +8179,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h24",
+     "id": "a29_h26",
      "x": 317.5,
      "z": 54.5,
      "width": 1.0,
@@ -8194,7 +8189,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h25",
+     "id": "a29_h27",
      "x": 319.0,
      "z": 73.0,
      "width": 4.0,
@@ -8204,7 +8199,7 @@
      "dressing": "tree"
     },
     {
-     "id": "a29_h26",
+     "id": "a29_h28",
      "x": 318.5,
      "z": 45.5,
      "width": 1.0,
@@ -8214,7 +8209,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h27",
+     "id": "a29_h29",
      "x": 318.5,
      "z": 50.5,
      "width": 1.0,
@@ -8224,7 +8219,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h28",
+     "id": "a29_h30",
      "x": 318.5,
      "z": 55.5,
      "width": 1.0,
@@ -8234,7 +8229,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h29",
+     "id": "a29_h31",
      "x": 321.5,
      "z": 43.5,
      "width": 5.0,
@@ -8244,7 +8239,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h30",
+     "id": "a29_h32",
      "x": 319.5,
      "z": 44.5,
      "width": 1.0,
@@ -8254,7 +8249,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h31",
+     "id": "a29_h33",
      "x": 319.5,
      "z": 51.5,
      "width": 1.0,
@@ -8264,7 +8259,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h32",
+     "id": "a29_h34",
      "x": 319.5,
      "z": 56.5,
      "width": 1.0,
@@ -8274,7 +8269,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h33",
+     "id": "a29_h35",
      "x": 321.5,
      "z": 61.0,
      "width": 5.0,
@@ -8284,7 +8279,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h34",
+     "id": "a29_h36",
      "x": 320.5,
      "z": 42.5,
      "width": 1.0,
@@ -8294,7 +8289,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h35",
+     "id": "a29_h37",
      "x": 324.0,
      "z": 52.5,
      "width": 8.0,
@@ -8304,7 +8299,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h36",
+     "id": "a29_h38",
      "x": 322.0,
      "z": 41.5,
      "width": 2.0,
@@ -8314,7 +8309,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h37",
+     "id": "a29_h39",
      "x": 325.5,
      "z": 47.5,
      "width": 9.0,
@@ -8324,7 +8319,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h38",
+     "id": "a29_h40",
      "x": 324.0,
      "z": 42.5,
      "width": 2.0,
@@ -8334,7 +8329,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h39",
+     "id": "a29_h41",
      "x": 326.5,
      "z": 56.5,
      "width": 7.0,
@@ -8344,7 +8339,7 @@
      "dressing": "hedge"
     },
     {
-     "id": "a29_h40",
+     "id": "a29_h42",
      "x": 326.0,
      "z": 43.5,
      "width": 2.0,
@@ -8373,13 +8368,13 @@
     },
     {
      "kind": "bolter",
-     "x": 314.312,
-     "z": 72.983
+     "x": 314.504,
+     "z": 73.45
     },
     {
      "kind": "bolter",
-     "x": 315.983,
-     "z": 73.688
+     "x": 316.496,
+     "z": 73.55
     },
     {
      "kind": "bruiser",
@@ -8418,13 +8413,13 @@
     },
     {
      "kind": "bolter",
-     "x": 314.5,
-     "z": 71.5
+     "x": 314.55,
+     "z": 71.504
     },
     {
      "kind": "bolter",
-     "x": 315.983,
-     "z": 71.688
+     "x": 316.496,
+     "z": 71.55
     },
     {
      "kind": "heavy",
@@ -8448,8 +8443,8 @@
     },
     {
      "kind": "bruiser",
-     "x": 316.5,
-     "z": 69.5
+     "x": 316.371,
+     "z": 69.347
     },
     {
      "kind": "heavy",
@@ -8483,13 +8478,13 @@
     },
     {
      "kind": "bolter",
-     "x": 304.312,
-     "z": 57.983
+     "x": 304.45,
+     "z": 58.496
     },
     {
      "kind": "bolter",
-     "x": 305.97,
-     "z": 57.97
+     "x": 306.45,
+     "z": 58.496
     },
     {
      "kind": "bolter",
@@ -8503,22 +8498,12 @@
     },
     {
      "kind": "bolter",
-     "x": 305.983,
-     "z": 56.688
-    },
-    {
-     "kind": "bolter",
-     "x": 320.5,
-     "z": 54.5
+     "x": 306.496,
+     "z": 56.55
     },
     {
      "kind": "bolter",
      "x": 322.5,
-     "z": 54.5
-    },
-    {
-     "kind": "bolter",
-     "x": 324.5,
      "z": 54.5
     },
     {
@@ -8528,27 +8513,12 @@
     },
     {
      "kind": "bolter",
-     "x": 328.5,
-     "z": 54.5
-    },
-    {
-     "kind": "bolter",
-     "x": 318.672,
-     "z": 53.254
-    },
-    {
-     "kind": "bolter",
-     "x": 316.672,
-     "z": 51.254
+     "x": 318.5,
+     "z": 53.5
     },
     {
      "kind": "bolter",
      "x": 322.5,
-     "z": 50.5
-    },
-    {
-     "kind": "bolter",
-     "x": 324.5,
      "z": 50.5
     },
     {
@@ -8558,12 +8528,7 @@
     },
     {
      "kind": "bolter",
-     "x": 314.672,
-     "z": 49.254
-    },
-    {
-     "kind": "bolter",
-     "x": 320.5,
+     "x": 314.5,
      "z": 49.5
     },
     {
@@ -8573,27 +8538,12 @@
     },
     {
      "kind": "bolter",
-     "x": 312.5,
-     "z": 45.5
-    },
-    {
-     "kind": "bolter",
      "x": 315.5,
      "z": 45.5
     },
     {
      "kind": "bolter",
-     "x": 321.5,
-     "z": 45.5
-    },
-    {
-     "kind": "bolter",
      "x": 323.5,
-     "z": 45.5
-    },
-    {
-     "kind": "bolter",
-     "x": 325.5,
      "z": 45.5
     },
     {
@@ -8607,24 +8557,14 @@
      "z": 43.5
     },
     {
-     "kind": "bolter",
-     "x": 317.5,
-     "z": 43.5
-    },
-    {
-     "kind": "bolter",
-     "x": 328.5,
-     "z": 43.5
+     "kind": "launcher",
+     "x": 315.525,
+     "z": 43.525
     },
     {
      "kind": "launcher",
-     "x": 316.02,
-     "z": 44.02
-    },
-    {
-     "kind": "launcher",
-     "x": 319.98,
-     "z": 40.98
+     "x": 320.475,
+     "z": 41.475
     },
     {
      "kind": "bolter",
@@ -8643,17 +8583,7 @@
     },
     {
      "kind": "bolter",
-     "x": 320.5,
-     "z": 39.5
-    },
-    {
-     "kind": "bolter",
      "x": 323.5,
-     "z": 39.5
-    },
-    {
-     "kind": "bolter",
-     "x": 325.5,
      "z": 39.5
     }
    ]

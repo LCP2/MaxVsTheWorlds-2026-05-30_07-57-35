@@ -155,6 +155,14 @@ namespace MaxWorlds.Tests.EditMode
         /// area's shed (<see cref="MapValidation.SpawnRadius"/> + <see cref="MapValidation.SpawnClearance"/>
         /// from <see cref="WorldArea.shed"/>), so a8's heavy-density ring placed seed #8 dead on the
         /// shed's spawn point (0 m clearance) on the shipped config. Same exemption as above.
+        ///
+        /// MV-655: restricted to <see cref="Garrison.Seed.Kind"/>-null (ring-fallback) slots only. An
+        /// AUTHORED slot's cover clearance is now governed by <c>MapValidation</c>'s own per-robot-kind
+        /// gap (a Bolter may stand 0.5 m from a hedge; a flat <see cref="MapValidation.SpawnClearance"/>
+        /// 0.8 m no longer applies to it) and is already enforced at load time by
+        /// <c>MapValidation.ValidateWorldConfig</c> — this test's own job is the RING dodge mechanism,
+        /// which never assigns a kind up front, so it still promises the flat clearance every
+        /// un-authored slot has always used.
         /// </summary>
         [Test]
         public void SeedPositions_World1_EveryGarrisonSeedClearsItsAreasAuthoredCoverAndShed()
@@ -167,10 +175,12 @@ namespace MaxWorlds.Tests.EditMode
                 int count = Garrison.SeedCount(area.index, cfg);
                 if (count <= 0) continue;
 
-                Vector3[] positions = Garrison.SeedPositions(area, count);
-                for (int i = 0; i < positions.Length; i++)
+                Garrison.Seed[] slots = Garrison.SeedSlots(area, count);
+                for (int i = 0; i < slots.Length; i++)
                 {
-                    var point = new Vector2(positions[i].x, positions[i].z);
+                    if (slots[i].Kind.HasValue) continue; // authored — MapValidation's own rule covers it
+
+                    var point = new Vector2(slots[i].Position.x, slots[i].Position.z);
                     foreach (WorldCover c in area.cover)
                     {
                         if (c == null) continue;
