@@ -11,18 +11,20 @@ namespace MaxWorlds.Tests.EditMode
     /// broke, because nothing existed there before that moment (only a garrisoned shed area or area 1
     /// itself had anything standing). The fix: the moment area N is entered, area N+1's garrison is
     /// placed immediately, dormant — visible through the still-closed gate rather than materialising
-    /// once it opens — and only toughened/woken when that gate actually breaks, using WHATEVER
+    /// once it opens — and only RETOUGHENED when that gate actually breaks (MV-656 removed the wake
+    /// that used to happen alongside it — a gate breaking is not a sight event), using WHATEVER
     /// <see cref="DifficultyDirector.ToughnessMultiplier"/> is live at that moment, not the one back
     /// when it was merely placed (the ticket's own "trap": freezing it at placement time would
     /// silently ease every area after the first as the run escalates).
     ///
     /// One test, two prongs, per the project's one-new-test policy: AC1 (pre-placed, dormant, not
-    /// counted in the live cap) and AC2 (toughness resolved at wake time, not placement time) together
-    /// are what stop the silent difficulty regression the ticket calls out as the real risk here; AC4
-    /// (area 2 specifically has robots before its gate opens) is exercised as the same case, area 2
-    /// being this test's own area N+1. AC3 (a dormant robot doesn't fire/chase/damage) is not
+    /// counted in the live cap) and AC2 (toughness resolved at retoughen time, not placement time)
+    /// together are what stop the silent difficulty regression the ticket calls out as the real risk
+    /// here; AC4 (area 2 specifically has robots before its gate opens) is exercised as the same case,
+    /// area 2 being this test's own area N+1. AC3 (a dormant robot doesn't fire/chase/damage) is not
     /// re-tested — it is inherited unchanged from MV-363/MV-478's own already-covered Dormant/Activate
-    /// state machine (MV363DormantRobotTests), which this ticket reuses rather than replaces.
+    /// state machine (MV363DormantRobotTests), which this ticket reuses rather than replaces. Whether
+    /// the gate breaking itself wakes a pre-placed member is MV-656's own concern, covered there.
     ///
     /// EditMode only, same reflection-free idiom as AreaAccumulationDirectorGarrisonAndPlacementTests
     /// (drives the director through its own public API - Configure/EnterArea - no private Tick reflection
@@ -153,9 +155,12 @@ namespace MaxWorlds.Tests.EditMode
             // that same call, driven directly since this test exercises the director in isolation).
             director.EnterArea(2);
 
-            Assert.IsFalse(pre.IsDormant, "the pre-placed garrison must wake the moment its area's gate breaks");
+            // MV-656: the gate breaking is not itself a sight event, so this must stay Dormant - only
+            // TickDormant/AmbushWake wakes it now, same as every other path (see
+            // MV656GarrisonStaysDormantOnGateBreakTests). The retoughen half below is unchanged.
+            Assert.IsTrue(pre.IsDormant, "opening the gate must not by itself wake a pre-placed garrison member");
             Assert.AreEqual(healthAtPlacement * highMultiplier, pre.HealthCurrent, 0.01f,
-                "AC2: resolved health must reflect the multiplier live NOW, at wake time - not the one in " +
+                "AC2: resolved health must reflect the multiplier live NOW, at retoughen time - not the one in " +
                 "effect back when this robot was merely placed, dormant, a whole area earlier");
         }
     }

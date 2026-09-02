@@ -501,10 +501,12 @@ namespace MaxWorlds.Enemies
             if (pending.Count > 0) _pendingGarrisonByArea[areaIndex] = pending;
         }
 
-        /// <summary>Wakes and toughens <paramref name="areaIndex"/>'s pre-placed garrison (see
+        /// <summary>Retoughens <paramref name="areaIndex"/>'s pre-placed garrison (see
         /// <see cref="PlacePendingGarrison"/>) the moment this area's own gate breaks, using whatever
         /// <see cref="DifficultyDirector.ToughnessMultiplier"/> is live RIGHT NOW — never the one that
-        /// was live back when the garrison was merely placed (MV-514). Still drains
+        /// was live back when the garrison was merely placed (MV-514). Does NOT wake it (MV-656): the
+        /// gate breaking is not itself a sight event, so every member stays Dormant and wakes only
+        /// through its own <see cref="RobotEnemy"/> TickDormant/AmbushWake check. Still drains
         /// <see cref="AreaSpawnQueue.TryTakeForGarrison"/> once per pre-placed member, exactly as the
         /// immediate-placement path always did, so this area's live-cap accounting stays correct even
         /// though the robot itself already existed. Falls back to the original <see cref="SeedGarrison"/>
@@ -535,7 +537,9 @@ namespace MaxWorlds.Enemies
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
                 e.Retoughen(archetype);
-                e.Activate();
+                // MV-656: no Activate() here - a gate breaking must not itself wake anyone. Every
+                // pre-placed member stays Dormant and wakes only through its own TickDormant ->
+                // AmbushWake.ShouldWake(onScreen, sightClear) check, same as SeedGarrison's members.
             }
         }
 
