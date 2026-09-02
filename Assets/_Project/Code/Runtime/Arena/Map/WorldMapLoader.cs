@@ -313,7 +313,7 @@ namespace MaxWorlds.Arena
 
         /// <summary>Reachable by a 2 m x 2 m body (margin off the area's own walls), and clear of
         /// authored cover and of any garrison position by the same margins <see cref="MapValidation"/>
-        /// already enforces for a garrison entry (<see cref="MapValidation.MinGarrisonCoverGap"/> against
+        /// already enforces for a garrison entry (<see cref="MapValidation.MinPickupCoverGap"/> against
         /// cover, <see cref="MapValidation.SpawnRadius"/>+<see cref="MapValidation.SpawnClearance"/>
         /// against another placed body — the personal-space radius every spawn-adjacent placement in
         /// this engine already uses).</summary>
@@ -333,7 +333,7 @@ namespace MaxWorlds.Arena
                     x = c.x, z = c.z, width = c.width, height = c.height, depth = c.depth, shape = c.shape,
                 }.ToCover();
 
-                if (body.DistanceTo(point) < MapValidation.MinGarrisonCoverGap) return false;
+                if (body.DistanceTo(point) < MapValidation.MinPickupCoverGap) return false;
             }
 
             foreach (WorldGarrisonEntry g in a.garrison)
