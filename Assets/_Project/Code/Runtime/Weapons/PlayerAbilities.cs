@@ -409,6 +409,33 @@ namespace MaxWorlds.Weapons
             _forceFieldBubble.Init(transform, _cc, ForceFieldRadius, level);
         }
 
+        /// <summary>MV-660: pushes the Settings panel's absorb-cap sliders onto every ALREADY-UP bubble
+        /// — same "an active bubble updates live rather than needing to be re-triggered" shape
+        /// <see cref="MaxWorlds.UI.SettingsPanel"/>'s <c>RefreshForceFieldShimmer</c> uses for the
+        /// shader knobs, but here it moves the CAP a moved slider changes headroom by rather than
+        /// snapping remaining absorb back to full: the fraction display keeps its ratio and Lee sees
+        /// the shield visibly take more (or less) hits before popping, on the shield he's already
+        /// raised, with no respawn or re-activation needed. No-op for a bubble that isn't up.</summary>
+        public static void RefreshForceFieldAbsorbCap()
+        {
+            foreach (var abilities in FindObjectsByType<PlayerAbilities>(FindObjectsSortMode.None))
+                abilities.ApplyForceFieldAbsorbCapOverride();
+        }
+
+        private void ApplyForceFieldAbsorbCapOverride()
+        {
+            if (!ForceFieldActive) return;
+
+            int level = WeaponSystemState.AbilityLevel(AbilityKind.ForceField);
+            float baseCap = DevTuning.Or(DevTuning.ForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCap);
+            float perLevel = DevTuning.Or(DevTuning.ForceFieldAbsorbCapPerLevel, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel);
+            float newCap = AbilityTuning.ForceFieldAbsorbCap(level, baseCap, perLevel);
+
+            float delta = newCap - _forceFieldAbsorbCap;
+            _forceFieldAbsorbCap = newCap;
+            _forceFieldAbsorbRemaining = Mathf.Clamp(_forceFieldAbsorbRemaining + delta, 0f, _forceFieldAbsorbCap);
+        }
+
         /// <summary>Eat as much of an incoming hit as the bubble's remaining budget allows — the single
         /// hook <see cref="MaxWorlds.Player.PlayerHealth.TakeDamage"/> calls before touching HP, so
         /// EVERY damage source (contact lunge, beam tick, missile splash) is absorbed the same way
