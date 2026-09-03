@@ -14,6 +14,7 @@ using MaxWorlds.Bosses;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Player;
+using MaxWorlds.Rendering;
 using MaxWorlds.Upgrades;
 using MaxWorlds.Weapons;
 
@@ -701,6 +702,23 @@ namespace MaxWorlds.UI
             Add("Shield pop damage", "hp", 0f, 300f, AbilityTuning.DefaultForceFieldPopDamage,
                 () => DevTuning.Or(DevTuning.ForceFieldPopDamage, AbilityTuning.DefaultForceFieldPopDamage),
                 v => DevTuning.ForceFieldPopDamage = v, tab: TabWeapons);
+
+            // Mobile URP tier GPU-bandwidth knobs (MV-662) — applied LIVE to whichever
+            // UniversalRenderPipelineAsset is currently active (Mobile_RPAsset on iOS/WebGL), so Lee
+            // can bisect the iOS thermal issue on-device without a rebuild. Defaults mirror that
+            // asset's authored values; the asset itself keeps them unchanged (only supportsHDR was
+            // dropped outright — see MobileRenderTuning).
+            Add("Render scale", "x", 0.5f, 1f, MobileRenderTuning.DefaultRenderScale,
+                () => DevTuning.Or(DevTuning.MobileRenderScale, MobileRenderTuning.DefaultRenderScale),
+                v => { DevTuning.MobileRenderScale = v; MobileRenderTuning.ApplyRenderScale(v); }, tab: TabWeapons);
+
+            Add("Shadow distance", "m", 5f, 60f, MobileRenderTuning.DefaultShadowDistance,
+                () => DevTuning.Or(DevTuning.MobileShadowDistance, MobileRenderTuning.DefaultShadowDistance),
+                v => { DevTuning.MobileShadowDistance = v; MobileRenderTuning.ApplyShadowDistance(v); }, tab: TabWeapons);
+
+            Add("Soft shadows", "on/off", 0f, 1f, 1f,
+                () => DevTuning.Or(DevTuning.MobileSoftShadows, 1f),
+                v => { DevTuning.MobileSoftShadows = v; MobileRenderTuning.ApplySoftShadows(v >= 0.5f); }, tab: TabWeapons);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
