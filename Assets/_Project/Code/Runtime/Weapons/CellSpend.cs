@@ -92,16 +92,19 @@ namespace MaxWorlds.Weapons
         /// <see cref="UpgradeCostFor"/>'s current-level price in cells — never touches banked parts,
         /// however many are sitting there. The same "unowned/locked items can't be upgraded" gate every
         /// other spend in this codebase enforces (<see cref="RigState.CanSpendPart"/>'s own owned/below-cap
-        /// check, via <see cref="RigState.RaiseLevel"/> — the currency-agnostic "raise one level"
-        /// primitive both the legacy part-spend wrappers and this class raise against). The cost is
-        /// read off the node's level BEFORE <see cref="RigState.RaiseLevel"/> advances it — a level 1
-        /// node's own upgrade costs <see cref="UpgradeCostFor"/>(1), not the level it is about to
-        /// become.</summary>
+        /// check, via the RIG model layer's own currency-agnostic "raise one level" primitive both the
+        /// legacy part-spend wrappers and this class raise against). The cost is read off the node's
+        /// level BEFORE the raise advances it — a level 1 node's own upgrade costs
+        /// <see cref="UpgradeCostFor"/>(1), not the level it is about to become. Raises through
+        /// <see cref="WeaponSystemState.RaiseLevelById"/> (MV-659) rather than calling the RIG model
+        /// layer's grant primitive directly — that would silently skip
+        /// <see cref="WeaponSystemState.Changed"/> and leave anything gated on it (the reticle, the
+        /// drawn stream) stuck at whatever it was last built at.</summary>
         public static bool TryUpgradeNode(string id)
         {
             int cost = UpgradeCostFor(id, RigState.Level(id));
             if (PickupWallet.PowerCells < cost) return false;
-            if (!RigState.RaiseLevel(id)) return false;
+            if (!WeaponSystemState.RaiseLevelById(id)) return false;
             PickupWallet.TrySpendPowerCells(cost);
             return true;
         }
