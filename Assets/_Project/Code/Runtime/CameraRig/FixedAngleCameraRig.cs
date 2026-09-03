@@ -84,7 +84,7 @@ namespace MaxWorlds.CameraRig
                  "read the number off the dev overlay, then commit it here. Keep the pitch fixed. " +
                  "MV-468: re-derived for the 60° pitch via DistanceHoldingVisibleArea against the " +
                  "pre-MV-468 72° baseline, not eyeballed.")]
-        [SerializeField] private float cameraDistance = 24.284037f;
+        [SerializeField] private float cameraDistance = 26.02f;   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 24.284037)
 
         /// <summary>Current pull-back, in metres. Read by the dev overlay so the number Lee dials in
         /// by eye is the number he can paste back into the field above.</summary>

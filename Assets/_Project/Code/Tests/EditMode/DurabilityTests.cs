@@ -30,8 +30,8 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 var hutch = go.AddComponent<MowerHutch>();   // RequireComponent brings EnemySpawner
-                Assert.That(hutch.AuthoredMax, Is.EqualTo(915.915f).Within(0.001f),
-                    "MV-315: re-baked to 61% of YT-200's 1501.5 (was 350 before that)");
+                Assert.That(hutch.AuthoredMax, Is.EqualTo(474.75f).Within(0.001f),
+                    "MV-658: baked from Lee's 2026-09-02 tuning pass (was ~916, MV-315)");
             }
             finally
             {
@@ -52,11 +52,11 @@ namespace MaxWorlds.Tests.EditMode
 
                 // Raise the ceiling: the dented amount stays, so the same HP now reads as half.
                 // MV-464: was a literal 700 against a stale "authored 350" assumption (the original
-                // PlayMode fixture's own comment) — MV-315 re-baked the authored default up to
-                // 915.915, so 700 had quietly become a LOWER ceiling than a fresh hutch's current HP,
+                // PlayMode fixture's own comment) — MV-315 re-baked the authored default up above
+                // 700, so 700 had quietly become a LOWER ceiling than a fresh hutch's current HP,
                 // and this assertion would fail the moment it actually ran. Never caught because
                 // playcheck (PlayMode CI) has been parked since MV-460. Anchored to AuthoredMax now
-                // so a future re-bake can't silently invert this test's meaning again.
+                // so a future re-bake (MV-658) can't silently invert this test's meaning again.
                 DevTuning.FactoryHealth = hutch.AuthoredMax * 2f;
                 hutch.RefreshMax();
                 Assert.That(hutch.Normalized, Is.EqualTo(0.5f).Within(0.001f),

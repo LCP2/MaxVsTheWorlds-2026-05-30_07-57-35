@@ -31,7 +31,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             Assert.That(BlasterTuning.EnergyPerSecond, Is.EqualTo(12.16f).Within(0.001f), "water deplete (MV-319: +15%)");
             Assert.That(BlasterTuning.RegenPerSec, Is.EqualTo(55f).Within(0.001f), "water replenish — unchanged");
-            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(2.04f).Within(0.001f), "robot speed (MV-315)");
+            Assert.That(EnemyArchetype.Rusher.MoveSpeed, Is.EqualTo(0.93f).Within(0.001f), "robot speed (MV-658)");
             Assert.That(BossTuning.MoveSpeed, Is.EqualTo(0.9f).Within(0.001f), "boss speed — quartered (MV-410)");
         }
 
@@ -68,12 +68,13 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void SprayKnockbackIsNearZeroCosmeticNotALaunch()
+        public void SprayKnockbackStaysBelowTheOldLaunchValue()
         {
-            // WV-225 reverses the YT-64 "more knockback" direction: a tiny stagger, not a shove that
-            // visibly scatters the swarm. Pin it well below the old 5 m/s launch value.
-            Assert.That(WaterBlaster.DefaultSprayKnockback, Is.LessThan(1f),
-                "spray knockback must be a near-zero cosmetic stagger, not a meaningful positional launch");
+            // WV-225 reversed the YT-64 "more knockback" direction; MV-658 (Lee's 2026-09-02 tuning
+            // pass) dials the stagger back up to a real, felt shove (0.625 -> 2.64), but it must still
+            // stay well below the old 5 m/s value that read as a launch.
+            Assert.That(WaterBlaster.DefaultSprayKnockback, Is.LessThan(5f),
+                "spray knockback must stay below the old 5 m/s launch value WV-225 reversed away from");
         }
 
         [Test]
@@ -94,9 +95,9 @@ namespace MaxWorlds.Tests.EditMode
             try
             {
                 Assert.That(go.GetComponent<PlayerController>().AuthoredMoveSpeed,
-                            Is.EqualTo(3.01f).Within(0.001f), "Max move speed default");
+                            Is.EqualTo(2.42f).Within(0.001f), "Max move speed default");
                 Assert.That(go.GetComponent<PlayerHealth>().AuthoredMax,
-                            Is.EqualTo(200f).Within(0.001f), "Max max-life default (MV-315)");
+                            Is.EqualTo(500f).Within(0.001f), "Max max-life default (MV-658)");
             }
             finally
             {
@@ -114,10 +115,10 @@ namespace MaxWorlds.Tests.EditMode
             string scene = Path.Combine(RepoRoot, "Assets", "_Project", "Scenes", "Backyard_Slice.unity");
             string text = File.ReadAllText(scene);
 
-            AssertField(text, "MaxWorlds.Player.PlayerController", "moveSpeed", "3.01");
-            AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "200");
-            AssertField(text, "MaxWorlds.Factories.MowerHutch", "factoryHealth", "915.915");
-            AssertField(text, "MaxWorlds.Enemies.EnemySpawner", "spawnIntervalMin", "12");
+            AssertField(text, "MaxWorlds.Player.PlayerController", "moveSpeed", "2.42");
+            AssertField(text, "MaxWorlds.Player.PlayerHealth", "maxHealth", "500");
+            AssertField(text, "MaxWorlds.Factories.MowerHutch", "factoryHealth", "474.75");
+            AssertField(text, "MaxWorlds.Enemies.EnemySpawner", "spawnIntervalMin", "0.5");
         }
 
         /// <summary>WV-225: knockbackForce was a [SerializeField] the scene baked to 5 — the exact

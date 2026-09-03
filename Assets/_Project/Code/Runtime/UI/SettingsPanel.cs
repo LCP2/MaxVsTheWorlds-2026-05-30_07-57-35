@@ -287,7 +287,7 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.PlayerMoveSpeed, playerDefault),
                 v => DevTuning.PlayerMoveSpeed = v, tab: TabFeel);
 
-            Add("Max max-life", "hp", 25f, 500f, healthDefault,
+            Add("Max max-life", "hp", 25f, 1500f, healthDefault,   // MV-658: widened for headroom above the new 500 hp default
                 () => DevTuning.Or(DevTuning.PlayerMaxHealth, healthDefault),
                 v =>
                 {
@@ -319,8 +319,8 @@ namespace MaxWorlds.UI
             // alone; the other six below are baked via the panel's own PosToValue(min, max, OLD
             // default, SG1-reading/200) per the ticket's own instruction to trust that over any
             // hand-derived cross-check.
-            Add("Shield rim power", "x", 0.5f, 8f, 2.4f,
-                () => DevTuning.Or(DevTuning.ForceFieldRimPower, 2.4f),
+            Add("Shield rim power", "x", 0.5f, 8f, 8f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 2.4)
+                () => DevTuning.Or(DevTuning.ForceFieldRimPower, 8f),
                 v => { DevTuning.ForceFieldRimPower = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // SG1: 0% (slider minimum) -> PosToValue(0, 6, 2.6, 0) = 0.
@@ -333,23 +333,23 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.ForceFieldPanelScale, 2f),
                 v => { DevTuning.ForceFieldPanelScale = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
-            Add("Shield seam width", "x", 0.02f, 0.5f, 0.1f,
-                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamWidth, 0.1f),
+            Add("Shield seam width", "x", 0.02f, 0.5f, 0.09f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 0.1)
+                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamWidth, 0.09f),
                 v => { DevTuning.ForceFieldPanelSeamWidth = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // SG1: 31% -> PosToValue(0, 4, 0.35, 0.31) = Lerp(0, 0.35, 0.31) = 0.1085.
-            Add("Shield seam boost", "x", 0f, 4f, 0.1085f,
-                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamBoost, 0.1085f),
+            Add("Shield seam boost", "x", 0f, 4f, 4f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 0.1085)
+                () => DevTuning.Or(DevTuning.ForceFieldPanelSeamBoost, 4f),
                 v => { DevTuning.ForceFieldPanelSeamBoost = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // SG1: 200% (slider maximum) -> PosToValue(0, 4, 1.2, 1) = 4.
-            Add("Shield pulse speed", "x", 0f, 4f, 4f,
-                () => DevTuning.Or(DevTuning.ForceFieldPulseSpeed, 4f),
+            Add("Shield pulse speed", "x", 0f, 4f, 1.77f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 4)
+                () => DevTuning.Or(DevTuning.ForceFieldPulseSpeed, 1.77f),
                 v => { DevTuning.ForceFieldPulseSpeed = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // SG1: 200% (slider maximum) -> PosToValue(0, 1, 0.08, 1) = 1.
-            Add("Shield pulse strength", "x", 0f, 1f, 1f,
-                () => DevTuning.Or(DevTuning.ForceFieldPulseStrength, 1f),
+            Add("Shield pulse strength", "x", 0f, 1f, 0f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 1)
+                () => DevTuning.Or(DevTuning.ForceFieldPulseStrength, 0f),
                 v => { DevTuning.ForceFieldPulseStrength = v; RefreshForceFieldShimmer(); }, tab: TabFeel);
 
             // MV-583 change 4: shimmer speed now scales with Force Field's level instead of reading
@@ -517,7 +517,7 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.StartingRobots, startingRobotsDefault),
                 v => DevTuning.StartingRobots = v, tab: TabEnemies);
 
-            Add("Production/min", "bots/m", 5f, 120f, productionDefault,
+            Add("Production/min", "bots/m", 5f, 360f, productionDefault,   // MV-658: widened for headroom above the new 120 bots/min default
                 () => DevTuning.Or(DevTuning.RobotProductionPerMinute, productionDefault),
                 v => DevTuning.RobotProductionPerMinute = v, tab: TabEnemies);
 
@@ -683,7 +683,7 @@ namespace MaxWorlds.UI
         private static float FactoryDefault()
         {
             foreach (MowerHutch h in FactoryCensus.All) if (h != null) return h.AuthoredMax;
-            return 915.915f;
+            return 474.75f;   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 915.915)
         }
 
         /// <summary>The pinned Spawn-interval override's 100% reference (YT-170, decoupled from
@@ -719,7 +719,7 @@ namespace MaxWorlds.UI
                 var spawner = h.GetComponent<EnemySpawner>();
                 if (spawner != null) return spawner.AuthoredProductionPerMinute;
             }
-            return 60f / 12f;
+            return 60f / 0.5f;   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 60f / 12f = 5 bots/min)
         }
 
         /// <summary>

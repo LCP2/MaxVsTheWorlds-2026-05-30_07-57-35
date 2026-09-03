@@ -91,7 +91,8 @@ namespace MaxWorlds.Enemies
         [Tooltip("Seconds between spawns at steady state (peak pressure).")]
         // YT-200: Lee's on-device number, dialled via the Settings panel's Production/min knob (was
         // 1.2s / 50 bots-per-min — this is 12s / 5 bots-per-min).
-        [SerializeField] private float spawnIntervalMin = 12f;
+        // MV-658: baked from Lee's 2026-09-02 tuning pass (was 12s / 5 bots-per-min) — 0.5s / 120 bots-per-min.
+        [SerializeField] private float spawnIntervalMin = 0.5f;
         [Tooltip("Seconds over which the cadence ramps from start to min.")]
         [SerializeField] private float rampSeconds = 45f;
 
