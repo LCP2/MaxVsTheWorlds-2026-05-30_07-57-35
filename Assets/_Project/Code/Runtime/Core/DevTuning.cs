@@ -372,6 +372,21 @@ namespace MaxWorlds.Core
         /// panel (YT-205's piecewise mapping still centres correctly at Default==Min==0).</summary>
         public static float? GateRequiresClear { get; set; }
 
+        // --- Mobile URP tier GPU-bandwidth knobs (MV-662) — applied LIVE to the active
+        // UniversalRenderPipelineAsset via MaxWorlds.Rendering.MobileRenderTuning, so Lee can bisect
+        // the iOS thermal issue on-device without a rebuild. See that class for the authored
+        // defaults, mirrored from Assets/Settings/Mobile_RPAsset.asset. ---
+
+        /// <summary>Render scale on the active URP asset (<c>renderScale</c>).</summary>
+        public static float? MobileRenderScale { get; set; }
+
+        /// <summary>Shadow draw distance on the active URP asset, metres (<c>shadowDistance</c>).</summary>
+        public static float? MobileShadowDistance { get; set; }
+
+        /// <summary>Whether soft shadows are enabled on the active URP asset
+        /// (<c>supportsSoftShadows</c>) — stored as 0/1, same idiom as <see cref="GateRequiresClear"/>.</summary>
+        public static float? MobileSoftShadows { get; set; }
+
         /// <summary>
         /// The number gameplay should actually use: the override if the Settings panel has set one,
         /// otherwise the authored value.
@@ -427,7 +442,8 @@ namespace MaxWorlds.Core
             GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
             WorldBaseThreat.HasValue || WorldThreatGrowth.HasValue || WorldHeavyFromArea.HasValue ||
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
-            ContactDamageCooldown.HasValue || LungeTokenCap.HasValue;
+            ContactDamageCooldown.HasValue || LungeTokenCap.HasValue ||
+            MobileRenderScale.HasValue || MobileShadowDistance.HasValue || MobileSoftShadows.HasValue;
 
         /// <summary>Drop every override, back to the authored numbers.</summary>
         public static void Reset()
@@ -519,6 +535,9 @@ namespace MaxWorlds.Core
             WorldTankShareEnd = null;
             ContactDamageCooldown = null;
             LungeTokenCap = null;
+            MobileRenderScale = null;
+            MobileShadowDistance = null;
+            MobileSoftShadows = null;
         }
 
         // ------------------------------------------------------------------ persistence (YT-201)
@@ -618,6 +637,9 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(WorldTankShareEnd), () => WorldTankShareEnd, v => WorldTankShareEnd = v),
             (PrefsPrefix + nameof(ContactDamageCooldown), () => ContactDamageCooldown, v => ContactDamageCooldown = v),
             (PrefsPrefix + nameof(LungeTokenCap), () => LungeTokenCap, v => LungeTokenCap = v),
+            (PrefsPrefix + nameof(MobileRenderScale), () => MobileRenderScale, v => MobileRenderScale = v),
+            (PrefsPrefix + nameof(MobileShadowDistance), () => MobileShadowDistance, v => MobileShadowDistance = v),
+            (PrefsPrefix + nameof(MobileSoftShadows), () => MobileSoftShadows, v => MobileSoftShadows = v),
         };
 
         /// <summary>True once a save has actually happened. Lets the panel and tests tell "never
