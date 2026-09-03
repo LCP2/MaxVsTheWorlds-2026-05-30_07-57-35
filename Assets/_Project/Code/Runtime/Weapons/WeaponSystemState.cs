@@ -176,6 +176,18 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
+        /// <summary>Raise an OWNED RIG node by id by one level, mirroring <see cref="AcquireById"/> for
+        /// the raise-a-level path (MV-659). This is meant to be the RIG model layer's only entry point
+        /// for a cell-bought level raise — a caller that calls <see cref="RigState.RaiseLevel"/> directly
+        /// silently skips <see cref="Changed"/> and leaves anything gated on it (the reticle, the drawn
+        /// stream, any HUD control keyed off a track level) stuck at whatever it was last built at.</summary>
+        public static bool RaiseLevelById(string id)
+        {
+            if (!RigState.RaiseLevel(id)) return false;
+            Changed?.Invoke();
+            return true;
+        }
+
         /// <summary>The inverse of <see cref="MapId(AbilityKind)"/> — every legacy HUD-bearing kind's
         /// RIG id, for <see cref="AcquireById"/> to route back onto <see cref="Acquire"/>.</summary>
         private static AbilityKind? KindForId(string id) => id switch
