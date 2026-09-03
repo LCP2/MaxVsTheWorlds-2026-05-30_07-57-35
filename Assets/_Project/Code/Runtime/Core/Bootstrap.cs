@@ -22,6 +22,7 @@ namespace MaxWorlds.Core
         [SerializeField] private bool logFps = true;
 
         private readonly FpsMeter _meter = new FpsMeter(0.5f);
+        private readonly FrameTimingProbe _timingProbe = new FrameTimingProbe();
         private float _lastLogAt;
         private GUIStyle _fpsStyle;
 
@@ -29,6 +30,11 @@ namespace MaxWorlds.Core
         /// diagnostics (MV-503/MV-505's overlay, MV-537's perf figures) read the same measurement
         /// rather than sampling a second, possibly-disagreeing one.</summary>
         public static FpsMeter ActiveMeter { get; private set; }
+
+        /// <summary>The single FrameTimingProbe instance Bootstrap ticks every frame (MV-663) — same
+        /// one-tick-site reasoning as <see cref="ActiveMeter"/>, so the overlay never samples a second,
+        /// possibly-disagreeing measurement path.</summary>
+        public static FrameTimingProbe ActiveTimingProbe { get; private set; }
 
         private void Awake()
         {
@@ -40,6 +46,7 @@ namespace MaxWorlds.Core
             BootTiming.Mark("bootstrap-awake");
 
             ActiveMeter = _meter;
+            ActiveTimingProbe = _timingProbe;
 
             QualitySettings.vSyncCount = 0;
 
@@ -60,6 +67,8 @@ namespace MaxWorlds.Core
 
         private void Update()
         {
+            _timingProbe.Tick();
+
             if (!_meter.Tick(Time.realtimeSinceStartup)) return;
             if (!logFps) return;
 
@@ -75,6 +84,7 @@ namespace MaxWorlds.Core
         private void OnDestroy()
         {
             if (ActiveMeter == _meter) ActiveMeter = null;
+            if (ActiveTimingProbe == _timingProbe) ActiveTimingProbe = null;
         }
 
         /// <summary>Real players only ever see the iOS TestFlight/App Store build — the WebGL Pages
