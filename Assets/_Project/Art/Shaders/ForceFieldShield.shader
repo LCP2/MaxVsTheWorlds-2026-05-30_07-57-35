@@ -56,7 +56,8 @@ Shader "MaxWorlds/ForceFieldShield"
         // not hardcoded in the shader. Defaults below are the steady-state blue/cyan look.
         _BaseColor      ("Fill Color", Color) = (0.22, 0.5, 1.0, 0.16)
         _RimColor       ("Rim Color", Color) = (0.55, 0.9, 1.0, 1)
-        _RimPower       ("Rim Power", Range(0.5, 8)) = 2.4
+        // MV-658 bakes Lee's 2026-09-02 tuning pass as the new compiled-in default (was 2.4).
+        _RimPower       ("Rim Power", Range(0.5, 8)) = 8
         // MV-583 bakes Lee's 26 Aug 2026 tuning session (SG1) as the new compiled-in defaults, kept
         // 1:1 with SettingsPanel's own Add(...) defaults so a fresh run matches the panel with no
         // dev override needed — see SettingsPanel.cs's Feel-tab Force Field knobs for the readings
@@ -67,15 +68,18 @@ Shader "MaxWorlds/ForceFieldShield"
         // thickness in hex-cell units, and how much brighter a seam glows versus the rim.
         // _PanelScale: MV-583, SG1 read 0% (slider minimum).
         _PanelScale     ("Panel Scale", Range(2, 20)) = 2
-        _PanelSeamWidth ("Panel Seam Width", Range(0.02, 0.5)) = 0.1
+        // MV-658 bakes Lee's 2026-09-02 tuning pass as the new compiled-in default (was 0.1).
+        _PanelSeamWidth ("Panel Seam Width", Range(0.02, 0.5)) = 0.09
         // _PanelSeamBoost: MV-583, SG1 read 31% -> PosToValue(0, 4, 0.35, 0.31) = 0.1085 (was 0.35).
-        _PanelSeamBoost ("Panel Seam Boost", Range(0, 4)) = 0.1085
+        // MV-658 bakes Lee's 2026-09-02 tuning pass as the new compiled-in default (was 0.1085).
+        _PanelSeamBoost ("Panel Seam Boost", Range(0, 4)) = 4
 
         // Secondary "reactive/alive" cue — a much subtler modulator on the seam glow only, kept
         // small so it never dominates the travelling shimmer band below. MV-583 bakes SG1's 200%
         // (slider maximum) readings for both — Lee dialled these to their ceiling.
-        _PulseSpeed     ("Pulse Speed", Range(0, 4)) = 4
-        _PulseStrength  ("Pulse Strength", Range(0, 1)) = 1
+        // MV-658 bakes Lee's 2026-09-02 tuning pass as the new compiled-in defaults (were 4 and 1).
+        _PulseSpeed     ("Pulse Speed", Range(0, 4)) = 1.77
+        _PulseStrength  ("Pulse Strength", Range(0, 1)) = 0
 
         // The shimmer itself (MV-455): a soft highlight band that sweeps the dome's surface along
         // its local Y axis over time, looping. Speed is full sweeps/second, Width is the band's

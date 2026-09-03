@@ -40,8 +40,8 @@ namespace MaxWorlds.Tests.EditMode
 
         // --- Kiteability (YT-80) --------------------------------------------------------------
 
-        /// <summary>PlayerController.moveSpeed (YT-106: Lee's on-device number, was 6).</summary>
-        private const float MaxSpeed = 3.01f;
+        /// <summary>PlayerController.moveSpeed (MV-658: baked from Lee's 2026-09-02 tuning pass, was 3.01).</summary>
+        private const float MaxSpeed = 2.42f;
 
         [Test]
         public void MovingAwayFromTheSwarmActuallyOpensAGap()
@@ -67,8 +67,10 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.Greater(a.MoveSpeed, 0f, $"the {a.Kind} would never reach Max at all");
 
             // And the rusher specifically still has to feel like a rusher — quick enough to pressure
-            // you into moving, not a second bruiser.
-            Assert.GreaterOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.5f,
+            // you into moving, not a second bruiser. MV-658: Lee's 2026-09-02 tuning pass scaled
+            // every archetype by a flat ratio off his playtest pin, dropping the rusher's share of
+            // Max's speed from ~68% to ~38% (0.93 / 2.42) — floor relaxed to match his approved feel.
+            Assert.GreaterOrEqual(Rusher.MoveSpeed, MaxSpeed * 0.35f,
                 "the rusher has stopped rushing");
         }
 

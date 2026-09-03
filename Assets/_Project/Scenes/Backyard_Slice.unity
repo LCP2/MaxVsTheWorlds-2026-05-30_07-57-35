@@ -461,7 +461,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 82fb8c8100025c441b9a1c1ba6134313, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Factories.MowerHutch
-  factoryHealth: 915.915
+  factoryHealth: 474.75
   gate: {fileID: 1395039861}
   bodyColor: {r: 0.45, g: 0.42, b: 0.4, a: 1}
   barColor: {r: 0.85, g: 0.55, b: 0.15, a: 1}
@@ -482,7 +482,7 @@ MonoBehaviour:
   target: {fileID: 0}
   maxLiveEnemies: 12
   spawnIntervalStart: 1.8
-  spawnIntervalMin: 12
+  spawnIntervalMin: 0.5
   rampSeconds: 45
   spawnRadius: 3.5
   mouthHalfAngle: 55
@@ -710,7 +710,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 0584fcc500d009b49860ee866a0ea654, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Player.PlayerController
-  moveSpeed: 3.01
+  moveSpeed: 2.42
   rotationSpeed: 720
   gravity: 20
   aimActivateThreshold: 0.5
@@ -778,7 +778,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 70347c6004f2b744a9d37cf91fcd58b8, type: 3}
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.Player.PlayerHealth
-  maxHealth: 200
+  maxHealth: 500
 --- !u!1 &500010018
 GameObject:
   m_ObjectHideFlags: 0
@@ -1431,7 +1431,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: MaxWorlds.Gameplay::MaxWorlds.CameraRig.FixedAngleCameraRig
   pitchDegrees: 60
-  cameraDistance: 24.284037
+  cameraDistance: 26.02
 --- !u!1 &1419767784
 GameObject:
   m_ObjectHideFlags: 0

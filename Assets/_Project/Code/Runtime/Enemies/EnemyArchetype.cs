@@ -118,7 +118,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Rusher => new EnemyArchetype(
             EnemyKind.Rusher, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 2.04f,   // MV-315: baked from tuning panel (was MV-289's 2.71)
+            moveSpeed: 0.93f,   // MV-658: baked from Lee's 2026-09-02 tuning pass (was 2.04)
             // MV-289: 36 -> 32. MV-315 also re-baked the live health multiplier to 1.26x (was
             // 1.42x), landing ~40 effective HP at run start.
             maxHealth: 32f,
@@ -158,7 +158,7 @@ namespace MaxWorlds.Enemies
             // whatever the rusher/panel default is to stay the slow tank (was 0.925 = half of YT-169's
             // 1.85, then 1.355 = half of MV-289's 2.71, now 1.02 = half of MV-315's 2.04). Flag: if
             // Lee wants ALL robots flat at the rusher's speed, this is the one line to change.
-            moveSpeed: 1.02f, maxHealth: 100f,   // 68 -> 100 per Lee's V12 workbook (2026-09-01)
+            moveSpeed: 0.46f, maxHealth: 100f,   // 68 -> 100 per Lee's V12 workbook (2026-09-01); moveSpeed baked MV-658 (was 1.02)
             // (MV-540 previously cut 135 -> 68; before that MV-512's 150 -> 135, before that YT-194's 100 -> 150)
             contactDamage: 28f, contactRadius: 1.4f,
             lungeRange: 2.6f, telegraphTime: 1.0f,
@@ -176,7 +176,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Heavy => new EnemyArchetype(
             EnemyKind.Heavy, EnemyShape.Box, new Vector3(1.2f, 1.35f, 1.2f),
             colliderHeight: 1.55f, colliderRadius: 0.58f,
-            moveSpeed: 0.85f, maxHealth: 260f,   // ~2.6x the bruiser's 100 (was ~3.82x the bruiser's 68 pre-V12)
+            moveSpeed: 0.39f, maxHealth: 260f,   // ~2.6x the bruiser's 100 (was ~3.82x the bruiser's 68 pre-V12); moveSpeed baked MV-658 (was 0.85)
             contactDamage: 32f, contactRadius: 1.5f,
             lungeRange: 2.6f, telegraphTime: 1.05f,
             lungeSpeed: 8.5f, lungeTime: 0.35f, recoverTime: 1.5f,
@@ -191,7 +191,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Brute => new EnemyArchetype(
             EnemyKind.Brute, EnemyShape.Box, new Vector3(1.25f, 1.5f, 1.25f),
             colliderHeight: 1.9f, colliderRadius: 0.6f,
-            moveSpeed: 0.75f, maxHealth: 420f,   // ~4.2x the bruiser's 100, well past the heavy's 260 (was ~6.18x pre-V12)
+            moveSpeed: 0.34f, maxHealth: 420f,   // ~4.2x the bruiser's 100, well past the heavy's 260 (was ~6.18x pre-V12); moveSpeed baked MV-658 (was 0.75)
             contactDamage: 38f, contactRadius: 1.6f,
             lungeRange: 2.6f, telegraphTime: 1.15f,
             lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
@@ -217,7 +217,7 @@ namespace MaxWorlds.Enemies
         public static EnemyArchetype Gunner => new EnemyArchetype(
             EnemyKind.Gunner, EnemyShape.Capsule, new Vector3(0.8f, 0.7f, 0.8f),
             colliderHeight: 1.4f, colliderRadius: 0.4f,
-            moveSpeed: 2.2f, maxHealth: 39f,   // MV-404: 26 -> 39, ~50% harder to kill per Lee's ask
+            moveSpeed: 1.00f, maxHealth: 39f,   // MV-404: 26 -> 39, ~50% harder to kill per Lee's ask; moveSpeed baked MV-658 (was 2.2)
             contactDamage: 18f,   // DPS while the beam holds
             contactRadius: 0.6f,  // beam half-width — wider than Max's 0.5 m radius, still side-steppable
             lungeRange: 6.3f,     // max fire range — MV-497: cut 30% from 9m per Lee's ask
@@ -246,7 +246,7 @@ namespace MaxWorlds.Enemies
             // "one-rusher-shot kill" invariant (see EnemyArchetypeTests, updated the same day).
             // MV-325: speed must invert with power too — a Launcher has less HP than the rusher, so it
             // has to be at least as quick, not slower (was 1.8, below the rusher's 2.04).
-            moveSpeed: 2.1f, maxHealth: 40f,
+            moveSpeed: 0.96f, maxHealth: 40f,   // moveSpeed baked MV-658 (was 2.1)
             contactDamage: 22f,   // splash damage
             contactRadius: 2.0f,  // splash radius
             lungeRange: 10f,      // max fire range
@@ -276,7 +276,7 @@ namespace MaxWorlds.Enemies
             // 30 -> 45 per Lee's V12 workbook (2026-09-01, MV-638), then 45 -> 40 per Lee's V12c
             // workbook (2026-09-02, MV-642) — see Launcher's comment above; the "one-rusher-shot
             // kill" invariant no longer applies to Blinker either.
-            moveSpeed: 2.1f, maxHealth: 40f,
+            moveSpeed: 0.96f, maxHealth: 40f,   // moveSpeed baked MV-658 (was 2.1)
             contactDamage: 14f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.5f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
@@ -302,7 +302,7 @@ namespace MaxWorlds.Enemies
             colliderHeight: 1.4f, colliderRadius: 0.4f,
             // 30 -> 45 per Lee's V12 workbook (2026-09-01, MV-638), then 45 -> 40 per Lee's V12c
             // workbook (2026-09-02, MV-642) — same reversal as Launcher/Blinker above.
-            moveSpeed: 2.1f, maxHealth: 40f,
+            moveSpeed: 0.96f, maxHealth: 40f,   // moveSpeed baked MV-658 (was 2.1)
             contactDamage: 0f,    // unread — bolt damage is resolved live off PlayerHealth.Max (AC1)
             contactRadius: 0.35f, // bolt hit-check radius against the player
             lungeRange: 9f,       // max fire range
