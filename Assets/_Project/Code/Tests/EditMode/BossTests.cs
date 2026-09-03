@@ -185,6 +185,58 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // ---- MV-661: engagement must be per-fight, not per-scene ----
+
+        /// <summary>AC1. Pre-fix, <c>_engaged</c> was a scene-lifetime latch cleared only by
+        /// <see cref="BossCensus.Reset"/> (once per map build) — so a12's boss engaging the bar once and
+        /// later dying left the latch permanently set, and a20's/a30's bosses (registering later in the
+        /// SAME scene) never got a <see cref="HudSignals.BossEngaged"/> of their own: neither the red HP
+        /// bar nor the yellow spawn-level bar ever appeared for their fights. Registering a boss in area
+        /// 12, defeating it, then registering a boss in area 20 must re-engage the bar — while the MV-542
+        /// guard (a second boss registering mid-fight must not re-emit) still holds.</summary>
+        [Test]
+        public void ReportDefeated_ClearsTheEngagedLatch_OnceEveryLivingBossIsDown_SoTheNextFightReEngages()
+        {
+            GameObject go12 = NewBossHandle();
+            GameObject go12B = NewBossHandle();
+            GameObject go20 = NewBossHandle();
+            var boss12 = go12.GetComponent<BigBermudaBoss>();
+            var boss12B = go12B.GetComponent<BigBermudaBoss>();
+            var boss20 = go20.GetComponent<BigBermudaBoss>();
+
+            int engagedCount = 0;
+            int defeatedCount = 0;
+            System.Action<string, int> onEngaged = (_, __) => engagedCount++;
+            System.Action onDefeated = () => defeatedCount++;
+            HudSignals.BossEngaged += onEngaged;
+            HudSignals.BossDefeated += onDefeated;
+            try
+            {
+                BossCensus.Register(boss12, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 12);
+                Assert.AreEqual(1, engagedCount, "a12's own boss registering must engage the bar");
+
+                BossCensus.Register(boss12B, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 12);
+                Assert.AreEqual(1, engagedCount,
+                    "MV-542 guard: a second boss registering while the first is still living must not re-engage");
+
+                BossCensus.ReportDefeated(boss12);
+                BossCensus.ReportDefeated(boss12B);
+                Assert.AreEqual(1, defeatedCount, "every living boss going down must defeat the bar");
+
+                BossCensus.Register(boss20, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 20);
+                Assert.AreEqual(2, engagedCount,
+                    "a20's boss registering after a12's fight fully ended must re-engage the bar, not be swallowed by a stale latch");
+            }
+            finally
+            {
+                HudSignals.BossEngaged -= onEngaged;
+                HudSignals.BossDefeated -= onDefeated;
+                Object.DestroyImmediate(go12);
+                Object.DestroyImmediate(go12B);
+                Object.DestroyImmediate(go20);
+            }
+        }
+
         private static GameObject NewBossHandle()
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cube);

@@ -114,6 +114,14 @@ namespace MaxWorlds.Bosses
                 EmitCombinedHealth();
                 EmitCombinedSpawnLevel();
             }
+
+            // MV-661: _engaged was a scene-lifetime latch, cleared only by Reset() (once per map
+            // build) — so a12's boss engaging the bar once and later dying left it set for the rest
+            // of the scene, and a20's/a30's bosses (registering later in the SAME scene) never got
+            // their own BossEngaged: neither bar ever appeared for their fights. Engagement must be
+            // per-fight instead: once literally no boss anywhere is left standing, the next Register
+            // (whichever area it's in) is a fresh fight and must re-engage the bar.
+            if (Living.Count == 0) _engaged = false;
         }
 
         /// <summary>This boss's GameObject went away without dying properly (a scene torn down, a
