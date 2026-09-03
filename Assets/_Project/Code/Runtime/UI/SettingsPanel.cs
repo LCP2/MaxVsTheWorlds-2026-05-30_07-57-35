@@ -676,6 +676,31 @@ namespace MaxWorlds.UI
             Add("Speed %/level", "x", 0f, 0.5f, AbilityTuning.DefaultSpeedMultiplierPerLevel,
                 () => DevTuning.Or(DevTuning.SpeedMultiplierPerLevel, AbilityTuning.DefaultSpeedMultiplierPerLevel),
                 v => DevTuning.SpeedMultiplierPerLevel = v, tab: TabWeapons);
+
+            // Force Field STRENGTH (MV-660) — the six DevTuning knobs above the shimmer block
+            // (MV-455) already read live by PlayerAbilities/WeaponCatalog, but none had a slider, so
+            // the shield could never be made stronger from the panel at all. Radius stays out of
+            // MV-583/MV-602's decision — this only exposes it as a tuning tool, default unchanged.
+            // ForceFieldActivationCost gets no slider: authored 0, activation made free by MV-523.
+            Add("Shield absorb cap", "hp", 20f, 600f, AbilityTuning.DefaultForceFieldAbsorbCap,
+                () => DevTuning.Or(DevTuning.ForceFieldAbsorbCap, AbilityTuning.DefaultForceFieldAbsorbCap),
+                v => { DevTuning.ForceFieldAbsorbCap = v; PlayerAbilities.RefreshForceFieldAbsorbCap(); }, tab: TabWeapons);
+
+            Add("Shield cap/level", "hp", 0f, 300f, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel,
+                () => DevTuning.Or(DevTuning.ForceFieldAbsorbCapPerLevel, AbilityTuning.DefaultForceFieldAbsorbCapPerLevel),
+                v => { DevTuning.ForceFieldAbsorbCapPerLevel = v; PlayerAbilities.RefreshForceFieldAbsorbCap(); }, tab: TabWeapons);
+
+            Add("Shield cooldown", "s", 0f, 30f, WeaponCatalog.DefaultForceFieldCooldownSeconds,
+                () => DevTuning.Or(DevTuning.ForceFieldCooldownSeconds, WeaponCatalog.DefaultForceFieldCooldownSeconds),
+                v => DevTuning.ForceFieldCooldownSeconds = v, tab: TabWeapons);
+
+            Add("Shield radius", "m", 0.5f, 4f, AbilityTuning.DefaultForceFieldRadius,
+                () => DevTuning.Or(DevTuning.ForceFieldRadius, AbilityTuning.DefaultForceFieldRadius),
+                v => DevTuning.ForceFieldRadius = v, tab: TabWeapons);
+
+            Add("Shield pop damage", "hp", 0f, 300f, AbilityTuning.DefaultForceFieldPopDamage,
+                () => DevTuning.Or(DevTuning.ForceFieldPopDamage, AbilityTuning.DefaultForceFieldPopDamage),
+                v => DevTuning.ForceFieldPopDamage = v, tab: TabWeapons);
         }
 
         /// <summary>The authored factory HP for the 100% reference: a live hutch's if the level has
