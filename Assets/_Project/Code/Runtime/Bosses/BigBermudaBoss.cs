@@ -58,6 +58,16 @@ namespace MaxWorlds.Bosses
         private readonly WallLatch _wallLatch = new WallLatch();
         private float _preferSign;
 
+        // MV-667: WallLatch escapes a flat wall (it has a slide to follow) but not concave geometry —
+        // a corner, a planter pocket, a doorway it has overshot — because a slide is a direction, not a
+        // route. EnemyNavigation.Waypoint (the same call RobotEnemy.TickChase makes) gives TickApproach
+        // an actual route out of the pocket; WallLatch stays underneath it as the local slide that
+        // keeps the body off whatever it grazes on the way, exactly as RobotEnemy layers the two. The
+        // budget throttles the in-room A* re-solve the same way RobotEnemy's own ZoneRouteBudget does
+        // (MV-611) — this boss is one instance, not a swarm, but there is no reason it should re-solve
+        // every single frame when nothing has changed since the last one.
+        private readonly ZoneRouteBudget _routeBudget = new ZoneRouteBudget();
+
         // The area whose floor wakes this boss (MV-572) — MapRuntime.BuildBoss hands this in right
         // after AddComponent, from the same WorldArea/MapZone footprint the boss was authored inside.
         // Defaults to an empty Rect, which Contains() never satisfies, so a boss nobody assigns one to
@@ -302,7 +312,13 @@ namespace MaxWorlds.Bosses
         /// <see cref="MowerHutch.TickMobility"/> so an EditMode test can drive it directly
         /// against a synthetic target instead of needing a live Update loop. MV-590: routed through
         /// <see cref="WallLatch"/> so a wall/prop in the way is walked around, the same as robots,
-        /// instead of ground into.</summary>
+        /// instead of ground into. MV-667: the BEARING it walks along is no longer a raw line to
+        /// <paramref name="targetPosition"/> — it is <see cref="EnemyNavigation"/>'s own routed
+        /// waypoint (in-room A* around this zone's cover, same as a melee robot's Chase), so a boss
+        /// standing inside concave geometry has an actual way out instead of only a direction and a
+        /// slide. The stop check below still measures the REAL distance to the target, not the route,
+        /// so the boss still parks at its authored standoff from Max and not from some intermediate
+        /// waypoint.</summary>
         public void TickApproach(float dt, Vector3 targetPosition, float speedScale = 1f)
         {
             Vector3 to = targetPosition - transform.position;
@@ -310,7 +326,14 @@ namespace MaxWorlds.Bosses
             if (to.magnitude <= BossTuning.Standoff) return;
 
             float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
-            Vector3 desired = _wallLatch.Tick(to.normalized, transform.position, dt, _preferSign);
+
+            Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, targetPosition,
+                useZoneRoute: true, budget: _routeBudget, dt: dt);
+            Vector3 routeTo = waypoint - transform.position;
+            routeTo.y = 0f;
+            Vector3 bearing = routeTo.sqrMagnitude > 0.0001f ? routeTo.normalized : to.normalized;
+
+            Vector3 desired = _wallLatch.Tick(bearing, transform.position, dt, _preferSign);
             // MV-386: SafeMove, not cc.Move directly -- same stall-tunneling fix as PlayerController/RobotEnemy.
             CharacterControllerMotion.SafeMove(_cc, desired * move * speedScale * dt);
         }
