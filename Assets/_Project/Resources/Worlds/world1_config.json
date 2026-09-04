@@ -250,7 +250,7 @@
     "pos": 0.5658
    },
    "width": 11.0,
-   "opensWith": "sheds-destroyed-before"
+   "opensWith": "primary"
   },
   {
    "id": "g12",
@@ -370,7 +370,7 @@
     "pos": 0.3625
    },
    "width": 11.0,
-   "opensWith": "sheds-destroyed-before"
+   "opensWith": "primary"
   },
   {
    "id": "g20",
@@ -520,7 +520,7 @@
     "pos": 0.5795
    },
    "width": 11.0,
-   "opensWith": "all-sheds-destroyed"
+   "opensWith": "primary"
   }
  ],
  "areas": [

@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Bosses;
@@ -14,14 +13,13 @@ namespace MaxWorlds.Arena
 {
     /// <summary>
     /// Wires a loaded <see cref="WorldConfig"/>'s origination engine (MV-269) into the scene
-    /// <see cref="MapRuntime"/> actually built (MV-270): the boss gate stays <see cref="AreaGate.Locked"/>
-    /// until every shed is destroyed. Owns a <see cref="SupplyLineNetwork"/> — the pure engine class
-    /// (MV-269) reads no live scene state itself, so something has to poll the built
+    /// <see cref="MapRuntime"/> actually built (MV-270). Owns a <see cref="SupplyLineNetwork"/> — the
+    /// pure engine class (MV-269) reads no live scene state itself, so something has to poll the built
     /// <see cref="MowerHutch"/> instances and report their deaths into it; that caller is this runner.
+    /// MV-665: sheds no longer gate any door — every gate opens on ordinary combat.
     ///
-    /// MV-427: also the death-continues-the-run orchestrator. It already owns the boss-gate identity
-    /// and (via the map) every other gate's, which is exactly the context a respawn needs to pick the
-    /// right door to re-close and never touch the one that isn't allowed to.
+    /// MV-427: also the death-continues-the-run orchestrator. It already owns every gate's identity
+    /// (via the map), which is exactly the context a respawn needs to pick the right door to re-close.
     ///
     /// MV-438: the respawn itself no longer runs synchronously off the death. <see cref="OnPlayerDied"/>
     /// now only records the death and shows <see cref="DeathOverlay"/>; everything MV-427 used to do
@@ -36,17 +34,6 @@ namespace MaxWorlds.Arena
         private const float RespawnMarginFromGate = 2.5f;
 
         private SupplyLineNetwork _supply;
-        private AreaGate _bossGate;
-
-        /// <summary>Every OTHER gate authored with <c>opensWith: sheds-destroyed-before</c> (MV-560) —
-        /// a mid-run boss's entry gate, which <see cref="_bossGate"/> above does not cover since that
-        /// field is only ever the fixed <c>"bg"</c> actor id the FINAL boss's gate builds under. Locked
-        /// at <see cref="Configure"/> exactly like <see cref="_bossGate"/> is, and force-opened the same
-        /// way once its own condition — every shed strictly before the area it opens into — is met.
-        /// <c>toAreaIndex</c> is that boundary <see cref="WorldArea.index"/>, what
-        /// <see cref="SupplyLineNetwork.ShedsDestroyedBefore"/> checks against.</summary>
-        private readonly List<(AreaGate gate, int toAreaIndex)> _shedsBeforeGates =
-            new List<(AreaGate, int)>(2);
 
         /// <summary>One entry per BUILT shed (MV-475, not per area — an area can carry several).
         /// <c>shedId</c> is the entity id <see cref="SupplyLineNetwork"/> tracks destruction against;
@@ -113,49 +100,6 @@ namespace MaxWorlds.Arena
                     // is what actually replaces the old area-blind global cadence for every real shed.
                     EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
                     if (spawner != null) spawner.ConfigureAreaComposition(area.composition);
-                }
-            }
-
-            if (build.Actors.TryGetValue("bg", out GameObject bossGateGo) && bossGateGo != null)
-                _bossGate = bossGateGo.GetComponent<AreaGate>();
-
-            // Locked from the start: the boss gate's own HP would otherwise let sustained primary fire
-            // break it early, exactly the "boss you can walk in on before the sheds fall" bug the
-            // opensWith='all-sheds-destroyed' rule (MapValidation.WorldBossGate) exists to make
-            // structurally impossible. A world authored with zero sheds never unlocks it here — that
-            // is a content bug for the world config to fix, not something this runner should paper over.
-            if (_bossGate != null) _bossGate.Locked = true;
-
-            // MV-571: push the boss gate's starting count immediately — Update()'s polling loop below
-            // only recomputes when a shed dies, which would otherwise leave the gate reading LOCKED
-            // (zero/zero) rather than its real total until the first shed anywhere falls.
-            PushBossGateProgress();
-
-            // MV-560: every OTHER gate authored with sheds-destroyed-before — a mid-run boss's entry,
-            // which the fixed "bg" lookup above never finds. Same lock-until-condition-met shape as the
-            // final boss gate, just resolved generically off the gate's own opensWith/to-area instead
-            // of a hardcoded id.
-            if (cfg.gates != null)
-            {
-                foreach (WorldGate g in cfg.gates)
-                {
-                    if (g?.id == null || g.id == "bg") continue;
-                    if (!string.Equals(g.opensWith, "sheds-destroyed-before", StringComparison.OrdinalIgnoreCase)) continue;
-                    if (!build.Actors.TryGetValue(g.id, out GameObject gateGo) || gateGo == null) continue;
-
-                    AreaGate gate = gateGo.GetComponent<AreaGate>();
-                    if (gate == null) continue;
-
-                    WorldArea toArea = cfg.Area(g.to?.area);
-                    if (toArea == null) continue;
-
-                    gate.Locked = true;
-                    _shedsBeforeGates.Add((gate, toArea.index));
-
-                    // MV-571: same starting-count push as the boss gate above, keyed to this gate's
-                    // own local boundary rather than the whole world.
-                    _supply.ShedProgressBefore(toArea.index, out int destroyed, out int total);
-                    gate.SetLockProgress(destroyed, total);
                 }
             }
 
@@ -246,32 +190,11 @@ namespace MaxWorlds.Arena
             _areaDirector.SetCurrentArea(plan.RespawnAreaIndex);
         }
 
-        /// <summary>Pushes the final boss gate's shed count (MV-571) — every shed in the world, the
-        /// same set <see cref="SupplyLineNetwork.AllShedsDestroyed"/> counts, unlike a mid-run gate's
-        /// local <see cref="SupplyLineNetwork.ShedsDestroyedBefore"/> boundary. Reuses
-        /// <see cref="SupplyLineNetwork.ShedProgressBefore"/> with an area-index bound past every
-        /// authored area (<c>_cfg.dials.areaCount + 1</c>) so nothing before it is excluded — an
-        /// exclusive bound, unrelated to any area's own index.</summary>
-        private void PushBossGateProgress()
-        {
-            if (_bossGate == null) return;
-            int worldAreaBound = _cfg?.dials != null ? _cfg.dials.areaCount + 1 : int.MaxValue;
-            _supply.ShedProgressBefore(worldAreaBound, out int destroyed, out int total);
-            _bossGate.SetLockProgress(destroyed, total);
-        }
-
-        /// <summary>MV-664: reports every newly-dead shed into <see cref="_supply"/>, THEN re-evaluates
-        /// every shed-gated door against <see cref="_supply"/>'s resulting state — unconditionally, not
-        /// only when this same call found a shed that just died. Before this, both the boss gate's open
-        /// check and every <see cref="_shedsBeforeGates"/> re-check lived INSIDE the per-shed death
-        /// branch below, so a gate only ever got asked "is your condition met yet" on the specific call
-        /// that detected a death. That is correct as long as this method is guaranteed to run again
-        /// after the condition becomes true, but nothing enforces that guarantee — a gate whose
-        /// condition became satisfied without a subsequent call ever re-checking it (a dropped frame, a
-        /// resume, a future caller that marks a shed destroyed some other way) would then stay locked
-        /// forever, with no other path back to "open". Called every <see cref="Update"/> tick (cheap: a
-        /// handful of sheds/gates at most) and public so anything else that needs a fresh, correct
-        /// resolution — a HUD refresh, a resume, a test — can force one directly.</summary>
+        /// <summary>MV-665: reports every newly-dead shed into <see cref="_supply"/> — sheds no longer
+        /// gate any door, but <see cref="SupplyLineNetwork"/> still needs to know a shed died for
+        /// everything else it drives (supply lines, <see cref="TrackDestroyedShedStream"/>). Called
+        /// every <see cref="Update"/> tick and public so anything else that needs a fresh resolution —
+        /// a resume, a test — can force one directly.</summary>
         public void RefreshConditionGates()
         {
             if (_supply == null) return;
@@ -284,31 +207,6 @@ namespace MaxWorlds.Arena
                 _sheds.RemoveAt(i);
                 _supply.DestroyShed(shedId);
                 TrackDestroyedShedStream(areaId, hutch);
-            }
-
-            if (_bossGate != null && _bossGate.Locked)
-            {
-                PushBossGateProgress();   // <-- MV-571, before AllShedsDestroyed opens it
-
-                if (_supply.AllShedsDestroyed)
-                {
-                    _bossGate.Locked = false;
-                    _bossGate.ForceOpen();
-                }
-            }
-
-            for (int j = _shedsBeforeGates.Count - 1; j >= 0; j--)
-            {
-                (AreaGate gate, int toAreaIndex) = _shedsBeforeGates[j];
-
-                _supply.ShedProgressBefore(toAreaIndex, out int done, out int total);
-                gate.SetLockProgress(done, total);          // <-- MV-571, before the early-continue
-
-                if (!_supply.ShedsDestroyedBefore(toAreaIndex)) continue;
-
-                gate.Locked = false;
-                gate.ForceOpen();
-                _shedsBeforeGates.RemoveAt(j);
             }
         }
 
