@@ -133,16 +133,6 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void Validation_RejectsABossGateThatDoesNotRequireAllSheds()
-        {
-            WorldConfig cfg = SmallValidWorld();
-            cfg.gates[1].opensWith = "primary";
-
-            Assert.IsFalse(MapValidation.ValidateWorldConfig(cfg, out string reason));
-            StringAssert.Contains("all-sheds-destroyed", reason);
-        }
-
-        [Test]
         public void Validation_RejectsABossAreaWithNoGateAtAll()
         {
             WorldConfig cfg = SmallValidWorld();

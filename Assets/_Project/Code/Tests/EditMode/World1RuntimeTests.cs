@@ -3,9 +3,7 @@ using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Arena;
-using MaxWorlds.Core;
 using MaxWorlds.Enemies;
-using MaxWorlds.Factories;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -635,10 +633,11 @@ namespace MaxWorlds.Tests.EditMode
                 "authored robots never spawn (MV-500)");
         }
 
-        // --- MV-641: gate g11 (a11 -> a12) opens on sheds-destroyed-before(12). Pre-V12c that set was
-        // --- 8 sheds across a3/a6/a7/a9(x2)/a10(x2)/a11, five of which no design sheet ever drew, so
-        // --- the gate read "SHEDS 4 / 8" and could never open. V12c's corrected sheds[] leaves exactly
-        // --- 3 sheds before area 12 — one each in a3, a7 and a11 — so the condition can actually be met.
+        // --- MV-641: SupplyLineNetwork's own "sheds before area 12" math (MV-665: no longer a gate
+        // --- condition, but SupplyLineNetwork itself stays — see WorldRunner/SupplyLineNetwork docs).
+        // --- Pre-V12c that set was 8 sheds across a3/a6/a7/a9(x2)/a10(x2)/a11, five of which no design
+        // --- sheet ever drew. V12c's corrected sheds[] leaves exactly 3 sheds before area 12 — one each
+        // --- in a3, a7 and a11 — the set this test still pins.
 
         [Test]
         public void World1_ShedsDestroyedBeforeArea12_IsSatisfiedByExactlyA3A7AndA11()
@@ -666,76 +665,5 @@ namespace MaxWorlds.Tests.EditMode
                 "destroying every shed in a3, a7 and a11 must satisfy gate g11's sheds-destroyed-before(12) condition");
         }
 
-        // --- MV-664: the a11 -> a12 gate softlocked a real TestFlight run. World1_ShedsDestroyedBefore-
-        // --- Area12_IsSatisfiedByExactlyA3A7AndA11 above already proves SupplyLineNetwork's own math is
-        // --- sound; this proves the BUILT WorldRunner/AreaGate wiring resolves correctly too — not only
-        // --- on the exact Update() frame a death is detected (every other path this ticket could find
-        // --- into WorldRunner's shed-death loop re-derives the same correct answer once Update() ticks
-        // --- again, so a plain "kill sheds, tick Update()" repro cannot fail here), but also when the
-        // --- condition is satisfied and the gate's locked state is asked WITHOUT an intervening
-        // --- Update() tick at all — a dropped frame, a resume, or any future caller that marks a shed
-        // --- destroyed some other way. Before this ticket, nothing but the private, event-driven
-        // --- Update() loop ever touched AreaGate.Locked, so this is exactly the gap that can softlock a
-        // --- real run one dropped frame away from the fix.
-
-        [Test]
-        public void World1_A12GateResolvesUnlocked_WhenAskedDirectly_NotOnlyOnADeathEvent()
-        {
-            WorldConfig cfg = LoadWorld1();
-            Assert.IsTrue(WorldMapLoader.TryLoad(cfg, out MapData map, out string reason), reason);
-
-            var root = new GameObject("MV-664 Gate Idle-Recheck Probe Root");
-            try
-            {
-                MapBuild built = MapRuntime.Build(map, root.transform);
-                var runner = root.AddComponent<WorldRunner>();
-                runner.Configure(cfg, map, built, null);
-
-                Assert.IsTrue(built.Actors.TryGetValue("g11", out GameObject gateGo) && gateGo != null,
-                    "world1_config.json's gate 'g11' was not built");
-                AreaGate gate = gateGo.GetComponent<AreaGate>();
-                Assert.IsNotNull(gate, "'g11' built no AreaGate component");
-                Assert.IsTrue(gate.Locked, "sanity: g11 must start locked — nothing has destroyed a shed yet");
-
-                // Destroy every shed in a3, a7 and a11 directly through the built MowerHutch — exactly
-                // the set g11's sheds-destroyed-before(12) condition waits on — WITHOUT ever calling
-                // WorldRunner's own per-frame poll. The condition is satisfied before anything has
-                // "asked" the gate about it.
-                foreach (string areaId in new[] { "a3", "a7", "a11" })
-                {
-                    WorldArea area = cfg.Area(areaId);
-                    Assert.IsNotNull(area, $"world1_config.json has no area '{areaId}'");
-                    WorldShed[] sheds = area.Sheds();
-                    Assert.Greater(sheds.Length, 0, $"area '{areaId}' must author a shed");
-
-                    for (int i = 0; i < sheds.Length; i++)
-                    {
-                        string shedId = area.ShedId(i, sheds.Length);
-                        Assert.IsTrue(built.Actors.TryGetValue(shedId, out GameObject shedGo) && shedGo != null,
-                            $"world1_config.json's shed '{shedId}' was not built");
-                        MowerHutch hutch = shedGo.GetComponent<MowerHutch>();
-                        Assert.IsNotNull(hutch, $"'{shedId}' built no MowerHutch");
-
-                        hutch.TakeDamage(new DamageInfo(hutch.AuthoredMax + 999f, Vector3.zero, Vector3.forward,
-                            Team.Player, source: DamageSource.PrimaryWeapon));
-                        Assert.IsFalse(hutch.IsAlive, $"'{shedId}' survived a lethal hit");
-                    }
-                }
-
-                // Ask the gate directly, the way a resume, a HUD refresh, or a dropped Update() frame
-                // would — rather than relying on the death-loop having caught the exact frame the third
-                // shed fell. On the pre-fix commit this call did not exist and the assertion below
-                // failed with gate.Locked still True (see the fix comment for the quoted failure).
-                runner.RefreshConditionGates();
-
-                Assert.IsFalse(gate.Locked,
-                    "g11 must resolve unlocked once every shed before area 12 is destroyed, even when " +
-                    "asked without an intervening Update() tick (MV-664)");
-            }
-            finally
-            {
-                Object.DestroyImmediate(root);
-            }
-        }
     }
 }
