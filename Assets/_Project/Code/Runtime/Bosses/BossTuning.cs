@@ -61,8 +61,9 @@ namespace MaxWorlds.Bosses
         // the player does (see BigBermudaBrain.SpawnLevel / BroodSpawnLevels).
 
         /// <summary>Seconds alive before the spawn level steps up. Level = 1 + floor(aliveSeconds /
-        /// this), capped at <see cref="MaxSpawnLevel"/>.</summary>
-        public const float SpawnLevelInterval = 60f;
+        /// this), capped at <see cref="MaxSpawnLevel"/>. MV-668: reverted to 30s (was raised to 60s by
+        /// MV-614) at Lee's request, 2026-09-02.</summary>
+        public const float SpawnLevelInterval = 30f;
 
         /// <summary>The ceiling the spawn level climbs to — L4 draws from the whole roster.</summary>
         public const int MaxSpawnLevel = 4;

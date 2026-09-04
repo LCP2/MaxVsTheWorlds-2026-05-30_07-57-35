@@ -240,10 +240,10 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void World1_BossBodyResolvesToTheAuthoredSize()
         {
-            // MV-650: authored boss size scaled to 75% (6x6 -> 4.5x4.5), now that MV-613 makes the rig
-            // actually follow authored size. Asserts the RESOLVED, constructed body — not the JSON —
-            // because a config edit that never reached MapRuntime.BuildBoss would pass a JSON-only
-            // assertion while the scene still spawned a mis-sized cube.
+            // MV-668: authored boss size cut a further 20% (4.5x4.5 -> 3.6x3.6), per Lee's 2026-09-02
+            // call. Asserts the RESOLVED, constructed body — not the JSON — because a config edit that
+            // never reached MapRuntime.BuildBoss would pass a JSON-only assertion while the scene still
+            // spawned a mis-sized cube.
             Assert.IsTrue(WorldMapLoader.TryLoad(LoadWorld1(), out MapData map, out string reason), reason);
 
             var root = new GameObject("MV-621 Boss Size Probe Root");
@@ -253,10 +253,10 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.IsTrue(built.Actors.TryGetValue("a12_boss1", out GameObject boss) && boss != null,
                     "world1_config.json's 'a12_boss1' was not built");
 
-                Assert.AreEqual(4.5f, boss.transform.localScale.x, 1e-4f,
-                    "a12_boss1's built width must match its authored 4.5 m size");
-                Assert.AreEqual(4.5f, boss.transform.localScale.z, 1e-4f,
-                    "a12_boss1's built depth must match its authored 4.5 m size");
+                Assert.AreEqual(3.6f, boss.transform.localScale.x, 1e-4f,
+                    "a12_boss1's built width must match its authored 3.6 m size");
+                Assert.AreEqual(3.6f, boss.transform.localScale.z, 1e-4f,
+                    "a12_boss1's built depth must match its authored 3.6 m size");
             }
             finally
             {
