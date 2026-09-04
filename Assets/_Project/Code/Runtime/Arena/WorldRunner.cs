@@ -260,48 +260,61 @@ namespace MaxWorlds.Arena
             _bossGate.SetLockProgress(destroyed, total);
         }
 
-        private void Update()
+        /// <summary>MV-664: reports every newly-dead shed into <see cref="_supply"/>, THEN re-evaluates
+        /// every shed-gated door against <see cref="_supply"/>'s resulting state — unconditionally, not
+        /// only when this same call found a shed that just died. Before this, both the boss gate's open
+        /// check and every <see cref="_shedsBeforeGates"/> re-check lived INSIDE the per-shed death
+        /// branch below, so a gate only ever got asked "is your condition met yet" on the specific call
+        /// that detected a death. That is correct as long as this method is guaranteed to run again
+        /// after the condition becomes true, but nothing enforces that guarantee — a gate whose
+        /// condition became satisfied without a subsequent call ever re-checking it (a dropped frame, a
+        /// resume, a future caller that marks a shed destroyed some other way) would then stay locked
+        /// forever, with no other path back to "open". Called every <see cref="Update"/> tick (cheap: a
+        /// handful of sheds/gates at most) and public so anything else that needs a fresh, correct
+        /// resolution — a HUD refresh, a resume, a test — can force one directly.</summary>
+        public void RefreshConditionGates()
         {
-            if (_supply != null)
+            if (_supply == null) return;
+
+            for (int i = _sheds.Count - 1; i >= 0; i--)
             {
-                for (int i = _sheds.Count - 1; i >= 0; i--)
+                (string areaId, string shedId, MowerHutch hutch) = _sheds[i];
+                if (hutch != null && hutch.IsAlive) continue;
+
+                _sheds.RemoveAt(i);
+                _supply.DestroyShed(shedId);
+                TrackDestroyedShedStream(areaId, hutch);
+            }
+
+            if (_bossGate != null && _bossGate.Locked)
+            {
+                PushBossGateProgress();   // <-- MV-571, before AllShedsDestroyed opens it
+
+                if (_supply.AllShedsDestroyed)
                 {
-                    (string areaId, string shedId, MowerHutch hutch) = _sheds[i];
-                    if (hutch != null && hutch.IsAlive) continue;
-
-                    _sheds.RemoveAt(i);
-                    _supply.DestroyShed(shedId);
-                    TrackDestroyedShedStream(areaId, hutch);
-
-                    if (_bossGate != null)
-                    {
-                        PushBossGateProgress();   // <-- MV-571, before AllShedsDestroyed opens it
-
-                        if (_supply.AllShedsDestroyed)
-                        {
-                            _bossGate.Locked = false;
-                            _bossGate.ForceOpen();
-                        }
-                    }
-
-                    // MV-560: a shed just fell, so it's the moment any mid-run boss's own condition
-                    // could newly be met — same event-driven check as the final boss gate above, just
-                    // per-gate against its own boundary area index instead of the whole world.
-                    for (int j = _shedsBeforeGates.Count - 1; j >= 0; j--)
-                    {
-                        (AreaGate gate, int toAreaIndex) = _shedsBeforeGates[j];
-
-                        _supply.ShedProgressBefore(toAreaIndex, out int done, out int total);
-                        gate.SetLockProgress(done, total);          // <-- MV-571, before the early-continue
-
-                        if (!_supply.ShedsDestroyedBefore(toAreaIndex)) continue;
-
-                        gate.Locked = false;
-                        gate.ForceOpen();
-                        _shedsBeforeGates.RemoveAt(j);
-                    }
+                    _bossGate.Locked = false;
+                    _bossGate.ForceOpen();
                 }
             }
+
+            for (int j = _shedsBeforeGates.Count - 1; j >= 0; j--)
+            {
+                (AreaGate gate, int toAreaIndex) = _shedsBeforeGates[j];
+
+                _supply.ShedProgressBefore(toAreaIndex, out int done, out int total);
+                gate.SetLockProgress(done, total);          // <-- MV-571, before the early-continue
+
+                if (!_supply.ShedsDestroyedBefore(toAreaIndex)) continue;
+
+                gate.Locked = false;
+                gate.ForceOpen();
+                _shedsBeforeGates.RemoveAt(j);
+            }
+        }
+
+        private void Update()
+        {
+            RefreshConditionGates();
 
             UpdatePostDestructionStreamGating();
 
