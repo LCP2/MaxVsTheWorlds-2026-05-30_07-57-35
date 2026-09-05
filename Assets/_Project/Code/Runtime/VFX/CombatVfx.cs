@@ -1,5 +1,6 @@
 using System.Collections;
 using UnityEngine;
+using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.VFX
@@ -52,6 +53,13 @@ namespace MaxWorlds.VFX
         private static readonly Color MaxTeleportDeep = new Color(0.5f, 0.35f, 0.98f, 1f);
         private static readonly Color MaxTeleportFlashColor = new Color(0.95f, 0.97f, 1f, 1f);
 
+        // MV-674: "more electrical frazzling" layered alongside the cyan-violet surge/shockwave
+        // above, not instead of it. Reuses the existing Element.Electric palette colour rather
+        // than adding a new one (see ElementPalette.cs); ElectricCrackleHot is that same colour
+        // lifted toward white so the gradient still reads amber-yellow rather than smooth glow.
+        private static readonly Color ElectricCrackleCore = ElementPalette.ColorOf(Element.Electric);
+        private static readonly Color ElectricCrackleHot = Color.Lerp(ElectricCrackleCore, Color.white, 0.6f);
+
         // The Launcher's missile (MV-349/MV-351): its own hot-orange palette, distinct from the
         // factory's fire so a missile hit reads as ITS OWN kind of event rather than a re-skinned
         // factory boom. MV-351: Lee reported the MV-349 version was "way too subtle" on the live
@@ -86,6 +94,7 @@ namespace MaxWorlds.VFX
         private VfxBurst _maxTeleportSurge; // Max: bigger energy surge, both ends
         private VfxBurst _maxTeleportShock; // Max: flat shockwave ring racing outward, both ends
         private VfxBurst _maxTeleportFlash; // Max: bigger vanish/reappear pop, both ends
+        private VfxBurst _maxTeleportCrackle; // Max: electric crackle layered on the beat, both ends (MV-674)
         private VfxBurst _missileFlash;     // missile: the pop of detonation
         private VfxBurst _missileBlast;     // missile: expanding fire
         private VfxBurst _missileDebris;    // missile: dark chunks off the blast
@@ -115,6 +124,7 @@ namespace MaxWorlds.VFX
             _maxTeleportSurge = new VfxBurst("MaxTeleportSurge", additive, 220, 0f, perFrameCap: 4, stretched: true);
             _maxTeleportShock = new VfxBurst("MaxTeleportShockwave", additive, 160, 0f, perFrameCap: 4, stretched: true);
             _maxTeleportFlash = new VfxBurst("MaxTeleportFlash", additive, 40, 0f, perFrameCap: 8);
+            _maxTeleportCrackle = new VfxBurst("MaxTeleportCrackle", additive, 260, 0f, perFrameCap: 4, stretched: true);
             // MV-351: bigger particle budgets throughout — the MV-349 blast was sized like a small
             // hit spark (24 particles/call) and Lee couldn't see it in a busy fight. maxParticles
             // headroom is sized for perFrameCap simultaneous detonations at the new, larger counts.
@@ -165,6 +175,7 @@ namespace MaxWorlds.VFX
             Dispose(_boom); Dispose(_boomDebris); Dispose(_boomSmoke);
             Dispose(_teleportSurge); Dispose(_teleportFlash);
             Dispose(_maxTeleportSurge); Dispose(_maxTeleportShock); Dispose(_maxTeleportFlash);
+            Dispose(_maxTeleportCrackle);
             Dispose(_missileFlash); Dispose(_missileBlast); Dispose(_missileDebris);
             Dispose(_missileScorch); Dispose(_missileShock); Dispose(_missileAfterSmoke);
             Dispose(_missileSputter); Dispose(_missileBounceDust);
@@ -367,6 +378,16 @@ namespace MaxWorlds.VFX
                 sizeMin: 0.1f, sizeMax: 0.22f,
                 lifeMin: 0.2f, lifeMax: 0.32f,
                 colorA: MaxTeleportFlashColor, colorB: MaxTeleportCore);
+
+            // MV-674: jagged, wide-spread, short-lived sparks at lower individual size than the
+            // surge above — that's what reads as "crackle" rather than more "glow" — layered on
+            // top of (not instead of) the existing surge/shockwave.
+            _maxTeleportCrackle.Emit(at, 44,
+                axis: Vector3.up, spreadDegrees: 150f,
+                speedMin: 3f, speedMax: 13f,
+                sizeMin: 0.05f, sizeMax: 0.14f,
+                lifeMin: 0.1f, lifeMax: 0.2f,
+                colorA: ElectricCrackleHot, colorB: ElectricCrackleCore);
         }
 
         private void EmitMaxTeleportFlash(Vector3 at) => _maxTeleportFlash.Emit(at, 1,
