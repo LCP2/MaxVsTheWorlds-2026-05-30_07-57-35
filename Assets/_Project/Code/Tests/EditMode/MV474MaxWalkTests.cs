@@ -33,7 +33,7 @@ namespace MaxWorlds.Tests.EditMode
         public void HipPivot_HasFootGeometryHangingOffIt_AndRotatingItMovesTheFoot()
         {
             const float hipY = 0.74f; // MaxRig.HipY — the waist height the rig builds the torso at.
-            var palette = new MaxPalette(null, null, null, null, null, null, null, null, null, null, null);
+            var palette = new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null, null);
 
             var body = MaxBody.Build(_root, palette, hipY);
 

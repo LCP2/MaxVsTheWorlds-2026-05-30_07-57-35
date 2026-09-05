@@ -138,11 +138,18 @@ namespace MaxWorlds.VFX
         /// of it. Get this wrong and the tank is just a blue block.</summary>
         private static readonly Color Water = new Color(0.31f, 0.76f, 0.97f);
 
-        /// <summary>The goggle lenses, and the one warm glint on him. Amber, because amber is what
-        /// workshop safety glass is — and because the only other lit eyes in the yard are the robots'
-        /// cold turquoise and the boss's acid green. Nothing that glows on Max may be mistakable for
-        /// something that is trying to kill him.</summary>
-        private static readonly Color LensGlass = new Color(1f, 0.72f, 0.24f);
+        /// <summary>MV-669 approved geometry: the goggle lenses moved off amber to a pale blue-white.
+        /// Amber competed with the hoodie for the eye; the pale lens is what makes the raised lens cups
+        /// read as two bright discs from the 60-degree camera, which is the whole point of the new
+        /// goggle geometry.</summary>
+        private static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
+
+        /// <summary>The utility belt band — MV-669's one new silhouette-breaker, giving the torso a
+        /// middle where the old body had none.</summary>
+        private static readonly Color Belt = new Color(0.29f, 0.25f, 0.22f);
+
+        /// <summary>The pouches riding on the belt. A shade darker than the band itself.</summary>
+        private static readonly Color Pouch = new Color(0.23f, 0.20f, 0.17f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
@@ -301,7 +308,7 @@ namespace MaxWorlds.VFX
         private MeshRenderer[] _gadgetGlow;
 
         private Material _skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat, _darkMat,
-                         _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat;
+                         _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat, _beltMat, _pouchMat;
         private MaterialPropertyBlock _lensMpb;
 
         private float _stride;
@@ -356,15 +363,15 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Eleven materials, all OURS.
+        /// Thirteen materials, all OURS (MV-669 added Belt and Pouch to the original eleven).
         ///
         /// Instances of <see cref="MaterialLibrary.Character()"/> — never that material itself, which
         /// is worn by every robot in the yard and by the boss, and tinting it to give Max brown hair
         /// would give the entire cast brown hair.
         ///
-        /// Instances rather than one material and eleven MaterialPropertyBlocks, for the same reason
+        /// Instances rather than one material and thirteen MaterialPropertyBlocks, for the same reason
         /// the boss's rig does it: a property block is what BREAKS SRP batching, and a shared material
-        /// instance is what keeps it. Eleven materials on one shader batch; eleven blocks do not.
+        /// instance is what keeps it. Thirteen materials on one shader batch; thirteen blocks do not.
         /// </summary>
         private void BuildMaterials()
         {
@@ -386,6 +393,8 @@ namespace MaxWorlds.VFX
             // unconditionally, no keyword needed — the same channel CharacterSkin drives per-frame for
             // the hit flash) is enough; no new geometry, so MaxBody.cs's generated mesh is untouched.
             _goggleMat = CharacterMaterial("Max_Goggle", LensGlass, emission: LensGlass * 0.6f);
+            _beltMat = CharacterMaterial("Max_Belt", Belt);
+            _pouchMat = CharacterMaterial("Max_Pouch", Pouch);
         }
 
         /// <summary>
@@ -463,7 +472,8 @@ namespace MaxWorlds.VFX
 
             var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
             var palette = new MaxPalette(_skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat,
-                                         _darkMat, _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat);
+                                         _darkMat, _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat,
+                                         _beltMat, _pouchMat);
             var body = MaxBody.Build(feet, palette, HipY);
             _gadgetGlow = body.GadgetGlow;
             _hips[0] = body.Hips[0];
@@ -683,6 +693,7 @@ namespace MaxWorlds.VFX
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
             Kill(_skinMat); Kill(_hairMat); Kill(_jacketMat); Kill(_hoodMat); Kill(_fabricMat);
             Kill(_darkMat); Kill(_bootMat); Kill(_soleMat); Kill(_metalMat); Kill(_eyeMat); Kill(_goggleMat);
+            Kill(_beltMat); Kill(_pouchMat);
         }
 
         private static void Kill(Material m)
