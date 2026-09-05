@@ -120,11 +120,13 @@ namespace MaxWorlds.VFX
         private const float PartRingRadius = 0.46f;
         private const float DeviceRingOuterRadius = 0.68f;
         private const float DeviceRingInnerRadius = 0.44f;
+        private const float PowerCellSecondaryRingRadius = 0.50f;
 
         private const float PowerCellRingAlpha = 0.85f;
         private const float PartRingAlpha = 0.70f;
         private const float DeviceRingOuterAlpha = 0.90f;
         private const float DeviceRingInnerAlpha = 0.50f;
+        private const float PowerCellSecondaryRingAlpha = 0.85f;
 
         // MV-429 wore this as its own literal ahead of MV-431's colour pass on the prop itself; now that
         // WeaponPartArt.ModuleGlow exists, read it back so the ring and the prop's core can never drift
@@ -192,6 +194,7 @@ namespace MaxWorlds.VFX
                 PickupKind.PowerCell => WeaponPartArt.Keys.PowerCell,
                 PickupKind.Device => WeaponPartArt.Keys.HydroDevice,
                 PickupKind.Supercell => RollNewPartKey(pickup),
+                PickupKind.PowerCellSecondary => WeaponPartArt.Keys.PowerCellSecondary,
                 _ => null,
             };
             if (key == null) return;
@@ -303,6 +306,14 @@ namespace MaxWorlds.VFX
                         // MV-304 Core breathe, not just the shared "grab me" ring below it.
                         PulseCellCore(state.Core);
                     }
+                    else if (pickup.Kind == PickupKind.PowerCellSecondary)
+                    {
+                        // MV-672: same shimmer/breathe language as the power cell, but the core reads
+                        // amber (PulseSecondaryCore) so the two currencies never breathe the same colour.
+                        PulseGlisten(state.Glisten[0], 0f);
+                        PulseGlisten(state.Glisten[1], 1.7f);
+                        PulseSecondaryCore(state.Core);
+                    }
                 }
 
                 DressGroundRing(pickup.transform, pickup.Kind, state);
@@ -339,6 +350,15 @@ namespace MaxWorlds.VFX
             {
                 state.RingOuter = ShowRing(pickup, state.RingOuter, RingOuterName, DeviceRingOuterRadius, DeviceRingColor, DeviceRingOuterAlpha * pulse);
                 state.RingInner = ShowRing(pickup, state.RingInner, RingInnerName, DeviceRingInnerRadius, DeviceRingColor, DeviceRingInnerAlpha * pulse);
+                return;
+            }
+
+            if (kind == PickupKind.PowerCellSecondary)
+            {
+                // MV-672: amber, not the power cell's cyan or the part's chrome — the ring must not
+                // read as either existing currency.
+                state.Ring = ShowRing(pickup, state.Ring, RingName, PowerCellSecondaryRingRadius,
+                    WeaponPartArt.PowerCellSecondaryGlow, PowerCellSecondaryRingAlpha * pulse);
                 return;
             }
 
@@ -399,6 +419,19 @@ namespace MaxWorlds.VFX
             r.SetPropertyBlock(_mpb);
         }
 
+        /// <summary>MV-672: the Power Cells crystal's own gentle radiance — same cadence as
+        /// <see cref="PulseCellCore"/>, amber instead of cyan so the two currencies' breathing cores
+        /// never read as the same charge.</summary>
+        private void PulseSecondaryCore(MeshRenderer r)
+        {
+            if (r == null) return;
+
+            float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetColor(BaseColorId, WeaponPartArt.PowerCellSecondaryGlow * (CellPulseMin + CellPulseRange * t));
+            r.SetPropertyBlock(_mpb);
+        }
+
         /// <summary>Flickers one of a prop's specular glint dots (YT-167, WV-236) in a brief spike-and-fade,
         /// not the aura's slow breathing sine — a sparkle is light catching a facet for an instant, not a
         /// beacon glowing steadily. <paramref name="phase"/> offsets each dot's cycle so, together with the
@@ -449,6 +482,8 @@ namespace MaxWorlds.VFX
                 art.transform.localScale = Vector3.one * WeaponPartArt.HydroDeviceGroundScale;
             else if (key == WeaponPartArt.Keys.PowerCell)
                 art.transform.localScale = Vector3.one * WeaponPartArt.PowerCellGroundScale;
+            else if (key == WeaponPartArt.Keys.PowerCellSecondary)
+                art.transform.localScale = Vector3.one * WeaponPartArt.PowerCellSecondaryGroundScale;
             else
                 // MV-326: every other key reaching here is one of the machine-internals designs a Part
                 // pickup wears — give it its own ground scale so it reads unmistakably larger than the

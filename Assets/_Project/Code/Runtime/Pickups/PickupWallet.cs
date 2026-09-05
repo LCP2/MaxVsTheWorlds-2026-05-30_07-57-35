@@ -148,6 +148,54 @@ namespace MaxWorlds.Pickups
             return true;
         }
 
+        // ------------------------------------------------------------------ Power Cells (MV-672)
+        //
+        // A second, separate, scarcer currency ("Power Cells" to the player) — NOT the same balance as
+        // PowerCells above, which post-Issue-1's rename displays to the player as "Parts" despite its
+        // old C# name. Mirrors PowerCells' own getter/Add/TrySpend/Set/changed-event shape exactly, but
+        // carries no reserve capacity of its own (nothing has authored a cap for it yet).
+
+        /// <summary>Banked Power Cells (MV-672's actual new currency).</summary>
+        public static int PowerCellsSecondary { get; private set; }
+
+        /// <summary>Fired when the Power Cells count changes. Arg = the new total.</summary>
+        public static event Action<int> PowerCellsSecondaryChanged;
+
+        /// <summary>Bank one collected Power Cell.</summary>
+        public static void AddPowerCellSecondary()
+        {
+            PowerCellsSecondary++;
+            PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+        }
+
+        /// <summary>Set the banked total directly — a save slot restoring what was on disk, not a pickup.</summary>
+        public static void SetPowerCellSecondary(int count)
+        {
+            int clamped = Mathf.Max(0, count);
+            if (clamped == PowerCellsSecondary) return;
+            PowerCellsSecondary = clamped;
+            PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+        }
+
+        /// <summary>Consume one Power Cell if any remain. Returns false at empty.</summary>
+        public static bool TrySpendPowerCellSecondary()
+        {
+            if (PowerCellsSecondary <= 0) return false;
+            PowerCellsSecondary--;
+            PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+            return true;
+        }
+
+        /// <summary>Spend several Power Cells atomically — affords the full amount or spends nothing.</summary>
+        public static bool TrySpendPowerCellSecondaries(int amount)
+        {
+            if (amount <= 0) return true;
+            if (PowerCellsSecondary < amount) return false;
+            PowerCellsSecondary -= amount;
+            PowerCellsSecondaryChanged?.Invoke(PowerCellsSecondary);
+            return true;
+        }
+
         /// <summary>Grant one collected Supercell's cells instantly (MV-519, retiring MV-515's banked/
         /// cash-in model) — no bank, no cash-in step, no player action. Always adds the FULL
         /// <see cref="SupercellCellValue"/>, even past <see cref="Capacity"/>: unlike an ordinary cell
@@ -170,9 +218,11 @@ namespace MaxWorlds.Pickups
         public static void Reset()
         {
             PowerCells = 0;
+            PowerCellsSecondary = 0;
             RigState.Reset();
             RigFusionState.Reset();
             PowerCellsChanged?.Invoke(0);
+            PowerCellsSecondaryChanged?.Invoke(0);
             CapacityChanged?.Invoke(Capacity);
         }
     }

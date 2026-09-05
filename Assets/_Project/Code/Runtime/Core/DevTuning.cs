@@ -362,6 +362,12 @@ namespace MaxWorlds.Core
         /// cell source.</summary>
         public static float? CellsPerLargeKill { get; set; }
 
+        /// <summary>How many Power Cells (MV-672's new secondary currency) drop for every Parts pickup
+        /// dropped — overrides <see cref="MaxWorlds.Pickups.CellEconomyTuning.DefaultPowerCellDropRatio"/>.
+        /// Read live by <see cref="MaxWorlds.Pickups.PickupDirector"/>'s fractional accumulator, so a
+        /// moved slider changes the very next kill's drop math.</summary>
+        public static float? PowerCellDropRatio { get; set; }
+
         // --- gated arena (WV-234, spec §1/§9) ---
 
         /// <summary>Sustained primary fire, seconds, to break a gate (<c>gateBreakSeconds</c>).</summary>
@@ -438,7 +444,7 @@ namespace MaxWorlds.Core
             LargeToSmallRatio.HasValue || LargeShareDriftPerArea.HasValue || MaxActiveRobots.HasValue ||
             GlobalRobotBudget.HasValue ||
             RobotHpPerAreaMult.HasValue || HeavyIntroArea.HasValue || BruteIntroArea.HasValue ||
-            ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue ||
+            ToughSubstitutionPct.HasValue || CellsPerLargeKill.HasValue || PowerCellDropRatio.HasValue ||
             GateBreakSeconds.HasValue || GateRequiresClear.HasValue ||
             WorldBaseThreat.HasValue || WorldThreatGrowth.HasValue || WorldHeavyFromArea.HasValue ||
             WorldBruteFromArea.HasValue || WorldTankShareEnd.HasValue ||
@@ -526,6 +532,7 @@ namespace MaxWorlds.Core
             BruteIntroArea = null;
             ToughSubstitutionPct = null;
             CellsPerLargeKill = null;
+            PowerCellDropRatio = null;
             GateBreakSeconds = null;
             GateRequiresClear = null;
             WorldBaseThreat = null;
@@ -628,6 +635,7 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(BruteIntroArea), () => BruteIntroArea, v => BruteIntroArea = v),
             (PrefsPrefix + nameof(ToughSubstitutionPct), () => ToughSubstitutionPct, v => ToughSubstitutionPct = v),
             (PrefsPrefix + nameof(CellsPerLargeKill), () => CellsPerLargeKill, v => CellsPerLargeKill = v),
+            (PrefsPrefix + nameof(PowerCellDropRatio), () => PowerCellDropRatio, v => PowerCellDropRatio = v),
             (PrefsPrefix + nameof(GateBreakSeconds), () => GateBreakSeconds, v => GateBreakSeconds = v),
             (PrefsPrefix + nameof(GateRequiresClear), () => GateRequiresClear, v => GateRequiresClear = v),
             (PrefsPrefix + nameof(WorldBaseThreat), () => WorldBaseThreat, v => WorldBaseThreat = v),

@@ -76,6 +76,11 @@ namespace MaxWorlds.UI
         // a matched copy, so an art retune moves both at once. It is the shared ORANGE, deliberately NOT
         // the old gold (0.98,0.72,0.22) that read as yellow — the ticket's whole point.
         private static readonly Color SupercellColor = MaxWorlds.VFX.PickupArtDirector.CollectibleGlow;
+        /// <summary>MV-672: the Power Cells (secondary currency) counter's colour — amber, matched to
+        /// its own ground pickup/icon (<see cref="MaxWorlds.VFX.WeaponPartArt.PowerCellSecondaryGlow"/>),
+        /// deliberately not <see cref="CellColor"/>'s cyan so the two currency readouts are never
+        /// mistaken for one another.</summary>
+        private static readonly Color PowerCellSecondaryColor = MaxWorlds.VFX.WeaponPartArt.PowerCellSecondaryGlow;
         /// <summary>The WEAPONS button's idle-state ring (MV-425) — "deliberately recessive... it
         /// should disappear mid-fight," a thin cool grey rather than any of the amber/cyan alert hues.</summary>
         private static readonly Color WeaponsButtonIdleRingColor = new Color(0.55f, 0.58f, 0.62f, 1f);
@@ -233,6 +238,14 @@ namespace MaxWorlds.UI
         private RectTransform _cellCounterRoot;
         private Image _cellCounterGlow, _cellCounterBg;
 
+        // MV-672: Power Cells (the new secondary currency) — a second, smaller pill stacked directly
+        // beneath the Parts counter above, styled amber/angular against its cyan/rounded battery so the
+        // two currencies are never mistaken for one another.
+        private Text _cellSecondaryCount;
+        private Image _cellSecondaryIcon;
+        private RectTransform _cellSecondaryCounterRoot;
+        private Image _cellSecondaryCounterBg;
+
         // The always-available WEAPONS access button (YT-178), redrawn as THE RIG's own hexagonal
         // mark (MV-425, retiring both the old ABILITIES pill and the single-chip corner badge YT-131/
         // YT-178/MV-358 built up on it). _weaponsButtonRing is the state-coloured stroke (grey/amber/
@@ -293,6 +306,7 @@ namespace MaxWorlds.UI
             BuildWeaponsButton();
             BuildMapButton();
             BuildPowerCellCounter(); // parents onto _weaponsButtonRoot — must follow BuildWeaponsButton
+            BuildPowerCellSecondaryCounter(); // MV-672 — stacks below BuildPowerCellCounter's Parts pill
             BuildWeaponsButtonBadges();
             BuildFloatingLayer();
             BuildSupercellFx(); // must follow BuildPowerCellCounter — travels toward _cellCounterRoot
@@ -316,6 +330,7 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.SentinelRecalled += OnSentinelRecalled;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged += OnPowerCells;
+            MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged += OnPowerCellsSecondary;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged += OnCellCapacity;
             UpgradeState.Changed += OnUpgradesChanged;
             WeaponSystemState.Changed += OnAbilitiesChanged;
@@ -338,6 +353,7 @@ namespace MaxWorlds.UI
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.SentinelRecalled -= OnSentinelRecalled;
             MaxWorlds.Pickups.PickupWallet.PowerCellsChanged -= OnPowerCells;
+            MaxWorlds.Pickups.PickupWallet.PowerCellsSecondaryChanged -= OnPowerCellsSecondary;
             MaxWorlds.Pickups.PickupWallet.CapacityChanged -= OnCellCapacity;
             UpgradeState.Changed -= OnUpgradesChanged;
             WeaponSystemState.Changed -= OnAbilitiesChanged;
@@ -372,6 +388,14 @@ namespace MaxWorlds.UI
         {
             SetCellCountDisplay(total, MaxWorlds.Pickups.PickupWallet.Capacity);
             _cellPop = 1f;   // a brief scale pop so a banked cell registers
+        }
+
+        /// <summary>MV-672: the Power Cells (secondary currency) counter has no capacity/pop-scale
+        /// machinery of its own yet — just the running total.</summary>
+        private void OnPowerCellsSecondary(int total)
+        {
+            if (_cellSecondaryCount == null) return;
+            _cellSecondaryCount.text = total.ToString();
         }
 
         /// <summary>MV-374: the reserve's cap itself moved (a Cell Capacity level-up) — the count
@@ -2029,6 +2053,42 @@ namespace MaxWorlds.UI
             _cellCount.resizeTextMinSize = (int)CellCounterTextMinSize;
             _cellCount.resizeTextMaxSize = (int)CellCounterTextMaxSize;
             _cellCount.text = $"{MaxWorlds.Pickups.PickupWallet.PowerCells}/{MaxWorlds.Pickups.PickupWallet.Capacity}";
+        }
+
+        /// <summary>The Power Cells (secondary currency, MV-672) counter — a second, smaller pill
+        /// stacked directly beneath <see cref="BuildPowerCellCounter"/>'s Parts pill (not replacing it),
+        /// styled amber with its own faceted-crystal icon so the two currencies are never mistaken for
+        /// one another. No capacity/affordability-flash machinery: this currency has no authored
+        /// reserve cap yet. Must build after <see cref="BuildPowerCellCounter"/> — it parents onto the
+        /// same <see cref="_weaponsButtonRoot"/> and stacks below that pill's own height.</summary>
+        private void BuildPowerCellSecondaryCounter()
+        {
+            var root = NewRect("Power Cells", _weaponsButtonRoot);
+            Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
+            root.sizeDelta = new Vector2(CellCounterWidth, CellCounterHeight);
+            root.anchoredPosition = new Vector2(0f, -(CellReadoutGap + CellCounterHeight + CellReadoutGap));
+            _cellSecondaryCounterRoot = root;
+
+            _cellSecondaryCounterBg = AddImage(root, HudTextures.RoundedBox(44, 0.5f), PanelColor, "BG");
+            Stretch(_cellSecondaryCounterBg.rectTransform);
+            _cellSecondaryCounterBg.type = Image.Type.Sliced;
+            _cellSecondaryCounterBg.raycastTarget = false;
+
+            _cellSecondaryIcon = AddImage(root, MaxWorlds.VFX.WeaponHudIcons.PowerCellSecondary(64), Color.white, "Power Cell Icon");
+            Anchor(_cellSecondaryIcon.rectTransform, new Vector2(0f, 0.5f), new Vector2(0f, 0.5f), new Vector2(0.5f, 0.5f));
+            _cellSecondaryIcon.rectTransform.sizeDelta = new Vector2(CellCounterIconSize, CellCounterIconSize);
+            _cellSecondaryIcon.rectTransform.anchoredPosition = new Vector2(CellIconCenterX, 0f);
+            _cellSecondaryIcon.raycastTarget = false;
+
+            _cellSecondaryCount = AddText(root, CellCounterTextMaxSize, PowerCellSecondaryColor, TextAnchor.MiddleLeft);
+            Anchor(_cellSecondaryCount.rectTransform, new Vector2(0f, 0.5f), new Vector2(1f, 0.5f), new Vector2(0f, 0.5f));
+            _cellSecondaryCount.rectTransform.offsetMin = new Vector2(CellCounterTextLeftInset, 0f);
+            _cellSecondaryCount.rectTransform.offsetMax = new Vector2(-12f, 0f);
+            _cellSecondaryCount.fontStyle = FontStyle.Bold;
+            _cellSecondaryCount.resizeTextForBestFit = true;
+            _cellSecondaryCount.resizeTextMinSize = (int)CellCounterTextMinSize;
+            _cellSecondaryCount.resizeTextMaxSize = (int)CellCounterTextMaxSize;
+            _cellSecondaryCount.text = MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary.ToString();
         }
 
         /// <summary>Hexagon bounding-box texture size THE WEAPONS button's background/ring/halo sprites
