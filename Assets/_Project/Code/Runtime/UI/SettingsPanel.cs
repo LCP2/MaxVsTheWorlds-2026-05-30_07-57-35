@@ -592,6 +592,13 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill),
                 v => DevTuning.CellsPerLargeKill = v, tab: TabEconomy);
 
+            // MV-672: Power Cells (the new secondary currency) drop at this fraction of the Parts
+            // pickup rate — a running fractional accumulator in PickupDirector, not a per-kill
+            // round-off, so a moved slider still lands on the right long-run average.
+            Add("Power Cell drop ratio", "x", 0f, 1f, CellEconomyTuning.DefaultPowerCellDropRatio,
+                () => DevTuning.Or(DevTuning.PowerCellDropRatio, CellEconomyTuning.DefaultPowerCellDropRatio),
+                v => DevTuning.PowerCellDropRatio = v, tab: TabEconomy);
+
             Add("Hydro burst", "s", 2f, 30f, HydroBurst.AuthoredSeconds,
                 () => DevTuning.Or(DevTuning.HydroBurstSeconds, HydroBurst.AuthoredSeconds),
                 v => DevTuning.HydroBurstSeconds = v, tab: TabEconomy);

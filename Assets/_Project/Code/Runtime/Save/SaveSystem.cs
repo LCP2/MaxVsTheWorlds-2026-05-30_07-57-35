@@ -143,6 +143,7 @@ namespace MaxWorlds.Save
             data.CheckpointUnlockedCategories = categories.ToArray();
             data.CheckpointAreaIndex = areaIndex;
             data.CheckpointPowerCells = PickupWallet.PowerCells;
+            data.CheckpointPowerCellsSecondary = PickupWallet.PowerCellsSecondary;
             data.CheckpointDeathsTaken = DeathRunState.DeathsTaken;
             data.HasRunInProgress = true;
 
@@ -164,6 +165,7 @@ namespace MaxWorlds.Save
 
             RigState.RestoreSnapshot(levels, data.CheckpointUnlockedCategories ?? Array.Empty<string>());
             PickupWallet.SetPowerCells(data.CheckpointPowerCells);
+            PickupWallet.SetPowerCellSecondary(data.CheckpointPowerCellsSecondary);
             DeathRunState.RestoreDeathsTaken(data.CheckpointDeathsTaken);
             return true;
         }
@@ -196,6 +198,7 @@ namespace MaxWorlds.Save
             data.CheckpointRigNodeLevels = Array.Empty<int>();
             data.CheckpointUnlockedCategories = Array.Empty<string>();
             data.CheckpointPowerCells = 0;
+            data.CheckpointPowerCellsSecondary = 0;
             data.CheckpointDeathsTaken = 0;
             Save(slot, data);
         }

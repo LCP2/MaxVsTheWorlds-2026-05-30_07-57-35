@@ -34,5 +34,12 @@ namespace MaxWorlds.Pickups
         /// authored line no matter how population tuning (MV-284/MV-365) changes underneath it.</summary>
         public static float CellsForArea(int areaIndex) =>
             Mathf.Max(0f, CellsAreaIntercept + CellsAreaSlope * Mathf.Max(0, areaIndex - 1));
+
+        /// <summary>How many <see cref="MaxWorlds.Pickups.PickupKind.PowerCellSecondary"/> pickups drop
+        /// for every Parts pickup dropped (MV-672) — 1-in-10 by default. Tunable via
+        /// <see cref="MaxWorlds.Core.DevTuning.PowerCellDropRatio"/>; scales
+        /// <see cref="MaxWorlds.Pickups.PickupDirector"/>'s fractional accumulator, not a flat modulo,
+        /// so a non-integer ratio still lands on the right long-run average.</summary>
+        public const float DefaultPowerCellDropRatio = 0.1f;
     }
 }

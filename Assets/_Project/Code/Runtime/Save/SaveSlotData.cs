@@ -56,6 +56,9 @@ namespace MaxWorlds.Save
         /// <summary><c>PickupWallet.PowerCells</c> at the checkpoint.</summary>
         public int CheckpointPowerCells;
 
+        /// <summary><c>PickupWallet.PowerCellsSecondary</c> at the checkpoint (MV-672).</summary>
+        public int CheckpointPowerCellsSecondary;
+
         /// <summary><c>DeathRunState.DeathsTaken</c> at the checkpoint — deaths persist across a resume
         /// by design (MV-524), so this is restored, not zeroed.</summary>
         public int CheckpointDeathsTaken;

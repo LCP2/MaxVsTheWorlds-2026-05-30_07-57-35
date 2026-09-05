@@ -167,6 +167,7 @@ namespace MaxWorlds.Tests.EditMode
 
             RigState.RaiseLevel("p_dmg");   // owned at start level 1 (run-start ability) -> level 2
             PickupWallet.SetPowerCells(7);
+            PickupWallet.SetPowerCellSecondary(4);   // MV-672: the new secondary currency
             DeathRunState.RecordDeath();
             DeathRunState.RecordDeath();    // DeathsTaken == 2
 
@@ -181,6 +182,8 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(restored, Is.True);
             Assert.That(RigState.Level("p_dmg"), Is.EqualTo(2));
             Assert.That(PickupWallet.PowerCells, Is.EqualTo(7));
+            Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(4),
+                "MV-672: Power Cells must round-trip through a checkpoint capture/restore too");
             Assert.That(DeathRunState.DeathsTaken, Is.EqualTo(2));
             SaveSlotData saved = SaveSystem.Load(0);
             Assert.That(saved.HasRunInProgress, Is.True);

@@ -99,6 +99,7 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _cellPool = new Stack<Pickup>(16);
         private readonly Stack<Pickup> _supercellPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
+        private readonly Stack<Pickup> _powerCellSecondaryPool = new Stack<Pickup>(8);
 
         /// <summary>Live power cells in spawn order, oldest first (MV-626). <see
         /// cref="RecycleOldestCellIfAtCap"/> needs O(1) oldest-lookup, and an ordinary walk-over
@@ -127,6 +128,14 @@ namespace MaxWorlds.Pickups
         /// carrying over the previous area's leftover fraction.</summary>
         private int _cellBudgetArea = -1;
         private float _cellAccum;
+
+        /// <summary>MV-672: a running fractional accumulator for Power Cells (the new secondary
+        /// currency) — same idiom as <see cref="_cellAccum"/>, but scoped to the whole run rather than
+        /// per-area, since the drop ratio is a flat fraction of Parts drops, not an authored per-area
+        /// budget. Accumulates <c>partsDropped * ratio</c> on every large kill; whenever it crosses a
+        /// whole number, that many Power Cells drop and the fraction carries over — so a non-integer
+        /// ratio (e.g. 0.1) still lands on the right long-run average instead of rounding away.</summary>
+        private float _powerCellSecondaryAccum;
 
         /// <summary>The area <see cref="_bruiserRemaining"/> is currently counting down (MV-401) —
         /// reset whenever a Bruiser dies in a different area so a fresh area starts from that area's
@@ -160,6 +169,20 @@ namespace MaxWorlds.Pickups
                 float ang = i * (Mathf.PI * 2f / cells);
                 Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
                 SpawnDrop(PickupKind.PowerCell, pos + off);
+            }
+
+            // MV-672: Power Cells (the new secondary currency) drop at a tunable fraction of the Parts
+            // rate above — a running fractional accumulator, same idiom as _cellAccum, so a non-integer
+            // ratio (the authored default, 0.1) still lands on the right long-run average instead of
+            // rounding away every kill.
+            _powerCellSecondaryAccum += cells * DevTuning.Or(DevTuning.PowerCellDropRatio, CellEconomyTuning.DefaultPowerCellDropRatio);
+            int powerCellSecondaries = Mathf.FloorToInt(_powerCellSecondaryAccum);
+            _powerCellSecondaryAccum -= powerCellSecondaries;
+            for (int i = 0; i < powerCellSecondaries; i++)
+            {
+                float ang = i * (Mathf.PI * 2f / powerCellSecondaries);
+                Vector3 off = new Vector3(Mathf.Cos(ang), 0f, Mathf.Sin(ang)) * ScatterRadius;
+                SpawnDrop(PickupKind.PowerCellSecondary, pos + off);
             }
 
             // MV-401: exactly one Supercell per arena, from the last Bruiser destroyed in it — not every
@@ -330,6 +353,7 @@ namespace MaxWorlds.Pickups
             {
                 PickupKind.Supercell => _supercellPool,
                 PickupKind.Device => _devicePool,
+                PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
                 _ => _cellPool,
             };
             Pickup p = pool.Count > 0 ? pool.Pop() : Pickup.Create(kind);
@@ -486,6 +510,13 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "MORPHING MODULE",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     break;
+                case PickupKind.PowerCellSecondary:
+                    // MV-672: a separate, scarcer currency — banks unconditionally (no reserve cap
+                    // authored for it yet, unlike PickupKind.PowerCell above).
+                    PickupWallet.AddPowerCellSecondary();
+                    HudSignals.EmitPickup(p.transform.position, "+1 POWER CELL",
+                        MaxWorlds.VFX.WeaponPartArt.PowerCellSecondaryGlow);
+                    break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
                     // own burst + "+10" flyup + readout count-up (HudSignals.EmitSupercellCollected) is
@@ -503,6 +534,7 @@ namespace MaxWorlds.Pickups
             {
                 PickupKind.Supercell => _supercellPool,
                 PickupKind.Device => _devicePool,
+                PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
                 _ => _cellPool,
             };
             pool.Push(p);

@@ -85,6 +85,112 @@ namespace MaxWorlds.VFX
             return sprite;
         }
 
+        // MV-672 — Power Cells (the new secondary currency): amber, angular, deliberately unlike the
+        // cyan/rounded battery above so the two counters never read as the same currency at a glance.
+        private static readonly Color AmberLight = new Color(0.96f, 0.78f, 0.25f, 1f);
+        private static readonly Color AmberMid = new Color(0.87f, 0.62f, 0.14f, 1f);
+        private static readonly Color AmberDark = new Color(0.62f, 0.42f, 0.08f, 1f);
+        private static readonly Color BoltHalo = new Color(0.98f, 0.94f, 0.80f, 1f);
+        private static readonly Color BoltDark = new Color(0.18f, 0.14f, 0.08f, 1f);
+
+        /// <summary>The Power Cells counter icon (MV-672) — a faceted amber gem (pointed top/bottom,
+        /// flat sides, banded to fake facet shading) with a pale halo and a dark lightning-bolt core,
+        /// matching the design reference (MV-672.png). Deliberately angular/amber against
+        /// <see cref="PowerCell"/>'s rounded/cyan battery so the two currencies are never mistaken for
+        /// one another at the size this renders in a HUD pill.</summary>
+        public static Sprite PowerCellSecondary(int size = 64)
+        {
+            const string key = "powercellsecondary";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];   // starts fully transparent
+
+            float cx = size * 0.5f;
+            float apexTop = size * 0.90f;
+            float apexBottom = size * 0.08f;
+            float shoulderY = size * 0.62f;
+            float hipY = size * 0.34f;
+            float halfWidth = size * 0.34f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+                    float hw = GemHalfWidth(fy, apexTop, apexBottom, shoulderY, hipY, halfWidth);
+                    if (hw < 0f || Mathf.Abs(fx - cx) > hw) continue;
+
+                    px[y * size + x] = fy >= shoulderY ? AmberLight : fy >= hipY ? AmberMid : AmberDark;
+                }
+            }
+
+            // The pale halo + dark bolt core (the design reference's charge emblem).
+            float haloCy = size * 0.5f, haloRy = size * 0.22f, haloRx = size * 0.16f;
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+                    float nx = (fx - cx) / haloRx, ny = (fy - haloCy) / haloRy;
+                    if (nx * nx + ny * ny <= 1f) px[y * size + x] = BoltHalo;
+                }
+            }
+            DrawBolt(px, size, cx, haloCy, haloRy);
+
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
+        /// <summary>The Power Cells gem's half-width at height <paramref name="y"/>: 0 at the pointed
+        /// top/bottom apexes, <paramref name="halfWidth"/> across the flat-sided band between
+        /// <paramref name="hipY"/> and <paramref name="shoulderY"/>, linearly tapering in the two bands
+        /// between. Returns -1 outside the gem's vertical extent.</summary>
+        private static float GemHalfWidth(float y, float apexTop, float apexBottom, float shoulderY,
+                                          float hipY, float halfWidth)
+        {
+            if (y > apexTop || y < apexBottom) return -1f;
+            if (y >= shoulderY) return halfWidth * (1f - (y - shoulderY) / (apexTop - shoulderY));
+            if (y >= hipY) return halfWidth;
+            return halfWidth * (y - apexBottom) / (hipY - apexBottom);
+        }
+
+        /// <summary>Stamps a simple zigzag lightning bolt (three thick line segments) onto the halo —
+        /// the design reference's charge emblem, approximated the same "distance to a segment" way
+        /// every procedural icon shape in this file already tests membership.</summary>
+        private static void DrawBolt(Color32[] px, int size, float cx, float cy, float scaleRef)
+        {
+            float s = scaleRef;
+            Vector2 top = new Vector2(cx + 0.32f * s, cy + 0.95f * s);
+            Vector2 mid1 = new Vector2(cx - 0.42f * s, cy + 0.05f * s);
+            Vector2 mid2 = new Vector2(cx + 0.18f * s, cy + 0.05f * s);
+            Vector2 bottom = new Vector2(cx - 0.32f * s, cy - 0.95f * s);
+            float halfThickness = s * 0.15f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    var p = new Vector2(x + 0.5f, y + 0.5f);
+                    float d = Mathf.Min(DistanceToSegment(p, top, mid1),
+                        Mathf.Min(DistanceToSegment(p, mid1, mid2), DistanceToSegment(p, mid2, bottom)));
+                    if (d <= halfThickness) px[y * size + x] = BoltDark;
+                }
+            }
+        }
+
+        private static float DistanceToSegment(Vector2 p, Vector2 a, Vector2 b)
+        {
+            Vector2 ab = b - a;
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / Mathf.Max(ab.sqrMagnitude, 0.0001f));
+            return Vector2.Distance(p, a + ab * t);
+        }
+
         private static readonly Color DeniedRed = new Color(0.95f, 0.18f, 0.15f, 1f);
 
         /// <summary>The <see cref="PowerCell"/> battery, dimmed, with a red prohibition ring and

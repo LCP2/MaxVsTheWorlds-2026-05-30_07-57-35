@@ -70,6 +70,12 @@ namespace MaxWorlds.VFX
         // reads it back to flicker the glints it built here (same idiom as CollectibleGlow).
         public static readonly Color GlistenColor = new Color(0.92f, 0.98f, 1f);
 
+        // MV-672: Power Cells (the new secondary currency) — a faceted amber/electric crystal,
+        // deliberately distinct from the power cell's cyan battery so the two currencies are never
+        // mistaken for one another on the ground (design reference: MV-672.png).
+        private static readonly Color AmberCrystal = new Color(0.82f, 0.58f, 0.14f);
+        public static readonly Color PowerCellSecondaryGlow = new Color(1.00f, 0.80f, 0.20f);
+
         /// <summary>Child name prefix for the power cell's and Hydro device's specular glint dots
         /// (YT-167, WV-236) — the director finds them by this to animate the sparkle without knowing
         /// either prop's geometry.</summary>
@@ -87,6 +93,7 @@ namespace MaxWorlds.VFX
             public const string AccelerationEngine = "acceleration_engine";
             public const string HydroDevice = "hydro_device";
             public const string PowerCell = "power_cell";
+            public const string PowerCellSecondary = "power_cell_secondary";
 
             // WV-237 — the machine-internals designs a dropped part is randomly dressed as. Purely
             // cosmetic (see MachineInternalsKeys below, which PickupArtDirector draws from); unlike
@@ -141,6 +148,7 @@ namespace MaxWorlds.VFX
                 case Keys.AccelerationEngine: return BuildAccelerationEngine(parent);
                 case Keys.HydroDevice: return BuildHydroDevice(parent);
                 case Keys.PowerCell: return BuildPowerCell(parent);
+                case Keys.PowerCellSecondary: return BuildPowerCellSecondary(parent);
                 case Keys.Gear: return BuildGear(parent);
                 case Keys.Coil: return BuildCoil(parent);
                 case Keys.CircuitBlock: return BuildCircuitBlock(parent);
@@ -294,6 +302,12 @@ namespace MaxWorlds.VFX
         /// its own thing — 1.8 keeps it just barely the larger of the two.</summary>
         public const float PartGroundScale = 1.8f;
 
+        /// <summary>The Power Cells crystal's ground scale (MV-672) — pitched between the everyday
+        /// power cell (<see cref="PowerCellGroundScale"/>) and a part (<see cref="PartGroundScale"/>):
+        /// this currency is scarcer than the everyday cell but this ticket doesn't introduce a rarity
+        /// hierarchy beyond that, so it isn't sized to compete with the rarer Supercell/Device drops.</summary>
+        public const float PowerCellSecondaryGroundScale = 1.2f;
+
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
         /// one that GLOWS brightest, because it is the endgame part that frees Max from the hose — and,
@@ -383,6 +397,41 @@ namespace MaxWorlds.VFX
             Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.13f, CasingRadius), 0.035f);
             Glisten(root, GlistenPrefix + "2", OnCircle(120f, 0.30f, CasingRadius), 0.04f);
             Glisten(root, GlistenPrefix + "3", OnCircle(300f, 0.05f, CasingRadius), 0.045f);
+            return root;
+        }
+
+        // ---------------------------------------------------------------- Power Cells (MV-672)
+
+        /// <summary>The Power Cells currency's ground pickup — a faceted amber crystal with a
+        /// lightning-bolt-charge core, matching the design reference (MV-672.png): a pointed top and
+        /// bottom tapering into a hexagonal "gem" waist, deliberately angular against the power cell's
+        /// own cylindrical battery silhouette so the two currencies are never mistaken for one another.
+        /// The reference's bolt emblem is a flat graphic cutout that needs a custom mesh to reproduce
+        /// exactly; here the charge reads through an additive glow core instead, the same "read via
+        /// colour, not a cutout" idiom every glowing prop in this catalog already uses.</summary>
+        public static GameObject BuildPowerCellSecondary(Transform parent = null)
+        {
+            var root = Root("PowerCellSecondary", parent);
+            Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, AmberCrystal);
+            Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+
+            // Two tapering facets meeting at the crystal's widest band — the pointed-top/pointed-bottom
+            // gem read from the reference, built the same "stack of cylinders" way BuildBeamNozzle
+            // fakes a tapering cone.
+            Part(root, "UpperFacet", PrimitiveType.Cylinder, new Vector3(0f, 0.30f, 0f),
+                 new Vector3(0.17f, 0.13f, 0.17f), null, body);
+            Part(root, "LowerFacet", PrimitiveType.Cylinder, new Vector3(0f, 0.11f, 0f),
+                 new Vector3(0.10f, 0.10f, 0.10f), null, body);
+            Part(root, "TopTip", PrimitiveType.Cylinder, new Vector3(0f, 0.44f, 0f),
+                 new Vector3(0.03f, 0.02f, 0.03f), null, cap);
+            Part(root, "BottomTip", PrimitiveType.Cylinder, new Vector3(0f, 0.02f, 0f),
+                 new Vector3(0.03f, 0.02f, 0.03f), null, cap);
+
+            // The lightning-bolt charge core (MV-672 design image).
+            Glow(root, "Core", new Vector3(0f, 0.24f, 0f), 0.14f, PowerCellSecondaryGlow);
+
+            Glisten(root, GlistenPrefix + "0", OnCircle(35f, 0.30f, 0.155f), 0.045f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.16f, 0.13f), 0.04f);
             return root;
         }
 
