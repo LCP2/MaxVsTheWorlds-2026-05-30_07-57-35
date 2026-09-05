@@ -40,6 +40,10 @@ namespace MaxWorlds.Weapons
                  "visual; this is what times the landing.")]
         [SerializeField] private float waterBalloonFlightSpeed = 9f;
 
+        // MV-670: how far short of a genuine solid (wall/building/gate) a clamped same-room blink
+        // lands — enough to keep Max's own CharacterController from immediately re-penetrating it.
+        private const float TeleportLandingClearance = 0.1f;
+
         private CharacterController _cc;
         private WaterBalloonSplashVfx _splashVfx;
         private float _waterBalloonCooldown;
@@ -298,7 +302,20 @@ namespace MaxWorlds.Weapons
                 if (_cc != null) { _cc.enabled = false; transform.position = target; _cc.enabled = true; }
                 else transform.position = target;
             }
-            else if (_cc != null) _cc.Move(offset);
+            else if (_cc != null)
+            {
+                // MV-670: this used to be a plain _cc.Move(offset) — a physics-swept move that stops
+                // dead at the first solid collider in its path, including hedges and pots, which are
+                // deliberately non-blocking dressing everywhere else (MV-400, MV-613) but still carry
+                // real colliders. ResolveSameRoomLanding runs the clearance check and reports where Max
+                // actually ends up; landing there directly (the same instant-set pattern the cross-zone
+                // warp above already uses) is what lets him pass through a hedge/pot instead of bouncing
+                // off it mid-sweep.
+                Vector3 landing = ResolveSameRoomLanding(from, target);
+                _cc.enabled = false;
+                transform.position = landing;
+                _cc.enabled = true;
+            }
             else transform.position += offset;
 
             // MV-426 BLINKGUARD (f_bgd): Energy+Move forged leaves a stationary Force Field bubble at
@@ -311,6 +328,39 @@ namespace MaxWorlds.Weapons
             // PlayerAbilities needing to know either exists.
             HudSignals.EmitMaxTeleported(from, transform.position);
             return true;
+        }
+
+        /// <summary>MV-670: where a same-room blink actually lands. A capsule cast shaped to Max's own
+        /// <see cref="CharacterController"/> runs from <paramref name="from"/> toward <paramref
+        /// name="target"/> against <see cref="CoverLayer.Mask"/> — the same layer that already
+        /// separates "real" solid geometry (walls, gates, the Mower Hutch, non-hedge cover, all
+        /// explicitly put on it by <c>MapRuntime</c>) from decorative dressing for sight-blocking
+        /// purposes. Hedges (MV-400) and pots (MV-613) are both deliberately left off that layer, so
+        /// the same partition happens to be exactly what a teleport clearance check needs too: the cast
+        /// passes through them, but a genuine wall/building/gate still reports a hit. A clear cast lands
+        /// Max at the aimed <paramref name="target"/>; a blocked one clamps him just short of the hit
+        /// point instead of leaving him wherever the old <see cref="CharacterController.Move"/> sweep
+        /// happened to stop.</summary>
+        private Vector3 ResolveSameRoomLanding(Vector3 from, Vector3 target)
+        {
+            Vector3 offset = target - from;
+            float distance = offset.magnitude;
+            if (distance <= 1e-4f || !CoverLayer.Exists) return target;
+            Vector3 dir = offset / distance;
+
+            Vector3 center = from + _cc.center;
+            float halfHeight = Mathf.Max(0f, _cc.height * 0.5f - _cc.radius);
+            Vector3 top = center + Vector3.up * halfHeight;
+            Vector3 bottom = center - Vector3.up * halfHeight;
+
+            if (Physics.CapsuleCast(bottom, top, _cc.radius, dir, out RaycastHit hit, distance,
+                    CoverLayer.Mask, QueryTriggerInteraction.Ignore))
+            {
+                float safeDistance = Mathf.Max(0f, hit.distance - TeleportLandingClearance);
+                return from + dir * safeDistance;
+            }
+
+            return target;
         }
 
         private static Sentinel NearestSentinel(Vector3 from)
