@@ -180,6 +180,19 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void ForceFieldAbsorbCapDefaultsMatchTheMV677Retune()
+        {
+            // MV-677 (Lee): "20% strong to begin with" (20% of Max's 200 HP = 40 at L1) and "at full
+            // power needs to be about 50% stronger than current full power" (1.5x the prior L5 value
+            // of 180 = 270 at L5, max level). Fails against the pre-MV-677 defaults (60/30 -> L1=60,
+            // L5=180).
+            Assert.That(AbilityTuning.ForceFieldAbsorbCap(1, AbilityTuning.DefaultForceFieldAbsorbCap,
+                AbilityTuning.DefaultForceFieldAbsorbCapPerLevel), Is.EqualTo(40f).Within(1e-5f));
+            Assert.That(AbilityTuning.ForceFieldAbsorbCap(5, AbilityTuning.DefaultForceFieldAbsorbCap,
+                AbilityTuning.DefaultForceFieldAbsorbCapPerLevel), Is.EqualTo(270f).Within(1e-5f));
+        }
+
+        [Test]
         public void OnlyLevelThreeForceFieldPopsDealDamage()
         {
             // DECISION #4: pop damage "stays exactly where the Upgrade track already scoped it,
