@@ -872,7 +872,7 @@ namespace MaxWorlds.UI
         {
             if (_root == null) return;
 
-            _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} CELLS";
+            _cellsText.text = $"{PickupWallet.PowerCells}/{PickupWallet.Capacity} PARTS";
             // MV-519 Change item 5: an over-cap balance must read as a deliberate bonus, not a bug —
             // tinted the same amber a Supercell glows, mirroring HudController.SetCellCountDisplay's
             // treatment of the gameplay HUD's own cell readout, so the two never disagree.
@@ -1383,7 +1383,7 @@ namespace MaxWorlds.UI
                 v.Icon.color = amber;
                 v.Label.text = fusion.Label;
                 v.Label.color = TextColor;
-                v.Sub.text = $"{fusion.CellCost} CELLS · SLOT {fusion.HudSlot}";
+                v.Sub.text = $"{fusion.CellCost} PARTS · SLOT {fusion.HudSlot}";
                 v.Sub.color = amber;
                 v.Sub.fontSize = Mathf.RoundToInt(FusionSubFontSize);
                 v.Button.interactable = cellsBanked >= fusion.CellCost;
@@ -2137,7 +2137,7 @@ namespace MaxWorlds.UI
             caption.rectTransform.anchoredPosition = new Vector2(ContentMargin, -(dividerY + 58f));
             caption.rectTransform.sizeDelta = new Vector2(380f - ContentMargin, 52f);
             caption.lineSpacing = 1.2f;
-            caption.text = "two lit categories · costs cells\nnever a shed · lands in B / U";
+            caption.text = "two lit categories · costs parts\nnever a shed · lands in B / U";
 
             foreach (var fusion in Fusions) _fusionNodes[fusion.Id] = BuildFusionNode(boardRoot, fusion);
         }
@@ -2622,7 +2622,7 @@ namespace MaxWorlds.UI
             // decision on the board is measured against, ahead of "THE RIG / MAX'S WORKBENCH".
             var cellsChip = BuildChip(bar, new Vector2(cursor, 0f), DominantCellsChipWidth, CellsColor, out _cellsText,
                 height: DominantCellsChipHeight, textMaxSize: DominantCellsChipTextMaxSize);
-            cellsChip.name = "Cells Chip";
+            cellsChip.name = "Parts Chip";
 
             _cellsChipBg = cellsChip.Find("BG").GetComponent<Image>();
             _cellsChipButton = _cellsChipBg.gameObject.AddComponent<Button>();
@@ -2632,7 +2632,7 @@ namespace MaxWorlds.UI
             // MV-443 defect 7, MV-445 defect 6: a real rounded pill (radius 25, matching BuildChip's own
             // background corner) with a 2.5px colours.sec border — was a flat, borderless chip.
             float cellsCornerFraction = Mathf.Clamp(25f / (Mathf.Min(DominantCellsChipWidth, DominantCellsChipHeight) * 0.5f), 0.05f, 0.5f);
-            var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(32, cellsCornerFraction, 2.5f), CellsColor, "Cells Border");
+            var cellsBorder = AddImage(cellsChip, HudTextures.RoundedBoxOutline(32, cellsCornerFraction, 2.5f), CellsColor, "Parts Border");
             Stretch(cellsBorder.rectTransform);
             cellsBorder.type = Image.Type.Sliced;
             cellsBorder.raycastTarget = false;

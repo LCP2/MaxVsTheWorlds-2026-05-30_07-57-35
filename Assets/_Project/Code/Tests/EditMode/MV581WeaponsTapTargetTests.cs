@@ -37,7 +37,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 var tapRoot = FindRect(hudGo, "Weapons Tap Target");
                 var hexRoot = FindRect(hudGo, "Weapons Button");
-                var cellRoot = FindRect(hudGo, "Power Cells");
+                var cellRoot = FindRect(hudGo, "Parts");
                 Assert.That(tapRoot, Is.Not.Null, "MV-581: HudController must build a combined 'Weapons Tap Target' wrapper");
                 Assert.That(hexRoot, Is.Not.Null, "fixture: the hex mark must still exist");
                 Assert.That(cellRoot, Is.Not.Null, "fixture: the cell readout must still exist");

@@ -50,7 +50,7 @@ namespace MaxWorlds.Tests.PlayMode
         [UnityTest]
         public IEnumerator TheCounterAndPartChipExist_AndTheChipStartsHidden()
         {
-            Assert.That(FindRect("Power Cells"), Is.Not.Null, "the power-cell counter is missing from the HUD");
+            Assert.That(FindRect("Parts"), Is.Not.Null, "the power-cell counter is missing from the HUD");
             var alert = FindRect("Parts Badge");
             Assert.That(alert, Is.Not.Null, "the parts badge is missing from the HUD (MV-425)");
             Assert.That(alert.gameObject.activeSelf, Is.False, "with no part collected the badge must be hidden");
@@ -78,7 +78,7 @@ namespace MaxWorlds.Tests.PlayMode
             // battery, not "a cyan dot". WeaponHudIcons.PowerCell names its sprite "powercell".
             Image icon = null;
             foreach (var img in _hudGo.GetComponentsInChildren<Image>(true))
-                if (img.name == "Cell Icon") icon = img;
+                if (img.name == "Part Icon") icon = img;
 
             Assert.That(icon, Is.Not.Null, "the power-cell counter has no icon");
             Assert.That(icon.sprite, Is.Not.Null, "the counter icon draws no sprite");
@@ -97,7 +97,7 @@ namespace MaxWorlds.Tests.PlayMode
 
             Text count = null;
             foreach (var t in _hudGo.GetComponentsInChildren<Text>(true))
-                if (t.transform.parent != null && t.transform.parent.name == "Power Cells") count = t;
+                if (t.transform.parent != null && t.transform.parent.name == "Parts") count = t;
 
             Assert.That(count, Is.Not.Null, "the counter has no number label");
             Assert.That(count.text, Is.EqualTo("3"), "the HUD counter must track the banked cells");

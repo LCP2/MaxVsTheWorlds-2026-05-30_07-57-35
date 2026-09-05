@@ -46,7 +46,7 @@ namespace MaxWorlds.Tests.EditMode
             {
                 var tapRoot = FindRect(hudGo, "Weapons Tap Target");
                 var hexRoot = FindRect(hudGo, "Weapons Button");
-                var cellRoot = FindRect(hudGo, "Power Cells");
+                var cellRoot = FindRect(hudGo, "Parts");
                 var badgeRoot = FindRect(hudGo, "Module Badge");
                 var forceField = FindRect(hudGo, "Force Field Button");
                 var teleport = FindRect(hudGo, "Teleport Joystick");

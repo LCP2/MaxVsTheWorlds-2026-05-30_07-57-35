@@ -578,7 +578,7 @@ namespace MaxWorlds.UI
             // ---- ECONOMY tab: cells are a vestigial display-only counter since MV-290 (nothing
             // spends them any more) — only their drop pacing/cap remain tunable — plus parts and
             // Hydro's burst timing. ----
-            Add("Cell capacity", "cells", 5f, 60f, PickupWallet.DefaultCapacity,
+            Add("Part capacity", "parts", 5f, 60f, PickupWallet.DefaultCapacity,
                 () => DevTuning.Or(DevTuning.PowerCellCapacity, PickupWallet.BaseCapacity),
                 v => DevTuning.PowerCellCapacity = v, tab: TabEconomy);
 
@@ -586,7 +586,7 @@ namespace MaxWorlds.UI
             // this knob. Parts no longer have a pacing knob (MV-459): MV-401 replaced the periodic
             // per-kill-count part drop with DeathRunState.TryGrantAreaPart (one part per area, from
             // the last Bruiser, once ever), so a "parts per kill" rate has nothing left to drive.
-            Add("Cells/large kill", "cells", 0f, 5f, CellEconomyTuning.DefaultCellsPerLargeKill,
+            Add("Parts/large kill", "parts", 0f, 5f, CellEconomyTuning.DefaultCellsPerLargeKill,
                 () => DevTuning.Or(DevTuning.CellsPerLargeKill, CellEconomyTuning.DefaultCellsPerLargeKill),
                 v => DevTuning.CellsPerLargeKill = v, tab: TabEconomy);
 

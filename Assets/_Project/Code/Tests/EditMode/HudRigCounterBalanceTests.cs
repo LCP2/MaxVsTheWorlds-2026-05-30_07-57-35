@@ -40,7 +40,7 @@ namespace MaxWorlds.Tests.EditMode
                 InvokeLifecycle(hud, "UpdateRigCounters");
 
                 var hexRoot = FindRect(hudGo, "Weapons Button");
-                var cellRoot = FindRect(hudGo, "Power Cells");
+                var cellRoot = FindRect(hudGo, "Parts");
                 Assert.That(hexRoot, Is.Not.Null, "RIG hex mark must exist");
                 Assert.That(cellRoot, Is.Not.Null, "cell pill must exist");
 
