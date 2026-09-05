@@ -307,6 +307,7 @@ namespace MaxWorlds.Dev
                 "_mv606phone_done.txt", "MV-606-phone", 852, 393)); // 852x393: the project's own iPhone-landscape convention (see UiScreensDirector)
             Add(BuildMv617WaterReach());
             Add(BuildMv616SentinelBeam());
+            Add(BuildMv674TeleportCrackle());
             return d;
         }
 
@@ -881,6 +882,92 @@ namespace MaxWorlds.Dev
                     if (sentinelGo != null) Destroy(sentinelGo);
                     if (targetGo != null) Destroy(targetGo);
                 },
+            };
+        }
+
+        // ---- MV674TeleportCrackle (MV-674 AC3) ------------------------------------------------
+
+        /// <summary>Fires Max's own teleport through the real <see cref="PlayerAbilities.TryTeleport"/>
+        /// path (not a scripted VFX call) and frames the arrival point once the beat's staggered
+        /// arrival burst has fired — long enough for the new electric crackle layer (MV-674) to be
+        /// live alongside the existing cyan-violet surge/shockwave, short enough that the crackle's
+        /// own ~0.1-0.2s life hasn't faded yet. Waits on <see cref="Time.time"/> rather than a fixed
+        /// frame count: an idle headless scene can render far more or fewer frames per real second
+        /// than 60, and <see cref="MaxWorlds.VFX.CombatVfx"/>'s own beat coroutine stagger
+        /// (<c>TeleportFlashStagger</c>, 0.08s) is itself Time.time-driven, not frame-count-driven.</summary>
+        private static CapturePreset BuildMv674TeleportCrackle()
+        {
+            const float pitch = 60f;
+            const float distance = 4f;
+            const float settleSeconds = 0.12f; // just past the 0.08s stagger — arrival burst freshly fired, nothing has faded
+
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press", "teleport-crackle"));
+            const string mirrorPath = @"C:\Dev\MaxVsTheWorlds-Images\MV-674-teleport-crackle.png";
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+                var abilities = maxGo.GetComponent<PlayerAbilities>();
+                if (abilities == null) throw new CaptureAbortException("Max has no PlayerAbilities");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Same starvation MV616SentinelBeam's own belt-and-braces fix guards against: a
+                // ParticleSystem outside the camera's frustum doesn't simulate (isPlaying stays true,
+                // particleCount stays 0), and the camera isn't pointed at the arrival spot until AFTER
+                // the teleport below. Force every Max-teleport burst to simulate regardless.
+                foreach (string burstName in new[] { "MaxTeleportSurge", "MaxTeleportShockwave", "MaxTeleportFlash", "MaxTeleportCrackle" })
+                {
+                    var burstGo = GameObject.Find(burstName);
+                    if (burstGo != null && burstGo.TryGetComponent<ParticleSystem>(out var burstPs))
+                    {
+                        var m = burstPs.main;
+                        m.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+                    }
+                }
+
+                // Same clear-of-hedges direction MV-555/MV-617's captures already settled on.
+                float teleportedAt = Time.time;
+                if (!abilities.TryTeleport(Vector3.left))
+                    throw new CaptureAbortException("TryTeleport returned false — ability not acquired or on cooldown");
+
+                // transform.position is already the arrival point (TryTeleport sets it synchronously).
+                Vector3 focus = maxGo.transform.position; focus.y = 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                while (Time.time - teleportedAt < settleSeconds) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv674teleportcrackle",
+                LogTag = "[MV674Capture]",
+                Flag = "-mv674shot",
+                ArmFile = "Temp/mv674.arm",
+                HeadlessMarker = "Temp/mv674.headless",
+                DoneFileName = "_mv674_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // HudController.Awake bakes Teleport's own visibility from RigState once, before
+                    // AfterSceneLoad — the unlock has to land before that Awake runs.
+                    RigState.Reset();
+                    foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
+                    RigState.AcquireCap("m_tp"); // Teleport
+                    // Same clean-profile guard as MV616SentinelBeam's own preset above: on a fresh
+                    // profile (no slot picked yet) HomeScreen's pick-a-slot modal freezes
+                    // Time.timeScale at 0, which would starve every ParticleSystem of simulation.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-674-teleport-crackle", Setup, new[] { mirrorPath }) },
             };
         }
     }
