@@ -20,13 +20,20 @@ namespace MaxWorlds.Tests.EditMode
     /// use for this rig. Must fail to even compile on the base commit (pre-MV-669): <c>MaxRig</c>
     /// has no <c>VisualScale</c> member there, the same "doesn't exist yet" failure mode MV-474's own
     /// test documents for this file.
+    ///
+    /// Extended for the approved-geometry follow-up (Lee's second comment on the ticket, 2026-09-05):
+    /// <see cref="GadgetGlowSurvivesTheRebuild"/> (A2), <see
+    /// cref="BuiltPartCountIsTheApprovedThirtyTwoPlusThePortedGadget"/> (A3) and <see
+    /// cref="MaxPaletteGainsExactlyBeltAndPouch"/> (A4). A1 (the hip pivots survive) is already
+    /// covered by <see cref="MV474MaxWalkTests"/>, which asserts the same claim against whatever
+    /// geometry <c>MaxBody.Build</c> currently produces.
     /// </summary>
     public sealed class MV669MaxHeroPassTests
     {
         private const float HipY = 0.74f; // MaxRig.HipY (private) — the waist height the rig builds at.
 
         private static MaxPalette NullPalette() =>
-            new MaxPalette(null, null, null, null, null, null, null, null, null, null, null);
+            new MaxPalette(null, null, null, null, null, null, null, null, null, null, null, null, null);
 
         /// <summary>
         /// Builds Max's body under a "Body" pivot scaled by <paramref name="bodyScale"/>, mirroring
@@ -149,6 +156,68 @@ namespace MaxWorlds.Tests.EditMode
             finally
             {
                 Object.DestroyImmediate(root.gameObject);
+            }
+        }
+
+        /// <summary>A2 (approved-geometry follow-up): the gadget glow (the tank window and the nozzle
+        /// tip) must survive the rebuild, or <c>MaxRig.TickGadget</c>'s present/aim tint has nothing to
+        /// colour.</summary>
+        [Test]
+        public void GadgetGlowSurvivesTheRebuild()
+        {
+            var root = new GameObject("Root").transform;
+            try
+            {
+                var body = MaxBody.Build(root, NullPalette(), HipY);
+                Assert.That(body.GadgetGlow, Is.Not.Empty,
+                    "MaxBody.Build returned no gadget glow renderers — MaxRig.TickGadget tints these " +
+                    "every frame and the present/aim lerp has nothing to colour without at least one.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root.gameObject);
+            }
+        }
+
+        /// <summary>A3 (approved-geometry follow-up): the approved block is 32 parts; the gadget ported
+        /// across from the pre-MV-669 body adds 9 more (7 solid parts plus the 2 glow lenses), for 41
+        /// renderers total.</summary>
+        [Test]
+        public void BuiltPartCountIsTheApprovedThirtyTwoPlusThePortedGadget()
+        {
+            var root = new GameObject("Root").transform;
+            try
+            {
+                MaxBody.Build(root, NullPalette(), HipY);
+                var renderers = root.GetComponentsInChildren<MeshRenderer>();
+                Assert.That(renderers.Length, Is.EqualTo(41),
+                    $"Built {renderers.Length} renderers, not the 32 approved-block parts plus the 9 " +
+                    "ported gadget parts (7 solid + 2 glow lenses) = 41.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(root.gameObject);
+            }
+        }
+
+        /// <summary>A4 (approved-geometry follow-up): <c>MaxPalette</c> gains exactly <c>Belt</c> and
+        /// <c>Pouch</c> — every pre-MV-669 field must still be there, under the same name.</summary>
+        [Test]
+        public void MaxPaletteGainsExactlyBeltAndPouch()
+        {
+            var fields = typeof(MaxPalette).GetFields(
+                System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance);
+            var names = new System.Collections.Generic.HashSet<string>();
+            foreach (var f in fields) names.Add(f.Name);
+
+            Assert.That(fields.Length, Is.EqualTo(13),
+                $"MaxPalette has {fields.Length} public fields, not the 11 pre-MV-669 fields plus " +
+                "exactly two new ones (Belt, Pouch).");
+
+            foreach (var expected in new[] { "Skin", "Hair", "Jacket", "Hood", "Fabric", "Dark", "Boot",
+                                             "Sole", "Metal", "Eye", "Goggle", "Belt", "Pouch" })
+            {
+                Assert.That(names, Does.Contain(expected), $"MaxPalette lost or renamed its '{expected}' field.");
             }
         }
     }
