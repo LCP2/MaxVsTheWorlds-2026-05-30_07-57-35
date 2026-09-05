@@ -1291,7 +1291,7 @@ namespace MaxWorlds.UI
 
             // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
             // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
-            var denied = AddImage(_sentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Cells");
+            var denied = AddImage(_sentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Parts");
             denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             denied.rectTransform.sizeDelta = new Vector2(72f, 72f);
@@ -1970,7 +1970,7 @@ namespace MaxWorlds.UI
         /// parents onto <see cref="_weaponsButtonRoot"/>.</summary>
         private void BuildPowerCellCounter()
         {
-            var root = NewRect("Power Cells", _weaponsButtonRoot);
+            var root = NewRect("Parts", _weaponsButtonRoot);
             Anchor(root, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 1f));
             root.sizeDelta = new Vector2(CellCounterWidth, CellCounterHeight);
             root.anchoredPosition = new Vector2(0f, -CellReadoutGap); // directly below the hex mark
@@ -1990,7 +1990,7 @@ namespace MaxWorlds.UI
 
             // A purpose-built battery cell (YT-134) — a disc read as "a thing", not "a power cell".
             // The sprite bakes its own cyan/dark, so tint white to render it as authored.
-            _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Cell Icon");
+            _cellIcon = AddImage(root, WeaponHudIcons.PowerCell(64), Color.white, "Part Icon");
             // MV-510 round 2 fix: pivot is now centred (was left-edge while the position math assumed
             // centre), so anchoredPosition.x = CellIconCenterX correctly places the icon's CENTRE, not
             // its left edge, at that x - this is the pivot bug the overlap defect traced to.

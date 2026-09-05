@@ -71,18 +71,26 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(Time.timeScale, Is.EqualTo(1f), "the second Open() must not have overwritten the saved pre-pause speed");
         }
 
-        /// <summary>MV-515 AC6: THE RIG's own half of "no active user-facing Text says Part/Parts" —
-        /// scans every built Text component's rendered string once the board is actually up, not the
-        /// source. Proven to fail on cdb39c7 (main HEAD before this ticket), whose PARTS tray literally
-        /// set its label text to "PARTS" and its sub-caption to "tap a node to fit one"/"N banked".</summary>
+        /// <summary>MV-515 AC6, narrowed by MV-671: originally banned any user-facing "Part(s)" text on
+        /// THE RIG board because MV-515 had just retired that word from the Supercell flow to avoid
+        /// confusion with the everyday currency (then "Cells"). MV-671 renames that everyday currency
+        /// itself to "Parts", so a blanket word ban is no longer correct — narrowed to the actual defect,
+        /// the defunct standalone Parts-tray widget proven on cdb39c7 (label "PARTS", sub-caption "tap a
+        /// node to fit one"/"N banked"). That widget's GameObject is separately guarded gone by
+        /// <c>MV519SupercellInstantCellsTests</c>'s "Supercell Tray" null check.</summary>
         [Test]
-        public void OpeningNeverShowsUserFacingPartOrPartsText_MV515()
+        public void OpeningNeverShowsTheDefunctPartsTrayCaption_MV515()
         {
             _screen.Open();
 
             foreach (var text in _go.GetComponentsInChildren<Text>(true))
-                Assert.That(System.Text.RegularExpressions.Regex.IsMatch(text.text ?? string.Empty, @"\bParts?\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase), Is.False,
-                    $"THE RIG Text on '{text.gameObject.name}' still reads \"{text.text}\" — MV-515 renamed the currency to Supercell");
+            {
+                string t = text.text ?? string.Empty;
+                Assert.That(t, Does.Not.Contain("tap a node to fit one"),
+                    $"Text on '{text.gameObject.name}' still reads the defunct Parts-tray caption \"{t}\"");
+                Assert.That(System.Text.RegularExpressions.Regex.IsMatch(t, @"^\d+ banked$"), Is.False,
+                    $"Text on '{text.gameObject.name}' still reads the defunct Parts-tray banked-count caption \"{t}\"");
+            }
         }
 
     }

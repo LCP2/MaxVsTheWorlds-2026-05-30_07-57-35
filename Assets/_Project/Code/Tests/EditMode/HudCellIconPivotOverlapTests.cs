@@ -36,8 +36,8 @@ namespace MaxWorlds.Tests.EditMode
             {
                 PickupWallet.SetPowerCells(12); // distinctive two-digit value, matches the ticket's own repro
 
-                var iconRect = FindImage(hudGo, "Cell Icon").rectTransform;
-                var textRect = FindText(hudGo, "Power Cells").rectTransform;
+                var iconRect = FindImage(hudGo, "Part Icon").rectTransform;
+                var textRect = FindText(hudGo, "Parts").rectTransform;
 
                 AssertNoHorizontalOverlap(iconRect, textRect, "at rest (_cellPop = 0)");
 

@@ -79,16 +79,16 @@ namespace MaxWorlds.Tests.EditMode
             var screen = go.AddComponent<WeaponsScreen>();
             try
             {
-                PickupWallet.SetPowerCells(8);   // a short string ("8/20 CELLS") so best-fit maxes out
+                PickupWallet.SetPowerCells(8);   // a short string ("8/20 PARTS") so best-fit maxes out
                 screen.Open();
 
                 Assert.That(FindRect(go, "Supercell Tray"), Is.Null,
                     "MV-519: the SUPERCELLS tray must be gone, not merely hidden");
 
-                var cellsChip = FindRect(go, "Cells Chip");
-                Assert.That(cellsChip, Is.Not.Null, "the CELLS chip must still exist");
+                var cellsChip = FindRect(go, "Parts Chip");
+                Assert.That(cellsChip, Is.Not.Null, "the PARTS chip must still exist");
                 var cellsText = cellsChip.GetComponentInChildren<Text>();
-                Assert.That(cellsText, Is.Not.Null, "the CELLS chip must carry a label");
+                Assert.That(cellsText, Is.Not.Null, "the PARTS chip must carry a label");
 
                 float cellsSize = ResolvedFontSize(cellsText);
                 float loudestOther = 0f;
@@ -112,12 +112,12 @@ namespace MaxWorlds.Tests.EditMode
                 screen.Close();
                 PickupWallet.AddSupercell();   // 8 -> 18, still under the default 20 cap
                 screen.Open();
-                cellsText = FindRect(go, "Cells Chip").GetComponentInChildren<Text>();
+                cellsText = FindRect(go, "Parts Chip").GetComponentInChildren<Text>();
                 Assert.That(cellsText.color, Is.EqualTo(underCapColor), "still under capacity — colour must not change yet");
                 screen.Close();
                 PickupWallet.AddSupercell();   // 18 -> 28, over the cap
                 screen.Open();
-                cellsText = FindRect(go, "Cells Chip").GetComponentInChildren<Text>();
+                cellsText = FindRect(go, "Parts Chip").GetComponentInChildren<Text>();
                 Assert.That(cellsText.color, Is.Not.EqualTo(underCapColor),
                     "an over-cap balance (28/20) must render in a visually distinct colour from a normal balance");
             }
