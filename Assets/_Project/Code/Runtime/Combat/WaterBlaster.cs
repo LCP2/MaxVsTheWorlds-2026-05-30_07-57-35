@@ -222,7 +222,12 @@ namespace MaxWorlds.Combat
         private EnergyPool _tank;
         private WaterVfx _vfx;
         private AimReticle _reticle;
-        private readonly Collider[] _hits = new Collider[32];
+
+        /// <summary>Starting size of <see cref="_hits"/> (MV-666). Not a hard cap any more —
+        /// <see cref="OverlapSphereGrowing"/> doubles it on saturation — so this only tunes how many
+        /// re-queries a very crowded room costs on its first tick.</summary>
+        private const int InitialHitBufferSize = 32;
+        private Collider[] _hits = new Collider[InitialHitBufferSize];
         private static readonly HashSet<IDamageable> s_arcHit = new HashSet<IDamageable>(8);
         private static readonly List<IDamageable> s_buffer = new List<IDamageable>(8);
         // Collider that produced each buffered hit, parallel to s_buffer. Cosmetic use
@@ -321,6 +326,26 @@ namespace MaxWorlds.Combat
             FireTick();
         }
 
+        /// <summary>
+        /// <c>Physics.OverlapSphereNonAlloc</c> into <see cref="_hits"/>, growing the buffer and
+        /// re-querying whenever a call comes back exactly <see cref="_hits"/>-length — that return
+        /// value means the query truncated and silently dropped an arbitrary subset of colliders
+        /// (MV-666: a30's 45-robot garrison plus its two bosses in one room saturated the original
+        /// fixed <c>Collider[32]</c>, and a boss the query never returned was never even tested for
+        /// <c>IsAlive</c>). Grows only when saturated, so the steady-state per-tick path stays
+        /// allocation-free — <c>MV527AllocationGuardTests</c> still holds.
+        /// </summary>
+        private int OverlapSphereGrowing(Vector3 origin, float radius)
+        {
+            int count;
+            while ((count = Physics.OverlapSphereNonAlloc(
+                       origin, radius, _hits, hitMask, QueryTriggerInteraction.Ignore)) == _hits.Length)
+            {
+                _hits = new Collider[_hits.Length * 2];
+            }
+            return count;
+        }
+
         private void FireTick()
         {
             Vector3 origin = transform.position;
@@ -335,8 +360,7 @@ namespace MaxWorlds.Combat
             float tickDamage = EffectiveDamagePerTick;
             // Spray: gather everything within range, then keep only what's inside the cone arc —
             // so one tick can wash a whole knot of robots, not a single-file tube (YT-64).
-            int count = Physics.OverlapSphereNonAlloc(
-                origin, reach, _hits, hitMask, QueryTriggerInteraction.Ignore);
+            int count = OverlapSphereGrowing(origin, reach);
 
             s_buffer.Clear();
             s_contacts.Clear();
@@ -454,8 +478,7 @@ namespace MaxWorlds.Combat
                 }
                 if (puddle == null) continue;
 
-                int count = Physics.OverlapSphereNonAlloc(
-                    puddle.Position, puddle.Radius, _hits, hitMask, QueryTriggerInteraction.Ignore);
+                int count = OverlapSphereGrowing(puddle.Position, puddle.Radius);
                 for (int j = 0; j < count; j++)
                 {
                     if (_hits[j] == null) continue;
