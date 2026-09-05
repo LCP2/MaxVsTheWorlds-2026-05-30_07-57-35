@@ -80,6 +80,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();
             try
@@ -99,6 +100,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             var maxGo = NewMax();
             maxGo.transform.position = new Vector3(4f, 0f, 4f);
             var abilities = maxGo.GetComponent<PlayerAbilities>();
@@ -119,6 +121,7 @@ namespace MaxWorlds.Tests.EditMode
             RigState.AcquireCap("u_slt"); // u_slt to L1
             RigState.RaiseLevel("u_slt"); // u_slt to L2 -> 3 slots free (MV-623: 1 + level) — proves this is an overlap rejection, not a cap rejection
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();
             try
@@ -126,11 +129,11 @@ namespace MaxWorlds.Tests.EditMode
                 var point = new Vector3(2f, 0f, 2f);
                 Assert.That(abilities.TryDeploySentinel(point), Is.True);
 
-                int cellsBefore = PickupWallet.PowerCells;
+                int cellsBefore = PickupWallet.PowerCellsSecondary;
                 Assert.That(abilities.TryDeploySentinel(new Vector3(2.1f, 0f, 2f)), Is.False,
                     "a second sentinel must not be allowed to land on top of the first — the slot cap " +
                     "alone (2 free) would not have caught this");
-                Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsBefore),
+                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(cellsBefore),
                     "a rejected placement must not spend the cost");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
             }
@@ -142,6 +145,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();
             try
@@ -167,6 +171,7 @@ namespace MaxWorlds.Tests.EditMode
             // reflection-a-private-Unity-callback idiom SentinelAreaCrossingTests.InvokeUpdate uses.
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             var maxGo = NewMax();
             var abilities = maxGo.GetComponent<PlayerAbilities>();
             var robotGo = new GameObject("Robot");
@@ -212,6 +217,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             _max = NewMax();
             _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
             var control = NewControl();
@@ -232,6 +238,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
             _max = NewMax();
             _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
             var control = NewControl();
@@ -254,7 +261,8 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100); // clamps to PickupWallet.Capacity (20 at Cell Storage level 0)
-            int cellsBefore = PickupWallet.PowerCells;
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
+            int cellsBefore = PickupWallet.PowerCellsSecondary;
             _max = NewMax();
             _pad = new GameObject("Pad", typeof(RectTransform), typeof(Image));
             var control = NewControl();
@@ -265,7 +273,7 @@ namespace MaxWorlds.Tests.EditMode
                 control.OnPointerUp(At(new Vector2(0f, 2f)));
 
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(0));
-                Assert.That(PickupWallet.PowerCells, Is.EqualTo(cellsBefore), "an unarmed release must spend nothing");
+                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(cellsBefore), "an unarmed release must spend nothing");
             }
             finally { Sentinel.DestroyAllActive(); Object.DestroyImmediate(_max); Object.DestroyImmediate(_pad); }
         }

@@ -951,7 +951,7 @@ namespace MaxWorlds.UI
             _sentinelRadial.fillAmount = _abilities.SentinelReady ? 0f : 1f;
             if (_sentinelDeniedIcon != null)
                 _sentinelDeniedIcon.gameObject.SetActive(
-                    MaxWorlds.Pickups.PickupWallet.PowerCells < PlayerAbilities.SentinelCost);
+                    MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary < PlayerAbilities.SentinelCost);
             if (_sentinelVisual.Label != null)
                 _sentinelVisual.Label.text = $"SEN\n{PlayerAbilities.SentinelDeployedCount}/{PlayerAbilities.SentinelDeploymentCap}";
         }
@@ -959,12 +959,13 @@ namespace MaxWorlds.UI
         /// <summary>Drives the Water Balloon/Teleport cooldown sweeps (WV-240, spec §6a: "every
         /// control shows a cooldown sweep and is disabled during cooldown"). MV-370: an empty cell bank
         /// reads the same as "on cooldown" — a full radial cover — since either way the control can't
-        /// fire right now (AC6: "communicated clearly").</summary>
+        /// fire right now (AC6: "communicated clearly"). MV-673: the gate now reads the Power Cells
+        /// secondary bank, since that's what a Water Balloon throw actually spends.</summary>
         private void UpdateAbilityControls()
         {
             if (_waterBalloonRadial != null && _waterBalloonRoot != null && _waterBalloonRoot.gameObject.activeSelf)
             {
-                if (MaxWorlds.Pickups.PickupWallet.PowerCells <= 0)
+                if (MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary <= 0)
                 {
                     _waterBalloonRadial.fillAmount = 1f;
                 }
@@ -1323,7 +1324,9 @@ namespace MaxWorlds.UI
 
             // MV-407: a dedicated "can't afford this" read, distinct from the radial cover above —
             // the radial also covers on a full deployment cap, which isn't a cell-cost problem.
-            var denied = AddImage(_sentinelRoot, WeaponHudIcons.PowerCellDenied(64), Color.white, "Insufficient Parts");
+            // MV-673: Sentinel deploy now gates on the Power Cells secondary currency, not Parts —
+            // the denied icon must say so rather than reusing the Parts battery glyph.
+            var denied = AddImage(_sentinelRoot, WeaponHudIcons.PowerCellSecondaryDenied(64), Color.white, "Insufficient Power Cells");
             denied.rectTransform.anchorMin = denied.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
             denied.rectTransform.pivot = new Vector2(0.5f, 0.5f);
             denied.rectTransform.sizeDelta = new Vector2(72f, 72f);

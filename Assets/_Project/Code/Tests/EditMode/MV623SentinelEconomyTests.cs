@@ -122,21 +122,22 @@ namespace MaxWorlds.Tests.EditMode
             WeaponSystemState.Reset();
             RigState.UnlockCategory(RigBoard.Category("u_sen"));
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
-            PickupWallet.SetPowerCells(5);
+            // MV-673: a Sentinel deploy now spends the Power Cells secondary bank, not Parts.
+            PickupWallet.SetPowerCellSecondary(5);
 
             var maxGo = new GameObject("Max");
             var abilities = maxGo.AddComponent<PlayerAbilities>();
             try
             {
                 Assert.That(abilities.TryDeploySentinel(new Vector3(5f, 0f, 0f)), Is.True);
-                Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "the deploy must cost exactly 5 cells");
+                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(0), "the deploy must cost exactly 5 cells");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(1));
 
-                PickupWallet.SetPowerCells(4);
+                PickupWallet.SetPowerCellSecondary(4);
                 int countBeforeRefusal = Sentinel.Active.Count;
                 Assert.That(abilities.TryDeploySentinel(new Vector3(20f, 0f, 0f)), Is.False,
                     "4 cells must not afford the 5-cell deploy");
-                Assert.That(PickupWallet.PowerCells, Is.EqualTo(4), "a refused deploy must not spend cells");
+                Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(4), "a refused deploy must not spend cells");
                 Assert.That(Sentinel.Active.Count, Is.EqualTo(countBeforeRefusal), "a refused deploy must not place a sentinel");
 
                 // ---------------------------------------------------------------- AC9: cap-recall still works
@@ -146,7 +147,7 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(PlayerAbilities.SentinelDeploymentCap, Is.EqualTo(3));
 
                 Sentinel.DestroyAllActive();
-                PickupWallet.SetPowerCells(999);
+                PickupWallet.SetPowerCellSecondary(999);
 
                 Assert.That(abilities.TryDeploySentinel(new Vector3(5f, 0f, 0f)), Is.True);
                 Assert.That(abilities.TryDeploySentinel(new Vector3(20f, 0f, 0f)), Is.True);

@@ -44,6 +44,7 @@ namespace MaxWorlds.Tests.EditMode
             // as they always were before MV-457.
             foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: Water Balloon now spends this bank, not Parts
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);   // MV-380: restored acquisition gate, same as Teleport
             WeaponSystemState.Acquire(AbilityKind.Teleport);
 
@@ -176,7 +177,7 @@ namespace MaxWorlds.Tests.EditMode
             // MV-381: MV-370 used to make a press on an owned-but-unspendable control a total no-op,
             // which read as "there's no aim indicator at all" to a player pressing a control that's
             // visibly on screen. The preview must still show; only the throw stays gated.
-            PickupWallet.SetPowerCells(0);
+            PickupWallet.SetPowerCellSecondary(0);   // MV-673: the bank a throw actually spends
             var control = NewWaterBalloonControl();
 
             control.OnPointerDown(At(Vector2.zero));
@@ -188,7 +189,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void WaterBalloon_ReleasingArmedWithNoCellsBankedNeverThrows()
         {
-            PickupWallet.SetPowerCells(0);
+            PickupWallet.SetPowerCellSecondary(0);   // MV-673: the bank a throw actually spends
             var control = NewWaterBalloonControl();
 
             control.OnPointerDown(At(Vector2.zero));
@@ -197,7 +198,7 @@ namespace MaxWorlds.Tests.EditMode
 
             control.OnPointerUp(At(new Vector2(OverThresholdPx, 0f)));
 
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0),
+            Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(0),
                 "releasing armed with no cell banked must never spend a cell it doesn't have");
         }
 

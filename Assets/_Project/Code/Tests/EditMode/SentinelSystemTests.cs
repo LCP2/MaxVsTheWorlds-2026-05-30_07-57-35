@@ -278,6 +278,7 @@ namespace MaxWorlds.Tests.EditMode
             // let it die, deploy again.
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(100);
+            PickupWallet.SetPowerCellSecondary(100);   // MV-673: a Sentinel deploy now spends this bank, not Parts
 
             var maxGo = new GameObject("Max");
             var abilities = maxGo.AddComponent<PlayerAbilities>();
@@ -328,6 +329,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             WeaponSystemState.Acquire(AbilityKind.Sentinels);
             PickupWallet.SetPowerCells(999);
+            PickupWallet.SetPowerCellSecondary(999);   // MV-673: a Sentinel deploy now spends this bank, not Parts
 
             RigState.AcquireCap("u_hp");  // reaches u_slt (u_hp's own RIG child)
             RigState.AcquireCap("u_slt"); // level 1 -> cap 1

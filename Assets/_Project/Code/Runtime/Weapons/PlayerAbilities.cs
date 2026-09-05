@@ -61,13 +61,14 @@ namespace MaxWorlds.Weapons
         /// <summary>Seconds left before Water Balloon can be thrown again, 0 when ready.</summary>
         public float WaterBalloonCooldownRemaining => Mathf.Max(0f, _waterBalloonCooldown);
 
-        /// <summary>Owned, off cooldown, AND a cell banked to spend — what an on-screen control
+        /// <summary>Owned, off cooldown, AND a Power Cell banked to spend — what an on-screen control
         /// (WV-240) gates its press on. MV-380: restores the acquisition gate MV-370 had silently
         /// dropped — Water Balloon is a shed-acquired <see cref="AbilityKind"/> again, same as
-        /// Teleport, on top of the per-throw cell cost MV-370 introduced.</summary>
+        /// Teleport, on top of the per-throw cell cost MV-370 introduced. MV-673: reads the Power
+        /// Cells secondary bank, matching what a throw actually spends now — not Parts.</summary>
         public bool WaterBalloonReady =>
             WeaponSystemState.IsAcquired(AbilityKind.WaterBalloon) &&
-            _waterBalloonCooldown <= 0f && PickupWallet.PowerCells > 0;
+            _waterBalloonCooldown <= 0f && PickupWallet.PowerCellsSecondary > 0;
 
         /// <summary>Seconds left before Teleport can be used again, 0 when ready.</summary>
         public float TeleportCooldownRemaining => Mathf.Max(0f, _teleportCooldown);
@@ -168,9 +169,10 @@ namespace MaxWorlds.Weapons
             if (dir.sqrMagnitude < 1e-4f) return false;
             dir.Normalize();
 
-            // MV-370: each balloon fired costs one cell — spent only once the throw is actually
+            // MV-370: each balloon fired costs one Power Cell (MV-673: the scarce secondary
+            // currency, not the everyday Parts balance) — spent only once the throw is actually
             // committing (direction validated), never on a degenerate press.
-            if (!PickupWallet.TrySpendPowerCell()) return false;
+            if (!PickupWallet.TrySpendPowerCellSecondary()) return false;
 
             _waterBalloonCooldown = WeaponSystemState.WaterBalloonEffectiveCooldownSeconds();
 
@@ -573,14 +575,15 @@ namespace MaxWorlds.Weapons
         public static int SentinelCost => AbilityTuning.SentinelCost(
             RigState.Level("u_cst"), AbilityTuning.DefaultSentinelCost, AbilityTuning.DefaultSentinelCostReductionPerLevel);
 
-        /// <summary>Owned AND enough cells banked — what an on-screen deploy control gates its press
-        /// on (same shape as <see cref="ForceFieldReady"/>). MV-604 (DECISION, Lee 26 Aug 2026
+        /// <summary>Owned AND enough Power Cells banked — what an on-screen deploy control gates its
+        /// press on (same shape as <see cref="ForceFieldReady"/>). MV-604 (DECISION, Lee 26 Aug 2026
         /// playtest): deliberately does NOT check the Slots cap any more — deployment must never be
         /// refused for lack of a slot, since redeploying at the cap now recalls the furthest sentinel
-        /// instead (see <see cref="TryDeploySentinel(Vector3)"/>).</summary>
+        /// instead (see <see cref="TryDeploySentinel(Vector3)"/>). MV-673: reads the Power Cells
+        /// secondary bank, matching what a deploy actually spends now — not Parts.</summary>
         public bool SentinelReady =>
             WeaponSystemState.IsAcquired(AbilityKind.Sentinels) &&
-            PickupWallet.PowerCells >= SentinelCost;
+            PickupWallet.PowerCellsSecondary >= SentinelCost;
 
         /// <summary>How close an aimed placement point must stay to an existing sentinel or a live
         /// robot to count as "occupied" (MV-399's "can't overlap existing structures/robots" AC).</summary>
@@ -651,7 +654,8 @@ namespace MaxWorlds.Weapons
         {
             if (!SentinelReady) return false;
             if (!IsValidSentinelPlacement(position)) return false;
-            if (!PickupWallet.TrySpendPowerCells(SentinelCost)) return false;
+            // MV-673: Sentinel deploy spends the Power Cells secondary currency, not Parts.
+            if (!PickupWallet.TrySpendPowerCellSecondaries(SentinelCost)) return false;
 
             if (SentinelDeployedCount >= SentinelDeploymentCap) RecallFurthestSentinel();
 

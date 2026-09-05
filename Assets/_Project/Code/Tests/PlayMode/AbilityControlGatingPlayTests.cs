@@ -161,14 +161,14 @@ namespace MaxWorlds.Tests.PlayMode
             control.OnPointerUp(drag);
 
             Assert.That(control.IsAiming, Is.False, "releasing must close the preview");
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "a release with no cell banked must never spend one");
+            Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(0), "a release with no cell banked must never spend one");
         }
 
         [UnityTest]
         public IEnumerator DraggingAndReleasingThrowsWhenReady()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
             yield return null;
 
             var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
@@ -191,7 +191,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator ATapWithNoRealDragDoesNotThrow()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
             yield return null;
 
             var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
@@ -273,7 +273,7 @@ namespace MaxWorlds.Tests.PlayMode
             // playtest found Water Balloon "worked once" through the real on-screen control.
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             DevTuning.WaterBalloonCooldownSeconds = 0.05f;
-            PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
             yield return null;
 
             var control = _hud.GetComponentInChildren<WaterBalloonJoystickControl>(true);
