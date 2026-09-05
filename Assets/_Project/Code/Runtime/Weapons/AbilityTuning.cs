@@ -345,19 +345,19 @@ namespace MaxWorlds.Weapons
         public static float SentinelFireInterval(float baseInterval, bool overchargeActive) =>
             overchargeActive ? baseInterval * 0.5f : baseInterval;
 
-        /// <summary>How fast the sentinel follows Max at a given Move (u_mov) level, m/s — level 0
-        /// (u_mov is a stat, un-owned starting point) means the sentinel does not follow at all
-        /// (MV-422: "Move is new — Gunner HP is currently fixed and it cannot move"), matching the
-        /// pre-MV-422 behaviour exactly until a player actually spends on this axis.</summary>
+        /// <summary>How fast the sentinel follows Max at a given Move (u_mov, RIG label "SPEED")
+        /// level, m/s — per-level rate above the level-1 floor (MV-675: "let's have them move to
+        /// begin with", so a sentinel now follows even before a player spends on this axis).</summary>
         public const float DefaultSentinelMoveSpeedPerLevel = 1.2f;
 
         /// <summary>True once the sentinel should follow Max at all (Move level &gt;= 1).</summary>
         public static bool SentinelCanMove(int level) => level >= 1;
 
-        /// <summary>The sentinel's follow speed at a given Move (u_mov) level, m/s — 0 at level 0
-        /// (stationary, matching the sentinel's pre-MV-422 behaviour), rising linearly above it.</summary>
+        /// <summary>The sentinel's follow speed at a given Move (u_mov) level, m/s — MV-675: level 0
+        /// now yields the same rate as level 1 (a floor, not a fresh slope step), rising linearly
+        /// above it exactly as before.</summary>
         public static float SentinelMoveSpeed(int level, float perLevel) =>
-            SentinelCanMove(level) ? Mathf.Max(0f, perLevel) * level : 0f;
+            Mathf.Max(0f, perLevel) * Mathf.Max(1, level);
 
         /// <summary>How far behind Max the sentinel holds station while following, metres — close
         /// enough to stay useful, far enough that it never crowds his own hitbox/aim.</summary>

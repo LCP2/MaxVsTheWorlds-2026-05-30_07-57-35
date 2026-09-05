@@ -418,7 +418,7 @@
       "x": 1550,
       "y": 740,
       "icon": "smov",
-      "label": "MOVE",
+      "label": "SPEED",
       "maxLevel": 4,
       "kind": "cap",
       "parent": "u_dmg",
