@@ -166,6 +166,27 @@ namespace MaxWorlds.VFX
         private const float ShoulderX = 0.30f;
         private const float SleeveWidth = 0.155f;
 
+        /// <summary>
+        /// MV-669 (Lee: "10% bigger"): the RENDERED body only, applied uniformly at <see cref="_body"/>
+        /// — the rig's model root, which sits at ground level (<c>Pivot("Body", transform,
+        /// Vector3.zero)</c>). Everything below it (<see cref="_torso"/>, the feet, the whole generated
+        /// mesh) is a descendant, so one scale here grows the whole kid together.
+        ///
+        /// This must never touch <see cref="EnemyArchetype.PlayerHeight"/>/<see
+        /// cref="EnemyArchetype.PlayerRadius"/> or Max's <c>CharacterController</c> — those drive every
+        /// robot's body-separation clamp, the spawn-height maths and the YT-74 "nothing out-sizes Max"
+        /// rule, none of which this ticket asked to move. <see cref="MaxRig"/> is a scene-root object
+        /// that only FOLLOWS Max (see <see cref="Follow"/>) and never touches his collider, so scaling
+        /// this transform cannot reach the CharacterController even by accident.
+        ///
+        /// Feet stay on the ground for free: <c>Torso</c> sits at local (0, HipY, 0) under <see
+        /// cref="_body"/> and <c>Feet</c> sits at local (0, -HipY, 0) under <c>Torso</c>, so Feet's
+        /// position IN BODY SPACE is exactly (0, 0, 0) — the ground pivot itself. Scaling a transform
+        /// never moves points that already sit at its own origin, so the feet don't float or sink at
+        /// any scale factor.
+        /// </summary>
+        public const float VisualScale = 1.1f;
+
         /// <summary>Where the gadget sits when he is just running: down at the hip, across the body,
         /// held two-handed. This is the pose you see 90% of the time.</summary>
         private static readonly Vector3 GunHipPos = new Vector3(0.03f, 0.155f, 0.30f);
@@ -357,7 +378,14 @@ namespace MaxWorlds.VFX
             _soleMat = CharacterMaterial("Max_Sole", Bone);
             _metalMat = CharacterMaterial("Max_Metal", Steel);
             _eyeMat = CharacterMaterial("Max_Eye", Rubber);
-            _goggleMat = CharacterMaterial("Max_Goggle", LensGlass);
+
+            // MV-669's hero detail: the goggles are LIT, not painted — the one small, warm, specific
+            // thing that catches the eye at gameplay zoom (this class's own doc has asked for this
+            // since YT-95: "they are lit rather than painted... the same trick the boss's lamps use").
+            // A flat _EmissionColor on the shared character shader (StylizedCharacter.shader adds it
+            // unconditionally, no keyword needed — the same channel CharacterSkin drives per-frame for
+            // the hit flash) is enough; no new geometry, so MaxBody.cs's generated mesh is untouched.
+            _goggleMat = CharacterMaterial("Max_Goggle", LensGlass, emission: LensGlass * 0.6f);
         }
 
         /// <summary>
@@ -394,7 +422,7 @@ namespace MaxWorlds.VFX
         /// too small to survive a line goes without one — up close it is a charm, and at gameplay zoom
         /// it is two honest pixels of brass instead of ten dishonest pixels of black.
         /// </summary>
-        private Material CharacterMaterial(string name, Color color, bool outline = true)
+        private Material CharacterMaterial(string name, Color color, bool outline = true, Color? emission = null)
         {
             // No character shader in this build is a look regression, never a magenta one (YT-58): a
             // plain lit material still draws a correctly coloured kid, just without the outline.
@@ -407,7 +435,7 @@ namespace MaxWorlds.VFX
             m.hideFlags = HideFlags.HideAndDontSave;
             if (m.HasProperty(BaseColorId)) m.SetColor(BaseColorId, color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
-            if (m.HasProperty(EmissionId)) m.SetColor(EmissionId, Color.black);
+            if (m.HasProperty(EmissionId)) m.SetColor(EmissionId, emission ?? Color.black);
             if (m.HasProperty(OutlineWidthId)) m.SetFloat(OutlineWidthId, outline ? outlineWidth : 0f);
             return m;
         }
@@ -430,6 +458,7 @@ namespace MaxWorlds.VFX
         private void Build()
         {
             _body = Pivot("Body", transform, Vector3.zero);           // leans, at the ground
+            _body.localScale = Vector3.one * VisualScale;              // MV-669: +10% visual, feet stay put
             _torso = Pivot("Torso", _body, new Vector3(0f, HipY, 0f)); // bobs, at the waist
 
             var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
