@@ -4,6 +4,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
+using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Tests.EditMode
@@ -151,11 +152,27 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void MoveSpeedIsZeroUntilTheAxisIsLeveled()
+        public void MoveSpeedAtLevelZeroMatchesLevelOneFloor()
         {
-            Assert.That(AbilityTuning.SentinelMoveSpeed(0, 1.2f), Is.EqualTo(0f),
-                "MV-422: the sentinel does not follow at all until Move is actually spent on — matches pre-MV-422 behaviour");
-            Assert.That(AbilityTuning.SentinelMoveSpeed(1, 1.2f), Is.GreaterThan(0f));
+            Assert.That(AbilityTuning.SentinelMoveSpeed(0, 1.2f), Is.EqualTo(1.2f),
+                "MV-675: sentinels follow from the start now — level 0 shares level 1's rate, it is a floor not a fresh slope step");
+            Assert.That(AbilityTuning.SentinelMoveSpeed(1, 1.2f), Is.EqualTo(1.2f));
+            Assert.That(AbilityTuning.SentinelMoveSpeed(2, 1.2f), Is.EqualTo(2.4f), "the per-level slope above the floor is unchanged");
+        }
+
+        /// <summary>MV-675 AC2 — sole guard on the RIG label rename; do not cull. Must fail against
+        /// pre-fix <c>rig_board.json</c> (label "MOVE"). Reads the resolved layout, not the raw JSON
+        /// string, so a parsing/mapping regression would also be caught.</summary>
+        [Test]
+        public void UMovBoardLabelReadsSpeed()
+        {
+            RigAbilityLayout uMov = null;
+            foreach (var ab in RigBoardLayout.Abilities)
+                if (ab.Id == "u_mov") { uMov = ab; break; }
+
+            Assert.That(uMov, Is.Not.Null, "fixture: u_mov must exist in the resolved layout");
+            Assert.That(uMov.Label, Is.EqualTo("SPEED"),
+                "MV-675: Lee's instruction was to rename the Sentinel's Move ability label to Speed");
         }
 
         [Test]
@@ -344,7 +361,7 @@ namespace MaxWorlds.Tests.EditMode
 
                 // --- (b) an already-deployed sentinel picks up Move/Range/Health upgrades LIVE ---
                 Sentinel live = Sentinel.Active[0]; // the 5m one, untouched since its own deploy
-                Assert.That(live.MoveSpeed, Is.EqualTo(0f), "u_mov is unowned — must start stationary");
+                Assert.That(live.MoveSpeed, Is.EqualTo(1.2f), "MV-675: u_mov unowned now still follows at the level-1 floor rate");
 
                 live.TakeDamage(new DamageInfo(15f, Vector3.zero, Vector3.forward, Team.Enemy));
                 float hpAfterDamage = live.HealthCurrent;
