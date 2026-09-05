@@ -99,9 +99,11 @@ namespace MaxWorlds.UI
         // Balloon/Force Field). BuildGearButton overrides its RectTransform's pivot to (0.5, 0.5), so
         // anchoredPosition.x is already the button's CENTRE offset from the anchor's left edge — no
         // half-width subtraction needed (unlike MAP, which keeps pivot (0,0.5) and does subtract).
-        // GearRise is an offset from the anchor's vertical mid-point (540): desired centre 708 - 540.
+        // GearRise is an offset from the anchor's vertical mid-point (540): MV-676 raised the desired
+        // centre from 708 to 744 (part of the same HudController column-wide gap widening as
+        // ForceFieldRise/WaterBalloonJoystickRise/MapButtonRise) — 744 - 540.
         private const float GearColumnX = 150f;
-        private const float GearRise = 168f;
+        private const float GearRise = 204f;
 
         private const int LabelFont = 30;
         private const int HeaderFont = 40;
