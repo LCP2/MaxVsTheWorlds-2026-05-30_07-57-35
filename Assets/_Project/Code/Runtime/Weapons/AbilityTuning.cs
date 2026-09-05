@@ -136,14 +136,16 @@ namespace MaxWorlds.Weapons
 
         // --- Force Field (MV-361) ---
 
-        /// <summary>Damage the bubble absorbs before popping at Level 1, the "60-damage cap" DECISION
-        /// #5 pins — roughly 30% of Max's 200 HP, enough runway to reposition against a two-Rusher
-        /// swarm without being a stalemate-proof wall (see the ticket's own DPS math).</summary>
-        public const float DefaultForceFieldAbsorbCap = 60f;
+        /// <summary>Damage the bubble absorbs before popping at Level 1 (MV-677, Lee: "20% strong to
+        /// begin with") — 20% of Max's 200 HP, down from DECISION #5's original 60 (30%); retuned so
+        /// the shield reads weaker at L1 and its L5 ceiling reads stronger (see
+        /// <see cref="DefaultForceFieldAbsorbCapPerLevel"/>).</summary>
+        public const float DefaultForceFieldAbsorbCap = 40f;
 
-        /// <summary>Extra absorb cap each Force Field level beyond L1 adds — same additive "level =
-        /// bigger number" shape as <see cref="TeleportDistance"/>, so a level-up is a felt difference.</summary>
-        public const float DefaultForceFieldAbsorbCapPerLevel = 30f;
+        /// <summary>Extra absorb cap each Force Field level beyond L1 adds (MV-677, Lee: "at full
+        /// power needs to be about 50% stronger than current full power") — retuned so the L5 (max
+        /// level) cap lands at 270, 1.5x the prior L5 value of 180: 40 + 57.5*4 = 270.</summary>
+        public const float DefaultForceFieldAbsorbCapPerLevel = 57.5f;
 
         /// <summary>Radius of the bubble at Level 1, metres (DECISION #3, MV-361) — originally pinned
         /// to the live world's normal gate width (3 m diameter) and never leveled; MV-422 ("Force
