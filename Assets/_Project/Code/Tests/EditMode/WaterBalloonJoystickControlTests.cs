@@ -38,6 +38,7 @@ namespace MaxWorlds.Tests.EditMode
             // was before MV-457.
             foreach (string id in RigBoard.AllCategoryIds) RigState.UnlockCategory(id);
             PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: Water Balloon now spends this bank, not Parts
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);   // MV-380: restored acquisition gate, same as Teleport
 
             _max = new GameObject("Max", typeof(CharacterController), typeof(PlayerController));

@@ -67,6 +67,7 @@ namespace MaxWorlds.Tests.PlayMode
             // MV-380: restores the acquisition gate MV-370 had dropped — a full cell bank must not be
             // enough on its own.
             PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
             Assert.IsNotNull(_abilities, "PlayerController must self-attach PlayerAbilities (WV-231)");
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False);
             yield return null;
@@ -86,11 +87,11 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator ThrowingSpendsOneCellAndStartsTheCooldown_MV370()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(1);
+            PickupWallet.SetPowerCellSecondary(1);   // MV-673: the bank a throw actually spends
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
 
-            Assert.That(PickupWallet.PowerCells, Is.EqualTo(0), "each balloon fired must cost exactly one cell");
+            Assert.That(PickupWallet.PowerCellsSecondary, Is.EqualTo(0), "each balloon fired must cost exactly one cell");
             Assert.That(_abilities.WaterBalloonReady, Is.False, "must be on cooldown immediately after a throw");
             yield return null;
         }
@@ -99,7 +100,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator LandingSplashesTheSpecPercentOfTheBruisersMaxHealthAndHaltsIt()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
 
             float level1Distance = AbilityTuning.WaterBalloonDistance(
                 1, AbilityTuning.DefaultWaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonDistancePerLevel);
@@ -126,7 +127,7 @@ namespace MaxWorlds.Tests.PlayMode
             // (Time.deltaTime-driven) wait fast.
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
             DevTuning.WaterBalloonCooldownSeconds = 0.05f;
-            PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.False,
@@ -167,7 +168,7 @@ namespace MaxWorlds.Tests.PlayMode
         public IEnumerator RangeLevelThrowsFartherThanLevel1_MV370()
         {
             WeaponSystemState.Acquire(AbilityKind.WaterBalloon);
-            PickupWallet.SetPowerCells(10);
+            PickupWallet.SetPowerCellSecondary(10);   // MV-673: the bank a throw actually spends
             WeaponSystemState.LevelUpWaterBalloonTrack(WaterBalloonTrackKind.Range);
 
             Assert.That(_abilities.TryThrowWaterBalloon(Vector3.forward), Is.True);

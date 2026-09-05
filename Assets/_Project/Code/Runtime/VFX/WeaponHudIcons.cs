@@ -279,6 +279,70 @@ namespace MaxWorlds.VFX
             return sprite;
         }
 
+        /// <summary>The <see cref="PowerCellSecondary"/> gem, dimmed, with the same red prohibition
+        /// ring and diagonal slash as <see cref="PowerCellDenied"/> (MV-673) — the "can't afford this"
+        /// read for a control gated on the Power Cells secondary currency specifically, not Parts, so
+        /// the denial icon never implies the wrong bank is short.</summary>
+        public static Sprite PowerCellSecondaryDenied(int size = 64)
+        {
+            const string key = "powercellsecondarydenied";
+            if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            var tex = NewTex(size, size);
+            var px = new Color32[size * size];   // starts fully transparent
+
+            float cx = size * 0.5f;
+            float apexTop = size * 0.90f;
+            float apexBottom = size * 0.08f;
+            float shoulderY = size * 0.62f;
+            float hipY = size * 0.34f;
+            float halfWidth = size * 0.34f;
+
+            Color dimLight = Fade(AmberLight, 0.55f);
+            Color dimMid = Fade(AmberMid, 0.55f);
+            Color dimDark = Fade(AmberDark, 0.55f);
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+                    float hw = GemHalfWidth(fy, apexTop, apexBottom, shoulderY, hipY, halfWidth);
+                    if (hw < 0f || Mathf.Abs(fx - cx) > hw) continue;
+
+                    px[y * size + x] = fy >= shoulderY ? dimLight : fy >= hipY ? dimMid : dimDark;
+                }
+            }
+
+            float cy = size * 0.5f;
+            float ringR = size * 0.46f;
+            float ringThick = size * 0.07f;
+            float slashHalfThick = size * 0.045f;
+
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f - cx, fy = y + 0.5f - cy;
+                    float dist = Mathf.Sqrt(fx * fx + fy * fy);
+
+                    bool onRing = dist <= ringR && dist >= ringR - ringThick;
+                    float perpDist = Mathf.Abs(fx + fy) * 0.70710678f;
+                    bool onSlash = perpDist <= slashHalfThick && dist <= ringR;
+
+                    if (onRing || onSlash) px[y * size + x] = DeniedRed;
+                }
+            }
+
+            tex.SetPixels32(px);
+            tex.Apply();
+
+            var sprite = Sprite.Create(tex, new Rect(0, 0, size, size), new Vector2(0.5f, 0.5f), size);
+            sprite.name = key;
+            s_cache[key] = sprite;
+            return sprite;
+        }
+
         /// <summary>MV-520: the "open this" glyph for an unlock cost tag — a keyhole (circle over a
         /// tapering triangle), the universal lock ideogram, distinct at a glance from
         /// <see cref="UpgradeGlyph"/>'s raise-arrow without reading the number. Drawn solid white so the
