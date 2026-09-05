@@ -126,10 +126,13 @@ namespace MaxWorlds.Tests.EditMode
                     Object.DestroyImmediate(gearRt);
                 }
 
-                AssertCentre(ffRect, 150f, 345f, "Force Field");
-                AssertCentre(balloonRect, 150f, 530f, "Water Balloon");
-                AssertCentre(gearRect, 150f, 708f, "Settings gear");
-                AssertCentre(mapRect, 150f, 846f, "MAP");
+                // MV-676: centres raised (357/554/744/894) as part of widening this column's gaps —
+                // see HudController.ForceFieldRise/WaterBalloonJoystickRise/MapButtonRise and
+                // SettingsPanel.GearRise.
+                AssertCentre(ffRect, 150f, 357f, "Force Field");
+                AssertCentre(balloonRect, 150f, 554f, "Water Balloon");
+                AssertCentre(gearRect, 150f, 744f, "Settings gear");
+                AssertCentre(mapRect, 150f, 894f, "MAP");
 
                 // ---------------------------------------------------------------- AC2: no overlap, stack fits.
                 var column = new (string id, Rect rect)[]

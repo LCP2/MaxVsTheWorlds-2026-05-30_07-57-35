@@ -93,9 +93,17 @@ namespace MaxWorlds.UI
 
         /// <summary>Force Field button (<see cref="BuildForceFieldButton"/>): bottom of the left
         /// play-area column (MV-645) — MAP, the Settings/Controls gear, Water Balloon and Force Field
-        /// all share X=150, stacked bottom-to-top directly above the Move stick.</summary>
+        /// all share X=150, stacked bottom-to-top directly above the Move stick.
+        /// MV-676: was 345 (40px clear of the Move stick's own 250-unit top edge) — widened to a
+        /// 52px clearance as part of easing the whole column's crowding. Not the full 55-60 the
+        /// ticket sketched: at CanvasScaler's matchWidthOrHeight=0.5 blend, an iPhone-standard
+        /// landscape aspect (~852x393pt) compresses the visible canvas to ~978 reference units tall,
+        /// and widening every gap in this column to the top of its suggested range would push MAP's
+        /// top edge inside the 20-unit safety margin MV676HudPhoneAspectMarginTests enforces — so all
+        /// four gaps (this one plus the three below) were grown by the same ~12px so the column reads
+        /// less crowded everywhere without any one element clipping on a narrow phone.</summary>
         private const float ForceFieldX = 150f;
-        private const float ForceFieldRise = 345f;
+        private const float ForceFieldRise = 357f;
 
         /// <summary>Teleport joystick (<see cref="RebuildTeleportJoystick"/>): tracks the right edge,
         /// horizontally centred on the aim stick's own centre line (same -150 offset — see
@@ -1337,12 +1345,20 @@ namespace MaxWorlds.UI
         /// left inactive; <see cref="RefreshAttackModeToggle"/> (driven off <see cref="WeaponSystemState.Changed"/>,
         /// which already fires on a RIG level-up — see <see cref="OnAbilitiesChanged"/>) shows/hides and
         /// relabels it live.</summary>
+        // MV-676: was SentinelJoystickRise + 120 (centre 940), only checked against the full 1080
+        // reference — top edge 962 leaves almost no room once an iPhone-standard landscape aspect
+        // (~852x393pt) compresses the CanvasScaler's matchWidthOrHeight=0.5 blend down to an effective
+        // ~978-unit-tall canvas, and it clipped on real devices. +60 lands the top edge at ~902, the
+        // same ~72-76-unit safety margin the MAP button (the column's own topmost element) already
+        // carries — see MV676HudPhoneAspectMarginTests.
+        private const float AttackModeToggleRise = 60f;
+
         private void BuildAttackModeToggle()
         {
             var root = NewRect("Sentinel Attack Mode Toggle", Root);
             Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
             root.sizeDelta = new Vector2(140f, 44f);
-            root.anchoredPosition = new Vector2(SentinelJoystickX, SentinelJoystickRise + 120f);
+            root.anchoredPosition = new Vector2(SentinelJoystickX, SentinelJoystickRise + AttackModeToggleRise);
             _attackModeToggleRoot = root;
 
             var bg = AddImage(root, HudTextures.RoundedBox(32, 0.5f), SentinelColor, "BG");
@@ -1395,7 +1411,9 @@ namespace MaxWorlds.UI
         // Field (all at X=150) — RebuildWaterBalloonJoystick re-anchors its root to the left edge to
         // apply it, same as RebuildTeleportJoystick already does on the right.
         private const float AbilityControlColumnX = 150f;
-        private const float WaterBalloonJoystickRise = 530f;
+        // MV-676: was 530 (a 30px gap above Force Field's own top edge) — raised to a 42px gap, part
+        // of the same column-wide crowding fix as ForceFieldRise above.
+        private const float WaterBalloonJoystickRise = 554f;
         private const float WaterBalloonJoystickMaxHalfSize = 100f;   // half of BuildJoystick's 200 px cap
 
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
@@ -2120,8 +2138,10 @@ namespace MaxWorlds.UI
         // (X=150, same as Force Field/Water Balloon/the Settings gear) — 150 minus half of 120.
         private const float MapButtonLeftInset = 90f;
         // Anchor is vertical-mid (Y=540), so this is an offset from there, not an absolute Y —
-        // desired centre 846 minus 540.
-        private const float MapButtonRise = 306f;
+        // MV-676: was 306 (desired centre 846), raised to desired centre 894 as part of the same
+        // column-wide gap widening as ForceFieldRise/WaterBalloonJoystickRise/SettingsPanel.GearRise —
+        // 894 minus 540.
+        private const float MapButtonRise = 354f;
 
         /// <summary>The always-available MAP button (MV-563), replacing the old always-on minimap this
         /// ticket removes outright. Mirrors <see cref="BuildWeaponsButton"/>'s own placement — mid-left,
