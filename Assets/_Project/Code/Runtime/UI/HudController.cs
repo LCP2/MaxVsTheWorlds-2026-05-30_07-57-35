@@ -1446,6 +1446,14 @@ namespace MaxWorlds.UI
         private static readonly Color WaterBalloonColor = new Color(0.35f, 0.65f, 0.98f); // balloon blue
         private static readonly Color TeleportColor = new Color(0.75f, 0.45f, 0.95f);     // blink violet
 
+        // MV-681: the auto-fire toggle used to differ ON vs OFF only by alpha on WaterBalloonColor,
+        // reading as a shade of the joystick beneath it rather than its own switch. Distinct opaque
+        // colors instead.
+        private static readonly Vector2 WaterBalloonAutoFireToggleSize = new Vector2(168f, 52f);
+        private const float WaterBalloonAutoFireToggleFontSize = 20f;
+        private static readonly Color WaterBalloonAutoFireOnColor = new Color(0.30f, 0.85f, 0.35f);
+        private static readonly Color WaterBalloonAutoFireOffColor = new Color(0.55f, 0.20f, 0.20f);
+
         /// <summary>The Water Balloon joystick (WV-240, spec §6a; MV-370: a primary add-on now, visible
         /// from run start rather than gated on acquisition), grows more prominent with level
         /// (<see cref="AbilityControlArt"/>), and its own <see cref="WaterBalloonJoystickControl"/>
@@ -1533,7 +1541,7 @@ namespace MaxWorlds.UI
         {
             var root = NewRect("Water Balloon Auto-fire Toggle", Root);
             Anchor(root, new Vector2(0f, 0f), new Vector2(0f, 0f), new Vector2(0.5f, 0.5f));
-            root.sizeDelta = new Vector2(140f, 44f);
+            root.sizeDelta = WaterBalloonAutoFireToggleSize;
             // Sits just above the joystick's own rings — nothing stacked above it on this column since
             // MV-606 moved Teleport to the right-edge column above the aim stick.
             root.anchoredPosition = new Vector2(
@@ -1550,7 +1558,7 @@ namespace MaxWorlds.UI
             button.transition = Selectable.Transition.None;
             button.onClick.AddListener(OnWaterBalloonAutoFireToggleTapped);
 
-            _waterBalloonAutoFireToggleLabel = AddText(root, 18f, BoneWhite, TextAnchor.MiddleCenter);
+            _waterBalloonAutoFireToggleLabel = AddText(root, WaterBalloonAutoFireToggleFontSize, BoneWhite, TextAnchor.MiddleCenter);
             Stretch(_waterBalloonAutoFireToggleLabel.rectTransform);
             _waterBalloonAutoFireToggleLabel.fontStyle = FontStyle.Bold;
             _waterBalloonAutoFireToggleLabel.raycastTarget = false;
@@ -1575,11 +1583,7 @@ namespace MaxWorlds.UI
             bool on = WeaponSystemState.WaterBalloonAutoFireEnabled;
             if (_waterBalloonAutoFireToggleLabel != null) _waterBalloonAutoFireToggleLabel.text = on ? "AUTO ON" : "AUTO OFF";
             if (_waterBalloonAutoFireToggleBg != null)
-            {
-                var c = WaterBalloonColor;
-                c.a = on ? 1f : 0.4f;
-                _waterBalloonAutoFireToggleBg.color = c;
-            }
+                _waterBalloonAutoFireToggleBg.color = on ? WaterBalloonAutoFireOnColor : WaterBalloonAutoFireOffColor;
         }
 
         /// <summary>The Teleport joystick (MV-338: "needs to work the same way as Water Balloon — a
