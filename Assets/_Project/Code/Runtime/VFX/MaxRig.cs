@@ -249,10 +249,10 @@ namespace MaxWorlds.VFX
         [Header("Run cycle")]
         [Tooltip("Strides per second at full stick. The legs swing at this rate and he bobs twice per " +
                  "stride, which is what a step is.")]
-        [SerializeField] private float strideRate = 2.15f;
+        [SerializeField] private float strideRate = 1.85f;   // MV-678: was 2.15 (Lee: "slightly reduce")
 
         [Tooltip("How far the legs swing, in degrees, at full stick.")]
-        [SerializeField] private float legSwing = 32f;
+        [SerializeField] private float legSwing = 26f;   // MV-678: was 32 (Lee: "slightly reduce the length")
 
         [Tooltip("How far he bobs, in metres, at full stick. Small. A bob you can measure is a bob " +
                  "that makes the whole character look like it is on a spring.")]
@@ -312,6 +312,20 @@ namespace MaxWorlds.VFX
         private MaterialPropertyBlock _lensMpb;
 
         private float _stride;
+
+        /// <summary>MV-678: +1 while the stride is running forwards, -1 backwards. Held across frames
+        /// where <c>moveLocal.z</c> sits inside <see cref="StrideDeadband"/> — a pure strafe puts it
+        /// near zero, and flipping on the raw sign there makes the direction flicker every frame.
+        /// Starts forwards, matching the direction the old, always-forwards stride used to run in.</summary>
+        private float _strideDir = 1f;
+
+        /// <summary>How far <c>moveLocal.z</c> has to clear, either side of zero, before the stride
+        /// direction is allowed to flip. Picked by looking at the same twin-stick input that already
+        /// drives <see cref="TickRun"/>'s lean: a stick pushed hard enough to register as a deliberate
+        /// strafe (not noise) sits well under this, and a stick pushed hard enough to register as
+        /// travel forwards or back clears it easily.</summary>
+        private const float StrideDeadband = 0.15f;
+
         private float _aim;            // 0 = at the hip, 1 = presented
         private Vector3 _lastPos;
         private Vector3 _velocity;
@@ -558,10 +572,26 @@ namespace MaxWorlds.VFX
         {
             float speed01 = Mathf.Clamp01(_max.MoveInput.magnitude);
 
+            // Max's own yaw is our yaw, so his move input — which is already in world XZ — has to come
+            // back into local space to know whether he is running forwards, backwards, or sideways.
+            // Read up here, before the stride update below, because the stride needs the same signed
+            // value the lean uses at the bottom of this method.
+            Vector3 moveLocal = transform.InverseTransformDirection(
+                new Vector3(_max.MoveInput.x, 0f, _max.MoveInput.y));
+
+            // MV-678: moveLocal.z is signed — positive forwards, negative back — so the legs can now
+            // run backwards when he does, instead of always playing a forwards cycle while he
+            // backpedals. A raw sign flip would flicker every frame during a pure strafe, where
+            // moveLocal.z hovers around zero: only cross StrideDeadband to change direction, and hold
+            // the last direction while inside it.
+            if (moveLocal.z > StrideDeadband) _strideDir = 1f;
+            else if (moveLocal.z < -StrideDeadband) _strideDir = -1f;
+
             // The stride only advances while he is actually moving, so he stops mid-step instead of
             // marching on the spot.
-            _stride += strideRate * speed01 * dt * Mathf.PI * 2f;
+            _stride += strideRate * speed01 * dt * Mathf.PI * 2f * _strideDir;
             if (_stride > Mathf.PI * 2f) _stride -= Mathf.PI * 2f;
+            else if (_stride < -Mathf.PI * 2f) _stride += Mathf.PI * 2f;
 
             float swing = Mathf.Sin(_stride) * legSwing * speed01;
             if (_hips[0] != null) _hips[0].localRotation = Quaternion.Euler(swing, 0f, 0f);
@@ -576,11 +606,6 @@ namespace MaxWorlds.VFX
             // him — which is what a thing held in two hands does.
             _torso.localPosition = new Vector3(0f, HipY + bounce, 0f);
             _torso.localRotation = Quaternion.Euler(0f, -swing * 0.14f, 0f);
-
-            // Lean. Max's own yaw is our yaw, so his move input — which is already in world XZ — has to
-            // come back into local space to know whether he is running forwards or sideways.
-            Vector3 moveLocal = transform.InverseTransformDirection(
-                new Vector3(_max.MoveInput.x, 0f, _max.MoveInput.y));
 
             _body.localRotation = Quaternion.Slerp(
                 _body.localRotation,
