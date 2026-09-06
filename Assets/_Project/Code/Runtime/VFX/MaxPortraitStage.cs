@@ -13,9 +13,9 @@ namespace MaxWorlds.VFX
     /// This is a standalone bust built from primitives, not a spawn of the live gameplay
     /// <see cref="MaxRig"/> — the same choice <see cref="UpgradeWeaponStage"/> made for the weapon
     /// rather than reaching into a live <c>WaterBlaster</c>. It shares MaxRig's palette (hoodie via
-    /// <see cref="CharacterSkin"/>, the amber goggle lenses, the hood/hair silhouette) so the two read
-    /// as the same kid, just built once here instead of depending on a live <c>PlayerController</c>
-    /// existing on this screen.
+    /// <see cref="CharacterSkin"/>, the pale blue-white goggle lenses via <see cref="MaxRig.LensGlass"/>,
+    /// the hood/hair silhouette) so the two read as the same kid, just built once here instead of
+    /// depending on a live <c>PlayerController</c> existing on this screen.
     ///
     /// Sits far below the world on its own stage, same idiom as the weapon: a tiny orthographic camera
     /// pointed at a rig nothing else can see, rendering into a <see cref="RenderTexture"/> the screen
@@ -33,7 +33,6 @@ namespace MaxWorlds.VFX
         private static readonly Color Hair = new Color(0.33f, 0.20f, 0.12f);
         private static readonly Color Rubber = new Color(0.13f, 0.13f, 0.15f);
         private static readonly Color CanvasTone = new Color(0.29f, 0.25f, 0.20f);
-        private static readonly Color LensGlass = new Color(1f, 0.72f, 0.24f);
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
@@ -169,7 +168,7 @@ namespace MaxWorlds.VFX
 
             var mpb = new MaterialPropertyBlock();
             r.GetPropertyBlock(mpb);
-            mpb.SetColor(BaseColorId, LensGlass);
+            mpb.SetColor(BaseColorId, MaxRig.LensGlass);
             r.SetPropertyBlock(mpb);
         }
 

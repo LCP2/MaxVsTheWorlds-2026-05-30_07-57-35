@@ -49,18 +49,38 @@ namespace MaxWorlds.VFX
             var eyes = new List<MeshRenderer>(2);
             var wheels = new List<Transform>(6);
             var legs = new List<Transform>(4);
+            Transform visualRoot = VisualTrimRootFor(kind, root);
             switch (kind)
             {
-                case EnemyKind.Launcher: BuildLauncher(root, p, eyes, wheels, legs); break;
-                case EnemyKind.Blinker:  BuildBlinker(root, p, eyes, wheels, legs); break;
-                case EnemyKind.Gunner:   BuildGunner(root, p, eyes, wheels, legs); break;
-                case EnemyKind.Bolter:   BuildBolter(root, p, eyes, wheels, legs); break;
-                case EnemyKind.Bruiser:  BuildBruiser(root, p, eyes, wheels, legs); break;
-                case EnemyKind.Heavy:    BuildHeavy(root, p, eyes, wheels, legs); break;
-                case EnemyKind.Brute:    BuildBrute(root, p, eyes, wheels, legs); break;
-                default:                 BuildRusher(root, p, eyes, wheels, legs); break;
+                case EnemyKind.Launcher: BuildLauncher(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Blinker:  BuildBlinker(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Gunner:   BuildGunner(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Bolter:   BuildBolter(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
+                default:                 BuildRusher(visualRoot, p, eyes, wheels, legs); break;
             }
             return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray());
+        }
+
+        /// <summary>MV-669 revision 3: reverting Max's own +10% scale-up re-exposed a pre-existing
+        /// YT-74 conflict — Heavy renders at 1.997 m, taller than the reverted Max (1.9876 m). Lee's
+        /// call was to trim Heavy, not re-inflate Max. This is a SILHOUETTE-only fix: a scale pivot
+        /// planted at y = 0 (ground, where every <c>Build*</c> method here already authors its feet),
+        /// so shrinking about it cannot float or sink the robot, and it leaves
+        /// <see cref="EnemyArchetype.BodyScale"/>/<c>ColliderHeight</c> — which drive the collider and
+        /// the MV-434 body-separation clamp — completely untouched. No other kind is trimmed.</summary>
+        private const float HeavyVisualTrim = 0.931f; // measured 1.997m -> ~1.859m, clears Max's 1.9876m by ~6.5%
+
+        private static Transform VisualTrimRootFor(EnemyKind kind, Transform root)
+        {
+            if (kind != EnemyKind.Heavy) return root;
+
+            var pivot = new GameObject("HeavyVisualTrim").transform;
+            pivot.SetParent(root, worldPositionStays: false);
+            pivot.localScale = Vector3.one * HeavyVisualTrim;
+            return pivot;
         }
 
         /// <summary>What a built body hands back: the lenses the eye tell drives, the wheels the rig

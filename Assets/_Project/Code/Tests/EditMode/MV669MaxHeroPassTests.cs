@@ -26,6 +26,18 @@ namespace MaxWorlds.Tests.EditMode
     /// on the base commit for this revision (524fad5, <c>VisualScale</c> still 1.1) and pass once
     /// <c>VisualScale</c> is reverted to 1 and the re-tuned block lands back within 2% of the
     /// pre-MV-669 ~1.95 m crown.
+    ///
+    /// Revision 3 (the Heavy conflict, 2026-09-06): reverting the +10% re-exposed a pre-existing
+    /// YT-74 gap the inflation had been masking — <see cref="NothingInTheSwarmOutSizesTheTallerMax"/>
+    /// went red on Heavy (1.997 m against the reverted Max's 1.9876 m), the base commit for THIS
+    /// revision (a642436). Decision: trim Heavy (<see cref="RobotBodies.VisualTrimRootFor"/>), not
+    /// re-inflate Max. No new test method — this already-existing parametrized case is the evidence:
+    /// red on a642436, green once the trim lands. R5 (Heavy's collider/health/damage/speed untouched)
+    /// and R6 (no amber goggle literal survives outside <see cref="MaxRig.LensGlass"/>) are satisfied
+    /// structurally — <c>EnemyArchetype.cs</c> is untouched by this revision's diff, and a grep for
+    /// the old amber value (1, 0.72, 0.24) across Assets/_Project/Code returns zero hits — rather than
+    /// by a new test asserting an authored constant, which the testing policy (MV-465, Tier 1) bans
+    /// and which could not be made to fail first (there is no defect in those fields to prove).
     /// </summary>
     public sealed class MV669MaxHeroPassTests
     {

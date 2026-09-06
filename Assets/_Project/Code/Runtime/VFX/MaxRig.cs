@@ -141,8 +141,9 @@ namespace MaxWorlds.VFX
         /// <summary>MV-669 approved geometry: the goggle lenses moved off amber to a pale blue-white.
         /// Amber competed with the hoodie for the eye; the pale lens is what makes the raised lens cups
         /// read as two bright discs from the 60-degree camera, which is the whole point of the new
-        /// goggle geometry.</summary>
-        private static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
+        /// goggle geometry. Public: <see cref="MaxPortraitStage"/>'s separate primitive bust reads this
+        /// too (MV-669 rev.3, R6), rather than carrying its own copy of the number that could drift.</summary>
+        public static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
 
         /// <summary>The utility belt band — MV-669's one new silhouette-breaker, giving the torso a
         /// middle where the old body had none.</summary>
