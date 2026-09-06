@@ -7,19 +7,12 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-669 — Lee: "Make max look way cooler and 10% bigger." This covers the size half, which is
-    /// the half with a measurable answer: the rig's model root (<c>MaxRig.Build</c>'s <c>_body</c>
-    /// pivot) now carries a <see cref="MaxRig.VisualScale"/> of 1.1, applied to the RENDERED body
-    /// only — never to <see cref="EnemyArchetype.PlayerHeight"/>/<see
-    /// cref="EnemyArchetype.PlayerRadius"/> or Max's <c>CharacterController</c>, which every robot's
-    /// body-separation clamp, the spawn-height maths and the YT-74 "nothing out-sizes Max" rule all
-    /// key off.
+    /// the half with a measurable answer.
     ///
     /// EditMode, because every claim here is about BUILT GEOMETRY (a renderer's bounds after
     /// <see cref="MaxBody.Build"/>/<see cref="RobotBodies.Build"/> place it), not about a running
     /// scene — the same idiom <see cref="MV474MaxWalkTests"/> and <see cref="MaxRigTests"/> already
-    /// use for this rig. Must fail to even compile on the base commit (pre-MV-669): <c>MaxRig</c>
-    /// has no <c>VisualScale</c> member there, the same "doesn't exist yet" failure mode MV-474's own
-    /// test documents for this file.
+    /// use for this rig.
     ///
     /// Extended for the approved-geometry follow-up (Lee's second comment on the ticket, 2026-09-05):
     /// <see cref="GadgetGlowSurvivesTheRebuild"/> (A2), <see
@@ -27,6 +20,12 @@ namespace MaxWorlds.Tests.EditMode
     /// cref="MaxPaletteGainsExactlyBeltAndPouch"/> (A4). A1 (the hip pivots survive) is already
     /// covered by <see cref="MV474MaxWalkTests"/>, which asserts the same claim against whatever
     /// geometry <c>MaxBody.Build</c> currently produces.
+    ///
+    /// Revision 2 (Lee's playtest, 2026-09-06): the +10% was rejected on device, so <see
+    /// cref="MaxIsBackToHisPreMV669Height"/> replaces the old "10% taller" assertion — it must fail
+    /// on the base commit for this revision (524fad5, <c>VisualScale</c> still 1.1) and pass once
+    /// <c>VisualScale</c> is reverted to 1 and the re-tuned block lands back within 2% of the
+    /// pre-MV-669 ~1.95 m crown.
     /// </summary>
     public sealed class MV669MaxHeroPassTests
     {
@@ -69,19 +68,22 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        /// <summary>AC1: the rendered bounds height is 10% (+/-1%) greater than the unscaled build —
-        /// the same geometry, the only difference being <see cref="MaxRig.VisualScale"/> at the model
-        /// root, which is exactly what shipped.</summary>
+        /// <summary>R1 (revision 2 — supersedes the old AC1): Lee rejected the +10% on device, so
+        /// <see cref="MaxRig.VisualScale"/> is reverted to 1 and Max must render within 2% of the
+        /// pre-MV-669 crown height (~1.95 m, the value <c>MaxBody</c>'s own doc comment carried before
+        /// this ticket touched the geometry). The re-emitted block's own shorter/thinner legs and
+        /// dropped upper body are what actually land this, not a compensating root scale.</summary>
         [Test]
-        public void MaxIsRenderedTenPercentTaller_AtTheModelRootPivot()
+        public void MaxIsBackToHisPreMV669Height()
         {
-            float baselineHeight = BuildAndMeasure(1f).size.y;
-            float scaledHeight = BuildAndMeasure(MaxRig.VisualScale).size.y;
+            const float PreMV669CrownHeight = 1.95f;
 
-            float ratio = scaledHeight / baselineHeight;
-            Assert.That(ratio, Is.EqualTo(1.10f).Within(0.01f),
-                $"Max's rendered height scaled by {ratio:0.000}x, not the 10% (+/-1%) the ticket asks " +
-                "for.");
+            float builtHeight = BuildAndMeasure(MaxRig.VisualScale).size.y;
+
+            Assert.That(builtHeight, Is.EqualTo(PreMV669CrownHeight).Within(PreMV669CrownHeight * 0.02f),
+                $"Max's rendered height is {builtHeight:0.000} m, not within 2% of the pre-MV-669 " +
+                $"{PreMV669CrownHeight:0.00} m crown — the +10% revert or the block's re-tuning didn't " +
+                "land where the ticket expects.");
         }
 
         /// <summary>AC3: scaling about the ground pivot must not float or sink him.</summary>

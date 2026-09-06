@@ -45,9 +45,9 @@ namespace MaxWorlds.VFX
 
     /// <summary>
     /// Max's body, in metres, feet at y = 0 and +Z where he faces. MV-669: 32 approved parts (down
-    /// from 60), authored feet-at-zero with the crown a little under 1.95 m — see
-    /// <c>MV-669-MaxBody-block.cs</c> in the design source folder, applied verbatim below except for
-    /// two integration points the approved geometry deliberately leaves out:
+    /// from 60), authored feet-at-zero — see <c>MV-669-MaxBody-block.cs</c> in the design source
+    /// folder, applied verbatim below except for two integration points the approved geometry
+    /// deliberately leaves out:
     ///
     ///   * THE GADGET is not in the approved block. It is ported from the pre-MV-669 body and
     ///     re-seated against the new glove positions (see the gadget section below) — still off the
@@ -55,6 +55,13 @@ namespace MaxWorlds.VFX
     ///   * THE HIP PIVOTS are not in the block either — the leg parts are drawn at rest and reparented
     ///     under <see cref="Hip"/> exactly as before, so <c>TickRun</c>'s stride rotation (MV-474) has
     ///     something to swing.
+    ///
+    /// Revision 2 (2026-09-06), after Lee's playtest: the +10% root scale (<see
+    /// cref="MaxRig.VisualScale"/>) is reverted to 1 — Lee tried the bigger Max and rejected it. The
+    /// re-emitted block also shrinks the sneakers, thins and shortens the legs, and drops everything
+    /// above the waist by 0.076 m to close the gap the shorter legs would otherwise open. The result
+    /// measures within 2% of the original pre-MV-669 ~1.95 m crown (see the fix comment for the exact
+    /// before/after numbers), so no compensating root scale was needed.
     /// </summary>
     public static class MaxBody
     {
@@ -68,70 +75,71 @@ namespace MaxWorlds.VFX
 
             // MV-669 approved geometry doesn't include the legs (see the class doc) — they're drawn
             // at rest here and reparented under hip pivots exactly as before MV-669, so TickRun's
-            // stride rotation (MV-474) still has a hinge to swing. The hip's own local position is the
-            // sole/boot's authored x (0.1421) so those two parts carry a zero local x, matching the
-            // pre-MV-669 convention; every other leg part's local offset is its authored root-space
-            // position minus the hip's, so at rest (identity hip rotation) it lands exactly where the
-            // approved block puts it.
-            var hipL = Hip(root, "HipL", new Vector3(-0.1421f, hipY, 0f));
-            var hipR = Hip(root, "HipR", new Vector3(0.1421f, hipY, 0f));
+            // stride rotation (MV-474) still has a hinge to swing. Revision 2's re-emitted block moved
+            // the sole/boot's authored x from 0.1421 to 0.132 (thinner legs), so the hip's own local x
+            // moves with it — those two parts still carry a zero local x, matching the pre-MV-669
+            // convention; every other leg part's local offset is its authored root-space position minus
+            // the hip's, so at rest (identity hip rotation) it lands exactly where the approved block
+            // puts it.
+            var hipL = Hip(root, "HipL", new Vector3(-0.132f, hipY, 0f));
+            var hipR = Hip(root, "HipR", new Vector3(0.132f, hipY, 0f));
             var hips = new[] { hipL, hipR };
 
-            // ---- legs (MV-669-MaxBody-block.cs items 1-8) ----------------------------------------
-            Add(hipL, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.1421f, 0.0142f), new Vector2(0.1563f, 0.0711f), new Vector2(0.1421f, 0.1089f), new Vector2(0f, 0.1184f) }, 16), p.Sole, new Vector3(0f, 0f - hipY, 0.0426f), Quaternion.identity, new Vector3(1f, 1f, 1.3f));
-            Add(hipL, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.0947f), new Vector2(0.1326f, 0.1137f), new Vector2(0.1374f, 0.1895f), new Vector2(0.1089f, 0.2321f), new Vector2(0f, 0.2368f) }, 16), p.Boot, new Vector3(0f, 0f - hipY, 0.0189f), Quaternion.identity, new Vector3(1f, 1f, 1.16f));
-            Add(hipR, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.1421f, 0.0142f), new Vector2(0.1563f, 0.0711f), new Vector2(0.1421f, 0.1089f), new Vector2(0f, 0.1184f) }, 16), p.Sole, new Vector3(0f, 0f - hipY, 0.0426f), Quaternion.identity, new Vector3(1f, 1f, 1.3f));
-            Add(hipR, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.0947f), new Vector2(0.1326f, 0.1137f), new Vector2(0.1374f, 0.1895f), new Vector2(0.1089f, 0.2321f), new Vector2(0f, 0.2368f) }, 16), p.Boot, new Vector3(0f, 0f - hipY, 0.0189f), Quaternion.identity, new Vector3(1f, 1f, 1.16f));
-            Add(hipL, CharacterMeshes.Beam(0.6253f, 0.1421f, 0.1213f, 7), p.Fabric, new Vector3(-0.1374f + 0.1421f, 0.5211f - hipY, 0f), Quaternion.identity, Vector3.one);
-            Add(hipL, CharacterMeshes.Prism(4, 0.0587f, 0.0521f, 0.1516f, 0.24f, 0f), p.Fabric, new Vector3(-0.2226f + 0.1421f, 0.4926f - hipY, 0.0189f), Quaternion.identity, new Vector3(0.55f, 1f, 1.05f));
-            Add(hipR, CharacterMeshes.Beam(0.6253f, 0.1421f, 0.1213f, 7), p.Fabric, new Vector3(0.1374f - 0.1421f, 0.5211f - hipY, 0f), Quaternion.identity, Vector3.one);
-            Add(hipR, CharacterMeshes.Prism(4, 0.0587f, 0.0521f, 0.1516f, 0.24f, 0f), p.Fabric, new Vector3(0.2226f - 0.1421f, 0.4926f - hipY, 0.0189f), Quaternion.identity, new Vector3(0.55f, 1f, 1.05f));
+            // ---- legs (MV-669-MaxBody-block.cs revision 2, items 1-8) ----------------------------
+            Add(hipL, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.124f, 0.014f), new Vector2(0.136f, 0.066f), new Vector2(0.124f, 0.1f), new Vector2(0f, 0.109f) }, 16), p.Sole, new Vector3(0f, 0f - hipY, 0.038f), Quaternion.identity, new Vector3(1f, 1f, 1.18f));
+            Add(hipL, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.088f), new Vector2(0.116f, 0.104f), new Vector2(0.12f, 0.172f), new Vector2(0.096f, 0.21f), new Vector2(0f, 0.215f) }, 16), p.Boot, new Vector3(0f, 0f - hipY, 0.016f), Quaternion.identity, new Vector3(1f, 1f, 1.08f));
+            Add(hipR, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.124f, 0.014f), new Vector2(0.136f, 0.066f), new Vector2(0.124f, 0.1f), new Vector2(0f, 0.109f) }, 16), p.Sole, new Vector3(0f, 0f - hipY, 0.038f), Quaternion.identity, new Vector3(1f, 1f, 1.18f));
+            Add(hipR, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.088f), new Vector2(0.116f, 0.104f), new Vector2(0.12f, 0.172f), new Vector2(0.096f, 0.21f), new Vector2(0f, 0.215f) }, 16), p.Boot, new Vector3(0f, 0f - hipY, 0.016f), Quaternion.identity, new Vector3(1f, 1f, 1.08f));
+            Add(hipL, CharacterMeshes.Beam(0.58f, 0.126f, 0.108f, 7), p.Fabric, new Vector3(-0.132f + 0.132f, 0.482f - hipY, 0f), Quaternion.identity, Vector3.one);
+            Add(hipL, CharacterMeshes.Prism(4, 0.052f, 0.046f, 0.14f, 0.24f, 0f), p.Fabric, new Vector3(-0.205f + 0.132f, 0.455f - hipY, 0.018f), Quaternion.identity, new Vector3(0.55f, 1f, 1.05f));
+            Add(hipR, CharacterMeshes.Beam(0.58f, 0.126f, 0.108f, 7), p.Fabric, new Vector3(0.132f - 0.132f, 0.482f - hipY, 0f), Quaternion.identity, Vector3.one);
+            Add(hipR, CharacterMeshes.Prism(4, 0.052f, 0.046f, 0.14f, 0.24f, 0f), p.Fabric, new Vector3(0.205f - 0.132f, 0.455f - hipY, 0.018f), Quaternion.identity, new Vector3(0.55f, 1f, 1.05f));
 
             // ---- belt, torso, hood, arms, head, hair, goggles (block items 9-32, verbatim) -------
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.8148f), new Vector2(0.2226f, 0.829f), new Vector2(0.2321f, 0.9048f), new Vector2(0.2132f, 0.9332f), new Vector2(0f, 0.9379f) }, 20), p.Belt, Vector3.zero, Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.0549f, 0.0493f, 0.1089f, 0.22f, 0f), p.Pouch, new Vector3(-0.1516f, 0.8669f, 0.1516f), Quaternion.identity, new Vector3(1f, 1f, 0.75f));
-            Add(root, CharacterMeshes.Prism(4, 0.0549f, 0.0493f, 0.1089f, 0.22f, 0f), p.Pouch, new Vector3(0.0947f, 0.8669f, 0.1895f), Quaternion.identity, new Vector3(1.25f, 1f, 0.75f));
-            Add(root, CharacterMeshes.Prism(4, 0.0549f, 0.0493f, 0.1089f, 0.22f, 0f), p.Pouch, new Vector3(0.2226f, 0.8669f, -0.0189f), Quaternion.identity, new Vector3(0.9f, 1f, 0.75f));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.9f), new Vector2(0.2132f, 0.919f), new Vector2(0.2037f, 1.0421f), new Vector2(0.2321f, 1.1937f), new Vector2(0.2605f, 1.3263f), new Vector2(0.2416f, 1.4116f), new Vector2(0.1611f, 1.459f), new Vector2(0f, 1.4684f) }, 22), p.Jacket, Vector3.zero, Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.2316f), new Vector2(0.1232f, 1.2695f), new Vector2(0.1421f, 1.3642f), new Vector2(0.1137f, 1.44f), new Vector2(0.0426f, 1.4779f), new Vector2(0f, 1.4779f) }, 18), p.Hood, new Vector3(0f, 0f, -0.1658f), Quaternion.identity, new Vector3(1.3f, 1f, 0.8f));
-            Add(root, CharacterMeshes.Beam(0.2463f, 0.0881f, 0.0777f, 7), p.Jacket, new Vector3(-0.2605f, 1.2127f, 0.0095f), Quaternion.Euler(0f, 0f, -11f), Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.2274f, 0.0682f, 0.0587f, 7), p.Skin, new Vector3(-0.2937f, 0.9758f, 0.0189f), Quaternion.Euler(0f, 0f, -6f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.0777f, 0.0189f), new Vector2(0.0815f, 0.0947f), new Vector2(0.0521f, 0.1279f), new Vector2(0f, 0.1326f) }, 12), p.Dark, new Vector3(-0.3079f, 0.8005f, 0.0284f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.2463f, 0.0881f, 0.0777f, 7), p.Jacket, new Vector3(0.2605f, 1.2127f, 0.0095f), Quaternion.Euler(0f, 0f, 11f), Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.2274f, 0.0682f, 0.0587f, 7), p.Skin, new Vector3(0.2937f, 0.9758f, 0.0189f), Quaternion.Euler(0f, 0f, 6f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.0777f, 0.0189f), new Vector2(0.0815f, 0.0947f), new Vector2(0.0521f, 0.1279f), new Vector2(0f, 0.1326f) }, 12), p.Dark, new Vector3(0.3079f, 0.8005f, 0.0284f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.4684f), new Vector2(0.1374f, 1.4969f), new Vector2(0.1847f, 1.5727f), new Vector2(0.1942f, 1.6863f), new Vector2(0.1753f, 1.7716f), new Vector2(0f, 1.8f) }, 20), p.Skin, Vector3.zero, Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Sphere(14), p.Eye, new Vector3(-0.0805f, 1.6437f, 0.1658f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
-            Add(root, CharacterMeshes.Sphere(14), p.Eye, new Vector3(0.0805f, 1.6437f, 0.1658f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.7053f), new Vector2(0.1421f, 1.7129f), new Vector2(0.2103f, 1.7394f), new Vector2(0.2255f, 1.7887f), new Vector2(0.2198f, 1.8417f), new Vector2(0.2027f, 1.8682f), new Vector2(0.1421f, 1.8796f), new Vector2(0f, 1.8815f) }, 22), p.Hair, new Vector3(0f, 0f, -0.0189f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Sphere(12), p.Hair, new Vector3(-0.1023f, 1.8834f, -0.18f), Quaternion.identity, new Vector3(0.17f, 0.135f, 0.16f));
-            Add(root, CharacterMeshes.Sphere(12), p.Hair, new Vector3(0.1118f, 1.8616f, -0.1942f), Quaternion.identity, new Vector3(0.152f, 0.122f, 0.148f));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.7735f), new Vector2(0.2302f, 1.7849f), new Vector2(0.235f, 1.8322f), new Vector2(0.2255f, 1.8455f), new Vector2(0f, 1.8493f) }, 24), p.Dark, new Vector3(0f, 0f, -0.0208f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.0265f), new Vector2(0.0834f, -0.0208f), new Vector2(0.0881f, 0.0246f), new Vector2(0.0786f, 0.0379f), new Vector2(0.0654f, 0.0398f), new Vector2(0.0654f, 0.0265f), new Vector2(0f, 0.0227f) }, 18), p.Dark, new Vector3(-0.0872f, 1.8834f, 0.1061f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.0246f), new Vector2(0.0644f, 0.0284f), new Vector2(0.0663f, 0.0351f), new Vector2(0f, 0.0369f) }, 18), p.Goggle, new Vector3(-0.0872f, 1.8834f, 0.1061f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.0265f), new Vector2(0.0834f, -0.0208f), new Vector2(0.0881f, 0.0246f), new Vector2(0.0786f, 0.0379f), new Vector2(0.0654f, 0.0398f), new Vector2(0.0654f, 0.0265f), new Vector2(0f, 0.0227f) }, 18), p.Dark, new Vector3(0.0872f, 1.8834f, 0.1061f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.0246f), new Vector2(0.0644f, 0.0284f), new Vector2(0.0663f, 0.0351f), new Vector2(0f, 0.0369f) }, 18), p.Goggle, new Vector3(0.0872f, 1.8834f, 0.1061f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.0246f, 0.0246f, 0.0947f, 0.1f, 0f), p.Dark, new Vector3(0f, 1.8739f, 0.1061f), Quaternion.Euler(24f, 0f, 90f), new Vector3(1f, 1f, 0.6f));
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.784f), new Vector2(0.235f, 0.799f), new Vector2(0.245f, 0.879f), new Vector2(0.225f, 0.909f), new Vector2(0f, 0.914f) }, 20), p.Belt, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Prism(4, 0.058f, 0.052f, 0.115f, 0.22f, 0f), p.Pouch, new Vector3(-0.16f, 0.839f, 0.16f), Quaternion.identity, new Vector3(1f, 1f, 0.75f));
+            Add(root, CharacterMeshes.Prism(4, 0.058f, 0.052f, 0.115f, 0.22f, 0f), p.Pouch, new Vector3(0.1f, 0.839f, 0.2f), Quaternion.identity, new Vector3(1.25f, 1f, 0.75f));
+            Add(root, CharacterMeshes.Prism(4, 0.058f, 0.052f, 0.115f, 0.22f, 0f), p.Pouch, new Vector3(0.235f, 0.839f, -0.02f), Quaternion.identity, new Vector3(0.9f, 1f, 0.75f));
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.874f), new Vector2(0.225f, 0.894f), new Vector2(0.215f, 1.024f), new Vector2(0.245f, 1.184f), new Vector2(0.275f, 1.324f), new Vector2(0.255f, 1.414f), new Vector2(0.17f, 1.464f), new Vector2(0f, 1.474f) }, 22), p.Jacket, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.224f), new Vector2(0.13f, 1.264f), new Vector2(0.15f, 1.364f), new Vector2(0.12f, 1.444f), new Vector2(0.045f, 1.484f), new Vector2(0f, 1.484f) }, 18), p.Hood, new Vector3(0f, 0f, -0.175f), Quaternion.identity, new Vector3(1.3f, 1f, 0.8f));
+            Add(root, CharacterMeshes.Beam(0.26f, 0.093f, 0.082f, 7), p.Jacket, new Vector3(-0.275f, 1.204f, 0.01f), Quaternion.Euler(0f, 0f, -11f), Vector3.one);
+            Add(root, CharacterMeshes.Beam(0.24f, 0.072f, 0.062f, 7), p.Skin, new Vector3(-0.31f, 0.954f, 0.02f), Quaternion.Euler(0f, 0f, -6f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.082f, 0.02f), new Vector2(0.086f, 0.1f), new Vector2(0.055f, 0.135f), new Vector2(0f, 0.14f) }, 12), p.Dark, new Vector3(-0.325f, 0.769f, 0.03f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Beam(0.26f, 0.093f, 0.082f, 7), p.Jacket, new Vector3(0.275f, 1.204f, 0.01f), Quaternion.Euler(0f, 0f, 11f), Vector3.one);
+            Add(root, CharacterMeshes.Beam(0.24f, 0.072f, 0.062f, 7), p.Skin, new Vector3(0.31f, 0.954f, 0.02f), Quaternion.Euler(0f, 0f, 6f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.082f, 0.02f), new Vector2(0.086f, 0.1f), new Vector2(0.055f, 0.135f), new Vector2(0f, 0.14f) }, 12), p.Dark, new Vector3(0.325f, 0.769f, 0.03f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.474f), new Vector2(0.145f, 1.504f), new Vector2(0.195f, 1.584f), new Vector2(0.205f, 1.704f), new Vector2(0.185f, 1.794f), new Vector2(0f, 1.824f) }, 20), p.Skin, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Sphere(14), p.Eye, new Vector3(-0.085f, 1.659f, 0.175f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
+            Add(root, CharacterMeshes.Sphere(14), p.Eye, new Vector3(0.085f, 1.659f, 0.175f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.724f), new Vector2(0.15f, 1.732f), new Vector2(0.222f, 1.76f), new Vector2(0.238f, 1.812f), new Vector2(0.232f, 1.868f), new Vector2(0.214f, 1.896f), new Vector2(0.15f, 1.908f), new Vector2(0f, 1.91f) }, 22), p.Hair, new Vector3(0f, 0f, -0.02f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Sphere(12), p.Hair, new Vector3(-0.108f, 1.912f, -0.19f), Quaternion.identity, new Vector3(0.17f, 0.135f, 0.16f));
+            Add(root, CharacterMeshes.Sphere(12), p.Hair, new Vector3(0.118f, 1.889f, -0.205f), Quaternion.identity, new Vector3(0.152f, 0.122f, 0.148f));
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.796f), new Vector2(0.243f, 1.808f), new Vector2(0.248f, 1.858f), new Vector2(0.238f, 1.872f), new Vector2(0f, 1.876f) }, 24), p.Dark, new Vector3(0f, 0f, -0.022f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.028f), new Vector2(0.088f, -0.022f), new Vector2(0.093f, 0.026f), new Vector2(0.083f, 0.04f), new Vector2(0.069f, 0.042f), new Vector2(0.069f, 0.028f), new Vector2(0f, 0.024f) }, 18), p.Dark, new Vector3(-0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(-0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.028f), new Vector2(0.088f, -0.022f), new Vector2(0.093f, 0.026f), new Vector2(0.083f, 0.04f), new Vector2(0.069f, 0.042f), new Vector2(0.069f, 0.028f), new Vector2(0f, 0.024f) }, 18), p.Dark, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Prism(4, 0.026f, 0.026f, 0.1f, 0.1f, 0f), p.Dark, new Vector3(0f, 1.902f, 0.112f), Quaternion.Euler(24f, 0f, 90f), new Vector3(1f, 1f, 0.6f));
 
             // ---- the gadget (not in the approved block — ported from the pre-MV-669 body) --------
             //
-            // The block's new glove sits at (0.3079, 0.8005, 0.0284), roughly at hip height rather than
-            // the old body's raised, near-chest hand (0.2585, 1.0525, 0.07) — which finally matches the
-            // GDD's own "holds the gadget two-handed AT THE HIP when running" (MaxRig's class doc), not
-            // an accident of the old geometry. Every gadget part below is the old part, translated by
-            // the fixed delta (right glove - old hand) = (+0.0494, -0.2520, -0.0416); rotations and
-            // scales are untouched. The two old hand-wrap prisms (the small p.Dark fists that used to
-            // grip the gun) are dropped — the approved block's own dedicated glove geometry now plays
-            // that role, and keeping both would double up the hand.
-            Add(root, CharacterMeshes.Prism(4, 0.055f, 0.05f, 0.3f, 0.12f, 0f), p.Metal, new Vector3(0.2544f, 0.788f, 0.1084f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.042f, 0.038f, 0.1f, 0.2f, 0f), p.Dark, new Vector3(0.2544f, 0.783f, 0.2984f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(6, 0.03f, 0.026f, 0.06f, 0.25f, 0f), p.Metal, new Vector3(0.2544f, 0.78f, 0.3634f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            gadgetGlow.Add(Lens(root, CharacterMeshes.Lathe(new[] { new Vector2(0.068f, 0f), new Vector2(0.082f, 0.035f), new Vector2(0.082f, 0.15f), new Vector2(0.064f, 0.19f) }, 16), new Vector3(0.2494f, 0.873f, 0.0484f), Quaternion.Euler(78f, -15f, 0f), Vector3.one));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.04f, 0f), new Vector2(0.046f, 0.015f), new Vector2(0.038f, 0.03f) }, 12), p.Dark, new Vector3(0.2494f, 0.873f, 0.2284f), Quaternion.Euler(78f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.2924f, 0.708f, -0.0016f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2324f, 0.738f, 0.2284f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2544f, 0.793f, 0.1834f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            gadgetGlow.Add(Lens(root, CharacterMeshes.Sphere(14), new Vector3(0.2544f, 0.778f, 0.4034f), Quaternion.identity, new Vector3(0.055f, 0.055f, 0.038f)));
+            // Revision 2's re-emitted block moved the right glove to (0.325, 0.769, 0.03) — the block's
+            // header states this explicitly. That is a further (+0.0171, -0.0315, +0.0016) from
+            // revision 1's glove (0.3079, 0.8005, 0.0284), which the gadget below was already re-seated
+            // to (MV-669's first approved-geometry commit). This section is that same revision-1
+            // geometry translated once more by that delta so it stays welded to the new glove; rotations
+            // and scales are still untouched. Combined with the revision-1 shift, the gadget has now
+            // moved a total of (+0.0665, -0.2835, -0.04) from the true pre-MV-669 hand (0.2585, 1.0525,
+            // 0.07) — down to hip height, matching the GDD's "holds the gadget two-handed at the hip".
+            Add(root, CharacterMeshes.Prism(4, 0.055f, 0.05f, 0.3f, 0.12f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Prism(4, 0.042f, 0.038f, 0.1f, 0.2f, 0f), p.Dark, new Vector3(0.2715f, 0.7515f, 0.3f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Prism(6, 0.03f, 0.026f, 0.06f, 0.25f, 0f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            gadgetGlow.Add(Lens(root, CharacterMeshes.Lathe(new[] { new Vector2(0.068f, 0f), new Vector2(0.082f, 0.035f), new Vector2(0.082f, 0.15f), new Vector2(0.064f, 0.19f) }, 16), new Vector3(0.2665f, 0.8415f, 0.05f), Quaternion.Euler(78f, -15f, 0f), Vector3.one));
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.04f, 0f), new Vector2(0.046f, 0.015f), new Vector2(0.038f, 0.03f) }, 12), p.Dark, new Vector3(0.2665f, 0.8415f, 0.23f), Quaternion.Euler(78f, -15f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.3095f, 0.6765f, 0f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2495f, 0.7065f, 0.23f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
+            Add(root, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            gadgetGlow.Add(Lens(root, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.055f, 0.055f, 0.038f)));
 
             return new MaxBodyResult(gadgetGlow.ToArray(), hips);
         }
