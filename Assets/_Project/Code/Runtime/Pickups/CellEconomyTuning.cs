@@ -36,10 +36,11 @@ namespace MaxWorlds.Pickups
             Mathf.Max(0f, CellsAreaIntercept + CellsAreaSlope * Mathf.Max(0, areaIndex - 1));
 
         /// <summary>How many <see cref="MaxWorlds.Pickups.PickupKind.PowerCellSecondary"/> pickups drop
-        /// for every Parts pickup dropped (MV-672) — 1-in-10 by default. Tunable via
-        /// <see cref="MaxWorlds.Core.DevTuning.PowerCellDropRatio"/>; scales
-        /// <see cref="MaxWorlds.Pickups.PickupDirector"/>'s fractional accumulator, not a flat modulo,
-        /// so a non-integer ratio still lands on the right long-run average.</summary>
-        public const float DefaultPowerCellDropRatio = 0.1f;
+        /// for every Parts pickup dropped (MV-672) — roughly 2-in-5 by default (MV-680 raised this from
+        /// 1-in-10; the original rate was too conservative for a currency that gates both Balloons and
+        /// Sentinel deployment). Tunable via <see cref="MaxWorlds.Core.DevTuning.PowerCellDropRatio"/>;
+        /// scales <see cref="MaxWorlds.Pickups.PickupDirector"/>'s fractional accumulator, not a flat
+        /// modulo, so a non-integer ratio still lands on the right long-run average.</summary>
+        public const float DefaultPowerCellDropRatio = 0.4f;
     }
 }

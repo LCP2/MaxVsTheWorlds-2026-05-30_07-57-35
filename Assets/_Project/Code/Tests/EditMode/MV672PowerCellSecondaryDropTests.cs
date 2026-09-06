@@ -75,5 +75,34 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(secondaryDrops, Is.InRange(expected - 1, expected + 1),
                 $"expected ~{expected} Power Cells across {kills} kills at ratio 0.1 (fractional accumulator), got {secondaryDrops}");
         }
+
+        /// <summary>
+        /// MV-680: the authored default drop ratio was raised 0.1 -> 0.4 (too conservative for a
+        /// currency that gates both Balloons and Sentinel deployment). Unlike the test above, this
+        /// leaves <c>DevTuning.PowerCellDropRatio</c> unset (nulled by <c>DevTuning.Reset()</c> in
+        /// SetUp) so <c>PickupDirector</c> must fall through to
+        /// <c>CellEconomyTuning.DefaultPowerCellDropRatio</c> on its own — proving the resolved
+        /// accumulation rate actually tracks the authored default rather than only ever being
+        /// exercised via an explicit override. The expected multiplier is the literal 0.4 rather than
+        /// a read of the constant itself (which would make the assertion self-referential and unable
+        /// to fail): on the pre-fix base commit the constant is still 0.1, so this fails there and
+        /// only passes once the default is actually raised.
+        /// </summary>
+        [Test]
+        public void OnRobotDied_WithNoOverride_DropsPowerCellSecondary_AtTheAuthoredDefaultRatio()
+        {
+            DevTuning.CellsPerLargeKill = 1f;      // deterministic: exactly 1 Parts pickup per large kill
+            Assert.IsFalse(DevTuning.PowerCellDropRatio.HasValue, "test relies on DevTuning.Reset() leaving no override");
+
+            const int kills = 37;   // not a multiple of the ratio's denominator - exercises the fractional remainder
+            for (int i = 0; i < kills; i++)
+                KillOneLargeRobot(_director, new Vector3(i, 0f, 0f));
+
+            int secondaryDrops = LiveList(_director).Count(p => p.Kind == PickupKind.PowerCellSecondary);
+            int expected = Mathf.FloorToInt(kills * 0.4f);
+
+            Assert.That(secondaryDrops, Is.InRange(expected - 1, expected + 1),
+                $"expected ~{expected} Power Cells across {kills} kills at the authored default ratio (0.4), got {secondaryDrops}");
+        }
     }
 }
