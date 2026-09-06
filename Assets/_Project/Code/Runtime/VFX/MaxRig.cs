@@ -141,8 +141,9 @@ namespace MaxWorlds.VFX
         /// <summary>MV-669 approved geometry: the goggle lenses moved off amber to a pale blue-white.
         /// Amber competed with the hoodie for the eye; the pale lens is what makes the raised lens cups
         /// read as two bright discs from the 60-degree camera, which is the whole point of the new
-        /// goggle geometry.</summary>
-        private static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
+        /// goggle geometry. Public: <see cref="MaxPortraitStage"/>'s separate primitive bust reads this
+        /// too (MV-669 rev.3, R6), rather than carrying its own copy of the number that could drift.</summary>
+        public static readonly Color LensGlass = new Color(0.75f, 0.89f, 1f);
 
         /// <summary>The utility belt band — MV-669's one new silhouette-breaker, giving the torso a
         /// middle where the old body had none.</summary>
@@ -174,17 +175,20 @@ namespace MaxWorlds.VFX
         private const float SleeveWidth = 0.155f;
 
         /// <summary>
-        /// MV-669 (Lee: "10% bigger"): the RENDERED body only, applied uniformly at <see cref="_body"/>
-        /// — the rig's model root, which sits at ground level (<c>Pivot("Body", transform,
-        /// Vector3.zero)</c>). Everything below it (<see cref="_torso"/>, the feet, the whole generated
-        /// mesh) is a descendant, so one scale here grows the whole kid together.
+        /// MV-669 (Lee: "10% bigger"), then reverted: applied uniformly at <see cref="_body"/> — the
+        /// rig's model root, which sits at ground level (<c>Pivot("Body", transform, Vector3.zero)</c>)
+        /// — so a non-1 value here would grow the whole kid together. Lee tried the +10% build on
+        /// device and rejected it (revision 2, 2026-09-06): Max ships at 1, his original size. The
+        /// re-emitted body block was independently re-tuned (shorter/thinner legs, upper body dropped
+        /// 0.076 m) to land within 2% of the pre-MV-669 ~1.95 m crown at this scale, so no compensating
+        /// value was needed — see the fix comment for the measured before/after heights.
         ///
         /// This must never touch <see cref="EnemyArchetype.PlayerHeight"/>/<see
         /// cref="EnemyArchetype.PlayerRadius"/> or Max's <c>CharacterController</c> — those drive every
         /// robot's body-separation clamp, the spawn-height maths and the YT-74 "nothing out-sizes Max"
-        /// rule, none of which this ticket asked to move. <see cref="MaxRig"/> is a scene-root object
-        /// that only FOLLOWS Max (see <see cref="Follow"/>) and never touches his collider, so scaling
-        /// this transform cannot reach the CharacterController even by accident.
+        /// rule. <see cref="MaxRig"/> is a scene-root object that only FOLLOWS Max (see
+        /// <see cref="Follow"/>) and never touches his collider, so scaling this transform cannot reach
+        /// the CharacterController even by accident.
         ///
         /// Feet stay on the ground for free: <c>Torso</c> sits at local (0, HipY, 0) under <see
         /// cref="_body"/> and <c>Feet</c> sits at local (0, -HipY, 0) under <c>Torso</c>, so Feet's
@@ -192,7 +196,7 @@ namespace MaxWorlds.VFX
         /// never moves points that already sit at its own origin, so the feet don't float or sink at
         /// any scale factor.
         /// </summary>
-        public const float VisualScale = 1.1f;
+        public const float VisualScale = 1f;
 
         /// <summary>Where the gadget sits when he is just running: down at the hip, across the body,
         /// held two-handed. This is the pose you see 90% of the time.</summary>
@@ -481,7 +485,7 @@ namespace MaxWorlds.VFX
         private void Build()
         {
             _body = Pivot("Body", transform, Vector3.zero);           // leans, at the ground
-            _body.localScale = Vector3.one * VisualScale;              // MV-669: +10% visual, feet stay put
+            _body.localScale = Vector3.one * VisualScale;              // MV-669 rev.2: reverted to 1x
             _torso = Pivot("Torso", _body, new Vector3(0f, HipY, 0f)); // bobs, at the waist
 
             var feet = Pivot("Feet", _torso, new Vector3(0f, -HipY, 0f));
