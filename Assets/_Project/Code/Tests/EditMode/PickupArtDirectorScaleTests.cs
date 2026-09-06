@@ -47,22 +47,46 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>
         /// MV-629 — the everyday power-cell ground pickup read too large next to the rarer Part/Hydro
-        /// drops; Lee wants it scaled down to 60% of its previous 1.6x multiplier (0.96x). Asserts the
-        /// resolved local scale against the literal <c>0.96f</c> rather than against
+        /// drops; scaled down to 60% of its previous 1.6x multiplier (0.96x).
+        ///
+        /// MV-679 — Lee's playtest found that cut read too small; bumped back up to 1.15x. Asserts the
+        /// resolved local scale against the literal <c>1.15f</c> rather than against
         /// <see cref="WeaponPartArt.PowerCellGroundScale"/> itself — comparing to the source constant
-        /// would pass no matter what value it holds, which is exactly the Tier-1 trap this ticket's
-        /// spec calls out.
+        /// would pass no matter what value it holds, which is exactly the Tier-1 trap the original
+        /// MV-629 spec called out.
         /// </summary>
         [Test]
-        public void PowerCell_BuiltArt_IsScaledTo96PercentOfAuthoredGeometry()
+        public void PowerCell_BuiltArt_IsScaledTo115xOfAuthoredGeometry()
         {
             var pickup = BarePickup();
 
             var art = InvokeBuild(pickup, WeaponPartArt.Keys.PowerCell);
 
             Assert.IsNotNull(art, "the power cell prop failed to build");
-            Assert.AreEqual(0.96f, art.localScale.x, 1e-4f,
-                "the power cell's ground art should resolve to 60% of its previous 1.6x scale (MV-629).");
+            Assert.AreEqual(1.15f, art.localScale.x, 1e-4f,
+                "the power cell's ground art should resolve to a 1.15x scale (MV-679).");
+
+            Object.DestroyImmediate(pickup.gameObject);
+        }
+
+        /// <summary>
+        /// MV-679 — the Power Cells crystal pickup (MV-672, PickupKind.PowerCellSecondary) also read too
+        /// small on the ground in Lee's playtest; bumped from 1.2x to 1.4x. Asserts the resolved local
+        /// scale against the literal <c>1.4f</c> for the same reason as
+        /// <see cref="PowerCell_BuiltArt_IsScaledTo115xOfAuthoredGeometry"/> above — comparing to
+        /// <see cref="WeaponPartArt.PowerCellSecondaryGroundScale"/> itself would pass no matter what
+        /// value it holds.
+        /// </summary>
+        [Test]
+        public void PowerCellSecondary_BuiltArt_IsScaledTo14xOfAuthoredGeometry()
+        {
+            var pickup = BarePickup();
+
+            var art = InvokeBuild(pickup, WeaponPartArt.Keys.PowerCellSecondary);
+
+            Assert.IsNotNull(art, "the power cells crystal prop failed to build");
+            Assert.AreEqual(1.4f, art.localScale.x, 1e-4f,
+                "the power cells crystal's ground art should resolve to a 1.4x scale (MV-679).");
 
             Object.DestroyImmediate(pickup.gameObject);
         }

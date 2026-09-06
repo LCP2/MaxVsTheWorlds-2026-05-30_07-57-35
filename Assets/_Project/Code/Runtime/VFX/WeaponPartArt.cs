@@ -280,8 +280,11 @@ namespace MaxWorlds.VFX
         ///
         /// MV-629: Lee wants the everyday cell pickup to read smaller on the ground — cut to 60% of the
         /// above, 1.6 -> 0.96. <see cref="PartGroundScale"/> and <see cref="HydroDeviceGroundScale"/> are
-        /// untouched, so the rarer drops still read as the bigger finds.</summary>
-        public const float PowerCellGroundScale = 0.96f;
+        /// untouched, so the rarer drops still read as the bigger finds.
+        ///
+        /// MV-679: MV-629's cut read too small in Lee's playtest — bumped back up, 0.96 -> 1.15.
+        /// <see cref="PartGroundScale"/> is untouched (out of scope).</summary>
+        public const float PowerCellGroundScale = 1.15f;
 
         /// <summary>A dropped part's machine-internals design (<see cref="MachineInternalsKeys"/>) was
         /// never given a ground multiplier at all — it stayed at its authored size while the power cell
@@ -305,8 +308,11 @@ namespace MaxWorlds.VFX
         /// <summary>The Power Cells crystal's ground scale (MV-672) — pitched between the everyday
         /// power cell (<see cref="PowerCellGroundScale"/>) and a part (<see cref="PartGroundScale"/>):
         /// this currency is scarcer than the everyday cell but this ticket doesn't introduce a rarity
-        /// hierarchy beyond that, so it isn't sized to compete with the rarer Supercell/Device drops.</summary>
-        public const float PowerCellSecondaryGroundScale = 1.2f;
+        /// hierarchy beyond that, so it isn't sized to compete with the rarer Supercell/Device drops.
+        ///
+        /// MV-679: also read too small in Lee's playtest — bumped 1.2 -> 1.4 alongside
+        /// <see cref="PowerCellGroundScale"/>.</summary>
+        public const float PowerCellSecondaryGroundScale = 1.4f;
 
         /// <summary>Hydro rapid condensation device — pulls water from the air, cuts the tether. The
         /// techiest of the five: a glowing core wrapped in condenser coils with radiator fins. It is the
