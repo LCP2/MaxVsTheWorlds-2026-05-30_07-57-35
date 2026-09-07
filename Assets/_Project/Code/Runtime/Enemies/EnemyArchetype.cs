@@ -5,8 +5,8 @@ using MaxWorlds.Arena;
 namespace MaxWorlds.Enemies
 {
     // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Launcher/Blinker/Bolter are new
-    // archetype ROWS, not a renumbering of the existing tiers.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter }
+    // archetype ROWS, not a renumbering of the existing tiers. Lurker (MV-688) follows the same rule.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -27,6 +27,7 @@ namespace MaxWorlds.Enemies
                 case "launcher": kind = EnemyKind.Launcher; return true;
                 case "blinker": kind = EnemyKind.Blinker; return true;
                 case "bolter": kind = EnemyKind.Bolter; return true;
+                case "lurker": kind = EnemyKind.Lurker; return true;
                 default: kind = default; return false;
             }
         }
@@ -343,6 +344,29 @@ namespace MaxWorlds.Enemies
             standoffRange: 4.5f,
             displayName: "BOLTER");
 
+        /// <summary>
+        /// Grate Lurker (MV-688): a thin maintenance bot that stays SUBMERGED — invulnerable and
+        /// invisible, the authored grate itself standing in as its visible body — until Max is close
+        /// and it has been seen once (the universal wake rule), at which point it cycles RATTLE →
+        /// EMERGE (a normal, damageable target for a short combat window) → SUBMERGE → reappear at
+        /// another authored grate (<see cref="LurkerCycle"/> owns the pure timing; killing it while
+        /// emerged is the only way to kill it). No lunge — a quick melee tick instead
+        /// (<see cref="ContactDamage"/> is spent per hit, not per lunge). <see cref="MoveSpeed"/> is
+        /// authored per the ticket but unread: this kind never chases, so kiteability doesn't apply to
+        /// it the way it does every other archetype (deliberately excluded from
+        /// EnemyArchetypeTests.AllArchetypes for that reason).
+        /// </summary>
+        public static EnemyArchetype Lurker => new EnemyArchetype(
+            EnemyKind.Lurker, EnemyShape.Capsule, new Vector3(0.6f, 1.2f, 0.6f),
+            colliderHeight: 1.5f, colliderRadius: 0.3f,
+            moveSpeed: 2.6f, maxHealth: 45f,
+            contactDamage: 11f,    // per hit, spent by RobotEnemy's Lurker-only contact tick, not a lunge
+            contactRadius: 1.0f,
+            lungeRange: 2.2f, telegraphTime: 0.55f,   // unread — Lurker never reaches Telegraph/Lunge
+            lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
+            knockbackDecay: 28f,
+            displayName: "LURKER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -352,6 +376,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Launcher => Launcher,
             EnemyKind.Blinker => Blinker,
             EnemyKind.Bolter => Bolter,
+            EnemyKind.Lurker => Lurker,
             _ => Rusher,
         };
 
@@ -510,6 +535,10 @@ namespace MaxWorlds.Enemies
                 _authored[(int)EnemyKind.Launcher] = composition.launcher;
                 _authored[(int)EnemyKind.Blinker] = composition.blinker;
                 _authored[(int)EnemyKind.Bolter] = composition.bolter;
+                // MV-688: deliberately NOT bound here. A Lurker only ever exists tied to an authored
+                // grate (MapValidation enforces the coincidence) — a shed's ambient release cadence must
+                // never invent one with no grate under it, so this area's authored lurker count stays
+                // out of AreaCadence's ratio math and is only ever drawn by name via garrison placement.
             }
 
             /// <summary>The next kind this shed should release — the allowed kind with the lowest

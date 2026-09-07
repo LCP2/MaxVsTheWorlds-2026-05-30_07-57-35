@@ -63,6 +63,20 @@ namespace MaxWorlds.Arena
         public bool mobile;
     }
 
+    /// <summary>One authored grate (MV-688) a Grate Lurker rises from and submerges back into — a 1 m
+    /// round floor decal, flush with the ground. <see cref="x"/>/<see cref="z"/> are in the SAME
+    /// coordinate space <see cref="WorldGarrisonEntry"/> already uses (absolute, not area-local like
+    /// <see cref="WorldSludge"/>'s MIN-corner rects), since a Lurker's garrison entry must COINCIDE with
+    /// one of these exactly — <see cref="MapValidation"/> checks the two against each other directly,
+    /// with no rect math in between.</summary>
+    [Serializable]
+    public sealed class WorldGrate
+    {
+        public string id;
+        public float x;
+        public float z;
+    }
+
     /// <summary>One authored, exact robot placement (MV-559) — a designer's "this Blinker stands
     /// here" override for <see cref="MaxWorlds.Enemies.Garrison.SeedPositions"/>'s otherwise-even
     /// ring. <see cref="kind"/> is the same lowercase key set <see cref="WorldComposition"/> uses.</summary>
@@ -109,6 +123,11 @@ namespace MaxWorlds.Arena
         public int blinker;
         public int bolter; // MV-539: the fourth ranged/special kind, authored-composition only for now
 
+        /// <summary>MV-688: the Grate Lurker — authored-composition only, same footing as
+        /// <see cref="bolter"/>, and never drawn by <see cref="MaxWorlds.Enemies.EnemyMix.AreaCadence"/>'s
+        /// ambient shed cadence (a Lurker only ever exists tied to an authored grate).</summary>
+        public int lurker;
+
         /// <summary>True if any kind actually has a count — the real "was this authored" signal.
         /// <c>JsonUtility</c> materialises a non-null <see cref="WorldComposition"/> for every area
         /// once ANY area in the array carries the field, even ones whose JSON omits it entirely (a
@@ -117,10 +136,10 @@ namespace MaxWorlds.Arena
         /// null-check would wrongly treat an un-authored area as "authored: 0 robots everywhere".</summary>
         public bool IsAuthored =>
             rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 ||
-            blinker > 0 || bolter > 0;
+            blinker > 0 || bolter > 0 || lurker > 0;
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker);
     }
 
     /// <summary>A world's partial restat/reskin of one <see cref="EnemyKind"/> (MV-701) — e.g. World 2's
@@ -308,6 +327,10 @@ namespace MaxWorlds.Arena
         /// each at its authored <c>kind</c>, and only fills any remaining seed slots from the ring.
         /// Optional; most areas carry none and behave exactly as before.</summary>
         public WorldGarrisonEntry[] garrison = Array.Empty<WorldGarrisonEntry>();
+
+        /// <summary>Authored grates (MV-688) a Grate Lurker garrisoned into this area may rise from and
+        /// reappear at. Optional — most areas carry none.</summary>
+        public WorldGrate[] grates = Array.Empty<WorldGrate>();
 
         /// <summary>Sludge slow-zones authored into this area (MV-692), area-local rects. Optional —
         /// most areas carry none.</summary>
@@ -582,6 +605,9 @@ namespace MaxWorlds.Arena
         // fallback as gunner/launcher/blinker above.
         public WorldEnemyTypeEntry bolter;
 
+        // MV-688: same optional/fallback footing as bolter above.
+        public WorldEnemyTypeEntry lurker;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -593,6 +619,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Launcher => launcher,
                 EnemyKind.Blinker => blinker,
                 EnemyKind.Bolter => bolter,
+                EnemyKind.Lurker => lurker,
                 _ => small,
             };
             return e != null ? e.thv : ThreatValues.Of(kind);
@@ -605,7 +632,8 @@ namespace MaxWorlds.Arena
             c.Rusher * Thv(EnemyKind.Rusher) + c.Bruiser * Thv(EnemyKind.Bruiser) +
             c.Heavy * Thv(EnemyKind.Heavy) + c.Brute * Thv(EnemyKind.Brute) +
             c.Gunner * Thv(EnemyKind.Gunner) + c.Launcher * Thv(EnemyKind.Launcher) +
-            c.Blinker * Thv(EnemyKind.Blinker) + c.Bolter * Thv(EnemyKind.Bolter);
+            c.Blinker * Thv(EnemyKind.Blinker) + c.Bolter * Thv(EnemyKind.Bolter) +
+            c.Lurker * Thv(EnemyKind.Lurker);
     }
 
     /// <summary>A whole world's map, in the 2D-area-placement schema (MV-267, Confluence MVW 34439170
