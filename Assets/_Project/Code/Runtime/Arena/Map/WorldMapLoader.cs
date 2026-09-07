@@ -34,6 +34,10 @@ namespace MaxWorlds.Arena
         /// shared const — see <see cref="ShedFootprint"/>).</summary>
         public const float BossHeight = 3f;
 
+        /// <summary>The suffix on a <see cref="WorldGate.opensWith"/> that marks it a deck-level gate
+        /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
+        public const string DeckGateSuffix = "[DECK]";
+
         /// <summary>Parse a world-config JSON string and load it. The single entry point ticket 4
         /// (MV-270) is expected to call once <c>world1_config.json</c> is wired up as a real map.</summary>
         public static bool TryLoadJson(string json, out MapData map, out string reason)
@@ -71,6 +75,19 @@ namespace MaxWorlds.Arena
 
             if (!MapValidation.ValidateWorldConfig(cfg, out reason)) return false;
 
+            // MV-697: an overlays area shares its target's origin/size BY DEFINITION — copy them now
+            // that validation has already proven any authored value here agreed, so every downstream
+            // reader (zones, decks/ramps/hatches, garrison) resolves off one single authoritative rect
+            // rather than whatever the overlay's own JSON happened to repeat.
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (string.IsNullOrEmpty(a.overlays)) continue;
+                WorldArea target = cfg.Area(a.overlays);
+                if (target == null) continue; // MapValidation already refused this
+                a.origin = target.origin;
+                a.size = target.size;
+            }
+
             // Combat areas 1..dials.areaCount are renamed to the old engine's "area<N>" convention —
             // AreaAccumulationDirector (MV-223/242/245) still resolves a zone's area number by parsing
             // that literal prefix (MV-270), and this is the one place that can translate for it without
@@ -96,6 +113,7 @@ namespace MaxWorlds.Arena
                     z = c.y,
                     width = a.size.w,
                     depth = a.size.d,
+                    level = a.level,
                 };
             }
 
@@ -117,6 +135,14 @@ namespace MaxWorlds.Arena
                 ResolveDoorPosition(fromArea, fromWall, g.from.pos, toArea, toWall, g.to.pos,
                                      out float gx, out float gz);
 
+                // MV-697: an opensWith carrying the "[DECK]" suffix is built at deck height in the wall
+                // instead of the floor — MapRuntime.BuildAreaGate reads this level back off the entity
+                // to shift its base up by MapData.deckHeight. The suffix itself is stripped here; the
+                // remainder is exactly the same inert opensWith data every other gate already carries
+                // (see WorldGate's own doc comment — nothing yet resolves it into locked/unlocked).
+                int gateLevel = !string.IsNullOrEmpty(g.opensWith) &&
+                                g.opensWith.EndsWith(DeckGateSuffix, StringComparison.Ordinal) ? 1 : 0;
+
                 entities.Add(new MapEntity
                 {
                     id = g.id,
@@ -127,6 +153,7 @@ namespace MaxWorlds.Arena
                     // gate towering over (or sunk into) a wall/fence line tuned to a different height.
                     height = wallHeight,
                     depth = 0.6f,
+                    level = gateLevel,
                 });
 
                 links[i] = new MapLink { from = zoneId[g.from.area], to = zoneId[g.to.area], doorway = g.width, gate = g.id };
@@ -200,7 +227,9 @@ namespace MaxWorlds.Arena
             // area's shrub rows are obstacles the moment they're authored, not a parallel mechanic.
             foreach (WorldArea a in cfg.areas)
             {
-                if (a.cover == null) continue;
+                // MV-697: an overlays area shares its target's floor/fence/sludge/cover — it never
+                // builds its own second pass of any of them, only its own decks/ramps/hatches/garrison.
+                if (a.cover == null || !string.IsNullOrEmpty(a.overlays)) continue;
                 foreach (WorldCover c in a.cover)
                 {
                     if (c == null) continue;
@@ -229,6 +258,11 @@ namespace MaxWorlds.Arena
 
             foreach (WorldArea a in cfg.areas)
             {
+                // MV-697: an overlays area shares its target's sludge — see the cover loop above for
+                // the same reasoning.
+                bool isOverlay = !string.IsNullOrEmpty(a.overlays);
+
+                if (!isOverlay)
                 foreach (WorldSludge s in a.sludge ?? Array.Empty<WorldSludge>())
                 {
                     if (s == null) continue;
@@ -295,6 +329,38 @@ namespace MaxWorlds.Arena
                     });
                 }
 
+                // MV-697: hatches — a locked opening lying flat on whichever deck cell it overlaps.
+                // MapValidation has already proven every hatch overlaps a deck in this same area, so
+                // resolving its built height is just reading that deck's own resolved height back off it.
+                foreach (WorldHatch h in a.hatches ?? Array.Empty<WorldHatch>())
+                {
+                    if (h == null) continue;
+                    Rect hatchRect = a.WorldRectOf(h.x, h.z, h.w, h.d);
+
+                    float hatchHeight = defaultDeckHeight;
+                    foreach (var (_, deckRect, deckHeightVal) in deckRects)
+                    {
+                        if (!deckRect.Overlaps(hatchRect)) continue;
+                        hatchHeight = deckHeightVal;
+                        break;
+                    }
+
+                    entities.Add(new MapEntity
+                    {
+                        id = h.id,
+                        kind = "hatch",
+                        x = hatchRect.center.x,
+                        z = hatchRect.center.y,
+                        width = hatchRect.width,
+                        depth = hatchRect.height,
+                        // MapRuntime.BuildHatch reads this back as the flat panel's own world Y — a
+                        // hatch has no vertical door extent the way a wall gate does, so, unlike a gate,
+                        // this field carries the resolved position, not a size.
+                        height = hatchHeight,
+                        level = 1,
+                    });
+                }
+
                 // MV-692 rule 4(c): a deck with no ramp reaching it is a validation WARNING, not an
                 // error, until deck gates ship (MV-697) — logged here rather than failing TryLoad.
                 foreach (var (deck, deckRect, _) in deckRects)
@@ -358,6 +424,7 @@ namespace MaxWorlds.Arena
             {
                 name = string.IsNullOrEmpty(cfg.world) ? "World" : cfg.world,
                 wallHeight = wallHeight,
+                deckHeight = defaultDeckHeight,
                 zones = zones,
                 links = links,
                 entities = entities.ToArray(),

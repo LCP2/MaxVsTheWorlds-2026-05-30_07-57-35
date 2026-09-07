@@ -72,6 +72,13 @@ namespace MaxWorlds.Arena
         public string kind;
         public float x;
         public float z;
+
+        /// <summary>Elevation tier (MV-697), default 0 (floor). 1 means this robot stands on a deck —
+        /// <see cref="MaxWorlds.Enemies.Garrison.SeedSlots(WorldArea, int, WorldConfig)"/> resolves its
+        /// spawn Y to the deck it lands on instead of the floor, and it is what
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.SetLevel"/> reads to leash its steering to that same
+        /// deck rather than letting it climb down.</summary>
+        public int level;
     }
 
     /// <summary>Where the boss stands in its arena (MV-270) — the compost clearing's Big Bermuda.</summary>
@@ -156,6 +163,25 @@ namespace MaxWorlds.Arena
         public float z;
         public float w;
         public float d;
+    }
+
+    /// <summary>A locked deck-cell opening (MV-697) — same area-local MIN-corner convention as
+    /// <see cref="WorldSludge"/>, authored on the same <see cref="WorldArea"/> record as the
+    /// <see cref="WorldDeck"/> it sits on. Built as an <see cref="AreaGate"/> lying flat at the deck's
+    /// height rather than upright in a wall. <see cref="opensWith"/> carries the same condition syntax
+    /// a wall <see cref="WorldGate"/> does, but the condition engine that would resolve anything other
+    /// than <c>"primary"</c> (a <c>replicators-destroyed:</c> list) is MV-703's, not this ticket's —
+    /// until it lands, every hatch behaves as if it read <c>"primary"</c>: breakable by sustained
+    /// primary fire like an ordinary gate, whatever text is actually authored here.</summary>
+    [Serializable]
+    public sealed class WorldHatch
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+        public string opensWith = "primary";
     }
 
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
@@ -250,6 +276,27 @@ namespace MaxWorlds.Arena
         /// <summary>Ramps joining the floor to a deck cell (MV-692), area-local rects. Optional — most
         /// areas carry none.</summary>
         public WorldRamp[] ramps = Array.Empty<WorldRamp>();
+
+        /// <summary>Locked deck-cell openings (MV-697), area-local rects — see <see cref="WorldHatch"/>.
+        /// Optional — most areas carry none.</summary>
+        public WorldHatch[] hatches = Array.Empty<WorldHatch>();
+
+        /// <summary>Elevation tier (MV-697): 0 is the floor, 1 is a deck. Most areas never author this —
+        /// a plain floor room stays 0. An area authored with <see cref="overlays"/> set is always the
+        /// deck side of the pair and carries 1.</summary>
+        public int level;
+
+        /// <summary>The id of the area THIS one is a vertical overlay of (MV-697) — a second visit to a
+        /// footprint World 2 already built once, on the gantries over it (e.g. Junction Hall's floor
+        /// area re-entered later, at deck height, as its own area record). An overlay area shares its
+        /// target's <see cref="origin"/>/<see cref="size"/> by definition:
+        /// <see cref="WorldMapLoader.TryLoad"/> copies them from the target once
+        /// <see cref="MapValidation"/> has proven any authored value here agrees, and it builds neither a
+        /// second floor/fence nor a second sludge/cover pass for it — only this area's OWN
+        /// <see cref="decks"/>/<see cref="ramps"/>/<see cref="hatches"/>/<see cref="garrison"/>/
+        /// <see cref="composition"/> and its own gates. Null (the common case) means an ordinary,
+        /// independent area.</summary>
+        public string overlays;
 
         /// <summary>A named encounter shape for this area (MV-365) — data only, read by
         /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> to bias WHERE within the room a

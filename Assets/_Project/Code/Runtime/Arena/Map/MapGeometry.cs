@@ -320,7 +320,10 @@ namespace MaxWorlds.Arena
 
             foreach (MapZone zone in map.zones)
             {
-                if (zone == null) continue;
+                // MV-697: a level>0 zone is a same-footprint overlay of a level-0 one (the deck version
+                // of a floor room already walled below) — its floor/fence were already built by the
+                // zone it overlays, so walling it again here would double every wall on that footprint.
+                if (zone == null || zone.level > 0) continue;
                 var acrossX = new Span(zone.XMin, zone.XMax);
                 var acrossZ = new Span(zone.ZMin, zone.ZMax);
 
