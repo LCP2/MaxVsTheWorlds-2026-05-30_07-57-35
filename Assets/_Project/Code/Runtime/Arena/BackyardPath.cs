@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
+using MaxWorlds.Rendering;
 using MaxWorlds.Save;
 
 namespace MaxWorlds.Arena
@@ -73,7 +74,8 @@ namespace MaxWorlds.Arena
 
         private void Awake()
         {
-            string key = string.IsNullOrWhiteSpace(worldKey) ? WorldLibrary.KeyForIndex(ActiveWorldIndex()) : worldKey;
+            int worldIndex = ActiveWorldIndex();
+            string key = string.IsNullOrWhiteSpace(worldKey) ? WorldLibrary.KeyForIndex(worldIndex) : worldKey;
 
             WorldConfig cfg = WorldLibrary.Load(key);
             if (cfg == null) return;   // WorldLibrary has already said why
@@ -87,6 +89,12 @@ namespace MaxWorlds.Arena
 
             _layout = MapLayoutBridge.ToLayout(_map);
             _build = MapRuntime.Build(_map, transform);
+
+            // After the geometry exists, not before (MV-690): this is what actually sweeps the floor/
+            // walls/props MapRuntime just built into this world's own biome — WorldMaterials.Install()'s
+            // own AfterSceneLoad self-install runs later still, sees a WorldMaterials already here and
+            // stands down, so this call is what decides the palette a run renders with, not that one.
+            ApplyWorldMaterials(worldIndex);
 
             // ConfigureWorld MUST run before Configure (MV-311): Configure() fills area 1 synchronously,
             // so if the world config lands after that fill, area 1 permanently misses the budget-solver
@@ -122,6 +130,19 @@ namespace MaxWorlds.Arena
         {
             int slot = SaveSystem.ActiveSlot;
             return slot >= 0 ? SaveSystem.Load(slot).WorldIndex : 0;
+        }
+
+        /// <summary>Dresses the arena in the loaded world's own biome (MV-690) — World 1's lawn-green or
+        /// World 2's wet concrete (<see cref="BiomePalette.ForWorld"/>). <see cref="WorldMaterials"/>
+        /// self-installs at <c>AfterSceneLoad</c> with the Backyard default, which runs AFTER this
+        /// Awake — so this call, not that one, is what actually decides the palette a World 2 run
+        /// renders with; finding-or-creating it here rather than waiting for its own install means the
+        /// floor/wall/prop sweep never runs twice with two different palettes.</summary>
+        private static void ApplyWorldMaterials(int worldIndex)
+        {
+            var wm = FindFirstObjectByType<WorldMaterials>();
+            if (wm == null) wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
+            wm.Apply(BiomePalette.ForWorld(worldIndex));
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

@@ -160,7 +160,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Sludge:
-                        BuildSludge(root, e);
+                        BuildSludge(map, root, e);
                         break;
 
                     case EntityKind.Deck:
@@ -178,9 +178,29 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>Acid-green (MV-692) — flat colour only, per the ticket's own scope; the [ART]
-        /// follow-up gives it a flowing UV scroll.</summary>
+        /// <summary>Acid-green (MV-692).</summary>
         private static readonly Color SludgeColor = new Color(0.55f, 0.85f, 0.15f);
+
+        /// <summary>W2 TEAL (MV-690, palette bridge #2fa3b0) — what the sludge grades toward within
+        /// <see cref="OutfallGradeRadius"/> of the outfall gate, per the palette bridge's "teal in,
+        /// acid-green out": seawater pushing in through the broken outfall before the flow has had
+        /// time to turn.</summary>
+        private static readonly Color SludgeTealColor = new Color(0.18f, 0.64f, 0.69f);
+
+        /// <summary>How fast a sludge tile's own material scrolls (MV-690) — closing the "[ART]
+        /// follow-up gives it a flowing UV scroll" note this file used to carry on
+        /// <see cref="SludgeColor"/>.</summary>
+        private static readonly Vector2 SludgeScrollSpeed = new Vector2(0f, 0.12f);
+
+        /// <summary>The id a world authors on the one <see cref="EntityKind.AreaGate"/> the sludge grades
+        /// toward (MV-690) — e.g. World 2's a1 west wall, "the sludge rises where the sea gets in".
+        /// Authoring convention, not a schema field: a gate is marked the outfall purely by giving it
+        /// this id, the same way <c>"big_bermuda"</c> names a boss without a dedicated flag.</summary>
+        private const string OutfallGateId = "outfall";
+
+        /// <summary>Metres from the outfall gate a sludge tile still grades toward teal (MV-690, the
+        /// ticket's own number).</summary>
+        private const float OutfallGradeRadius = 12f;
 
         /// <summary>Flat grate grey (MV-692) — same "flat colour is acceptable" scope as
         /// <see cref="SludgeColor"/>.</summary>
@@ -196,14 +216,35 @@ namespace MaxWorlds.Arena
 
         /// <summary>A sludge slow-zone's ground overlay (MV-692) — visual only, no collider: a mover's
         /// slow is decided by <see cref="MapSlowZones"/> sampling its footprint, not by a physical
-        /// trigger, so nothing here needs to catch anything.</summary>
-        private static void BuildSludge(Transform root, MapEntity e)
+        /// trigger, so nothing here needs to catch anything. MV-690 gives it a flowing UV scroll
+        /// (<see cref="SludgeFlow"/>) and grades its tone toward teal near the outfall.</summary>
+        private static void BuildSludge(MapData map, Transform root, MapEntity e)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
                 new Vector3(e.x, SludgeThickness * 0.5f, e.z), new Vector3(e.width, SludgeThickness, e.depth));
             StripCollider(body);
-            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Prop, SludgeColor));
             body.isStatic = true;
+
+            Material material = MaterialLibrary.Tinted(SurfaceKind.Prop, SludgeToneAt(map, e.CenterXz));
+            Tint(body, material);
+            body.AddComponent<SludgeFlow>().Configure(material, SludgeScrollSpeed);
+        }
+
+        /// <summary>Plain acid green, graded toward <see cref="SludgeTealColor"/> the closer this tile
+        /// stands to the map's outfall gate (MV-690) — "teal in, acid-green out". A map with no gate
+        /// carrying <see cref="OutfallGateId"/> grades nothing, which is exactly what every non-Stormdrain
+        /// map (and today's placeholder World 2 config, which authors no outfall gate yet) already
+        /// does: plain acid green, same as MV-692 shipped.</summary>
+        private static Color SludgeToneAt(MapData map, Vector2 at)
+        {
+            MapEntity outfall = map.Entity(OutfallGateId);
+            if (outfall == null || outfall.Kind != EntityKind.AreaGate) return SludgeColor;
+
+            float distance = Vector2.Distance(at, outfall.CenterXz);
+            if (distance >= OutfallGradeRadius) return SludgeColor;
+
+            float t = 1f - distance / OutfallGradeRadius;
+            return Color.Lerp(SludgeColor, SludgeTealColor, t);
         }
 
         /// <summary>A deck's walkable top slab plus its kerb rails (MV-692) — the rail on whichever
