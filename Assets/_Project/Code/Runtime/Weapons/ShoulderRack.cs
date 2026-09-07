@@ -2,7 +2,6 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
-using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Weapons
 {
@@ -21,15 +20,14 @@ namespace MaxWorlds.Weapons
     /// Salvo track instead, as a capstone; a real node can follow once MV-689 gives THE RIG's buy-flow
     /// its own layout pass.
     ///
-    /// DEVIATION from the ticket's literal step 3: the placeholder mesh is built directly on THIS
-    /// component (Max's own GameObject), not threaded through <see cref="MaxWorlds.VFX.MaxRig"/>'s
-    /// private <c>Build()</c>/pivot hierarchy — reaching into that would need Awake to run (it doesn't,
-    /// in EditMode) or a reflection-driven partial rebuild, for a mesh the [ART] ticket replaces anyway.
-    /// The cost: <see cref="MaxWorlds.Rendering.CharacterSkinDirector"/> repaints every renderer under
-    /// an <c>IDamageable</c> (Max included), so this greybox placeholder tints with him rather than
-    /// keeping its own gunmetal, exactly the trap <c>MaxRig</c>'s own class doc warns about. Acceptable
-    /// for a greybox-only placeholder; migrate onto a real <c>MaxRig</c> mount if the tint bothers the
-    /// art pass.
+    /// MV-702 resolves the deviation this class used to carry: the mount mesh now lives on
+    /// <see cref="MaxWorlds.VFX.MaxRig"/> (built once in <see cref="MaxWorlds.VFX.MaxBody.Build"/>,
+    /// alongside the LPPE gadget it's welded to), reading <see cref="IsBought"/>/
+    /// <see cref="ReloadFraction01"/> off this component instead of owning a placeholder GameObject
+    /// itself — which also fixes the tint bug the old placeholder had (built on Max's own
+    /// <c>IDamageable</c> GameObject, <see cref="MaxWorlds.Rendering.CharacterSkinDirector"/> repainted
+    /// it flat with him; <c>MaxRig</c> is a scene-root object outside any <c>IDamageable</c>, exactly
+    /// the trap its own class doc warns about).
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class ShoulderRack : MonoBehaviour
@@ -39,18 +37,27 @@ namespace MaxWorlds.Weapons
 
         private static readonly Collider[] s_hits = new Collider[16];
 
-        private static readonly Color RackColor = new Color(0.35f, 0.36f, 0.4f);
-
         // Starts at the base reload so the very first salvo waits a full reload window rather than
         // firing on the first tick — a field initializer, not Awake, since EditMode never runs Awake
         // (MV694ShoulderRackTests adds this component directly).
         private float _reloadCooldown = AbilityTuning.DefaultShoulderRackBaseReloadSeconds;
 
-        private GameObject _mount;
+        /// <summary>Whether the rack is bought — <c>s_rkt</c> reaches L1 — the resolved value
+        /// <see cref="MaxWorlds.VFX.MaxRig"/> reads to show/hide its mount mesh (AC2, carried over from
+        /// MV-694's own placeholder).</summary>
+        public bool IsBought => WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.RocketDamage) >= 1;
 
-        /// <summary>The placeholder mesh's root — <c>MV694ShoulderRackTests</c> reads
-        /// <c>activeInHierarchy</c> off this directly (AC2).</summary>
-        public GameObject MountForTests => _mount;
+        /// <summary>0 right after a salvo fires, 1 once the reload window has fully elapsed — what
+        /// <c>MaxRig</c> lerps its tube glow across ("tubes glow as they reload"). 0 while unbought.</summary>
+        public float ReloadFraction01
+        {
+            get
+            {
+                if (!IsBought) return 0f;
+                float total = ReloadSecondsNow(WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.RocketDamage));
+                return total <= 0f ? 1f : 1f - Mathf.Clamp01(_reloadCooldown / total);
+            }
+        }
 
         private void Update() => Tick(Time.deltaTime);
 
@@ -62,7 +69,6 @@ namespace MaxWorlds.Weapons
         public void Tick(float dt)
         {
             int rocketLevel = WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.RocketDamage);
-            RefreshMountVisibility(rocketLevel);
 
             if (WeaponSystemState.SecondaryKind != SecondaryKind.ShoulderRack) return;
             if (rocketLevel < 1) return;   // s_rkt unowned — the rack isn't bought yet
@@ -84,63 +90,6 @@ namespace MaxWorlds.Weapons
 
             FireSalvo(target, rocketLevel);
             _reloadCooldown = ReloadSecondsNow(rocketLevel);
-        }
-
-        /// <summary>Builds the mount the first time it's actually needed and syncs its visibility to
-        /// whether the rack is bought (<paramref name="rocketLevel"/> &gt;= 1) — AC2's "shown only when
-        /// bought." Lazy, same "most sessions never touch this" rationale
-        /// <see cref="PlayerAbilities.SplashVfx"/> uses: building the placeholder geometry for every Max
-        /// who never buys the rack (everyone, for the whole of World 1) would be pure waste.</summary>
-        private void RefreshMountVisibility(int rocketLevel)
-        {
-            if (rocketLevel < 1)
-            {
-                if (_mount != null) _mount.SetActive(false);
-                return;
-            }
-
-            EnsureMount();
-            _mount.SetActive(true);
-        }
-
-        private void EnsureMount()
-        {
-            if (_mount != null) return;
-
-            _mount = new GameObject("ShoulderRackMount");
-            _mount.transform.SetParent(transform, worldPositionStays: false);
-            // Roughly the right shoulder of a ~1.9m-tall Max, forward of the torso.
-            _mount.transform.localPosition = new Vector3(0.32f, 1.35f, 0.05f);
-            _mount.AddComponent<KeepsOwnMaterial>();
-
-            Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, RackColor);
-
-            var body = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            body.name = "RackBody";
-            StripCollider(body);
-            body.transform.SetParent(_mount.transform, false);
-            body.transform.localScale = new Vector3(0.35f, 0.12f, 0.12f);
-            if (mat != null) body.GetComponent<MeshRenderer>().sharedMaterial = mat;
-
-            for (int i = 0; i < 3; i++)
-            {
-                var tube = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-                tube.name = "Tube";
-                StripCollider(tube);
-                tube.transform.SetParent(_mount.transform, false);
-                tube.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-                tube.transform.localScale = new Vector3(0.06f, 0.2f, 0.06f);
-                tube.transform.localPosition = new Vector3(0f, (i - 1) * 0.09f, 0.1f);
-                if (mat != null) tube.GetComponent<MeshRenderer>().sharedMaterial = mat;
-            }
-        }
-
-        private static void StripCollider(GameObject go)
-        {
-            var col = go.GetComponent<Collider>();
-            if (col == null) return;
-            if (Application.isPlaying) Destroy(col);
-            else DestroyImmediate(col);
         }
 
         private static float ReloadSecondsNow(int rocketLevel) => AbilityTuning.ShoulderRackReloadSeconds(

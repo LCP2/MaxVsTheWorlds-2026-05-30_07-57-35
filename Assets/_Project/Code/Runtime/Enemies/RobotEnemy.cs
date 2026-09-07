@@ -653,6 +653,7 @@ namespace MaxWorlds.Enemies
             if (Current == State.Dead) return;
             _stunTimer = Mathf.Max(_stunTimer, seconds);
             SetTell(ShockTell);
+            ShockZigzagVfx.Show(transform, _stunTimer);   // MV-702: the "yellow zigzag flash" the spec names
         }
 
         private void Awake()

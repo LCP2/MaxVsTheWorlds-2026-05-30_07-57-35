@@ -4,6 +4,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.VFX
 {
@@ -151,6 +152,17 @@ namespace MaxWorlds.VFX
 
         /// <summary>The pouches riding on the belt. A shade darker than the band itself.</summary>
         private static readonly Color Pouch = new Color(0.23f, 0.20f, 0.17f);
+
+        /// <summary>MV-702: the LPPE's own cyan-white lens — <see cref="LensGlass"/>, to the digit, so
+        /// the gadget's glow reads as the same "pale blue-white" family the goggles already established,
+        /// distinct from the RCDA's more saturated water-cyan tank glow (<see cref="Water"/>).</summary>
+        private static readonly Color LppeLens = LensGlass;
+
+        /// <summary>The Shoulder Rack's tubes, dim while reloading. <see cref="RackTubeReady"/> is the
+        /// colour they lerp to as they finish reloading — the same cyan-white family as the LPPE's own
+        /// lens, since the rack is welded to the LPPE's own primary once World 2's morph fires.</summary>
+        private static readonly Color RackTubeCharging = LensGlass * 0.25f;
+        private static readonly Color RackTubeReady = LensGlass;
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
@@ -311,6 +323,14 @@ namespace MaxWorlds.VFX
         /// returns. The only cool light in the whole cast; see <see cref="Water"/>.</summary>
         private MeshRenderer[] _gadgetGlow;
 
+        /// <summary>MV-702: the two gadget submeshes toggled on <see cref="WeaponSystemState.ActivePrimary"/>,
+        /// the LPPE's own lens (tinted separately from the RCDA's), and the Shoulder Rack's mount + its
+        /// three tube-tip lenses (migrated here from <c>ShoulderRack</c>'s own placeholder — see that
+        /// class's history).</summary>
+        private GameObject _rcdaGadget, _lppeGadget, _rackMount;
+        private MeshRenderer[] _lppeGlow, _rackTubeGlow;
+        private ShoulderRack _shoulderRack;
+
         private Material _skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat, _darkMat,
                          _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat, _beltMat, _pouchMat;
         private MaterialPropertyBlock _lensMpb;
@@ -350,6 +370,7 @@ namespace MaxWorlds.VFX
             if (_max == null) return;
 
             _blaster = _max.GetComponent<WaterBlaster>();
+            _shoulderRack = _max.GetComponent<ShoulderRack>();
 
             // RuntimeSurfaceDirector honours this, and it covers everything parented below us. Without
             // it, the director classifies each part BY SHAPE and repaints the backpack as a paving
@@ -372,6 +393,13 @@ namespace MaxWorlds.VFX
             }
 
             Build();
+
+            // MV-702: the LPPE gadget only shows once WeaponSystemState.ActivePrimary flips (MV-689's
+            // World 2 morph) — both submeshes are already built (see Build()/MaxBody.Build), so this is
+            // a visibility flip, not a rebuild. Subscribed once, for the rig's whole lifetime; matched
+            // by the unsubscribe in OnDestroy.
+            ApplyPrimaryVisual();
+            WeaponSystemState.Changed += ApplyPrimaryVisual;
 
             // Stand him on Max BEFORE the first frame, or he spends frame one at the world origin and
             // frame two three metres away — and the hair, which reads its whip off how far he actually
@@ -497,6 +525,12 @@ namespace MaxWorlds.VFX
             _hips[0] = body.Hips[0];
             _hips[1] = body.Hips[1];
 
+            _rcdaGadget = body.RcdaGadget;
+            _lppeGadget = body.LppeGadget;
+            _lppeGlow = body.LppeGlow;
+            _rackMount = body.RackMount;
+            _rackTubeGlow = body.RackTubeGlow;
+
             // The gadget glow is the only COOL light in the whole cast, against every robot's warm eye
             // (see the class doc). Coloured once here, the same way the old goggle lenses were.
             if (_lensMpb == null) _lensMpb = new MaterialPropertyBlock();
@@ -508,6 +542,35 @@ namespace MaxWorlds.VFX
                 _lensMpb.SetColor(BaseColorId, Water);
                 r.SetPropertyBlock(_lensMpb);
             }
+
+            // MV-702: the LPPE's own lens, tinted separately (see LppeLens's doc for why).
+            for (int i = 0; i < _lppeGlow.Length; i++)
+            {
+                var r = _lppeGlow[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_lensMpb);
+                _lensMpb.SetColor(BaseColorId, LppeLens);
+                r.SetPropertyBlock(_lensMpb);
+            }
+        }
+
+        /// <summary>MV-702: shows the gadget submesh matching <see cref="WeaponSystemState.ActivePrimary"/>
+        /// and hides the other — both are already built (see <see cref="Build"/>), so this is a
+        /// visibility flip, not a rebuild. Runs once at build time and again every time
+        /// <see cref="WeaponSystemState.Changed"/> fires (MV-689's World 2 morph is the only thing that
+        /// ever actually changes it mid-run).</summary>
+        private void ApplyPrimaryVisual() => ApplyPrimaryVisual(_rcdaGadget, _lppeGadget, WeaponSystemState.ActivePrimary);
+
+        /// <summary>The toggle rule itself, pulled out as a pure static so an EditMode test can prove
+        /// the resolved <c>GameObject.activeSelf</c> state directly off <see cref="MaxBody.Build"/>'s
+        /// own output — <see cref="Awake"/> requires a live <see cref="PlayerController"/> in the scene,
+        /// which <see cref="MaxBody.Build"/> does not.</summary>
+        public static void ApplyPrimaryVisual(GameObject rcdaGadget, GameObject lppeGadget,
+            WeaponCatalog.PrimaryKind primary)
+        {
+            bool lppe = primary == WeaponCatalog.PrimaryKind.Lppe;
+            if (rcdaGadget != null) rcdaGadget.SetActive(!lppe);
+            if (lppeGadget != null) lppeGadget.SetActive(lppe);
         }
 
         private static Transform Pivot(string name, Transform parent, Vector3 at)
@@ -540,6 +603,7 @@ namespace MaxWorlds.VFX
 
             TickRun(dt);
             TickGadget(dt);
+            TickShoulderRackMount();
             TickSecondary(dt);
 
             // The sleeves go LAST. They are stretched between the shoulders and the hands, and both of
@@ -646,6 +710,26 @@ namespace MaxWorlds.VFX
             _gun.localRotation = rot;
         }
 
+        /// <summary>MV-702: shows the Shoulder Rack mount once <see cref="ShoulderRack.IsBought"/> (AC2,
+        /// carried over from MV-694's own placeholder), and glows its three tubes from dim to bright as
+        /// <see cref="ShoulderRack.ReloadFraction01"/> climbs back to 1 — "tubes glow as they reload".</summary>
+        private void TickShoulderRackMount()
+        {
+            bool bought = _shoulderRack != null && _shoulderRack.IsBought;
+            if (_rackMount != null && _rackMount.activeSelf != bought) _rackMount.SetActive(bought);
+            if (!bought || _rackTubeGlow == null) return;
+
+            Color glow = Color.Lerp(RackTubeCharging, RackTubeReady, _shoulderRack.ReloadFraction01);
+            for (int i = 0; i < _rackTubeGlow.Length; i++)
+            {
+                var r = _rackTubeGlow[i];
+                if (r == null) continue;
+                r.GetPropertyBlock(_lensMpb);
+                _lensMpb.SetColor(BaseColorId, glow);
+                r.SetPropertyBlock(_lensMpb);
+            }
+        }
+
         /// <summary>
         /// The hair and the charms lag behind him, then catch up.
         ///
@@ -719,6 +803,8 @@ namespace MaxWorlds.VFX
 
         private void OnDestroy()
         {
+            WeaponSystemState.Changed -= ApplyPrimaryVisual;
+
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
             Kill(_skinMat); Kill(_hairMat); Kill(_jacketMat); Kill(_hoodMat); Kill(_fabricMat);
             Kill(_darkMat); Kill(_bootMat); Kill(_soleMat); Kill(_metalMat); Kill(_eyeMat); Kill(_goggleMat);

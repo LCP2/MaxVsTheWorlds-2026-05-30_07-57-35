@@ -98,11 +98,40 @@ namespace MaxWorlds.Weapons
             shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
             shaft.transform.localScale = new Vector3(0.10f, 0.16f, 0.10f);
             if (bodyMat != null) shaft.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
+
+            BuildSmokeTrail(parent);
         }
 
-        /// <summary>Gunmetal — the rack's own placeholder is greybox (MV-694 step 3); the [ART] ticket
-        /// restyles both the mount and the rocket it fires.</summary>
+        /// <summary>The ticket's "rocket smoke trail" — same build idiom
+        /// <see cref="MaxWorlds.Enemies.HomingMissile.BuildTrail"/> and <see cref="SeekerPulse"/>'s own
+        /// bolt trail use, just wider/longer-lived and grey rather than a weapon-coloured bolt smear, so
+        /// it reads as smoke rather than an energy streak.</summary>
+        private static void BuildSmokeTrail(Transform parent)
+        {
+            var trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = 0.35f;
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = 0.14f;
+            trail.minVertexDistance = 0.03f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, SmokeColor);
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(SmokeColor, 0f), new GradientColorKey(SmokeColor, 1f) },
+                new[] { new GradientAlphaKey(0.55f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
+
+            trail.Clear();
+        }
+
+        /// <summary>Gunmetal — restyled by MV-702, the [ART] ticket MV-694's own doc pointed at.</summary>
         private static readonly Color BodyColor = new Color(0.35f, 0.36f, 0.4f);
+
+        /// <summary>The smoke trail's colour (MV-702) — pale grey, distinct from every weapon-coloured
+        /// trail in the cast (the LPPE bolt's cyan-white, the missile's own shaft tint).</summary>
+        private static readonly Color SmokeColor = new Color(0.6f, 0.6f, 0.58f);
 
         private static void Strip(GameObject go)
         {
@@ -156,6 +185,7 @@ namespace MaxWorlds.Weapons
             s_active.Remove(this);
 
             ApplySplashDamage(transform.position, _damage, _splashRadius);
+            RocketImpactVfx.PlaySplashRing(transform.position, _splashRadius);
             if (_cluster) SpawnClusterBomblets(transform.position);
 
             Destroy(gameObject);
@@ -189,6 +219,7 @@ namespace MaxWorlds.Weapons
                 float angle = i * (360f / ClusterBombletCount) * Mathf.Deg2Rad;
                 Vector3 point = center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ClusterRingRadius;
                 ApplySplashDamage(point, ClusterBombletDamage, ClusterBombletSplash);
+                RocketImpactVfx.PlayBombletPop(point);
             }
         }
     }
