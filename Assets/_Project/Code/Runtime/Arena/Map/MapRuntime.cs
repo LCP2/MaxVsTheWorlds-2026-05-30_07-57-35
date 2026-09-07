@@ -159,6 +159,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Ramp:
                         BuildRamp(map, root, e);
                         break;
+
+                    case EntityKind.Hatch:
+                        BuildHatch(e, root, built);
+                        break;
                 }
             }
         }
@@ -298,6 +302,29 @@ namespace MaxWorlds.Arena
             body.transform.localScale = new Vector3(slab.Width, RampThickness, slopeLength);
             Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
             body.isStatic = true;
+        }
+
+        /// <summary>A hatch's flat panel thickness (MV-697) — thicker than a deck's own 0.15 m grate
+        /// slab so it reads as a solid, lockable plate rather than more grating.</summary>
+        private const float HatchThickness = 0.3f;
+
+        /// <summary>A locked deck-cell opening (MV-697): an <see cref="AreaGate"/> exactly like a wall
+        /// gate mechanically (its own HP, breakable by sustained primary fire, opens on destruction) but
+        /// built lying flat at the deck's own resolved height instead of upright in a wall — the entity's
+        /// <see cref="MapEntity.height"/> IS that resolved Y (<see cref="WorldMapLoader"/>'s doc comment
+        /// on the field). MV-703's condition engine (<c>replicators-destroyed:</c>) does not exist yet,
+        /// so every hatch is left unlocked regardless of its authored <c>opensWith</c> — see
+        /// <see cref="WorldHatch"/>'s own doc comment.</summary>
+        private static void BuildHatch(MapEntity e, Transform root, MapBuild built)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
+                new Vector3(e.x, e.height, e.z), new Vector3(e.width, HatchThickness, e.depth));
+            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
+
+            MarkDiscoverable(body);
+            body.AddComponent<AreaGate>(); // Locked defaults false — unlocked until MV-703 exists to read a real condition
+
+            built.Actors[e.id] = body;
         }
 
         private static void StripCollider(GameObject go)
@@ -526,7 +553,12 @@ namespace MaxWorlds.Arena
 
         private static GameObject BuildAreaGate(MapData map, MapEntity e, Transform root, MapBuild built)
         {
-            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter,
+            // MV-697: a deck-level gate (opensWith carried "[DECK]") is built at deck height in the
+            // wall instead of the floor — everything else about it (width, hinge, lock) is identical.
+            float baseY = e.level > 0 ? map.deckHeight : 0f;
+            var center = new Vector3(e.x, baseY + e.height * 0.5f, e.z);
+
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, center,
                 new Vector3(SealWidth(map, e), e.height, e.depth + AntiZFightMargin));
 
             // The box is built for an N/S-wall doorway (width along local X, thickness along local Z —

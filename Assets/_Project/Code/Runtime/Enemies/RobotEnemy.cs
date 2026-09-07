@@ -205,7 +205,53 @@ namespace MaxWorlds.Enemies
             knockbackDecay = a.KnockbackDecay;
             standoffRange = a.StandoffRange;
             teleportCooldown = a.TeleportCooldown;
+            // MV-697: a pooled instance must never carry a previous spawn's deck leash into its next
+            // life — the common case (Level 0, no footprint) is the correct default until whoever
+            // places this robot next calls SetLevel/SetDeckFootprint again.
+            Level = 0;
+            _deckRects = null;
             ResetState();
+        }
+
+        /// <summary>Elevation tier (MV-697), set at spawn from the authored garrison entry's
+        /// <see cref="WorldGarrisonEntry.level"/> (0 for every ambient/queue-released robot, which never
+        /// calls this). A level-1 robot's steering is leashed to <see cref="SetDeckFootprint"/>'s union
+        /// of deck rects; a level-0 robot ignores ramps and decks entirely — it is not clamped to
+        /// anything and walks straight under them.</summary>
+        public int Level { get; private set; }
+
+        public void SetLevel(int level) => Level = level;
+
+        private List<Rect> _deckRects;
+
+        /// <summary>Gives a level-1 robot its deck leash (MV-697) — the same
+        /// <see cref="MaxWorlds.Factories.MowerHutch.SetAreaFootprint"/> idiom MV-683 gave a mobile
+        /// shed, extended to a union of rects rather than one, since a deck's own footprint need not be
+        /// convex or singular. A robot never given one (every level-0 robot) is never clamped.</summary>
+        public void SetDeckFootprint(List<Rect> deckRects) => _deckRects = deckRects;
+
+        /// <summary>MV-697's leash: holds this robot's X/Z to the nearest point inside the union of its
+        /// deck rects — the one thing ordinary wall collision does not stop it walking off (a deck has
+        /// no railing on the edge a ramp climbs into). A no-op with no footprint set.</summary>
+        private void ClampToDeckFootprint()
+        {
+            if (_deckRects == null || _deckRects.Count == 0) return;
+
+            Vector3 p = transform.position;
+            var point = new Vector2(p.x, p.z);
+            foreach (Rect r in _deckRects)
+                if (r.Contains(point)) return;
+
+            Vector2 nearest = point;
+            float bestDistSq = float.MaxValue;
+            foreach (Rect r in _deckRects)
+            {
+                var candidate = new Vector2(Mathf.Clamp(p.x, r.xMin, r.xMax), Mathf.Clamp(p.z, r.yMin, r.yMax));
+                float distSq = (candidate - point).sqrMagnitude;
+                if (distSq < bestDistSq) { bestDistSq = distSq; nearest = candidate; }
+            }
+
+            transform.position = new Vector3(nearest.x, p.y, nearest.y);
         }
 
         /// <summary>How far through the wind-up this enemy is, 0..1 (0 when not telegraphing).
@@ -627,6 +673,7 @@ namespace MaxWorlds.Enemies
 
             ApplyKnockback(dt);
             ApplyGravity(dt);
+            ClampToDeckFootprint(); // MV-697: applied after every state's own movement, regardless of state
 
             // MV-611: keeps this robot's own entry in the shared neighbour grid current every tick,
             // REGARDLESS of state — a Dormant/Telegraphing/Lunging robot must still be found by another
@@ -758,8 +805,8 @@ namespace MaxWorlds.Enemies
             MapData map = EnemyNavigation.Map;
             if (map == null || _playerTarget == null) return false;
 
-            MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.z);
-            MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.z);
+            MapZone robotZone = map.ZoneAt(transform.position.x, transform.position.y, transform.position.z);
+            MapZone playerZone = map.ZoneAt(_playerTarget.position.x, _playerTarget.position.y, _playerTarget.position.z);
             if (robotZone == null || playerZone == null) return false;
 
             int robotArea = AreaAccumulationDirector.AreaIndexOf(robotZone.id);

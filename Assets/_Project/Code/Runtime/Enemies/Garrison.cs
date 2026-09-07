@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 
@@ -50,7 +51,13 @@ namespace MaxWorlds.Enemies
         {
             public readonly Vector3 Position;
             public readonly EnemyKind? Kind;
-            public Seed(Vector3 position, EnemyKind? kind) { Position = position; Kind = kind; }
+
+            /// <summary>Elevation tier (MV-697) — an authored entry's own <see cref="WorldGarrisonEntry.level"/>,
+            /// or the seeding area's <see cref="WorldArea.level"/> for a ring-filled slot with no
+            /// authored entry of its own. 0 (floor) for every world that has never authored a deck.</summary>
+            public readonly int Level;
+
+            public Seed(Vector3 position, EnemyKind? kind, int level = 0) { Position = position; Kind = kind; Level = level; }
         }
 
         /// <summary>Deterministic, authored-not-random placement for garrison slots in
@@ -80,17 +87,80 @@ namespace MaxWorlds.Enemies
             {
                 WorldGarrisonEntry entry = authored[i];
                 EnemyKind? kind = EnemyKindNames.TryParse(entry.kind, out EnemyKind k) ? k : (EnemyKind?)null;
-                slots[i] = new Seed(new Vector3(entry.x, 0f, entry.z), kind);
+                slots[i] = new Seed(new Vector3(entry.x, 0f, entry.z), kind, entry.level);
             }
 
             if (remaining > 0)
             {
                 Vector3[] ring = RingPositions(area, remaining);
                 for (int i = 0; i < remaining; i++)
-                    slots[authoredUsed + i] = new Seed(ring[i], null);
+                    slots[authoredUsed + i] = new Seed(ring[i], null, area.level);
             }
 
             return slots;
+        }
+
+        /// <summary>Same as <see cref="SeedSlots(WorldArea, int)"/>, but a level-1 (MV-697) slot's Y is
+        /// resolved to the deck it actually lands on instead of the floor — <paramref name="area"/>'s
+        /// own <see cref="WorldArea.decks"/> when it authors them directly, or its overlay target's when
+        /// <paramref name="area"/> is itself the deck-side overlay of another area (the common World 2
+        /// shape: the floor room authors the deck geometry, the gantry revisit authors the garrison that
+        /// stands on it). A slot whose resolved Y misses every deck rect falls back to the world's own
+        /// <see cref="WorldDials.deckHeight"/> rather than staying on the floor — a level-1 slot is never
+        /// meant to be walkable at y=0.</summary>
+        public static Seed[] SeedSlots(WorldArea area, int count, WorldConfig cfg)
+        {
+            Seed[] slots = SeedSlots(area, count);
+            if (cfg == null || slots.Length == 0) return slots;
+
+            List<Rect> deckRects = DeckFootprints(area, cfg, out float defaultDeckHeight, out List<float> deckHeights);
+            if (deckRects.Count == 0) return slots;
+
+            for (int i = 0; i < slots.Length; i++)
+            {
+                if (slots[i].Level <= 0) continue;
+
+                Vector3 pos = slots[i].Position;
+                float y = defaultDeckHeight;
+                for (int d = 0; d < deckRects.Count; d++)
+                {
+                    if (!deckRects[d].Contains(new Vector2(pos.x, pos.z))) continue;
+                    y = deckHeights[d];
+                    break;
+                }
+
+                slots[i] = new Seed(new Vector3(pos.x, y, pos.z), slots[i].Kind, slots[i].Level);
+            }
+
+            return slots;
+        }
+
+        /// <summary>The deck rects a level-1 robot garrisoned into <paramref name="area"/> may stand on
+        /// (MV-697) — <paramref name="area"/>'s own <see cref="WorldArea.decks"/>, or its overlay
+        /// target's when <paramref name="area"/> is itself the overlay. Empty for an area with no deck
+        /// geometry to leash to at all. Public so <see cref="MaxWorlds.Enemies.RobotEnemy.SetDeckFootprint"/>
+        /// can be handed the exact same union <see cref="SeedSlots(WorldArea, int, WorldConfig)"/>
+        /// resolved a garrisoned robot's spawn height against.</summary>
+        public static List<Rect> DeckFootprints(WorldArea area, WorldConfig cfg) =>
+            DeckFootprints(area, cfg, out _, out _);
+
+        private static List<Rect> DeckFootprints(WorldArea area, WorldConfig cfg, out float defaultDeckHeight, out List<float> heights)
+        {
+            var rects = new List<Rect>();
+            heights = new List<float>();
+            defaultDeckHeight = cfg?.dials?.deckHeight ?? 2.5f;
+
+            WorldArea deckSource = area != null && !string.IsNullOrEmpty(area.overlays) ? cfg?.Area(area.overlays) : area;
+            if (deckSource?.decks == null) return rects;
+
+            foreach (WorldDeck d in deckSource.decks)
+            {
+                if (d == null) continue;
+                rects.Add(deckSource.WorldRectOf(d.x, d.z, d.w, d.d));
+                heights.Add(d.height > 0f ? d.height : defaultDeckHeight);
+            }
+
+            return rects;
         }
 
         /// <summary>Just the positions from <see cref="SeedSlots"/> — every existing caller that only
@@ -98,6 +168,17 @@ namespace MaxWorlds.Enemies
         public static Vector3[] SeedPositions(WorldArea area, int count)
         {
             Seed[] slots = SeedSlots(area, count);
+            var positions = new Vector3[slots.Length];
+            for (int i = 0; i < slots.Length; i++) positions[i] = slots[i].Position;
+            return positions;
+        }
+
+        /// <summary>Just the positions from <see cref="SeedSlots(WorldArea, int, WorldConfig)"/> — same
+        /// relationship to it as <see cref="SeedPositions(WorldArea, int)"/> has to the 2-arg
+        /// <see cref="SeedSlots(WorldArea, int)"/>.</summary>
+        public static Vector3[] SeedPositions(WorldArea area, int count, WorldConfig cfg)
+        {
+            Seed[] slots = SeedSlots(area, count, cfg);
             var positions = new Vector3[slots.Length];
             for (int i = 0; i < slots.Length; i++) positions[i] = slots[i].Position;
             return positions;

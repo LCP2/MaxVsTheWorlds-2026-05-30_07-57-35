@@ -529,6 +529,25 @@ namespace MaxWorlds.Arena
                         return false;
                     }
                 }
+
+                // MV-697: a hatch is a locked opening ON a deck cell, not free-floating geometry — it
+                // must sit inside its own area's floor AND actually overlap one of that area's decks,
+                // or there is no deck for WorldMapLoader to resolve its built height from.
+                foreach (WorldHatch h in a.hatches ?? Array.Empty<WorldHatch>())
+                {
+                    if (h == null) { reason = $"area '{a.id}' has a null hatch"; return false; }
+
+                    Rect rect = a.WorldRectOf(h.x, h.z, h.w, h.d);
+                    if (!RectInsideArea(rect, a))
+                    { reason = $"area '{a.id}': hatch '{h.id}' rect falls outside the area floor"; return false; }
+
+                    bool onDeck = false;
+                    foreach (Rect deckRect in deckRects)
+                        if (deckRect.Overlaps(rect)) { onDeck = true; break; }
+
+                    if (!onDeck)
+                    { reason = $"area '{a.id}': hatch '{h.id}' does not sit on any of the area's deck cells"; return false; }
+                }
             }
 
             reason = null;
@@ -715,9 +734,33 @@ namespace MaxWorlds.Arena
                 { reason = $"area '{a.id}' has no area ({a.size?.w ?? 0f}×{a.size?.d ?? 0f})"; return false; }
             }
 
+            // MV-697: an overlays area must name a real target, and if it authors its own origin/size
+            // they must agree with the target's — WorldMapLoader.TryLoad copies the target's onto it
+            // right after validation passes, so a silent mismatch here would otherwise just vanish
+            // instead of being caught.
+            foreach (WorldArea a in cfg.areas)
+            {
+                if (string.IsNullOrEmpty(a.overlays)) continue;
+
+                WorldArea target = cfg.Area(a.overlays);
+                if (target == null)
+                { reason = $"area '{a.id}' overlays unknown area '{a.overlays}'"; return false; }
+
+                if (!Geo.Same(a.XMin, target.XMin) || !Geo.Same(a.XMax, target.XMax) ||
+                    !Geo.Same(a.ZMin, target.ZMin) || !Geo.Same(a.ZMax, target.ZMax))
+                {
+                    reason = $"area '{a.id}' overlays '{target.id}' but its origin/size disagree";
+                    return false;
+                }
+            }
+
             for (int i = 0; i < cfg.areas.Length; i++)
             for (int j = i + 1; j < cfg.areas.Length; j++)
             {
+                // MV-697: an overlay area shares its target's exact footprint on purpose — the same
+                // gantry-over-a-floor-room revisit AreasOverlap otherwise exists to refuse.
+                if (IsOverlayPair(cfg.areas[i], cfg.areas[j])) continue;
+
                 if (AreasOverlap(cfg.areas[i], cfg.areas[j]))
                 {
                     reason = $"area '{cfg.areas[i].id}' overlaps area '{cfg.areas[j].id}'";
@@ -743,6 +786,12 @@ namespace MaxWorlds.Arena
         private static bool AreasOverlap(WorldArea a, WorldArea b) =>
             a.XMin < b.XMax - Geo.Epsilon && a.XMax > b.XMin + Geo.Epsilon &&
             a.ZMin < b.ZMax - Geo.Epsilon && a.ZMax > b.ZMin + Geo.Epsilon;
+
+        /// <summary>True if either area overlays the other (MV-697) — a deliberate, same-footprint pair
+        /// (a floor room and the gantry deck revisiting it), not the two-rooms-claiming-the-same-ground
+        /// mistake <see cref="AreasOverlap"/> exists to catch.</summary>
+        private static bool IsOverlayPair(WorldArea a, WorldArea b) =>
+            (a.overlays != null && a.overlays == b.id) || (b.overlays != null && b.overlays == a.id);
 
         /// <summary>Every shed an area carries (MV-475, <see cref="WorldArea.Sheds"/>) must sit clear of
         /// its own area's walls, and two sheds in the same area must sit clear of each other — the same

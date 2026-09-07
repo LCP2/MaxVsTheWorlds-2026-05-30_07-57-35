@@ -17,6 +17,7 @@ namespace MaxWorlds.Arena
     {
         Unknown, PlayerSpawn, Factory, Gate, Boss, Cover, Prop, Pickup, AreaGate,
         Sludge, Deck, Ramp,   // MV-692
+        Hatch,                // MV-697
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -33,6 +34,13 @@ namespace MaxWorlds.Arena
         public float z;       // centre Z
         public float width;   // size along X
         public float depth;   // size along Z
+
+        /// <summary>Elevation tier (MV-697): 0 is the floor, 1 is a deck built as a same-footprint
+        /// overlay of another zone (<see cref="WorldArea.overlays"/>). <see cref="MapGeometry.Walls"/>
+        /// skips a zone with <c>level &gt; 0</c> — its floor/fence were already built by the level-0 zone
+        /// it overlays — and <see cref="MapData.ZoneAt(float, float, float)"/> is what a caller uses to
+        /// resolve which of two same-footprint zones a 3D position is actually standing in.</summary>
+        public int level;
 
         public ZoneKind Kind => MapEnums.Zone(type);
 
@@ -122,6 +130,14 @@ namespace MaxWorlds.Arena
         /// meaning" idiom as <see cref="mobile"/>/<see cref="opensOn"/> above.</summary>
         public float SludgeSpeedMultiplier => height;
 
+        /// <summary>Hatch only (MV-697) — the deck's own resolved height it sits at, carried on the
+        /// otherwise-unused <see cref="height"/> field, same "reuse the shape, not the meaning" idiom as
+        /// <see cref="SludgeSpeedMultiplier"/>. Gate only (MV-697) — 1 when this <c>AreaGate</c>'s
+        /// authored <c>opensWith</c> carried the <c>[DECK]</c> suffix (<see cref="WorldMapLoader"/> parses
+        /// and strips it): the gate is built at deck height instead of the floor. 0 for every other
+        /// kind.</summary>
+        public int level;
+
         /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
         /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means
         /// the gate never opens, which validation rejects: a locked door with no key is a bug every
@@ -180,6 +196,13 @@ namespace MaxWorlds.Arena
         /// authored-map level by MV-246/YT-112 — this is the code-level default following suit).</summary>
         public float wallThickness = 0.4f;
 
+        /// <summary>The world's <see cref="WorldDials.deckHeight"/> (MV-697), carried here so
+        /// <see cref="ZoneAt(float, float, float)"/> can tell "standing on the deck" from "standing on
+        /// the floor beneath it" without a caller having to thread the world config through. Default
+        /// matches <see cref="WorldDials.deckHeight"/>'s own default for a map built without one
+        /// (a hand-built fixture, an older test).</summary>
+        public float deckHeight = 2.5f;
+
         public MapZone[] zones = Array.Empty<MapZone>();
         public MapLink[] links = Array.Empty<MapLink>();
         public MapEntity[] entities = Array.Empty<MapEntity>();
@@ -217,6 +240,32 @@ namespace MaxWorlds.Arena
             foreach (MapZone z in zones)
                 if (z != null && z.Contains(px, pz)) return z;
             return null;
+        }
+
+        /// <summary>The zone a 3D position falls in, level-aware (MV-697): a footprint an overlay
+        /// shares with the zone it overlays resolves to the deck zone once <paramref name="py"/> reads
+        /// as "on the deck" (within <see cref="deckHeight"/> minus half a metre of it), and to the
+        /// floor zone otherwise — the same rule <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/>
+        /// and <see cref="MaxWorlds.Enemies.RobotEnemy"/> use to resolve which area a live position
+        /// (Max's, a robot's) is actually standing in. Degrades to the plain floor match for any map
+        /// with no overlay zones at all (every <see cref="MapZone.level"/> is 0), so this is a safe
+        /// drop-in for every existing <see cref="ZoneAt(float, float)"/> call site that has a Y to give
+        /// it.</summary>
+        public MapZone ZoneAt(float px, float py, float pz)
+        {
+            if (zones == null) return null;
+
+            bool onDeck = py >= deckHeight - 0.5f;
+            MapZone floorMatch = null;
+
+            foreach (MapZone z in zones)
+            {
+                if (z == null || !z.Contains(px, pz)) continue;
+                if (onDeck && z.level > 0) return z;
+                if (z.level == 0) floorMatch = z;
+            }
+
+            return floorMatch;
         }
 
         /// <summary>Bounding box of every room, in XZ. The floor is cut to this.</summary>

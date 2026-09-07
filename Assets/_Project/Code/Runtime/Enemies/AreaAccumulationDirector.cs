@@ -301,7 +301,9 @@ namespace MaxWorlds.Enemies
                 if (_target == null) return;
             }
 
-            MapZone zone = _map.ZoneAt(_target.position.x, _target.position.z);
+            // MV-697: level-aware — a same-footprint deck overlay resolves separately from the floor
+            // it sits over once Max's feet actually read as "on the deck".
+            MapZone zone = _map.ZoneAt(_target.position.x, _target.position.y, _target.position.z);
             int area = zone == null ? 0 : AreaIndexOf(zone.id);
 
             // The real, physical area-crossing signal (MV-396) — advances only off Max's own position,
@@ -473,7 +475,7 @@ namespace MaxWorlds.Enemies
             var previewQueue = new AreaSpawnQueue(1);
             previewQueue.FillExact(preview, areaIndex);
 
-            Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount);
+            Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount, _worldCfg);
             var pending = new List<RobotEnemy>(slots.Length);
             for (int i = 0; i < slots.Length; i++)
             {
@@ -484,10 +486,14 @@ namespace MaxWorlds.Enemies
 
                 RobotEnemy e = Take(kind, archetype);
                 Vector3 pos = slots[i].Position;
-                pos.y = archetype.SpawnHeight;
+                // MV-697: pos.y already carries the deck height for a level-1 slot (0 for a floor one),
+                // so this ADDS the archetype's own ground clearance rather than replacing the Y outright.
+                pos.y += archetype.SpawnHeight;
                 e.transform.position = pos;
                 e.transform.rotation = Quaternion.identity;
                 e.gameObject.SetActive(true);
+                e.SetLevel(slots[i].Level);
+                if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
                 _areaByRobot[e] = areaIndex;
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
@@ -562,7 +568,7 @@ namespace MaxWorlds.Enemies
             int seedCount = Garrison.SeedCount(areaIndex, _worldCfg);
             if (seedCount <= 0) return;
 
-            Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount);
+            Garrison.Seed[] slots = Garrison.SeedSlots(area, seedCount, _worldCfg);
             for (int i = 0; i < slots.Length; i++)
             {
                 if (!_queue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
@@ -573,10 +579,14 @@ namespace MaxWorlds.Enemies
 
                 RobotEnemy e = Take(kind, archetype);
                 Vector3 pos = slots[i].Position;
-                pos.y = archetype.SpawnHeight;
+                // MV-697: pos.y already carries the deck height for a level-1 slot (0 for a floor one),
+                // so this ADDS the archetype's own ground clearance rather than replacing the Y outright.
+                pos.y += archetype.SpawnHeight;
                 e.transform.position = pos;
                 e.transform.rotation = Quaternion.identity;
                 e.gameObject.SetActive(true);
+                e.SetLevel(slots[i].Level);
+                if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
                 _areaByRobot[e] = areaIndex;
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
