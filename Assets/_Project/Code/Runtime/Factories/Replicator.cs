@@ -5,6 +5,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Factories
 {
@@ -48,19 +49,28 @@ namespace MaxWorlds.Factories
         /// back in" rule).</summary>
         public const float TwinNoReplicateSeconds = 8f;
 
+        /// <summary>How long the emit-flash tell stays lit (MV-693 Reads: "a 0.6 s white 'twin'
+        /// flash on each emitted robot"), seeded the instant <see cref="TickConsumption"/> spawns
+        /// a doubled pair.</summary>
+        public const float TwinFlashSeconds = 0.6f;
+
         [SerializeField] private int capacity;
 
-        // Hazard-orange body, same family as MowerHutch.bodyColor — this is also an objective box, not
-        // scenery.
-        [SerializeField] private Color bodyColor = new Color(0.72f, 0.34f, 0.10f);
         [SerializeField] private Color ledCapacityColor = new Color(0.25f, 0.95f, 1f);   // cyan: capacity left
         [SerializeField] private Color ledSpentColor = new Color(0.9f, 0.15f, 0.1f);     // red: spent, still a target
+        [SerializeField] private Color hatchGlowColor = new Color(1f, 0.82f, 0.45f);     // warm amber: mid-consume
 
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
         private Transform _target; // Max
         private Renderer _led;
         private MaterialPropertyBlock _ledMpb;
+        private Transform _hatch;
+        private Renderer _hatchGlow;
+        private MaterialPropertyBlock _hatchGlowMpb;
+        private Renderer _emitFlash;
+        private MaterialPropertyBlock _emitFlashMpb;
+        private float _emitFlashTimer;
 
         private readonly struct PendingEmission
         {
@@ -119,34 +129,29 @@ namespace MaxWorlds.Factories
             BuildBody();
         }
 
+        /// <summary>MV-693: replaces MV-706's primitive-cube visual with a generated mesh (see
+        /// <see cref="FactoryBodies"/>). The primitive cube <see cref="Replicator"/> is itself
+        /// added to stays — it is still the collider the Water Blaster has to hit — but its own
+        /// renderer is switched off (never destroyed: <c>Destroy</c> on a component is EditMode-
+        /// illegal, the same trap MowerHutch.BuildCore's own doc comment names) rather than the
+        /// body it draws.</summary>
         private void BuildBody()
         {
             var rend = GetComponent<Renderer>();
-            if (rend != null)
-            {
-                var mpb = new MaterialPropertyBlock();
-                rend.GetPropertyBlock(mpb);
-                mpb.SetColor("_BaseColor", bodyColor);
-                rend.SetPropertyBlock(mpb);
-            }
+            if (rend != null) rend.enabled = false;
 
-            // The status LED on the hatch face — cyan while it can still double a robot, red once
-            // spent, off once destroyed (OnDestroyed hides it). No collider: same "the Water Blaster
-            // must hit the body behind it" reasoning as MowerHutch's own vulnerable core.
-            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            go.name = "ReplicatorLed";
-            var col = go.GetComponent<Collider>();
-            if (col != null)
-            {
-                if (Application.isPlaying) Destroy(col); else DestroyImmediate(col);
-            }
-            go.transform.SetParent(transform, false);
-            go.transform.localPosition = new Vector3(0f, 0.1f, -0.52f);
-            go.transform.localScale = new Vector3(0.3f, 0.3f, 0.08f);
-            go.AddComponent<SelfDrivenTint>();
-            _led = go.GetComponent<Renderer>();
-            Material mat = MaterialLibrary.Character();
-            if (mat != null) _led.sharedMaterial = mat;
+            Transform bodyRoot = ParentScale.MakeMetreSpace(new GameObject("Body").transform, transform);
+            FactoryBodies.ReplicatorParts parts = FactoryBodies.BuildReplicator(bodyRoot, transform.lossyScale);
+
+            _hatch = parts.Hatch;
+            _hatchGlow = parts.HatchGlow;
+            _hatchGlowMpb = new MaterialPropertyBlock();
+            _emitFlash = parts.EmitFlash;
+            _emitFlashMpb = new MaterialPropertyBlock();
+
+            // The status LED — cyan while it can still double a robot, red once spent, off once
+            // destroyed (OnDestroyed hides it).
+            _led = parts.Led;
             _ledMpb = new MaterialPropertyBlock();
         }
 
@@ -239,6 +244,7 @@ namespace MaxWorlds.Factories
                 {
                     _spawner.SpawnExact(p.Kind, 2, TwinNoReplicateSeconds);
                     capacity = Mathf.Max(0, capacity - 1);
+                    _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
                     _pending.RemoveAt(i);
                 }
                 else
@@ -288,16 +294,51 @@ namespace MaxWorlds.Factories
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
             if (_led != null) _led.gameObject.SetActive(false);
+
+            // MV-693 Reads: "sparks and a drooping hatch on destruction". The sparks are
+            // HudSignals.EmitFactoryDestroyed's own generic wreck sequence (CombatVfx) that every
+            // factory's death already fires above; the drooping hatch is this box's own tell. The
+            // hull/hazard band/hatch stay visible as a wreck — same "the body isn't hidden away"
+            // call MowerHutch made for its own core/bar (YT-107) — only the live tells go dark.
+            if (_hatch != null) _hatch.localRotation *= Quaternion.Euler(55f, 0f, 0f);
+            if (_hatchGlow != null) _hatchGlow.gameObject.SetActive(false);
+            if (_emitFlash != null) _emitFlash.gameObject.SetActive(false);
         }
 
         private void LateUpdate()
         {
-            if (_led == null || !IsAlive) return;
-            Color c = capacity > 0 ? ledCapacityColor : ledSpentColor;
-            _led.GetPropertyBlock(_ledMpb);
-            _ledMpb.SetColor("_BaseColor", c);
-            _ledMpb.SetColor("_EmissionColor", c * 2f);
-            _led.SetPropertyBlock(_ledMpb);
+            if (!IsAlive) return;
+
+            if (_led != null)
+            {
+                Color c = capacity > 0 ? ledCapacityColor : ledSpentColor;
+                _led.GetPropertyBlock(_ledMpb);
+                _ledMpb.SetColor("_BaseColor", c);
+                _ledMpb.SetColor("_EmissionColor", c * 2f);
+                _led.SetPropertyBlock(_ledMpb);
+            }
+
+            // Hatch-open glow (MV-693 Reads): lit for exactly as long as something is mid-consume.
+            if (_hatchGlow != null)
+            {
+                Color glow = _pending.Count > 0 ? hatchGlowColor : Color.clear;
+                _hatchGlow.GetPropertyBlock(_hatchGlowMpb);
+                _hatchGlowMpb.SetColor("_BaseColor", glow);
+                _hatchGlow.SetPropertyBlock(_hatchGlowMpb);
+            }
+
+            // The 0.6 s white "twin" flash (MV-693 Reads), decaying from the timer TickConsumption
+            // seeds the instant a doubled pair emerges.
+            if (_emitFlash != null)
+            {
+                _emitFlashTimer = Mathf.Max(0f, _emitFlashTimer - Time.deltaTime);
+                Color flash = _emitFlashTimer > 0f
+                    ? Color.white * (_emitFlashTimer / TwinFlashSeconds) * 2.5f
+                    : Color.clear;
+                _emitFlash.GetPropertyBlock(_emitFlashMpb);
+                _emitFlashMpb.SetColor("_BaseColor", flash);
+                _emitFlash.SetPropertyBlock(_emitFlashMpb);
+            }
         }
     }
 }

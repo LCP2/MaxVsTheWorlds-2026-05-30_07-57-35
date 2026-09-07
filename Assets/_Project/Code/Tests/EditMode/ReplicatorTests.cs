@@ -134,5 +134,38 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
                 "spent at capacity 0, the Replicator lures nothing further — the count must stay two");
         }
+
+        /// <summary>
+        /// MV-693 — the primitive-cube body MV-706 shipped with is replaced by a generated mesh
+        /// (see <c>FactoryBodies.BuildReplicator</c>). Fails on the MV-706 merge commit (0ee9d99):
+        /// there is no "Body/Hull" child at all (the box was only ever the bare primitive cube
+        /// itself), and the primitive cube's own renderer is never switched off. Tier 2 (resolved
+        /// values): the hull's WORLD bounds after the metre-space container's scale-cancel — never
+        /// an authored constant, since nothing in this test asserts a serialized field back at
+        /// itself.
+        /// </summary>
+        [Test]
+        public void Replicator_BuildsGeneratedHullMesh_MatchingAuthoredBoxFootprint()
+        {
+            _replicatorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _replicatorGo.name = "Replicator";
+            _replicatorGo.transform.position = RigOrigin;
+            _replicatorGo.transform.localScale = new Vector3(2f, 2f, 1.5f); // MV-706's own authored footprint
+            var replicator = _replicatorGo.AddComponent<Replicator>();
+            replicator.Build(); // AddComponent's own Awake never runs outside Play mode
+
+            Transform hull = _replicatorGo.transform.Find("Body/Hull");
+            Assert.IsNotNull(hull, "Build() must generate a Hull part under a metre-space Body container");
+
+            Bounds resolvedBounds = hull.GetComponent<Renderer>().bounds;
+            Assert.AreEqual(2f, resolvedBounds.size.x, 0.01f,
+                "the generated hull's resolved world width must match the box's own authored footprint, " +
+                "not whatever CharacterMeshes.Prism's own unit geometry happens to be before scaling");
+            Assert.AreEqual(1.5f, resolvedBounds.size.z, 0.01f,
+                "the generated hull's resolved world depth must match the box's own authored footprint");
+
+            Assert.IsFalse(_replicatorGo.GetComponent<Renderer>().enabled,
+                "the old primitive-cube renderer must be switched off once the generated body is built");
+        }
     }
 }
