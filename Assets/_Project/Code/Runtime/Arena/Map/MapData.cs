@@ -8,12 +8,16 @@ namespace MaxWorlds.Arena
     /// author says "this is the fight room" vs "this is the boss arena", and it is what the dressing
     /// and validation layers key off (a boss arena must stay clear of cover; an entry must not hold a
     /// factory).</summary>
-    public enum ZoneKind { Entry, Open, Cover, Interior, Hazard, Dense, Boss }
+    public enum ZoneKind { Entry, Open, Cover, Interior, Hazard, Dense, Boss, Bridge }
 
     /// <summary>Everything that can stand in a map. <see cref="EntityKind.Unknown"/> is what an
     /// unrecognised string parses to — the loader skips those rather than throwing, so a map authored
     /// against a newer build still loads the parts this build understands.</summary>
-    public enum EntityKind { Unknown, PlayerSpawn, Factory, Gate, Boss, Cover, Prop, Pickup, AreaGate }
+    public enum EntityKind
+    {
+        Unknown, PlayerSpawn, Factory, Gate, Boss, Cover, Prop, Pickup, AreaGate,
+        Sludge, Deck, Ramp,   // MV-692
+    }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
     /// in metres — the same way the design board draws it. Walls are NOT authored: they are derived
@@ -106,6 +110,17 @@ namespace MaxWorlds.Arena
         /// wires it into <see cref="MaxWorlds.Factories.MowerHutch.ConfigureMobility"/> instead of
         /// leaving it a static body.</summary>
         public bool mobile;
+
+        /// <summary>Ramp only (MV-692) — which wall of THIS rect abuts the deck it climbs to (N/E/S/W,
+        /// <see cref="Wall"/>), resolved by <see cref="WorldMapLoader"/> from rect adjacency at load
+        /// time. Empty for every other kind.</summary>
+        public string facing = "";
+
+        /// <summary>Sludge only (MV-692) — the speed multiplier a mover standing inside this rect is
+        /// scaled to, resolved from <see cref="WorldDials.sludgeSpeedMultiplier"/> at load time and
+        /// carried on the otherwise-unused <see cref="height"/> field — same "reuse the shape, not the
+        /// meaning" idiom as <see cref="mobile"/>/<see cref="opensOn"/> above.</summary>
+        public float SludgeSpeedMultiplier => height;
 
         /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
         /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -437,8 +438,121 @@ namespace MaxWorlds.Arena
                 && WorldBosses(cfg, out reason)
                 && WorldGarrison(cfg, out reason)
                 && WorldGates(cfg, out reason)
-                && WorldReachability(cfg, out reason);
+                && WorldReachability(cfg, out reason)
+                && WorldVerticality(cfg, out reason);
         }
+
+        /// <summary>Sludge/deck/ramp rects (MV-692): (a) every rect must lie inside its own area's
+        /// floor; (b) a deck may not overlap floor-level cover/a shed/a boss that stands as tall as or
+        /// taller than the deck itself — an overlap with something SHORTER than the deck is exactly the
+        /// "deck OVER cover" case the design wants, so it is not an error; and a ramp must touch exactly
+        /// one deck rect edge, since that adjacency is how <see cref="WorldMapLoader"/> orients it.
+        /// A deck with no ramp reaching it is deliberately NOT checked here — until deck gates ship
+        /// (MV-697) that is a validation WARNING (logged by <see cref="WorldMapLoader"/> at load time),
+        /// not a reason to refuse the whole config.</summary>
+        private static bool WorldVerticality(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                var deckRects = new List<Rect>();
+
+                foreach (WorldDeck deck in a.decks ?? Array.Empty<WorldDeck>())
+                {
+                    if (deck == null) { reason = $"area '{a.id}' has a null deck"; return false; }
+
+                    Rect rect = a.WorldRectOf(deck.x, deck.z, deck.w, deck.d);
+                    if (!RectInsideArea(rect, a))
+                    { reason = $"area '{a.id}': deck '{deck.id}' rect falls outside the area floor"; return false; }
+
+                    deckRects.Add(rect);
+                    float deckHeight = deck.height > 0f ? deck.height : (cfg.dials?.deckHeight ?? 2.5f);
+
+                    foreach (WorldCover c in a.cover)
+                    {
+                        if (c == null) continue;
+                        var coverRect = new Rect(c.x - c.width * 0.5f, c.z - c.depth * 0.5f, c.width, c.depth);
+                        if (rect.Overlaps(coverRect) && c.height >= deckHeight)
+                        {
+                            reason = $"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps " +
+                                     $"cover '{c.id}', which stands {c.height:0.#} m tall — too tall to sit under it";
+                            return false;
+                        }
+                    }
+
+                    foreach (WorldShed s in a.Sheds())
+                    {
+                        var shedRect = new Rect(s.x - WorldMapLoader.ShedFootprint * 0.5f,
+                            s.z - WorldMapLoader.ShedFootprint * 0.5f, WorldMapLoader.ShedFootprint, WorldMapLoader.ShedFootprint);
+                        if (rect.Overlaps(shedRect) && WorldMapLoader.ShedHeight >= deckHeight)
+                        {
+                            reason = $"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps a shed " +
+                                     $"— too tall to sit under it";
+                            return false;
+                        }
+                    }
+
+                    foreach (WorldBoss b in a.Bosses())
+                    {
+                        float bw = b.size?.w ?? 3.5f, bd = b.size?.d ?? 3.5f;
+                        var bossRect = new Rect(b.x - bw * 0.5f, b.z - bd * 0.5f, bw, bd);
+                        if (rect.Overlaps(bossRect) && WorldMapLoader.BossHeight >= deckHeight)
+                        {
+                            reason = $"area '{a.id}': deck '{deck.id}' (height {deckHeight:0.#} m) overlaps boss " +
+                                     $"'{b.id}' — too tall to sit under it";
+                            return false;
+                        }
+                    }
+                }
+
+                foreach (WorldSludge s in a.sludge ?? Array.Empty<WorldSludge>())
+                {
+                    if (s == null) { reason = $"area '{a.id}' has a null sludge rect"; return false; }
+                    Rect rect = a.WorldRectOf(s.x, s.z, s.w, s.d);
+                    if (!RectInsideArea(rect, a))
+                    { reason = $"area '{a.id}': sludge '{s.id}' rect falls outside the area floor"; return false; }
+                }
+
+                foreach (WorldRamp r in a.ramps ?? Array.Empty<WorldRamp>())
+                {
+                    if (r == null) { reason = $"area '{a.id}' has a null ramp"; return false; }
+                    Rect rect = a.WorldRectOf(r.x, r.z, r.w, r.d);
+                    if (!RectInsideArea(rect, a))
+                    { reason = $"area '{a.id}': ramp '{r.id}' rect falls outside the area floor"; return false; }
+
+                    int touches = 0;
+                    foreach (Rect deckRect in deckRects)
+                        if (TouchesEdge(rect, deckRect)) touches++;
+
+                    if (touches != 1)
+                    {
+                        reason = $"area '{a.id}': ramp '{r.id}' must touch exactly one deck — touches {touches}";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        private static bool RectInsideArea(Rect rect, WorldArea a) =>
+            rect.xMin >= a.XMin - Geo.Epsilon && rect.xMax <= a.XMax + Geo.Epsilon &&
+            rect.yMin >= a.ZMin - Geo.Epsilon && rect.yMax <= a.ZMax + Geo.Epsilon;
+
+        /// <summary>True if the two rects share a full run along exactly one edge — the adjacency
+        /// <see cref="WorldMapLoader"/> needs to orient a ramp onto its deck. Mirrors
+        /// <see cref="MapGeometry.Doorway"/>'s own "same coordinate, overlapping span" test.</summary>
+        private static bool TouchesEdge(Rect a, Rect b)
+        {
+            bool northSouth = (Geo.Same(a.yMax, b.yMin) || Geo.Same(a.yMin, b.yMax)) &&
+                               RangesOverlap(a.xMin, a.xMax, b.xMin, b.xMax);
+            bool eastWest = (Geo.Same(a.xMax, b.xMin) || Geo.Same(a.xMin, b.xMax)) &&
+                             RangesOverlap(a.yMin, a.yMax, b.yMin, b.yMax);
+            return northSouth || eastWest;
+        }
+
+        private static bool RangesOverlap(float minA, float maxA, float minB, float maxB) =>
+            minA < maxB - Geo.Epsilon && maxA > minB + Geo.Epsilon;
 
         /// <summary>Every boss an area carries (MV-561, <see cref="WorldArea.Bosses"/>) must sit clear of
         /// its own area's walls, and two bosses in the same area must sit clear of each other — same

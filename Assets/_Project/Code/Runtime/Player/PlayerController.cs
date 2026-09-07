@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Upgrades;
 using MaxWorlds.Weapons;
@@ -28,11 +29,14 @@ namespace MaxWorlds.Player
         /// spec §6). The single number <see cref="Update"/> moves him at; exposed so the effect can be
         /// measured without driving input.</summary>
         public float WalkSpeed => DevTuning.Or(DevTuning.PlayerMoveSpeed, moveSpeed)
-            * UpgradeState.MoveSpeedMultiplier * SpeedAbilityMultiplier;
+            * UpgradeState.MoveSpeedMultiplier * SpeedAbilityMultiplier * SludgeMultiplier;
 
         private static float SpeedAbilityMultiplier => AbilityTuning.SpeedMultiplier(
             WeaponSystemState.AbilityLevel(AbilityKind.Speed),
             DevTuning.Or(DevTuning.SpeedMultiplierPerLevel, AbilityTuning.DefaultSpeedMultiplierPerLevel));
+
+        /// <summary>MV-692: 0.6 while Max's feet are inside a sludge rect, 1 otherwise.</summary>
+        private float SludgeMultiplier => MapSlowZones.Instance.SpeedMultiplierAt(transform.position);
         [SerializeField] private float rotationSpeed = 720f; // deg/s
         [SerializeField] private float gravity = 20f;
 

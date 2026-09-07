@@ -116,6 +116,48 @@ namespace MaxWorlds.Arena
             new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter);
     }
 
+    /// <summary>A sludge slow-zone (MV-692) — a rect in AREA-LOCAL metres (like <see cref="WorldArea.origin"/>,
+    /// <see cref="x"/>/<see cref="z"/> are the rect's MIN corner, not its centre), authored inside the
+    /// area that carries it. Any mover whose feet fall inside it is slowed to
+    /// <see cref="WorldDials.sludgeSpeedMultiplier"/> of its normal speed — see <see cref="MapGeometry.SlowZones"/>.</summary>
+    [Serializable]
+    public sealed class WorldSludge
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+    }
+
+    /// <summary>A walkable deck rect (MV-692) — same area-local MIN-corner convention as
+    /// <see cref="WorldSludge"/>. <see cref="height"/> is the elevation of its walkable top surface in
+    /// metres; 0 (unauthored) falls back to <see cref="WorldDials.deckHeight"/>.</summary>
+    [Serializable]
+    public sealed class WorldDeck
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+        public float height;
+    }
+
+    /// <summary>A ramp rect joining the floor to an adjacent deck cell (MV-692) — same area-local
+    /// MIN-corner convention as <see cref="WorldSludge"/>. Carries no orientation of its own: it must
+    /// touch exactly one edge of exactly one authored <see cref="WorldDeck"/> rect, and the loader
+    /// derives which way it climbs from that adjacency (<see cref="WorldMapLoader"/>).</summary>
+    [Serializable]
+    public sealed class WorldRamp
+    {
+        public string id;
+        public float x;
+        public float z;
+        public float w;
+        public float d;
+    }
+
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
     /// the same fields as <see cref="MapEntity"/>'s cover shape so <see cref="WorldMapLoader"/> can
     /// hand it straight to the engine that already knows how to build, validate and dress cover
@@ -197,6 +239,18 @@ namespace MaxWorlds.Arena
         /// Optional; most areas carry none and behave exactly as before.</summary>
         public WorldGarrisonEntry[] garrison = Array.Empty<WorldGarrisonEntry>();
 
+        /// <summary>Sludge slow-zones authored into this area (MV-692), area-local rects. Optional —
+        /// most areas carry none.</summary>
+        public WorldSludge[] sludge = Array.Empty<WorldSludge>();
+
+        /// <summary>Walkable decks authored into this area (MV-692), area-local rects. Optional — most
+        /// areas carry none.</summary>
+        public WorldDeck[] decks = Array.Empty<WorldDeck>();
+
+        /// <summary>Ramps joining the floor to a deck cell (MV-692), area-local rects. Optional — most
+        /// areas carry none.</summary>
+        public WorldRamp[] ramps = Array.Empty<WorldRamp>();
+
         /// <summary>A named encounter shape for this area (MV-365) — data only, read by
         /// <see cref="MaxWorlds.Enemies.AreaAccumulationDirector"/> to bias WHERE within the room a
         /// particular kind spawns (composition alone only says how many; some scenarios need
@@ -264,8 +318,18 @@ namespace MaxWorlds.Arena
         public bool IsBossRole => HasRole("boss");
         public bool IsExitRole => HasRole("exit");
 
+        /// <summary>A crossing area rather than a fight room (MV-692, e.g. a gantry over a sludge
+        /// channel) — <see cref="MapValidation.MinFightRoomWidth"/> is not applied to one.</summary>
+        public bool IsBridgeRole => HasRole("bridge");
+
         private bool HasRole(string token) =>
             role != null && role.IndexOf(token, StringComparison.OrdinalIgnoreCase) >= 0;
+
+        /// <summary>An area-local <c>{x,z,w,d}</c> rect (MV-692: <see cref="WorldSludge"/>,
+        /// <see cref="WorldDeck"/>, <see cref="WorldRamp"/>) resolved to a world-space footprint — same
+        /// MIN-corner convention <see cref="origin"/>/<see cref="size"/> already use.</summary>
+        public Rect WorldRectOf(float localX, float localZ, float w, float d) =>
+            new Rect(XMin + localX, ZMin + localZ, w, d);
 
         /// <summary>The fixed coordinate a wall sits on — every point on the N/S wall shares a Z, every
         /// point on the E/W wall shares an X.</summary>
@@ -377,6 +441,16 @@ namespace MaxWorlds.Arena
         public float[] pacingRhythm = Array.Empty<float>();
         public WorldToughnessCurve toughnessCurve;
         public int powerupCadence;
+
+        /// <summary>Speed a mover is scaled to while its feet are inside a <see cref="WorldSludge"/>
+        /// rect (MV-692). 0 in the JSON means "not authored" would read as "sludge stops you dead",
+        /// which is never intended — so this carries the design default directly rather than through
+        /// <see cref="WorldMapLoader"/>'s usual "0 means fall back" idiom.</summary>
+        public float sludgeSpeedMultiplier = 0.6f;
+
+        /// <summary>Elevation, in metres, a <see cref="WorldDeck"/> builds at when it doesn't author its
+        /// own <see cref="WorldDeck.height"/> (MV-692).</summary>
+        public float deckHeight = 2.5f;
 
         public PacingRhythm EnginePacing =>
             new PacingRhythm(pacingRhythm != null && pacingRhythm.Length > 0 ? pacingRhythm : new[] { 1f });
