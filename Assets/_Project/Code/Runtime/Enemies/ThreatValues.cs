@@ -30,6 +30,11 @@ namespace MaxWorlds.Enemies
         // Gunner (3.0) on the same placeholder footing until real per-type calibration lands.
         public const float Lurker = 3.0f;
 
+        // MV-691: the ticket's own authored THV — a static lobber, placed just under the Bolter
+        // (2.8) on the same placeholder footing: it trades mobility for area denial, so it sits
+        // below every kind that can also close distance.
+        public const float Turret = 2.5f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -40,6 +45,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Blinker => Blinker,
             EnemyKind.Bolter => Bolter,
             EnemyKind.Lurker => Lurker,
+            EnemyKind.Turret => Turret,
             _ => Rusher,
         };
     }

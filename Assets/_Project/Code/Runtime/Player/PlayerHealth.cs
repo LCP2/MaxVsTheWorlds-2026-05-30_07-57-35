@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
+using MaxWorlds.Enemies;
 using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
@@ -29,6 +30,11 @@ namespace MaxWorlds.Player
         private float _health;
         private float _timeSinceDamage;
 
+        /// <summary>Seconds left on the Pipe Turret's CORRODED status (MV-691) — 0 when not corroded.
+        /// Ticked down in <see cref="Update"/>, refreshed (never stacked) by <see cref="ApplyCorroded"/>
+        /// while Max stands in a <see cref="MaxWorlds.Enemies.CorrosionPuddle"/>.</summary>
+        private float _corrodedTimer;
+
         public bool IsAlive => _health > 0f;
         public Team Team => Team.Player;
 
@@ -42,6 +48,23 @@ namespace MaxWorlds.Player
 
         public float Current => _health;
         public float Normalized => Max > 0f ? _health / Max : 0f;
+
+        /// <summary>Whether Max is currently CORRODED (MV-691) — the Pipe Turret's puddle status.</summary>
+        public bool IsCorroded => CorrodedStatus.IsActive(_corrodedTimer);
+
+        /// <summary>Seconds left on the CORRODED status, 0 when inactive — the resolved value a test
+        /// reads, never an authored constant.</summary>
+        public float CorrodedRemaining => _corrodedTimer;
+
+        /// <summary>What <see cref="TakeDamage"/> actually multiplies an incoming hit by right now —
+        /// 1.25x while corroded, 1x otherwise.</summary>
+        public float DamageTakenMultiplier => CorrodedStatus.MultiplierFor(_corrodedTimer);
+
+        /// <summary>Marks Max CORRODED for a fresh <see cref="CorrodedStatus.Duration"/> (MV-691) —
+        /// called every tick a <see cref="MaxWorlds.Enemies.CorrosionPuddle"/> finds him standing
+        /// inside it. Refreshes rather than stacks, same "never shortens, only ever refreshes to the
+        /// authored ceiling" idiom as every other timed status in this project.</summary>
+        public void ApplyCorroded() => _corrodedTimer = CorrodedStatus.Refresh();
 
         /// <summary>
         /// Re-settle current HP against a max that just changed underneath it (YT-105). Raising the
@@ -122,10 +145,15 @@ namespace MaxWorlds.Player
             if (DevMode.IsInvincible) return;                      // dev/filming only; off by default (YT-60)
             if (!DamageRules.Applies(info.Attacker, Team)) return; // no friendly fire
 
+            // MV-691: CORRODED amplifies the INCOMING hit itself (20 -> 25 at the ticket's own 1.25x),
+            // applied before Force Field ever sees it — the shield still absorbs off the amplified
+            // total, not the pre-corrosion one.
+            float rawAmount = info.Amount * DamageTakenMultiplier;
+
             // MV-361: Force Field eats as much of the hit as its remaining budget allows, before HP
             // ever sees it — every damage source funnels through here, so the bubble needs no special
             // case per attacker (contact lunge, beam tick, missile splash all arrive as one DamageInfo).
-            float amount = Abilities != null ? Abilities.AbsorbForceFieldDamage(info.Amount) : info.Amount;
+            float amount = Abilities != null ? Abilities.AbsorbForceFieldDamage(rawAmount) : rawAmount;
             if (amount <= 0f) return;
 
             _health = Mathf.Max(0f, _health - amount);
@@ -164,6 +192,7 @@ namespace MaxWorlds.Player
             if (!IsAlive) return;
             float dt = Time.deltaTime;
             _timeSinceDamage += dt;
+            _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
 
             float before = _health;
             _health = Regenerate(_health, Max, _timeSinceDamage,

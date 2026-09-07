@@ -22,6 +22,7 @@ namespace MaxWorlds.VFX
         Bolter,     // MV-578: the rod-launcher gets its own colour, not the rusher's turquoise
         Blinker,    // MV-584: the teleporter gets its own colour, not the rusher's turquoise
         Lurker,     // MV-688: the grate ambusher — oil-black, its own hue family
+        Turret,     // MV-691: the wall-mounted lobber — gunmetal, its own hue family
     }
 
     /// <summary>
@@ -161,6 +162,14 @@ namespace MaxWorlds.VFX
         /// lens and gold neck ring (built in <see cref="RobotBodies"/>) carry the rest of the read.</summary>
         private static readonly Color LurkerBody = new Color(0.05f, 0.05f, 0.06f);
 
+        /// <summary>The Pipe Turret (MV-691): the ticket's own "gunmetal" colour call — a cool,
+        /// mid-value grey with a faint blue lean, deliberately lighter than the Brute's near-black
+        /// charcoal (0.20, 0.22, 0.27) so a static wall-mounted body doesn't get mistaken for the
+        /// tank tier at a glance. Its cyan status light (built in <see cref="RobotBodies"/>, coloured
+        /// via <see cref="RobotEnemy"/>'s idle/windup tell override, the same idiom
+        /// <see cref="LurkerBody"/>'s own eye lens already uses) carries the rest of the read.</summary>
+        private static readonly Color TurretBody = new Color(0.34f, 0.37f, 0.40f);
+
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
         private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
@@ -269,6 +278,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Bolter: return BolterBody;
                 case CharacterRole.Blinker: return BlinkerBody;
                 case CharacterRole.Lurker: return LurkerBody;
+                case CharacterRole.Turret: return TurretBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -291,6 +301,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Bolter: return CharacterRole.Bolter;
                 case EnemyKind.Blinker: return CharacterRole.Blinker;
                 case EnemyKind.Lurker: return CharacterRole.Lurker;
+                case EnemyKind.Turret: return CharacterRole.Turret;
                 default: return CharacterRole.Robot;
             }
         }
@@ -314,7 +325,8 @@ namespace MaxWorlds.VFX
             r == CharacterRole.Robot || r == CharacterRole.Bruiser ||
             r == CharacterRole.Heavy || r == CharacterRole.Brute ||
             r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
-            r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Boss;
+            r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Turret ||
+            r == CharacterRole.Boss;
 
         private void OnEnable()
         {
