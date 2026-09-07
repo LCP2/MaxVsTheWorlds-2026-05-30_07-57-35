@@ -192,7 +192,7 @@ namespace MaxWorlds.Arena
                         break;
 
                     case EntityKind.Factory:
-                        built.Factories.Add(BuildFactory(e, root, built));
+                        built.Factories.Add(BuildFactory(map, e, root, built));
                         break;
 
                     case EntityKind.AreaGate:
@@ -258,8 +258,13 @@ namespace MaxWorlds.Arena
         /// Nothing here sets a material. The body is damageable, so the rendering layer skins it as a
         /// Structure exactly as it skins the hutch the scene used to hold, and both directors leave a
         /// damageable renderer alone — which is what keeps a code-built factory off the magenta path.
+        ///
+        /// MV-683: also hands a mobile shed its own leash — the footprint of whichever zone it was
+        /// authored inside, the same <c>map.ZoneAt(e.x, e.z).Footprint</c> convention <see cref="BuildBoss"/>
+        /// already uses for a boss's wake area — so a static shed's <see cref="MowerHutch.TickMobility"/>
+        /// (a permanent no-op for it) never even reads the field.
         /// </summary>
-        private static MowerHutch BuildFactory(MapEntity e, Transform root, MapBuild built)
+        private static MowerHutch BuildFactory(MapData map, MapEntity e, Transform root, MapBuild built)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
 
@@ -290,7 +295,12 @@ namespace MaxWorlds.Arena
             // RequireComponent brings the EnemySpawner with it — the factory's mouth is part of what a
             // factory IS, not something a scene has to remember to bolt on.
             var hutch = body.AddComponent<MowerHutch>();
-            if (e.mobile) hutch.ConfigureMobility(true);
+            if (e.mobile)
+            {
+                hutch.ConfigureMobility(true);
+                MapZone zone = map.ZoneAt(e.x, e.z);
+                if (zone != null) hutch.SetAreaFootprint(zone.Footprint);
+            }
 
             built.Actors[e.id] = body;
             return hutch;
