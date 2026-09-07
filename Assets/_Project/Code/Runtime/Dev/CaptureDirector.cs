@@ -7,6 +7,7 @@ using Unity.Cinemachine;
 using UnityEngine;
 using static UnityEngine.Object;
 using MaxWorlds.Arena;
+using MaxWorlds.Bosses;
 using MaxWorlds.CameraRig;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
@@ -15,6 +16,7 @@ using MaxWorlds.Factories;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Dev
@@ -311,6 +313,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv674TeleportCrackle());
             Add(BuildMv693Replicator());
             Add(BuildMv702LppeShoulderRack());
+            Add(BuildMv699Sludgequeen());
             return d;
         }
 
@@ -1100,6 +1103,85 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-702-result", Setup) },
+            };
+        }
+
+        // ---- MV699Sludgequeen (MV-699) ---------------------------------------------------------
+
+        /// <summary>Builds a standalone Sludgequeen and explicitly grows her rig via
+        /// <c>SludgequeenRig.CreateFor</c> — the boss doesn't do this itself yet (wiring into
+        /// <c>MapRuntime</c>'s <c>bosses[]</c> dispatch is still MV-696's own out-of-scope follow-up) —
+        /// then frames it so the generated drum/hatches/valve-wheel-crown/eye body (MV-699) is
+        /// visible: proof of the actual result, not a description of one.</summary>
+        private static CapturePreset BuildMv699Sludgequeen()
+        {
+            const float pitch = 60f;
+            // 18 m, not MV693Replicator's 5 m: this boss's own footprint (6 m drum, ~4.5 m to the
+            // crown's top) is 3x that box's, and a distance that only cleared the smaller Replicator
+            // framed nothing but this crown's own top face.
+            const float distance = 18f;
+
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject bossGo = null;
+            SludgequeenRig rig = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                bossGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bossGo.name = "MV699CaptureSludgequeen";
+                bossGo.transform.position = focus;
+                // The camera below approaches from -Z looking toward +Z — face the rig's own +Z
+                // front (the CuratorEye's side) back at it, or the one part meant to read as a face
+                // would sit on the far, camera-away side of the drum.
+                bossGo.transform.rotation = Quaternion.Euler(0f, 180f, 0f);
+                var boss = bossGo.AddComponent<SludgequeenBoss>();
+                boss.SetArenaBounds(new Rect(focus.x - 22f, focus.z - 22f, 44f, 44f));
+
+                rig = SludgequeenRig.CreateFor(boss);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * 2.2f;   // roughly mid-height on the drum
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                // Same first-manual-Render() warm-up MV693Replicator's own preset needed — URP's
+                // Render Graph has logged a one-off NullReferenceException on exactly that first call
+                // in headless -nographics runs.
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv699sludgequeen",
+                LogTag = "[MV699Capture]",
+                Flag = "-mv699shot",
+                ArmFile = "Temp/mv699.arm",
+                HeadlessMarker = "Temp/mv699.headless",
+                DoneFileName = "_mv699_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV674TeleportCrackle/MV693Replicator's
+                    // own presets use: on a fresh profile (no slot picked yet) HomeScreen's pick-a-slot
+                    // modal freezes Time.timeScale at 0 and blocks this capture indefinitely.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-699-result", Setup) },
+                Cleanup = () =>
+                {
+                    if (rig != null) Destroy(rig.gameObject);
+                    if (bossGo != null) Destroy(bossGo);
+                },
             };
         }
     }
