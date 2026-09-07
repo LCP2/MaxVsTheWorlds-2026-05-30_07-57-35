@@ -310,6 +310,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv616SentinelBeam());
             Add(BuildMv674TeleportCrackle());
             Add(BuildMv693Replicator());
+            Add(BuildMv702LppeShoulderRack());
             return d;
         }
 
@@ -1037,6 +1038,68 @@ namespace MaxWorlds.Dev
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-693-result", Setup) },
                 Cleanup = () => { if (replicatorGo != null) Destroy(replicatorGo); },
+            };
+        }
+
+        // ---- MV702LppeShoulderRack (MV-702) ---------------------------------------------------
+
+        /// <summary>Frames Max with the LPPE gadget live and the Shoulder Rack mount bought (MV-702) —
+        /// proof the generated meshes actually show on <c>MaxRig</c>, not a description of one. Reaches
+        /// World 2 state the same proven way <c>MV689WeaponCoreMorphTests</c> does (the real
+        /// collect-a-core-then-open-THE-RIG morph), rather than hand-setting
+        /// <c>WeaponSystemState.ActivePrimary</c>/<c>SecondaryKind</c> directly against a World-1 board
+        /// that has no <c>s_rkt</c> node to acquire.</summary>
+        private static CapturePreset BuildMv702LppeShoulderRack()
+        {
+            const float pitch = 60f;
+            const float distance = 4f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var maxGo = GameObject.FindGameObjectWithTag("Player");
+                if (maxGo == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let MaxRig's own Awake read the morphed state
+
+                Vector3 focus = maxGo.transform.position + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv702lppeshoulderrack",
+                LogTag = "[MV702Capture]",
+                Flag = "-mv702shot",
+                ArmFile = "Temp/mv702.arm",
+                HeadlessMarker = "Temp/mv702.headless",
+                DoneFileName = "_mv702_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // The same real morph path MV689WeaponCoreMorphTests proves: collect a Weapon Core,
+                    // then THE RIG's next open. Landing on World 2's board this way (rather than poking
+                    // ActivePrimary/SecondaryKind directly against a still-World-1 board) is what makes
+                    // "s_rkt" a real, acquirable node.
+                    WeaponSystemState.Reset();
+                    PendingMorphingModule.Reset();
+                    PendingMorphingModule.SetWeaponCore();
+                    WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex: 1);
+                    RigState.AcquireCap("s_rkt");   // clears SECONDARY's mystery lock, buys the rack to L1
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-702-result", Setup) },
             };
         }
     }

@@ -30,16 +30,50 @@ namespace MaxWorlds.VFX
 
     /// <summary>What a built body hands back: the gadget glow the rig tints, and the hip pivots the run
     /// cycle drives (MV-474) — the same Eyes/Wheels split <see cref="RobotBodies.Body"/> already uses,
-    /// so a director never has to hunt geometry down by name.</summary>
+    /// so a director never has to hunt geometry down by name.
+    ///
+    /// MV-702 adds the LPPE/Shoulder Rack integration points: <see cref="RcdaGadget"/>/
+    /// <see cref="LppeGadget"/> are the two gadget submeshes <c>MaxRig</c> toggles on
+    /// <c>WeaponSystemState.ActivePrimary</c> (both built once, never rebuilt — a SetActive flip is
+    /// cheaper than tearing down and re-emitting the fused body mesh on every primary swap), and
+    /// <see cref="RackMount"/>/<see cref="RackTubeGlow"/> are the Shoulder Rack's mount, migrated here
+    /// from its old placeholder home directly on <c>ShoulderRack</c> (see that class's history).</summary>
     public readonly struct MaxBodyResult
     {
         public readonly MeshRenderer[] GadgetGlow;
         public readonly Transform[] Hips;
 
-        public MaxBodyResult(MeshRenderer[] gadgetGlow, Transform[] hips)
+        /// <summary>The RCDA's own gadget submesh — active by default (the RCDA is Max's run-start
+        /// primary).</summary>
+        public readonly GameObject RcdaGadget;
+
+        /// <summary>The LPPE's gadget submesh — inactive by default, shown once
+        /// <c>WeaponSystemState.ActivePrimary</c> reads <c>Lppe</c> (MV-689's World 2 morph).</summary>
+        public readonly GameObject LppeGadget;
+
+        /// <summary>The LPPE's own cyan-white lens — tinted separately from the RCDA's water-cyan tank
+        /// glow so the two weapons don't share a light colour.</summary>
+        public readonly MeshRenderer[] LppeGlow;
+
+        /// <summary>The Shoulder Rack's 3-tube mount — inactive by default (unbought), shown once
+        /// <c>ShoulderRack.IsBought</c> is true.</summary>
+        public readonly GameObject RackMount;
+
+        /// <summary>The three tube-tip lenses, tinted by <c>MaxRig</c> from dim (just fired) to bright
+        /// (fully reloaded) as the rack reloads.</summary>
+        public readonly MeshRenderer[] RackTubeGlow;
+
+        public MaxBodyResult(MeshRenderer[] gadgetGlow, Transform[] hips, GameObject rcdaGadget,
+                             GameObject lppeGadget, MeshRenderer[] lppeGlow, GameObject rackMount,
+                             MeshRenderer[] rackTubeGlow)
         {
             GadgetGlow = gadgetGlow;
             Hips = hips;
+            RcdaGadget = rcdaGadget;
+            LppeGadget = lppeGadget;
+            LppeGlow = lppeGlow;
+            RackMount = rackMount;
+            RackTubeGlow = rackTubeGlow;
         }
     }
 
@@ -121,7 +155,7 @@ namespace MaxWorlds.VFX
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
             Add(root, CharacterMeshes.Prism(4, 0.026f, 0.026f, 0.1f, 0.1f, 0f), p.Dark, new Vector3(0f, 1.902f, 0.112f), Quaternion.Euler(24f, 0f, 90f), new Vector3(1f, 1f, 0.6f));
 
-            // ---- the gadget (not in the approved block — ported from the pre-MV-669 body) --------
+            // ---- the RCDA gadget (not in the approved block — ported from the pre-MV-669 body) -----
             //
             // Revision 2's re-emitted block moved the right glove to (0.325, 0.769, 0.03) — the block's
             // header states this explicitly. That is a further (+0.0171, -0.0315, +0.0016) from
@@ -131,17 +165,58 @@ namespace MaxWorlds.VFX
             // and scales are still untouched. Combined with the revision-1 shift, the gadget has now
             // moved a total of (+0.0665, -0.2835, -0.04) from the true pre-MV-669 hand (0.2585, 1.0525,
             // 0.07) — down to hip height, matching the GDD's "holds the gadget two-handed at the hip".
-            Add(root, CharacterMeshes.Prism(4, 0.055f, 0.05f, 0.3f, 0.12f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.042f, 0.038f, 0.1f, 0.2f, 0f), p.Dark, new Vector3(0.2715f, 0.7515f, 0.3f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(6, 0.03f, 0.026f, 0.06f, 0.25f, 0f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            gadgetGlow.Add(Lens(root, CharacterMeshes.Lathe(new[] { new Vector2(0.068f, 0f), new Vector2(0.082f, 0.035f), new Vector2(0.082f, 0.15f), new Vector2(0.064f, 0.19f) }, 16), new Vector3(0.2665f, 0.8415f, 0.05f), Quaternion.Euler(78f, -15f, 0f), Vector3.one));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.04f, 0f), new Vector2(0.046f, 0.015f), new Vector2(0.038f, 0.03f) }, 12), p.Dark, new Vector3(0.2665f, 0.8415f, 0.23f), Quaternion.Euler(78f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.3095f, 0.6765f, 0f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2495f, 0.7065f, 0.23f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
-            gadgetGlow.Add(Lens(root, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.055f, 0.055f, 0.038f)));
+            //
+            // MV-702: parented under its own container so MaxRig can SetActive it off once the LPPE
+            // morph (MV-689) flips WeaponSystemState.ActivePrimary — both gadgets are built once, at
+            // Awake, and swapped by visibility rather than torn down and re-emitted.
+            var rcdaRoot = new GameObject("GadgetRcda");
+            rcdaRoot.transform.SetParent(root, worldPositionStays: false);
+            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.055f, 0.05f, 0.3f, 0.12f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.042f, 0.038f, 0.1f, 0.2f, 0f), p.Dark, new Vector3(0.2715f, 0.7515f, 0.3f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(rcdaRoot.transform, CharacterMeshes.Prism(6, 0.03f, 0.026f, 0.06f, 0.25f, 0f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            gadgetGlow.Add(Lens(rcdaRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.068f, 0f), new Vector2(0.082f, 0.035f), new Vector2(0.082f, 0.15f), new Vector2(0.064f, 0.19f) }, 16), new Vector3(0.2665f, 0.8415f, 0.05f), Quaternion.Euler(78f, -15f, 0f), Vector3.one));
+            Add(rcdaRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.04f, 0f), new Vector2(0.046f, 0.015f), new Vector2(0.038f, 0.03f) }, 12), p.Dark, new Vector3(0.2665f, 0.8415f, 0.23f), Quaternion.Euler(78f, -15f, 0f), Vector3.one);
+            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.3095f, 0.6765f, 0f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
+            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2495f, 0.7065f, 0.23f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
+            Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            gadgetGlow.Add(Lens(rcdaRoot.transform, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.055f, 0.055f, 0.038f)));
 
-            return new MaxBodyResult(gadgetGlow.ToArray(), hips);
+            // ---- the LPPE gadget (MV-702) — a laser-pointer-and-drill hybrid, welded to the same ----
+            // glove position the RCDA occupies (a hidden gadget swap has to land in exactly the same
+            // hands), reusing the RCDA's own grip/stock parts so the two weapons read as siblings from
+            // the same toolbox rather than two unrelated props. Boxy Prism housing + a ridged Lathe
+            // "coil" replace the RCDA's tank; a tapered hex Prism nose replaces its round barrel; one
+            // cyan-white lens (the ticket's "cyan-white lens") stands in for the RCDA's two.
+            var lppeGlow = new List<MeshRenderer>(1);
+            var lppeRoot = new GameObject("GadgetLppe");
+            lppeRoot.transform.SetParent(root, worldPositionStays: false);
+            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.06f, 0.05f, 0.32f, 0.1f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(lppeRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.036f, 0f), new Vector2(0.05f, 0.018f), new Vector2(0.036f, 0.036f), new Vector2(0.05f, 0.054f), new Vector2(0.036f, 0.072f), new Vector2(0.05f, 0.09f), new Vector2(0.036f, 0.108f), new Vector2(0f, 0.118f) }, 14), p.Dark, new Vector3(0.2715f, 0.75f, 0.24f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(lppeRoot.transform, CharacterMeshes.Prism(6, 0.032f, 0.012f, 0.09f, 0.3f, 10f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.04f, 0.034f, 0.13f, 0.2f, 0f), p.Dark, new Vector3(0.3095f, 0.6765f, 0f), Quaternion.Euler(22f, -15f, 0f), Vector3.one);
+            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.034f, 0.03f, 0.08f, 0.22f, 0f), p.Dark, new Vector3(0.2495f, 0.7065f, 0.23f), Quaternion.Euler(26f, -15f, 0f), Vector3.one);
+            Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
+            lppeGlow.Add(Lens(lppeRoot.transform, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.05f, 0.05f, 0.036f)));
+            lppeRoot.SetActive(false);   // RCDA is Max's run-start primary; MaxRig flips these on ActivePrimary
+
+            // ---- the Shoulder Rack mount (MV-702) — migrated from ShoulderRack's own placeholder ----
+            // GameObject (see that class's history) onto MaxRig proper, so it stops being tinted by
+            // CharacterSkinDirector (which claims every renderer under Max's own IDamageable — see
+            // MaxRig's class doc). Right shoulder, outboard of the arm beam at (0.275, 1.204, 0.01).
+            var rackTubeGlow = new MeshRenderer[3];
+            var rackRoot = new GameObject("ShoulderRackMount");
+            rackRoot.transform.SetParent(root, worldPositionStays: false);
+            Add(rackRoot.transform, CharacterMeshes.Prism(4, 0.09f, 0.08f, 0.3f, 0.08f, 0f), p.Metal, new Vector3(0.33f, 1.28f, 0.02f), Quaternion.Euler(0f, -15f, 0f), Vector3.one);
+            for (int i = 0; i < 3; i++)
+            {
+                float yOff = (i - 1) * 0.075f;
+                Add(rackRoot.transform, CharacterMeshes.Beam(0.22f, 0.032f, 0.028f, 8), p.Dark, new Vector3(0.33f, 1.28f + yOff, 0.16f), Quaternion.Euler(90f, -15f, 0f), Vector3.one);
+                rackTubeGlow[i] = Lens(rackRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.03f, 0.012f), new Vector2(0.024f, 0.03f) }, 10), new Vector3(0.33f, 1.28f + yOff, 0.275f), Quaternion.Euler(90f, -15f, 0f), Vector3.one);
+            }
+            rackRoot.SetActive(false);   // shown only once ShoulderRack.IsBought (AC2, carried over from MV-694)
+
+            return new MaxBodyResult(gadgetGlow.ToArray(), hips, rcdaRoot, lppeRoot, lppeGlow.ToArray(),
+                                     rackRoot, rackTubeGlow);
         }
 
         /// <summary>An empty rotation handle — the hinge <see cref="MaxRig.TickRun"/> swings a foot

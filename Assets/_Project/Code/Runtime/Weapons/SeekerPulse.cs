@@ -65,6 +65,7 @@ namespace MaxWorlds.Weapons
             BuildVisual(go.transform);
 
             RobotEnemy target = AcquireTarget(origin, aimDir, lockRange, lockHalfAngleDeg);
+            LockBracketVfx.Show(target);   // MV-702: the reticle bracket MV-708 deferred as this ticket's own
 
             var pulse = go.AddComponent<SeekerPulse>();
             pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit);

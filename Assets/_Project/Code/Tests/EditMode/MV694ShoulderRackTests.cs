@@ -48,22 +48,19 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Physics.SyncTransforms();
 
-                // AC2 (part 1): s_rkt starts at 0 (RigState.Reset()'s baseline) — the mesh must stay
-                // hidden. A single zero-length tick is enough to run RefreshMountVisibility without
-                // touching the reload countdown.
-                rack.Tick(0f);
-                Assert.That(rack.MountForTests == null || !rack.MountForTests.activeInHierarchy, Is.True,
-                    "the rack mesh must not be shown before s_rkt is owned");
+                // AC2 (part 1): s_rkt starts at 0 (RigState.Reset()'s baseline) — the mesh (now built on
+                // MaxRig, MV-702) must stay hidden. IsBought is the resolved value MaxRig itself reads
+                // to decide that (see MaxRig.TickShoulderRackMount).
+                Assert.That(rack.IsBought, Is.False, "the rack mesh must not be shown before s_rkt is owned");
 
                 // s_rkt L1, s_sal L1 (RestoreSnapshot bypasses the draft/reach gate for test setup, the
                 // same shortcut MV681WaterBalloonAutoFireToggleTests/RigStateTests use).
                 RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 1 } },
                     new[] { "SECONDARY" });
 
+                Assert.That(rack.IsBought, Is.True, "AC2: the rack mesh must be shown once s_rkt reaches L1");
+
                 Advance(rack, 1.8f);
-                Assert.That(rack.MountForTests, Is.Not.Null, "fixture: the mesh must exist once s_rkt is owned");
-                Assert.That(rack.MountForTests.activeInHierarchy, Is.True,
-                    "AC2: the rack mesh must be shown once s_rkt reaches L1");
 
                 Assert.That(PlayerRocket.Active.Count, Is.EqualTo(1),
                     "advancing 1.8s (one ReloadSeconds window) must fire exactly one rocket");
