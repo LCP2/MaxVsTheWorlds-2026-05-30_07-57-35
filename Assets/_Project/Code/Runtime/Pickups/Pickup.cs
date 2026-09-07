@@ -50,11 +50,11 @@ namespace MaxWorlds.Pickups
         /// scene-wide scan (MV-527).</summary>
         public static IReadOnlyList<Pickup> Active => _active;
 
-        /// <summary>Fires exactly once per placement — a fresh drop (<see cref="Create"/> then
-        /// immediately <see cref="Place"/>, both inside the same call) or a pooled reuse (<see cref="Place"/>
-        /// alone, after <c>PickupDirector.Collect</c> deactivated it). <c>PickupArtDirector</c> listens
-        /// for this instead of polling an active/inactive transition itself every frame (MV-527) — same
-        /// null-safe static-event idiom as <c>DropSignals</c>/<c>HudSignals</c>.</summary>
+        /// <summary>Fires exactly once per placement — a fresh drop or a pooled reuse, both always via
+        /// <see cref="Place"/> (see below for why it is raised there and not from <see cref="OnEnable"/>).
+        /// <c>PickupArtDirector</c> listens for this instead of polling an active/inactive transition
+        /// itself every frame (MV-527) — same null-safe static-event idiom as
+        /// <c>DropSignals</c>/<c>HudSignals</c>.</summary>
         public static event System.Action<Pickup> Registered;
 
         /// <summary>Test isolation only (mirrors <c>RobotEnemy.ResetRegistry</c>) — a fixture that
@@ -62,11 +62,7 @@ namespace MaxWorlds.Pickups
         /// leak stale entries into the next test.</summary>
         public static void ResetRegistry() => _active.Clear();
 
-        private void OnEnable()
-        {
-            _active.Add(this);
-            Registered?.Invoke(this);
-        }
+        private void OnEnable() => _active.Add(this);
 
         private void OnDisable() => _active.Remove(this);
 
@@ -108,11 +104,24 @@ namespace MaxWorlds.Pickups
             _spin = prim.transform;
         }
 
-        /// <summary>Drop the pickup at a ground position and switch it on (the director calls this).</summary>
+        /// <summary>Drop the pickup at a ground position and switch it on (the director calls this).
+        /// <see cref="Registered"/> fires from here, not from <see cref="OnEnable"/> (MV-685): a fresh
+        /// <see cref="Create"/> calls <c>AddComponent&lt;Pickup&gt;()</c> on a GameObject that starts
+        /// active, and Unity fires a freshly-added component's <c>OnEnable</c> synchronously, inside that
+        /// call — before <c>Create</c> has assigned <see cref="Kind"/> or built the "Visual" greybox
+        /// child. Raising <see cref="Registered"/> from <c>OnEnable</c> back then meant
+        /// <c>PickupArtDirector</c> saw a pickup with no kind and no greybox to hide yet, so the greybox
+        /// was built moments later and never got hidden, and (for every kind but the enum's zero value,
+        /// PowerCell) the wrong art got built too. <c>Place</c> is always called after both are ready —
+        /// for a fresh drop, at the end of the same <c>Create</c>-then-<c>Place</c> call the director's
+        /// own doc comment already promised; for a pooled reuse, <see cref="Kind"/> never changes and the
+        /// art/greybox were already built the first time — so raising it here instead is unconditionally
+        /// safe and fixes both without depending on Unity's OnEnable timing at all.</summary>
         public void Place(Vector3 groundPos)
         {
             transform.position = new Vector3(groundPos.x, _baseY, groundPos.z);
             gameObject.SetActive(true);
+            Registered?.Invoke(this);
         }
 
         private void Update()
