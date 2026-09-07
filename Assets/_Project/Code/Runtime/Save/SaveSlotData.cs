@@ -27,6 +27,10 @@ namespace MaxWorlds.Save
         /// reaches 100%). -1 means this profile has never finished a run yet.</summary>
         public int BestDeathsToVictory = -1;
 
+        /// <summary>Which world (<see cref="MaxWorlds.Arena.WorldLibrary.Keys"/>) this profile plays
+        /// next, 0-based (MV-687). Advances by one on every Victory, clamped to the last world.</summary>
+        public int WorldIndex;
+
         // --- Mid-run checkpoint (MV-557 schema; captured/restored for real as of MV-524 parts 2/3) ---
         // Written by SaveSystem.CaptureActiveCheckpoint (AreaAccumulationDirector.EnterArea and
         // WorldRunner's pause/focus handlers) and read by SaveSystem.RestoreCheckpoint (HomeScreen's

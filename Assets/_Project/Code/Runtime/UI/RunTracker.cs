@@ -116,6 +116,13 @@ namespace MaxWorlds.UI
             _sealed = true;
             _stats.Finish(outcome);
 
+            // MV-687: capture whether this victory WILL advance the world before RecordResult actually
+            // does it — SaveSystem is the only place that knows the pre-advance WorldIndex, and the
+            // Result screen needs to know whether there's a next world to name its CTA correctly.
+            bool advancesWorld = SaveSystem.ActiveSlot >= 0 &&
+                SaveSystem.Load(SaveSystem.ActiveSlot).WorldIndex < WorldLibrary.Count - 1;
+            _stats.SetAdvancesWorld(advancesWorld);
+
             // MV-427: deaths taken is the new personal-best discriminator — the peak-Domination %
             // stopped meaning anything once a death no longer ends the run (every player eventually
             // reaches 100%). Still only banked on a run that actually finishes (Victory); bailing out

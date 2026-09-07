@@ -30,6 +30,15 @@ namespace MaxWorlds.UI
 
         public bool IsOver => Outcome != RunOutcome.InProgress;
 
+        /// <summary>Whether sealing this run as a Victory will push the active profile's
+        /// <c>SaveSlotData.WorldIndex</c> forward (MV-687) — set by <c>RunTracker</c> before it calls
+        /// <c>SaveSystem.RecordResult</c>, since that call is what actually performs the advance and
+        /// this needs to know the state beforehand. Drives whether the Result screen's NEXT WORLD
+        /// button is live or reads NO FURTHER WORLDS.</summary>
+        public bool AdvancesWorld { get; private set; }
+
+        public void SetAdvancesWorld(bool value) => AdvancesWorld = value;
+
         /// <summary>Advance the run clock. No-op once the run is over.</summary>
         public void Tick(float dt)
         {

@@ -18,6 +18,22 @@ namespace MaxWorlds.Arena
         /// <summary>World 1 — Backyard, LOCKED v1 (2026-08-05), the 0.6 milestone's playable world.</summary>
         public const string World1 = "world1_config";
 
+        /// <summary>World 2 — Stormdrain (MV-687). Ships as a placeholder config until MV-700 lands
+        /// the real level design.</summary>
+        public const string World2 = "world2_config";
+
+        /// <summary>Every world, in play order — index 0 is <see cref="World1"/>. What
+        /// <see cref="MaxWorlds.Save.SaveSlotData.WorldIndex"/> counts against.</summary>
+        public static readonly string[] Keys = { World1, World2 };
+
+        /// <summary>How many worlds exist.</summary>
+        public static int Count => Keys.Length;
+
+        /// <summary>The world key for a 0-based world index, clamped to the last world once a save's
+        /// index would otherwise run off the end of <see cref="Keys"/> (there is no world after the
+        /// last one to advance into).</summary>
+        public static string KeyForIndex(int worldIndex) => Keys[Mathf.Clamp(worldIndex, 0, Keys.Length - 1)];
+
         /// <summary>Load a world config by key. Returns null and logs if it is missing, unparseable, or
         /// fails validation — the caller decides what a missing/broken world means; here it is never
         /// silently papered over.</summary>
