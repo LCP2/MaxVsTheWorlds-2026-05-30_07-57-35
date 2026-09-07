@@ -67,6 +67,12 @@ namespace MaxWorlds.Enemies
         /// as one more instance of the game's warm rust/orange telegraph family.</summary>
         private static readonly Color GlobColor = new Color(0.24f, 0.55f, 0.18f);
 
+        /// <summary>MV-699's own "glob trails": a short smear the same MV-508 fix
+        /// <see cref="HomingMissile.BuildTrail"/> already uses — a lobbed ballistic arc with no
+        /// connective motion between frames reads as strobing rather than flight.</summary>
+        private const float TrailTime = 0.14f;
+        private const float TrailWidth = 0.3f;
+
         private static void BuildVisual(Transform parent)
         {
             // Same reason as HomingMissile.BuildVisual/BolterBolt.BuildVisual: without this,
@@ -81,6 +87,30 @@ namespace MaxWorlds.Enemies
             blob.transform.SetParent(parent, false);
             blob.transform.localScale = Vector3.one * 0.35f;   // the ticket's own authored size
             if (mat != null) blob.GetComponent<MeshRenderer>().sharedMaterial = mat;
+
+            BuildTrail(parent, mat);
+        }
+
+        /// <summary>Same shape as <see cref="HomingMissile.BuildTrail"/>: a short motion smear, not a
+        /// ribbon, sourced from the glob's own material so it shares its tint/caching rules.</summary>
+        private static void BuildTrail(Transform parent, Material mat)
+        {
+            var trail = parent.gameObject.AddComponent<TrailRenderer>();
+            trail.time = TrailTime;
+            trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
+            trail.widthMultiplier = TrailWidth;
+            trail.minVertexDistance = 0.03f;
+            trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            trail.receiveShadows = false;
+            trail.sharedMaterial = mat;
+
+            var gradient = new Gradient();
+            gradient.SetKeys(
+                new[] { new GradientColorKey(GlobColor, 0f), new GradientColorKey(GlobColor, 1f) },
+                new[] { new GradientAlphaKey(0.85f, 0f), new GradientAlphaKey(0f, 1f) });
+            trail.colorGradient = gradient;
+
+            trail.Clear();
         }
 
         private static void Strip(GameObject go)
