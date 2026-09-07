@@ -441,6 +441,7 @@ namespace MaxWorlds.Arena
                 && WorldSheds(cfg, out reason)
                 && WorldBosses(cfg, out reason)
                 && WorldGarrison(cfg, out reason)
+                && WorldLurkerGrates(cfg, out reason)
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
                 && WorldVerticality(cfg, out reason);
@@ -704,6 +705,43 @@ namespace MaxWorlds.Arena
             return true;
         }
 
+        /// <summary>Every garrisoned Grate Lurker (MV-688, AC2) must sit exactly on one of its own
+        /// area's authored <see cref="WorldArea.grates"/> — the grate IS the Lurker's visible body while
+        /// submerged, so a Lurker authored off one has no body to stand in for it at all. Names the area
+        /// and the entry's index in the failure reason, per the ticket's own AC2 wording.</summary>
+        private static bool WorldLurkerGrates(WorldConfig cfg, out string reason)
+        {
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldGarrisonEntry[] garrison = a.garrison;
+                if (garrison == null || garrison.Length == 0) continue;
+
+                for (int i = 0; i < garrison.Length; i++)
+                {
+                    WorldGarrisonEntry entry = garrison[i];
+                    if (entry == null) continue;
+                    if (!EnemyKindNames.TryParse(entry.kind, out EnemyKind kind) || kind != EnemyKind.Lurker) continue;
+
+                    bool onGrate = false;
+                    foreach (WorldGrate grate in a.grates ?? Array.Empty<WorldGrate>())
+                    {
+                        if (grate == null) continue;
+                        if (Geo.Same(grate.x, entry.x) && Geo.Same(grate.z, entry.z)) { onGrate = true; break; }
+                    }
+
+                    if (!onGrate)
+                    {
+                        reason = $"area '{a.id}': garrison entry {i} is a lurker at ({entry.x:0.#}, {entry.z:0.#}) " +
+                                 "but no grate sits there — a Lurker must be authored exactly on a grate";
+                        return false;
+                    }
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
         private static int CompositionCount(DifficultyEngine.Composition c, EnemyKind kind) => kind switch
         {
             EnemyKind.Rusher => c.Rusher,
@@ -714,6 +752,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Launcher => c.Launcher,
             EnemyKind.Blinker => c.Blinker,
             EnemyKind.Bolter => c.Bolter,
+            EnemyKind.Lurker => c.Lurker,
             _ => 0,
         };
 

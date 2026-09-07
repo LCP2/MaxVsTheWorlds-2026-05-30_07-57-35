@@ -26,7 +26,7 @@ namespace MaxWorlds.Enemies
             if (rusher == composition.Rusher) return composition;
             return new DifficultyEngine.Composition(rusher, composition.Bruiser, composition.Heavy,
                 composition.Brute, composition.Gunner, composition.Launcher, composition.Blinker,
-                composition.Bolter);
+                composition.Bolter, composition.Lurker);
         }
     }
 }

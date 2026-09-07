@@ -46,15 +46,19 @@ namespace MaxWorlds.Enemies
             /// it (<see cref="MaxWorlds.Arena.WorldComposition.ToEngineComposition"/>).</summary>
             public readonly int Bolter;
 
+            /// <summary>MV-688: the Grate Lurker — same "authored-composition only" footing as
+            /// <see cref="Bolter"/> (no dial ever unlocks it in <see cref="SolveComposition"/>).</summary>
+            public readonly int Lurker;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
-                int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0)
+                int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
-                Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter;
+                Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
             }
 
             public int TotalCount =>
-                Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter;
+                Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -65,7 +69,8 @@ namespace MaxWorlds.Enemies
                 Rusher * ThreatValues.Rusher + Bruiser * ThreatValues.Bruiser +
                 Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute +
                 Gunner * ThreatValues.Gunner + Launcher * ThreatValues.Launcher +
-                Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter;
+                Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter +
+                Lurker * ThreatValues.Lurker;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

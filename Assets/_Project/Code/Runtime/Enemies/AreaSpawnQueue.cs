@@ -116,6 +116,10 @@ namespace MaxWorlds.Enemies
             for (int i = 0; i < composition.Launcher; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Launcher));
             for (int i = 0; i < composition.Blinker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Blinker));
             for (int i = 0; i < composition.Bolter; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Bolter));
+            // MV-688: a Lurker only ever fills a NAMED garrison slot (TryTakeForGarrison's exact-kind
+            // path) — it still has to be queued here or that lookup finds nothing and silently
+            // substitutes the wrong kind at the Lurker's own grate.
+            for (int i = 0; i < composition.Lurker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Lurker));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

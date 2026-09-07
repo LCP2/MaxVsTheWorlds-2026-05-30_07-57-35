@@ -178,6 +178,11 @@ namespace MaxWorlds.Factories
                 RobotEnemy r = active[i];
                 if (r == null || !r.IsAlive || r.IsDormant) continue;
                 if (r.NoReplicate) continue;
+                // MV-688: a Grate Lurker is never Dormant (it lives in its own State.Submerged cycle),
+                // so the IsDormant screen above lets it through — luring one off its grate would freeze
+                // LurkerCycle mid-cycle with no way back. Excluded outright, same as an already-seeking
+                // robot below.
+                if (r.Kind == EnemyKind.Lurker) continue;
                 if (r.Current == RobotEnemy.State.ReplicatorSeeking) continue; // already lured (by this box or another)
 
                 float distToMe = Vector3.Distance(r.transform.position, transform.position);

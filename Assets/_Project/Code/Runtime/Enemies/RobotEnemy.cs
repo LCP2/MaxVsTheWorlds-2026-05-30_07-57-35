@@ -36,7 +36,9 @@ namespace MaxWorlds.Enemies
         // the short "waking up" beat between spotting him and actually joining the chase.
         // ReplicatorSeeking (MV-706) follows the same rule — lured off Max toward a World 2 Replicator's
         // hatch instead of walking the ordinary Chase route.
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert, ReplicatorSeeking }
+        // Submerged (MV-688) follows it too — a Grate Lurker's whole RATTLE/EMERGED/SUBMERGING cycle
+        // shares this one value; TickLurkerSubmerged/_lurkerPhase (LurkerCycle.Phase) track which beat.
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert, ReplicatorSeeking, Submerged }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -130,6 +132,11 @@ namespace MaxWorlds.Enemies
         [SerializeField] private Color idleTell = new Color(0.85f, 0.7f, 0.2f);
         [SerializeField] private Color windupTell = new Color(1f, 0.2f, 0.1f);
 
+        /// <summary>The Grate Lurker's own single cyan orb eye (MV-688) — stamped over the shared
+        /// idle/windup tell pair in <see cref="Apply"/>, since <see cref="MaxWorlds.VFX.RobotRig"/>'s
+        /// eye-lens tell otherwise reads the same amber/red pair for every kind.</summary>
+        private static readonly Color LurkerEyeColor = new Color(0.15f, 0.85f, 0.9f);
+
         // --- Field-wide registry (YT-186) ---------------------------------------------------------
         // Tracked directly off OnEnable/OnDisable rather than tallied by hand, so it can never drift
         // from what is actually switched on: a normal death, being pooled back out, and a test's
@@ -179,6 +186,13 @@ namespace MaxWorlds.Enemies
         /// individually, never off another robot waking).</summary>
         public bool IsDormant => Current == State.Dormant;
 
+        /// <summary>Whether this robot can currently take damage (MV-688) — true for every kind in
+        /// every state except a Grate Lurker outside its <see cref="LurkerCycle.Phase.Emerged"/> beat:
+        /// SUBMERGED/RATTLE/SUBMERGING are all invulnerable, matching the ticket's "killing it while
+        /// emerged is the only way to kill it". Every other kind never sets <see cref="_lurkerPhase"/>
+        /// away from its default, so this is always true for them.</summary>
+        public bool IsDamageable => Kind != EnemyKind.Lurker || LurkerCycle.IsDamageable(_lurkerPhase);
+
         /// <summary>Which robot this is (YT-66). Set by <see cref="Apply"/>; the spawner pools by it,
         /// so a dead bruiser is never recycled as a rusher wearing the wrong body.</summary>
         public EnemyKind Kind { get; private set; } = EnemyKind.Rusher;
@@ -224,6 +238,15 @@ namespace MaxWorlds.Enemies
             knockbackDecay = a.KnockbackDecay;
             standoffRange = a.StandoffRange;
             teleportCooldown = a.TeleportCooldown;
+            // MV-688: the Lurker's own single cyan orb eye — idleTell/windupTell are otherwise the
+            // same shared amber/red pair every kind's eye lens renders (RobotRig reads them straight,
+            // with no per-kind hue of its own), so this is the one place a kind can own its eye colour
+            // without reworking that shared tell system for every archetype.
+            if (Kind == EnemyKind.Lurker)
+            {
+                idleTell = LurkerEyeColor;
+                windupTell = LurkerEyeColor;
+            }
             // MV-697: a pooled instance must never carry a previous spawn's deck leash into its next
             // life — the common case (Level 0, no footprint) is the correct default until whoever
             // places this robot next calls SetLevel/SetDeckFootprint again.
@@ -496,6 +519,37 @@ namespace MaxWorlds.Enemies
         /// <see cref="TickChase"/>, then executed after the charge-up in <see cref="TickTeleport"/>.</summary>
         private Vector3 _teleportTarget;
 
+        // --- Grate Lurker cycle (MV-688) — irrelevant, and never advanced, for every other kind. ---
+
+        /// <summary>Which beat of <see cref="LurkerCycle"/> this Lurker is actually in — every beat
+        /// shares the one <see cref="State.Submerged"/> value on <see cref="Current"/>.</summary>
+        private LurkerCycle.Phase _lurkerPhase = LurkerCycle.Phase.Submerged;
+
+        /// <summary>Time already spent in <see cref="_lurkerPhase"/> — <see cref="LurkerCycle.Step"/>'s
+        /// own clock.</summary>
+        private float _lurkerPhaseElapsed;
+
+        /// <summary>Landed hits this emergence — <see cref="LurkerCycle"/>'s own "up to 2 hits" early
+        /// re-submerge cap.</summary>
+        private int _lurkerHitsThisEmergence;
+
+        /// <summary>Latched true the first time the universal "dormant until seen" wake check passes
+        /// (the grate itself is the visible body while submerged) — never reverts, same one-way idiom
+        /// as <see cref="Activate"/>.</summary>
+        private bool _lurkerAwake;
+
+        /// <summary>The grate this Lurker currently stands on/in.</summary>
+        private Vector3 _grateHome;
+
+        /// <summary>Every grate in this Lurker's own area (including its own) — <see cref="LurkerCycle.PickReappearGrate"/>
+        /// picks the next one to warp to on re-submerge.</summary>
+        private IReadOnlyList<Vector3> _areaGrates = Array.Empty<Vector3>();
+
+        /// <summary>Every renderer under this robot's body — cached the first time a Lurker needs to
+        /// hide/show itself (MV-688: invisible while SUBMERGED/RATTLE, visible while EMERGED/SUBMERGING).
+        /// Unused, and never populated, for every other kind.</summary>
+        private Renderer[] _bodyRenderers;
+
         /// <summary>What this robot knows about where Max is — which, since YT-83, is no longer the
         /// same thing as where he is. Read-only outside; the state machine drives it.</summary>
         public Perception Sight => _sight;
@@ -646,6 +700,13 @@ namespace MaxWorlds.Enemies
             _noReplicate = false;
             _noReplicateTimer = 0f;
             _bar?.SetReplicatorMarker(false);
+            // MV-688: a pooled Lurker must not carry the last life's cycle progress/wake latch forward —
+            // BeginSubmerged() (called right after this by whoever placed it) re-stamps these anyway, but
+            // a plain pooled reuse that skips BeginDormant/BeginSubmerged must never inherit them either.
+            _lurkerPhase = LurkerCycle.Phase.Submerged;
+            _lurkerPhaseElapsed = LurkerCycle.CooldownDuration;
+            _lurkerHitsThisEmergence = 0;
+            _lurkerAwake = false;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -774,6 +835,7 @@ namespace MaxWorlds.Enemies
                     case State.Dormant:  TickDormant();    break;
                     case State.Alert:    TickAlert(dt);    break;
                     case State.ReplicatorSeeking: TickReplicatorSeeking(dt); break;
+                    case State.Submerged: TickLurkerSubmerged(dt); break;
                 }
             }
 
@@ -868,9 +930,38 @@ namespace MaxWorlds.Enemies
         public void BeginDormant()
         {
             if (Current == State.Dead) return;
+            // MV-688: a Grate Lurker has no ordinary Dormant->Chase life — every placement call site
+            // (AreaAccumulationDirector's garrison seeding) calls this one method regardless of kind, so
+            // this is the one place that has to branch rather than every call site needing its own.
+            if (Kind == EnemyKind.Lurker) { BeginSubmerged(); return; }
             Current = State.Dormant;
             _stateTimer = 0f;
             SetTell(idleTell);
+        }
+
+        /// <summary>Wires this Lurker to its home grate and every grate in its own area (MV-688) —
+        /// called once at placement, before <see cref="BeginDormant"/>/<see cref="BeginSubmerged"/>.
+        /// <paramref name="areaGrates"/> should include <paramref name="home"/> itself; re-submerging
+        /// picks the nearest OTHER one within <see cref="LurkerCycle.ReappearRadius"/>.</summary>
+        public void SetGrates(Vector3 home, IReadOnlyList<Vector3> areaGrates)
+        {
+            _grateHome = home;
+            _areaGrates = areaGrates ?? Array.Empty<Vector3>();
+        }
+
+        /// <summary>A Grate Lurker's own "concealed until seen" state (MV-688) — SUBMERGED, ready to
+        /// RATTLE the instant it is awake and Max is close (<see cref="TickLurkerSubmerged"/>). Unlike
+        /// <see cref="BeginDormant"/>'s one-time wake into Chase, a Lurker cycles back to this exact
+        /// state forever.</summary>
+        private void BeginSubmerged()
+        {
+            Current = State.Submerged;
+            _stateTimer = 0f;
+            _lurkerPhase = LurkerCycle.Phase.Submerged;
+            _lurkerPhaseElapsed = LurkerCycle.CooldownDuration;   // ready to rattle the instant it wakes
+            _lurkerHitsThisEmergence = 0;
+            _lurkerAwake = false;
+            SetBodyVisible(false);
         }
 
         /// <summary>Nothing: the whole point (AC2) is that a dormant robot does not path toward Max,
@@ -974,6 +1065,95 @@ namespace MaxWorlds.Enemies
                 Current = State.Chase;
                 _stateTimer = 0f;
             }
+        }
+
+        /// <summary>A Grate Lurker's whole RATTLE/EMERGED/SUBMERGING cycle (MV-688) — timing owned by
+        /// <see cref="LurkerCycle"/> (a pure static class, unit-tested directly); this only owns the
+        /// one-time wake latch, sight/hit bookkeeping and the actual position warp on reappear. Runs
+        /// unconditionally for <see cref="State.Submerged"/> — <see cref="_lurkerPhase"/> is what
+        /// actually distinguishes the beat.</summary>
+        private void TickLurkerSubmerged(float dt)
+        {
+            if (!_lurkerAwake)
+            {
+                // Same universal "dormant until seen" gate as TickDormant — the grate itself is this
+                // Lurker's visible body while submerged, so seeing the grate is what wakes it.
+                if (IsWellBehindPlayer()) return;
+                if (!AmbushWake.ShouldWake(IsOnScreen(), _sight.HasSight)) return;
+                _lurkerAwake = true;
+            }
+
+            float dist = target != null ? Vector3.Distance(transform.position, target.position) : float.MaxValue;
+            LurkerCycle.Phase before = _lurkerPhase;
+            _lurkerPhase = LurkerCycle.Step(_lurkerPhase, ref _lurkerPhaseElapsed, dt,
+                _lurkerAwake, dist, _lurkerHitsThisEmergence);
+
+            if (_lurkerPhase != before) OnLurkerPhaseChanged(_lurkerPhase);
+            if (_lurkerPhase == LurkerCycle.Phase.Emerged) TickLurkerContact(dt);
+        }
+
+        /// <summary>The visible/audible beat at each cycle transition (MV-688) — visibility, the tell
+        /// colour, and (arriving back at SUBMERGED) the actual reappear warp.</summary>
+        private void OnLurkerPhaseChanged(LurkerCycle.Phase to)
+        {
+            switch (to)
+            {
+                case LurkerCycle.Phase.Rattle:
+                    SetTell(windupTell);
+                    break;
+
+                case LurkerCycle.Phase.Emerged:
+                    SetBodyVisible(true);
+                    _lurkerHitsThisEmergence = 0;
+                    SetTell(idleTell);
+                    break;
+
+                case LurkerCycle.Phase.Submerged:
+                    // Instant reposition, same idiom as TickTeleport's own reappear (MV-293) — the
+                    // Blinker's flank MATHS don't apply to a fixed authored grate, but the mechanism
+                    // (disable the controller, set the position, re-enable it) is the same one reused.
+                    _cc.enabled = false;
+                    transform.position = LurkerCycle.PickReappearGrate(_grateHome, _areaGrates, LurkerCycle.ReappearRadius);
+                    _cc.enabled = true;
+                    _grateHome = transform.position;
+                    SetBodyVisible(false);
+                    _lurkerHitsThisEmergence = 0;
+                    break;
+            }
+        }
+
+        /// <summary>The Lurker's own "lunge-less quick melee" while EMERGED (MV-688) — same per-hit-
+        /// cooldown idiom as <see cref="TickContactTouch"/>, but spends the archetype's own
+        /// <see cref="contactDamage"/> (11, per the ticket) rather than <see cref="touchDamage"/>, and
+        /// counts landed hits into <see cref="_lurkerHitsThisEmergence"/> — <see cref="LurkerCycle"/>'s
+        /// own "up to 2 hits" early re-submerge cap. It never chases (it fights from its grate), so this
+        /// only ever fires when Max walks into range himself.</summary>
+        private void TickLurkerContact(float dt)
+        {
+            _contactCooldownTimer -= dt;
+            if (target == null || _contactCooldownTimer > 0f) return;
+
+            Vector3 to = target.position - transform.position; to.y = 0f;
+            if (to.magnitude > contactRadius) return;
+
+            _contactCooldownTimer = EffectiveContactCooldown;
+            _targetDamageable ??= target.GetComponent<IDamageable>();
+            if (_targetDamageable != null && _targetDamageable.IsAlive)
+            {
+                _targetDamageable.TakeDamage(new DamageInfo(contactDamage, transform.position, to.normalized, Team.Enemy));
+                _lurkerHitsThisEmergence++;
+            }
+        }
+
+        /// <summary>Shows/hides every renderer under this robot's body (MV-688) — a Lurker is invisible
+        /// while SUBMERGED/RATTLE (the grate itself stands in as its body) and visible while
+        /// EMERGED/SUBMERGING. Cached on first use rather than in <see cref="Apply"/>/<see cref="ResetState"/>,
+        /// since the body isn't built by <see cref="MaxWorlds.VFX.RobotRig"/> until after those run.</summary>
+        private void SetBodyVisible(bool visible)
+        {
+            if (_bodyRenderers == null) _bodyRenderers = GetComponentsInChildren<Renderer>(includeInactive: true);
+            for (int i = 0; i < _bodyRenderers.Length; i++)
+                if (_bodyRenderers[i] != null) _bodyRenderers[i].enabled = visible;
         }
 
         private void TickChase(float dt)
@@ -1542,6 +1722,7 @@ namespace MaxWorlds.Enemies
         public void TakeDamage(in DamageInfo info)
         {
             if (!IsAlive) return;
+            if (!IsDamageable) return;   // MV-688: a submerged/rattling/re-submerging Lurker is invulnerable
             // Friendly-fire rejection: an enemy never damages another enemy, whatever
             // path delivered the hit. Logged so any same-team source is visible.
             if (!DamageRules.Applies(info.Attacker, Team))

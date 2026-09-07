@@ -494,6 +494,9 @@ namespace MaxWorlds.Enemies
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
+                // MV-688: wired BEFORE BeginDormant() (which routes a Lurker into BeginSubmerged) — it
+                // needs its home/area grates to already be set for the initial hidden state to be correct.
+                if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));
                 _areaByRobot[e] = areaIndex;
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
@@ -587,6 +590,8 @@ namespace MaxWorlds.Enemies
                 e.gameObject.SetActive(true);
                 e.SetLevel(slots[i].Level);
                 if (slots[i].Level > 0) e.SetDeckFootprint(Garrison.DeckFootprints(area, _worldCfg));
+                // MV-688: see PlacePendingGarrison's own comment on this same line.
+                if (kind == EnemyKind.Lurker) e.SetGrates(pos, GrateWorldPositions(area, pos.y));
                 _areaByRobot[e] = areaIndex;
 
                 // BeginDormant() must run AFTER SetActive(true): OnEnable() calls ResetState(), which
@@ -595,6 +600,21 @@ namespace MaxWorlds.Enemies
 
                 LetThePlayerThrough(e.gameObject);
             }
+        }
+
+        /// <summary>Every grate in <paramref name="area"/>, resolved to world positions at
+        /// <paramref name="spawnY"/> (MV-688) — the same Y a Lurker's own garrison entry spawned at, so
+        /// <see cref="LurkerCycle.PickReappearGrate"/>'s distance check and the actual reappear warp both
+        /// sit at ground height rather than floor level regardless of a deck's elevation.</summary>
+        private static IReadOnlyList<Vector3> GrateWorldPositions(WorldArea area, float spawnY)
+        {
+            WorldGrate[] grates = area.grates;
+            if (grates == null || grates.Length == 0) return System.Array.Empty<Vector3>();
+
+            var positions = new List<Vector3>(grates.Length);
+            foreach (WorldGrate g in grates)
+                if (g != null) positions.Add(new Vector3(g.x, spawnY, g.z));
+            return positions;
         }
 
         /// <summary>Applies <see cref="RusherCap.Apply"/> against this director's running total, then

@@ -26,6 +26,10 @@ namespace MaxWorlds.Enemies
         // just under the Gunner's 3.0 on the same placeholder footing.
         public const float Bolter = 2.8f;
 
+        // MV-688: the ticket's own authored THV — a submerge-cycling ambush kind, placed above the
+        // Gunner (3.0) on the same placeholder footing until real per-type calibration lands.
+        public const float Lurker = 3.0f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -35,6 +39,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Launcher => Launcher,
             EnemyKind.Blinker => Blinker,
             EnemyKind.Bolter => Bolter,
+            EnemyKind.Lurker => Lurker,
             _ => Rusher,
         };
     }

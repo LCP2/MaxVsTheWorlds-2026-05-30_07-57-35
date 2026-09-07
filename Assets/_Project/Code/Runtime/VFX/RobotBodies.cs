@@ -56,6 +56,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Blinker:  BuildBlinker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Gunner:   BuildGunner(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bolter:   BuildBolter(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Lurker:   BuildLurker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -294,6 +295,24 @@ namespace MaxWorlds.VFX
             // robot's own +Z (the direction BolterBolt.Fire's aim always resolves to before rotation).
             Add(root, CharacterMeshes.Beam(0.42f, 0.055f, 0.04f, 8), p.Dark, new Vector3(0f, 0.62f, 0.51f), Quaternion.Euler(90f, 0f, 0f), Vector3.one, "Barrel");
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(0f, 0.62f, 0.72f), Quaternion.identity, new Vector3(0.032f, 0.032f, 0.032f));
+        }
+
+        /// <summary>Grate Lurker (MV-688) — hand-authored, same exception as <see cref="BuildBolter"/>
+        /// above (robot-gen-mesh.html is an interactive browser tool this worker cannot drive
+        /// headlessly). No wheels, no legs: it never walks, only telescopes up out of a grate and back
+        /// down. A thin, tall spindle — the cool lower half and the oil-black warm upper collar meeting
+        /// at a gold filigree ring around the "neck" — with one eye lens near the top, per the roster's
+        /// one-eye rule.</summary>
+        private static void BuildLurker(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.02f, 0f), new Vector2(0.20f, 0.08f), new Vector2(0.22f, 0.35f), new Vector2(0.19f, 0.55f) }, 20), p.Cool, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.19f, 0.55f), new Vector2(0.15f, 0.75f), new Vector2(0.09f, 0.95f), new Vector2(0.05f, 1.08f) }, 20), p.Warm, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
+
+            // The one Tier-1 gold tell, at the join between the cool lower body and the oil-black collar.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.19f, -0.015f), new Vector2(0.24f, 0f), new Vector2(0.19f, 0.015f) }, 24), p.Gold, new Vector3(0f, 0.55f, 0f), Quaternion.identity, Vector3.one);
+
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0f, 0.92f, 0.08f), Quaternion.Euler(-30f, 0f, 0f), new Vector3(0.09f, 0.09f, 0.05f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>
