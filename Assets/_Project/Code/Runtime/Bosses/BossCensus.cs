@@ -1,16 +1,22 @@
 using System.Collections.Generic;
+using UnityEngine;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Bosses
 {
     /// <summary>
-    /// How many <see cref="BigBermudaBoss"/> instances a fight has, and whether they are all down
-    /// (MV-542). Mirrors <c>FactoryCensus</c>'s own reasoning one level up the same problem: a
-    /// single-boss fight worked because "the boss" and "the last boss" were the same event, and
-    /// everything downstream — the HUD boss bar, <c>BossVictoryPayoff</c>, the exit door, results —
-    /// could listen to one boss's own signals directly. With 2+ bosses those are different
-    /// questions, so one place has to answer them: the HUD bar shows the COMBINED health of every
-    /// living boss, and anything keyed on "the boss is dead" waits for the LAST one, not the first.
+    /// How many boss instances a fight has, and whether they are all down (MV-542). Mirrors
+    /// <c>FactoryCensus</c>'s own reasoning one level up the same problem: a single-boss fight worked
+    /// because "the boss" and "the last boss" were the same event, and everything downstream — the HUD
+    /// boss bar, <c>BossVictoryPayoff</c>, the exit door, results — could listen to one boss's own
+    /// signals directly. With 2+ bosses those are different questions, so one place has to answer them:
+    /// the HUD bar shows the COMBINED health of every living boss, and anything keyed on "the boss is
+    /// dead" waits for the LAST one, not the first.
+    ///
+    /// Keyed on <see cref="MonoBehaviour"/>, not a concrete boss class (MV-696): every method here only
+    /// ever uses the boss reference as a dictionary key and to pass back to the caller, so any boss type
+    /// (<c>BigBermudaBoss</c>, <c>SludgequeenBoss</c>, …) can share this one census and the one HUD bar
+    /// it drives, without this class needing to know about a second concrete type.
     ///
     /// Deliberately does not read a boss's health off the instance itself — <see cref="ReportHealth"/>
     /// is pushed in by the boss whenever its own <c>DestructibleHealth</c> changes, the same shape as
@@ -20,12 +26,12 @@ namespace MaxWorlds.Bosses
     /// </summary>
     public static class BossCensus
     {
-        private static readonly List<BigBermudaBoss> Living = new List<BigBermudaBoss>(4);
-        private static readonly Dictionary<BigBermudaBoss, float> CurrentByBoss = new Dictionary<BigBermudaBoss, float>(4);
-        private static readonly Dictionary<BigBermudaBoss, float> MaxByBoss = new Dictionary<BigBermudaBoss, float>(4);
-        private static readonly Dictionary<BigBermudaBoss, int> AreaByBoss = new Dictionary<BigBermudaBoss, int>(4);
-        private static readonly Dictionary<BigBermudaBoss, int> SpawnLevelByBoss = new Dictionary<BigBermudaBoss, int>(4);
-        private static readonly Dictionary<BigBermudaBoss, float> SpawnProgressByBoss = new Dictionary<BigBermudaBoss, float>(4);
+        private static readonly List<MonoBehaviour> Living = new List<MonoBehaviour>(4);
+        private static readonly Dictionary<MonoBehaviour, float> CurrentByBoss = new Dictionary<MonoBehaviour, float>(4);
+        private static readonly Dictionary<MonoBehaviour, float> MaxByBoss = new Dictionary<MonoBehaviour, float>(4);
+        private static readonly Dictionary<MonoBehaviour, int> AreaByBoss = new Dictionary<MonoBehaviour, int>(4);
+        private static readonly Dictionary<MonoBehaviour, int> SpawnLevelByBoss = new Dictionary<MonoBehaviour, int>(4);
+        private static readonly Dictionary<MonoBehaviour, float> SpawnProgressByBoss = new Dictionary<MonoBehaviour, float>(4);
         private static bool _engaged;
 
         public static int LivingCount => Living.Count;
@@ -55,7 +61,7 @@ namespace MaxWorlds.Bosses
         /// <summary>A boss has woken and joined the fight. The FIRST one engages the HUD boss bar;
         /// later ones (a 2+ boss fight) just add to the combined total — engaging a second time would
         /// snap the bar back to full and re-show the name card mid-fight.</summary>
-        public static void Register(BigBermudaBoss boss, string name, int phases, float current, float max,
+        public static void Register(MonoBehaviour boss, string name, int phases, float current, float max,
                                     int areaIndex)
         {
             if (boss == null || Living.Contains(boss)) return;
@@ -77,7 +83,7 @@ namespace MaxWorlds.Bosses
 
         /// <summary>This boss's own HP changed (damage, or a live Retune from the Settings slider).
         /// Pushes the recombined (sum current / sum max) fraction to the HUD boss bar.</summary>
-        public static void ReportHealth(BigBermudaBoss boss, float current, float max)
+        public static void ReportHealth(MonoBehaviour boss, float current, float max)
         {
             if (boss == null || !Living.Contains(boss)) return;
             CurrentByBoss[boss] = current;
@@ -89,7 +95,7 @@ namespace MaxWorlds.Bosses
         /// escalated) changed. Pushes the HIGHEST level among every living boss, and that leader's own
         /// progress, to the HUD's spawn-level bar — same "combine, don't last-write-wins" reasoning as
         /// <see cref="ReportHealth"/>.</summary>
-        public static void ReportSpawnLevel(BigBermudaBoss boss, int level, float progress01)
+        public static void ReportSpawnLevel(MonoBehaviour boss, int level, float progress01)
         {
             if (boss == null || !Living.Contains(boss)) return;
             SpawnLevelByBoss[boss] = level;
@@ -102,7 +108,7 @@ namespace MaxWorlds.Bosses
         /// Reading it scene-wide made a12's single boss the last boss in the game, which fired the
         /// whole victory chain 18 areas early. a20 authors two and a30 three; each area's payoff waits
         /// for its own last one.</summary>
-        public static void ReportDefeated(BigBermudaBoss boss)
+        public static void ReportDefeated(MonoBehaviour boss)
         {
             if (boss == null || !Living.Remove(boss)) return;
             CurrentByBoss.Remove(boss);
@@ -137,7 +143,7 @@ namespace MaxWorlds.Bosses
         /// test fixture cleaned up). Not a kill; nothing is raised here. Same shape as
         /// <c>FactoryCensus.Forget</c> — belt-and-braces against a boss outliving its level as a dead
         /// reference in a static list.</summary>
-        public static void Forget(BigBermudaBoss boss)
+        public static void Forget(MonoBehaviour boss)
         {
             Living.Remove(boss);
             CurrentByBoss.Remove(boss);
@@ -152,7 +158,7 @@ namespace MaxWorlds.Bosses
         /// <see cref="HudSignals.EmitRunComplete"/> for the final area.</summary>
         public static bool AnyLivingIn(int areaIndex)
         {
-            foreach (KeyValuePair<BigBermudaBoss, int> kv in AreaByBoss)
+            foreach (KeyValuePair<MonoBehaviour, int> kv in AreaByBoss)
                 if (kv.Value == areaIndex && Living.Contains(kv.Key)) return true;
             return false;
         }
@@ -160,7 +166,7 @@ namespace MaxWorlds.Bosses
         private static void EmitCombinedHealth()
         {
             float current = 0f, max = 0f;
-            foreach (BigBermudaBoss b in Living)
+            foreach (MonoBehaviour b in Living)
             {
                 current += CurrentByBoss[b];
                 max += MaxByBoss[b];
@@ -175,7 +181,7 @@ namespace MaxWorlds.Bosses
         {
             int level = 1;
             float progress = 0f;
-            foreach (BigBermudaBoss b in Living)
+            foreach (MonoBehaviour b in Living)
             {
                 int l = SpawnLevelByBoss.TryGetValue(b, out int lv) ? lv : 1;
                 float p = SpawnProgressByBoss.TryGetValue(b, out float pr) ? pr : 0f;
