@@ -1,7 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
-using MaxWorlds.Hose;
 using MaxWorlds.Rendering;
 
 namespace MaxWorlds.Arena
@@ -17,9 +16,13 @@ namespace MaxWorlds.Arena
     /// against that wall instead: it replaces a section of the boundary right where the run starts,
     /// rather than hiding metres behind it. It still carries no collider — the real wall is what
     /// stops the player — so nothing about the arena's actual boundary changes, only what's visible
-    /// standing at it. Matches the intro's exterior shed look (plank walls, pitched roof, a door),
-    /// centred on the starting tap so the first hose plainly reads as running back to it. Built the
-    /// same self-installing, code-only way as <see cref="BackyardBackdrop"/> and
+    /// standing at it. Matches the intro's exterior shed look (plank walls, pitched roof, a door).
+    ///
+    /// REVISED again (MV-709): World 1's run was rebuilt south-to-north → west-to-east (v12d), and
+    /// this shed kept building on the old south wall — 160 m from where Max actually spawns, on the
+    /// world's far southern edge where the fixed camera never sees it. It now stands off the WEST
+    /// wall, centred on the entry area, with its door facing +X (into the run) instead of +Z. Built
+    /// the same self-installing, code-only way as <see cref="BackyardBackdrop"/> and
     /// <see cref="BackyardDressing"/> — no scene wiring, and it re-installs itself on Replay the same
     /// way.
     /// </summary>
@@ -85,19 +88,36 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>
-        /// Where the shed stands: centred on <see cref="HoseDirector.StartTapPosition"/>'s X, so the
-        /// tap Max plugs into at spawn sits directly in front of its door and the hose reads as coming
-        /// from the shed rather than from the middle of the lawn. Its front wall stands
-        /// <see cref="WallGap"/> past the patio's own back wall (<see cref="MapData.Bounds"/>'s Z
-        /// minimum) — flush against it, not held metres off it the way the rest of the neighbourhood
-        /// is, so it reads as part of the boundary rather than scenery beyond it (YT-179).
+        /// Where the shed stands (MV-709): off the map's WEST wall — <see cref="Width"/> plus
+        /// <see cref="WallGap"/> and the wall's own thickness clear of <see cref="MapData.Bounds"/>'s
+        /// X minimum — flush against it, not held metres off it the way the rest of the neighbourhood
+        /// is, so it reads as part of the boundary rather than scenery beyond it (YT-179). Centred on
+        /// <see cref="EntryAreaZ"/> so it stands right where Max actually starts, whichever way the
+        /// run happens to be laid out.
         /// </summary>
         public static Vector3 PlaceFor(MapData map)
         {
             float pad = map.wallThickness + WallGap;
-            float frontZ = map.Bounds().yMin - pad;
-            float centerZ = frontZ - Depth * 0.5f;
-            return new Vector3(HoseDirector.StartTapPosition.x, 0f, centerZ);
+            float x = map.Bounds().xMin - pad - Width * 0.5f;
+            return new Vector3(x, 0f, EntryAreaZ(map));
+        }
+
+        /// <summary>The entry area's centre Z, so the shed always sits alongside wherever the run
+        /// actually starts rather than a coordinate baked in for one particular layout. Falls back to
+        /// the westernmost area if the map exposes no entry-role zone at all (MV-709).</summary>
+        private static float EntryAreaZ(MapData map)
+        {
+            if (map.zones == null) return 0f;
+
+            MapZone westernmost = null;
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null) continue;
+                if (zone.Kind == ZoneKind.Entry) return zone.z;
+                if (westernmost == null || zone.XMin < westernmost.XMin) westernmost = zone;
+            }
+
+            return westernmost?.z ?? 0f;
         }
 
         /// <summary>True when the shed's footprint is genuinely outside every room — grown only by the
@@ -153,11 +173,11 @@ namespace MaxWorlds.Arena
                 center + new Vector3(0f, WallHeight * 0.5f, 0f),
                 new Vector3(Width, WallHeight, Depth), plank);
 
-            // The door, on the FRONT wall — facing the patio, where Max just walked out of.
-            float doorZ = center.z + Depth * 0.5f + 0.05f;
+            // The door, on the +X face — facing the entry, where Max actually starts (MV-709).
+            float doorX = center.x + Width * 0.5f + 0.05f;
             Part(root, "Door", PrimitiveType.Cube,
-                new Vector3(center.x, WallHeight * 0.42f, doorZ),
-                new Vector3(1.6f, WallHeight * 0.84f, 0.12f), plankDark);
+                new Vector3(doorX, WallHeight * 0.42f, center.z),
+                new Vector3(0.12f, WallHeight * 0.84f, 1.6f), plankDark);
 
             // Two tipped slabs meeting at a ridge — the same box-and-wedge every other roof in this
             // yard is built from (BackyardBackdrop's houses, the intro's own exterior shed).
