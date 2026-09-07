@@ -137,6 +137,10 @@ namespace MaxWorlds.Enemies
         /// eye-lens tell otherwise reads the same amber/red pair for every kind.</summary>
         private static readonly Color LurkerEyeColor = new Color(0.15f, 0.85f, 0.9f);
 
+        /// <summary>The Pipe Turret's own cyan status light (MV-691, the ticket's own colour call) —
+        /// same "stamped over the shared idle/windup tell pair" idiom as <see cref="LurkerEyeColor"/>.</summary>
+        private static readonly Color TurretEyeColor = new Color(0.2f, 0.85f, 0.95f);
+
         // --- Field-wide registry (YT-186) ---------------------------------------------------------
         // Tracked directly off OnEnable/OnDisable rather than tallied by hand, so it can never drift
         // from what is actually switched on: a normal death, being pooled back out, and a test's
@@ -246,6 +250,11 @@ namespace MaxWorlds.Enemies
             {
                 idleTell = LurkerEyeColor;
                 windupTell = LurkerEyeColor;
+            }
+            else if (Kind == EnemyKind.Turret)
+            {
+                idleTell = TurretEyeColor;
+                windupTell = TurretEyeColor;
             }
             // MV-697: a pooled instance must never carry a previous spawn's deck leash into its next
             // life — the common case (Level 0, no footprint) is the correct default until whoever
@@ -600,6 +609,30 @@ namespace MaxWorlds.Enemies
         /// value <c>PulseLaserTests</c> asserts against (MV-708 AC1), never an authored constant.</summary>
         public float StunTimeRemaining => _stunTimer;
 
+        /// <summary>Seconds left on the Pipe Turret's CORRODED status (MV-691) — 0 when not corroded.
+        /// A robot can be corroded the same as Max ("Max (and robots)" per the ticket): a puddle
+        /// doesn't care whose feet are standing in it.</summary>
+        private float _corrodedTimer;
+
+        /// <summary>Whether this robot is currently CORRODED.</summary>
+        public bool IsCorroded => CorrodedStatus.IsActive(_corrodedTimer);
+
+        /// <summary>Seconds left on the CORRODED status, 0 when inactive — the resolved value a test
+        /// reads, never an authored constant.</summary>
+        public float CorrodedTimeRemaining => _corrodedTimer;
+
+        /// <summary>What <see cref="TakeDamage"/> actually multiplies an incoming hit by right now.</summary>
+        public float DamageTakenMultiplier => CorrodedStatus.MultiplierFor(_corrodedTimer);
+
+        /// <summary>Marks this robot CORRODED for a fresh <see cref="CorrodedStatus.Duration"/>
+        /// (MV-691) — called every tick a <see cref="CorrosionPuddle"/> finds it standing inside.
+        /// Refreshes rather than stacks, same convention as <see cref="ApplyHalt"/>/<see cref="Stun"/>.</summary>
+        public void ApplyCorroded()
+        {
+            if (Current == State.Dead) return;
+            _corrodedTimer = CorrodedStatus.Refresh();
+        }
+
         /// <summary>Shock's tell (spec: "yellow zigzag flash") — greybox placeholder is a colour flash,
         /// the same idiom every other tell in this class already uses (<see cref="idleTell"/>,
         /// <see cref="windupTell"/>, the white hit-flash in <see cref="TakeDamage"/>).</summary>
@@ -680,6 +713,7 @@ namespace MaxWorlds.Enemies
             _knockback = Vector3.zero;
             _haltTimer = 0f;
             _stunTimer = 0f;
+            _corrodedTimer = 0f;
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
             _teleportTimer = teleportCooldown;
@@ -784,6 +818,7 @@ namespace MaxWorlds.Enemies
             float dt = Time.deltaTime;
 
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
+            _corrodedTimer = CorrodedStatus.Tick(_corrodedTimer, dt);
 
             // MV-706: ticks regardless of state, same reasoning as the ram cooldown above — a robot
             // mid-Chase or mid-Lunge still has to shed its "just doubled" tag on schedule.
@@ -1474,6 +1509,7 @@ namespace MaxWorlds.Enemies
                 case EnemyKind.Gunner: TickBeam(dt); break;
                 case EnemyKind.Launcher: TickMissileFire(dt); break;
                 case EnemyKind.Bolter: TickBolt(dt); break;
+                case EnemyKind.Turret: TickGlobFire(dt); break;
                 default:               TickMeleeLunge(dt); break;
             }
         }
@@ -1560,6 +1596,37 @@ namespace MaxWorlds.Enemies
 
             if (_stateTimer >= lungeTime) EnterRecover();
         }
+
+        /// <summary>The Pipe Turret's corrosive lob (MV-691): fired once, on the first tick of the
+        /// state — the same "already acted this cycle" gate <see cref="TickMissileFire"/>/<see cref="TickBolt"/>
+        /// use to gate their own launch to one shot. <see cref="lungeSpeed"/> doubles as the glob's
+        /// flight speed and <see cref="contactRadius"/> as its splash radius (same idiom
+        /// <see cref="TickMissileFire"/> already uses); the puddle size/lifetime are the ticket's own
+        /// authored 1.5 m / 3 s, not read off the archetype since nothing else needs them.</summary>
+        private void TickGlobFire(float dt)
+        {
+            if (!_dealtThisLunge)
+            {
+                _dealtThisLunge = true;
+                if (target != null)
+                {
+                    CorrosiveGlob.Fire(transform.position, target, lungeSpeed, contactDamage <= 0f ? GlobDamage : contactDamage,
+                        contactRadius, GlobPuddleRadius, GlobPuddleDuration);
+                }
+            }
+
+            if (_stateTimer >= lungeTime) EnterRecover();
+        }
+
+        /// <summary>The glob's splash damage (MV-691's authored 10) — kept off the archetype table
+        /// (unlike <see cref="Launcher"/>'s splash, which reuses <see cref="contactDamage"/>) since the
+        /// Turret's own <see cref="EnemyArchetype.ContactDamage"/> is deliberately 0 ("no contact
+        /// damage" — it never gets close enough to touch Max), so <see cref="TickGlobFire"/> falls back
+        /// to this authored constant instead of firing a harmless 0-damage glob.</summary>
+        private const float GlobDamage = 10f;
+
+        private const float GlobPuddleRadius = 1.5f;
+        private const float GlobPuddleDuration = 3f;
 
         private void TickRecover(float dt)
         {
@@ -1730,9 +1797,12 @@ namespace MaxWorlds.Enemies
                 Debug.Log($"[RobotEnemy] rejected same-team damage from {info.Attacker} at {info.Point}");
                 return;
             }
-            _health -= info.Amount;
+            // MV-691: CORRODED amplifies the incoming hit itself, same rule PlayerHealth.TakeDamage
+            // applies (20 -> 25 at the ticket's own 1.25x).
+            float amount = info.Amount * DamageTakenMultiplier;
+            _health -= amount;
             // Floating damage number (YT-30 HUD). No-op if nothing is listening (tests).
-            HudSignals.EmitDamage(transform.position, info.Amount);
+            HudSignals.EmitDamage(transform.position, amount);
             if (_health <= 0f) Die(info.Direction);
             else SetTell(Color.white); // brief hit flash; next state tick restores
         }

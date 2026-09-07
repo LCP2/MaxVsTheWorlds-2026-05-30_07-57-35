@@ -6,7 +6,8 @@ namespace MaxWorlds.Enemies
 {
     // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Launcher/Blinker/Bolter are new
     // archetype ROWS, not a renumbering of the existing tiers. Lurker (MV-688) follows the same rule.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker }
+    // Turret (MV-691) follows it too — a static, wall-mounted lobber, appended after Lurker.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -28,6 +29,7 @@ namespace MaxWorlds.Enemies
                 case "blinker": kind = EnemyKind.Blinker; return true;
                 case "bolter": kind = EnemyKind.Bolter; return true;
                 case "lurker": kind = EnemyKind.Lurker; return true;
+                case "turret": kind = EnemyKind.Turret; return true;
                 default: kind = default; return false;
             }
         }
@@ -367,6 +369,36 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             displayName: "LURKER");
 
+        /// <summary>
+        /// Pipe Turret (MV-691): a static, wall-mounted lobber — the first ranged kind that never
+        /// moves at all (MoveSpeed 0; that alone is what excludes it from the deck leash, the
+        /// steering machinery and a Replicator's lure — <see cref="MaxWorlds.Factories.Replicator.TickLure"/>
+        /// excludes it outright the same way it already excludes <see cref="Lurker"/>). Fires a
+        /// corrosive coolant glob (<see cref="CorrosiveGlob"/>) rather than the Launcher's homing
+        /// missile or the Bolter's straight rod — no tracking of any kind, aimed at Max's position at
+        /// the instant it fires, and its impact leaves a puddle that marks anything standing in it
+        /// CORRODED (<see cref="CorrodedStatus"/>) rather than dealing a bigger single hit.
+        /// <see cref="ContactRadius"/> doubles as the glob's own splash radius (same "ranged kind's
+        /// ContactRadius feeds the projectile" idiom <see cref="Launcher"/> already uses);
+        /// <see cref="LungeSpeed"/> doubles as the glob's flight speed. <see cref="LungeTime"/> is 0 —
+        /// same "instant release, the whole cadence is telegraph + recover" idiom as
+        /// <see cref="Bolter"/> — so telegraphTime (0.4, the ticket's own nozzle-glow tell) +
+        /// recoverTime (1.8) lands the ticket's authored 2.2 s cadence exactly.
+        /// </summary>
+        public static EnemyArchetype Turret => new EnemyArchetype(
+            EnemyKind.Turret, EnemyShape.Box, new Vector3(0.9f, 0.9f, 0.9f),
+            colliderHeight: 1.0f, colliderRadius: 0.5f,
+            moveSpeed: 0f, maxHealth: 60f,
+            contactDamage: 0f,     // no contact damage — it never gets close enough to touch Max
+            contactRadius: 1.5f,   // the glob's own splash radius
+            lungeRange: 11f,       // max fire range
+            telegraphTime: 0.4f,   // the ticket's own nozzle-glow tell
+            lungeSpeed: 7f,        // glob flight speed
+            lungeTime: 0f,         // instant release — the whole cadence is telegraph + recover (2.2s)
+            recoverTime: 1.8f,     // 0.4 + 1.8 = the ticket's authored 2.2s cadence
+            knockbackDecay: 28f,
+            displayName: "TURRET");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -377,6 +409,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Blinker => Blinker,
             EnemyKind.Bolter => Bolter,
             EnemyKind.Lurker => Lurker,
+            EnemyKind.Turret => Turret,
             _ => Rusher,
         };
 

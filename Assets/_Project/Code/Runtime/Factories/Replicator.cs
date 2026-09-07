@@ -183,6 +183,11 @@ namespace MaxWorlds.Factories
                 // LurkerCycle mid-cycle with no way back. Excluded outright, same as an already-seeking
                 // robot below.
                 if (r.Kind == EnemyKind.Lurker) continue;
+                // MV-691: a Pipe Turret is wall-mounted and never moves (MoveSpeed 0) — luring one
+                // toward a hatch would either do nothing (correct, but pointless bookkeeping) or, if a
+                // dev-tuning override ever forces a global move speed onto every robot, visibly slide a
+                // "static" turret across the yard. Excluded outright, same reasoning as Lurker above.
+                if (r.Kind == EnemyKind.Turret) continue;
                 if (r.Current == RobotEnemy.State.ReplicatorSeeking) continue; // already lured (by this box or another)
 
                 float distToMe = Vector3.Distance(r.transform.position, transform.position);
