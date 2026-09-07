@@ -304,6 +304,58 @@ namespace MaxWorlds.Weapons
             WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
             WaterBalloonRepeatFirePerLevel);
 
+        // ---------------------------------------------------------------- Weapon Core morph (MV-689)
+
+        /// <summary>The Weapon Core morph: PRIMARY swaps to the LPPE (<c>p_dmg</c> re-granted at level
+        /// 1, no RCDA levels carried — this is a new gadget) and SECONDARY swaps to the Shoulder Rack
+        /// (fully reset, mystery-"?"-locked via <see cref="RigState.SecondaryLocked"/> until <c>s_rkt</c>
+        /// is bought), while ENERGY/MOVE/SUPPORT carry across untouched. Switches <see cref="RigBoard"/>'s
+        /// active board to <paramref name="worldIndex"/>'s first (<see cref="RigBoardLibrary.ForWorld"/>)
+        /// — PRIMARY/SECONDARY's ids are redefined by the new file, so those two categories are rebuilt
+        /// from scratch rather than merged; ENERGY/MOVE/SUPPORT keep the same ids in both boards, so their
+        /// levels/unlocks are preserved by carrying them across the switch explicitly. Call directly to
+        /// apply the morph immediately (fixtures, a pre-existing save's silent catch-up); THE RIG's own
+        /// open ceremony goes through <see cref="OpenWeaponCoreMorphIfPending"/> instead.</summary>
+        public static void ApplyWeaponCoreMorph(int worldIndex)
+        {
+            var preservedLevels = new Dictionary<string, int>();
+            foreach (KeyValuePair<string, int> kv in RigState.SnapshotLevels())
+            {
+                string category = RigBoard.Category(kv.Key);
+                if (category == "ENERGY" || category == "MOVE" || category == "SUPPORT")
+                    preservedLevels[kv.Key] = kv.Value;
+            }
+
+            var preservedCategories = new List<string>();
+            foreach (string category in RigState.SnapshotUnlockedCategories())
+                if (category == "ENERGY" || category == "MOVE" || category == "SUPPORT")
+                    preservedCategories.Add(category);
+
+            RigBoard.UseWorld(worldIndex);
+
+            preservedLevels["p_dmg"] = 1;
+            preservedCategories.Add("PRIMARY");
+            preservedCategories.Add("SECONDARY");
+
+            RigState.RestoreSnapshot(preservedLevels, preservedCategories);
+            RigState.ActivateSecondaryMystery();
+
+            s_activePrimary = WeaponCatalog.PrimaryKind.Lppe;
+            s_secondaryKind = SecondaryKind.ShoulderRack;
+            RebuildAcquiredFromRigState();   // fires Changed
+        }
+
+        /// <summary>THE RIG's "next open plays the morph" ceremony trigger (MV-689) — applies a banked
+        /// Weapon Core (<see cref="PendingMorphingModule.SetWeaponCore"/>) the moment THE RIG opens.
+        /// Idempotent: a no-op, returning false, if nothing is pending.</summary>
+        public static bool OpenWeaponCoreMorphIfPending(int worldIndex)
+        {
+            if (!PendingMorphingModule.WeaponCorePending) return false;
+            PendingMorphingModule.TakeWeaponCore();
+            ApplyWeaponCoreMorph(worldIndex);
+            return true;
+        }
+
         // ---------------------------------------------------------------- Shoulder Rack tracks (MV-694)
 
         /// <summary>A Shoulder Rack track's current level — same "root cap plus child tracks" shape
@@ -349,6 +401,7 @@ namespace MaxWorlds.Weapons
         /// re-fit.</summary>
         public static void Reset()
         {
+            RigBoard.UseWorld(0);   // MV-689: undo any lingering Weapon Core morph board switch
             RigState.Reset();
             s_acquisitionOrder.Clear();
             s_waterBalloonAutoFireEnabled = true;

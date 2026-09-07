@@ -221,6 +221,48 @@ namespace MaxWorlds.Dev
             // SECONDARY's own highlight lit, its children lighting in sequence — instead of the ceremony's
             // barely-visible opening beat a bare open+0.1s would catch.
             yield return CaptureFixtureScreen("MV-605", 1920, 1080, ApplyRigFixtureMv605, weapons.Open, weapons.Close, canvas, ScaleBoardTo, extraWaitSeconds: 1.8f);
+
+            // MV-689 AC2: World 2's board right after the Weapon Core morph — PRIMARY on the LPPE,
+            // SECONDARY still mystery-"?"-locked. World 2 authors different PRIMARY/SECONDARY ability
+            // ids than World 1, so the fixture (which switches RigBoard's active board as part of the
+            // morph) must also force WeaponsScreen to rebuild its whole node graph — ApplyBoardScale's
+            // existing rebuild-on-verdict-change wouldn't fire here (the aspect is unchanged, only the
+            // board is), hence the explicit RebuildBoard() below rather than reusing the plain
+            // weapons.Open() every other shot in this method passes as its own "open" callback. Reset
+            // back to World 1 afterward so every fixture below (there are none left in this method, but
+            // CaptureWeaponsButton/CaptureMapScreen run next) sees the ordinary board again.
+            yield return CaptureFixtureScreen("rig-world2-16x9", 1920, 1080, ApplyRigFixtureWorld2Morph,
+                () => { weapons.RebuildBoard(); weapons.Open(); }, weapons.Close, canvas, ScaleBoardTo);
+            RigBoard.UseWorld(0);
+            weapons.RebuildBoard();
+        }
+
+        /// <summary>MV-689 AC2's fixture: a player who unlocked every non-PRIMARY category and invested
+        /// in each before finishing World 1 (SECONDARY/ENERGY/MOVE/SUPPORT all lit, not the bare fresh-run
+        /// baseline every other fixture in this file avoids for the opposite reason —
+        /// <see cref="ApplyRigFixtureFreshRun"/>'s own doc comment) — <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>
+        /// applied directly (bypassing the pickup/ceremony chain, same idiom as every other fixture here)
+        /// so the capture shows the morph's RESOLVED state: PRIMARY on the LPPE at <c>p_dmg</c> L1,
+        /// SECONDARY mystery-locked, ENERGY/MOVE/SUPPORT carried across untouched and still lit. Public
+        /// and static — no scene needed — so an EditMode test could assert the resulting
+        /// <see cref="RigState"/>/<see cref="WeaponSystemState"/> values directly, same as
+        /// <see cref="ApplyRigFixtureFreshRun"/>.</summary>
+        public static void ApplyRigFixtureWorld2Morph()
+        {
+            WeaponSystemState.Reset();
+            PickupWallet.Reset();
+
+            RigState.UnlockCategory("SECONDARY");
+            RigState.AcquireCap("s_bal");
+            RigState.UnlockCategory("ENERGY");
+            RigState.AcquireCap("e_ff");
+            RigState.UnlockCategory("MOVE");
+            RigState.AcquireCap("m_spd");
+            RigState.UnlockCategory("SUPPORT");
+            RigState.AcquireCap("u_sen");
+
+            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            PickupWallet.SetPowerCells(15);
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
@@ -635,7 +677,7 @@ namespace MaxWorlds.Dev
                     // own doc comment for the coordinate transform this needed. rig-16x10 stays unmeasured
                     // (this ticket names exactly rig-16x9/rig-phone/rig-ipad-mini; rig-16x10 isn't one of
                     // the three), same as the mv472/lowcells/freshrun/noparts fixture variants.
-                    else if (name == "rig-phone" || name == "rig-ipad-mini")
+                    else if (name == "rig-phone" || name == "rig-ipad-mini" || name == "rig-world2-16x9")
                     {
                         RunConformanceChecks(tex, name, w, h);
                     }

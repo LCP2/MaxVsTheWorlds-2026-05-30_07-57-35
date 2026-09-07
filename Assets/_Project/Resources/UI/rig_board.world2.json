@@ -1,0 +1,525 @@
+{
+  "$comment": "THE RIG board — WORLD 2 (MV-689). Same schema 3 as rig_board.json; ENERGY/MOVE/SUPPORT/fusions/geometry/colours/icons are byte-for-byte identical to that file — only PRIMARY (LPPE) and SECONDARY (Shoulder Rack) differ, since those are the two categories the Weapon Core morph swaps out. RigBoardLibrary.ForWorld(1) resolves to this file.",
+  "schema": 3,
+  "canvas": {
+    "w": 1920,
+    "h": 1080
+  },
+  "safeInset": {
+    "left": 28,
+    "right": 28,
+    "top": 28,
+    "bottom": 28
+  },
+  "captureAspects": [
+    { "name": "16x9", "w": 1920, "h": 1080 },
+    { "name": "16x10", "w": 1728, "h": 1080 },
+    { "name": "phone", "w": 2340, "h": 1080 },
+    { "name": "ipad-mini", "w": 1078, "h": 815 }
+  ],
+  "model": {
+    "$comment": "MV-515: one currency (cells) for every node action. A MORPHING MODULE (dropped by a shed) UNLOCKS an ability at level 1 for cells; the same cells raise an owned ability's level. SUPERCELLS are a banked 10-cell top-up, cashed in explicitly - no longer an unlock requirement. MV-457: a shed's own draft offers a locked CATEGORY, not a single ability - see rules below.",
+    "rules": [
+      "A category must be UNLOCKED (by a shed's Morphing Module) before any of its abilities can be reached at all - a root ability (no parent) is only reached once its own category is unlocked.",
+      "Destroying a shed offers a random choice of 2 still-locked categories; picking one unlocks that whole category. 1 locked category left is granted outright, no choice shown. 0 left falls back to a Supercell plus a bigger cell cache.",
+      "Once a category is unlocked, every ability is still taken individually - there is no cells-unlockable tier for an ability itself; the 'stat' kind from schema 2 no longer exists.",
+      "Cells raise an OWNED ability from its current level toward maxLevel. Cells spent on an unowned ability are impossible, not merely disallowed.",
+      "A non-root node is REACHED when its parent is at level >= 1, same as always.",
+      "MV-689: the Weapon Core morph re-grants p_dmg (LPPE DAMAGE) at level 1 and unlocks PRIMARY/SECONDARY directly (no shed draft) — SECONDARY reads `?` until s_rkt is bought."
+    ]
+  },
+  "geometry": {
+    "rowY": {
+      "category": 230,
+      "tier1": 420,
+      "tier2": 580,
+      "tier3": 740,
+      "forge": 910
+    },
+    "radius": {
+      "category": 72,
+      "ability": 50,
+      "fusion": 40
+    },
+    "hexOrientation": "pointy-top; vertex angles are 60*i-90 degrees, so height = 2r and width = r*sqrt(3)",
+    "strokeOwned": 4,
+    "strokeActive": 3,
+    "strokeLocked": 2,
+    "capOuterRingOffset": 9,
+    "capMarkerRadius": 8,
+    "capMarkerOffset": {
+      "dx": "+r-6",
+      "dy": "-r+15"
+    },
+    "levelPill": {
+      "w": 62,
+      "h": 30,
+      "radius": 15,
+      "offsetY": "+r-15",
+      "fontSize": 17
+    },
+    "labelOffsetY": "+r+46",
+    "labelFontSize": 16,
+    "labelLetterSpacing": 1.2,
+    "categoryLabelOffsetY": "+r+48",
+    "categoryLabelFontSize": 21,
+    "regionRect": {
+      "y": 150,
+      "h": 706,
+      "radius": 22,
+      "padX": 88,
+      "opacityLit": 0.014,
+      "opacityDark": 0.003,
+      "borderAlphaLit": 0.037,
+      "borderAlphaDark": 0.010
+    },
+    "forgeDivider": {
+      "y": 866
+    },
+    "iconScaleAbility": 0.94,
+    "iconScaleCategory": 1.2,
+    "iconScaleFusion": 0.8,
+    "iconOffsetY": -4,
+    "connector": {
+      "width": 2.6,
+      "controlBias": 0.55,
+      "startOffsetCategory": 88,
+      "startOffsetAbility": "+r*0.92",
+      "endOffset": "-r*0.92",
+      "alphaLive": 0.45,
+      "alphaDim": 0.14,
+      "fusionWidth": 2.0,
+      "fusionAlpha": 0.014,
+      "fusionAlphaLocked": 0.004,
+      "fusionControlBias": 0.62
+    },
+    "lockedFusion": {
+      "borderAlpha": 0.031,
+      "iconAlpha": 0.057
+    },
+    "glowBlurOwned": 14,
+    "glowAlphaOwned": 0.45,
+    "glowBlurDraft": 10,
+    "glowAlphaDraft": 0.18,
+    "forgeCaptionFontSize": 18,
+    "fusionSubFontSize": 16,
+    "supercellTraySubFontSizeMin": 16,
+    "supercellTraySubFontSizeMax": 18,
+    "familyDimFactor": 0.39
+  },
+  "colours": {
+    "pri": {
+      "hex": "#A87AF9",
+      "constant": "WeaponsScreen primary purple"
+    },
+    "sec": {
+      "hex": "#4FDBFA",
+      "constant": "HudController.CellColor"
+    },
+    "eng": {
+      "hex": "#E06FF0",
+      "constant": "HudController.ForceFieldColor"
+    },
+    "mov": {
+      "hex": "#6FE08A",
+      "constant": "NEW - add HudController.MoveColor"
+    },
+    "sup": {
+      "hex": "#B8945F",
+      "constant": "HudController.WallSentinelColor"
+    },
+    "supercell": {
+      "hex": "#FFB84A",
+      "constant": "WeaponsScreen supercells amber"
+    },
+    "module": {
+      "hex": "#7FE3FF",
+      "constant": "NEW - add HudController.ModuleColor"
+    },
+    "ink": {
+      "hex": "#F5F2DC",
+      "constant": "HudController.BoneWhite"
+    },
+    "base": {
+      "hex": "#07080b"
+    }
+  },
+  "categories": [
+    {
+      "id": "PRIMARY",
+      "family": "pri",
+      "x": 250,
+      "icon": "nozzle"
+    },
+    {
+      "id": "SECONDARY",
+      "family": "sec",
+      "x": 610,
+      "icon": "wb"
+    },
+    {
+      "id": "ENERGY",
+      "family": "eng",
+      "x": 970,
+      "icon": "cel"
+    },
+    {
+      "id": "MOVE",
+      "family": "mov",
+      "x": 1310,
+      "icon": "spd"
+    },
+    {
+      "id": "SUPPORT",
+      "family": "sup",
+      "x": 1670,
+      "icon": "sen"
+    }
+  ],
+  "abilities": [
+    {
+      "id": "p_dmg",
+      "category": "PRIMARY",
+      "x": 250,
+      "y": 420,
+      "icon": "dmg",
+      "label": "DAMAGE",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 1
+    },
+    {
+      "id": "p_rng",
+      "category": "PRIMARY",
+      "x": 175,
+      "y": 580,
+      "icon": "rng",
+      "label": "RANGE",
+      "maxLevel": 6,
+      "kind": "cap",
+      "parent": "p_dmg",
+      "startLevel": 0
+    },
+    {
+      "id": "p_rof",
+      "category": "PRIMARY",
+      "x": 345,
+      "y": 580,
+      "icon": "rte",
+      "label": "RATE",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": "p_dmg",
+      "startLevel": 0,
+      "$comment": "MV-689: fire rate 0.22s -> 0.16s over these 4 levels."
+    },
+    {
+      "id": "p_frk",
+      "category": "PRIMARY",
+      "x": 175,
+      "y": 740,
+      "icon": "spr",
+      "label": "FORK",
+      "maxLevel": 1,
+      "kind": "cap",
+      "parent": "p_rng",
+      "startLevel": 0,
+      "$comment": "MV-689: a pulse that kills its target releases a second pulse at the next target. One level."
+    },
+    {
+      "id": "s_rkt",
+      "category": "SECONDARY",
+      "x": 610,
+      "y": 420,
+      "icon": "rkt",
+      "label": "ROCKETS",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 0,
+      "$comment": "MV-689: Shoulder Rack unlock + rocket damage — this world's SECONDARY root. RigState.SecondaryLocked reads `?` until this reaches level 1 (see RigState/WeaponSystemState)."
+    },
+    {
+      "id": "s_spl",
+      "category": "SECONDARY",
+      "x": 730,
+      "y": 580,
+      "icon": "spl",
+      "label": "SPLASH",
+      "maxLevel": 3,
+      "kind": "cap",
+      "parent": "s_rkt",
+      "startLevel": 0,
+      "$comment": "MV-689: splash radius 2m -> 3.5m."
+    },
+    {
+      "id": "s_sal",
+      "category": "SECONDARY",
+      "x": 610,
+      "y": 580,
+      "icon": "sal",
+      "label": "SALVO",
+      "maxLevel": 3,
+      "kind": "cap",
+      "parent": "s_rkt",
+      "startLevel": 0,
+      "$comment": "MV-689: 1 -> 3 rockets per volley."
+    },
+    {
+      "id": "s_rld",
+      "category": "SECONDARY",
+      "x": 490,
+      "y": 580,
+      "icon": "rld",
+      "label": "RELOAD",
+      "maxLevel": 3,
+      "kind": "cap",
+      "parent": "s_rkt",
+      "startLevel": 0,
+      "$comment": "MV-689: 1.8s -> 1.0s."
+    },
+    {
+      "id": "s_clu",
+      "category": "SECONDARY",
+      "x": 490,
+      "y": 740,
+      "icon": "sal",
+      "label": "CLUSTER",
+      "maxLevel": 1,
+      "kind": "cap",
+      "parent": "s_rld",
+      "startLevel": 0,
+      "$comment": "MV-689: a rocket splits into 3 bomblets on impact. One level."
+    },
+    {
+      "id": "e_ff",
+      "category": "ENERGY",
+      "x": 890,
+      "y": 420,
+      "icon": "ff",
+      "label": "FORCE FIELD",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 0
+    },
+    {
+      "id": "e_cel",
+      "category": "ENERGY",
+      "x": 1050,
+      "y": 420,
+      "icon": "cel",
+      "label": "PART STORAGE",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 0
+    },
+    {
+      "id": "e_cd",
+      "category": "ENERGY",
+      "x": 1050,
+      "y": 580,
+      "icon": "cd",
+      "label": "COOLDOWN",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "e_cel",
+      "startLevel": 0
+    },
+    {
+      "id": "e_mag",
+      "category": "ENERGY",
+      "x": 1050,
+      "y": 740,
+      "icon": "mag",
+      "label": "MAGNETO",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "e_cd",
+      "startLevel": 0
+    },
+    {
+      "id": "m_spd",
+      "category": "MOVE",
+      "x": 1230,
+      "y": 420,
+      "icon": "spd",
+      "label": "SPEED",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 0
+    },
+    {
+      "id": "m_tp",
+      "category": "MOVE",
+      "x": 1390,
+      "y": 420,
+      "icon": "tp",
+      "label": "TELEPORT",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 0
+    },
+    {
+      "id": "u_sen",
+      "category": "SUPPORT",
+      "x": 1670,
+      "y": 420,
+      "icon": "sen",
+      "label": "SENTINEL",
+      "maxLevel": 1,
+      "kind": "cap",
+      "parent": null,
+      "startLevel": 0
+    },
+    {
+      "id": "u_dmg",
+      "category": "SUPPORT",
+      "x": 1550,
+      "y": 580,
+      "icon": "sdmg",
+      "label": "DAMAGE",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "u_sen",
+      "startLevel": 0
+    },
+    {
+      "id": "u_rng",
+      "category": "SUPPORT",
+      "x": 1670,
+      "y": 580,
+      "icon": "srng",
+      "label": "RANGE",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "u_sen",
+      "startLevel": 0
+    },
+    {
+      "id": "u_hp",
+      "category": "SUPPORT",
+      "x": 1790,
+      "y": 580,
+      "icon": "hp",
+      "label": "HEALTH",
+      "maxLevel": 5,
+      "kind": "cap",
+      "parent": "u_sen",
+      "startLevel": 0
+    },
+    {
+      "id": "u_mov",
+      "category": "SUPPORT",
+      "x": 1550,
+      "y": 740,
+      "icon": "smov",
+      "label": "SPEED",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": "u_dmg",
+      "startLevel": 0
+    },
+    {
+      "id": "u_cst",
+      "category": "SUPPORT",
+      "x": 1670,
+      "y": 740,
+      "icon": "cst",
+      "label": "COST",
+      "maxLevel": 4,
+      "kind": "cap",
+      "parent": "u_rng",
+      "startLevel": 0
+    },
+    {
+      "id": "u_slt",
+      "category": "SUPPORT",
+      "x": 1790,
+      "y": 740,
+      "icon": "slt",
+      "label": "SLOTS",
+      "maxLevel": 2,
+      "kind": "cap",
+      "parent": "u_hp",
+      "startLevel": 0
+    }
+  ],
+  "fusions": [
+    {
+      "id": "f_del",
+      "x": 430,
+      "y": 910,
+      "label": "DELUGE",
+      "parentA": "PRIMARY",
+      "parentB": "SECONDARY",
+      "hudSlot": "B",
+      "cellCost": 30
+    },
+    {
+      "id": "f_bgd",
+      "x": 790,
+      "y": 910,
+      "label": "BLINKGUARD",
+      "parentA": "ENERGY",
+      "parentB": "MOVE",
+      "hudSlot": "B",
+      "cellCost": 30
+    },
+    {
+      "id": "f_ovc",
+      "x": 1140,
+      "y": 910,
+      "label": "OVERCHARGE",
+      "parentA": "ENERGY",
+      "parentB": "SUPPORT",
+      "hudSlot": "U",
+      "cellCost": 30
+    },
+    {
+      "id": "f_skr",
+      "x": 1490,
+      "y": 910,
+      "label": "SKIRMISH",
+      "parentA": "MOVE",
+      "parentB": "SUPPORT",
+      "hudSlot": "U",
+      "cellCost": 30
+    }
+  ],
+  "icons": {
+    "$comment": "Procedural vector icons. Each value is an SVG fragment drawn in a 44x44 box centred on (0,0); '#ICON#' is the stroke/fill colour placeholder. HudFont cannot render symbol glyphs (LegacyRuntime.ttf), so these MUST be drawn as geometry via HudTextures, never as text.",
+    "dmg": "<path d=\"M0,-17 L4,-5 16,-3 7,5 10,16 0,10 -10,16 -7,5 -16,-3 -4,-5 Z\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "rng": "<path d=\"M-16,0 L10,0\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M3,-7 L11,0 3,7\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M14,-13 L14,13\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "flw": "<path d=\"M0,-16 C9,-5 15,1 15,7 A15,15 0 0,1 -15,7 C-15,1 -9,-5 0,-16 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "spr": "<path d=\"M0,-15 L-16,14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,-15 L16,14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"-9\" cy=\"6\" r=\"2.6\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><circle cx=\"0\" cy=\"10\" r=\"2.6\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><circle cx=\"9\" cy=\"6\" r=\"2.6\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><circle cx=\"0\" cy=\"-2\" r=\"2.6\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
+    "prc": "<path d=\"M-17,0 L17,0\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M8,-7 L16,0 8,7\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"-4\" cy=\"0\" r=\"5\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\"/>",
+    "wb": "<circle cx=\"0\" cy=\"2\" r=\"12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,-10 L0,-16\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-4,-16 L4,-16\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "spl": "<circle cx=\"0\" cy=\"2\" r=\"7\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,-16 L0,-10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-14,-6 L-9,-2\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M14,-6 L9,-2\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-15,10 L-9,9\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M15,10 L9,9\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "lob": "<path d=\"M-15,12 Q0,-20 15,12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"-15\" cy=\"12\" r=\"3.5\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><circle cx=\"15\" cy=\"12\" r=\"3.5\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
+    "af": "<path d=\"M13,-4 A13,13 0 1,0 9,9\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M13,-12 L13,-3 5,-3\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "rte": "<circle cx=\"0\" cy=\"2\" r=\"12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,2 L0,-5\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,2 L7,2\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-5,-14 L5,-14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "ff": "<path d=\"M0,-16 L14,-8 L14,8 L0,16 L-14,8 L-14,-8 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,-8 L7,-4 L7,4 L0,8 L-7,4 L-7,-4 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "cel": "<path d=\"M-11,-13 L11,-13 L11,13 L-11,13 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-4,-17 L4,-17\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-6,4 L6,4\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-6,-3 L6,-3\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "cd": "<circle cx=\"0\" cy=\"0\" r=\"14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,-7 L0,1 L6,5\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "mag": "<path d=\"M-12,10 L-12,-2 A12,12 0 0,1 12,-2 L12,10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"4\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-12,10 L-12,16\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M12,10 L12,16\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-16,13 L-8,13\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M8,13 L16,13\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "spd": "<path d=\"M-13,-10 L-3,0 -13,10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M2,-10 L12,0 2,10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "tp": "<path d=\"M-13,-13 L-16,0 -13,13\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M13,-13 L16,0 13,13\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"-5\" cy=\"0\" r=\"3\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><circle cx=\"5\" cy=\"0\" r=\"3\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><circle cx=\"0\" cy=\"0\" r=\"3\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
+    "sen": "<path d=\"M-12,12 L12,12 L9,3 L-9,3 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"0\" cy=\"-4\" r=\"7\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,-11 L0,-17\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-14,16 L14,16\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "sdmg": "<circle cx=\"0\" cy=\"0\" r=\"11\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\"/><path d=\"M0,-16 L0,-13\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,13 L0,16\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-16,0 L-13,0\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M13,0 L16,0\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"0\" cy=\"0\" r=\"3.5\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
+    "srng": "<path d=\"M-6,14 A15,15 0 0,1 -6,-14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M2,10 A10,10 0 0,1 2,-10\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"9\" cy=\"0\" r=\"3.5\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
+    "hp": "<path d=\"M-4,-14 L4,-14 L4,-4 L14,-4 L14,4 L4,4 L4,14 L-4,14 L-4,4 L-14,4 L-14,-4 L-4,-4 Z\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "smov": "<path d=\"M-14,8 L14,8\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><circle cx=\"-8\" cy=\"13\" r=\"4\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\"/><circle cx=\"8\" cy=\"13\" r=\"4\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\"/><path d=\"M-10,-12 L10,-12 L14,2 L-14,2 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "cst": "<path d=\"M-11,-11 L11,-11 L11,11 L-11,11 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-6,0 L6,0\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-4,-15 L4,-15\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "slt": "<path d=\"M-15,-12 L-3,-12 L-3,0 L-15,0 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M3,-12 L15,-12 L15,0 L3,0 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-6,4 L6,4 L6,15 L-6,15 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "nozzle": "<path d=\"M-16,-7 L2,-7 L11,-3 L11,3 L2,7 L-16,7 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M14,-9 L19,-4\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M14,9 L19,4\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M15,0 L20,0\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "fuse": "<path d=\"M0,-15 L4,-4 15,-4 6,3 10,14 0,7 -10,14 -6,3 -15,-4 -4,-4 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "rkt": "<path d=\"M0,-17 L7,-2 L7,10 L-7,10 L-7,-2 Z\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-7,10 L-11,17 L-4,10 Z\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/><path d=\"M7,10 L11,17 L4,10 Z\" fill=\"#ICON#\" stroke=\"none\" stroke-width=\"3\"/>",
+    "sal": "<path d=\"M-11,10 L-11,-6 L-14,-6\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,10 L0,-12 L-3,-12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M11,10 L11,-6 L8,-6\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
+    "rld": "<circle cx=\"0\" cy=\"2\" r=\"12\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\"/><path d=\"M0,2 L0,-5\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M0,2 L7,2\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"3\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/><path d=\"M-5,-14 L5,-14\" fill=\"none\" stroke=\"#ICON#\" stroke-width=\"2.5\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>"
+  }
+}

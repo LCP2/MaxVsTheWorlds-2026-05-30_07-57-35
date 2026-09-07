@@ -22,8 +22,17 @@ namespace MaxWorlds.Weapons
     {
         private static readonly Queue<string[]> s_queue = new Queue<string[]>();
 
+        /// <summary>MV-689: a Weapon Core is banked and waiting for THE RIG's next open to play the
+        /// morph. Kept apart from <see cref="s_queue"/> above — a Weapon Core isn't a pick between
+        /// candidates, it always resolves the same single way the instant THE RIG opens (see
+        /// <c>WeaponSystemState.OpenWeaponCoreMorphIfPending</c>).</summary>
+        private static bool s_weaponCorePending;
+
         /// <summary>At least one draft is banked and waiting for the player to open WEAPONS.</summary>
         public static bool HasPending => s_queue.Count > 0;
+
+        /// <summary>MV-689: a Weapon Core is banked and waiting for THE RIG's next open.</summary>
+        public static bool WeaponCorePending => s_weaponCorePending;
 
         /// <summary>How many separate draws are banked right now — test-only access, same idiom as
         /// <see cref="HasPending"/>.</summary>
@@ -52,11 +61,32 @@ namespace MaxWorlds.Weapons
             return ids;
         }
 
+        /// <summary>Bank a collected Weapon Core (MV-689, granted by MV-698's World 1 finale drop) — the
+        /// next THE RIG open plays the morph. Idempotent: collecting a second Weapon Core before the
+        /// first is opened is a no-op — there is only ever one morph to play.</summary>
+        public static void SetWeaponCore()
+        {
+            if (s_weaponCorePending) return;
+            s_weaponCorePending = true;
+            Changed?.Invoke();
+        }
+
+        /// <summary>Consumes the banked Weapon Core flag — <c>WeaponSystemState.OpenWeaponCoreMorphIfPending</c>'s
+        /// own entry point. Returns false if nothing was pending.</summary>
+        public static bool TakeWeaponCore()
+        {
+            if (!s_weaponCorePending) return false;
+            s_weaponCorePending = false;
+            Changed?.Invoke();
+            return true;
+        }
+
         /// <summary>Back to a fresh run's baseline: nothing pending. Test isolation and a new run.</summary>
         public static void Reset()
         {
-            if (s_queue.Count == 0) return;
+            if (s_queue.Count == 0 && !s_weaponCorePending) return;
             s_queue.Clear();
+            s_weaponCorePending = false;
             Changed?.Invoke();
         }
     }

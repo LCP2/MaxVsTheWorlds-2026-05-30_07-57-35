@@ -9,7 +9,10 @@ namespace MaxWorlds.Pickups
     /// (MV-672) is the new, separate "Power Cells" currency — named distinctly from
     /// <see cref="PickupKind.PowerCell"/> on purpose: that member is the one that, post Issue 1's
     /// rename, displays to the player as "Parts", so reusing its name for the actual new Power Cells
-    /// currency would collide with the wrong C# identity.
+    /// currency would collide with the wrong C# identity. <see cref="PickupKind.WeaponCore"/> (MV-689)
+    /// is the World 1 finale drop (MV-698 spawns it): walking over it banks
+    /// <see cref="MaxWorlds.Weapons.PendingMorphingModule.SetWeaponCore"/>, the same "banks, doesn't
+    /// force-open THE RIG" shape <see cref="Device"/> already uses.
     /// </summary>
     public enum PickupKind
     {
@@ -17,5 +20,6 @@ namespace MaxWorlds.Pickups
         Supercell,
         Device,
         PowerCellSecondary,
+        WeaponCore,
     }
 }
