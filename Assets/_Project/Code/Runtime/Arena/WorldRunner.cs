@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Bosses;
@@ -16,7 +17,10 @@ namespace MaxWorlds.Arena
     /// <see cref="MapRuntime"/> actually built (MV-270). Owns a <see cref="SupplyLineNetwork"/> — the
     /// pure engine class (MV-269) reads no live scene state itself, so something has to poll the built
     /// <see cref="MowerHutch"/> instances and report their deaths into it; that caller is this runner.
-    /// MV-665: sheds no longer gate any door — every gate opens on ordinary combat.
+    /// MV-665 removed the old role-driven gate lock; MV-703 reintroduces condition-gating driven off
+    /// each gate's own parsed <see cref="GateCondition"/> instead (<see cref="RefreshGateLocks"/>) — a
+    /// gate whose condition is Start/Primary/Sluice opens on ordinary combat alone, exactly as every
+    /// World 1 gate does today.
     ///
     /// MV-427: also the death-continues-the-run orchestrator. It already owns every gate's identity
     /// (via the map), which is exactly the context a respawn needs to pick the right door to re-close.
@@ -40,6 +44,23 @@ namespace MaxWorlds.Arena
         /// <c>areaId</c> is only needed alongside it for <see cref="TrackDestroyedShedStream"/>.</summary>
         private readonly List<(string areaId, string shedId, MowerHutch hutch)> _sheds =
             new List<(string, string, MowerHutch)>(3);
+
+        /// <summary>One entry per BUILT Replicator (MV-703/MV-706), polled the same "check IsAlive every
+        /// tick" way <see cref="_sheds"/> is — a Replicator has no death event to subscribe to, only
+        /// <see cref="Replicator.IsAlive"/>.</summary>
+        private readonly List<Replicator> _replicators = new List<Replicator>(2);
+
+        /// <summary>Each combat area's incoming gate, parsed into a <see cref="GateCondition"/> (MV-703)
+        /// — built once in <see cref="BuildGateIntoAreaMap"/> alongside <see cref="_gateIntoArea"/>, from
+        /// the same <see cref="WorldConfig.gates"/> entry <see cref="MapLink.gate"/> names. Only the
+        /// three condition-gated kinds (<see cref="GateCondition.IsConditionGated"/>) do anything in
+        /// <see cref="RefreshGateLocks"/> — every World 1 gate parses to Start/Primary and is untouched.</summary>
+        private readonly Dictionary<int, GateCondition> _gateConditionIntoArea = new Dictionary<int, GateCondition>();
+
+        /// <summary>MV-703 World 1 compatibility: logs once, the first time a boss-role area's incoming
+        /// gate is found NOT condition-gated (every World 1 boss gate authors "primary") — see
+        /// <see cref="IsConditionGatedArea"/>.</summary>
+        private bool _loggedBossPrimaryCompat;
 
         /// <summary>Destroyed sheds' spawners, keyed by their 1-based area index (MV-456) — fed by
         /// <see cref="TrackDestroyedShedStream"/> as each shed dies. Never drained: a world is short
@@ -101,9 +122,29 @@ namespace MaxWorlds.Arena
                     EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
                     if (spawner != null) spawner.ConfigureAreaComposition(area.composition);
                 }
+
+                // MV-703: register this area's Replicators (MV-706) into FactoryCensus by area id — the
+                // same "the map builds them, this runner tells the census where" split as the shed loop
+                // above, needed so a replicators-destroyed:<areas> gate condition can ask "destroyed in
+                // THESE areas", not just "destroyed overall".
+                WorldReplicator[] replicators = area.replicators ?? Array.Empty<WorldReplicator>();
+                for (int i = 0; i < replicators.Length; i++)
+                {
+                    WorldReplicator r = replicators[i];
+                    if (r == null) continue;
+                    string replicatorId = string.IsNullOrEmpty(r.id) ? $"{area.id}_replicator{i + 1}" : r.id;
+                    if (!build.Actors.TryGetValue(replicatorId, out GameObject repGo) || repGo == null) continue;
+
+                    Replicator replicator = repGo.GetComponent<Replicator>();
+                    if (replicator == null) continue;
+
+                    FactoryCensus.RegisterReplicator(replicator, area.id);
+                    _replicators.Add(replicator);
+                }
             }
 
             BuildGateIntoAreaMap(build);
+            RefreshGateLocks(); // initial lock state before the first Update tick
 
             _playerHealth = FindFirstObjectByType<PlayerHealth>();
             if (_playerHealth != null) _playerHealth.Died += OnPlayerDied;
@@ -126,7 +167,22 @@ namespace MaxWorlds.Arena
                 // id to "area<N>" exactly like every other combat area, so the loop above keys its gate
                 // at its real index without needing a separate synthetic-index case here.
                 if (gate != null) _gateIntoArea[intoArea] = gate;
+
+                // MV-703: resolve the same gate's authored opensWith into a GateCondition, keyed the
+                // same way, so RefreshGateLocks (and IsConditionGatedArea) can evaluate it per area
+                // without re-deriving link.gate -> WorldGate every tick.
+                WorldGate schemaGate = GateSchemaById(link.gate);
+                if (schemaGate != null && GateCondition.TryParse(schemaGate.opensWith, out GateCondition condition, out _))
+                    _gateConditionIntoArea[intoArea] = condition;
             }
+        }
+
+        private WorldGate GateSchemaById(string gateId)
+        {
+            if (_cfg?.gates == null) return null;
+            foreach (WorldGate g in _cfg.gates)
+                if (g != null && g.id == gateId) return g;
+            return null;
         }
 
         private void OnDestroy()
@@ -172,7 +228,7 @@ namespace MaxWorlds.Arena
         {
             if (_areaDirector == null || _cfg?.dials == null || areaIndex <= 0) return;
 
-            bool gateIsConditionGated = _cfg.AreaByIndex(areaIndex)?.IsBossRole ?? false;
+            bool gateIsConditionGated = IsConditionGatedArea(areaIndex);
             RespawnPlan plan = RespawnPlanner.Resolve(areaIndex, gateIsConditionGated);
 
             _areaDirector.RestoreArea(plan.RestoreAreaIndex);
@@ -191,10 +247,12 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>MV-665: reports every newly-dead shed into <see cref="_supply"/> — sheds no longer
-        /// gate any door, but <see cref="SupplyLineNetwork"/> still needs to know a shed died for
-        /// everything else it drives (supply lines, <see cref="TrackDestroyedShedStream"/>). Called
-        /// every <see cref="Update"/> tick and public so anything else that needs a fresh resolution —
-        /// a resume, a test — can force one directly.</summary>
+        /// gate any door by role, but <see cref="SupplyLineNetwork"/> still needs to know a shed died for
+        /// everything else it drives (supply lines, <see cref="TrackDestroyedShedStream"/>). MV-703 adds
+        /// the Replicator equivalent (no death event to subscribe to, so polled the same way) and then
+        /// re-resolves every condition-gated gate's lock. Called every <see cref="Update"/> tick and
+        /// public so anything else that needs a fresh resolution — a resume, a test — can force one
+        /// directly.</summary>
         public void RefreshConditionGates()
         {
             if (_supply == null) return;
@@ -208,6 +266,87 @@ namespace MaxWorlds.Arena
                 _supply.DestroyShed(shedId);
                 TrackDestroyedShedStream(areaId, hutch);
             }
+
+            for (int i = _replicators.Count - 1; i >= 0; i--)
+            {
+                Replicator replicator = _replicators[i];
+                if (replicator != null && replicator.IsAlive) continue;
+
+                _replicators.RemoveAt(i);
+                if (replicator != null) FactoryCensus.ReportReplicatorDestroyed(replicator);
+            }
+
+            RefreshGateLocks();
+        }
+
+        /// <summary>Evaluates every condition-gated incoming gate (MV-703) and syncs
+        /// <see cref="AreaGate.Locked"/>/<see cref="AreaGate.SetLockProgress"/> to it — the direct
+        /// replacement for the role-driven lock this runner had before MV-665 stripped it, now keyed off
+        /// the gate's own parsed <see cref="GateCondition"/> instead of the area's role. A gate whose
+        /// condition is Start/Primary/Sluice is skipped entirely (<see cref="GateCondition.IsConditionGated"/>
+        /// false) — exactly every World 1 gate today, so this is a no-op there.</summary>
+        private void RefreshGateLocks()
+        {
+            if (_supply == null) return;
+
+            foreach (KeyValuePair<int, GateCondition> kv in _gateConditionIntoArea)
+            {
+                GateCondition condition = kv.Value;
+                if (!condition.IsConditionGated) continue;
+                if (!_gateIntoArea.TryGetValue(kv.Key, out AreaGate gate) || gate == null) continue;
+
+                // MV-571's "SHEDS 3 / 8" readout only makes sense for the two legacy shed kinds — a
+                // replicators-destroyed gate has no progress count to show and falls back to the plain
+                // "LOCKED" label (AreaGate.ReadoutName).
+                if (condition.Kind == GateConditionKind.AllShedsDestroyed)
+                {
+                    _supply.ShedProgressBefore(int.MaxValue, out int destroyed, out int total);
+                    gate.SetLockProgress(destroyed, total);
+                }
+                else if (condition.Kind == GateConditionKind.ShedsDestroyedBefore)
+                {
+                    _supply.ShedProgressBefore(kv.Key, out int destroyed, out int total);
+                    gate.SetLockProgress(destroyed, total);
+                }
+
+                if (condition.IsSatisfied(_supply, kv.Key))
+                {
+                    bool wasLocked = gate.Locked;
+                    gate.Locked = false;
+                    if (wasLocked) gate.ForceOpen();
+                }
+                else
+                {
+                    gate.Locked = true;
+                }
+            }
+        }
+
+        /// <summary>Is the gate into <paramref name="areaIndex"/> condition-gated (MV-703) — the answer
+        /// <see cref="ResumeCheckpoint"/>/<see cref="OnPlayerDied"/> need to decide whether a death
+        /// re-closes it (never, for a condition-gated gate — re-closing it would be unreopenable).
+        /// Prefers the gate's own parsed <see cref="GateCondition"/>; falls back to the area's role only
+        /// when that gate is NOT condition-gated but the area is boss-role anyway (World 1 compatibility
+        /// — every World 1 boss gate still authors "primary", not a condition string, logged once).</summary>
+        private bool IsConditionGatedArea(int areaIndex)
+        {
+            if (_gateConditionIntoArea.TryGetValue(areaIndex, out GateCondition condition) && condition.IsConditionGated)
+                return true;
+
+            WorldArea area = _cfg?.AreaByIndex(areaIndex);
+            if (area != null && area.IsBossRole)
+            {
+                if (!_loggedBossPrimaryCompat)
+                {
+                    _loggedBossPrimaryCompat = true;
+                    Debug.Log($"MV-703: area '{area.id}' is boss-role but its incoming gate is not " +
+                              "condition-gated (opensWith is still 'primary') — keeping the legacy " +
+                              "role-driven reclose behaviour.");
+                }
+                return true;
+            }
+
+            return false;
         }
 
         private void Update()
@@ -284,7 +423,7 @@ namespace MaxWorlds.Arena
             // MV-575: whether the gate into the death area re-closes is a property of the area (its
             // role), not of where it sits in the sequence — a boss area's gate opens on a shed
             // condition, never combat, and re-closing it would be unreopenable (a softlock).
-            bool deathGateIsConditionGated = _cfg.AreaByIndex(deathArea)?.IsBossRole ?? false;
+            bool deathGateIsConditionGated = IsConditionGatedArea(deathArea);
             RespawnPlan plan = RespawnPlanner.Resolve(deathArea, deathGateIsConditionGated);
 
             DeathRunState.RecordDeath();

@@ -168,11 +168,13 @@ namespace MaxWorlds.Arena
     /// <summary>A locked deck-cell opening (MV-697) — same area-local MIN-corner convention as
     /// <see cref="WorldSludge"/>, authored on the same <see cref="WorldArea"/> record as the
     /// <see cref="WorldDeck"/> it sits on. Built as an <see cref="AreaGate"/> lying flat at the deck's
-    /// height rather than upright in a wall. <see cref="opensWith"/> carries the same condition syntax
-    /// a wall <see cref="WorldGate"/> does, but the condition engine that would resolve anything other
-    /// than <c>"primary"</c> (a <c>replicators-destroyed:</c> list) is MV-703's, not this ticket's —
-    /// until it lands, every hatch behaves as if it read <c>"primary"</c>: breakable by sustained
-    /// primary fire like an ordinary gate, whatever text is actually authored here.</summary>
+    /// height rather than upright in a wall. <see cref="opensWith"/> carries the same
+    /// <see cref="GateCondition"/> syntax a wall <see cref="WorldGate"/> does and MV-703's
+    /// <see cref="MapValidation"/> rules validate it the same way — but unlike a wall gate, nothing yet
+    /// wires a built hatch into <see cref="WorldRunner"/>'s condition-gate lock/unlock loop, so a hatch
+    /// still behaves as if it read <c>"primary"</c> at runtime: breakable by sustained primary fire like
+    /// an ordinary gate, whatever condition is actually authored here. That runtime wiring is a
+    /// follow-up, not this ticket's.</summary>
     [Serializable]
     public sealed class WorldHatch
     {
@@ -430,9 +432,11 @@ namespace MaxWorlds.Arena
     }
 
     /// <summary>A doorway between two areas' walls, placed at a fraction along each rather than forced
-    /// onto a shared centre-line (MV-267). <see cref="opensWith"/> is data the difficulty/origination
-    /// engines (MV-268/MV-269) act on — this ticket only carries and validates the word, it does not
-    /// wire any gameplay behind it (gates still open by their own HP, <see cref="AreaGate"/>).</summary>
+    /// onto a shared centre-line (MV-267). <see cref="opensWith"/> parses into a
+    /// <see cref="GateCondition"/> (MV-703, validated by <see cref="MapValidation"/>) — Start/Primary/
+    /// Sluice gates open by their own HP alone (<see cref="AreaGate"/>); the shed/replicator conditions
+    /// hold the gate <see cref="AreaGate.Locked"/> until <see cref="WorldRunner.RefreshGateLocks"/>
+    /// resolves them true.</summary>
     [Serializable]
     public sealed class WorldGate
     {

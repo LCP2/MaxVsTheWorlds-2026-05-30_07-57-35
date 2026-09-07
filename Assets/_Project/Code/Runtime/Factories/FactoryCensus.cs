@@ -25,6 +25,13 @@ namespace MaxWorlds.Factories
         private static readonly List<MowerHutch> Standing = new List<MowerHutch>(4);
         private static readonly List<MowerHutch> Registered = new List<MowerHutch>(4);
 
+        // Replicators (MV-703/MV-706), tracked separately from MowerHutch above because a gate's
+        // `replicators-destroyed:<areas>` condition needs to ask "destroyed in THESE areas", not just
+        // "destroyed overall" — an MowerHutch shed condition never needed to ask that.
+        private static readonly List<Replicator> ReplicatorsStanding = new List<Replicator>(4);
+        private static readonly List<Replicator> ReplicatorsRegistered = new List<Replicator>(4);
+        private static readonly Dictionary<Replicator, string> ReplicatorArea = new Dictionary<Replicator, string>(4);
+
         /// <summary>Every factory in the run, in the order the map placed them. The first is the one
         /// nearest the start of the level, which is what the tyre tracks and the mission line want.</summary>
         public static IReadOnlyList<MowerHutch> All => Registered;
@@ -46,6 +53,9 @@ namespace MaxWorlds.Factories
         {
             Registered.Clear();
             Standing.Clear();
+            ReplicatorsRegistered.Clear();
+            ReplicatorsStanding.Clear();
+            ReplicatorArea.Clear();
         }
 
         public static void Register(MowerHutch hutch)
@@ -75,6 +85,45 @@ namespace MaxWorlds.Factories
         {
             if (hutch == null || !Standing.Remove(hutch)) return;
             if (AllDown) Cleared?.Invoke();
+        }
+
+        /// <summary>Register a Replicator by the id of the area it was authored into (MV-703) —
+        /// <see cref="MaxWorlds.Arena.WorldRunner"/> calls this once per built Replicator, the same
+        /// "known by the time anything reads it" ordering <see cref="Register"/> above guarantees for
+        /// sheds.</summary>
+        public static void RegisterReplicator(Replicator replicator, string areaId)
+        {
+            if (replicator == null || ReplicatorsRegistered.Contains(replicator)) return;
+            ReplicatorsRegistered.Add(replicator);
+            ReplicatorsStanding.Add(replicator);
+            ReplicatorArea[replicator] = areaId;
+        }
+
+        /// <summary>Report a Replicator destroyed. Idempotent, same shape as <see cref="ReportDestroyed"/>.</summary>
+        public static void ReportReplicatorDestroyed(Replicator replicator)
+        {
+            if (replicator == null) return;
+            ReplicatorsStanding.Remove(replicator);
+        }
+
+        /// <summary>True once every Replicator this run has is down. False in a run with none — same
+        /// "never cleared, just never had a source" convention as <see cref="AllDown"/> (MV-703 AC1).</summary>
+        public static bool AllReplicatorsDestroyed =>
+            ReplicatorsRegistered.Count > 0 && ReplicatorsStanding.Count == 0;
+
+        /// <summary>True once every Replicator authored into each of <paramref name="areaIds"/> is
+        /// destroyed. An EMPTY list resolves TRUE (MV-703 — the opposite of the shed helpers' "nothing to
+        /// clear" trap: <see cref="MapValidation"/> only lets an empty list ship if the design meant it,
+        /// so there is nothing here to wait on). Ignores any standing replicator outside the named areas.</summary>
+        public static bool ReplicatorsDestroyedInAreas(IReadOnlyList<string> areaIds)
+        {
+            if (areaIds == null || areaIds.Count == 0) return true;
+
+            foreach (string areaId in areaIds)
+                foreach (Replicator r in ReplicatorsStanding)
+                    if (ReplicatorArea.TryGetValue(r, out string a) && a == areaId) return false;
+
+            return true;
         }
     }
 }

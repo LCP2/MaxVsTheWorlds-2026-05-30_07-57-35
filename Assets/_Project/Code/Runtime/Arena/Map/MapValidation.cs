@@ -551,6 +551,8 @@ namespace MaxWorlds.Arena
 
                     if (!onDeck)
                     { reason = $"area '{a.id}': hatch '{h.id}' does not sit on any of the area's deck cells"; return false; }
+
+                    if (!ValidateOpensWith(cfg, "hatch", h.id, h.opensWith, out reason)) return false;
                 }
             }
 
@@ -857,6 +859,8 @@ namespace MaxWorlds.Arena
                 if (!ResolveEndpoint(cfg, g.from, out WorldArea fromArea, out Wall fromWall, out reason)) return false;
                 if (!ResolveEndpoint(cfg, g.to, out WorldArea toArea, out Wall toWall, out reason)) return false;
 
+                if (!ValidateOpensWith(cfg, "gate", g.id, g.opensWith, out reason)) return false;
+
                 if (toWall != WallEnums.Opposite(fromWall))
                 {
                     reason = $"gate '{g.id}' joins '{fromArea.id}'s {fromWall} wall to '{toArea.id}'s {toWall} wall — " +
@@ -905,6 +909,44 @@ namespace MaxWorlds.Arena
                     reason = $"gate '{g.id}' at {along:0.#} spills past the shared wall [{overlap.Min:0.#}, {overlap.Max:0.#}] " +
                              $"— move its pos closer to the middle or narrow it below {overlap.Length:0.#} m";
                     return false;
+                }
+            }
+
+            reason = null;
+            return true;
+        }
+
+        /// <summary>Validates an authored <c>opensWith</c> string against the <see cref="GateCondition"/>
+        /// grammar (MV-703), naming <paramref name="entityId"/> (prefixed with <paramref name="entityKind"/>
+        /// — <c>"gate"</c> or <c>"hatch"</c>) in any failure reason. For a
+        /// <c>replicators-destroyed:&lt;list&gt;</c> form, also checks every named area exists and
+        /// actually authors at least one replicator — an empty list is fine
+        /// (see <see cref="FactoryCensus.ReplicatorsDestroyedInAreas"/>'s own "nothing to wait on" rule),
+        /// a typo'd or replicator-free area is not, since that can only be a content bug.</summary>
+        private static bool ValidateOpensWith(WorldConfig cfg, string entityKind, string entityId, string opensWith, out string reason)
+        {
+            if (!GateCondition.TryParse(opensWith, out GateCondition condition, out string parseReason))
+            {
+                reason = $"{entityKind} '{entityId}': {parseReason}";
+                return false;
+            }
+
+            if (condition.Kind == GateConditionKind.ReplicatorsDestroyed && !condition.ReplicatorsAll)
+            {
+                foreach (string areaId in condition.ReplicatorAreaIds)
+                {
+                    WorldArea area = cfg.Area(areaId);
+                    if (area == null)
+                    {
+                        reason = $"{entityKind} '{entityId}' opens on replicators-destroyed:{areaId}, but area '{areaId}' does not exist";
+                        return false;
+                    }
+
+                    if (area.replicators == null || area.replicators.Length == 0)
+                    {
+                        reason = $"{entityKind} '{entityId}' opens on replicators-destroyed:{areaId}, but area '{areaId}' authors no replicator";
+                        return false;
+                    }
                 }
             }
 
