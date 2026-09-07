@@ -88,6 +88,7 @@ namespace MaxWorlds.Intro
         {
             s_consumed = false;
             Enabled = false;
+            IntroVideo.OverrideKindForTests = null;
         }
 
         // The three acts live far apart in world space so nothing overlaps the yard (at the origin) or
@@ -102,6 +103,7 @@ namespace MaxWorlds.Intro
         private IntroSpace _space;
         private IntroDescent _descent;
         private IntroShed _shed;
+        private IntroVideo _video;
 
         // The screen the intro borrowed, to be handed back exactly as it was found.
         private GameObject _hud;
@@ -135,6 +137,11 @@ namespace MaxWorlds.Intro
         public IntroShed Shed => _shed;
         public Camera IntroCamera => _cam;
 
+        /// <summary>MV-710: true once a pre-rendered video source resolved — the cinematic plays that
+        /// instead of scrubbing the box-built beat timeline. False (the fallback) whenever no video
+        /// asset is present, which is every build until one ships.</summary>
+        public bool UsingVideo => _video != null && _video.HasSource;
+
         /// <summary>True while the intro is holding the player's control (disabled for the cinematic).
         /// A test reads this to prove control is suspended during, and returned after, the sequence.</summary>
         public bool PlayerControlSuspended => _suspendedPlayer != null && !_suspendedPlayer.enabled;
@@ -153,9 +160,16 @@ namespace MaxWorlds.Intro
 
         // ------------------------------------------------------------------ build
 
-        private void Awake()
+        private void Awake() => Initialize();
+
+        /// <summary>The Awake work, exposed so an EditMode test can build the cinematic directly: a
+        /// MonoBehaviour without <c>[ExecuteAlways]</c> only ever receives Awake once Unity is actually
+        /// in Play Mode, which an EditMode test (this project bans PlayMode tests — MV-299/311/330) never
+        /// enters, no matter how many frames it yields.</summary>
+        public void Initialize()
         {
             TakeOverScreen();
+            _video = new IntroVideo(_cam, transform);   // MV-710 — resolved before the box set so Tick() can route on it
             BuildSet();
             BuildBeats();
         }
@@ -429,6 +443,16 @@ namespace MaxWorlds.Intro
         {
             if (_done) return;
 
+            if (UsingVideo)
+            {
+                // MV-710: the video path — the box timeline never scrubs, and hands off on completion
+                // instead of at TotalDuration. Trigger, skip, camera takeover, HUD/fog/player suspend and
+                // Restore are unchanged and shared with the beat path below.
+                _clock += dt;
+                if (_video.IsComplete) Handoff();
+                return;
+            }
+
             // The per-frame housekeeping for whichever act is live (Earth turns, VFX budgets refill).
             if (_beat >= 0 && _beat <= 2) _space.Frame(dt);
 
@@ -505,7 +529,11 @@ namespace MaxWorlds.Intro
             if (_done) return;
             _done = true;
             Restore();
-            Destroy(gameObject);
+            // Same guard as IntroBuild.Strip: Destroy is deferred to end-of-frame and only valid while
+            // playing; an EditMode test (MV-710's IntroVideoTests) drives this outside Play Mode and needs
+            // the immediate form.
+            if (Application.isPlaying) Destroy(gameObject);
+            else DestroyImmediate(gameObject);
         }
 
         /// <summary>
