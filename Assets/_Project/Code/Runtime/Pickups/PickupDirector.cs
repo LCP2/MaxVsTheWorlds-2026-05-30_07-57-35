@@ -309,6 +309,17 @@ namespace MaxWorlds.Pickups
         /// (<see cref="OnFactoryDestroyed"/>) may do that.</summary>
         public void PlacePartsCache(Vector3 pos) => SpawnCellCache(pos);
 
+        /// <summary>Places World 1's finale drop (MV-698) at <paramref name="pos"/> — the one
+        /// <see cref="PickupKind.WeaponCore"/> <c>BossVictoryPayoff</c> requests when the world's final
+        /// boss area falls and there is a next world to send the player into. A thin public wrapper
+        /// around <see cref="SpawnDrop"/> (private) for the same reason <see cref="PlacePartsCache"/>
+        /// is one — the caller lives outside this director.</summary>
+        public void SpawnWeaponCore(Vector3 pos)
+        {
+            SpawnDrop(PickupKind.WeaponCore, pos);
+            HudSignals.EmitWeaponCoreDropped();
+        }
+
         private void OnFactoryDestroyed(Vector3 pos)
         {
             bool anyLocked = false;
@@ -526,6 +537,7 @@ namespace MaxWorlds.Pickups
                     PendingMorphingModule.SetWeaponCore();
                     HudSignals.EmitPickup(p.transform.position, "WEAPON CORE",
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
+                    HudSignals.EmitWeaponCoreCollected();
                     break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's

@@ -30,6 +30,13 @@ namespace MaxWorlds.Bosses
 
         public static int LivingCount => Living.Count;
 
+        /// <summary>The area index <see cref="ReportDefeated"/> most recently cleared (MV-698) — set
+        /// just before <see cref="HudSignals.EmitBossDefeated"/> fires, so a synchronous subscriber
+        /// (<c>BossVictoryPayoff</c>) can read which area's last boss just fell without the scene-wide
+        /// signal itself needing to carry a payload (see <c>BigBermudaRig.OnDefeated</c>'s own doc
+        /// comment on why <see cref="HudSignals.BossDefeated"/> stays identity-free).</summary>
+        public static int LastDefeatedAreaIndex { get; private set; }
+
         /// <summary>Wipe the census. Called when a level starts building (the map engine), so a scene
         /// loaded a second time — in the game or in a test run — counts its own bosses and not the
         /// previous level's ghosts. Same reasoning as <c>FactoryCensus.Reset</c>.</summary>
@@ -42,6 +49,7 @@ namespace MaxWorlds.Bosses
             SpawnLevelByBoss.Clear();
             SpawnProgressByBoss.Clear();
             _engaged = false;
+            LastDefeatedAreaIndex = 0;
         }
 
         /// <summary>A boss has woken and joined the fight. The FIRST one engages the HUD boss bar;
@@ -106,6 +114,7 @@ namespace MaxWorlds.Bosses
 
             if (!AnyLivingIn(areaIndex))
             {
+                LastDefeatedAreaIndex = areaIndex;
                 HudSignals.EmitBossHealth(0f);
                 HudSignals.EmitBossDefeated();
             }

@@ -5,6 +5,7 @@ using UnityEngine.UI;
 using UnityEngine.InputSystem.UI;
 using MaxWorlds.Core;
 using MaxWorlds.Pickups;
+using MaxWorlds.Save;
 using MaxWorlds.Weapons;
 using MaxWorlds.VFX;
 
@@ -763,10 +764,15 @@ namespace MaxWorlds.UI
         /// <summary>Open THE RIG, pausing the game. Ignored if already open. MV-425: if a Morphing
         /// Module draft is banked and waiting (<see cref="PendingMorphingModule"/>), opening here shows
         /// it immediately rather than the plain board — the player asked to open WEAPONS precisely
-        /// because the HUD's cyan badge told them one was waiting.</summary>
+        /// because the HUD's cyan badge told them one was waiting. MV-698: a banked Weapon Core
+        /// (<see cref="PendingMorphingModule.WeaponCorePending"/>) resolves first and silently — unlike
+        /// a module draft there is nothing to pick between, so the morph just applies and the board
+        /// opens straight into its new PRIMARY/SECONDARY rather than a separate ceremony screen.</summary>
         public void Open()
         {
             if (_open) return;
+
+            WeaponSystemState.OpenWeaponCoreMorphIfPending(CurrentWorldIndex());
 
             if (PendingMorphingModule.HasPending)
             {
@@ -784,6 +790,15 @@ namespace MaxWorlds.UI
             Refresh();
             _screenRoot.gameObject.SetActive(true);
         }
+
+        /// <summary>MV-698: the world whose board a pending Weapon Core morph should switch to — the
+        /// active profile's current <c>WorldIndex</c> (already advanced past the world whose finale
+        /// dropped the core by <c>SaveSystem.RecordResult</c> by the time THE RIG can next be opened).
+        /// Falls back to World 1 with no active profile (a capture/press-kit run, or a test) — never
+        /// reached for real, since nothing sets <see cref="PendingMorphingModule.WeaponCorePending"/>
+        /// without an active slot to have advanced.</summary>
+        private static int CurrentWorldIndex() =>
+            SaveSystem.ActiveSlot >= 0 ? SaveSystem.Load(SaveSystem.ActiveSlot).WorldIndex : 0;
 
         /// <summary>Close THE RIG and resume at whatever speed it paused from.</summary>
         public void Close()

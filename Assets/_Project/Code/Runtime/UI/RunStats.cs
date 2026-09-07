@@ -39,6 +39,14 @@ namespace MaxWorlds.UI
 
         public void SetAdvancesWorld(bool value) => AdvancesWorld = value;
 
+        /// <summary>Whether this Victory's finale dropped and collected a Weapon Core (MV-698) — set by
+        /// <c>RunTracker</c> at seal time, same "captured beforehand, not derived here" shape as
+        /// <see cref="AdvancesWorld"/>. Drives whether the Result screen shows its "NEW PRIMARY: LPPE"
+        /// line.</summary>
+        public bool WeaponCoreGranted { get; private set; }
+
+        public void SetWeaponCoreGranted(bool value) => WeaponCoreGranted = value;
+
         /// <summary>Advance the run clock. No-op once the run is over.</summary>
         public void Tick(float dt)
         {
