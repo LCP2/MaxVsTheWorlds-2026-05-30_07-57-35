@@ -61,6 +61,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv674TeleportCrackle() => RunFromMenu(CapturePresets.All["mv674teleportcrackle"]);
         public static void CaptureMv674TeleportCrackle() => Run(CapturePresets.All["mv674teleportcrackle"]);
 
+        [MenuItem("MaxWorlds/Capture/Intro Handoff Frame (MV-719)")]
+        public static void MenuIntroHandoffFrame() => RunFromMenu(CapturePresets.All["introhandoffframe"]);
+        public static void CaptureIntroHandoffFrame() => Run(CapturePresets.All["introhandoffframe"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

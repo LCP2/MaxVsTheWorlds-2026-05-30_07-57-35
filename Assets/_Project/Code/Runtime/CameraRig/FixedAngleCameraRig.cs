@@ -196,5 +196,18 @@ namespace MaxWorlds.CameraRig
             float rad = pitchDegrees * Mathf.Deg2Rad;
             return new Vector3(0f, distance * Mathf.Sin(rad), -distance * Mathf.Cos(rad));
         }
+
+        /// <summary>
+        /// The exact world pose this rig settles on when following <paramref name="targetPosition"/>
+        /// — position = target + <see cref="ComputeOffset"/>, rotation = the fixed pitch with no yaw
+        /// (this rig never turns). Resolved directly rather than through a live Cinemachine follow, so
+        /// it is usable the instant a target's position is known (MV-719's intro handoff pre-warm) —
+        /// headless, no vcam, no frame of LateUpdate required.
+        /// </summary>
+        public void RestingPose(Vector3 targetPosition, out Vector3 position, out Quaternion rotation)
+        {
+            position = targetPosition + ComputeOffset(cameraDistance, pitchDegrees);
+            rotation = Quaternion.Euler(pitchDegrees, 0f, 0f);
+        }
     }
 }
