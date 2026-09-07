@@ -21,6 +21,31 @@ namespace MaxWorlds.Weapons
         /// <summary>The short form the HUD/weapons screen actually has room for.</summary>
         public const string PrimaryShortName = "RCDA";
 
+        /// <summary>Which primary is currently equipped (MV-708) — the RCDA from run start, replaced
+        /// by the LPPE for the rest of the campaign once World 2 begins. The swap itself is
+        /// MV-689/MV-698; this ticket only adds the weapon and makes it selectable.</summary>
+        public enum PrimaryKind { Rcda, Lppe }
+
+        /// <summary>World 2's primary (MV-708) — the Locked-Phase Pulse Emitter. Whether "LPPE" itself
+        /// gets renamed is Lee's call; the code identifier stays <see cref="PrimaryKind.Lppe"/> either
+        /// way (ticket's explicit "do not re-raise").</summary>
+        public const string LppeName = "LOCKED-PHASE PULSE EMITTER";
+        public const string LppeShortName = "LPPE";
+
+        public static string DisplayName(PrimaryKind kind) => kind switch
+        {
+            PrimaryKind.Rcda => PrimaryName,
+            PrimaryKind.Lppe => LppeName,
+            _ => kind.ToString(),
+        };
+
+        public static string ShortName(PrimaryKind kind) => kind switch
+        {
+            PrimaryKind.Rcda => PrimaryShortName,
+            PrimaryKind.Lppe => LppeShortName,
+            _ => kind.ToString(),
+        };
+
         /// <summary>Placeholder base cooldowns (v0.5 recut spec §9 names these as settings —
         /// <c>waterBalloonCooldown</c>/<c>teleportCooldown</c> — without pinning numbers; live-tune
         /// via DevTuning once the Settings tab exists, WV-234). Water Balloon's is 3x the original 3s

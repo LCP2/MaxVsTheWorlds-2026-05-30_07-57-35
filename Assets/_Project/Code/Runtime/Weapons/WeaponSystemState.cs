@@ -32,6 +32,22 @@ namespace MaxWorlds.Weapons
         /// the state is reset. Systems that cache a derived value rebuild on this.</summary>
         public static event Action Changed;
 
+        private static WeaponCatalog.PrimaryKind s_activePrimary = WeaponCatalog.PrimaryKind.Rcda;
+
+        /// <summary>Which primary Max is currently firing (MV-708) — the RCDA from run start; MV-689
+        /// flips this to <see cref="WeaponCatalog.PrimaryKind.Lppe"/> for the rest of the campaign once
+        /// World 2 begins.</summary>
+        public static WeaponCatalog.PrimaryKind ActivePrimary
+        {
+            get => s_activePrimary;
+            set
+            {
+                if (s_activePrimary == value) return;
+                s_activePrimary = value;
+                Changed?.Invoke();
+            }
+        }
+
         // ---------------------------------------------------------------- enum <-> RIG id mapping
 
         private static string MapId(WeaponTrackKind kind) => kind switch
@@ -288,6 +304,7 @@ namespace MaxWorlds.Weapons
             RigState.Reset();
             s_acquisitionOrder.Clear();
             s_waterBalloonAutoFireEnabled = true;
+            s_activePrimary = WeaponCatalog.PrimaryKind.Rcda;
             Changed?.Invoke();
         }
     }
