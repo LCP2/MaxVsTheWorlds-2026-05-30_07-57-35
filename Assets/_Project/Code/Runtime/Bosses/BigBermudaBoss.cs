@@ -409,6 +409,7 @@ namespace MaxWorlds.Bosses
                     archetype.SpawnHeight, spread);
 
                 RobotEnemy add = TakeAdd(archetype);
+                add.TagNoReplicatePermanent(); // MV-706: a boss-flung robot may never be lured into a Replicator
                 add.transform.position = from;
                 add.gameObject.SetActive(true);   // VISIBLE for the throw…
                 add.enabled = false;              // …but its own chase/gravity is off while the boss flies it

@@ -323,6 +323,7 @@ namespace MaxWorlds.UI
             HudSignals.EnemyKilled += OnEnemyKilled;
             HudSignals.FactoryRegistered += OnFactoryRegistered;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
+            HudSignals.WorldFactoryWording += OnWorldFactoryWording;
             HudSignals.BossRegistered += OnBossRegistered;
             HudSignals.BossEngaged += OnBossEngaged;
             HudSignals.BossHealthChanged += OnBossHealth;
@@ -346,6 +347,7 @@ namespace MaxWorlds.UI
             HudSignals.EnemyKilled -= OnEnemyKilled;
             HudSignals.FactoryRegistered -= OnFactoryRegistered;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
+            HudSignals.WorldFactoryWording -= OnWorldFactoryWording;
             HudSignals.BossRegistered -= OnBossRegistered;
             HudSignals.BossEngaged -= OnBossEngaged;
             HudSignals.BossHealthChanged -= OnBossHealth;
@@ -525,6 +527,8 @@ namespace MaxWorlds.UI
         private void OnBossDefeated() => _model.DefeatBossExternal();
 
         private void OnFactoryRegistered() => _model.RegisterFactory();
+
+        private void OnWorldFactoryWording(bool isReplicatorWorld) => _model.Arena.SetReplicatorWorld(isReplicatorWorld);
 
         private void OnFactoryDestroyed(Vector3 pos)
         {
@@ -1771,7 +1775,11 @@ namespace MaxWorlds.UI
         /// meaning of its own left to give a correct label to. FACTORIES stays — it counts real,
         /// dynamically-discovered factories correctly (see <see cref="HudModel.RegisterFactory"/>).
         /// </summary>
-        public static string ArenaLabelText(ArenaProgress a) => $"FACTORIES {a.FactoriesDestroyed}/{a.FactoriesTotal}";
+        /// <summary>MV-706: a world whose sources are Replicators with no sheds reads "REPLICATORS
+        /// n/N" — same counter, different word, so a World 2 player never sees a label naming a
+        /// building type this world doesn't have.</summary>
+        public static string ArenaLabelText(ArenaProgress a) =>
+            $"{(a.IsReplicatorWorld ? "REPLICATORS" : "FACTORIES")} {a.FactoriesDestroyed}/{a.FactoriesTotal}";
 
         /// <summary>The Invasion Dial (YT-197): a small fill meter across the three escalation bands
         /// — INVASION / INFESTATION / DOMINATION — so the DifficultyDirector curve the swarm is

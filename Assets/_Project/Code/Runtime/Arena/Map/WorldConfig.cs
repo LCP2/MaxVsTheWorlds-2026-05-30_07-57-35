@@ -184,6 +184,21 @@ namespace MaxWorlds.Arena
         public string opensWith = "primary";
     }
 
+    /// <summary>A Replicator's authored position and doubling budget (MV-706) — World 2's factory:
+    /// a box that never spawns on its own, but doubles any robot that reaches its hatch. <see cref="x"/>/
+    /// <see cref="z"/> are area-local metres (box centre), same convention as <see cref="WorldShed"/>.
+    /// <see cref="capacity"/> is the maximum number of doublings this one box can ever perform — Lee's
+    /// exact-count rule: the worst case per area is the authored composition plus Σ every replicator's
+    /// capacity, by design, never a dial retuned live.</summary>
+    [Serializable]
+    public sealed class WorldReplicator
+    {
+        public string id;
+        public float x;
+        public float z;
+        public int capacity;
+    }
+
     /// <summary>One authored obstacle in an area — shrubbery, a hedge row, a planter (MV-318). Carries
     /// the same fields as <see cref="MapEntity"/>'s cover shape so <see cref="WorldMapLoader"/> can
     /// hand it straight to the engine that already knows how to build, validate and dress cover
@@ -238,6 +253,12 @@ namespace MaxWorlds.Arena
         /// anything; call <see cref="Sheds"/> instead, which resolves this against the legacy
         /// <see cref="shed"/> field so callers never branch on which one a config authored.</summary>
         public WorldShed[] sheds;
+
+        /// <summary>Replicators authored into this area (MV-706) — World 2's factory in place of a
+        /// shed. Optional; most areas (and every World 1 area) carry none. Unlike <see cref="Sheds"/>
+        /// there is no legacy single-field fallback to resolve — replicators shipped only after the
+        /// array form already existed.</summary>
+        public WorldReplicator[] replicators = Array.Empty<WorldReplicator>();
 
         public WorldBoss boss;
 

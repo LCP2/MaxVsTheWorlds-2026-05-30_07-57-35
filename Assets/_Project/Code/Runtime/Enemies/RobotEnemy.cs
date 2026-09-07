@@ -34,7 +34,9 @@ namespace MaxWorlds.Enemies
         // Emerging rather than inserted anywhere earlier.
         // Dormant/Alert (MV-363) follow it too — a concealed robot that hasn't yet seen Max, and
         // the short "waking up" beat between spotting him and actually joining the chase.
-        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert }
+        // ReplicatorSeeking (MV-706) follows the same rule — lured off Max toward a World 2 Replicator's
+        // hatch instead of walking the ordinary Chase route.
+        public enum State { Chase, Telegraph, Lunge, Recover, Dead, Search, Emerging, Teleport, Dormant, Alert, ReplicatorSeeking }
 
         [Header("Target")]
         [Tooltip("Max. If null, located by tag 'Player' on enable.")]
@@ -252,6 +254,83 @@ namespace MaxWorlds.Enemies
             }
 
             transform.position = new Vector3(nearest.x, p.y, nearest.y);
+        }
+
+        // --- Replicator lure (MV-706) — World 2's factory pulls an unaware robot off Max toward its
+        // own hatch instead of the ordinary Chase route. The Replicator itself owns the lure-eligibility
+        // scan and the consume/double timing; this robot only knows how to walk toward a point and how
+        // to refuse a second doubling for a while (or forever) once it's already been through one. ---
+
+        /// <summary>Where this robot is walking while <see cref="State.ReplicatorSeeking"/> — the
+        /// Replicator's own hatch position. Meaningless (last-set value) outside that state; read back
+        /// by <see cref="MaxWorlds.Factories.Replicator.TickLure"/>'s own test.</summary>
+        public Vector3 ReplicatorSeekTarget { get; private set; }
+
+        private bool _noReplicate;
+        private bool _noReplicatePermanent;
+        private float _noReplicateTimer;
+
+        /// <summary>True while this robot must never be lured into a Replicator (MV-706) — a fresh
+        /// doubled pair for a few seconds after emerging, or permanently for a boss-volley add
+        /// (<see cref="TagNoReplicatePermanent"/>).</summary>
+        public bool NoReplicate => _noReplicatePermanent || _noReplicate;
+
+        /// <summary>Refuse the lure for <paramref name="seconds"/> (MV-706: a freshly doubled pair
+        /// can't immediately walk back into the box that made them). Extends rather than shortens an
+        /// already-running timer, same "never shortens" convention as <see cref="ApplyHalt"/>.</summary>
+        public void TagNoReplicate(float seconds)
+        {
+            _noReplicate = true;
+            _noReplicateTimer = Mathf.Max(_noReplicateTimer, seconds);
+        }
+
+        /// <summary>Refuse the lure forever (MV-706: a robot flung by a Big Bermuda volley,
+        /// <see cref="MaxWorlds.Bosses.BigBermudaBoss"/>). One-way — nothing ever clears this.</summary>
+        public void TagNoReplicatePermanent() => _noReplicatePermanent = true;
+
+        /// <summary>Sets this robot lured toward a Replicator's hatch instead of Max (MV-706). A no-op
+        /// for a robot that isn't actually awake and fighting — Dead/Dormant robots are never lured, and
+        /// the Replicator's own <c>TickLure</c> already screens for "awake"; this is belt-and-braces
+        /// against being called some other way. Safe to call again on an already-seeking robot (the
+        /// Replicator re-scans on its own cadence) — it just refreshes the target point.</summary>
+        public void SeekReplicator(Vector3 hatchPosition)
+        {
+            if (!IsAlive || Current == State.Dormant) return;
+            if (Current != State.ReplicatorSeeking)
+            {
+                Current = State.ReplicatorSeeking;
+                _stateTimer = 0f;
+                _bar?.SetReplicatorMarker(true);
+            }
+            ReplicatorSeekTarget = hatchPosition;
+        }
+
+        /// <summary>Break off a lure and resume the ordinary chase (MV-706) — called by a Replicator
+        /// that is destroyed while still owed a robot that hasn't reached its hatch yet. A no-op unless
+        /// this robot is actually mid-lure.</summary>
+        public void CancelReplicatorSeeking()
+        {
+            if (Current != State.ReplicatorSeeking) return;
+            Current = State.Chase;
+            _stateTimer = 0f;
+            _bar?.SetReplicatorMarker(false);
+        }
+
+        /// <summary>Walks straight toward <see cref="ReplicatorSeekTarget"/> (MV-706) — the same
+        /// direct point-to-point <see cref="CharacterControllerMotion.SafeMove"/> idiom
+        /// <see cref="MaxWorlds.Factories.MowerHutch"/>'s own mobile pursuit already uses, reused rather
+        /// than forked: no sight, no navigation waypoints, no cover-routing — a lured robot beelines for
+        /// the box it's been pulled toward. Arrival itself is the Replicator's own call (it watches the
+        /// distance and consumes the robot); this only ever closes the gap.</summary>
+        private void TickReplicatorSeeking(float dt)
+        {
+            Vector3 to = ReplicatorSeekTarget - transform.position;
+            to.y = 0f;
+            float dist = to.magnitude;
+            if (dist <= 0.001f) return;
+            Vector3 dir = to / dist;
+            float step = Mathf.Min(EffectiveMoveSpeed * dt, dist);
+            CharacterControllerMotion.SafeMove(_cc, dir * step);
         }
 
         /// <summary>How far through the wind-up this enemy is, 0..1 (0 when not telegraphing).
@@ -549,6 +628,14 @@ namespace MaxWorlds.Enemies
             // A pooled robot must never inherit the last life's ram cooldown (MV-586) — its first
             // contact with a fresh bubble this life should cost it immediately.
             _forceFieldRamCooldownTimer = 0f;
+            // MV-706: a pooled robot must not carry the last life's lure tag or hatch target forward —
+            // the common case (never lured) is the correct default until a Replicator calls SeekReplicator/
+            // TagNoReplicate again this life. Permanent boss-volley tagging is NOT cleared here — Apply()
+            // (called right after a boss's TakeAdd) re-tags it anyway, but a plain pooled reuse through
+            // EnemySpawner must never un-permanent a tag it never re-applies.
+            _noReplicate = false;
+            _noReplicateTimer = 0f;
+            _bar?.SetReplicatorMarker(false);
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -627,6 +714,14 @@ namespace MaxWorlds.Enemies
 
             _forceFieldRamCooldownTimer = Mathf.Max(0f, _forceFieldRamCooldownTimer - dt);
 
+            // MV-706: ticks regardless of state, same reasoning as the ram cooldown above — a robot
+            // mid-Chase or mid-Lunge still has to shed its "just doubled" tag on schedule.
+            if (_noReplicate && !_noReplicatePermanent)
+            {
+                _noReplicateTimer -= dt;
+                if (_noReplicateTimer <= 0f) _noReplicate = false;
+            }
+
             // MV-657: target can go null in ANY state, not only at spawn — Unity's fake-null makes a
             // destroyed target (a dead Sentinel this robot was retargeted to, MV-362) read as null here.
             // Re-acquire immediately, before the sight tick below, or the tick below stays permanently
@@ -668,6 +763,7 @@ namespace MaxWorlds.Enemies
                     case State.Teleport: TickTeleport(dt); break;
                     case State.Dormant:  TickDormant();    break;
                     case State.Alert:    TickAlert(dt);    break;
+                    case State.ReplicatorSeeking: TickReplicatorSeeking(dt); break;
                 }
             }
 

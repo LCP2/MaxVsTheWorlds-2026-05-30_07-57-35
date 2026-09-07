@@ -53,6 +53,7 @@ namespace MaxWorlds.UI
         private static readonly Color OutlineColor = new Color(0.02f, 0.03f, 0.02f, 0.92f);
         private static readonly Color BackColor = new Color(0f, 0f, 0f, 0.55f);
         private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.9f);
+        private static readonly Color ReplicatorMarkerColor = new Color(0.3f, 1f, 1f, 0.95f); // MV-706: matches the Replicator's own cyan LED
 
         // Height of the optional secondary gauge (Max's water), as a fraction of the health bar's.
         private const float SecondaryHeightFraction = 0.62f;
@@ -91,6 +92,7 @@ namespace MaxWorlds.UI
         private Image _fill;
         private Text _nameText;
         private Text _numberText;
+        private Text _replicatorMarker;
         private Camera _camera;
 
         // Optional secondary gauge stacked ABOVE the life bar (YT-121 — Max's water level). Null for
@@ -189,6 +191,15 @@ namespace MaxWorlds.UI
             if (hidden && _barVisuals != null) _barVisuals.gameObject.SetActive(false);
         }
 
+        /// <summary>Show/hide the Replicator lure tell (MV-706) above this unit's nameplate. Called on
+        /// the discrete state transition (<see cref="MaxWorlds.Enemies.RobotEnemy.SeekReplicator"/>/
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.CancelReplicatorSeeking"/>/consumption), not every
+        /// frame.</summary>
+        public void SetReplicatorMarker(bool show)
+        {
+            if (_replicatorMarker != null) _replicatorMarker.gameObject.SetActive(show);
+        }
+
         private void Build()
         {
             if (_pivot != null) return;
@@ -261,6 +272,21 @@ namespace MaxWorlds.UI
             nr.anchoredPosition = new Vector2(0f, nameLift);
             // Text itself is set by Refresh() below (MV-312) — it re-reads ReadoutName every call, so
             // there is no separate "initial" assignment to keep in step with that one.
+
+            // MV-706: the Replicator lure tell — "⇈" above the nameplate while a robot is seeking a
+            // hatch instead of Max, the readability tell the craft bible demands for "who is running for
+            // the box". Off by default; SetReplicatorMarker toggles it on state change only, not every
+            // frame, since it's driven by a discrete state transition, not a continuous value.
+            _replicatorMarker = NewText(_canvas, LabelFontSize + 8, ReplicatorMarkerColor, TextAnchor.LowerCenter);
+            var mr = _replicatorMarker.rectTransform;
+            mr.anchorMin = mr.anchorMax = new Vector2(0.5f, 1f);
+            mr.pivot = new Vector2(0.5f, 0f);
+            mr.sizeDelta = new Vector2(LabelPixelWidth, LabelPixelHeight);
+            mr.anchoredPosition = new Vector2(0f, nameLift + LabelPixelHeight);
+            // ASCII only (MV-600): LegacyRuntime.ttf has no coverage for the double-up-arrow glyph the
+            // ticket names, so this stands in for it rather than adding a new non-ASCII allow-list entry.
+            _replicatorMarker.text = "^^";
+            _replicatorMarker.gameObject.SetActive(false);
 
             // The number sits ON the bar, Brawl-Stars style, so the figure and the length it
             // describes are one object rather than two things to look between.
