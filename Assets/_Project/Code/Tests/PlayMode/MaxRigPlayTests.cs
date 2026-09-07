@@ -264,19 +264,15 @@ namespace MaxWorlds.Tests.PlayMode
                 "test is no longer proving the rig ignores it.");
         }
 
-        // MV-451 FLAG FOR LEE: HisHandsNeverLeaveTheGadget and the gun-position half of
-        // HeCarriesTheGadgetAtTheHipUntilHeAims are removed here, not adapted. MaxBody.Build bakes the
-        // gadget and both arms into ONE fused static mesh under a single root with no "Gun"/"ArmL"/
-        // "ArmR"/"HandL"/"HandR" transforms of its own to find or move — by design (see MaxBody's own
-        // "elbows are explicit" and "blaster is off the midline" doc comments, which describe a single
-        // authored pose, not a runtime-posable rig). MaxRig.TickGadget/PoseArm still compute _aim and
-        // the shoulder/hand math every frame (AimPose, BarrelHeight and MaxRigTests all still hold),
-        // but per INTEGRATION-v2.md's own instruction there is nothing left for that computation to
-        // visually drive: the gadget no longer visibly rises when Max aims. That is a real behaviour
-        // change from the class doc's "you can see the gun come up before a drop of water leaves it"
-        // and this ticket's own scope (rename, delete-and-delegate, wheels) has no coordinate to fix it
-        // with — extending MaxBody to expose a posable gun root is a design call for MV-453 (Max detail
-        // pass), not a fidelity bug this ticket can hand-edit its way out of.
+        // MV-451 FLAG FOR LEE, RESOLVED BY MV-717: HisHandsNeverLeaveTheGadget and the gun-position half
+        // of HeCarriesTheGadgetAtTheHipUntilHeAims were removed here rather than adapted, because
+        // MaxBody.Build baked the gadget and both arms into one fused static mesh with no "Gun"/"ArmL"/
+        // "ArmR"/"HandL"/"HandR" transforms of its own to find or move. MV-717 is exactly the design
+        // call this comment deferred to MV-453: MaxBody.Build now hands all five back (plus "Head", for
+        // the head-lag cue), and MaxRig.TickGadget/PoseArm drive them for real — the gadget visibly
+        // rises when Max aims again. EditMode coverage for the resolved-transform claims lives in
+        // MV717MaxArmsAndGunTests (that ticket's own one-test rule); no PlayMode test is added back
+        // here for it, per this project's standing PlayMode ban (see CC_AUTONOMY.md).
 
         /// <summary>He starts at the hip. The gadget is only presented while the aim stick is actually
         /// pushed, and an untouched controller is the state the game spends most of its time in. The
