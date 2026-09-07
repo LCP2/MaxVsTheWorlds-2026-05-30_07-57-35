@@ -23,7 +23,14 @@ namespace MaxWorlds.Arena
         public static readonly MapSlowZones Instance = new MapSlowZones();
         private MapSlowZones() { }
 
-        public float SpeedMultiplierAt(Vector3 worldPosition) =>
-            MapGeometry.SpeedMultiplierAt(EnemyNavigation.Map, worldPosition.x, worldPosition.z);
+        public float SpeedMultiplierAt(Vector3 worldPosition)
+        {
+            float mapMultiplier = MapGeometry.SpeedMultiplierAt(EnemyNavigation.Map, worldPosition.x, worldPosition.z);
+            // MV-705: a Sludge Drone's death puddle is a temporary, runtime-spawned sludge zone rather
+            // than a map-authored one — consulted here too so both movers slow inside it through this
+            // one shared hook, same as every map-authored rect already does.
+            float puddleMultiplier = SludgePuddle.SpeedMultiplierAt(worldPosition);
+            return Mathf.Min(mapMultiplier, puddleMultiplier);
+        }
     }
 }

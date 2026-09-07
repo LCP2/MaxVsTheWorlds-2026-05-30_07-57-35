@@ -23,6 +23,7 @@ namespace MaxWorlds.VFX
         Blinker,    // MV-584: the teleporter gets its own colour, not the rusher's turquoise
         Lurker,     // MV-688: the grate ambusher — oil-black, its own hue family
         Turret,     // MV-691: the wall-mounted lobber — gunmetal, its own hue family
+        Sludger,    // MV-705: the sapper that splits on death — acid-green, its own hue family
     }
 
     /// <summary>
@@ -170,6 +171,13 @@ namespace MaxWorlds.VFX
         /// <see cref="LurkerBody"/>'s own eye lens already uses) carries the rest of the read.</summary>
         private static readonly Color TurretBody = new Color(0.34f, 0.37f, 0.40f);
 
+        /// <summary>The Sludge Drone (MV-705): the ticket's own "acid-green" colour call — a lime/
+        /// chartreuse green, distinct from the Gunner's cooler sentry-teal (0.18, 0.58, 0.24) so the
+        /// two never get confused as one "the green one" kind at a glance. Pulled under the yard's own
+        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6) headroom from the start, same margin every other
+        /// hand-authored kind colour already sits at.</summary>
+        private static readonly Color SludgerBody = new Color(0.42f, 0.58f, 0.05f);
+
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
         private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
@@ -279,6 +287,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Blinker: return BlinkerBody;
                 case CharacterRole.Lurker: return LurkerBody;
                 case CharacterRole.Turret: return TurretBody;
+                case CharacterRole.Sludger: return SludgerBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
                 default: return RobotBody;
@@ -302,6 +311,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Blinker: return CharacterRole.Blinker;
                 case EnemyKind.Lurker: return CharacterRole.Lurker;
                 case EnemyKind.Turret: return CharacterRole.Turret;
+                case EnemyKind.Sludger: return CharacterRole.Sludger;
                 default: return CharacterRole.Robot;
             }
         }
@@ -326,7 +336,7 @@ namespace MaxWorlds.VFX
             r == CharacterRole.Heavy || r == CharacterRole.Brute ||
             r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
             r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Turret ||
-            r == CharacterRole.Boss;
+            r == CharacterRole.Sludger || r == CharacterRole.Boss;
 
         private void OnEnable()
         {

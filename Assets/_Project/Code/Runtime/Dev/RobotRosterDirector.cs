@@ -47,7 +47,7 @@ namespace MaxWorlds.Dev
         private static readonly EnemyKind[] Roster =
         {
             EnemyKind.Rusher, EnemyKind.Launcher, EnemyKind.Blinker, EnemyKind.Gunner, EnemyKind.Bolter,
-            EnemyKind.Bruiser, EnemyKind.Heavy, EnemyKind.Brute,
+            EnemyKind.Sludger, EnemyKind.Bruiser, EnemyKind.Heavy, EnemyKind.Brute,
         };
 
         private string _outDir;

@@ -12,8 +12,10 @@ namespace MaxWorlds.Bosses
     {
         private static readonly EnemyKind[] Level1 = { EnemyKind.Rusher };
         private static readonly EnemyKind[] Level2 = { EnemyKind.Rusher, EnemyKind.Bruiser };
+        // MV-705: the Sludger joins Level3, one level earlier than MV-539 gave the Bolter (Level4) —
+        // the ticket's own instruction, not a copy of Bolter's own unlock beat.
         private static readonly EnemyKind[] Level3 =
-            { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker };
+            { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker, EnemyKind.Sludger };
         private static readonly EnemyKind[] Level4 =
             { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker, EnemyKind.Heavy, EnemyKind.Bolter };
 

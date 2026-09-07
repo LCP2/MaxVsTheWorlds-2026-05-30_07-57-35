@@ -7,7 +7,8 @@ namespace MaxWorlds.Enemies
     // Appended, not inserted (same rule as RobotEnemy.State) — Gunner/Launcher/Blinker/Bolter are new
     // archetype ROWS, not a renumbering of the existing tiers. Lurker (MV-688) follows the same rule.
     // Turret (MV-691) follows it too — a static, wall-mounted lobber, appended after Lurker.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret }
+    // Sludger (MV-705) follows it too — a sapper that splits in two on death, appended after Turret.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -30,6 +31,7 @@ namespace MaxWorlds.Enemies
                 case "bolter": kind = EnemyKind.Bolter; return true;
                 case "lurker": kind = EnemyKind.Lurker; return true;
                 case "turret": kind = EnemyKind.Turret; return true;
+                case "sludger": kind = EnemyKind.Sludger; return true;
                 default: kind = default; return false;
             }
         }
@@ -399,6 +401,28 @@ namespace MaxWorlds.Enemies
             knockbackDecay: 28f,
             displayName: "TURRET");
 
+        /// <summary>
+        /// Sludge Drone (MV-705): a sapper that splits in two rather than simply dying — killing it
+        /// isn't the end, it's two Rushers (World 2's Scrap Rat via MV-701) at half health and a
+        /// temporary sludge puddle where it stood (<see cref="RobotEnemy"/>'s own <c>Die</c>). Melee on
+        /// a timer, not a lunge — same <see cref="LungesAsKind"/> exclusion as Bruiser/Heavy/Brute, so
+        /// <see cref="ContactDamage"/> here IS the per-tick touch damage, not a comparative "what a
+        /// lunge would have hit for" number those three keep. Immune to its own and every other sludge
+        /// slow zone (<see cref="RobotEnemy.EffectiveMoveSpeed"/> exempts it outright) — a coolant bot
+        /// wading through its own leak would otherwise be the one kind that slows itself down.
+        /// </summary>
+        public static EnemyArchetype Sludger => new EnemyArchetype(
+            EnemyKind.Sludger, EnemyShape.Capsule, new Vector3(0.9f, 0.8f, 0.9f),
+            colliderHeight: 1.45f, colliderRadius: 0.45f,
+            moveSpeed: 1.4f, maxHealth: 55f,
+            contactDamage: 16f,   // read as the per-tick touch damage — see doc comment above
+            contactRadius: 1.0f,
+            lungeRange: 2.2f, telegraphTime: 0.55f,   // unread — Sludger never reaches Telegraph/Lunge
+            lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
+            knockbackDecay: 28f,
+            touchDamage: 16f,
+            displayName: "SLUDGER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -410,6 +434,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Bolter => Bolter,
             EnemyKind.Lurker => Lurker,
             EnemyKind.Turret => Turret,
+            EnemyKind.Sludger => Sludger,
             _ => Rusher,
         };
 
@@ -568,6 +593,9 @@ namespace MaxWorlds.Enemies
                 _authored[(int)EnemyKind.Launcher] = composition.launcher;
                 _authored[(int)EnemyKind.Blinker] = composition.blinker;
                 _authored[(int)EnemyKind.Bolter] = composition.bolter;
+                // MV-705: an ambient sapper, same footing as Bolter — bound here so a shed's release
+                // cadence actually emits it, unlike Lurker below which only ever exists at a grate.
+                _authored[(int)EnemyKind.Sludger] = composition.sludger;
                 // MV-688: deliberately NOT bound here. A Lurker only ever exists tied to an authored
                 // grate (MapValidation enforces the coincidence) — a shed's ambient release cadence must
                 // never invent one with no grate under it, so this area's authored lurker count stays

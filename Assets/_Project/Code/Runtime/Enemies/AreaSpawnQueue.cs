@@ -120,6 +120,9 @@ namespace MaxWorlds.Enemies
             // path) — it still has to be queued here or that lookup finds nothing and silently
             // substitutes the wrong kind at the Lurker's own grate.
             for (int i = 0; i < composition.Lurker; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Lurker));
+            // MV-705: an ambient sapper, same footing as Bolter above — queued exactly like every other
+            // authored-composition-only kind, no grate coincidence required.
+            for (int i = 0; i < composition.Sludger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Sludger));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

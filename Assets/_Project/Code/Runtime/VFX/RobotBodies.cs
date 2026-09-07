@@ -4,6 +4,7 @@
 // MV-539/MV-578 EXCEPTION: BuildBolter below was hand-authored, not re-emitted from robot-gen-mesh.html —
 // that generator is an interactive browser tool this worker cannot drive headlessly. Flagged for Lee to
 // fold into the design source and re-emit at his convenience; every other Build* method here is untouched.
+// MV-705 EXCEPTION: BuildSludger is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -58,6 +59,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Bolter:   BuildBolter(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Lurker:   BuildLurker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Turret:   BuildTurret(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Sludger:  BuildSludger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -342,6 +344,46 @@ namespace MaxWorlds.VFX
             // The cyan status light (the ticket's own colour call, stamped in by RobotEnemy.Apply's
             // TurretEyeColor) — one lens, per the roster's one-eye rule.
             eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0f, 0.6f, 0.16f), Quaternion.identity, new Vector3(0.09f, 0.09f, 0.06f)));
+        }
+
+        /// <summary>Sludge Drone (MV-705) — hand-authored, same exception as <see cref="BuildBolter"/>/
+        /// <see cref="BuildLurker"/>/<see cref="BuildTurret"/> above. A near-spherical leaking-coolant
+        /// orb (the design reference's own silhouette) on four short legs radiating from its underside
+        /// — <see cref="AddLeg"/>'s hip pivots give it to <see cref="MaxWorlds.VFX.LegGaitDriver"/>'s
+        /// existing generic gait for free, which is the ticket's own "waddle": a legged, wheel-less
+        /// walker rocks with every step in a way no wheeled kind in the roster does, with no bespoke
+        /// animation of its own. A drooping coolant hose off one flank is the ticket's own "dripping
+        /// hose" detail; one eye lens, per the roster's one-eye rule.</summary>
+        private static void BuildSludger(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            for (int i = 0; i < 4; i++)
+            {
+                float thetaDeg = 45f + i * 90f;
+                float thetaRad = thetaDeg * Mathf.Deg2Rad;
+                var hipDir = new Vector3(Mathf.Sin(thetaRad), 0f, Mathf.Cos(thetaRad));
+                Vector3 beamPos = new Vector3(hipDir.x * 0.18f, 0.14f, hipDir.z * 0.18f);
+                Transform legBeam = Add(root, CharacterMeshes.Beam(0.22f, 0.03f, 0.022f, 6), p.Dark,
+                    beamPos, Quaternion.Euler(28f, thetaDeg, 0f), Vector3.one);
+                Vector3 footPos = new Vector3(hipDir.x * 0.32f, 0.02f, hipDir.z * 0.32f);
+                Transform legFoot = Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.045f, 0f), new Vector2(0.03f, 0.025f), new Vector2(0.012f, 0.05f) }, 8), p.Dark,
+                    footPos, Quaternion.identity, Vector3.one, "Foot");
+                legs.Add(AddLeg(root, legBeam, legFoot, 0.11f));
+            }
+
+            // The round leaking-coolant body — nearer a sphere than any wheeled kind's tapered cone stack.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.08f, 0f), new Vector2(0.32f, 0.08f), new Vector2(0.4f, 0.26f), new Vector2(0.38f, 0.4f) }, 28), p.Cool, new Vector3(0f, 0.22f, 0f), Quaternion.identity, Vector3.one);
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.38f, 0.4f), new Vector2(0.33f, 0.5f), new Vector2(0.18f, 0.58f), new Vector2(0f, 0.6f) }, 28), p.Warm, new Vector3(0f, 0.22f, 0f), Quaternion.identity, Vector3.one);
+
+            // The dripping-hose detail — a coolant hose drooping off the body's flank, with a single
+            // drip bead at its tip.
+            Add(root, CharacterMeshes.Beam(0.26f, 0.028f, 0.024f, 6), p.Dark, new Vector3(0.28f, 0.32f, 0.1f), Quaternion.Euler(0f, 0f, -58f), Vector3.one, "Hose");
+            Add(root, CharacterMeshes.Sphere(10), p.Cool, new Vector3(0.36f, 0.14f, 0.14f), Quaternion.identity, new Vector3(0.045f, 0.045f, 0.045f));
+
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1f, 0f), new Vector2(0.153f, 0.0157f), new Vector2(0.161f, 0.0323f), new Vector2(0.145f, 0.0522f) }, 24), p.Dark, new Vector3(0f, 0.66f, 0.24f), Quaternion.Euler(48f, 0f, 0f), Vector3.one);
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0f, 0.6774f, 0.263f), Quaternion.Euler(-42f, 0f, 0f), new Vector3(0.19f, 0.19f, 0.06f)));
+
+            Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(-0.12f, 0.58f, 0.2f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>
