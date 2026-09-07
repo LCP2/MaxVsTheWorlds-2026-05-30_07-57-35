@@ -1,5 +1,7 @@
 using NUnit.Framework;
 using UnityEngine;
+using MaxWorlds.Arena;
+using MaxWorlds.CameraRig;
 using MaxWorlds.Intro;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
@@ -164,6 +166,95 @@ namespace MaxWorlds.Tests.EditMode
 
             Object.DestroyImmediate(playerGo);
             Object.DestroyImmediate(hudGo);
+        }
+
+        // ------------------------------------------------------------------ MV-719: pre-warm + cross-fade handover
+
+        /// <summary>
+        /// MV-719 — the natural end of the beats (last beat crossing TotalDuration) no longer hard-cuts
+        /// to gameplay: it pre-warms <c>Camera.main</c> onto <see cref="FixedAngleCameraRig"/>'s resting
+        /// pose over the map's <see cref="EntityKind.PlayerSpawn"/> (AC2), reveals it under a named,
+        /// sub-half-second cross-fade constant (AC3) that advances on the caller's unscaled <c>dt</c>
+        /// regardless of <see cref="Time.timeScale"/> (AC5), and still lets a tap mid-fade jump straight
+        /// to the fully-restored state (AC4's "during" case — the other two points, before and after,
+        /// are already covered by <see cref="SkipRestoresHudFogAndPlayerControl_OnTheBeatPath"/> and the
+        /// existing <c>if (_done) return;</c> guard).
+        /// </summary>
+        [Test]
+        public void HandoverPreWarmsCameraCrossFadesUnderBudgetAndStaysSkippableMidFade()
+        {
+            foreach (var stray in Object.FindObjectsByType<FixedAngleCameraRig>(FindObjectsSortMode.None))
+                Object.DestroyImmediate(stray.gameObject);
+
+            // MV-417: an EditMode run still has whatever scene the Editor had open at launch loaded, and
+            // it may carry its own active MainCamera-tagged object — Camera.main can resolve to THAT one
+            // instead of SetUp's _camGo. Suppress every ambient MainCamera, then re-activate _camGo (it
+            // got caught by the same sweep, being tagged MainCamera itself) so it is the only one left.
+            Camera[] suppressed = CameraTestUtil.SuppressAmbientMainCameras();
+            _camGo.SetActive(true);
+
+            var rigGo = new GameObject("Rig");
+            var playerGo = new GameObject("Player");
+            var hudGo = new GameObject("Hud");
+            try
+            {
+                var rig = rigGo.AddComponent<FixedAngleCameraRig>();
+                var player = playerGo.AddComponent<PlayerController>();
+                hudGo.AddComponent<HudController>();
+
+                var intro = Build();
+                Assert.IsFalse(intro.UsingVideo, "sanity: this exercises the beat path's natural end.");
+
+                // Reach the natural end of the beats in one jump — this is what begins the handover.
+                intro.Tick(intro.TotalDuration + 0.001f);
+                Assert.IsTrue(intro.IsCrossFading,
+                    "reaching the end of the beats did not begin the pre-warm + cross-fade handover.");
+                Assert.IsTrue(intro.IsPlaying, "the handover must not report done before the reveal finishes.");
+
+                // AC2 — the pre-warmed camera already sits exactly where FixedAngleCameraRig would rest
+                // over PlayerSpawn, computed fresh from the live rig and the shipped map, never hard-coded.
+                MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+                MapEntity spawn = map.First(EntityKind.PlayerSpawn);
+                rig.RestingPose(spawn.GroundedCenter, out Vector3 expectedPos, out Quaternion expectedRot);
+                Assert.Less(Vector3.Distance(expectedPos, _camGo.transform.position), 0.01f,
+                    "the pre-warmed camera position does not match FixedAngleCameraRig's resting pose over PlayerSpawn.");
+                Assert.Less(Quaternion.Angle(expectedRot, _camGo.transform.rotation), 0.1f,
+                    "the pre-warmed camera rotation does not match FixedAngleCameraRig's resting pitch.");
+
+                // AC3 — the cross-fade duration is the named constant, with headroom under the 0.5s budget.
+                Assert.Less(IntroCinematic.CrossFadeSeconds, 0.5f,
+                    "the named cross-fade constant leaves no headroom under the half-second handover budget.");
+
+                // AC5 — the fade advances on the caller-supplied unscaled dt, not Time.timeScale/deltaTime.
+                float prevTimeScale = Time.timeScale;
+                Time.timeScale = 0f;
+                try
+                {
+                    intro.Tick(IntroCinematic.CrossFadeSeconds * 0.4f);
+                    Assert.IsTrue(intro.IsCrossFading, "sanity: the fade must still be running partway through.");
+
+                    // AC4 (during) — a tap mid cross-fade jumps straight to the fully restored state, never
+                    // leaving the HUD hidden or the player suspended.
+                    intro.Skip();
+                }
+                finally { Time.timeScale = prevTimeScale; }
+
+                Assert.IsFalse(intro.IsPlaying, "Skip mid cross-fade did not end the cinematic.");
+                Assert.IsTrue(RenderSettings.fog, "Skip mid cross-fade did not restore fog.");
+                Assert.IsTrue(player.enabled, "Skip mid cross-fade left the player suspended.");
+                Assert.IsTrue(hudGo.activeSelf, "Skip mid cross-fade left the HUD hidden.");
+
+                // AC4 (after) — calling Skip again on an already-handed-off cinematic must stay a no-op.
+                intro.Skip();
+                Assert.IsTrue(player.enabled, "a second Skip after handoff must not disturb the restored state.");
+            }
+            finally
+            {
+                Object.DestroyImmediate(playerGo);
+                Object.DestroyImmediate(hudGo);
+                Object.DestroyImmediate(rigGo);
+                CameraTestUtil.RestoreAmbientMainCameras(suppressed);
+            }
         }
     }
 }

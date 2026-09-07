@@ -314,6 +314,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv693Replicator());
             Add(BuildMv702LppeShoulderRack());
             Add(BuildMv699Sludgequeen());
+            Add(BuildIntroHandoffFrame());
             return d;
         }
 
@@ -1182,6 +1183,95 @@ namespace MaxWorlds.Dev
                     if (rig != null) Destroy(rig.gameObject);
                     if (bossGo != null) Destroy(bossGo);
                 },
+            };
+        }
+
+        // ---- IntroHandoffFrame (MV-719 AC6) ---------------------------------------------------
+
+        /// <summary>The single reference frame the opening cinematic's cross-fade hands off onto — Max
+        /// at <see cref="MapData"/>'s <see cref="EntityKind.PlayerSpawn"/>, framed by
+        /// <see cref="FixedAngleCameraRig"/>'s resting pitch and distance, HUD hidden. Lee's decision
+        /// (2026-09-07): the pre-rendered opening film is authored to END on this frame, using the video
+        /// model's start/end-frame control, so this is the reference the film gets made to land on — not
+        /// a conformance shot, and deliberately NOT wired into cc-verify/cc-screens (MV-719 AC6). Written
+        /// beside the other press shots in docs/press/, not the MaxVsTheWorlds-Images folder every other
+        /// preset here uses.</summary>
+        private static CapturePreset BuildIntroHandoffFrame()
+        {
+            string outDir = Path.GetFullPath(Path.Combine(Application.dataPath, "..", "docs", "press"));
+
+            Vector3 spawnPos = default;
+            Vector3 camPos = default;
+            Quaternion camRot = default;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                if (rig == null) throw new CaptureAbortException("no FixedAngleCameraRig in the scene");
+
+                MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+                MapEntity spawn = map?.First(EntityKind.PlayerSpawn);
+                if (spawn == null) throw new CaptureAbortException("the shipped map has no PlayerSpawn");
+                spawnPos = spawn.GroundedCenter;
+
+                var max = GameObject.FindGameObjectWithTag("Player");
+                if (max == null) throw new CaptureAbortException("no Player-tagged Max in the scene");
+
+                // Same collider-disable/teleport/re-enable shape MapRuntime.Adopt uses to place Max at
+                // the map's start — a live CharacterController would otherwise fight a direct position set.
+                var cc = max.GetComponent<CharacterController>();
+                bool was = cc != null && cc.enabled;
+                if (cc != null) cc.enabled = false;
+                Vector3 at = max.transform.position;
+                max.transform.position = new Vector3(spawnPos.x, at.y, spawnPos.z);
+                if (cc != null) cc.enabled = was;
+                Physics.SyncTransforms();
+
+                rig.RestingPose(spawnPos, out camPos, out camRot);
+                cam.transform.SetPositionAndRotation(camPos, camRot);
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // A clean reference pose has no business showing transient VFX anyway, and disabling
+                // every particle renderer sidesteps a real access-violation crash this shot hit inside
+                // URP's billboard batcher (GfxDevice::DrawSharedGeometryJobs) under -nographics —
+                // headless has no GPU context for the ambient/idle particle systems the world builds.
+                foreach (var pr in FindObjectsByType<ParticleSystemRenderer>(FindObjectsSortMode.None))
+                    pr.enabled = false;
+
+                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
+                // need — URP's Render Graph has crashed on exactly the first manual cam.Render() call
+                // in a headless -nographics run.
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "introhandoffframe",
+                LogTag = "[IntroHandoffFrame]",
+                Flag = "-introHandoffFrame",
+                ArmFile = "Temp/introhandoffframe.arm",
+                HeadlessMarker = "Temp/introhandoffframe.headless",
+                DoneFileName = "_intro_handoff_frame_done.txt",
+                Width = 2560,
+                Height = 1440,
+                SuperSample = 1,   // a still reference frame, not a hero shot — no need to 2x-blit for AA
+                OutputDirs = new[] { outDir },
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV674TeleportCrackle/MV693Replicator/
+                    // MV699Sludgequeen's own presets use: on a fresh profile (no slot picked yet)
+                    // HomeScreen's pick-a-slot modal freezes Time.timeScale at 0 and blocks this capture.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("intro_handoff_frame", NoSetup) },
+                ExtraReport = () =>
+                    $"spawn_world_pos={spawnPos:F3}\ncamera_pos={camPos:F3}\ncamera_rot_euler={camRot.eulerAngles:F3}\n",
             };
         }
     }

@@ -1,6 +1,10 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.Rendering;
+using UnityEngine.UI;
+using Unity.Cinemachine;
+using MaxWorlds.Arena;
+using MaxWorlds.CameraRig;
 using MaxWorlds.Core;
 using MaxWorlds.Player;
 using MaxWorlds.UI;
@@ -98,12 +102,26 @@ namespace MaxWorlds.Intro
         private static readonly Vector3 DescentOffset = new Vector3(0f, -3000f, 0f);
         private static readonly Vector3 ShedOffset = new Vector3(0f, -6000f, 0f);
 
+        /// <summary>MV-719: how long the intro-to-gameplay reveal takes once the pre-warmed gameplay
+        /// camera is already framing the right thing. A handover, not a transition — kept short and
+        /// named so the AC's "under half a second" budget is checkable arithmetic, not a literal
+        /// buried in the method.</summary>
+        public const float CrossFadeSeconds = 0.25f;
+
         private Transform _root;
         private Camera _cam;
         private IntroSpace _space;
         private IntroDescent _descent;
         private IntroShed _shed;
         private IntroVideo _video;
+
+        // MV-719: the pre-warm + cross-fade handover — see BeginHandover/TickCrossFade.
+        private Camera _gameplayCam;
+        private CinemachineBrain _gameplayBrain;
+        private bool _gameplayBrainWasEnabled;
+        private Image _handoffFill;
+        private bool _crossFading;
+        private float _crossFadeElapsed;
 
         // The screen the intro borrowed, to be handed back exactly as it was found.
         private GameObject _hud;
@@ -146,6 +164,11 @@ namespace MaxWorlds.Intro
         /// A test reads this to prove control is suspended during, and returned after, the sequence.</summary>
         public bool PlayerControlSuspended => _suspendedPlayer != null && !_suspendedPlayer.enabled;
 
+        /// <summary>MV-719: true while the pre-warmed gameplay camera is being revealed under the
+        /// intro-to-gameplay cross-fade. A test drives through this window to prove Skip stays safe
+        /// mid-fade.</summary>
+        public bool IsCrossFading => _crossFading;
+
         private readonly struct Beat
         {
             public readonly string Name;
@@ -177,6 +200,7 @@ namespace MaxWorlds.Intro
         private void TakeOverScreen()
         {
             var gameCam = Camera.main;   // captured only to draw ABOVE it — never disabled
+            _gameplayCam = gameCam;      // MV-719: also the camera the handoff pre-warms and reveals
 
             // The HUD is a ScreenSpaceOverlay canvas — it draws to the backbuffer after every camera, so
             // it would sit on top of the cinematic. Hide it (PressKitDirector does the same to film clean
@@ -443,13 +467,18 @@ namespace MaxWorlds.Intro
         {
             if (_done) return;
 
+            // MV-719: the natural-end handover (pre-warm + cross-fade) is already under way — advance
+            // it instead of re-entering either playback path below. Skip still bypasses this entirely
+            // (see Skip/Handoff) and jumps straight to the restored state.
+            if (_crossFading) { TickCrossFade(dt); return; }
+
             if (UsingVideo)
             {
                 // MV-710: the video path — the box timeline never scrubs, and hands off on completion
                 // instead of at TotalDuration. Trigger, skip, camera takeover, HUD/fog/player suspend and
                 // Restore are unchanged and shared with the beat path below.
                 _clock += dt;
-                if (_video.IsComplete) Handoff();
+                if (_video.IsComplete) BeginHandover();
                 return;
             }
 
@@ -486,7 +515,7 @@ namespace MaxWorlds.Intro
             ApplyFade();
 
             // Past the last beat, we are done.
-            if (_clock >= TotalDuration) Handoff();
+            if (_clock >= TotalDuration) BeginHandover();
         }
 
         private void AimCam(Transform actRoot, Vector3 fromLocal, Vector3 lookFromLocal,
@@ -521,13 +550,118 @@ namespace MaxWorlds.Intro
             r.enabled = c.a > 0.001f;
         }
 
-        // ------------------------------------------------------------------ handoff
+        // ------------------------------------------------------------------ handoff (MV-719)
+
+        /// <summary>
+        /// The natural end of the sequence (last beat, or video completion — see <see cref="Tick"/>)
+        /// no longer cuts straight to gameplay. It pre-warms the gameplay camera onto the exact frame
+        /// play will open on, then reveals it under a short cross-fade instead of a hard cut. A tap
+        /// always wins over this: <see cref="Skip"/> calls <see cref="Handoff"/> directly and jumps
+        /// straight to the fully restored state regardless of where this is up to.
+        /// </summary>
+        private void BeginHandover()
+        {
+            if (_crossFading || _done) return;
+            PreWarmGameplayCamera();
+            EnsureHandoffOverlay();
+            // Snap the overlay to whatever tone the intro's own fade curtain last held (the shed beat
+            // already fades to opaque white before the sequence ends) so the cut to it is invisible,
+            // then hard-cut the intro camera off — silencing its scene AND the video's camera-near-plane
+            // draw (MV-710) with no special-casing between the two playback paths.
+            var c = _fadeColor; c.a = 1f;
+            _handoffFill.color = c;
+            if (_cam != null) _cam.enabled = false;
+            _crossFading = true;
+            _crossFadeElapsed = 0f;
+        }
+
+        /// <summary>Advance the reveal by <paramref name="dt"/> unscaled seconds — ramps the overlay's
+        /// alpha down over <see cref="CrossFadeSeconds"/>, uncovering the pre-warmed gameplay camera
+        /// beneath it, and calls <see cref="Handoff"/> once it completes.</summary>
+        private void TickCrossFade(float dt)
+        {
+            _crossFadeElapsed += dt;
+            float t = Mathf.Clamp01(_crossFadeElapsed / CrossFadeSeconds);
+            if (_handoffFill != null)
+            {
+                var c = _handoffFill.color;
+                c.a = 1f - t;
+                _handoffFill.color = c;
+            }
+            if (t >= 1f) Handoff();
+        }
+
+        /// <summary>
+        /// Place <see cref="Camera.main"/> at exactly the frame gameplay will open on — Max at
+        /// <see cref="EntityKind.PlayerSpawn"/> under <see cref="FixedAngleCameraRig"/>'s resting pitch
+        /// and distance — and hold Cinemachine off it so the manual pose sticks through the reveal.
+        /// Cinemachine's control is handed back in <see cref="RestoreGameplayCamera"/>. Resolved fresh
+        /// from the rig and the map each time (never cached), per MV-719's AC — the whole point is that
+        /// this is knowable in advance without trusting wherever the live camera already happens to be.
+        /// </summary>
+        private void PreWarmGameplayCamera()
+        {
+            if (_gameplayCam == null) return;
+            var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+            if (rig == null) return;
+
+            MapData map = MapLibrary.Load(MapLibrary.BackyardSlice);
+            MapEntity spawn = map?.First(EntityKind.PlayerSpawn);
+            Vector3 targetPos = spawn != null ? spawn.GroundedCenter : Vector3.zero;
+
+            rig.RestingPose(targetPos, out Vector3 pos, out Quaternion rot);
+
+            if (_gameplayCam.TryGetComponent<CinemachineBrain>(out var brain))
+            {
+                _gameplayBrain = brain;
+                _gameplayBrainWasEnabled = brain.enabled;
+                brain.enabled = false;   // hold the manual pose — the brain would otherwise fight it
+            }
+            _gameplayCam.transform.SetPositionAndRotation(pos, rot);
+        }
+
+        /// <summary>Give Cinemachine its camera back, exactly as enabled/disabled as found — called from
+        /// <see cref="Handoff"/> whether or not a pre-warm actually ran (idempotent/no-op if it didn't).</summary>
+        private void RestoreGameplayCamera()
+        {
+            if (_gameplayBrain == null) return;
+            _gameplayBrain.enabled = _gameplayBrainWasEnabled;
+            _gameplayBrain = null;
+        }
+
+        /// <summary>A full-screen curtain that always draws last (above the HUD and every camera),
+        /// parented to this cinematic so it is torn down with everything else on <see cref="Handoff"/>.
+        /// A plain <see cref="Image"/> with no sprite renders as a solid <see cref="Image.color"/> rect
+        /// — no material/texture needed for a flat fade.</summary>
+        private void EnsureHandoffOverlay()
+        {
+            if (_handoffFill != null) return;
+
+            var go = new GameObject("IntroHandoffFade");
+            go.transform.SetParent(transform, worldPositionStays: false);
+            var canvas = go.AddComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            canvas.sortingOrder = short.MaxValue;
+            go.AddComponent<CanvasScaler>();
+
+            var fillGo = new GameObject("Fill");
+            fillGo.transform.SetParent(go.transform, worldPositionStays: false);
+            var rect = fillGo.AddComponent<RectTransform>();
+            rect.anchorMin = Vector2.zero;
+            rect.anchorMax = Vector2.one;
+            rect.offsetMin = Vector2.zero;
+            rect.offsetMax = Vector2.zero;
+            _handoffFill = fillGo.AddComponent<Image>();
+            _handoffFill.raycastTarget = false;
+        }
 
         /// <summary>Give the screen back exactly as it was borrowed, and remove the cinematic entirely.</summary>
         private void Handoff()
         {
             if (_done) return;
             _done = true;
+            _crossFading = false;
+            RestoreGameplayCamera();
             Restore();
             // Same guard as IntroBuild.Strip: Destroy is deferred to end-of-frame and only valid while
             // playing; an EditMode test (MV-710's IntroVideoTests) drives this outside Play Mode and needs
@@ -555,6 +689,12 @@ namespace MaxWorlds.Intro
             BootTiming.Mark("controllable");
         }
 
-        private void OnDestroy() => Restore();
+        private void OnDestroy()
+        {
+            // A stray cinematic destroyed directly (bypassing Skip/Handoff — e.g. test teardown) must
+            // still give Cinemachine its camera back, not just the HUD/fog/player Restore() covers.
+            RestoreGameplayCamera();
+            Restore();
+        }
     }
 }
