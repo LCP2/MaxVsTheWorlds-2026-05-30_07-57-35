@@ -58,7 +58,7 @@ namespace MaxWorlds.Tests.EditMode
 
             var wire = JsonUtility.FromJson<RigBoardSchemaWire>(asset.text);
             Assert.That(wire.schema, Is.EqualTo(3), "rig_board.json must be schema 3 (MV-436 — cap/stat split retired)");
-            Assert.That(wire.abilities.Length, Is.EqualTo(22), "MV-597 deleted the never-wired-up PIERCE (p_prc), 23 -> 22");
+            Assert.That(wire.abilities.Length, Is.EqualTo(25), "MV-597 deleted the never-wired-up PIERCE (p_prc), 23 -> 22; MV-694 added the Shoulder Rack's s_rkt/s_sal/s_rld, 22 -> 25");
             foreach (var a in wire.abilities)
                 Assert.That(a.kind, Is.EqualTo("cap"), "every ability must be kind 'cap' under schema 3 — the 'stat' kind no longer exists");
         }
@@ -68,7 +68,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void APartCanNeverRaiseAnAbilityFromZeroToOne_ForAllTwentyTwoAbilities()
         {
-            Assert.That(RigBoard.AllIds.Count, Is.EqualTo(22), "MV-597: the tree must name exactly 22 abilities now PIERCE is gone");
+            Assert.That(RigBoard.AllIds.Count, Is.EqualTo(25), "MV-597: 23 -> 22 when PIERCE was cut; MV-694 added s_rkt/s_sal/s_rld, 22 -> 25");
 
             foreach (string id in RigBoard.AllIds)
             {

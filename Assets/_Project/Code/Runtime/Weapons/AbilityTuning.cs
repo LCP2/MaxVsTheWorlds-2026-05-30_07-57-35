@@ -94,6 +94,61 @@ namespace MaxWorlds.Weapons
         /// until Lee tunes it on device.</summary>
         public const float DefaultPuddleDurationSeconds = 4f;
 
+        // ---------------------------------------------------------------- Shoulder Rack (MV-694)
+
+        /// <summary>Per-rocket damage at Rocket Damage (<c>s_rkt</c>) Level 1 — the AC's own pinned
+        /// number.</summary>
+        public const float DefaultShoulderRackBaseDamage = 30f;
+
+        /// <summary>Flat damage each Rocket Damage level above 1 adds (the AC's own "+6/level").</summary>
+        public const float DefaultShoulderRackDamagePerLevel = 6f;
+
+        /// <summary>A rocket's damage at a given Rocket Damage track level — same flat base-plus-step
+        /// shape as <see cref="SentinelDamagePerShot"/>.</summary>
+        public static float ShoulderRackRocketDamage(int level, float baseDamage, float perLevel) =>
+            Mathf.Max(0f, baseDamage) + Mathf.Max(0f, perLevel) * Mathf.Max(0, level - 1);
+
+        /// <summary>Rockets fired per salvo at a maxed Salvo (<c>s_sal</c>) track — the AC's own
+        /// "SalvoCount (1, s_sal -&gt; 3)".</summary>
+        public const int DefaultShoulderRackMaxSalvoCount = 3;
+
+        /// <summary>Rockets fired per salvo at a given Salvo track level — 1 at Level 1, one more per
+        /// level up to the track's own cap (unlike every other track here, the level number itself IS
+        /// the count, so this needs no separate perLevel constant).</summary>
+        public static int ShoulderRackSalvoCount(int level, int maxCount) =>
+            Mathf.Clamp(Mathf.Max(1, level), 1, Mathf.Max(1, maxCount));
+
+        /// <summary>Seconds between Shoulder Rack salvos at Reload (<c>s_rld</c>) Level 0/1 — the AC's
+        /// own "every ReloadSeconds (1.8s, s_rld -&gt; 1.0)".</summary>
+        public const float DefaultShoulderRackBaseReloadSeconds = 1.8f;
+
+        /// <summary>The reload floor a maxed Reload track reaches — the AC's own "s_rld -&gt; 1.0".</summary>
+        public const float DefaultShoulderRackReloadFloorSeconds = 1.0f;
+
+        /// <summary>The salvo reload interval at a given Reload track level, seconds — linearly
+        /// interpolated from the base (Level 1 or below) down to the floor (the track's own max level),
+        /// same "level = fraction of the way there" shape <see cref="WeaponCatalog.VisualStrengthFraction"/>
+        /// uses.</summary>
+        public static float ShoulderRackReloadSeconds(int level, float baseSeconds, float floorSeconds, int maxLevel) =>
+            Mathf.Lerp(Mathf.Max(0f, baseSeconds), Mathf.Max(0f, floorSeconds),
+                WeaponCatalog.VisualStrengthFraction(Mathf.Max(1, level), Mathf.Max(1, maxLevel)));
+
+        /// <summary>Splash radius, metres, at Splash Area (<c>s_spl</c>) Level 1 — the AC's own "splash
+        /// 2 m". Shared with the Water Balloon's own <c>s_spl</c> node, but interpreted through this
+        /// weapon's own absolute-metres curve rather than <see cref="WaterBalloonSplashRadius"/>'s
+        /// robot-footprint-relative one — the two weapons read the same level, each through its own
+        /// authored numbers.</summary>
+        public const float DefaultShoulderRackBaseSplashRadius = 2f;
+
+        /// <summary>Splash radius at a maxed Splash Area track — the AC's own "s_spl -&gt; 3.5".</summary>
+        public const float DefaultShoulderRackMaxSplashRadius = 3.5f;
+
+        /// <summary>The rocket's splash radius at a given Splash Area track level, metres — same
+        /// linear interpolation shape as <see cref="ShoulderRackReloadSeconds"/>.</summary>
+        public static float ShoulderRackSplashRadius(int level, float baseRadius, float maxRadius, int maxLevel) =>
+            Mathf.Lerp(Mathf.Max(0f, baseRadius), Mathf.Max(0f, maxRadius),
+                WeaponCatalog.VisualStrengthFraction(Mathf.Max(1, level), Mathf.Max(1, maxLevel)));
+
         /// <summary>Fraction each Speed level adds to Max's walk speed. The spec's settings list
         /// (§9) doesn't name this one explicitly the way it does Water Balloon/Power
         /// Efficiency/Weapon Cooldown; authored the same per-level-multiplier shape as those.</summary>

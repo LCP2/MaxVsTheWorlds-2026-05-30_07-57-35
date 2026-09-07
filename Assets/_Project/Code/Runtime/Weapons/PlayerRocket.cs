@@ -1,0 +1,195 @@
+using System.Collections.Generic;
+using UnityEngine;
+using MaxWorlds.Core;
+using MaxWorlds.Rendering;
+using MaxWorlds.VFX;
+
+namespace MaxWorlds.Weapons
+{
+    /// <summary>
+    /// The Shoulder Rack's own rocket (MV-694) — player faction, homing, splash. Reuses
+    /// <see cref="HomingSteering"/> for turn-toward-target and Cover-layer obstruction, the same shared
+    /// steering <see cref="MaxWorlds.Enemies.HomingMissile"/> already uses (MV-708 extracted it), just
+    /// fired the other way (player -&gt; robot, not robot -&gt; Max). Damage goes through the ordinary
+    /// <see cref="DamageRules"/> friendly-fire gate, so it naturally ignores Max (Team.Player) and hits
+    /// anything else IDamageable — RobotEnemy, Replicator, bosses, gates — with no special-casing per
+    /// receiver type.
+    ///
+    /// Free-flying and not pooled, same lifetime shape as <see cref="MaxWorlds.Enemies.HomingMissile"/>:
+    /// short-lived, self-destroys on impact/timeout. Flight/detonation timing runs on
+    /// <c>Time.deltaTime</c> inside <see cref="Update"/> and isn't covered by an EditMode test — per the
+    /// project's standing PlayMode-is-CI's-problem rule — <see cref="ShoulderRack"/>'s own test only
+    /// exercises the firing/targeting decision that calls <see cref="Fire"/>.
+    /// </summary>
+    public sealed class PlayerRocket : MonoBehaviour
+    {
+        private const float TurnRateDegPerSec = 120f;
+        private const float ContactRadius = 0.4f;
+        private const float FuelBudgetSeconds = 4f;
+
+        private const int ClusterBombletCount = 3;
+        private const float ClusterRingRadius = 1.5f;
+        private const float ClusterBombletDamage = 10f;
+        private const float ClusterBombletSplash = 1.2f;
+
+        private static readonly List<PlayerRocket> s_active = new List<PlayerRocket>();
+        private static readonly Collider[] s_hits = new Collider[32];
+        private static readonly HashSet<int> s_hitIds = new HashSet<int>();
+
+        /// <summary>Every rocket currently in flight — <c>MV694ShoulderRackTests</c> counts salvos this
+        /// way, the same static-registry shape <see cref="MaxWorlds.Arena.Sentinel.Active"/> and
+        /// <see cref="MaxWorlds.Enemies.RobotEnemy.Active"/> already use.</summary>
+        public static IReadOnlyList<PlayerRocket> Active => s_active;
+
+        private Transform _target;
+        private float _speed;
+        private float _damage;
+        private float _splashRadius;
+        private bool _cluster;
+        private float _age;
+        private bool _detonated;
+
+        /// <summary>The robot this rocket was launched at — <c>MV694ShoulderRackTests</c> asserts the
+        /// salvo picked the nearer, in-range Rusher over the out-of-range Heavy.</summary>
+        public Transform TargetForTests => _target;
+
+        /// <summary>Launch one rocket from <paramref name="origin"/> toward <paramref name="target"/>.
+        /// Mirrors <see cref="MaxWorlds.Enemies.HomingMissile.Fire"/>'s static-builder shape.</summary>
+        public static PlayerRocket Fire(Vector3 origin, Transform target, float speed, float damage,
+            float splashRadius, bool cluster)
+        {
+            var go = new GameObject("PlayerRocket (stand-in)");
+            go.transform.position = origin;
+
+            Vector3 aim = target != null ? target.position - origin : Vector3.forward;
+            aim.y = 0f;
+            if (aim.sqrMagnitude < 1e-4f) aim = Vector3.forward;
+            go.transform.rotation = Quaternion.LookRotation(aim.normalized, Vector3.up);
+
+            BuildVisual(go.transform);
+
+            var rocket = go.AddComponent<PlayerRocket>();
+            rocket.Init(target, speed, damage, splashRadius, cluster);
+            s_active.Add(rocket);
+            return rocket;
+        }
+
+        /// <summary>Every rocket currently tracked in <see cref="Active"/> is force-cleared —
+        /// <c>[TearDown]</c> hygiene, same shape as <see cref="MaxWorlds.Arena.Sentinel.DestroyAllActive"/>.</summary>
+        public static void DestroyAllActive()
+        {
+            for (int i = s_active.Count - 1; i >= 0; i--)
+            {
+                if (s_active[i] != null) Object.DestroyImmediate(s_active[i].gameObject);
+            }
+            s_active.Clear();
+        }
+
+        private static void BuildVisual(Transform parent)
+        {
+            parent.gameObject.AddComponent<KeepsOwnMaterial>();
+
+            Material bodyMat = MaterialLibrary.Tinted(SurfaceKind.Metal, BodyColor);
+
+            var shaft = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            shaft.name = "Shaft";
+            Strip(shaft);
+            shaft.transform.SetParent(parent, false);
+            shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            shaft.transform.localScale = new Vector3(0.10f, 0.16f, 0.10f);
+            if (bodyMat != null) shaft.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
+        }
+
+        /// <summary>Gunmetal — the rack's own placeholder is greybox (MV-694 step 3); the [ART] ticket
+        /// restyles both the mount and the rocket it fires.</summary>
+        private static readonly Color BodyColor = new Color(0.35f, 0.36f, 0.4f);
+
+        private static void Strip(GameObject go)
+        {
+            var col = go.GetComponent<Collider>();
+            if (col == null) return;
+            if (Application.isPlaying) Object.Destroy(col);
+            else Object.DestroyImmediate(col);
+        }
+
+        private void Init(Transform target, float speed, float damage, float splashRadius, bool cluster)
+        {
+            _target = target;
+            _speed = speed;
+            _damage = damage;
+            _splashRadius = splashRadius;
+            _cluster = cluster;
+        }
+
+        private void Update()
+        {
+            if (_detonated) return;
+            float dt = Time.deltaTime;
+            _age += dt;
+
+            if (_target != null)
+            {
+                transform.rotation = HomingSteering.TurnToward(transform.rotation, transform.position,
+                    _target.position, TurnRateDegPerSec, dt);
+            }
+
+            Vector3 from = transform.position;
+            Vector3 next = from + transform.forward * (_speed * dt);
+
+            if (HomingSteering.BlockedByGeometry(from, next, out RaycastHit hit))
+            {
+                transform.position = hit.point;
+                Detonate();
+                return;
+            }
+
+            transform.position = next;
+
+            bool closeEnough = _target != null &&
+                (transform.position - _target.position).sqrMagnitude <= ContactRadius * ContactRadius;
+            if (closeEnough || _age >= FuelBudgetSeconds) Detonate();
+        }
+
+        private void Detonate()
+        {
+            _detonated = true;
+            s_active.Remove(this);
+
+            ApplySplashDamage(transform.position, _damage, _splashRadius);
+            if (_cluster) SpawnClusterBomblets(transform.position);
+
+            Destroy(gameObject);
+        }
+
+        /// <summary>One AOE damage query — reused for both the rocket's own splash and each cluster
+        /// bomblet (MV-694 <c>s_clu</c>), same dedupe idiom <see cref="PlayerAbilities.Land"/> uses for
+        /// the Water Balloon splash.</summary>
+        private static void ApplySplashDamage(Vector3 point, float damage, float radius)
+        {
+            s_hitIds.Clear();
+            int count = Physics.OverlapSphereNonAlloc(point, radius, s_hits, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                if (s_hits[i] == null) continue;
+                if (!s_hitIds.Add(s_hits[i].gameObject.GetInstanceID())) continue;
+                if (!s_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive) continue;
+                if (!DamageRules.Applies(Team.Player, d.Team)) continue;
+                d.TakeDamage(new DamageInfo(damage, point, Vector3.up, Team.Player,
+                    source: DamageSource.SecondaryWeapon));
+            }
+        }
+
+        /// <summary>MV-694 <c>s_clu</c>: three bomblets in a ring around the impact point, each its own
+        /// small splash — folded onto the Salvo track's own max level rather than a dedicated RIG node
+        /// (see <see cref="ShoulderRack"/>'s class doc for why).</summary>
+        private static void SpawnClusterBomblets(Vector3 center)
+        {
+            for (int i = 0; i < ClusterBombletCount; i++)
+            {
+                float angle = i * (360f / ClusterBombletCount) * Mathf.Deg2Rad;
+                Vector3 point = center + new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle)) * ClusterRingRadius;
+                ApplySplashDamage(point, ClusterBombletDamage, ClusterBombletSplash);
+            }
+        }
+    }
+}

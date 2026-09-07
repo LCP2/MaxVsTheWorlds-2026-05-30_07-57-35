@@ -384,6 +384,9 @@ namespace MaxWorlds.UI
             RefreshAttackModeToggle();
             if (_forceFieldButtonRoot != null)
                 _forceFieldButtonRoot.gameObject.SetActive(WeaponSystemState.IsAcquired(AbilityKind.ForceField));
+            // MV-694: SecondaryKind flipping (MV-689's morph) changes whether an empty bank reads EMPTY
+            // on this chip, independent of the cell count itself changing.
+            RefreshPowerCellSecondaryDisplay(MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary);
         }
 
         private void OnPowerCells(int total)
@@ -393,11 +396,18 @@ namespace MaxWorlds.UI
         }
 
         /// <summary>MV-672: the Power Cells (secondary currency) counter has no capacity/pop-scale
-        /// machinery of its own yet — just the running total.</summary>
-        private void OnPowerCellsSecondary(int total)
+        /// machinery of its own yet — just the running total. MV-694: once the Shoulder Rack is the
+        /// active secondary, an empty bank reads EMPTY on the same chip (reusing this pill's style, not
+        /// a new one) rather than a bare "0" — the rack goes silent with nothing to spend, and EMPTY
+        /// says so the same way the count normally does.</summary>
+        private void OnPowerCellsSecondary(int total) => RefreshPowerCellSecondaryDisplay(total);
+
+        private void RefreshPowerCellSecondaryDisplay(int total)
         {
             if (_cellSecondaryCount == null) return;
-            _cellSecondaryCount.text = total.ToString();
+            _cellSecondaryCount.text = total <= 0 && WeaponSystemState.SecondaryKind == SecondaryKind.ShoulderRack
+                ? "EMPTY"
+                : total.ToString();
         }
 
         /// <summary>MV-374: the reserve's cap itself moved (a Cell Capacity level-up) — the count
@@ -2103,7 +2113,7 @@ namespace MaxWorlds.UI
             _cellSecondaryCount.resizeTextForBestFit = true;
             _cellSecondaryCount.resizeTextMinSize = (int)CellCounterTextMinSize;
             _cellSecondaryCount.resizeTextMaxSize = (int)CellCounterTextMaxSize;
-            _cellSecondaryCount.text = MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary.ToString();
+            RefreshPowerCellSecondaryDisplay(MaxWorlds.Pickups.PickupWallet.PowerCellsSecondary);
         }
 
         /// <summary>Hexagon bounding-box texture size THE WEAPONS button's background/ring/halo sprites

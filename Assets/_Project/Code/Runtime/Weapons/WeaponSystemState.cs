@@ -48,6 +48,23 @@ namespace MaxWorlds.Weapons
             }
         }
 
+        private static SecondaryKind s_secondaryKind = SecondaryKind.WaterBalloon;
+
+        /// <summary>Which weapon occupies the SECONDARY slot (MV-694) — the Water Balloon from run
+        /// start, flipped to the Shoulder Rack by MV-689's morph once World 2 begins. Only one is ever
+        /// live: <see cref="PlayerAbilities.TryThrowWaterBalloon"/> no-ops unless this reads
+        /// <see cref="SecondaryKind.WaterBalloon"/>.</summary>
+        public static SecondaryKind SecondaryKind
+        {
+            get => s_secondaryKind;
+            set
+            {
+                if (s_secondaryKind == value) return;
+                s_secondaryKind = value;
+                Changed?.Invoke();
+            }
+        }
+
         // ---------------------------------------------------------------- enum <-> RIG id mapping
 
         private static string MapId(WeaponTrackKind kind) => kind switch
@@ -64,6 +81,17 @@ namespace MaxWorlds.Weapons
             WaterBalloonTrackKind.Range => "s_lob",
             WaterBalloonTrackKind.SplashArea => "s_spl",
             WaterBalloonTrackKind.RepeatFire => "s_rte",
+            _ => null,
+        };
+
+        /// <summary>MV-694: the Shoulder Rack's own SECONDARY-family ids — see
+        /// <see cref="ShoulderRackTrackKind"/>'s class doc for why splash isn't mapped here (it reuses
+        /// <c>s_spl</c> via <see cref="WaterBalloonTrackLevel"/> directly).</summary>
+        private static string MapId(ShoulderRackTrackKind kind) => kind switch
+        {
+            ShoulderRackTrackKind.RocketDamage => "s_rkt",
+            ShoulderRackTrackKind.Salvo => "s_sal",
+            ShoulderRackTrackKind.Reload => "s_rld",
             _ => null,
         };
 
@@ -276,6 +304,26 @@ namespace MaxWorlds.Weapons
             WeaponCatalog.WaterBalloonBaseCooldownSeconds(),
             WaterBalloonRepeatFirePerLevel);
 
+        // ---------------------------------------------------------------- Shoulder Rack tracks (MV-694)
+
+        /// <summary>A Shoulder Rack track's current level — same "root cap plus child tracks" shape
+        /// <see cref="WaterBalloonTrackLevel"/> uses for <c>s_bal</c>: <c>s_sal</c>/<c>s_rld</c> are both
+        /// direct children of <c>s_rkt</c> (rig_board.json's own comment on <c>s_rkt</c> explains why a
+        /// single-child chain isn't safe here — the tree-offset layout algorithm can silently collide
+        /// two different branches onto the same rendered position). <c>s_rkt</c> is also the CODE-level
+        /// "is the rack usable at all" gate (<see cref="ShoulderRack.Tick"/>), independent of the RIG
+        /// tree's own reached-ness rules.</summary>
+        public static int ShoulderRackTrackLevel(ShoulderRackTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>Spend a part to raise a Shoulder Rack track by one level. Fails if its RIG node
+        /// isn't reached yet or is already at its cap.</summary>
+        public static bool LevelUpShoulderRackTrack(ShoulderRackTrackKind kind)
+        {
+            if (!RigState.RaiseLevel(MapId(kind))) return false;
+            Changed?.Invoke();
+            return true;
+        }
+
         /// <summary>Rebuilds <see cref="Acquired"/> from <see cref="RigState"/>'s CURRENT ownership
         /// (MV-524 part 3) — a mid-run resume restores <c>RigState</c> directly
         /// (<c>SaveSystem.RestoreCheckpoint</c>), which never touches <see cref="s_acquisitionOrder"/>;
@@ -305,6 +353,7 @@ namespace MaxWorlds.Weapons
             s_acquisitionOrder.Clear();
             s_waterBalloonAutoFireEnabled = true;
             s_activePrimary = WeaponCatalog.PrimaryKind.Rcda;
+            s_secondaryKind = SecondaryKind.WaterBalloon;
             Changed?.Invoke();
         }
     }
