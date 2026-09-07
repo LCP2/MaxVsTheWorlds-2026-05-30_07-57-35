@@ -83,11 +83,30 @@ namespace MaxWorlds.Enemies
         /// every kind that still lunges — they never read this field.</summary>
         public readonly float TouchDamage;
 
+        /// <summary>What this kind's nameplate reads (MV-701) — base value matches the hardcoded
+        /// names <see cref="RobotEnemy.ReadoutName"/> used to own directly (a Gunner still reads
+        /// "LASER", not its enum name); a world's <see cref="MaxWorlds.Arena.WorldEnemyOverride.displayName"/>
+        /// replaces it via <see cref="For"/>/<see cref="WithOverride"/>.</summary>
+        public readonly string DisplayName;
+
+        /// <summary>The look a world's override paints this kind with (MV-701), e.g. World 2's
+        /// <c>"stormdrain"</c> for the Rusher/Scrap Rat — empty for the base table, which wears
+        /// whatever <see cref="MaxWorlds.VFX.CharacterSkin.RoleFor"/> already gives its <see cref="Kind"/>.
+        /// Resolved to an actual colour in <see cref="MaxWorlds.VFX.CharacterSkin"/> (colour roles live
+        /// there, not here) — this is just the tag a world authored.</summary>
+        public readonly string Skin;
+
+        /// <summary>An override's optional direct <see cref="MaxWorlds.VFX.CharacterRole"/> name (MV-701) —
+        /// an escape hatch for a world that wants an existing role's colour on a different kind, rather
+        /// than a brand-new named skin. Empty for the base table.</summary>
+        public readonly string ColourRole;
+
         public EnemyArchetype(EnemyKind kind, EnemyShape shape, Vector3 bodyScale,
             float colliderHeight, float colliderRadius, float moveSpeed, float maxHealth,
             float contactDamage, float contactRadius, float lungeRange, float telegraphTime,
             float lungeSpeed, float lungeTime, float recoverTime, float knockbackDecay,
-            float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f)
+            float standoffRange = 0f, float teleportCooldown = 0f, float touchDamage = 0f,
+            string displayName = null, string skin = null, string colourRole = null)
         {
             Kind = kind; Shape = shape; BodyScale = bodyScale;
             ColliderHeight = colliderHeight; ColliderRadius = colliderRadius;
@@ -98,6 +117,9 @@ namespace MaxWorlds.Enemies
             KnockbackDecay = knockbackDecay;
             StandoffRange = standoffRange; TeleportCooldown = teleportCooldown;
             TouchDamage = touchDamage;
+            DisplayName = string.IsNullOrEmpty(displayName) ? kind.ToString().ToUpperInvariant() : displayName;
+            Skin = skin ?? string.Empty;
+            ColourRole = colourRole ?? string.Empty;
         }
 
         /// <summary>Where the body's origin must sit for its feet to touch the ground.</summary>
@@ -125,7 +147,8 @@ namespace MaxWorlds.Enemies
             contactDamage: 12f, contactRadius: 1.0f,
             lungeRange: 2.2f, telegraphTime: 0.55f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
-            knockbackDecay: 28f);
+            knockbackDecay: 28f,
+            displayName: "RUSHER");
 
         /// <summary>
         /// The contrast (YT-66): a fridge on legs. Half the rusher's speed and four times its
@@ -164,7 +187,8 @@ namespace MaxWorlds.Enemies
             lungeRange: 2.6f, telegraphTime: 1.0f,
             lungeSpeed: 9f, lungeTime: 0.35f, recoverTime: 1.4f,
             knockbackDecay: 70f,
-            touchDamage: 10f);  // MV-428: see the fix comment for the crowd-DPS arithmetic
+            touchDamage: 10f,  // MV-428: see the fix comment for the crowd-DPS arithmetic
+            displayName: "BRUISER");
 
         /// <summary>The first later-area tier (v0.5 recut spec §2-3, MV-224): Area 5 onward
         /// substitutes a slice of the bruiser's large slots with something that just plain outlasts
@@ -181,7 +205,8 @@ namespace MaxWorlds.Enemies
             lungeRange: 2.6f, telegraphTime: 1.05f,
             lungeSpeed: 8.5f, lungeTime: 0.35f, recoverTime: 1.5f,
             knockbackDecay: 95f,
-            touchDamage: 12f);  // MV-428: no lunge — see Bruiser's doc comment
+            touchDamage: 12f,  // MV-428: no lunge — see Bruiser's doc comment
+            displayName: "HEAVY");
 
         /// <summary>The second later-area tier (Area 8 on, spec §2 table) — the top of the
         /// composition ladder, introduced alongside <see cref="Heavy"/> rather than replacing it (the
@@ -196,7 +221,8 @@ namespace MaxWorlds.Enemies
             lungeRange: 2.6f, telegraphTime: 1.15f,
             lungeSpeed: 7.5f, lungeTime: 0.35f, recoverTime: 1.6f,
             knockbackDecay: 120f,
-            touchDamage: 14f);  // MV-428: no lunge — see Bruiser's doc comment
+            touchDamage: 14f,  // MV-428: no lunge — see Bruiser's doc comment
+            displayName: "BRUTE");
 
         /// <summary>
         /// Ranged laser (MV-293), displayed to the player as "LASER" (MV-404: display-only rename,
@@ -226,7 +252,8 @@ namespace MaxWorlds.Enemies
             lungeTime: 1.1f,      // beam duration
             recoverTime: 1.3f,
             knockbackDecay: 28f,
-            standoffRange: 4.5f);
+            standoffRange: 4.5f,
+            displayName: "LASER");   // MV-404: display-only rename, EnemyKind.Gunner unchanged
 
         /// <summary>
         /// Lobs a slow homing missile (MV-293) rather than closing — pure area denial, forcing the
@@ -255,7 +282,8 @@ namespace MaxWorlds.Enemies
             lungeTime: 0.3f,      // release beat before it recovers
             recoverTime: 2.2f,    // area-denial cadence, not rapid fire
             knockbackDecay: 28f,
-            standoffRange: 5f);
+            standoffRange: 5f,
+            displayName: "LAUNCHER");
 
         /// <summary>
         /// Teleport-flanks Max (MV-293) instead of relying on raw pursuit speed — the one kind you
@@ -281,7 +309,8 @@ namespace MaxWorlds.Enemies
             lungeRange: 2.2f, telegraphTime: 0.5f,
             lungeSpeed: 11f, lungeTime: 0.22f, recoverTime: 0.7f,
             knockbackDecay: 28f,
-            teleportCooldown: 4.5f);
+            teleportCooldown: 4.5f,
+            displayName: "BLINKER");
 
         /// <summary>
         /// Fires a straight-line rod bolt (MV-539) rather than a beam or a homing splash — the third
@@ -311,7 +340,8 @@ namespace MaxWorlds.Enemies
             lungeTime: 0f,        // instant release — the whole cadence is telegraph + recover (1.25s)
             recoverTime: 0.9f,    // ~1.25s per shot with the telegraph above — clearly faster than the Launcher's 2.2s
             knockbackDecay: 28f,
-            standoffRange: 4.5f);
+            standoffRange: 4.5f,
+            displayName: "BOLTER");
 
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
@@ -340,7 +370,8 @@ namespace MaxWorlds.Enemies
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage * multiplier, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
-            StandoffRange, TeleportCooldown, TouchDamage * multiplier);
+            StandoffRange, TeleportCooldown, TouchDamage * multiplier,
+            DisplayName, Skin, ColourRole);
 
         /// <summary>The same archetype with only its HEALTH scaled (YT-194's "Robot health" slider) —
         /// contact damage, speed, silhouette and timing are all untouched. Kept separate from
@@ -351,7 +382,43 @@ namespace MaxWorlds.Enemies
             Kind, Shape, BodyScale, ColliderHeight, ColliderRadius,
             MoveSpeed, MaxHealth * multiplier, ContactDamage, ContactRadius,
             LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
-            StandoffRange, TeleportCooldown, TouchDamage);
+            StandoffRange, TeleportCooldown, TouchDamage,
+            DisplayName, Skin, ColourRole);
+
+        /// <summary>The same lookup as <see cref="Of"/>, with this world's own
+        /// <see cref="MaxWorlds.Arena.WorldConfig.enemyOverrides"/> applied over the base table
+        /// (MV-701) — a world can restat and rename a kind (Scrap Rat is the Rusher wearing World 2's
+        /// override) without forking a second archetype or a second <see cref="EnemyKind"/>. Every
+        /// stat NOT named in the override stays exactly what <see cref="Of"/> already returns — this
+        /// is a PARTIAL archetype, not a replacement one. <paramref name="worldConfig"/> may be null
+        /// (falls back to the base table untouched) so a caller with no loaded world yet never has to
+        /// null-check first.</summary>
+        public static EnemyArchetype For(EnemyKind kind, MaxWorlds.Arena.WorldConfig worldConfig)
+        {
+            EnemyArchetype baseArchetype = Of(kind);
+            MaxWorlds.Arena.WorldEnemyOverride ov = worldConfig?.EnemyOverrideFor(kind);
+            return ov == null ? baseArchetype : baseArchetype.WithOverride(ov);
+        }
+
+        /// <summary>Applies one <see cref="MaxWorlds.Arena.WorldEnemyOverride"/> over this archetype
+        /// (MV-701). A zero/empty field on the override means "not authored" — the same idiom
+        /// <see cref="MaxWorlds.Arena.WorldConfig.wallHeight"/> already uses — so a world that only
+        /// wants to rename a kind isn't forced to also repeat every one of its base stats.
+        /// <see cref="Shape"/>/<see cref="ColliderHeight"/>/<see cref="ColliderRadius"/> are
+        /// deliberately never overridable (the ticket's own "do not re-raise": an override cannot
+        /// change <see cref="Shape"/>).</summary>
+        public EnemyArchetype WithOverride(MaxWorlds.Arena.WorldEnemyOverride ov) => new EnemyArchetype(
+            Kind, Shape,
+            ov.bodyScale != Vector3.zero ? ov.bodyScale : BodyScale,
+            ColliderHeight, ColliderRadius,
+            ov.moveSpeed > 0f ? ov.moveSpeed : MoveSpeed,
+            ov.maxHealth > 0f ? ov.maxHealth : MaxHealth,
+            ov.contactDamage > 0f ? ov.contactDamage : ContactDamage,
+            ContactRadius, LungeRange, TelegraphTime, LungeSpeed, LungeTime, RecoverTime, KnockbackDecay,
+            StandoffRange, TeleportCooldown, TouchDamage,
+            string.IsNullOrEmpty(ov.displayName) ? DisplayName : ov.displayName,
+            string.IsNullOrEmpty(ov.skin) ? Skin : ov.skin,
+            string.IsNullOrEmpty(ov.colourRole) ? ColourRole : ov.colourRole);
     }
 
     /// <summary>Which kind the factory emits next (YT-66). Pure, so the mix is testable.</summary>

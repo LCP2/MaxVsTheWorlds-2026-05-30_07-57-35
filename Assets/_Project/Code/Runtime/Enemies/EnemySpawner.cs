@@ -157,6 +157,15 @@ namespace MaxWorlds.Enemies
         public void ConfigureAreaComposition(MaxWorlds.Arena.WorldComposition composition) =>
             _areaCadence = new EnemyMix.AreaCadence(composition);
 
+        /// <summary>This shed's loaded world (MV-701) — wired by <see cref="MaxWorlds.Arena.WorldRunner.Configure"/>
+        /// alongside <see cref="ConfigureAreaComposition"/>, so <see cref="SpawnKind"/> can resolve a
+        /// world's <see cref="MaxWorlds.Arena.WorldConfig.enemyOverrides"/> (Scrap Rat) instead of always
+        /// building the base archetype table. Null (never overridden) is a valid, common state — every
+        /// world that authors no overrides, and any spawner this hasn't been called on yet.</summary>
+        private MaxWorlds.Arena.WorldConfig _worldConfig;
+
+        public void ConfigureWorldConfig(MaxWorlds.Arena.WorldConfig cfg) => _worldConfig = cfg;
+
         // --- Death-throes surge (YT-182) — the wreck's last wave. A shed dying shouldn't just go
         // quiet: it spits out a short burst, and on a roll one Bruiser standing in as the "elite"
         // crawling out of the wreck, so each kill is a spike of danger rather than the quietest
@@ -416,7 +425,7 @@ namespace MaxWorlds.Enemies
             // itself is what gets harder, not just how fast it arrives. The Settings panel's "Robot
             // health" knob (YT-194) is a separate, flat baseline applied first — the two compose
             // rather than fight, since WithHealthMultiplier leaves ContactDamage untouched.
-            EnemyArchetype archetype = EnemyArchetype.Of(kind)
+            EnemyArchetype archetype = EnemyArchetype.For(kind, _worldConfig)
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
             RobotEnemy e = Take(kind, archetype);

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
@@ -146,6 +147,13 @@ namespace MaxWorlds.VFX
         /// same margin the Bolter and the Heavy already sit at.</summary>
         private static readonly Color BlinkerBody = new Color(0.55f, 0.162f, 0.55f);
 
+        /// <summary>World 2's "stormdrain" skin (MV-701) — the Rusher's Scrap Rat reskin: rust-orange,
+        /// the "uniform industrial finish" Tier-2 tell from the enemy design page. Pulled to the same
+        /// headroom every other kind's peak channel sits under (<see cref="SunlitAlbedo.Ceiling"/>,
+        /// 0.6) rather than repeating the MV-348/MV-328/MV-578/MV-584 clipped-then-washed defect on a
+        /// brand-new colour.</summary>
+        private static readonly Color StormdrainBody = new Color(0.55f, 0.28f, 0.10f);
+
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
         private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
@@ -211,6 +219,13 @@ namespace MaxWorlds.VFX
         private Color _body;
         private float _flash;
 
+        /// <summary>The <see cref="RobotEnemy.Skin"/>/<see cref="RobotEnemy.ColourRole"/> this body was
+        /// last coloured for (MV-701) — compared against every <see cref="Apply"/> so a pooled robot
+        /// that comes back WITHOUT a world override (role unchanged) still drops a stale skin tint
+        /// instead of keeping the previous life's colour.</summary>
+        private string _appliedSkin;
+        private string _appliedColourRole;
+
         public CharacterRole Role => role;
         public Color BodyColor => _body;
 
@@ -271,6 +286,19 @@ namespace MaxWorlds.VFX
             }
         }
 
+        /// <summary>The colour a robot's world override paints it (MV-701) over the plain
+        /// <see cref="RoleFor"/>/<see cref="BaseColorFor(CharacterRole)"/> mapping — a named
+        /// <paramref name="skin"/> (World 2's <c>"stormdrain"</c>) wins over an unrecognised or absent
+        /// one; a bare <paramref name="colourRole"/> (an escape hatch for "wear an existing role's
+        /// colour on a different kind") is the fallback before the kind's own default role.</summary>
+        private static Color ResolveBodyColor(CharacterRole role, string skin, string colourRole)
+        {
+            if (skin == "stormdrain") return StormdrainBody;
+            if (!string.IsNullOrEmpty(colourRole) && Enum.TryParse(colourRole, ignoreCase: true, out CharacterRole r))
+                return BaseColorFor(r);
+            return BaseColorFor(role);
+        }
+
         /// <summary>Every role that is trying to kill Max. The hit flash is routed to these and only
         /// these — a hit must never be able to flash the player.</summary>
         public static bool IsEnemy(CharacterRole r) =>
@@ -306,10 +334,14 @@ namespace MaxWorlds.VFX
             if (_enemy != null)
             {
                 var kind = RoleFor(_enemy.Kind);
-                if (kind != role)
+                string skin = _enemy.Skin;
+                string colourRole = _enemy.ColourRole;
+                if (kind != role || skin != _appliedSkin || colourRole != _appliedColourRole)
                 {
                     role = kind;
-                    _body = BaseColorFor(role);
+                    _appliedSkin = skin;
+                    _appliedColourRole = colourRole;
+                    _body = ResolveBodyColor(role, skin, colourRole);
                 }
             }
 

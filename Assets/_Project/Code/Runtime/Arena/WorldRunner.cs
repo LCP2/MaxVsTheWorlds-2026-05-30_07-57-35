@@ -120,7 +120,11 @@ namespace MaxWorlds.Arena
                     // contains — every world1 area with a shed authors one (WorldComposition), so this
                     // is what actually replaces the old area-blind global cadence for every real shed.
                     EnemySpawner spawner = hutch.GetComponent<EnemySpawner>();
-                    if (spawner != null) spawner.ConfigureAreaComposition(area.composition);
+                    if (spawner != null)
+                    {
+                        spawner.ConfigureAreaComposition(area.composition);
+                        spawner.ConfigureWorldConfig(cfg);   // MV-701: so this shed's own spawns can resolve enemyOverrides
+                    }
                 }
 
                 // MV-703: register this area's Replicators (MV-706) into FactoryCensus by area id — the

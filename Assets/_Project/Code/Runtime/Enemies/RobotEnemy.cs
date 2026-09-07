@@ -183,12 +183,29 @@ namespace MaxWorlds.Enemies
         /// so a dead bruiser is never recycled as a rusher wearing the wrong body.</summary>
         public EnemyKind Kind { get; private set; } = EnemyKind.Rusher;
 
+        /// <summary>This robot's nameplate (MV-701) — the archetype's own <see cref="EnemyArchetype.DisplayName"/>,
+        /// stamped by <see cref="Apply"/>. A world's <see cref="MaxWorlds.Arena.WorldEnemyOverride.displayName"/>
+        /// (Scrap Rat) reads here exactly like the base "RUSHER"/"BRUISER"/... names always have.</summary>
+        public string DisplayName { get; private set; } = "RUSHER";
+
+        /// <summary>The look a world's override painted this robot with (MV-701), e.g. <c>"stormdrain"</c>
+        /// — empty for the base table. <see cref="MaxWorlds.VFX.CharacterSkin"/> resolves this (and
+        /// <see cref="ColourRole"/>) into an actual body colour; colour roles live there, not here.</summary>
+        public string Skin { get; private set; } = string.Empty;
+
+        /// <summary>An override's optional direct <see cref="MaxWorlds.VFX.CharacterRole"/> name
+        /// (MV-701) — empty for the base table. See <see cref="Skin"/>.</summary>
+        public string ColourRole { get; private set; } = string.Empty;
+
         /// <summary>Stamp this robot with an archetype's stats and reset it to fresh. Must be called
         /// after the component exists (Awake has already run and seeded the old defaults), so it
         /// re-runs <see cref="ResetState"/> to pick the new health up.</summary>
         public void Apply(in EnemyArchetype a)
         {
             Kind = a.Kind;
+            DisplayName = a.DisplayName;
+            Skin = a.Skin;
+            ColourRole = a.ColourRole;
             // MV-473: Awake() attached the bar against the Rusher default (Apply hasn't run yet — see
             // that method's own doc comment), so a Heavy/Brute spawned with a Rusher-height anchor
             // would clip its own head for one frame and then jump. Re-anchor now that the real
@@ -488,17 +505,10 @@ namespace MaxWorlds.Enemies
         // --- IHealthReadout (YT-111): what the floating bar over this robot reads. ---
         public float HealthNormalized => maxHealth > 0f ? Mathf.Clamp01(_health / maxHealth) : 0f;
         public float HealthCurrent => _health;
-        public string ReadoutName => Kind switch
-        {
-            EnemyKind.Bruiser => "BRUISER",
-            EnemyKind.Heavy => "HEAVY",
-            EnemyKind.Brute => "BRUTE",
-            EnemyKind.Gunner => "LASER",   // MV-404: display-only rename, EnemyKind.Gunner unchanged
-            EnemyKind.Launcher => "LAUNCHER",   // MV-405 renamed the display only; MV-451 renamed the enum to match
-            EnemyKind.Blinker => "BLINKER",
-            EnemyKind.Bolter => "BOLTER",
-            _ => "RUSHER",
-        };
+        // MV-701: reads the archetype's own DisplayName (stamped by Apply) rather than switching on
+        // Kind directly — a world's enemyOverrides can rename a kind (Scrap Rat) without this needing
+        // its own second copy of the name table to keep in step.
+        public string ReadoutName => DisplayName;
 
         /// <summary>This robot's full HP, unscaled by current damage — what Water Balloon's
         /// percentage splash (WV-231, spec §9 <c>waterBalloonDamagePct</c>) is a fraction of.
