@@ -42,6 +42,10 @@ namespace MaxWorlds.Arena
         public const float WallHeight = 2.6f;
         public const float RoofRise = 1.6f;
 
+        /// <summary>The shed's own door width, in metres — exposed so a companion object (MV-718's
+        /// entry-wall door) can match it exactly instead of duplicating the literal.</summary>
+        public const float DoorWidth = 1.6f;
+
         /// <summary>How far past the wall's own thickness the shed's front face stands — just enough
         /// to clear it, not <see cref="BackyardBackdrop.MinClearance"/>'s whole metres of standoff.
         /// The neighbourhood has to stay clear of the arena; this shed is deliberately attached to it,
@@ -177,7 +181,7 @@ namespace MaxWorlds.Arena
             float doorX = center.x + Width * 0.5f + 0.05f;
             Part(root, "Door", PrimitiveType.Cube,
                 new Vector3(doorX, WallHeight * 0.42f, center.z),
-                new Vector3(0.12f, WallHeight * 0.84f, 1.6f), plankDark);
+                new Vector3(0.12f, WallHeight * 0.84f, DoorWidth), plankDark);
 
             // Two tipped slabs meeting at a ridge — the same box-and-wedge every other roof in this
             // yard is built from (BackyardBackdrop's houses, the intro's own exterior shed).
@@ -217,6 +221,11 @@ namespace MaxWorlds.Arena
         private static readonly Color Roof = new Color(0.42f, 0.24f, 0.19f);
 
         private static readonly Dictionary<string, Material> Cache = new Dictionary<string, Material>();
+
+        /// <summary>The shed's own dark-plank door material — exposed so a companion object (MV-718's
+        /// entry-wall door) can share the exact same instance rather than a duplicate with a matching
+        /// colour, so the two read as one structure under any lighting change.</summary>
+        public static Material DoorMaterial() => Flat("home_shed_plank_dark", PlankDark);
 
         private static Material Flat(string key, Color c)
         {
