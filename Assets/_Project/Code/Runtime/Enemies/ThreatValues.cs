@@ -35,6 +35,11 @@ namespace MaxWorlds.Enemies
         // below every kind that can also close distance.
         public const float Turret = 2.5f;
 
+        /// <summary>MV-705: the ticket's own authored THV — priced below the Bolter/Lurker/Turret band
+        /// on purpose: a Sludger's death spawns two more robots (each priced at their own THV once they
+        /// exist), so the drone itself is billed as the lighter half of the pair's total threat.</summary>
+        public const float Sludger = 2.0f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -46,6 +51,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Bolter => Bolter,
             EnemyKind.Lurker => Lurker,
             EnemyKind.Turret => Turret,
+            EnemyKind.Sludger => Sludger,
             _ => Rusher,
         };
     }

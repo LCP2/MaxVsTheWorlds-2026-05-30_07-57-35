@@ -287,7 +287,8 @@ namespace MaxWorlds.Tests.EditMode
             {
                 1 => new[] { EnemyKind.Rusher },
                 2 => new[] { EnemyKind.Rusher, EnemyKind.Bruiser },
-                3 => new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker },
+                // MV-705: the Sludger joins level 3, one level earlier than the Bolter's own level 4.
+                3 => new[] { EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker, EnemyKind.Sludger },
                 _ => new[]
                 {
                     EnemyKind.Rusher, EnemyKind.Bruiser, EnemyKind.Gunner, EnemyKind.Blinker,

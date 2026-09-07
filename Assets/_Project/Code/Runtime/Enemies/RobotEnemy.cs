@@ -4,6 +4,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Enemies
@@ -56,7 +57,11 @@ namespace MaxWorlds.Enemies
         /// field — the ones you're watching — instead of only the next wave.
         /// </summary>
         private float EffectiveMoveSpeed =>
-            DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed) * MapSlowZones.Instance.SpeedMultiplierAt(transform.position);
+            DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed) *
+            // MV-705: a Sludge Drone is immune to sludge slow — its own map-authored puddles AND its
+            // own death puddle (SludgePuddle) both flow through MapSlowZones, so exempting it here
+            // covers both at once rather than needing a separate check per source.
+            (Kind == EnemyKind.Sludger ? 1f : MapSlowZones.Instance.SpeedMultiplierAt(transform.position));
         [SerializeField] private float gravity = 20f;
 
         /// <summary>Minimum spacing this robot keeps from other active robots while chasing (MV-321),
@@ -958,6 +963,13 @@ namespace MaxWorlds.Enemies
             _health = maxHealth;
         }
 
+        /// <summary>Sets this robot's CURRENT health to a fraction of its already-stamped MaxHealth,
+        /// leaving MaxHealth itself untouched (MV-705): a Sludger's split Rushers spawn already-damaged
+        /// at 50%, not with a smaller ceiling, so a single follow-up hit finishes what the parent's
+        /// death started. Call after <see cref="Apply"/>, which otherwise resets a fresh spawn to full
+        /// health.</summary>
+        public void SetHealthFraction(float fraction) => _health = maxHealth * Mathf.Clamp01(fraction);
+
         /// <summary>Puts this robot to sleep behind cover (MV-363): world-present and rendered from
         /// the moment it's placed — never spawned later at the moment a gate opens — but not yet
         /// chasing, firing or telegraphing. Called by the spawner right after placement, in place of
@@ -1403,9 +1415,11 @@ namespace MaxWorlds.Enemies
 
         /// <summary>Whether <paramref name="kind"/> still telegraphs and commits to a Lunge (MV-428).
         /// False for Bruiser/Heavy/Brute, which lose the state entirely — see <see cref="TickChase"/>
-        /// and <see cref="TickContactTouch"/>.</summary>
+        /// and <see cref="TickContactTouch"/>. MV-705's Sludger joins them — "melee on a timer, no
+        /// lunge" per its own ticket.</summary>
         private static bool LungesAsKind(EnemyKind kind) =>
-            kind != EnemyKind.Bruiser && kind != EnemyKind.Heavy && kind != EnemyKind.Brute;
+            kind != EnemyKind.Bruiser && kind != EnemyKind.Heavy && kind != EnemyKind.Brute
+                                       && kind != EnemyKind.Sludger;
 
         /// <summary>Whether <paramref name="kind"/> routes around this zone's own cover instead of
         /// beelining across it (MV-476) — the touch-damage archetypes only: Rusher, Bruiser, Heavy,
@@ -1819,8 +1833,79 @@ namespace MaxWorlds.Enemies
             // Announce the death to the drop system (YT-131); it decides whether loot falls out of
             // this kind. The enemy stays ignorant of pickups — the policy lives in PickupDirector.
             MaxWorlds.Pickups.DropSignals.EmitRobotDied(transform.position, Kind);
+            // MV-705: a Sludger's whole gimmick — killing it isn't the end.
+            if (Kind == EnemyKind.Sludger) SpawnSludgerSplit();
             Died?.Invoke(this);
             gameObject.SetActive(false);
+        }
+
+        private const float SludgerSplitOffset = 0.6f;
+        private const float SludgerSplitNoReplicateSeconds = 8f;
+        private const float SludgerPuddleRadius = 2f;
+        private const float SludgerPuddleDuration = 4f;
+
+        /// <summary>MV-705: a Sludge Drone's death spawns two Rushers (a world's own override
+        /// reskins/restats them — World 2's Scrap Rat, MV-701) at half health, 0.6 m either side, and a
+        /// temporary sludge puddle at the death point. Built standalone rather than through
+        /// <see cref="EnemySpawner"/> — a Sludger dies wherever the fight is, not next to a shed's
+        /// mouth — the same construction <see cref="MaxWorlds.Bosses.BigBermudaBoss.CreateAdd"/> already
+        /// uses for a boss-flung add. Spawned AWAKE (no Dormant/emergence beat, per the ticket) and
+        /// tagged <see cref="TagNoReplicate"/> so a fresh pair can't immediately walk back into the box
+        /// that doubled it. The splits themselves are never counted as authored composition (the
+        /// ticket's own wording) — only <see cref="ActiveCount"/>, same as any other live robot.</summary>
+        private void SpawnSludgerSplit()
+        {
+            Vector3 deathPos = transform.position;
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            WorldConfig worldCfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
+            EnemyArchetype rusherArchetype = EnemyArchetype.For(EnemyKind.Rusher, worldCfg);
+
+            for (int i = 0; i < 2; i++)
+            {
+                float side = i == 0 ? -1f : 1f;
+                Vector3 pos = deathPos + new Vector3(side * SludgerSplitOffset, 0f, 0f);
+
+                var go = GameObject.CreatePrimitive(
+                    rusherArchetype.Shape == EnemyShape.Box ? PrimitiveType.Cube : PrimitiveType.Capsule);
+                go.name = $"RobotEnemy {rusherArchetype.Kind} (sludger split)";
+                go.transform.position = pos;
+                go.transform.localScale = rusherArchetype.BodyScale;
+
+                var cc = go.AddComponent<CharacterController>();
+                float lateral = Mathf.Max(rusherArchetype.BodyScale.x, rusherArchetype.BodyScale.z);
+                cc.height = rusherArchetype.ColliderHeight / Mathf.Max(rusherArchetype.BodyScale.y, 1e-4f);
+                cc.radius = rusherArchetype.ColliderRadius / Mathf.Max(lateral, 1e-4f);
+                cc.center = Vector3.zero;
+
+                var e = go.AddComponent<RobotEnemy>();
+                e.Apply(rusherArchetype);
+                e.SetHealthFraction(0.5f);
+                e.TagNoReplicate(SludgerSplitNoReplicateSeconds);
+                go.AddComponent<RobotRig>();
+                IgnorePlayerCollision(go);
+            }
+
+            SludgePuddle.Spawn(deathPos, SludgerPuddleRadius, SludgerPuddleDuration);
+        }
+
+        /// <summary>Robots must never be able to WALL MAX IN (YT-74) — the same rule
+        /// <see cref="EnemySpawner.LetThePlayerThrough"/> already gives a shed-spawned robot, reused
+        /// here for a robot born mid-arena instead of at a factory's mouth.</summary>
+        private static void IgnorePlayerCollision(GameObject enemy)
+        {
+            var p = GameObject.FindGameObjectWithTag("Player");
+            if (p == null) return;
+            Collider[] playerColliders = p.GetComponents<Collider>();
+            Collider[] enemyColliders = enemy.GetComponents<Collider>();
+            foreach (Collider ec in enemyColliders)
+            {
+                if (ec == null) continue;
+                foreach (Collider pc in playerColliders)
+                {
+                    if (pc == null) continue;
+                    Physics.IgnoreCollision(ec, pc, true);
+                }
+            }
         }
 
         /// <summary>Remove this robot WITHOUT counting it as a kill (MV-427): no kill signal, no loot,
