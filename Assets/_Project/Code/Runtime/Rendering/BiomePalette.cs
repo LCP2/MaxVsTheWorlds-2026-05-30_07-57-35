@@ -188,6 +188,56 @@ namespace MaxWorlds.Rendering
             Smoothness = 0.06f,
         };
 
+        /// <summary>
+        /// Stormdrain — World 2's wet-concrete kit (MV-690). Colours read off the palette bridge
+        /// (Confluence, <c>MVW_World2_Stormdrain_Concept.html</c>): W2 WET CONCRETE #4d554a for the
+        /// walls, a darker/lighter split of the same family for the floor's shaded/sunlit slabs, and
+        /// W2 RUST #985025 for the metal tones the deck/pipe/rail surfaces already wear via
+        /// <see cref="SurfaceKind.Metal"/>.
+        ///
+        /// Green stays the hue anchor carried over from <see cref="Backyard"/> (the palette bridge's
+        /// "same family, dropped in luminance and pushed to acid/yellow" note) — this is grass gone
+        /// bad, not a different colour language. No wind, no clump relief: concrete doesn't sway and
+        /// doesn't tuft, so <see cref="GroundWindLean"/>/<see cref="GroundClumpDepth"/> are zeroed
+        /// rather than left at the lawn's values.
+        /// </summary>
+        public static BiomePalette Stormdrain => new BiomePalette
+        {
+            Tint = Color.white,
+            GroundBase = new Color(0.15f, 0.18f, 0.16f),      // shaded wet concrete
+            GroundAccent = new Color(0.26f, 0.29f, 0.26f),    // sunlit slab
+            GroundDry = new Color(0.30f, 0.31f, 0.27f),       // dust/algae-bleached slab, still concrete
+            Wall = new Color(0.30f, 0.33f, 0.29f),            // W2 WET CONCRETE #4d554a, sunlit-ceiling-safe
+            Prop = new Color(0.36f, 0.40f, 0.36f),            // concrete cover blocks
+
+            Wood = new Color(0.28f, 0.22f, 0.16f),
+            Stone = new Color(0.30f, 0.33f, 0.29f),           // == Wall: it's the same wet concrete
+            Dirt = new Color(0.20f, 0.15f, 0.10f),
+            Metal = new Color(0.60f, 0.31f, 0.15f),           // W2 RUST #985025 — pipe banks, kerb rails
+            Foliage = new Color(0.43f, 0.56f, 0.20f),         // algae creep, greener cousin of the sludge
+
+            GroundDetailScale = 0.45f,     // slab joints, coarser than the lawn's blade-scale grain
+            GroundMacroScale = 0.05f,
+            GroundMacroStrength = 0.30f,
+            GroundLushShade = 0.70f,
+            GroundNormalStrength = 0.6f,   // wet concrete is flatter than turf, not glassy
+            GroundClumpScale = 0.5f,
+            GroundClumpDepth = 0f,         // no tufting — this is paving, not a lawn
+
+            GroundWindLean = 0f,           // concrete doesn't sway
+            GroundWindSpeed = 0f,
+            GroundWindShimmer = 0f,
+
+            GroundTiling = 5f,
+            Smoothness = 0.14f,            // wet sheen — higher than the lawn's matte 0.06
+        };
+
+        /// <summary>The biome for a loaded world (MV-690), mirroring
+        /// <see cref="MaxWorlds.Weapons.RigBoardLibrary.ForWorld"/>'s own "world 0 gets the original,
+        /// anything past it gets World 2's" rule: index 0 is <see cref="Backyard"/>, everything else is
+        /// <see cref="Stormdrain"/> — there being only two worlds today.</summary>
+        public static BiomePalette ForWorld(int worldIndex) => worldIndex >= 1 ? Stormdrain : Backyard;
+
         public Color ColorFor(SurfaceKind kind)
         {
             Color c;
