@@ -4,6 +4,7 @@ using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Enemies
 {
@@ -264,14 +265,9 @@ namespace MaxWorlds.Enemies
 
             if (_target != null)
             {
-                Vector3 to = _target.position - transform.position;
-                to.y = 0f;
-                if (to.sqrMagnitude > 1e-4f)
-                {
-                    Quaternion wanted = Quaternion.LookRotation(to.normalized, Vector3.up);
-                    transform.rotation = Quaternion.RotateTowards(transform.rotation, wanted,
-                        TurnRateDegPerSec * dt);
-                }
+                // MV-708: shared with SeekerPulse via HomingSteering — see that class's own doc comment.
+                transform.rotation = HomingSteering.TurnToward(transform.rotation, transform.position,
+                    _target.position, TurnRateDegPerSec, dt);
             }
 
             Vector3 from = transform.position;
@@ -303,19 +299,8 @@ namespace MaxWorlds.Enemies
         /// frame — the same Cover layer <see cref="LineOfSight"/> stops at (MV-364). Extracted as its
         /// own static query, rather than inlined in <see cref="Update"/>, so a test can prove a fence
         /// stops a missile without having to drive a live MonoBehaviour's per-frame Update.</summary>
-        public static bool BlockedByGeometry(Vector3 from, Vector3 to, out RaycastHit hit)
-        {
-            Vector3 delta = to - from;
-            float dist = delta.magnitude;
-            if (dist < 1e-4f)
-            {
-                hit = default;
-                return false;
-            }
-
-            return Physics.Raycast(from, delta / dist, out hit, dist, CoverLayer.Mask,
-                                   QueryTriggerInteraction.Ignore);
-        }
+        public static bool BlockedByGeometry(Vector3 from, Vector3 to, out RaycastHit hit) =>
+            HomingSteering.BlockedByGeometry(from, to, out hit);
 
         /// <summary>Pure so the fuel-exhausted transition can be tested without a scene or a clock
         /// (MV-349 AC6).</summary>

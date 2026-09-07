@@ -396,6 +396,38 @@ namespace MaxWorlds.Enemies
             _haltTimer = Mathf.Max(_haltTimer, seconds);
         }
 
+        /// <summary>Seconds left on a Shock stun (MV-708, the LPPE's World 2 special) — a separate
+        /// clock from <see cref="_haltTimer"/> so the two freezes (Water Balloon's halt vs. Shock)
+        /// are visually distinguishable, even though both gate the same freeze branch in
+        /// <see cref="Update"/>.</summary>
+        private float _stunTimer;
+
+        /// <summary>True while frozen by Shock — movement, attack timers and (for a Blinker) the
+        /// teleport cooldown are all held, the same "true freeze" <see cref="IsHalted"/> already gives
+        /// Water Balloon (see <see cref="Update"/>'s combined freeze branch).</summary>
+        public bool IsStunned => _stunTimer > 0f;
+
+        /// <summary>How long is left on the current Shock stun, 0 when not stunned — the resolved
+        /// value <c>PulseLaserTests</c> asserts against (MV-708 AC1), never an authored constant.</summary>
+        public float StunTimeRemaining => _stunTimer;
+
+        /// <summary>Shock's tell (spec: "yellow zigzag flash") — greybox placeholder is a colour flash,
+        /// the same idiom every other tell in this class already uses (<see cref="idleTell"/>,
+        /// <see cref="windupTell"/>, the white hit-flash in <see cref="TakeDamage"/>).</summary>
+        private static readonly Color ShockTell = new Color(1f, 0.86f, 0.1f);
+
+        /// <summary>Freeze this robot for <paramref name="seconds"/> (MV-708's Shock) — extends rather
+        /// than resets an existing stun, same "never shortens" convention as <see cref="ApplyHalt"/>.
+        /// A dead robot ignores it. Bosses are immune by construction: <see cref="MaxWorlds.Weapons.SeekerPulse"/>
+        /// only ever locks onto a <see cref="RobotEnemy"/>, which a boss (e.g. <c>BigBermudaBoss</c>) is
+        /// never — no boss-specific check needed here.</summary>
+        public void Stun(float seconds)
+        {
+            if (Current == State.Dead) return;
+            _stunTimer = Mathf.Max(_stunTimer, seconds);
+            SetTell(ShockTell);
+        }
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
@@ -458,6 +490,7 @@ namespace MaxWorlds.Enemies
             _routeEpoch = EnemyNavigation.RouteEpoch;
             _knockback = Vector3.zero;
             _haltTimer = 0f;
+            _stunTimer = 0f;
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
             _teleportTimer = teleportCooldown;
@@ -570,9 +603,10 @@ namespace MaxWorlds.Enemies
             // Water Balloon's halt (WV-231): a true freeze, not just a movement stop — the state
             // timer doesn't advance either, so a robot caught mid-telegraph resumes exactly where it
             // left off once the halt ends, rather than the wind-up quietly expiring while frozen.
-            if (_haltTimer > 0f)
+            if (_haltTimer > 0f || _stunTimer > 0f)
             {
-                _haltTimer -= dt;
+                if (_haltTimer > 0f) _haltTimer -= dt;
+                if (_stunTimer > 0f) _stunTimer -= dt;
             }
             else
             {
