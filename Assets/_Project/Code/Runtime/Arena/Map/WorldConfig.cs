@@ -123,6 +123,27 @@ namespace MaxWorlds.Arena
             new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter);
     }
 
+    /// <summary>A world's partial restat/reskin of one <see cref="EnemyKind"/> (MV-701) — e.g. World 2's
+    /// Rusher wears this as the "Scrap Rat": same <see cref="EnemyKind"/>, same <see cref="EnemyShape"/>
+    /// and collider (never overridable, per the ticket's own "do not re-raise"), different stats and
+    /// look. <see cref="kind"/> is the same lowercase key set <see cref="WorldComposition"/>/
+    /// <see cref="WorldGarrisonEntry"/> already use. Every OTHER field is optional: 0/empty/zero means
+    /// "not authored" (the same idiom <see cref="WorldConfig.wallHeight"/> already uses), so a world
+    /// that only wants to rename a kind doesn't have to also repeat its full base stat block. Resolved
+    /// onto the base table by <see cref="MaxWorlds.Enemies.EnemyArchetype.For"/>.</summary>
+    [Serializable]
+    public sealed class WorldEnemyOverride
+    {
+        public string kind;
+        public string displayName;
+        public float moveSpeed;
+        public float maxHealth;
+        public float contactDamage;
+        public Vector3 bodyScale;
+        public string colourRole;
+        public string skin;
+    }
+
     /// <summary>A sludge slow-zone (MV-692) — a rect in AREA-LOCAL metres (like <see cref="WorldArea.origin"/>,
     /// <see cref="x"/>/<see cref="z"/> are the rect's MIN corner, not its centre), authored inside the
     /// area that carries it. Any mover whose feet fall inside it is slowed to
@@ -609,6 +630,23 @@ namespace MaxWorlds.Arena
 
         public WorldDials dials;
         public WorldEnemyTypes enemyTypes;
+
+        /// <summary>Per-world restat/reskin overrides (MV-701) — see <see cref="WorldEnemyOverride"/>.
+        /// Empty for every world that doesn't need one (World 1's whole roster is the base table).</summary>
+        public WorldEnemyOverride[] enemyOverrides = Array.Empty<WorldEnemyOverride>();
+
+        /// <summary>This world's override for <paramref name="kind"/>, or null if it authors none —
+        /// what <see cref="MaxWorlds.Enemies.EnemyArchetype.For"/> applies over the base table.</summary>
+        public WorldEnemyOverride EnemyOverrideFor(EnemyKind kind)
+        {
+            if (enemyOverrides == null) return null;
+            foreach (WorldEnemyOverride ov in enemyOverrides)
+            {
+                if (ov == null || string.IsNullOrEmpty(ov.kind)) continue;
+                if (EnemyKindNames.TryParse(ov.kind, out EnemyKind k) && k == kind) return ov;
+            }
+            return null;
+        }
 
         public WorldArea Area(string areaId)
         {

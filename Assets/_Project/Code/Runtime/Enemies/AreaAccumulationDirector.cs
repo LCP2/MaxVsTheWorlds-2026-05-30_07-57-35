@@ -481,7 +481,7 @@ namespace MaxWorlds.Enemies
             {
                 if (!previewQueue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
 
-                EnemyArchetype archetype = EnemyArchetype.Of(kind)
+                EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier));
 
                 RobotEnemy e = Take(kind, archetype);
@@ -539,7 +539,7 @@ namespace MaxWorlds.Enemies
                     continue;
                 }
 
-                EnemyArchetype archetype = EnemyArchetype.Of(e.Kind)
+                EnemyArchetype archetype = EnemyArchetype.For(e.Kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
                 e.Retoughen(archetype);
@@ -573,7 +573,7 @@ namespace MaxWorlds.Enemies
             {
                 if (!_queue.TryTakeForGarrison(areaIndex, slots[i].Kind, out EnemyKind kind)) break;
 
-                EnemyArchetype archetype = EnemyArchetype.Of(kind)
+                EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                     .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                     .Toughened(DifficultyDirector.ToughnessMultiplier);
 
@@ -636,7 +636,7 @@ namespace MaxWorlds.Enemies
         /// to be placed.</summary>
         private bool Spawn(int areaIndex, EnemyKind kind)
         {
-            EnemyArchetype archetype = EnemyArchetype.Of(kind)
+            EnemyArchetype archetype = EnemyArchetype.For(kind, _worldCfg)
                 .WithHealthMultiplier(DevTuning.Or(DevTuning.RobotHealthMultiplier, EnemySpawner.DefaultRobotHealthMultiplier))
                 .Toughened(DifficultyDirector.ToughnessMultiplier);
 

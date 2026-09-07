@@ -71,6 +71,15 @@
    "thv": 8.53
   }
  },
+ "enemyOverrides": [
+  {
+   "kind": "rusher",
+   "displayName": "SCRAP RAT",
+   "moveSpeed": 2.4,
+   "maxHealth": 28,
+   "skin": "stormdrain"
+  }
+ ],
  "gates": [
   {
    "id": "g0",
