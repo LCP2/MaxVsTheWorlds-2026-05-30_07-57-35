@@ -421,13 +421,14 @@ namespace MaxWorlds.VFX
             Material body = MaterialLibrary.Tinted(SurfaceKind.Metal, AmberCrystal);
             Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
-            // Two tapering facets meeting at the crystal's widest band — the pointed-top/pointed-bottom
-            // gem read from the reference, built the same "stack of cylinders" way BuildBeamNozzle
-            // fakes a tapering cone.
-            Part(root, "UpperFacet", PrimitiveType.Cylinder, new Vector3(0f, 0.30f, 0f),
-                 new Vector3(0.17f, 0.13f, 0.17f), null, body);
-            Part(root, "LowerFacet", PrimitiveType.Cylinder, new Vector3(0f, 0.11f, 0f),
-                 new Vector3(0.10f, 0.10f, 0.10f), null, body);
+            // MV-682: the body used to be two tapering PrimitiveType.Cylinder pieces — a Cylinder's
+            // cross-section stays circular under any scale, so it could only ever read as a smooth
+            // round taper, never the flat hexagonal facets the MV-672 reference calls for. A
+            // hand-authored hexagonal bipyramid mesh replaces both: pointed top and bottom (meeting
+            // TopTip/BottomTip below) with a straight hex-prism waist between them.
+            Mesh facetMesh = BuildHexBipyramidMesh(bottomApexY: 0.02f, waistBottomY: 0.14f,
+                                                    waistTopY: 0.32f, topApexY: 0.44f, waistRadius: 0.13f);
+            MeshPart(root, "Facets", facetMesh, body);
             Part(root, "TopTip", PrimitiveType.Cylinder, new Vector3(0f, 0.44f, 0f),
                  new Vector3(0.03f, 0.02f, 0.03f), null, cap);
             Part(root, "BottomTip", PrimitiveType.Cylinder, new Vector3(0f, 0.02f, 0f),
@@ -778,6 +779,66 @@ namespace MaxWorlds.VFX
             go.transform.localScale = scale;
             go.GetComponent<MeshRenderer>().sharedMaterial = mat;
             return go.transform;
+        }
+
+        /// <summary>A part built from a hand-authored mesh instead of a stretched primitive — for
+        /// shapes (MV-682's faceted gem) no <see cref="PrimitiveType"/> can produce. No collider is
+        /// ever added by <c>AddComponent&lt;MeshRenderer&gt;</c>/<c>MeshFilter</c>, so unlike
+        /// <see cref="Part"/> there's nothing for <see cref="Strip"/> to remove.</summary>
+        private static Transform MeshPart(GameObject root, string name, Mesh mesh, Material mat)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(root.transform, worldPositionStays: false);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>().sharedMaterial = mat;
+            return go.transform;
+        }
+
+        /// <summary>A hexagonal bipyramid — pointed top, pointed bottom, a straight hex-prism band at
+        /// the waist — the faceted "gem" silhouette the MV-672 reference calls for (MV-682). Every
+        /// triangle gets its own three vertices (nothing shared) so <see cref="Mesh.RecalculateNormals"/>
+        /// gives each of the eighteen faces a flat normal instead of averaging them into a smooth,
+        /// rounded-looking gem — the exact read a faceted crystal must avoid.</summary>
+        private static Mesh BuildHexBipyramidMesh(float bottomApexY, float waistBottomY, float waistTopY,
+                                                    float topApexY, float waistRadius)
+        {
+            var verts = new List<Vector3>(72);
+            var tris = new List<int>(72);
+            Vector3 bottomApex = new Vector3(0f, bottomApexY, 0f);
+            Vector3 topApex = new Vector3(0f, topApexY, 0f);
+            var lowerRing = new Vector3[6];
+            var upperRing = new Vector3[6];
+            for (int i = 0; i < 6; i++)
+            {
+                float rad = i * 60f * Mathf.Deg2Rad;
+                float x = Mathf.Cos(rad) * waistRadius;
+                float z = Mathf.Sin(rad) * waistRadius;
+                lowerRing[i] = new Vector3(x, waistBottomY, z);
+                upperRing[i] = new Vector3(x, waistTopY, z);
+            }
+
+            void AddTri(Vector3 a, Vector3 b, Vector3 c)
+            {
+                int baseIndex = verts.Count;
+                verts.Add(a); verts.Add(b); verts.Add(c);
+                tris.Add(baseIndex); tris.Add(baseIndex + 1); tris.Add(baseIndex + 2);
+            }
+
+            for (int i = 0; i < 6; i++)
+            {
+                int next = (i + 1) % 6;
+                AddTri(bottomApex, lowerRing[i], lowerRing[next]);          // bottom pyramid cap
+                AddTri(lowerRing[i], upperRing[next], lowerRing[next]);     // waist side, lower triangle
+                AddTri(lowerRing[i], upperRing[i], upperRing[next]);        // waist side, upper triangle
+                AddTri(topApex, upperRing[next], upperRing[i]);             // top pyramid cap
+            }
+
+            var mesh = new Mesh { name = "HexBipyramid" };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         /// <summary>An additive glowing sphere — a lit core. Shared VFX material + a per-renderer block

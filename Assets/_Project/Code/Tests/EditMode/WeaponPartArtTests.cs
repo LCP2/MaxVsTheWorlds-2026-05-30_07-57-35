@@ -226,6 +226,37 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
+        public void ThePowerCellSecondary_BodyIsAFacetedHexagonalGem_NotARoundCylinder()
+        {
+            // MV-682: the two body facets were built from PrimitiveType.Cylinder, which stays circular
+            // under any scale — it can only ever read as a smooth round taper, never the flat hexagonal
+            // facets the MV-672 reference design calls for. Fails on the pre-fix build: the body was
+            // two separate Cylinder GameObjects named UpperFacet/LowerFacet (no "Facets" mesh child at
+            // all), and a Cylinder's own built-in mesh has far more than six distinct side directions.
+            _built = WeaponPartArt.Build(WeaponPartArt.Keys.PowerCellSecondary);
+
+            Assert.IsNull(_built.transform.Find("UpperFacet"),
+                "UpperFacet is still a separate PrimitiveType.Cylinder body piece.");
+            Assert.IsNull(_built.transform.Find("LowerFacet"),
+                "LowerFacet is still a separate PrimitiveType.Cylinder body piece.");
+
+            var facets = _built.transform.Find("Facets");
+            Assert.IsNotNull(facets, "the power cell has no faceted body mesh.");
+
+            var mesh = facets.GetComponent<MeshFilter>()?.sharedMesh;
+            Assert.IsNotNull(mesh, "the Facets part has no mesh assigned.");
+
+            int[] sideDirections = mesh.vertices
+                .Where(v => Mathf.Abs(v.x) > 0.001f || Mathf.Abs(v.z) > 0.001f)   // skip the axis-aligned apex verts
+                .Select(v => Mathf.RoundToInt(Mathf.Atan2(v.z, v.x) * Mathf.Rad2Deg))
+                .Distinct()
+                .ToArray();
+
+            Assert.AreEqual(6, sideDirections.Length,
+                $"the facet mesh has {sideDirections.Length} distinct side directions, not six — it still reads round, not hexagonal.");
+        }
+
+        [Test]
         public void AnUnknownKeyBuildsNothing_RatherThanThrowing()
         {
             // A gameplay drop table with a typo should drop nothing, not error the run.
