@@ -11,6 +11,7 @@ using MaxWorlds.CameraRig;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
@@ -308,6 +309,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv617WaterReach());
             Add(BuildMv616SentinelBeam());
             Add(BuildMv674TeleportCrackle());
+            Add(BuildMv693Replicator());
             return d;
         }
 
@@ -968,6 +970,73 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Shots = new List<CaptureShot> { new CaptureShot("MV-674-teleport-crackle", Setup, new[] { mirrorPath }) },
+            };
+        }
+
+        // ---- MV693Replicator (MV-693) ---------------------------------------------------------
+
+        /// <summary>Builds a standalone Replicator the same way <c>MapRuntime.BuildReplicator</c>
+        /// does (primitive-cube collider host, <c>Configure</c> after <c>AddComponent</c>) and
+        /// frames it so the generated hull/hazard band/hatch/valve-wheel body (MV-693) is
+        /// visible — proof of the actual result, not a description of one.</summary>
+        private static CapturePreset BuildMv693Replicator()
+        {
+            const float pitch = 60f;
+            const float distance = 5f;
+
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject replicatorGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                replicatorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                replicatorGo.name = "MV693CaptureReplicator";
+                replicatorGo.transform.position = focus;
+                replicatorGo.transform.localScale = new Vector3(2f, 2f, 1.5f);
+                var replicator = replicatorGo.AddComponent<Replicator>();
+                replicator.Configure(1);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body settle
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * 1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                // A throwaway render to the screen backbuffer first: this preset's shot is the
+                // FIRST manual cam.Render() call of the whole session, and URP's Render Graph has
+                // logged a one-off NullReferenceException on exactly that first call in headless
+                // -nographics runs (seen on this exact preset) — warming it up here, before
+                // Capture()'s own render-to-texture call, keeps that hiccup off the real shot.
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv693replicator",
+                LogTag = "[MV693Capture]",
+                Flag = "-mv693shot",
+                ArmFile = "Temp/mv693.arm",
+                HeadlessMarker = "Temp/mv693.headless",
+                DoneFileName = "_mv693_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV674TeleportCrackle's own presets
+                    // use: on a fresh profile (no slot picked yet) HomeScreen's pick-a-slot modal
+                    // freezes Time.timeScale at 0 and blocks this capture indefinitely.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-693-result", Setup) },
+                Cleanup = () => { if (replicatorGo != null) Destroy(replicatorGo); },
             };
         }
     }
