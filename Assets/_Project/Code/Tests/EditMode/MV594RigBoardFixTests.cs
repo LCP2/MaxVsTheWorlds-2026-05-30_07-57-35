@@ -182,14 +182,20 @@ namespace MaxWorlds.Tests.EditMode
                 _screen.ApplyBoardScale(1.78f);  // force back to standard mode, rebuilds with the new padX
             }
 
-            RebuildStandardWith(5f);
+            // MV-694 shrank the interior gap on ENERGY's SECONDARY-facing side a little (the Shoulder
+            // Rack's own s_rkt/s_sal/s_rld widened the SECONDARY column) — 5/15 now saturates that side
+            // before 15px, so this probes a smaller, still-comfortably-unsaturated pair instead. The
+            // property under test (padX is actually read, not hardcoded) is unchanged; only the two
+            // synthetic calibration values move.
+            const float ProbeLow = 2f, ProbeHigh = 5f;
+            RebuildStandardWith(ProbeLow);
             float widthAt5 = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
 
-            RebuildStandardWith(15f);
+            RebuildStandardWith(ProbeHigh);
             float widthAt15 = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
 
-            Assert.That(widthAt15 - widthAt5, Is.EqualTo(2f * (15f - 5f)).Within(0.5f),
-                $"ENERGY panel width must grow by 2x the RegionRectPadX delta when neither value saturates the neighbour clamp (5px -> {widthAt5:0.0}, 15px -> {widthAt15:0.0})");
+            Assert.That(widthAt15 - widthAt5, Is.EqualTo(2f * (ProbeHigh - ProbeLow)).Within(0.5f),
+                $"ENERGY panel width must grow by 2x the RegionRectPadX delta when neither value saturates the neighbour clamp ({ProbeLow}px -> {widthAt5:0.0}, {ProbeHigh}px -> {widthAt15:0.0})");
         }
     }
 }

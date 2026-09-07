@@ -93,6 +93,11 @@ namespace MaxWorlds.Player
             // Water Balloon + Teleport's live component self-attaches, same code-driven-scenes rule
             // WaterBlaster's own sub-components follow (WV-231) — no scene wiring.
             if (GetComponent<PlayerAbilities>() == null) gameObject.AddComponent<PlayerAbilities>();
+
+            // MV-694: the Shoulder Rack self-attaches the same way — it no-ops entirely while
+            // WeaponSystemState.SecondaryKind still reads WaterBalloon, so attaching it unconditionally
+            // costs nothing before World 2's morph flips the kind.
+            if (GetComponent<ShoulderRack>() == null) gameObject.AddComponent<ShoulderRack>();
         }
 
         private void OnEnable()

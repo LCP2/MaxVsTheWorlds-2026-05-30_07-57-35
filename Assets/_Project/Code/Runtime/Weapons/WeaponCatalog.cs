@@ -101,6 +101,15 @@ namespace MaxWorlds.Weapons
             WaterBalloonTrackKind.RepeatFire,
         };
 
+        /// <summary>The Shoulder Rack's own tracks (MV-694), in the order the weapons screen would
+        /// list them — same shape as <see cref="AllWaterBalloonTrackKinds"/>.</summary>
+        public static readonly ShoulderRackTrackKind[] AllShoulderRackTrackKinds =
+        {
+            ShoulderRackTrackKind.RocketDamage,
+            ShoulderRackTrackKind.Salvo,
+            ShoulderRackTrackKind.Reload,
+        };
+
         /// <summary>The level cap for an RCDA track. Range was cut from MV-367's 9-level cap to 6
         /// (MV-631, Lee: "at L9, range is too far"). Damage and
         /// Spread were both cut to 4 levels (MV-597, Lee's playtest: 6/6 Damage + 5/9 Spread + 6/6 Flow
@@ -244,6 +253,11 @@ namespace MaxWorlds.Weapons
         /// ability track it replaces used to have.</summary>
         public static int MaxLevel(WaterBalloonTrackKind kind) => 3;
 
+        /// <summary>The level cap for a Shoulder Rack track (MV-694), matching <c>rig_board.json</c>'s
+        /// own per-node <c>maxLevel</c> — Rocket Damage caps at 4 (same shape as <c>p_dmg</c>), Salvo
+        /// and Reload cap at 3 (same shape as the Water Balloon's own three tracks).</summary>
+        public static int MaxLevel(ShoulderRackTrackKind kind) => kind == ShoulderRackTrackKind.RocketDamage ? 4 : 3;
+
         /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Teleport is the only
         /// remaining AbilityKind with an on-screen control (spec §6a) and a real cooldown — Water
         /// Balloon's own base cooldown moved to <see cref="WaterBalloonBaseCooldownSeconds"/> when
@@ -305,6 +319,19 @@ namespace MaxWorlds.Weapons
                 case WaterBalloonTrackKind.Range: return "RANGE";
                 case WaterBalloonTrackKind.SplashArea: return "SPLASH AREA";
                 case WaterBalloonTrackKind.RepeatFire: return "AUTO FIRE RATE";
+                default: return kind.ToString();
+            }
+        }
+
+        /// <summary>Display name for a Shoulder Rack track's row (MV-694), same shape as
+        /// <see cref="DisplayName(WaterBalloonTrackKind)"/>.</summary>
+        public static string DisplayName(ShoulderRackTrackKind kind)
+        {
+            switch (kind)
+            {
+                case ShoulderRackTrackKind.RocketDamage: return "ROCKET DAMAGE";
+                case ShoulderRackTrackKind.Salvo: return "SALVO";
+                case ShoulderRackTrackKind.Reload: return "RELOAD";
                 default: return kind.ToString();
             }
         }
