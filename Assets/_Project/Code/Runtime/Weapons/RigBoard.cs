@@ -110,18 +110,37 @@ namespace MaxWorlds.Weapons
     /// </summary>
     public static class RigBoard
     {
-        private const string ResourcePath = "UI/rig_board";
-
         /// <summary>The most candidates a single Morphing Module draw offers — schema 3 dropped this
         /// from the data file (it's prose only, model.rules' "Max 3, sampled without replacement"),
         /// so it's pinned here instead.</summary>
         private const int DraftMaxCandidatesConst = 3;
+
+        private static string s_resourcePath = RigBoardLibrary.ForWorld(0);
+        private static int s_activeWorldIndex;
 
         private static Dictionary<string, RigNodeDef> s_nodes;
         private static string[] s_allIds;
         private static string[] s_allCategoryIds;
         private static Dictionary<string, RigFusionDef> s_fusions;
         private static RigFusionDef[] s_allFusions;
+
+        /// <summary>The world index THE RIG is currently reading from (MV-689) — 0 until
+        /// <see cref="UseWorld"/> switches it.</summary>
+        public static int ActiveWorldIndex => s_activeWorldIndex;
+
+        /// <summary>Points THE RIG at <paramref name="worldIndex"/>'s board (<see cref="RigBoardLibrary.ForWorld"/>)
+        /// — a no-op if it's already the active board. Forces a reload from Resources on the next
+        /// access when the resource actually changes; every existing level/unlock in
+        /// <see cref="RigState"/> is untouched here (the caller, <c>WeaponSystemState.ApplyWeaponCoreMorph</c>,
+        /// owns reconciling state across the switch).</summary>
+        public static void UseWorld(int worldIndex)
+        {
+            string path = RigBoardLibrary.ForWorld(worldIndex);
+            s_activeWorldIndex = worldIndex;
+            if (path == s_resourcePath) return;
+            s_resourcePath = path;
+            s_nodes = null;
+        }
 
         private static void EnsureLoaded()
         {
@@ -133,10 +152,10 @@ namespace MaxWorlds.Weapons
             s_fusions = new Dictionary<string, RigFusionDef>();
             s_allFusions = Array.Empty<RigFusionDef>();
 
-            TextAsset asset = Resources.Load<TextAsset>(ResourcePath);
+            TextAsset asset = Resources.Load<TextAsset>(s_resourcePath);
             if (asset == null)
             {
-                Debug.LogError($"[RigBoard] no data at Resources/{ResourcePath}.json");
+                Debug.LogError($"[RigBoard] no data at Resources/{s_resourcePath}.json");
                 return;
             }
 
@@ -228,8 +247,14 @@ namespace MaxWorlds.Weapons
             return s_fusions.TryGetValue(id, out def);
         }
 
-        /// <summary>Reloads from Resources on the next access — test isolation only (a live build
-        /// never needs this; the tree never changes at runtime).</summary>
-        public static void ResetForTests() => s_nodes = null;
+        /// <summary>Reloads from Resources on the next access, back to World 1's board — test isolation
+        /// only (a live build never needs this; MV-689 is the only thing that switches boards at
+        /// runtime, and always explicitly via <see cref="UseWorld"/>).</summary>
+        public static void ResetForTests()
+        {
+            s_resourcePath = RigBoardLibrary.ForWorld(0);
+            s_activeWorldIndex = 0;
+            s_nodes = null;
+        }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Save
 {
@@ -30,6 +31,19 @@ namespace MaxWorlds.Save
         /// <summary>Which world (<see cref="MaxWorlds.Arena.WorldLibrary.Keys"/>) this profile plays
         /// next, 0-based (MV-687). Advances by one on every Victory, clamped to the last world.</summary>
         public int WorldIndex;
+
+        /// <summary>Which primary this profile is currently equipped with (MV-689) — the RCDA until a
+        /// World 1 finale Weapon Core morph flips it to the LPPE for good. Mirrors
+        /// <see cref="WeaponCatalog.PrimaryKind"/> exactly so a save round-trips it with no converter.
+        /// A pre-existing save with <see cref="WorldIndex"/> &gt;= 1 but this still at
+        /// <see cref="WeaponCatalog.PrimaryKind.Rcda"/> is a save from before this field existed — one
+        /// whose morph never got the chance to persist.</summary>
+        public WeaponCatalog.PrimaryKind PrimaryKind = WeaponCatalog.PrimaryKind.Rcda;
+
+        /// <summary>True once a Weapon Core has been collected but THE RIG hasn't been opened yet to
+        /// play the morph (MV-689) — the persisted twin of <see cref="MaxWorlds.Weapons.PendingMorphingModule.WeaponCorePending"/>,
+        /// which lives only in memory and would otherwise lose the banked core across an app restart.</summary>
+        public bool WeaponCorePending;
 
         // --- Mid-run checkpoint (MV-557 schema; captured/restored for real as of MV-524 parts 2/3) ---
         // Written by SaveSystem.CaptureActiveCheckpoint (AreaAccumulationDirector.EnterArea and

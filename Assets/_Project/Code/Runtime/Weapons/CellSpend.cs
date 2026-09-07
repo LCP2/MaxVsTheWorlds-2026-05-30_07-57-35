@@ -48,10 +48,26 @@ namespace MaxWorlds.Weapons
         /// price and charging another).</summary>
         private static readonly Dictionary<string, int> s_flatNodeCost = new() { { "u_slt", SlotCostCells } };
 
+        /// <summary>MV-689: World 2's PRIMARY/SECONDARY nodes (the LPPE/Shoulder Rack boards) price
+        /// 25% above World 1's curve — ENERGY/MOVE/SUPPORT are untouched (same ids/costs in both
+        /// boards), so this only ever applies while <see cref="RigBoard.ActiveWorldIndex"/> is on a
+        /// World 2+ board AND <paramref name="id"/> resolves to one of those two families on THE
+        /// CURRENTLY ACTIVE board (never World 1's own PRIMARY/SECONDARY, even though some ids are
+        /// textually reused between the two files).</summary>
+        private const float World2PrimarySecondaryCostMultiplier = 1.25f;
+
+        private static float CostMultiplierFor(string id)
+        {
+            if (RigBoard.ActiveWorldIndex < 1) return 1f;
+            string category = RigBoard.Category(id);
+            return category == "PRIMARY" || category == "SECONDARY" ? World2PrimarySecondaryCostMultiplier : 1f;
+        }
+
         /// <summary>Cost to unlock <paramref name="id"/> with cells — <see cref="s_flatNodeCost"/>'s
-        /// price if it has one, else the global <see cref="UnlockCostCells"/>.</summary>
+        /// price if it has one, else the global <see cref="UnlockCostCells"/>, scaled by
+        /// <see cref="CostMultiplierFor"/>.</summary>
         public static int UnlockCostFor(string id) =>
-            s_flatNodeCost.TryGetValue(id, out int c) ? c : UnlockCostCells;
+            Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UnlockCostCells) * CostMultiplierFor(id));
 
         /// <summary>Cost to raise a node currently at <paramref name="level"/> by one level with cells —
         /// 5, 10, 15, 20, 20, 20... for levels 1..6 and beyond, escalating by the node's OWN level (a
@@ -65,9 +81,10 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Cost to raise <paramref name="id"/>, currently at <paramref name="level"/>, by one
         /// level with cells — <see cref="s_flatNodeCost"/>'s flat price if it has one, else the same
-        /// level-escalating <see cref="UpgradeCostFor(int)"/> every other node uses.</summary>
+        /// level-escalating <see cref="UpgradeCostFor(int)"/> every other node uses, scaled by
+        /// <see cref="CostMultiplierFor"/>.</summary>
         public static int UpgradeCostFor(string id, int level) =>
-            s_flatNodeCost.TryGetValue(id, out int c) ? c : UpgradeCostFor(level);
+            Mathf.RoundToInt((s_flatNodeCost.TryGetValue(id, out int c) ? c : UpgradeCostFor(level)) * CostMultiplierFor(id));
 
         /// <summary>Unlock <paramref name="id"/> for <see cref="UnlockCostCells"/> cells. Requires
         /// <see cref="RigState.IsCellUnlockable"/> (its category unlocked and, for a non-root node, its

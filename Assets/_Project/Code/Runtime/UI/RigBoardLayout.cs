@@ -77,7 +77,23 @@ namespace MaxWorlds.UI
     /// </summary>
     public static class RigBoardLayout
     {
-        private const string ResourcePath = "UI/rig_board";
+        private static string s_resourcePath = MaxWorlds.Weapons.RigBoardLibrary.ForWorld(0);
+
+        /// <summary>Points the UI-only geometry/colour/icon read at <paramref name="worldIndex"/>'s
+        /// board (MV-689), mirroring <see cref="MaxWorlds.Weapons.RigBoard.UseWorld"/> for the model
+        /// layer — kept as a SEPARATE switch (not driven by <c>RigBoard.UseWorld</c> itself) because
+        /// this class's own doc comment already established the two readers are deliberately
+        /// independent; a caller that switches the model board must switch this one too if it wants
+        /// the board it draws to match (<c>WeaponsScreen.RebuildBoard</c> does both). A no-op if
+        /// already on that board; forces a reload (standard and phone) otherwise.</summary>
+        public static void UseWorld(int worldIndex)
+        {
+            string path = MaxWorlds.Weapons.RigBoardLibrary.ForWorld(worldIndex);
+            if (path == s_resourcePath && s_loaded) return;
+            s_resourcePath = path;
+            s_loaded = false;
+            s_phoneLoaded = false;
+        }
 
         private static bool s_loaded;
         private static RigCategoryLayout[] s_categories = Array.Empty<RigCategoryLayout>();
@@ -189,10 +205,10 @@ namespace MaxWorlds.UI
             if (s_loaded) return;
             s_loaded = true;
 
-            TextAsset asset = Resources.Load<TextAsset>(ResourcePath);
+            TextAsset asset = Resources.Load<TextAsset>(s_resourcePath);
             if (asset == null)
             {
-                Debug.LogError($"[RigBoardLayout] no data at Resources/{ResourcePath}.json");
+                Debug.LogError($"[RigBoardLayout] no data at Resources/{s_resourcePath}.json");
                 return;
             }
 

@@ -30,7 +30,22 @@ namespace MaxWorlds.Weapons
         /// only by <see cref="UnlockCategory"/>.</summary>
         private static readonly HashSet<string> s_unlockedCategories = new HashSet<string>();
 
+        /// <summary>MV-689: true once a Weapon Core morph has swapped SECONDARY to a not-yet-revealed
+        /// weapon — see <see cref="SecondaryLocked"/>.</summary>
+        private static bool s_secondaryMysteryActive;
+
         static RigState() => ResetLevels();
+
+        /// <summary>MV-689: SECONDARY is technically UNLOCKED right after a Weapon Core morph (its root,
+        /// <c>s_rkt</c>, is immediately buyable — no shed draft needed), but reads as a mystery "?" on
+        /// the board until the player actually buys it, same as the Water Balloon/RCDA pairing was
+        /// revealed at run start rather than teased. Auto-clears the moment <c>s_rkt</c> reaches level 1;
+        /// never true for a run that hasn't morphed.</summary>
+        public static bool SecondaryLocked => s_secondaryMysteryActive && Level("s_rkt") < 1;
+
+        /// <summary>Arms <see cref="SecondaryLocked"/> — called only by
+        /// <c>WeaponSystemState.ApplyWeaponCoreMorph</c>, never directly.</summary>
+        public static void ActivateSecondaryMystery() => s_secondaryMysteryActive = true;
 
         /// <summary>Fired whenever a node's level changes (a part spend or a draft acquire), a category
         /// unlocks, or the state is reset.</summary>
@@ -200,6 +215,7 @@ namespace MaxWorlds.Weapons
         {
             s_levels.Clear();
             s_unlockedCategories.Clear();
+            s_secondaryMysteryActive = false;
             foreach (string id in RigBoard.AllIds)
             {
                 int start = RigBoard.StartLevel(id);

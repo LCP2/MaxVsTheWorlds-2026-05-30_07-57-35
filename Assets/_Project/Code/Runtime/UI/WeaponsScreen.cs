@@ -1134,6 +1134,34 @@ namespace MaxWorlds.UI
             v.PillBorder.color = DimIfUnlit(new Color(family.r, family.g, family.b, lit ? 0.95f : 0.3f), lit);
             v.PillText.color = DimIfUnlit(lit ? family : new Color(family.r, family.g, family.b, 0.7f), lit);
             v.Label.color = DimIfUnlit(new Color(ink.r, ink.g, ink.b, 0.62f), lit);
+            v.Label.text = CategoryHeaderText(cat.Id);
+        }
+
+        /// <summary>MV-689: SECONDARY's header text after a Weapon Core morph — "?" while
+        /// <see cref="RigState.SecondaryLocked"/> (the Shoulder Rack hasn't been bought into yet),
+        /// "SHOULDER RACK" once it has. Every other category (and SECONDARY on a run that never
+        /// morphed, still <see cref="SecondaryKind.WaterBalloon"/>) keeps the plain category id it has
+        /// always shown.</summary>
+        private static string CategoryHeaderText(string categoryId)
+        {
+            if (categoryId != "SECONDARY") return categoryId;
+            if (RigState.SecondaryLocked) return "?";
+            return WeaponSystemState.SecondaryKind == SecondaryKind.ShoulderRack ? "SHOULDER RACK" : categoryId;
+        }
+
+        /// <summary>MV-689: rebuilds the whole board from scratch against whichever world
+        /// <see cref="RigBoard.ActiveWorldIndex"/> currently reads — needed because a Weapon Core morph
+        /// changes PRIMARY/SECONDARY's own ability ids (not just their levels), so the node graph
+        /// <see cref="BuildBoardContent"/> already built for the old board has no entries for the new
+        /// ids at all. Mirrors the exact rebuild <see cref="ApplyBoardScale(float)"/> already does on a
+        /// phone/standard verdict change. Public: the ui-screens capture harness drives this directly
+        /// (no scene-level "world changed" event exists yet to call it automatically).</summary>
+        public void RebuildBoard()
+        {
+            RigBoardLayout.UseWorld(RigBoard.ActiveWorldIndex);
+            DestroyBoardContent();
+            BuildBoardContent();
+            RefreshBoardState();
         }
 
         /// <summary>MV-462 defect 3: multiplies <paramref name="c"/>'s alpha by

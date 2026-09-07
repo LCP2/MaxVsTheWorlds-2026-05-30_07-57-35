@@ -100,6 +100,7 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _supercellPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
         private readonly Stack<Pickup> _powerCellSecondaryPool = new Stack<Pickup>(8);
+        private readonly Stack<Pickup> _weaponCorePool = new Stack<Pickup>(1);
 
         /// <summary>Live power cells in spawn order, oldest first (MV-626). <see
         /// cref="RecycleOldestCellIfAtCap"/> needs O(1) oldest-lookup, and an ordinary walk-over
@@ -354,6 +355,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.Supercell => _supercellPool,
                 PickupKind.Device => _devicePool,
                 PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
+                PickupKind.WeaponCore => _weaponCorePool,
                 _ => _cellPool,
             };
             Pickup p = pool.Count > 0 ? pool.Pop() : Pickup.Create(kind);
@@ -517,6 +519,14 @@ namespace MaxWorlds.Pickups
                     HudSignals.EmitPickup(p.transform.position, "+1 POWER CELL",
                         MaxWorlds.VFX.WeaponPartArt.PowerCellSecondaryGlow);
                     break;
+                case PickupKind.WeaponCore:
+                    // MV-689/MV-698: World 1's finale drop. Same "banks, doesn't force-open THE RIG"
+                    // shape as PickupKind.Device above — the morph itself plays on THE RIG's next open
+                    // (WeaponSystemState.OpenWeaponCoreMorphIfPending).
+                    PendingMorphingModule.SetWeaponCore();
+                    HudSignals.EmitPickup(p.transform.position, "WEAPON CORE",
+                        MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
+                    break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
                     // own burst + "+10" flyup + readout count-up (HudSignals.EmitSupercellCollected) is
@@ -535,6 +545,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.Supercell => _supercellPool,
                 PickupKind.Device => _devicePool,
                 PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
+                PickupKind.WeaponCore => _weaponCorePool,
                 _ => _cellPool,
             };
             pool.Push(p);
