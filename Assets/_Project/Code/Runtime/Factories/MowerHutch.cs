@@ -95,6 +95,22 @@ namespace MaxWorlds.Factories
         private IDamageable _pursuitDamageable;
         private MaterialPropertyBlock _bodyMpb;
 
+        // --- MV-683: nothing bounded a pursuing hutch to the area it was authored inside, so it could
+        // walk straight through an open gate and out of its own room chasing Max — reading as "the shed
+        // vanished" (it hadn't died, it just relocated somewhere off-screen/behind a wall the flat
+        // LineOfSight raycast can't see around, even though the angled camera still can) and, once
+        // there, going unhittable the same way any robot behind real cover is: LineOfSight.Clear blocked
+        // by a wall standing between Max and it. SprayHit.InCone is explicitly planar (height ignored),
+        // so the hover height itself was never the cause of "no damage" — ruled out by inspection rather
+        // than assumed away. TakeDamage itself has no dependency on _mobilityState/_liftTimer/_pursuitTarget
+        // (its only gates are IsAlive and DamageRules.Applies), so AreaAccumulationDirector.RestoreArea
+        // never resetting those across a death+continue was never itself a damage-blocking bug — it only
+        // mattered because a hutch that had already wandered out of its area stayed wandered after the
+        // respawn too. Leashed here, it can no longer wander out in the first place, so there is nothing
+        // left for a death+continue to fail to reset. ---
+        private bool _hasAreaFootprint;
+        private Rect _areaFootprint;
+
         /// <summary>Counts down to this hutch's next contact-damage tick while pursuing (MV-618) —
         /// same "no free first hit" seeding as <see cref="RobotEnemy"/>'s own
         /// <c>_contactCooldownTimer</c>, on the same <see cref="RobotCompositionTuning.DefaultContactCooldown"/>
@@ -157,6 +173,18 @@ namespace MaxWorlds.Factories
             // MV-618: seeded full so the very first contact ever made isn't an instant free hit —
             // same convention RobotEnemy's own _contactCooldownTimer uses.
             _contactCooldownTimer = RobotCompositionTuning.DefaultContactCooldown;
+        }
+
+        /// <summary>Bounds a pursuing mobile shed to the area it was authored inside (MV-683), the same
+        /// <c>map.ZoneAt(e.x, e.z).Footprint</c> convention <see cref="MaxWorlds.Bosses.BigBermudaBoss.SetWakeArea"/>
+        /// already uses for a boss's wake area. Called by <see cref="MaxWorlds.Arena.Map.MapRuntime"/>
+        /// right after <see cref="ConfigureMobility"/> for a mobile shed; a hutch this is never called on
+        /// (a static shed, or a test fixture driving <see cref="TickMobility"/> directly) is never
+        /// clamped. Public so an EditMode test can drive it directly, same reasoning as <see cref="Build"/>.</summary>
+        public void SetAreaFootprint(Rect footprint)
+        {
+            _areaFootprint = footprint;
+            _hasAreaFootprint = true;
         }
 
         private void Awake() => Build();
@@ -332,6 +360,24 @@ namespace MaxWorlds.Factories
                     TickPursuit(dt, targetPosition, target);
                     break;
             }
+
+            // MV-683: applied after every state's own movement (standoff-close AND hutch-to-hutch
+            // separation both call MoveBody above) rather than inside MoveBody itself — MoveBody has no
+            // opinion on area bounds, only on not tunnelling through solid geometry.
+            ClampToArea();
+        }
+
+        /// <summary>MV-683's leash: holds this hutch's X/Z inside the area it was authored inside
+        /// (<see cref="SetAreaFootprint"/>), the one thing real wall collision (<see cref="MoveBody"/>'s
+        /// <see cref="CharacterControllerMotion.SafeMove"/>) does NOT stop it walking through — an open
+        /// gate's doorway. A no-op with no footprint set (<see cref="_hasAreaFootprint"/> false).</summary>
+        private void ClampToArea()
+        {
+            if (!_hasAreaFootprint) return;
+            Vector3 p = transform.position;
+            float x = Mathf.Clamp(p.x, _areaFootprint.xMin, _areaFootprint.xMax);
+            float z = Mathf.Clamp(p.z, _areaFootprint.yMin, _areaFootprint.yMax);
+            if (x != p.x || z != p.z) transform.position = new Vector3(x, p.y, z);
         }
 
         /// <summary>Grounded's own exit condition (MV-548 state table): the area has to be ACTIVE —
