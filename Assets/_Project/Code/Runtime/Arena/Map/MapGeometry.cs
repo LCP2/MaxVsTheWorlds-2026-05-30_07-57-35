@@ -95,6 +95,57 @@ namespace MaxWorlds.Arena
         public static bool Same(float a, float b) => Mathf.Abs(a - b) <= Epsilon;
     }
 
+    /// <summary>A walkable deck's resolved top-collider box (MV-692) — <see cref="Center"/>.y already
+    /// accounts for <see cref="Size"/>.y, so <see cref="TopY"/> is exactly the deck's authored
+    /// elevation, never the box's centre.</summary>
+    public readonly struct DeckSlab
+    {
+        public readonly string Id;
+        public readonly Vector3 Center;
+        public readonly Vector3 Size;
+
+        public DeckSlab(string id, Vector3 center, Vector3 size) { Id = id; Center = center; Size = size; }
+
+        public float TopY => Center.y + Size.y * 0.5f;
+    }
+
+    /// <summary>A ramp's resolved slope (MV-692): the floor-level end and the deck-level end it climbs
+    /// to. <see cref="BottomCenter"/>.y is always 0 (the floor) and <see cref="TopCenter"/>.y is always
+    /// the deck's height — the "top surface spans y 0 → height across its length" the ticket's AC
+    /// asks for is exactly these two points.</summary>
+    public readonly struct RampSlab
+    {
+        public readonly string Id;
+        public readonly Vector3 BottomCenter;
+        public readonly Vector3 TopCenter;
+
+        /// <summary>The ramp's span across the slope (perpendicular to the climb direction).</summary>
+        public readonly float Width;
+        public readonly Wall ClimbsToward;
+
+        public RampSlab(string id, Vector3 bottomCenter, Vector3 topCenter, float width, Wall climbsToward)
+        {
+            Id = id; BottomCenter = bottomCenter; TopCenter = topCenter; Width = width; ClimbsToward = climbsToward;
+        }
+    }
+
+    /// <summary>A sludge slow-zone's resolved footprint (MV-692) — the movement hook every
+    /// <see cref="MaxWorlds.Player.PlayerController"/> and <see cref="MaxWorlds.Enemies.RobotEnemy"/>
+    /// consults (via <see cref="MapSlowZones"/>) to know how much to slow down.</summary>
+    public readonly struct SlowZoneVolume
+    {
+        public readonly string Id;
+        public readonly Rect Footprint;
+        public readonly float SpeedMultiplier;
+
+        public SlowZoneVolume(string id, Rect footprint, float speedMultiplier)
+        {
+            Id = id; Footprint = footprint; SpeedMultiplier = speedMultiplier;
+        }
+
+        public bool Contains(float x, float z) => Footprint.Contains(new Vector2(x, z));
+    }
+
     /// <summary>
     /// Turns a <see cref="MapData"/> into walls and floor. Pure maths — no GameObjects — so a map's
     /// shape is unit-testable without a scene, which is what lets a bad layout fail a test instead of
@@ -144,6 +195,113 @@ namespace MaxWorlds.Arena
             return new FloorSlab(
                 new Vector3(b.center.x, -FloorThickness * 0.5f, b.center.y),
                 new Vector3(b.width + m * 2f, FloorThickness, b.height + m * 2f));
+        }
+
+        /// <summary>Thickness of a deck's top-collider slab (MV-692) — thin enough that the deck reads
+        /// as a grated surface, not a second floor; the underside stays open because nothing else about
+        /// a deck builds a collider below this.</summary>
+        public const float DeckThickness = 0.15f;
+
+        /// <summary>Every deck's resolved top-collider box (MV-692).</summary>
+        public static List<DeckSlab> Decks(MapData map)
+        {
+            var result = new List<DeckSlab>();
+            if (map?.entities == null) return result;
+
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || e.Kind != EntityKind.Deck) continue;
+                float topY = e.height;
+                var center = new Vector3(e.x, topY - DeckThickness * 0.5f, e.z);
+                var size = new Vector3(e.width, DeckThickness, e.depth);
+                result.Add(new DeckSlab(e.id, center, size));
+            }
+            return result;
+        }
+
+        /// <summary>Every ramp's resolved slope (MV-692), oriented by its authored
+        /// <see cref="MapEntity.facing"/> — the wall of the ramp rect that abuts the deck it climbs to.
+        /// A ramp with no recognised facing (should never happen past <see cref="MapValidation"/>) is
+        /// skipped rather than guessed at.</summary>
+        public static List<RampSlab> Ramps(MapData map)
+        {
+            var result = new List<RampSlab>();
+            if (map?.entities == null) return result;
+
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || e.Kind != EntityKind.Ramp) continue;
+                if (!WallEnums.TryParse(e.facing, out Wall facing)) continue;
+
+                float top = e.height;
+                Vector3 bottom, topCenter;
+                float width;
+
+                switch (facing)
+                {
+                    case Wall.N:
+                        topCenter = new Vector3(e.x, top, e.z + e.depth * 0.5f);
+                        bottom = new Vector3(e.x, 0f, e.z - e.depth * 0.5f);
+                        width = e.width;
+                        break;
+                    case Wall.S:
+                        topCenter = new Vector3(e.x, top, e.z - e.depth * 0.5f);
+                        bottom = new Vector3(e.x, 0f, e.z + e.depth * 0.5f);
+                        width = e.width;
+                        break;
+                    case Wall.E:
+                        topCenter = new Vector3(e.x + e.width * 0.5f, top, e.z);
+                        bottom = new Vector3(e.x - e.width * 0.5f, 0f, e.z);
+                        width = e.depth;
+                        break;
+                    default: // Wall.W
+                        topCenter = new Vector3(e.x - e.width * 0.5f, top, e.z);
+                        bottom = new Vector3(e.x + e.width * 0.5f, 0f, e.z);
+                        width = e.depth;
+                        break;
+                }
+
+                result.Add(new RampSlab(e.id, bottom, topCenter, width, facing));
+            }
+            return result;
+        }
+
+        /// <summary>Every sludge slow-zone's resolved footprint (MV-692).</summary>
+        public static List<SlowZoneVolume> SlowZones(MapData map)
+        {
+            var result = new List<SlowZoneVolume>();
+            if (map?.entities == null) return result;
+
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || e.Kind != EntityKind.Sludge) continue;
+                var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+                result.Add(new SlowZoneVolume(e.id, footprint, e.SludgeSpeedMultiplier));
+            }
+            return result;
+        }
+
+        /// <summary>The movement hook (MV-692): 1 (no effect) unless <paramref name="x"/>/<paramref name="z"/>
+        /// falls inside a sludge rect, in which case the SLOWEST rect covering the point wins. Null
+        /// <paramref name="map"/> (no level loaded) reads as 1 — a missing map must never stop a mover.
+        ///
+        /// Walks <c>map.entities</c> directly rather than through <see cref="SlowZones"/> — every mover
+        /// samples this once a frame (<see cref="MapSlowZones"/>), and <see cref="SlowZones"/>'s List
+        /// allocation on every one of those calls is exactly the per-frame GC cost this codebase has
+        /// spent several tickets (MV-611 among them) removing from a robot's hot path.</summary>
+        public static float SpeedMultiplierAt(MapData map, float x, float z)
+        {
+            float multiplier = 1f;
+            if (map?.entities == null) return multiplier;
+
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || e.Kind != EntityKind.Sludge) continue;
+                var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+                if (footprint.Contains(new Vector2(x, z)))
+                    multiplier = Mathf.Min(multiplier, e.SludgeSpeedMultiplier);
+            }
+            return multiplier;
         }
 
         /// <summary>Every wall the map needs, doorways already cut.</summary>

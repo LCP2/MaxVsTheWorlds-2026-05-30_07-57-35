@@ -51,7 +51,8 @@ namespace MaxWorlds.Enemies
         /// stamped in <see cref="Apply"/>, so dragging the slider retimes the robots already on the
         /// field — the ones you're watching — instead of only the next wave.
         /// </summary>
-        private float EffectiveMoveSpeed => DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed);
+        private float EffectiveMoveSpeed =>
+            DevTuning.Or(DevTuning.RobotMoveSpeed, moveSpeed) * MapSlowZones.Instance.SpeedMultiplierAt(transform.position);
         [SerializeField] private float gravity = 20f;
 
         /// <summary>Minimum spacing this robot keeps from other active robots while chasing (MV-321),

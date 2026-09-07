@@ -1,9 +1,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Bosses;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
+using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Arena
@@ -145,8 +147,171 @@ namespace MaxWorlds.Arena
                         // factory death here to hook it off.
                         PickupDirector.EnsureInstalled().PlacePartsCache(e.GroundedCenter);
                         break;
+
+                    case EntityKind.Sludge:
+                        BuildSludge(root, e);
+                        break;
+
+                    case EntityKind.Deck:
+                        BuildDeck(map, root, e);
+                        break;
+
+                    case EntityKind.Ramp:
+                        BuildRamp(map, root, e);
+                        break;
                 }
             }
+        }
+
+        /// <summary>Acid-green (MV-692) — flat colour only, per the ticket's own scope; the [ART]
+        /// follow-up gives it a flowing UV scroll.</summary>
+        private static readonly Color SludgeColor = new Color(0.55f, 0.85f, 0.15f);
+
+        /// <summary>Flat grate grey (MV-692) — same "flat colour is acceptable" scope as
+        /// <see cref="SludgeColor"/>.</summary>
+        private static readonly Color DeckGrateColor = new Color(0.42f, 0.44f, 0.47f);
+
+        /// <summary>Hazard-yellow kerb rail (MV-692).</summary>
+        private static readonly Color DeckRailColor = new Color(0.85f, 0.65f, 0.15f);
+
+        private const float SludgeThickness = 0.05f;
+        private const float DeckRailHeight = 1.5f;
+        private const float DeckRailThickness = 0.08f;
+        private const float RampThickness = 0.15f;
+
+        /// <summary>A sludge slow-zone's ground overlay (MV-692) — visual only, no collider: a mover's
+        /// slow is decided by <see cref="MapSlowZones"/> sampling its footprint, not by a physical
+        /// trigger, so nothing here needs to catch anything.</summary>
+        private static void BuildSludge(Transform root, MapEntity e)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
+                new Vector3(e.x, SludgeThickness * 0.5f, e.z), new Vector3(e.width, SludgeThickness, e.depth));
+            StripCollider(body);
+            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Prop, SludgeColor));
+            body.isStatic = true;
+        }
+
+        /// <summary>A deck's walkable top slab plus its kerb rails (MV-692) — the rail on whichever
+        /// edge a ramp actually climbs into is skipped, so the mouth stays open. Carries
+        /// <see cref="DeckVisibility"/> so the grate/rails fade out from directly under Max
+        /// (readability rule, change item 5).</summary>
+        private static void BuildDeck(MapData map, Transform root, MapEntity e)
+        {
+            DeckSlab slab = default;
+            bool found = false;
+            foreach (DeckSlab d in MapGeometry.Decks(map))
+                if (d.Id == e.id) { slab = d; found = true; break; }
+            if (!found) return;
+
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, slab.Center, slab.Size);
+            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
+            body.isStatic = false; // MV-692: DeckVisibility repaints it every frame it's near Max
+
+            HashSet<Wall> mouths = DeckMouthWalls(map, e);
+            var rails = new List<GameObject>(4);
+            foreach (Wall wall in AllWalls)
+            {
+                if (mouths.Contains(wall)) continue;
+                rails.Add(BuildDeckRail(root, e, wall, slab.TopY));
+            }
+
+            var footprint = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+            body.AddComponent<DeckVisibility>().Configure(body.GetComponent<Renderer>(), rails.ToArray(), footprint, slab.TopY);
+        }
+
+        private static readonly Wall[] AllWalls = { Wall.N, Wall.E, Wall.S, Wall.W };
+
+        /// <summary>Which of this deck's own walls a ramp actually climbs into (MV-692) — the mirror of
+        /// the ramp's own <see cref="RampSlab.ClimbsToward"/>, found by matching each ramp's resolved
+        /// top point against this deck's footprint.</summary>
+        private static HashSet<Wall> DeckMouthWalls(MapData map, MapEntity deck)
+        {
+            var mouths = new HashSet<Wall>();
+            const float tolerance = 0.05f;
+            var expanded = new Rect(deck.x - deck.width * 0.5f - tolerance, deck.z - deck.depth * 0.5f - tolerance,
+                deck.width + tolerance * 2f, deck.depth + tolerance * 2f);
+
+            foreach (RampSlab ramp in MapGeometry.Ramps(map))
+            {
+                var top = new Vector2(ramp.TopCenter.x, ramp.TopCenter.z);
+                if (expanded.Contains(top)) mouths.Add(WallEnums.Opposite(ramp.ClimbsToward));
+            }
+            return mouths;
+        }
+
+        private static GameObject BuildDeckRail(Transform root, MapEntity deck, Wall wall, float topY)
+        {
+            float halfW = deck.width * 0.5f, halfD = deck.depth * 0.5f;
+            Vector3 center;
+            Vector3 size;
+            switch (wall)
+            {
+                case Wall.N:
+                    center = new Vector3(deck.x, topY + DeckRailHeight * 0.5f, deck.z + halfD);
+                    size = new Vector3(deck.width, DeckRailHeight, DeckRailThickness);
+                    break;
+                case Wall.S:
+                    center = new Vector3(deck.x, topY + DeckRailHeight * 0.5f, deck.z - halfD);
+                    size = new Vector3(deck.width, DeckRailHeight, DeckRailThickness);
+                    break;
+                case Wall.E:
+                    center = new Vector3(deck.x + halfW, topY + DeckRailHeight * 0.5f, deck.z);
+                    size = new Vector3(DeckRailThickness, DeckRailHeight, deck.depth);
+                    break;
+                default: // Wall.W
+                    center = new Vector3(deck.x - halfW, topY + DeckRailHeight * 0.5f, deck.z);
+                    size = new Vector3(DeckRailThickness, DeckRailHeight, deck.depth);
+                    break;
+            }
+
+            GameObject rail = Spawn(root, $"{deck.id}_rail_{wall}", PrimitiveType.Cube, center, size);
+            StripCollider(rail); // MV-692: visual only, never a collider
+            Tint(rail, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckRailColor));
+            rail.isStatic = true;
+            return rail;
+        }
+
+        /// <summary>A ramp's walkable slope (MV-692) — one box, tilted so its top face runs continuously
+        /// from the floor to the deck it climbs to; Unity's own <c>CharacterController</c> slope-climb
+        /// walks it without any code change on either mover's side.</summary>
+        private static void BuildRamp(MapData map, Transform root, MapEntity e)
+        {
+            RampSlab slab = default;
+            bool found = false;
+            foreach (RampSlab r in MapGeometry.Ramps(map))
+                if (r.Id == e.id) { slab = r; found = true; break; }
+            if (!found) return; // no recognised facing — MapValidation should never let this through
+
+            Vector3 bottom = slab.BottomCenter, top = slab.TopCenter;
+            Vector3 mid = (bottom + top) * 0.5f;
+            Vector3 along = top - bottom;
+            float slopeLength = along.magnitude;
+            Quaternion rot = along.sqrMagnitude > 0.0001f
+                ? Quaternion.LookRotation(along.normalized, Vector3.up)
+                : Quaternion.identity;
+
+            GameObject body = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            body.name = e.id;
+            body.transform.SetParent(root, false);
+            body.transform.localPosition = mid;
+            body.transform.localRotation = rot;
+            body.transform.localScale = new Vector3(slab.Width, RampThickness, slopeLength);
+            Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
+            body.isStatic = true;
+        }
+
+        private static void StripCollider(GameObject go)
+        {
+            var collider = go.GetComponent<Collider>();
+            if (collider != null) Object.DestroyImmediate(collider);
+        }
+
+        private static void Tint(GameObject go, Material material)
+        {
+            if (material == null) return;
+            var renderer = go.GetComponent<Renderer>();
+            if (renderer != null) renderer.sharedMaterial = material;
+            if (go.GetComponent<KeepsOwnMaterial>() == null) go.AddComponent<KeepsOwnMaterial>();
         }
 
         private static CoverPiece BuildCover(Transform root, MapEntity e)

@@ -21,6 +21,19 @@ namespace MaxWorlds.Arena
     /// </summary>
     public static class WorldMapLoader
     {
+        /// <summary>A shed's built footprint, square, in metres (MV-541 chose the number; MV-692 gave
+        /// it a shared name, matching the literal <see cref="TryLoad"/> stamps on a shed's own
+        /// <see cref="MapEntity"/> below, so <see cref="MapValidation"/>'s deck-overlap check can never
+        /// disagree with what actually gets built).</summary>
+        public const float ShedFootprint = 2.25f;
+
+        /// <summary>A shed's built height, in metres (MV-692 shared const — see <see cref="ShedFootprint"/>).</summary>
+        public const float ShedHeight = 1.5f;
+
+        /// <summary>A boss's built height, in metres, regardless of its authored footprint (MV-692
+        /// shared const — see <see cref="ShedFootprint"/>).</summary>
+        public const float BossHeight = 3f;
+
         /// <summary>Parse a world-config JSON string and load it. The single entry point ticket 4
         /// (MV-270) is expected to call once <c>world1_config.json</c> is wired up as a real map.</summary>
         public static bool TryLoadJson(string json, out MapData map, out string reason)
@@ -141,9 +154,9 @@ namespace MaxWorlds.Arena
                         kind = "factory",
                         x = s.x,
                         z = s.z,
-                        width = 2.25f,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
-                        height = 1.5f,  // MV-541: 25% smaller (0.75x the pre-541 2 m body)
-                        depth = 2.25f,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
+                        width = ShedFootprint,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
+                        height = ShedHeight,    // MV-541: 25% smaller (0.75x the pre-541 2 m body)
+                        depth = ShedFootprint,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
                         dressing = "shed",
                         mobile = s.mobile,  // MV-548
                     });
@@ -206,6 +219,98 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // Sludge/decks/ramps (MV-692) — World 2's Stormdrain floor geometry. Rects are authored
+            // area-local (WorldArea.WorldRectOf resolves them, same MIN-corner convention as an area's
+            // own origin/size); MapValidation.ValidateWorldConfig has already proven every rect sits
+            // inside its own area and every ramp touches exactly one deck, so building them here is
+            // just resolving world coordinates, never re-checking correctness.
+            float sludgeSpeedMultiplier = cfg.dials?.sludgeSpeedMultiplier ?? 0.6f;
+            float defaultDeckHeight = cfg.dials?.deckHeight ?? 2.5f;
+
+            foreach (WorldArea a in cfg.areas)
+            {
+                foreach (WorldSludge s in a.sludge ?? Array.Empty<WorldSludge>())
+                {
+                    if (s == null) continue;
+                    Rect rect = a.WorldRectOf(s.x, s.z, s.w, s.d);
+                    entities.Add(new MapEntity
+                    {
+                        id = s.id,
+                        kind = "sludge",
+                        x = rect.center.x,
+                        z = rect.center.y,
+                        width = rect.width,
+                        depth = rect.height,
+                        // SludgeSpeedMultiplier reads this back off the otherwise-unused height field.
+                        height = sludgeSpeedMultiplier,
+                    });
+                }
+
+                var deckRects = new List<(WorldDeck deck, Rect rect, float height)>();
+                foreach (WorldDeck d in a.decks ?? Array.Empty<WorldDeck>())
+                {
+                    if (d == null) continue;
+                    Rect rect = a.WorldRectOf(d.x, d.z, d.w, d.d);
+                    float height = d.height > 0f ? d.height : defaultDeckHeight;
+                    deckRects.Add((d, rect, height));
+
+                    entities.Add(new MapEntity
+                    {
+                        id = d.id,
+                        kind = "deck",
+                        x = rect.center.x,
+                        z = rect.center.y,
+                        width = rect.width,
+                        depth = rect.height,
+                        height = height,
+                    });
+                }
+
+                foreach (WorldRamp r in a.ramps ?? Array.Empty<WorldRamp>())
+                {
+                    if (r == null) continue;
+                    Rect rampRect = a.WorldRectOf(r.x, r.z, r.w, r.d);
+
+                    Wall? facing = null;
+                    float climbHeight = defaultDeckHeight;
+                    foreach (var (_, deckRect, deckHeight) in deckRects)
+                    {
+                        Wall? touch = RampFacing(rampRect, deckRect);
+                        if (touch == null) continue;
+                        facing = touch;
+                        climbHeight = deckHeight;
+                        break;
+                    }
+
+                    entities.Add(new MapEntity
+                    {
+                        id = r.id,
+                        kind = "ramp",
+                        x = rampRect.center.x,
+                        z = rampRect.center.y,
+                        width = rampRect.width,
+                        depth = rampRect.height,
+                        height = climbHeight,
+                        facing = facing?.ToString() ?? "",
+                    });
+                }
+
+                // MV-692 rule 4(c): a deck with no ramp reaching it is a validation WARNING, not an
+                // error, until deck gates ship (MV-697) — logged here rather than failing TryLoad.
+                foreach (var (deck, deckRect, _) in deckRects)
+                {
+                    bool reached = false;
+                    foreach (WorldRamp r in a.ramps ?? Array.Empty<WorldRamp>())
+                    {
+                        if (r == null) continue;
+                        if (RampFacing(a.WorldRectOf(r.x, r.z, r.w, r.d), deckRect) != null) { reached = true; break; }
+                    }
+                    if (!reached)
+                        Debug.LogWarning($"[WorldMapLoader] area '{a.id}': deck '{deck.id}' has no ramp reaching " +
+                                          "it — until deck gates ship (MV-697) it may be unreachable.");
+                }
+            }
+
             // The boss(es), built the same way MV-542 anticipated a 2+ boss fight would need
             // (BigBermudaBoss.FitColliderToRenderedBody's own comment). MV-561: one entity per
             // resolved boss (WorldArea.Bosses()), not one per area — an area can carry several.
@@ -227,7 +332,7 @@ namespace MaxWorlds.Arena
                         x = center.x,
                         z = center.y,
                         width = 3.5f,
-                        height = 3f,
+                        height = BossHeight,
                         depth = 3.5f,
                     });
                     continue;
@@ -243,7 +348,7 @@ namespace MaxWorlds.Arena
                         x = b.x,
                         z = b.z,
                         width = b.size?.w ?? 3.5f,
-                        height = 3f,
+                        height = BossHeight,
                         depth = b.size?.d ?? 3.5f,
                     });
                 }
@@ -350,8 +455,29 @@ namespace MaxWorlds.Arena
         {
             if (a.IsEntryRole) return "entry";
             if (a.IsBossRole) return "boss";
+            if (a.IsBridgeRole) return "bridge";
             return "open";
         }
+
+        /// <summary>Which wall of <paramref name="rampRect"/> abuts <paramref name="deckRect"/>, or null
+        /// if they don't touch — the same adjacency <see cref="MapValidation"/> already required to be
+        /// unique before this ever runs, resolved here into the direction <see cref="MapGeometry.Ramps"/>
+        /// climbs (MV-692).</summary>
+        private static Wall? RampFacing(Rect rampRect, Rect deckRect)
+        {
+            if (Geo.Same(rampRect.yMax, deckRect.yMin) && RangesTouch(rampRect.xMin, rampRect.xMax, deckRect.xMin, deckRect.xMax))
+                return Wall.N;
+            if (Geo.Same(rampRect.yMin, deckRect.yMax) && RangesTouch(rampRect.xMin, rampRect.xMax, deckRect.xMin, deckRect.xMax))
+                return Wall.S;
+            if (Geo.Same(rampRect.xMax, deckRect.xMin) && RangesTouch(rampRect.yMin, rampRect.yMax, deckRect.yMin, deckRect.yMax))
+                return Wall.E;
+            if (Geo.Same(rampRect.xMin, deckRect.xMax) && RangesTouch(rampRect.yMin, rampRect.yMax, deckRect.yMin, deckRect.yMax))
+                return Wall.W;
+            return null;
+        }
+
+        private static bool RangesTouch(float minA, float maxA, float minB, float maxB) =>
+            minA < maxB - Geo.Epsilon && maxA > minB + Geo.Epsilon;
 
         private static WorldArea FindEntry(WorldConfig cfg)
         {
