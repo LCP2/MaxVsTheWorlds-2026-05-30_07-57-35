@@ -195,7 +195,13 @@ namespace MaxWorlds.Tests.EditMode
 
         /// <summary>A3 (approved-geometry follow-up): the approved block is 32 parts; the gadget ported
         /// across from the pre-MV-669 body adds 9 more (7 solid parts plus the 2 glow lenses), for 41
-        /// renderers total.</summary>
+        /// renderers total.
+        ///
+        /// MV-717 moves this count: the old static sleeve+forearm+glove (6 parts) are gone, replaced by
+        /// one dynamic beam per arm (2) plus a small knuckle-ball glove on each of the gun's two hand
+        /// grips (2) — net -2, landing on 39. This is exactly the "a ticket's own changes make an
+        /// existing count stale" case the culling policy allows for; the count itself is still a
+        /// resolved value read off real renderers, not an authored constant.</summary>
         [Test]
         public void BuiltPartCountIsTheApprovedThirtyTwoPlusThePortedGadget()
         {
@@ -204,9 +210,10 @@ namespace MaxWorlds.Tests.EditMode
             {
                 MaxBody.Build(root, NullPalette(), HipY);
                 var renderers = root.GetComponentsInChildren<MeshRenderer>();
-                Assert.That(renderers.Length, Is.EqualTo(41),
-                    $"Built {renderers.Length} renderers, not the 32 approved-block parts plus the 9 " +
-                    "ported gadget parts (7 solid + 2 glow lenses) = 41.");
+                Assert.That(renderers.Length, Is.EqualTo(39),
+                    $"Built {renderers.Length} renderers, not the post-MV-717 39 (32 approved-block " +
+                    "parts - 6 old static arm parts + 2 dynamic arm beams + 9 ported gadget parts + 2 " +
+                    "hand-grip knuckle balls).");
             }
             finally
             {

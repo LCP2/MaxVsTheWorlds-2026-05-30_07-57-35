@@ -186,6 +186,10 @@ namespace MaxWorlds.VFX
         private const float ShoulderX = 0.30f;
         private const float SleeveWidth = 0.155f;
 
+        /// <summary>MV-717: how far a relaxed arm hangs down from the shoulder while not aiming —
+        /// roughly to hip height. See <see cref="PoseArms"/> for why this has to be nonzero.</summary>
+        private const float ArmHangDrop = 0.45f;
+
         /// <summary>
         /// MV-669 (Lee: "10% bigger"), then reverted: applied uniformly at <see cref="_body"/> — the
         /// rig's model root, which sits at ground level (<c>Pivot("Body", transform, Vector3.zero)</c>)
@@ -305,6 +309,35 @@ namespace MaxWorlds.VFX
         [Tooltip("How far the gadget kicks back while the water is actually flowing, in metres.")]
         [SerializeField] private float recoil = 0.022f;
 
+        [Tooltip("MV-717: how long the anticipation dip lasts before the raise, in seconds. A prop " +
+                 "that snaps straight to its target reads as teleporting onto a socket; a dip first " +
+                 "reads as hefting it.")]
+        [SerializeField] private float anticipationDuration = 0.06f;
+
+        [Tooltip("How far the gadget dips down during the anticipation beat, in metres.")]
+        [SerializeField] private float anticipationDip = 0.02f;
+
+        [Header("Arms (MV-717)")]
+        [Tooltip("How far the arms swing opposite the legs while not aiming, in metres at the hand. " +
+                 "Smaller than the legs' own swing — this is a kid's arm, not a sprinter's.")]
+        [SerializeField] private float armSwingAmplitude = 0.10f;
+
+        [Header("Idle (MV-717)")]
+        [Tooltip("How fast he breathes while standing still and not aiming, in Hz. He must never be " +
+                 "perfectly frozen.")]
+        [SerializeField] private float idleBobRate = 0.4f;
+
+        [Tooltip("How far he bobs while breathing, in metres.")]
+        [SerializeField] private float idleBobAmount = 0.005f;
+
+        [Tooltip("How fast his head catches up after his body turns, in Hz-like terms — higher is " +
+                 "snappier. Picked so the catch-up reads as roughly 0.12 s.")]
+        [SerializeField] private float headCatchUp = 8f;
+
+        [Tooltip("How far he rolls toward the planted foot on each footfall, in degrees. Kept small — " +
+                 "this is a weight shift, not a stagger.")]
+        [SerializeField] private float weightShiftAngle = 2.5f;
+
         // ---------------------------------------------------------------- state
 
         private PlayerController _max;
@@ -317,7 +350,22 @@ namespace MaxWorlds.VFX
         private Transform _gun;
         private Transform _armL, _armR;
         private Transform _handL, _handR;
+        private Transform _head;
         private readonly Transform[] _hips = new Transform[2];
+
+        /// <summary>MV-717: decays from 1 to 0 over <see cref="anticipationDuration"/> once the aim
+        /// stick is pushed — see <see cref="TickGadget"/>.</summary>
+        private float _anticipation;
+        private bool _wasAiming;
+
+        /// <summary>MV-717: the breathing idle's own phase. Advances every tick regardless of whether
+        /// he is actually idle, so he is never caught mid-reset — only the AMPLITUDE fades him out
+        /// while he is moving or aiming (see <see cref="TickRun"/>).</summary>
+        private float _idlePhase;
+
+        /// <summary>MV-717: the head-lag's own smoothed copy of <see cref="Transform.eulerAngles"/>'s
+        /// Y — see <see cref="TickHeadLag"/>.</summary>
+        private float _laggedFacingYaw;
 
         /// <summary>The gadget glow (MV-451) — the two emissive parts <see cref="MaxBody.Build"/>
         /// returns. The only cool light in the whole cast; see <see cref="Water"/>.</summary>
@@ -503,12 +551,14 @@ namespace MaxWorlds.VFX
         /// part. <see cref="_body"/> (lean) and <see cref="_torso"/> (bob) stay — the whole mesh hangs
         /// under a "Feet" pivot at the torso's own hip offset, so <c>MaxBody</c>'s "feet at y = 0"
         /// coordinates land on the ground exactly the way <see cref="RobotBodies"/> does it for the
-        /// robots. Of the old per-part hierarchy's rig points, the gun, the arms, the hair and charm
-        /// pivots are still gone (flagged for MV-453, which reviewed the static pose and left them so —
-        /// see its ticket comment); <see cref="_hips"/> is not, as of MV-474: <c>MaxBody.Build</c> now
-        /// hands back two hip pivots with the boot geometry hanging off them, so <c>TickRun</c>'s
-        /// stride rotation — which kept writing <c>_hips[i].localRotation</c> the whole time, into a
-        /// null-guarded no-op — has something to turn again.
+        /// robots. <see cref="_hips"/> came back at MV-474: <c>MaxBody.Build</c> hands back two hip
+        /// pivots with the boot geometry hanging off them, so <c>TickRun</c>'s stride rotation — which
+        /// kept writing <c>_hips[i].localRotation</c> the whole time, into a null-guarded no-op — has
+        /// something to turn again. MV-717 brings back the rest of what MV-451 dropped: the gun, both
+        /// arms, both hand grips and the head all get wired up below, the same "hand back a rig point,
+        /// keep everything else static" pattern the hips already proved out. The hair and charm pivots
+        /// (<see cref="_hairPivot"/>/<see cref="_charmPivot"/>) are still gone — out of MV-717's scope,
+        /// since the body doc names no static geometry to hang them off.
         /// </summary>
         private void Build()
         {
@@ -530,6 +580,42 @@ namespace MaxWorlds.VFX
             _lppeGlow = body.LppeGlow;
             _rackMount = body.RackMount;
             _rackTubeGlow = body.RackTubeGlow;
+
+            // MV-717: wire up the moving parts MV-451's fused mesh dropped (see the class doc's "HE
+            // CARRIES THE GADGET" section). All of this happens here, in Build, still inside Awake and
+            // before torso or feet have ever been rotated by a tick — the worldPositionStays reparents
+            // below only resolve to the right numbers while that holds.
+            //
+            // The gun: MaxBody handed back "Gun" sitting at feet's own origin, wrapping the gadget at
+            // its current (correct, already-shipped) appearance. A pivot placed at GunHipPos/GunHipRot
+            // — both already TORSO-space constants — absorbs it with worldPositionStays, so Unity
+            // solves "what local offset keeps this rendering exactly where it already is" once, and
+            // the result becomes this pivot's own local pose. Hoisting that pivot onto _torso the same
+            // way then resolves it to GunHipPos/GunHipRot exactly, because _torso is still at identity
+            // rotation at this point in Awake — so TickGadget's very first frame (_aim = 0) sets
+            // _gun's transform right back to the pose it is already sitting at. No visual jump.
+            var gunRestPivot = Pivot("GunRest", feet, GunHipPos + new Vector3(0f, HipY, 0f));
+            gunRestPivot.localRotation = Quaternion.Euler(GunHipRot);
+            body.Gun.SetParent(gunRestPivot, worldPositionStays: true);
+            gunRestPivot.SetParent(_torso, worldPositionStays: true);
+            _gun = gunRestPivot;
+
+            // The hands: fixed grip points MaxBody placed on the gun itself, so they move with it for
+            // free — PoseArms only ever reads their world position.
+            _handL = body.HandL;
+            _handR = body.HandR;
+
+            // The arms: brand-new dynamic sleeves, nothing to preserve visually — straight under the
+            // torso, which is the space PoseArm's own math already assumes.
+            _armL = body.ArmL;
+            _armL.SetParent(_torso, worldPositionStays: false);
+            _armR = body.ArmR;
+            _armR.SetParent(_torso, worldPositionStays: false);
+
+            // The head: same "preserve what's already correct" hoist as the gun, minus the extra rest
+            // pose — nothing ever moved this before, so there is nothing to re-seat it against.
+            _head = body.Head;
+            _head.SetParent(_torso, worldPositionStays: true);
 
             // The gadget glow is the only COOL light in the whole cast, against every robot's warm eye
             // (see the class doc). Coloured once here, the same way the old goggle lenses were.
@@ -605,6 +691,7 @@ namespace MaxWorlds.VFX
             TickGadget(dt);
             TickShoulderRackMount();
             TickSecondary(dt);
+            TickHeadLag(dt);
 
             // The sleeves go LAST. They are stretched between the shoulders and the hands, and both of
             // those have just moved.
@@ -669,11 +756,23 @@ namespace MaxWorlds.VFX
             // step and sinks through the lawn on the other.
             float bounce = Mathf.Abs(Mathf.Sin(_stride)) * bob * speed01;
 
-            // Shoulders counter-rotate against the hips. Tiny, and it is what stops a run cycle from
-            // reading as a puppet on a stick. The gadget is parented to the torso, so it swings with
-            // him — which is what a thing held in two hands does.
-            _torso.localPosition = new Vector3(0f, HipY + bounce, 0f);
-            _torso.localRotation = Quaternion.Euler(0f, -swing * 0.14f, 0f);
+            // MV-717: the breathing idle. The phase always advances — he must never be perfectly
+            // frozen — but the amplitude fades to nothing once he is actually moving or presenting the
+            // gadget, so it never fights the stride bounce or the aim-in hold.
+            _idlePhase += dt * idleBobRate * Mathf.PI * 2f;
+            float idleBounce = Mathf.Sin(_idlePhase) * idleBobAmount * (1f - speed01) * (1f - _aim);
+
+            // MV-717: a small roll toward the planted foot, on the same stride phase as the legs — the
+            // weight actually shifting underneath him, not just the legs swinging in place.
+            float weightShift = -Mathf.Sin(_stride) * weightShiftAngle * speed01;
+
+            // Shoulders counter-rotate against the hips. This is what stops a run cycle from reading as
+            // a puppet on a stick — raised from 0.14 (MV-717, Lee: from a 60-degree camera the old
+            // factor was a couple of degrees of yaw and invisible; yaw is the rotation a top-down
+            // camera reads best). The gadget is parented to the torso, so it swings with him — which is
+            // what a thing held in two hands does.
+            _torso.localPosition = new Vector3(0f, HipY + bounce + idleBounce, 0f);
+            _torso.localRotation = Quaternion.Euler(0f, -swing * 0.35f, weightShift);
 
             _body.localRotation = Quaternion.Slerp(
                 _body.localRotation,
@@ -682,15 +781,44 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
+        /// MV-717: the head yaws slightly behind the body when he turns, then catches up — the
+        /// strongest single cue at this size that he is alive rather than a sprite being dragged.
+        ///
+        /// The rig root snaps to Max's yaw exactly (see <see cref="Follow"/>), so to make the head
+        /// APPEAR to lag, its LOCAL yaw is set to the difference between that instant facing and a
+        /// smoothed copy of it — the head's world yaw is then the smoothed value, which catches up to
+        /// the real one as the smoothing converges.
+        /// </summary>
+        private void TickHeadLag(float dt)
+        {
+            float facingYaw = transform.eulerAngles.y;
+            _laggedFacingYaw = Mathf.LerpAngle(_laggedFacingYaw, facingYaw, 1f - Mathf.Exp(-headCatchUp * dt));
+
+            if (_head != null)
+                _head.localRotation = Quaternion.Euler(0f, Mathf.DeltaAngle(facingYaw, _laggedFacingYaw), 0f);
+        }
+
+        /// <summary>
         /// Up to aim, down to run — the pose the GDD asks for by name, and the only thing on screen
         /// that says the gadget is live before the water does.
         /// </summary>
         private void TickGadget(float dt)
         {
-            float target = _max.IsAiming ? 1f : 0f;
+            bool aiming = _max.IsAiming;
+            float target = aiming ? 1f : 0f;
+
+            // MV-717: a brief anticipation dip before the raise. Kicked only on the false-to-true edge
+            // (not on release, and not re-kicked while already aiming) and decayed linearly over
+            // anticipationDuration; Sin(t * PI) shapes it into a bump that starts and ends at zero so
+            // it blends cleanly into the lerp below rather than snapping in and out.
+            if (aiming && !_wasAiming) _anticipation = 1f;
+            _wasAiming = aiming;
+            _anticipation = Mathf.Max(0f, _anticipation - dt / anticipationDuration);
+
             _aim = Mathf.Lerp(_aim, target, 1f - Mathf.Exp(-presentSpeed * dt));
 
             GadgetPose(_aim, out Vector3 pos, out Quaternion rot);
+            pos.y -= Mathf.Sin(_anticipation * Mathf.PI) * anticipationDip;
 
             // A kick while the water is actually flowing. Not while merely AIMING: the blaster stops
             // firing when the energy runs out (YT-80), and a gun that keeps bucking on an empty tank is
@@ -702,9 +830,8 @@ namespace MaxWorlds.VFX
                 pos -= rot * Vector3.forward * (recoil * shudder);
             }
 
-            // MV-451: the gadget is fused into the generated body now, so there is no separate _gun
-            // transform to move — this still computes _aim/pose for AimPose/BarrelHeight (WaterBlaster,
-            // MaxRigTests) and for the recoil shudder above, it just has nothing left to apply to.
+            // MV-717: the gadget is a real rig point again (see Build) — the gun raises to aim, and the
+            // arms follow it (see PoseArms).
             if (_gun == null) return;
             _gun.localPosition = pos;
             _gun.localRotation = rot;
@@ -766,37 +893,67 @@ namespace MaxWorlds.VFX
             }
         }
 
+        /// <summary>
+        /// MV-717: while not aiming, the arms swing opposite the legs off the same stride phase — so
+        /// they cannot drift out of sync with the walk — and blend out to the fixed hand-on-gun grip as
+        /// <see cref="_aim"/> rises. The left arm swings opposite the LEFT leg (i.e. with the right, per
+        /// a natural contralateral gait), and the right arm the mirror.
+        /// </summary>
         private void PoseArms()
         {
             Vector3 aimOffset = Vector3.Lerp(ShoulderRestOffset, ShoulderAimOffset, _aim);
+            Vector3 shoulderL = new Vector3(-ShoulderX - aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z);
+            Vector3 shoulderR = new Vector3(ShoulderX + aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z);
 
-            PoseArm(_armL, new Vector3(-ShoulderX - aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z), _handL);
-            PoseArm(_armR, new Vector3(ShoulderX + aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z), _handR);
+            float speed01 = Mathf.Clamp01(_max.MoveInput.magnitude);
+            float swingL = -Mathf.Sin(_stride) * armSwingAmplitude * speed01;
+            float swingR = Mathf.Sin(_stride) * armSwingAmplitude * speed01;
+
+            // A relaxed arm hangs DOWN from the shoulder, not level with it — ArmHangDrop is that
+            // vertical reach, roughly to hip height. Without it the swing target sits at shoulder
+            // height and only ever moves in Z, so FromToRotation only ever sees two possible
+            // directions (the swing's sign) instead of a continuously varying angle — the arm would
+            // twitch between two poses instead of swinging through them.
+            Vector3 freeL = shoulderL + new Vector3(0f, -ArmHangDrop, swingL);
+            Vector3 freeR = shoulderR + new Vector3(0f, -ArmHangDrop, swingR);
+
+            // Both hands settle on the gun's fixed grip points as _aim rises (Part 1's HandL/HandR,
+            // parented to the gadget so they cannot come off it); at _aim = 0 the arm swing above is
+            // what actually reaches, since there is nothing to grip while he is just running.
+            Vector3 targetL = _handL != null
+                ? Vector3.Lerp(freeL, _torso.InverseTransformPoint(_handL.position), _aim)
+                : freeL;
+            Vector3 targetR = _handR != null
+                ? Vector3.Lerp(freeR, _torso.InverseTransformPoint(_handR.position), _aim)
+                : freeR;
+
+            PoseArm(_armL, shoulderL, targetL);
+            PoseArm(_armR, shoulderR, targetR);
         }
 
         /// <summary>
-        /// One sleeve, stretched from a shoulder to a hand.
+        /// One sleeve, stretched from a shoulder to wherever the hand is reaching this frame.
         ///
         /// There is no elbow and there is no IK. The sleeve is a box whose length is however far the
-        /// hand happens to be, which means the arm CANNOT come off the gadget — and a hand floating
-        /// next to its own gun is the single most obvious way a rig like this breaks. The cost is that
-        /// his arms stretch by a few centimetres between the hip carry and the aim; at the size he is
-        /// actually drawn, that is a fraction of a pixel.
+        /// target happens to be, which means the arm CANNOT come off the gadget once it settles there —
+        /// and a hand floating next to its own gun is the single most obvious way a rig like this
+        /// breaks. The cost is that his arms stretch by a few centimetres between the hip carry and the
+        /// aim; at the size he is actually drawn, that is a fraction of a pixel.
         ///
-        /// All of it in torso space: the shoulders and the gadget are both children of the torso, so
-        /// nothing here has to touch world coordinates or care that he is bobbing.
+        /// All of it in torso space: the shoulder and the target are both already given in that space
+        /// (see <see cref="PoseArms"/>), so nothing here has to touch world coordinates or care that he
+        /// is bobbing.
         /// </summary>
-        private void PoseArm(Transform arm, Vector3 shoulder, Transform hand)
+        private void PoseArm(Transform arm, Vector3 shoulder, Vector3 targetLocal)
         {
-            if (arm == null || hand == null) return;
+            if (arm == null) return;
 
-            Vector3 handLocal = _torso.InverseTransformPoint(hand.position);
-            Vector3 along = handLocal - shoulder;
+            Vector3 along = targetLocal - shoulder;
 
             float len = along.magnitude;
             if (len < 0.01f) return;
 
-            arm.localPosition = (shoulder + handLocal) * 0.5f;
+            arm.localPosition = (shoulder + targetLocal) * 0.5f;
             arm.localRotation = Quaternion.FromToRotation(Vector3.down, along / len);
             arm.localScale = new Vector3(SleeveWidth, len, SleeveWidth);
         }

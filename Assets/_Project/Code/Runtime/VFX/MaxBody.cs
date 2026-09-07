@@ -63,9 +63,25 @@ namespace MaxWorlds.VFX
         /// (fully reloaded) as the rack reloads.</summary>
         public readonly MeshRenderer[] RackTubeGlow;
 
+        /// <summary>MV-717: the moving parts MV-451's fused mesh dropped. All five (six, counting
+        /// <see cref="Head"/>) are children of whatever <c>root</c> was built under, and <c>MaxRig</c>
+        /// re-parents each one under its own torso pivot — see that class's <c>Build</c> for why.
+        ///
+        /// <see cref="Gun"/> wraps the whole gadget assembly (both submeshes and both hand grips) at
+        /// its rest pose, so <c>TickGadget</c> can move and rotate one transform and carry everything
+        /// welded to it along for free. <see cref="ArmL"/>/<see cref="ArmR"/> are the sleeve meshes
+        /// <c>PoseArm</c> stretches every frame — a single tapered beam each, not the old static
+        /// sleeve-plus-forearm pair, because a stretch target needs one transform to own the position,
+        /// rotation AND scale it is given. <see cref="HandL"/>/<see cref="HandR"/> are the grip points
+        /// <c>PoseArm</c> reaches for, parented under <see cref="Gun"/> so the hands cannot come off it.
+        /// <see cref="Head"/> wraps the skull/hair/goggle geometry so <c>MaxRig</c> can yaw it
+        /// independently for the head-lag cue.</summary>
+        public readonly Transform Gun, ArmL, ArmR, HandL, HandR, Head;
+
         public MaxBodyResult(MeshRenderer[] gadgetGlow, Transform[] hips, GameObject rcdaGadget,
                              GameObject lppeGadget, MeshRenderer[] lppeGlow, GameObject rackMount,
-                             MeshRenderer[] rackTubeGlow)
+                             MeshRenderer[] rackTubeGlow, Transform gun, Transform armL, Transform armR,
+                             Transform handL, Transform handR, Transform head)
         {
             GadgetGlow = gadgetGlow;
             Hips = hips;
@@ -74,6 +90,12 @@ namespace MaxWorlds.VFX
             LppeGlow = lppeGlow;
             RackMount = rackMount;
             RackTubeGlow = rackTubeGlow;
+            Gun = gun;
+            ArmL = armL;
+            ArmR = armR;
+            HandL = handL;
+            HandR = handR;
+            Head = head;
         }
     }
 
@@ -129,31 +151,54 @@ namespace MaxWorlds.VFX
             Add(hipR, CharacterMeshes.Beam(0.58f, 0.126f, 0.108f, 7), p.Fabric, new Vector3(0.132f - 0.132f, 0.482f - hipY, 0f), Quaternion.identity, Vector3.one);
             Add(hipR, CharacterMeshes.Prism(4, 0.052f, 0.046f, 0.14f, 0.24f, 0f), p.Fabric, new Vector3(0.205f - 0.132f, 0.455f - hipY, 0.018f), Quaternion.identity, new Vector3(0.55f, 1f, 1.05f));
 
-            // ---- belt, torso, hood, arms, head, hair, goggles (block items 9-32, verbatim) -------
+            // ---- belt, torso, hood (block items 9-14, verbatim) ----------------------------------
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.784f), new Vector2(0.235f, 0.799f), new Vector2(0.245f, 0.879f), new Vector2(0.225f, 0.909f), new Vector2(0f, 0.914f) }, 20), p.Belt, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Prism(4, 0.058f, 0.052f, 0.115f, 0.22f, 0f), p.Pouch, new Vector3(-0.16f, 0.839f, 0.16f), Quaternion.identity, new Vector3(1f, 1f, 0.75f));
             Add(root, CharacterMeshes.Prism(4, 0.058f, 0.052f, 0.115f, 0.22f, 0f), p.Pouch, new Vector3(0.1f, 0.839f, 0.2f), Quaternion.identity, new Vector3(1.25f, 1f, 0.75f));
             Add(root, CharacterMeshes.Prism(4, 0.058f, 0.052f, 0.115f, 0.22f, 0f), p.Pouch, new Vector3(0.235f, 0.839f, -0.02f), Quaternion.identity, new Vector3(0.9f, 1f, 0.75f));
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.874f), new Vector2(0.225f, 0.894f), new Vector2(0.215f, 1.024f), new Vector2(0.245f, 1.184f), new Vector2(0.275f, 1.324f), new Vector2(0.255f, 1.414f), new Vector2(0.17f, 1.464f), new Vector2(0f, 1.474f) }, 22), p.Jacket, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.224f), new Vector2(0.13f, 1.264f), new Vector2(0.15f, 1.364f), new Vector2(0.12f, 1.444f), new Vector2(0.045f, 1.484f), new Vector2(0f, 1.484f) }, 18), p.Hood, new Vector3(0f, 0f, -0.175f), Quaternion.identity, new Vector3(1.3f, 1f, 0.8f));
-            Add(root, CharacterMeshes.Beam(0.26f, 0.093f, 0.082f, 7), p.Jacket, new Vector3(-0.275f, 1.204f, 0.01f), Quaternion.Euler(0f, 0f, -11f), Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.24f, 0.072f, 0.062f, 7), p.Skin, new Vector3(-0.31f, 0.954f, 0.02f), Quaternion.Euler(0f, 0f, -6f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.082f, 0.02f), new Vector2(0.086f, 0.1f), new Vector2(0.055f, 0.135f), new Vector2(0f, 0.14f) }, 12), p.Dark, new Vector3(-0.325f, 0.769f, 0.03f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.26f, 0.093f, 0.082f, 7), p.Jacket, new Vector3(0.275f, 1.204f, 0.01f), Quaternion.Euler(0f, 0f, 11f), Vector3.one);
-            Add(root, CharacterMeshes.Beam(0.24f, 0.072f, 0.062f, 7), p.Skin, new Vector3(0.31f, 0.954f, 0.02f), Quaternion.Euler(0f, 0f, 6f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0f), new Vector2(0.082f, 0.02f), new Vector2(0.086f, 0.1f), new Vector2(0.055f, 0.135f), new Vector2(0f, 0.14f) }, 12), p.Dark, new Vector3(0.325f, 0.769f, 0.03f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.474f), new Vector2(0.145f, 1.504f), new Vector2(0.195f, 1.584f), new Vector2(0.205f, 1.704f), new Vector2(0.185f, 1.794f), new Vector2(0f, 1.824f) }, 20), p.Skin, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Sphere(14), p.Eye, new Vector3(-0.085f, 1.659f, 0.175f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
-            Add(root, CharacterMeshes.Sphere(14), p.Eye, new Vector3(0.085f, 1.659f, 0.175f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.724f), new Vector2(0.15f, 1.732f), new Vector2(0.222f, 1.76f), new Vector2(0.238f, 1.812f), new Vector2(0.232f, 1.868f), new Vector2(0.214f, 1.896f), new Vector2(0.15f, 1.908f), new Vector2(0f, 1.91f) }, 22), p.Hair, new Vector3(0f, 0f, -0.02f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Sphere(12), p.Hair, new Vector3(-0.108f, 1.912f, -0.19f), Quaternion.identity, new Vector3(0.17f, 0.135f, 0.16f));
-            Add(root, CharacterMeshes.Sphere(12), p.Hair, new Vector3(0.118f, 1.889f, -0.205f), Quaternion.identity, new Vector3(0.152f, 0.122f, 0.148f));
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.796f), new Vector2(0.243f, 1.808f), new Vector2(0.248f, 1.858f), new Vector2(0.238f, 1.872f), new Vector2(0f, 1.876f) }, 24), p.Dark, new Vector3(0f, 0f, -0.022f), Quaternion.identity, Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.028f), new Vector2(0.088f, -0.022f), new Vector2(0.093f, 0.026f), new Vector2(0.083f, 0.04f), new Vector2(0.069f, 0.042f), new Vector2(0.069f, 0.028f), new Vector2(0f, 0.024f) }, 18), p.Dark, new Vector3(-0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(-0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.028f), new Vector2(0.088f, -0.022f), new Vector2(0.093f, 0.026f), new Vector2(0.083f, 0.04f), new Vector2(0.069f, 0.042f), new Vector2(0.069f, 0.028f), new Vector2(0f, 0.024f) }, 18), p.Dark, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
-            Add(root, CharacterMeshes.Prism(4, 0.026f, 0.026f, 0.1f, 0.1f, 0f), p.Dark, new Vector3(0f, 1.902f, 0.112f), Quaternion.Euler(24f, 0f, 90f), new Vector3(1f, 1f, 0.6f));
+
+            // ---- MV-717: the old block's static sleeve+forearm+glove (6 parts, items 15-16 and their
+            // mirror) are gone — PoseArm needs ONE transform per arm it can own position, rotation AND
+            // scale on, so a two-piece static sleeve can't be reused as a stretch target. ArmL/ArmR
+            // below (a single tapered beam each, HoodieShade like the old sleeve — see MaxRig's
+            // HoodieShade doc for why) replace them; the glove becomes a small knuckle ball riding on
+            // each hand grip instead (see the gadget section).
+
+            // ---- head, hair, goggles (block items 17-32, verbatim) — wrapped in a "Head" pivot so ---
+            // MaxRig can yaw it independently for the head-lag cue (MV-717). The pivot sits at root's
+            // own origin (identity local transform), so every child keeps the exact authored offset
+            // below; a pure yaw of the pivot only ever moves X/Z, and every child's X/Z is already
+            // relative to the midline (x=0), so the pivot's own height is irrelevant to the result.
+            var headGroup = new GameObject("Head");
+            headGroup.transform.SetParent(root, worldPositionStays: false);
+            var head = headGroup.transform;
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.474f), new Vector2(0.145f, 1.504f), new Vector2(0.195f, 1.584f), new Vector2(0.205f, 1.704f), new Vector2(0.185f, 1.794f), new Vector2(0f, 1.824f) }, 20), p.Skin, new Vector3(0f, 0f, 0f), Quaternion.identity, Vector3.one);
+            Add(head, CharacterMeshes.Sphere(14), p.Eye, new Vector3(-0.085f, 1.659f, 0.175f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
+            Add(head, CharacterMeshes.Sphere(14), p.Eye, new Vector3(0.085f, 1.659f, 0.175f), Quaternion.identity, new Vector3(0.062f, 0.07f, 0.045f));
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.724f), new Vector2(0.15f, 1.732f), new Vector2(0.222f, 1.76f), new Vector2(0.238f, 1.812f), new Vector2(0.232f, 1.868f), new Vector2(0.214f, 1.896f), new Vector2(0.15f, 1.908f), new Vector2(0f, 1.91f) }, 22), p.Hair, new Vector3(0f, 0f, -0.02f), Quaternion.identity, Vector3.one);
+            Add(head, CharacterMeshes.Sphere(12), p.Hair, new Vector3(-0.108f, 1.912f, -0.19f), Quaternion.identity, new Vector3(0.17f, 0.135f, 0.16f));
+            Add(head, CharacterMeshes.Sphere(12), p.Hair, new Vector3(0.118f, 1.889f, -0.205f), Quaternion.identity, new Vector3(0.152f, 0.122f, 0.148f));
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 1.796f), new Vector2(0.243f, 1.808f), new Vector2(0.248f, 1.858f), new Vector2(0.238f, 1.872f), new Vector2(0f, 1.876f) }, 24), p.Dark, new Vector3(0f, 0f, -0.022f), Quaternion.identity, Vector3.one);
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.028f), new Vector2(0.088f, -0.022f), new Vector2(0.093f, 0.026f), new Vector2(0.083f, 0.04f), new Vector2(0.069f, 0.042f), new Vector2(0.069f, 0.028f), new Vector2(0f, 0.024f) }, 18), p.Dark, new Vector3(-0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(-0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, -0.028f), new Vector2(0.088f, -0.022f), new Vector2(0.093f, 0.026f), new Vector2(0.083f, 0.04f), new Vector2(0.069f, 0.042f), new Vector2(0.069f, 0.028f), new Vector2(0f, 0.024f) }, 18), p.Dark, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(head, CharacterMeshes.Lathe(new[] { new Vector2(0f, 0.026f), new Vector2(0.068f, 0.03f), new Vector2(0.07f, 0.037f), new Vector2(0f, 0.039f) }, 18), p.Goggle, new Vector3(0.092f, 1.912f, 0.112f), Quaternion.Euler(24f, 0f, 0f), Vector3.one);
+            Add(head, CharacterMeshes.Prism(4, 0.026f, 0.026f, 0.1f, 0.1f, 0f), p.Dark, new Vector3(0f, 1.902f, 0.112f), Quaternion.Euler(24f, 0f, 90f), new Vector3(1f, 1f, 0.6f));
+
+            // ---- MV-717: the sleeves. One tapered beam per arm, built at unit length (Beam's own
+            // profile already centres on its own origin — see CharacterMeshes' doc) so PoseArm can
+            // scale it directly to whatever length the shoulder-to-hand distance turns out to be, the
+            // same trick the run cycle already uses for nothing else on this body because nothing else
+            // needs to change length every frame. Parented under root for now; MaxRig re-parents each
+            // one under the torso, which is the space PoseArm's own math already assumes (see its doc).
+            // Given a resting-arm position/scale here rather than Vector3.zero/one: PoseArm overwrites
+            // all three every frame once the rig is ticking, but a test that builds the body WITHOUT a
+            // ticking rig (MV669MaxHeroPassTests' bounds checks) reads whatever is here at rest, and a
+            // unit beam at the origin would render half a metre through the lawn.
+            var armL = Add(root, CharacterMeshes.Beam(1f, 0.5f, 0.4f, 6), p.Hood, new Vector3(-0.29f, 1.0f, 0.03f), Quaternion.identity, new Vector3(0.16f, 0.45f, 0.16f));
+            var armR = Add(root, CharacterMeshes.Beam(1f, 0.5f, 0.4f, 6), p.Hood, new Vector3(0.29f, 1.0f, 0.03f), Quaternion.identity, new Vector3(0.16f, 0.45f, 0.16f));
 
             // ---- the RCDA gadget (not in the approved block — ported from the pre-MV-669 body) -----
             //
@@ -169,8 +214,17 @@ namespace MaxWorlds.VFX
             // MV-702: parented under its own container so MaxRig can SetActive it off once the LPPE
             // morph (MV-689) flips WeaponSystemState.ActivePrimary — both gadgets are built once, at
             // Awake, and swapped by visibility rather than torn down and re-emitted.
+            //
+            // MV-717: that container is itself wrapped in "Gun" — sitting at root's own origin
+            // (identity local transform), so every child below keeps the exact authored offset it
+            // always had. MaxRig re-parents Gun onto a pivot placed at GunHipPos/GunHipRot (both
+            // already expressed in the same torso space this whole gadget was designed for) using
+            // worldPositionStays — Unity solves the "what local offset keeps this rendering exactly
+            // where it already is" arithmetic, so nothing here has to.
+            var gunAssembly = new GameObject("Gun");
+            gunAssembly.transform.SetParent(root, worldPositionStays: false);
             var rcdaRoot = new GameObject("GadgetRcda");
-            rcdaRoot.transform.SetParent(root, worldPositionStays: false);
+            rcdaRoot.transform.SetParent(gunAssembly.transform, worldPositionStays: false);
             Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.055f, 0.05f, 0.3f, 0.12f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
             Add(rcdaRoot.transform, CharacterMeshes.Prism(4, 0.042f, 0.038f, 0.1f, 0.2f, 0f), p.Dark, new Vector3(0.2715f, 0.7515f, 0.3f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
             Add(rcdaRoot.transform, CharacterMeshes.Prism(6, 0.03f, 0.026f, 0.06f, 0.25f, 0f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
@@ -189,7 +243,7 @@ namespace MaxWorlds.VFX
             // cyan-white lens (the ticket's "cyan-white lens") stands in for the RCDA's two.
             var lppeGlow = new List<MeshRenderer>(1);
             var lppeRoot = new GameObject("GadgetLppe");
-            lppeRoot.transform.SetParent(root, worldPositionStays: false);
+            lppeRoot.transform.SetParent(gunAssembly.transform, worldPositionStays: false);
             Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.06f, 0.05f, 0.32f, 0.1f, 0f), p.Metal, new Vector3(0.2715f, 0.7565f, 0.11f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
             Add(lppeRoot.transform, CharacterMeshes.Lathe(new[] { new Vector2(0.036f, 0f), new Vector2(0.05f, 0.018f), new Vector2(0.036f, 0.036f), new Vector2(0.05f, 0.054f), new Vector2(0.036f, 0.072f), new Vector2(0.05f, 0.09f), new Vector2(0.036f, 0.108f), new Vector2(0f, 0.118f) }, 14), p.Dark, new Vector3(0.2715f, 0.75f, 0.24f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
             Add(lppeRoot.transform, CharacterMeshes.Prism(6, 0.032f, 0.012f, 0.09f, 0.3f, 10f), p.Metal, new Vector3(0.2715f, 0.7485f, 0.365f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
@@ -198,6 +252,22 @@ namespace MaxWorlds.VFX
             Add(lppeRoot.transform, CharacterMeshes.Prism(4, 0.048f, 0.044f, 0.035f, 0.15f, 0f), p.Boot, new Vector3(0.2715f, 0.7615f, 0.185f), Quaternion.Euler(82f, -15f, 0f), Vector3.one);
             lppeGlow.Add(Lens(lppeRoot.transform, CharacterMeshes.Sphere(14), new Vector3(0.2715f, 0.7465f, 0.405f), Quaternion.identity, new Vector3(0.05f, 0.05f, 0.036f)));
             lppeRoot.SetActive(false);   // RCDA is Max's run-start primary; MaxRig flips these on ActivePrimary
+
+            // ---- MV-717: the two grip points, parented under the gun so the hands cannot come off it
+            // no matter how it is posed. HandR sits back near the trigger/stock (the RCDA's grip
+            // prisms around x=0.28-0.31, z<=0.23 — close to the shoulder that is already on this side
+            // of the body); HandL sits up on the tank/nose (x~0.27, z~0.3) — the far grip his left arm
+            // has to reach across his own chest for (see MaxRig's ShoulderAimOffset doc). A small dark
+            // knuckle ball on each stands in for the old static glove.
+            var handR = new GameObject("HandR").transform;
+            handR.SetParent(gunAssembly.transform, worldPositionStays: false);
+            handR.localPosition = new Vector3(0.29f, 0.70f, 0.05f);
+            Add(handR, CharacterMeshes.Sphere(10), p.Dark, Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.09f));
+
+            var handL = new GameObject("HandL").transform;
+            handL.SetParent(gunAssembly.transform, worldPositionStays: false);
+            handL.localPosition = new Vector3(0.27f, 0.75f, 0.30f);
+            Add(handL, CharacterMeshes.Sphere(10), p.Dark, Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.09f));
 
             // ---- the Shoulder Rack mount (MV-702) — migrated from ShoulderRack's own placeholder ----
             // GameObject (see that class's history) onto MaxRig proper, so it stops being tinted by
@@ -216,7 +286,7 @@ namespace MaxWorlds.VFX
             rackRoot.SetActive(false);   // shown only once ShoulderRack.IsBought (AC2, carried over from MV-694)
 
             return new MaxBodyResult(gadgetGlow.ToArray(), hips, rcdaRoot, lppeRoot, lppeGlow.ToArray(),
-                                     rackRoot, rackTubeGlow);
+                                     rackRoot, rackTubeGlow, gunAssembly.transform, armL, armR, handL, handR, head);
         }
 
         /// <summary>An empty rotation handle — the hinge <see cref="MaxRig.TickRun"/> swings a foot
