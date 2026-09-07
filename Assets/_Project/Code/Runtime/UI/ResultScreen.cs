@@ -2,16 +2,17 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 
 namespace MaxWorlds.UI
 {
     /// <summary>
     /// Slice Result screen (YT-31, spec §4.9). Built entirely in code — a dim overlay with the
-    /// VICTORY banner, the run's stat card (time, kills, factory destroyed), and NEXT WORLD (locked
-    /// in the slice). Shown by <see cref="RunTracker"/> once the boss falls and its payoff finishes;
-    /// it pauses the game (timeScale 0). Loads instantly (a code-built canvas), meeting the
-    /// sub-3-second AC.
+    /// VICTORY banner, the run's stat card (time, kills, factory destroyed), and NEXT WORLD (MV-687:
+    /// advances to the next world once one exists, otherwise reads NO FURTHER WORLDS). Shown by
+    /// <see cref="RunTracker"/> once the boss falls and its payoff finishes; it pauses the game
+    /// (timeScale 0). Loads instantly (a code-built canvas), meeting the sub-3-second AC.
     ///
     /// MV-427: Victory-only now. Death no longer ends the run (it respawns Max instead, handled by
     /// <see cref="MaxWorlds.Arena.WorldRunner"/>), so this screen — and its old REPLAY CTA, which
@@ -61,7 +62,11 @@ namespace MaxWorlds.UI
 
             var sub = AddText(panel.rectTransform, 26f, Bone, TextAnchor.MiddleCenter, FontStyle.Normal);
             Top(sub.rectTransform, 0f, -140f, 680f, 40f);
-            sub.text = "Backyard slice cleared";
+            // MV-687: reads the loaded world's own name, not a "Backyard"-literal — a Victory in
+            // World 2 (or beyond) must not still read as if it happened in the Backyard.
+            var backyardPath = FindFirstObjectByType<BackyardPath>();
+            string worldName = backyardPath != null && backyardPath.Map != null ? backyardPath.Map.name : "World";
+            sub.text = $"{worldName} cleared";
 
             // Stat rows.
             float y = -210f;
@@ -71,13 +76,13 @@ namespace MaxWorlds.UI
             AddStatRow(panel.rectTransform, "DIFFICULTY", "NORMAL", ref y);
 
             // One CTA now that REPLAY is gone (MV-427) — centred on the panel rather than the old
-            // two-button RightButtonX slot.
-            var nextBtn = AddButton(panel.rectTransform, "NEXT WORLD", new Color(0.3f, 0.34f, 0.4f), false, null);
+            // two-button RightButtonX slot. MV-687: live once this Victory actually advanced the
+            // active profile's WorldIndex (RunTracker captured that in stats.AdvancesWorld before
+            // RecordResult performed it); otherwise it reads NO FURTHER WORLDS and stays disabled.
+            bool canAdvance = stats.AdvancesWorld;
+            var nextBtn = AddButton(panel.rectTransform, canAdvance ? "NEXT WORLD" : "NO FURTHER WORLDS",
+                new Color(0.3f, 0.34f, 0.4f), canAdvance, canAdvance ? (UnityEngine.Events.UnityAction)RunFlow.StartNextWorld : null);
             Bottom(nextBtn, 0f, 40f, ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
-
-            var lockNote = AddText(panel.rectTransform, 16f, new Color(1, 1, 1, 0.5f), TextAnchor.MiddleCenter, FontStyle.Normal);
-            Bottom((RectTransform)lockNote.transform, 0f, 14f, ResultLayout.ButtonWidth, 20f);
-            lockNote.text = "locked in the slice";
         }
 
         private void AddStatRow(RectTransform panel, string label, string value, ref float y)

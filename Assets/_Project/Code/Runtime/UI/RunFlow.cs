@@ -22,5 +22,18 @@ namespace MaxWorlds.UI
             Scene scene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(scene.buildIndex);
         }
+
+        /// <summary>NEXT WORLD (MV-687): the active slot's <c>WorldIndex</c> has already been advanced
+        /// by <see cref="MaxWorlds.Save.SaveSystem.RecordResult"/> by the time this is wired up (the
+        /// Result screen only shows after a Victory seals), so reloading the scene is enough —
+        /// <see cref="MaxWorlds.Arena.BackyardPath"/> resolves the new world from the save on its own
+        /// next <c>Awake</c>. Same reload mechanism as <see cref="QuitToMenu"/>, but the active slot is
+        /// left set so the reload drops straight into the next run instead of reopening Home.</summary>
+        public static void StartNextWorld()
+        {
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(scene.buildIndex);
+        }
     }
 }

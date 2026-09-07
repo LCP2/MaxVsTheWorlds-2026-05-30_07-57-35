@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
+using MaxWorlds.Save;
 
 namespace MaxWorlds.Arena
 {
@@ -37,10 +38,11 @@ namespace MaxWorlds.Arena
     [DisallowMultipleComponent]
     public sealed class BackyardPath : MonoBehaviour
     {
-        [Tooltip("Which world to build — a JSON file under Resources/Worlds/ (MV-270). Authored in " +
-                 "code, not the inspector default: a value baked into the scene would silently shadow " +
-                 "this the way BlasterTuning's old serialized fields once did.")]
-        [SerializeField] private string worldKey = WorldLibrary.World1;
+        [Tooltip("Dev override only (MV-687): which world to build, a JSON file under Resources/Worlds/ " +
+                 "(MV-270). Left empty, the world resolves from the active save's WorldIndex instead — " +
+                 "a value baked into the scene would silently shadow that the way BlasterTuning's old " +
+                 "serialized fields once did.")]
+        [SerializeField] private string worldKey = string.Empty;
 
         private static readonly List<CoverPiece> NoCover = new List<CoverPiece>(0);
 
@@ -71,14 +73,14 @@ namespace MaxWorlds.Arena
 
         private void Awake()
         {
-            if (string.IsNullOrWhiteSpace(worldKey)) worldKey = WorldLibrary.World1;
+            string key = string.IsNullOrWhiteSpace(worldKey) ? WorldLibrary.KeyForIndex(ActiveWorldIndex()) : worldKey;
 
-            WorldConfig cfg = WorldLibrary.Load(worldKey);
+            WorldConfig cfg = WorldLibrary.Load(key);
             if (cfg == null) return;   // WorldLibrary has already said why
 
             if (!WorldMapLoader.TryLoad(cfg, out _map, out string reason))
             {
-                Debug.LogError($"[BackyardPath] world '{worldKey}' is not playable: {reason}");
+                Debug.LogError($"[BackyardPath] world '{key}' is not playable: {reason}");
                 _map = null;
                 return;
             }
@@ -111,6 +113,15 @@ namespace MaxWorlds.Arena
             _worldRunner.Configure(cfg, _map, _build, _areaDirector);
 
             WireAreaGatesToPopulation();
+        }
+
+        /// <summary>Which world the active save is up to (MV-687) — 0 with no active profile (tests,
+        /// captures, a scene with no Home screen involved), matching the pre-MV-687 always-World-1
+        /// behaviour.</summary>
+        private static int ActiveWorldIndex()
+        {
+            int slot = SaveSystem.ActiveSlot;
+            return slot >= 0 ? SaveSystem.Load(slot).WorldIndex : 0;
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

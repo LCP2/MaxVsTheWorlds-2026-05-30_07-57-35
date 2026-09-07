@@ -1,0 +1,179 @@
+{
+ "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
+ "world": "World 2 — Stormdrain",
+ "revision": "PLACEHOLDER — replaced by MV-700",
+ "note": "MV-687: stub config so the world-advance flow (WorldIndex, NEXT WORLD, world2_config loading) is testable before World 2's real level design lands. dials/enemyTypes copied verbatim from world1_config.json. Only two real areas are authored: a1 (Outfall Steps, 4 rushers) and a23 (the boss room, single big_bermuda, garrisonDensity none so it fields no ambient defenders). Do not treat this as a design pass — MV-700 replaces it wholesale.",
+ "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
+ "wallHeight": 1.5,
+ "dials": {
+  "areaCount": 30,
+  "baseThreat": 14.0,
+  "threatGrowth": 0.1,
+  "band": {
+   "up": 0.4,
+   "down": -0.15
+  },
+  "pacingRhythm": [
+   0.35,
+   1.1,
+   1.15,
+   0.9,
+   1.1,
+   1.2,
+   0.9,
+   1.25,
+   1.0,
+   1.05,
+   1.3,
+   0.95,
+   1.1,
+   1.35,
+   0.9,
+   1.15,
+   1.4,
+   1.3,
+   0.354,
+   1.126,
+   1.191,
+   0.943,
+   1.166,
+   1.286,
+   0.976,
+   1.37,
+   1.108,
+   1.176,
+   1.472,
+   1.087
+  ],
+  "toughnessCurve": {
+   "heavyFromArea": 5,
+   "bruteFromArea": 8,
+   "toughSubstitutionPct": 0.25,
+   "tankShareEnd": 0.7,
+   "gunnerFromArea": 2,
+   "launcherFromArea": 3,
+   "blinkerFromArea": 4,
+   "specialSharePct": 12
+  },
+  "powerupCadence": 2
+ },
+ "enemyTypes": {
+  "small": {
+   "thv": 1.2
+  },
+  "large": {
+   "thv": 1.41
+  },
+  "heavy": {
+   "thv": 5.38
+  },
+  "brute": {
+   "thv": 8.53
+  }
+ },
+ "gates": [
+  {
+   "id": "g0",
+   "from": {
+    "area": "stub",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a1",
+    "wall": "W",
+    "pos": 0.55
+   },
+   "width": 3,
+   "opensWith": "start"
+  },
+  {
+   "id": "g1",
+   "from": {
+    "area": "a1",
+    "wall": "S",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a23",
+    "wall": "N",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  }
+ ],
+ "areas": [
+  {
+   "id": "stub",
+   "index": 0,
+   "name": "Entry path",
+   "role": "entry",
+   "origin": {
+    "x": -6,
+    "z": 8
+   },
+   "size": {
+    "w": 6,
+    "d": 6
+   },
+   "hasShed": false,
+   "garrisonDensity": "none"
+  },
+  {
+   "id": "a1",
+   "index": 1,
+   "name": "Area 1 - Outfall Steps",
+   "role": "normal",
+   "origin": {
+    "x": 0,
+    "z": 0
+   },
+   "size": {
+    "w": 22,
+    "d": 20
+   },
+   "hasShed": false,
+   "garrisonDensity": "light",
+   "targetThreatBudget": 0,
+   "notes": "PLACEHOLDER (MV-687): 4 rushers, authored composition. Replaced by MV-700.",
+   "composition": {
+    "rusher": 4,
+    "bruiser": 0,
+    "heavy": 0,
+    "brute": 0,
+    "gunner": 0,
+    "launcher": 0,
+    "blinker": 0,
+    "bolter": 0
+   }
+  },
+  {
+   "id": "a23",
+   "index": 23,
+   "name": "The Outfall",
+   "role": "boss",
+   "origin": {
+    "x": -11,
+    "z": -44
+   },
+   "size": {
+    "w": 44,
+    "d": 44
+   },
+   "hasShed": false,
+   "garrisonDensity": "none",
+   "targetThreatBudget": 0,
+   "notes": "PLACEHOLDER (MV-687): single big_bermuda boss, no ambient defenders (garrisonDensity none). Replaced by MV-700.",
+   "boss": {
+    "id": "big_bermuda",
+    "x": 11,
+    "z": -22,
+    "size": {
+     "w": 3.6,
+     "d": 3.6
+    }
+   }
+  }
+ ]
+}
