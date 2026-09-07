@@ -18,7 +18,8 @@ namespace MaxWorlds.Bosses
     /// army outgrows you". At low HP it enrages — faster, and it rains mower blades (the slice's
     /// stand-in for the full M2 phase-2 choreography, spec §4.7). Takes Water-Blaster damage, drives
     /// the HUD boss bar (name card + phase segments + spawn-level bar) via <see cref="HudSignals"/>,
-    /// and drops a guaranteed Rare gadget shard on death. Greybox body; VFX are code-driven.
+    /// and, only for the world's final boss area (MV-698), payoffs a Weapon Core through
+    /// <see cref="MaxWorlds.Bosses.BossVictoryPayoff"/>. Greybox body; VFX are code-driven.
     /// </summary>
     [RequireComponent(typeof(CharacterController))]
     public sealed class BigBermudaBoss : MonoBehaviour, IDamageable
@@ -575,7 +576,9 @@ namespace MaxWorlds.Bosses
             _phase = Phase.Dead;
             // MV-542: waits for every living boss, not just this one — see BossCensus.
             BossCensus.ReportDefeated(this);
-            HudSignals.EmitPickup(transform.position + Vector3.up * 2.5f, "RARE SHARD", new Color(0.5f, 0.85f, 1f));
+            // MV-698: the "RARE SHARD" toast here was a placeholder — no pickup ever backed it, and the
+            // shard concept isn't in the design. The real finale reward (BossVictoryPayoff's Weapon
+            // Core, World 1's last boss area only) carries its own toast on collection.
             // The death spectacle hangs off the BossDefeated signal (BossSpectacle, YT-55).
             gameObject.SetActive(false);
         }

@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
+using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
+using MaxWorlds.Save;
 using MaxWorlds.UI;
 using MaxWorlds.Upgrades;
 
@@ -82,6 +84,14 @@ namespace MaxWorlds.Bosses
         private bool _finished;
         private float _elapsed;
 
+        /// <summary>MV-698: guards the finale drop to exactly once per run — separate from
+        /// <see cref="_running"/> on purpose. The fling-and-walk-out beat above only ever plays for the
+        /// FIRST boss defeated in a run (<see cref="_running"/> latches true and is never reset), but
+        /// World 1 v4 has bosses mid-run too (a12, a20) ahead of the actual finale (a30) — so the
+        /// Weapon Core check below runs on every <see cref="HudSignals.BossDefeated"/>, independent of
+        /// whether the fling beat already fired earlier in the same run.</summary>
+        private bool _weaponCoreDropped;
+
         private void Awake()
         {
             _boss = FindFirstObjectByType<BigBermudaBoss>();
@@ -99,11 +109,48 @@ namespace MaxWorlds.Bosses
 
         private void OnDefeated()
         {
+            MaybeDropWeaponCore();
+
             if (_running) return;
             _running = true;
             _elapsed = 0f;
             _layout = ResolveLayout();
             FlingParts(BossPos() + Vector3.up * 1.4f);
+        }
+
+        /// <summary>MV-698: World 1's finale drop. The area that just cleared
+        /// (<see cref="BossCensus.LastDefeatedAreaIndex"/>, set synchronously just before
+        /// <see cref="HudSignals.BossDefeated"/> fired) must be the world's own final boss area — role
+        /// "boss" AND the last area by index — and there must be a next world for the drop to matter;
+        /// World 1 v4's mid-run bosses (a12, a20) and a final world's own last victory both fall through
+        /// this untouched. Never spawns a <see cref="PickupKind.Device"/> — this is a distinct kind
+        /// with its own visual, not a shed grant.</summary>
+        private void MaybeDropWeaponCore()
+        {
+            if (_weaponCoreDropped) return;
+            if (!IsFinalBossAreaDefeat()) return;
+            if (!HasNextWorld()) return;
+
+            _weaponCoreDropped = true;
+            PickupDirector.EnsureInstalled().SpawnWeaponCore(BossPos() + Vector3.up * 1.4f);
+        }
+
+        private static bool IsFinalBossAreaDefeat()
+        {
+            var areaDirector = FindFirstObjectByType<AreaAccumulationDirector>();
+            WorldConfig cfg = areaDirector != null ? areaDirector.ActiveWorldConfig : null;
+            if (cfg?.dials == null) return false;
+
+            int areaIndex = BossCensus.LastDefeatedAreaIndex;
+            WorldArea area = cfg.AreaByIndex(areaIndex);
+            return area != null && area.IsBossRole && areaIndex == cfg.dials.areaCount;
+        }
+
+        private static bool HasNextWorld()
+        {
+            if (SaveSystem.ActiveSlot < 0) return false;
+            SaveSlotData save = SaveSystem.Load(SaveSystem.ActiveSlot);
+            return WorldLibrary.Count > save.WorldIndex + 1;
         }
 
         private void Update()

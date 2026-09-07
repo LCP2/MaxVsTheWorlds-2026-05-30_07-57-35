@@ -24,6 +24,7 @@ namespace MaxWorlds.UI
         private static readonly Color Panel = new Color(0.08f, 0.10f, 0.14f, 0.96f);
         private static readonly Color Gold = new Color(0.957f, 0.788f, 0.365f);
         private static readonly Color Bone = new Color(0.96f, 0.94f, 0.86f);
+        private static readonly Color CoreCyan = new Color(0.31f, 0.86f, 0.98f);
 
         /// <summary>Build and show the screen for a finished (Victory) run. Pauses the game.</summary>
         public void Show(RunStats stats)
@@ -83,6 +84,16 @@ namespace MaxWorlds.UI
             var nextBtn = AddButton(panel.rectTransform, canAdvance ? "NEXT WORLD" : "NO FURTHER WORLDS",
                 new Color(0.3f, 0.34f, 0.4f), canAdvance, canAdvance ? (UnityEngine.Events.UnityAction)RunFlow.StartNextWorld : null);
             Bottom(nextBtn, 0f, 40f, ResultLayout.ButtonWidth, ResultLayout.ButtonHeight);
+
+            // MV-698: World 1's finale — collecting the Weapon Core morphs PRIMARY the moment THE RIG
+            // is next opened (WeaponSystemState.OpenWeaponCoreMorphIfPending). This line is the only
+            // place that ever tells the player so, sitting just above the CTA it's pointing them at.
+            if (stats.WeaponCoreGranted)
+            {
+                var corePrompt = AddText(panel.rectTransform, 22f, CoreCyan, TextAnchor.MiddleCenter, FontStyle.Bold);
+                Bottom(corePrompt.rectTransform, 0f, 40f + ResultLayout.ButtonHeight + 14f, ResultLayout.ButtonWidth, 28f);
+                corePrompt.text = "NEW PRIMARY: LPPE - open THE RIG";
+            }
         }
 
         private void AddStatRow(RectTransform panel, string label, string value, ref float y)

@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
 using MaxWorlds.Upgrades;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Pickups
@@ -23,6 +24,17 @@ namespace MaxWorlds.Pickups
         // brown once the sunlit-albedo ceiling scales it down in shade — a near-neutral chrome can't.
         private static readonly Color PartColor = new Color(0.80f, 0.83f, 0.88f); // chrome part
 
+        /// <summary>MV-698: World 1's finale drop — a brighter, more saturated cyan than the ordinary
+        /// power cell's, so the two never read as the same tier of pickup even sharing the same hue
+        /// family.</summary>
+        private static readonly Color WeaponCoreColor = new Color(0.35f, 0.95f, 1f);
+
+        /// <summary>MV-698: the Weapon Core's own greybox is bigger than an ordinary part (0.6 m
+        /// diameter) and carries a 2 m ground glow — a rare, one-per-run drop reading unmistakably
+        /// different from the routine cell/part/device trio.</summary>
+        private const float WeaponCoreDiameter = 0.6f;
+        private const float WeaponCoreRingRadius = 1f;   // 2 m across
+
         /// <summary>How high the collectible hovers over the ground.</summary>
         private const float FloatHeight = 0.6f;
 
@@ -39,6 +51,7 @@ namespace MaxWorlds.Pickups
 
         private Transform _spin;
         private float _baseY = FloatHeight;
+        private GroundRing _glowRing;   // MV-698: only the Weapon Core carries one of its own
 
         // MV-527: PickupArtDirector used to find every currently-placed pickup with a per-frame
         // FindObjectsByType<Pickup>(Include) scan — same idiom RobotEnemy._active already replaces for
@@ -84,6 +97,12 @@ namespace MaxWorlds.Pickups
             // runtime primitive would draw magenta in a player build.
             gameObject.AddComponent<KeepsOwnMaterial>();
 
+            if (Kind == PickupKind.WeaponCore)
+            {
+                BuildWeaponCoreVisual();
+                return;
+            }
+
             bool cell = Kind == PickupKind.PowerCell;
             var prim = GameObject.CreatePrimitive(cell ? PrimitiveType.Sphere : PrimitiveType.Cube);
             prim.name = "Visual";
@@ -104,6 +123,32 @@ namespace MaxWorlds.Pickups
             _spin = prim.transform;
         }
 
+        /// <summary>MV-698: World 1's finale drop wears its own greybox rather than the ordinary
+        /// sphere/cube pair — a larger cyan-cored sphere plus a 2 m ground glow ring
+        /// (<see cref="WeaponCoreRingRadius"/>) it carries for itself (no other kind gets one from
+        /// <c>Pickup</c> directly; <c>PickupArtDirector</c> dresses everyone else's). A native primitive,
+        /// not a hand-authored mesh — this is a once-per-run drop with no screenshot harness watching
+        /// it, so reliability beats a fancier silhouette.</summary>
+        private void BuildWeaponCoreVisual()
+        {
+            var prim = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            prim.name = "Visual";
+            var collider = prim.GetComponent<Collider>();
+            if (Application.isPlaying) Destroy(collider);
+            else DestroyImmediate(collider);
+            prim.transform.SetParent(transform, worldPositionStays: false);
+            prim.transform.localScale = Vector3.one * WeaponCoreDiameter;
+            prim.transform.localPosition = Vector3.zero;
+
+            var mr = prim.GetComponent<MeshRenderer>();
+            mr.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, WeaponCoreColor);
+            mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
+            _spin = prim.transform;
+
+            _glowRing = GroundRing.Create("WeaponCoreGlow");
+            _glowRing.transform.SetParent(transform, worldPositionStays: false);
+        }
+
         /// <summary>Drop the pickup at a ground position and switch it on (the director calls this).
         /// <see cref="Registered"/> fires from here, not from <see cref="OnEnable"/> (MV-685): a fresh
         /// <see cref="Create"/> calls <c>AddComponent&lt;Pickup&gt;()</c> on a GameObject that starts
@@ -121,6 +166,11 @@ namespace MaxWorlds.Pickups
         {
             transform.position = new Vector3(groundPos.x, _baseY, groundPos.z);
             gameObject.SetActive(true);
+            // MV-698: the glow ring is a flat ground quad, not a child riding the pickup's own
+            // transform (see GroundRing's own doc comment on why — it must not inherit the bob) — so it
+            // needs its own explicit re-place on every placement, fresh drop or pooled reuse alike.
+            if (_glowRing != null)
+                _glowRing.Show(new Vector3(groundPos.x, 0f, groundPos.z), WeaponCoreRingRadius, WeaponCoreColor);
             Registered?.Invoke(this);
         }
 

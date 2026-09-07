@@ -61,6 +61,18 @@ namespace MaxWorlds.UI
         /// run; a boss can fall mid-run (a12, a20) without this ever firing.</summary>
         public static event Action RunComplete;
 
+        /// <summary>World 1's finale Weapon Core (MV-698) was just placed on the ground — the run-seal
+        /// counterpart to <see cref="RunComplete"/>: <c>RunTracker</c> must not show results while a
+        /// dropped core is still uncollected, so it starts waiting the moment this fires (and stops
+        /// waiting once <see cref="WeaponCoreCollected"/> answers it, walk-over or the auto-collect
+        /// timeout alike).</summary>
+        public static event Action WeaponCoreDropped;
+
+        /// <summary>The dropped Weapon Core was collected — a real walk-over
+        /// (<c>PickupDirector.Collect</c>) or the grace-timeout auto-collect (<c>RunTracker</c>) alike,
+        /// so a listener never has to care which.</summary>
+        public static event Action WeaponCoreCollected;
+
         /// <summary>A Blinker just teleported (MV-330). (fromWorldPos, toWorldPos) — the reposition in
         /// <c>RobotEnemy.TickTeleport</c> is a same-frame snap, so this carries BOTH points rather than
         /// just one: unlike a death or a hit, the VFX has to land at two places, not one.</summary>
@@ -159,6 +171,12 @@ namespace MaxWorlds.UI
 
         public static void EmitRunComplete()
             => RunComplete?.Invoke();
+
+        public static void EmitWeaponCoreDropped()
+            => WeaponCoreDropped?.Invoke();
+
+        public static void EmitWeaponCoreCollected()
+            => WeaponCoreCollected?.Invoke();
 
         public static void EmitBlinkerTeleported(Vector3 from, Vector3 to)
             => BlinkerTeleported?.Invoke(from, to);

@@ -456,10 +456,12 @@ namespace MaxWorlds.UI
 
         /// <summary>MV-519: the ring's amber "parts to fit" state now tracks banked ability credits
         /// alone — a Supercell is never banked anymore (<see cref="MaxWorlds.Pickups.PickupWallet.AddSupercell"/>
-        /// grants instantly, nothing left to flag an alert over).</summary>
+        /// grants instantly, nothing left to flag an alert over). MV-698: a banked Weapon Core is the
+        /// same "the game is waiting on a decision" cyan state a captured Morphing Module already
+        /// carries — collecting one must pulse this button exactly the way a module does.</summary>
         private static WeaponsButtonAlert CurrentWeaponsButtonAlert() => ComputeWeaponsButtonAlert(
             AbilityCreditBank.Banked > 0,
-            PendingMorphingModule.HasPending);
+            PendingMorphingModule.HasPending || PendingMorphingModule.WeaponCorePending);
 
         /// <summary>Pure predicate (MV-358, dropped its Supercell half MV-519 — a Supercell is never
         /// banked anymore) — pinned by an EditMode test without building a canvas: a spend is waiting

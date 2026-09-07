@@ -35,6 +35,11 @@ namespace MaxWorlds.UI
         /// walk-out drives the timing and this never fires.</summary>
         private const float VictorySafetyTimeout = 20f;
 
+        /// <summary>MV-698: how long a dropped Weapon Core waits for a walk-over collect before it is
+        /// auto-collected — the soft-lock guard the ticket asks for, so a player who never notices (or
+        /// never can reach) the drop can't stall the world's finale forever.</summary>
+        private const float WeaponCoreAutoCollectTimeout = 60f;
+
         private readonly RunStats _stats = new RunStats();
 
         private bool _sealed;              // outcome decided; the clock stops and nothing may override it
@@ -46,12 +51,21 @@ namespace MaxWorlds.UI
         private bool _payoffFinished;
         private bool _runComplete;
 
+        // MV-698: a THIRD condition, live only for a run whose finale actually dropped a Weapon Core —
+        // every other run's _weaponCoreAwaited stays false and this gate is a no-op, unchanged from
+        // before this ticket.
+        private bool _weaponCoreAwaited;
+        private bool _weaponCoreCollected;
+        private float _weaponCoreDropRealtime;
+
         private void OnEnable()
         {
             HudSignals.EnemyKilled += OnKill;
             HudSignals.FactoryDestroyed += OnFactory;
             HudSignals.BossPayoffFinished += OnBossPayoffFinished;
             HudSignals.RunComplete += OnRunComplete;
+            HudSignals.WeaponCoreDropped += OnWeaponCoreDropped;
+            HudSignals.WeaponCoreCollected += OnWeaponCoreCollected;
         }
 
         private void OnDisable()
@@ -60,6 +74,8 @@ namespace MaxWorlds.UI
             HudSignals.FactoryDestroyed -= OnFactory;
             HudSignals.BossPayoffFinished -= OnBossPayoffFinished;
             HudSignals.RunComplete -= OnRunComplete;
+            HudSignals.WeaponCoreDropped -= OnWeaponCoreDropped;
+            HudSignals.WeaponCoreCollected -= OnWeaponCoreCollected;
         }
 
         private void Update()
@@ -78,10 +94,37 @@ namespace MaxWorlds.UI
                 _payoffFinished = true;
                 TrySeal();
             }
+
+            // MV-698: same soft-lock-guard shape as the backstop above — a dropped core nobody ever
+            // walks over must not stall Victory forever.
+            if (_weaponCoreAwaited && !_weaponCoreCollected
+                && Time.unscaledTime - _weaponCoreDropRealtime >= WeaponCoreAutoCollectTimeout)
+            {
+                MaxWorlds.Weapons.PendingMorphingModule.SetWeaponCore();
+                HudSignals.EmitWeaponCoreCollected();
+            }
         }
 
         private void OnKill(Vector3 _) => _stats.AddKill();
         private void OnFactory(Vector3 _) => _stats.MarkFactoryDestroyed();
+
+        // MV-698: a Weapon Core landed on the ground — Victory must wait for it (walk-over or the
+        // auto-collect timeout above), the same "necessary but not sufficient on its own" shape
+        // _payoffFinished/_runComplete already have.
+        private void OnWeaponCoreDropped()
+        {
+            _weaponCoreAwaited = true;
+            _weaponCoreCollected = false;
+            _weaponCoreDropRealtime = Time.unscaledTime;
+        }
+
+        // MV-698: the awaited core was collected — walk-over (PickupDirector.Collect) or the timeout
+        // above, either way this is the one place that clears the wait and re-attempts the seal.
+        private void OnWeaponCoreCollected()
+        {
+            _weaponCoreCollected = true;
+            TrySeal();
+        }
 
         // A boss's payoff beat played out (Max reached the gate, or it timed out) — one half of the
         // seal condition. Fires for every boss, mid-run or final; only matters once RunComplete agrees.
@@ -102,10 +145,13 @@ namespace MaxWorlds.UI
 
         /// <summary>MV-591: the payoff beat alone used to seal the run, so any boss dying anywhere
         /// ended the game. Victory now needs the final area cleared AS WELL, and takes whichever of
-        /// the two lands later, so the loot-and-walk-to-the-door beat is unchanged.</summary>
+        /// the two lands later, so the loot-and-walk-to-the-door beat is unchanged. MV-698 adds a
+        /// third, usually-inert condition: if this run's finale dropped a Weapon Core, it must be
+        /// collected too (walk-over or the auto-collect timeout) before Victory seals.</summary>
         private void TrySeal()
         {
             if (_sealed || !_payoffFinished || !_runComplete) return;
+            if (_weaponCoreAwaited && !_weaponCoreCollected) return;
             Seal(RunOutcome.Victory);
             ShowResults();
         }
@@ -122,6 +168,11 @@ namespace MaxWorlds.UI
             bool advancesWorld = SaveSystem.ActiveSlot >= 0 &&
                 SaveSystem.Load(SaveSystem.ActiveSlot).WorldIndex < WorldLibrary.Count - 1;
             _stats.SetAdvancesWorld(advancesWorld);
+
+            // MV-698: this run's finale granted a Weapon Core (already collected by now — TrySeal
+            // wouldn't have let a still-awaited one reach here) — the Result screen's cue to show the
+            // "NEW PRIMARY: LPPE" line.
+            _stats.SetWeaponCoreGranted(_weaponCoreAwaited);
 
             // MV-427: deaths taken is the new personal-best discriminator — the peak-Domination %
             // stopped meaning anything once a death no longer ends the run (every player eventually
