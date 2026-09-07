@@ -106,6 +106,12 @@ namespace MaxWorlds.UI
         /// must give it its own despawn beat rather than reusing the kill/death VFX.</summary>
         public static event Action<Vector3> SentinelRecalled;
 
+        /// <summary>MV-706: which word the bottom banner counter should use — true for "REPLICATORS",
+        /// false for "FACTORIES". Fired once by <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/> after
+        /// a level finishes building, since only the map — not the HUD, built earlier — knows whether
+        /// this world's sources are sheds or Replicators.</summary>
+        public static event Action<bool> WorldFactoryWording;
+
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
 
@@ -129,6 +135,9 @@ namespace MaxWorlds.UI
 
         public static void EmitSentinelRecalled(Vector3 worldPos)
             => SentinelRecalled?.Invoke(worldPos);
+
+        public static void EmitWorldFactoryWording(bool isReplicatorWorld)
+            => WorldFactoryWording?.Invoke(isReplicatorWorld);
 
         public static void EmitBossRegistered()
             => BossRegistered?.Invoke();

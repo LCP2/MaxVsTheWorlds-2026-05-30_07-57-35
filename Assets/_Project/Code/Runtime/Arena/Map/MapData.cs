@@ -18,6 +18,7 @@ namespace MaxWorlds.Arena
         Unknown, PlayerSpawn, Factory, Gate, Boss, Cover, Prop, Pickup, AreaGate,
         Sludge, Deck, Ramp,   // MV-692
         Hatch,                // MV-697
+        Replicator,           // MV-706
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
@@ -137,6 +138,10 @@ namespace MaxWorlds.Arena
         /// and strips it): the gate is built at deck height instead of the floor. 0 for every other
         /// kind.</summary>
         public int level;
+
+        /// <summary>Replicator only (MV-706) — the maximum number of doublings this box can ever
+        /// perform, resolved from <see cref="WorldReplicator.capacity"/>. 0 for every other kind.</summary>
+        public int capacity;
 
         /// <summary>Gate only — the unlock condition: the factory whose destruction opens this gate,
         /// or a comma-separated list of factories ALL of which must fall first (YT-92). Empty means

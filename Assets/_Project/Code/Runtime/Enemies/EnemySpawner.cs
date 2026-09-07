@@ -344,6 +344,24 @@ namespace MaxWorlds.Enemies
             if (_areaCadence.TryNextKind(out EnemyKind kind)) SpawnKind(kind);
         }
 
+        /// <summary>Force-spawns exactly <paramref name="count"/> robots of <paramref name="kind"/> at
+        /// full health, bypassing the area's own cadence/composition AND the <see cref="_running"/>
+        /// latch entirely (MV-706's Replicator: a box that never spawns on its own — <see cref="Stop"/>
+        /// is called on it at build time — still has to emit the pair it doubles from). Still respects
+        /// the live/global population caps <see cref="SpawnSurge"/> already does, so emitting into an
+        /// already-crowded field never blows past them; a capped emission comes out short rather than
+        /// silently over budget. <paramref name="noReplicateSeconds"/>, when positive, tags every robot
+        /// this call emits <see cref="RobotEnemy.NoReplicate"/> for that long — the "fresh pair can't
+        /// immediately walk back in" rule.</summary>
+        public void SpawnExact(EnemyKind kind, int count, float noReplicateSeconds = 0f)
+        {
+            for (int i = 0; i < count && _live.Count < EffectiveMaxLiveEnemies && GlobalHasRoom; i++)
+            {
+                RobotEnemy e = SpawnKind(kind);
+                if (noReplicateSeconds > 0f) e.TagNoReplicate(noReplicateSeconds);
+            }
+        }
+
         /// <summary>
         /// Death-throes surge (YT-182): called once, at the instant this factory's health hits zero —
         /// BEFORE <see cref="Stop"/> latches production off for good, so it rides the same <c>_running</c>
@@ -391,7 +409,7 @@ namespace MaxWorlds.Enemies
         /// emergence walk for one robot of the given <paramref name="kind"/>. <see cref="SpawnOne"/> is
         /// the timer-driven path (asks the mix what's next); <see cref="SpawnSurge"/> is the
         /// death-throes burst (picks the kind itself, so it can force in an elite).</summary>
-        private void SpawnKind(EnemyKind kind)
+        private RobotEnemy SpawnKind(EnemyKind kind)
         {
             // Toughened by the Invasion Level (YT-181): read live, so a robot spawned late in a run
             // is tankier and hits harder than the one that came out at the opening bell — the swarm
@@ -437,6 +455,7 @@ namespace MaxWorlds.Enemies
             LetThePlayerThrough(e.gameObject);
 
             _live.Add(e);
+            return e;
         }
 
         /// <summary>

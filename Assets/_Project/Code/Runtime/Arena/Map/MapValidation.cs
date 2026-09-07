@@ -291,6 +291,10 @@ namespace MaxWorlds.Arena
         {
             List<MapEntity> cover = Kind(map, EntityKind.Cover);
             List<MapEntity> factories = Kind(map, EntityKind.Factory);
+            // MV-706: a Replicator is "a 2x2 solid entity for overlap/clearance purposes" — the exact
+            // same spawn-ring clearance a shed's Factory entity already gets (SpawnRadius/SpawnClearance
+            // below), so it is folded into the same list rather than duplicating the loop that checks it.
+            factories.AddRange(Kind(map, EntityKind.Replicator));
             List<MapEntity> bosses = Kind(map, EntityKind.Boss);
 
             for (int i = 0; i < cover.Count; i++)

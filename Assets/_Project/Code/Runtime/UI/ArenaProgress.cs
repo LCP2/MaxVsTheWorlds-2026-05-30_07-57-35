@@ -23,6 +23,11 @@ namespace MaxWorlds.UI
         public int SubZonesCleared { get; private set; }
         public int FactoriesDestroyed { get; private set; }
 
+        /// <summary>MV-706: true for a world whose sources are Replicators with no sheds — the bottom
+        /// banner reads "REPLICATORS n/N" instead of "FACTORIES n/N". Defaults false (World 1's
+        /// wording), set once the map finishes building (<see cref="SetReplicatorWorld"/>).</summary>
+        public bool IsReplicatorWorld { get; private set; }
+
         /// <summary>Fired on a count change. Arg = true when it should pop prominently
         /// (a sub-zone was cleared), false for a quiet factory tick.</summary>
         public event Action<bool> Changed;
@@ -68,6 +73,15 @@ namespace MaxWorlds.UI
         {
             if (FactoriesDestroyed >= FactoriesTotal) return;
             FactoriesDestroyed++;
+            Changed?.Invoke(false);
+        }
+
+        /// <summary>MV-706: which word the banner uses. A quiet tick (Lee's eye isn't meant to be
+        /// pulled by a label swap the way a count change pulls it) — but still notifies, so the HUD
+        /// text rebuilds even if it happens to land on an otherwise-unchanged count.</summary>
+        public void SetReplicatorWorld(bool isReplicatorWorld)
+        {
+            IsReplicatorWorld = isReplicatorWorld;
             Changed?.Invoke(false);
         }
     }

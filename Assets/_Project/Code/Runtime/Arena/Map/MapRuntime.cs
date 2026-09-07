@@ -6,6 +6,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Pickups;
 using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Arena
@@ -19,6 +20,9 @@ namespace MaxWorlds.Arena
 
         /// <summary>The factories this map built, in the order it authored them.</summary>
         public readonly List<MowerHutch> Factories = new List<MowerHutch>(2);
+
+        /// <summary>The Replicators this map built (MV-706), in the order it authored them.</summary>
+        public readonly List<Replicator> Replicators = new List<Replicator>(2);
 
         /// <summary>The bosses this map built (MV-561), in the order it authored them.</summary>
         public readonly List<BigBermudaBoss> Bosses = new List<BigBermudaBoss>(2);
@@ -116,6 +120,13 @@ namespace MaxWorlds.Arena
             BuildProps(map, root, built);
             PlaceActors(map, root, built);
             WireGates(map, built);
+
+            // MV-706: "REPLICATORS n/N" for a world with replicators and no sheds; "FACTORIES" wording
+            // stays for a world (or a legacy fixture) that only ever has sheds — a world with neither
+            // never shows this at all (HudModel's own count-driven visibility is unaffected either way).
+            bool hasReplicators = built.Replicators.Count > 0;
+            bool hasSheds = built.Factories.Count > 0;
+            HudSignals.EmitWorldFactoryWording(hasReplicators && !hasSheds);
 
             return built;
         }
@@ -387,6 +398,10 @@ namespace MaxWorlds.Arena
                         built.Factories.Add(BuildFactory(map, e, root, built));
                         break;
 
+                    case EntityKind.Replicator:
+                        built.Replicators.Add(BuildReplicator(e, root, built));
+                        break;
+
                     case EntityKind.AreaGate:
                         BuildAreaGate(map, e, root, built);
                         break;
@@ -496,6 +511,25 @@ namespace MaxWorlds.Arena
 
             built.Actors[e.id] = body;
             return hutch;
+        }
+
+        /// <summary>
+        /// A Replicator, from data (MV-706) — World 2's factory, built the same "one recipe, however
+        /// many a level authors" way <see cref="BuildFactory"/> already builds a shed. RequireComponent
+        /// brings the EnemySpawner with it; <see cref="Replicator.Configure"/> is called AFTER
+        /// AddComponent (same ordering as <see cref="MowerHutch.ConfigureMobility"/>) so the box reads
+        /// its own scale in Awake before anything else touches it.
+        /// </summary>
+        private static Replicator BuildReplicator(MapEntity e, Transform root, MapBuild built)
+        {
+            GameObject body = Spawn(root, e.id, PrimitiveType.Cube, e.GroundedCenter, e.Size);
+            MarkDiscoverable(body);
+
+            var replicator = body.AddComponent<Replicator>();
+            replicator.Configure(e.capacity);
+
+            built.Actors[e.id] = body;
+            return replicator;
         }
 
         /// <summary>

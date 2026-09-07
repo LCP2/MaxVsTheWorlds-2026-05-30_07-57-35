@@ -34,6 +34,12 @@ namespace MaxWorlds.Arena
         /// shared const — see <see cref="ShedFootprint"/>).</summary>
         public const float BossHeight = 3f;
 
+        /// <summary>A Replicator's built footprint, in metres (MV-706: "a 2x2x1.5 m armoured box").</summary>
+        public const float ReplicatorFootprint = 2f;
+
+        /// <summary>A Replicator's built height, in metres (MV-706).</summary>
+        public const float ReplicatorHeight = 1.5f;
+
         /// <summary>The suffix on a <see cref="WorldGate.opensWith"/> that marks it a deck-level gate
         /// (MV-697) — parsed and stripped here, never carried onto the built <see cref="MapEntity"/>.</summary>
         public const string DeckGateSuffix = "[DECK]";
@@ -186,6 +192,31 @@ namespace MaxWorlds.Arena
                         depth = ShedFootprint,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
                         dressing = "shed",
                         mobile = s.mobile,  // MV-548
+                    });
+                }
+            }
+
+            // A Replicator area's box (MV-706, World & Difficulty Framework §6): World 2's factory in
+            // place of a shed — the same MapRuntime.BuildReplicator recipe every map's replicator
+            // builds through. One entity per authored replicator, same "per-entity not per-area" shape
+            // as WorldShed above (MV-475).
+            foreach (WorldArea a in cfg.areas)
+            {
+                WorldReplicator[] reps = a.replicators ?? Array.Empty<WorldReplicator>();
+                for (int i = 0; i < reps.Length; i++)
+                {
+                    WorldReplicator r = reps[i];
+                    if (r == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = string.IsNullOrEmpty(r.id) ? $"{a.id}_replicator{i + 1}" : r.id,
+                        kind = "replicator",
+                        x = r.x,
+                        z = r.z,
+                        width = ReplicatorFootprint,
+                        height = ReplicatorHeight,
+                        depth = ReplicatorFootprint,
+                        capacity = r.capacity,
                     });
                 }
             }
