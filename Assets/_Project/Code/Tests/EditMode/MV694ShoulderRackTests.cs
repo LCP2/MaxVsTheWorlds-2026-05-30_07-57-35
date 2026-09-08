@@ -24,13 +24,27 @@ namespace MaxWorlds.Tests.EditMode
         private const float Dt = 1f / 60f;
 
         [SetUp]
-        [TearDown]
-        public void Clear()
+        public void SetUp()
         {
             WeaponSystemState.Reset();
             RigState.Reset();
             PickupWallet.Reset();
             PlayerRocket.DestroyAllActive();
+            // MV-732 removed s_rkt/s_sal/s_rld from World 1's rig_board.json — the rack lives only on
+            // rig_board.world2.json now, so RigState.RestoreSnapshot (which drops any id RigBoard.Exists
+            // says isn't in the ACTIVE board) needs World 2's board selected to accept those ids at all.
+            RigBoard.UseWorld(1);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            WeaponSystemState.Reset();
+            RigState.Reset();
+            PickupWallet.Reset();
+            PlayerRocket.DestroyAllActive();
+            // Reset back to World 1 so no later test in the same batch run sees World 2 active.
+            RigBoard.ResetForTests();
         }
 
         [Test]
