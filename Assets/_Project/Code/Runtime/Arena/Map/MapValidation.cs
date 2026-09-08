@@ -73,6 +73,15 @@ namespace MaxWorlds.Arena
         /// room.</summary>
         public const float MinFreeChannel = 3f;
 
+        /// <summary>Narrowest gap the under-route beneath a bridge must keep, at floor level, once its
+        /// piers are placed (MV-711) — wider than the ordinary <see cref="MinFreeChannel"/> because the
+        /// first pass under a bridge is deliberately a fuller room, not a corridor squeezed by columns.</summary>
+        public const float MinBridgeUnderChannel = 6f;
+
+        /// <summary>A bridge pier's own footprint for the under-route channel check (MV-711) — a single
+        /// support column, not a wide obstacle.</summary>
+        public const float BridgePierSize = 1f;
+
         public static bool Validate(MapData map, out string reason)
         {
             if (map == null) { reason = "the map is null"; return false; }
@@ -444,7 +453,116 @@ namespace MaxWorlds.Arena
                 && WorldLurkerGrates(cfg, out reason)
                 && WorldGates(cfg, out reason)
                 && WorldReachability(cfg, out reason)
-                && WorldVerticality(cfg, out reason);
+                && WorldVerticality(cfg, out reason)
+                && WorldBridges(cfg, out reason);
+        }
+
+        /// <summary>World-level bridges (MV-711): every violation across every bridge is collected and
+        /// reported TOGETHER, unlike <see cref="Cover"/> above (which this ticket's own spec calls out by
+        /// name as the shape NOT to copy) — a designer fixing a bridge pass should not have to re-run
+        /// validation once per mistake.</summary>
+        private static bool WorldBridges(WorldConfig cfg, out string reason)
+        {
+            var violations = new List<string>();
+
+            var deckRects = new List<Rect>();
+            foreach (WorldArea a in cfg.areas)
+                foreach (WorldDeck d in a.decks ?? Array.Empty<WorldDeck>())
+                    if (d != null) deckRects.Add(a.WorldRectOf(d.x, d.z, d.w, d.d));
+
+            var bridgeRects = new List<(string id, Rect rect)>();
+            var seenIds = new HashSet<string>();
+
+            foreach (WorldBridge b in cfg.bridges ?? Array.Empty<WorldBridge>())
+            {
+                if (b == null) { violations.Add("a bridge is null"); continue; }
+                if (string.IsNullOrWhiteSpace(b.id)) { violations.Add("a bridge has no id"); continue; }
+                if (!seenIds.Add(b.id)) { violations.Add($"two bridges share the id '{b.id}'"); continue; }
+
+                if (b.width < MinDoorway)
+                    violations.Add($"bridge '{b.id}' is {b.width} m wide — under {MinDoorway} m Max and a swarm cannot both fit across");
+
+                if (!b.TryResolveFootprint(cfg, out Rect rect, out string endReason))
+                {
+                    violations.Add(endReason);
+                    continue; // no resolved footprint to check overlap/piers against
+                }
+
+                bridgeRects.Add((b.id, rect));
+
+                foreach (Rect deckRect in deckRects)
+                    if (rect.Overlaps(deckRect))
+                        violations.Add($"bridge '{b.id}' overlaps a deck");
+
+                foreach (WorldBridgePier pier in b.piers ?? Array.Empty<WorldBridgePier>())
+                {
+                    if (pier == null) { violations.Add($"bridge '{b.id}' has a null pier"); continue; }
+
+                    WorldArea under = AreaAt(cfg, pier.x, pier.z);
+                    if (under == null) continue; // nothing under this pier to pinch
+
+                    var blockers = new List<(float x, float z, float size)> { (pier.x, pier.z, BridgePierSize) };
+                    foreach (WorldCover c in under.cover ?? Array.Empty<WorldCover>())
+                        if (c != null) blockers.Add((c.x, c.z, Mathf.Max(c.width, c.depth)));
+                    foreach (WorldBridge other in cfg.bridges)
+                    {
+                        if (other == null || other == b) continue;
+                        foreach (WorldBridgePier op in other.piers ?? Array.Empty<WorldBridgePier>())
+                            if (op != null && AreaAt(cfg, op.x, op.z) == under)
+                                blockers.Add((op.x, op.z, BridgePierSize));
+                    }
+
+                    float channel = UnderChannelAt(under, blockers, pier.z);
+                    if (channel < MinBridgeUnderChannel)
+                    {
+                        violations.Add($"bridge '{b.id}' pier at ({pier.x:0.#}, {pier.z:0.#}) leaves only " +
+                                       $"{channel:0.#} m clear under '{under.id}' — under {MinBridgeUnderChannel} m " +
+                                       "the under-route pinches shut");
+                    }
+                }
+            }
+
+            for (int i = 0; i < bridgeRects.Count; i++)
+            for (int j = i + 1; j < bridgeRects.Count; j++)
+                if (bridgeRects[i].rect.Overlaps(bridgeRects[j].rect))
+                    violations.Add($"bridge '{bridgeRects[i].id}' overlaps bridge '{bridgeRects[j].id}'");
+
+            if (violations.Count > 0) { reason = string.Join("; ", violations); return false; }
+            reason = null;
+            return true;
+        }
+
+        private static WorldArea AreaAt(WorldConfig cfg, float x, float z)
+        {
+            foreach (WorldArea a in cfg.areas)
+                if (a != null && a.Footprint.Contains(new Vector2(x, z))) return a;
+            return null;
+        }
+
+        /// <summary>Widest continuous gap along X at depth <paramref name="z"/> inside <paramref name="area"/>,
+        /// once <paramref name="blockers"/> (a bridge's own piers plus the area's authored cover) are
+        /// placed — the pre-conversion, World-config-space counterpart of <see cref="FreeChannelAt"/>,
+        /// needed here because bridge validation runs before a <see cref="MapData"/> exists to sweep.</summary>
+        private static float UnderChannelAt(WorldArea area, List<(float x, float z, float size)> blockers, float z)
+        {
+            float min = area.XMin, max = area.XMax;
+
+            var blocked = new List<Span>();
+            foreach (var (bx, bz, size) in blockers)
+            {
+                float half = size * 0.5f;
+                if (z < bz - half || z > bz + half) continue;
+                blocked.Add(new Span(Mathf.Max(bx - half, min), Mathf.Min(bx + half, max)));
+            }
+            blocked.Sort((a, b) => a.Min.CompareTo(b.Min));
+
+            float widest = 0f, cursor = min;
+            foreach (Span b in blocked)
+            {
+                if (b.Min > cursor) widest = Mathf.Max(widest, b.Min - cursor);
+                cursor = Mathf.Max(cursor, b.Max);
+            }
+            return Mathf.Max(widest, max - cursor);
         }
 
         /// <summary>Sludge/deck/ramp rects (MV-692): (a) every rect must lie inside its own area's

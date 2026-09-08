@@ -67,12 +67,31 @@ namespace MaxWorlds.Enemies
         /// HERE", not subject to the density dial. Any slots beyond the authored ones — all of them,
         /// when nothing is authored — fill from the same evenly-spaced ring <see cref="SeedPositions"/>
         /// always used, each with no kind preference.</summary>
-        public static Seed[] SeedSlots(WorldArea area, int count)
+        public static Seed[] SeedSlots(WorldArea area, int count) =>
+            SeedSlotsFor(area, area?.garrison, count);
+
+        /// <summary>Same as <see cref="SeedSlots(WorldArea, int)"/>, but only the garrison entries
+        /// authored for VISIT <paramref name="visitLevel"/> are placed (MV-711) — see
+        /// <see cref="WorldArea.GarrisonForVisit"/>. The World 3 double-pass shape: an area revisited at
+        /// a second, different level seeds only that visit's own entries, so the first pass's garrison
+        /// never re-seeds alongside the second's.</summary>
+        public static Seed[] SeedSlots(WorldArea area, int count, int visitLevel) =>
+            SeedSlotsFor(area, area?.GarrisonForVisit(visitLevel), count);
+
+        /// <summary>Deterministic, authored-not-random placement for garrison slots in
+        /// <paramref name="area"/> (MV-559, MV-601) from exactly the authored entries in
+        /// <paramref name="authoredSource"/>: every one of them is placed, in authored order, each
+        /// carrying its own authored kind, even past <paramref name="count"/> — an authored entry is the
+        /// designer saying "this robot stands HERE", not subject to the density dial. Any slots beyond
+        /// the authored ones — all of them, when nothing is authored — fill from the same evenly-spaced
+        /// ring <see cref="RingPositions"/> always used, each with no kind preference.</summary>
+        private static Seed[] SeedSlotsFor(WorldArea area, WorldGarrisonEntry[] authoredSource, int count)
         {
             if (area == null) return Array.Empty<Seed>();
-            if (count <= 0 && (area.garrison == null || area.garrison.Length == 0)) return Array.Empty<Seed>();
 
-            WorldGarrisonEntry[] authored = area.garrison ?? Array.Empty<WorldGarrisonEntry>();
+            WorldGarrisonEntry[] authored = authoredSource ?? Array.Empty<WorldGarrisonEntry>();
+            if (count <= 0 && authored.Length == 0) return Array.Empty<Seed>();
+
             // Every authored entry is placed, even past SeedCount. An authored garrison is a
             // designer saying "this robot stands HERE"; the density dial decides how many the RING
             // seeds, not how much of the authored design survives. DensityShare tops out at 0.85, so
@@ -108,9 +127,16 @@ namespace MaxWorlds.Enemies
         /// stands on it). A slot whose resolved Y misses every deck rect falls back to the world's own
         /// <see cref="WorldDials.deckHeight"/> rather than staying on the floor — a level-1 slot is never
         /// meant to be walkable at y=0.</summary>
-        public static Seed[] SeedSlots(WorldArea area, int count, WorldConfig cfg)
+        public static Seed[] SeedSlots(WorldArea area, int count, WorldConfig cfg) =>
+            ResolveDeckHeights(SeedSlots(area, count), area, cfg);
+
+        /// <summary>Same as <see cref="SeedSlots(WorldArea, int, WorldConfig)"/>, but filtered to one
+        /// VISIT (MV-711) exactly as <see cref="SeedSlots(WorldArea, int, int)"/> does.</summary>
+        public static Seed[] SeedSlots(WorldArea area, int count, WorldConfig cfg, int visitLevel) =>
+            ResolveDeckHeights(SeedSlots(area, count, visitLevel), area, cfg);
+
+        private static Seed[] ResolveDeckHeights(Seed[] slots, WorldArea area, WorldConfig cfg)
         {
-            Seed[] slots = SeedSlots(area, count);
             if (cfg == null || slots.Length == 0) return slots;
 
             List<Rect> deckRects = DeckFootprints(area, cfg, out float defaultDeckHeight, out List<float> deckHeights);

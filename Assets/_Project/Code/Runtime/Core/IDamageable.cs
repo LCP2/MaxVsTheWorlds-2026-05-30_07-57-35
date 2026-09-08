@@ -77,6 +77,15 @@ namespace MaxWorlds.Core
     {
         public static bool Applies(Team attacker, Team target)
             => attacker == Team.Neutral || attacker != target;
+
+        /// <summary>MV-711's level-separated variant: an entity on one elevation tier (MV-697's floor/deck
+        /// split, extended by MV-711 to a bridge deck) cannot damage, or be damaged by, an entity on a
+        /// DIFFERENT tier even where their XZ footprints coincide — the under/over-bridge case a plain
+        /// team check alone cannot tell apart. Same team rule as <see cref="Applies(Team, Team)"/>, plus
+        /// the two levels must match. Not yet wired into every <see cref="IDamageable.TakeDamage"/> call
+        /// site (MV-711 fix comment) — only a receiver that reads its own attacker's level opts in.</summary>
+        public static bool Applies(Team attacker, Team target, int attackerLevel, int targetLevel)
+            => Applies(attacker, target) && attackerLevel == targetLevel;
     }
 
     /// <summary>Something that can be knocked out of action briefly without dying — the Water

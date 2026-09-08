@@ -338,6 +338,19 @@ namespace MaxWorlds.Arena
         /// Optional; most areas carry none and behave exactly as before.</summary>
         public WorldGarrisonEntry[] garrison = Array.Empty<WorldGarrisonEntry>();
 
+        /// <summary>This area's garrison entries for ONE VISIT (MV-711): when an area's own id appears
+        /// twice in <see cref="WorldConfig.route"/> at two different levels (The Reef's under/over
+        /// bridge pass), each visit seeds only the entries authored at its own <see cref="WorldGarrisonEntry.level"/> —
+        /// reusing that field's existing elevation-tier meaning as the visit selector, since the two
+        /// coincide by construction (the first pass is the floor, the second is the deck). An area never
+        /// revisited simply has every entry at level 0, so calling this with <paramref name="visitLevel"/>
+        /// 0 is a no-op identical to reading <see cref="garrison"/> directly.</summary>
+        public WorldGarrisonEntry[] GarrisonForVisit(int visitLevel)
+        {
+            if (garrison == null || garrison.Length == 0) return Array.Empty<WorldGarrisonEntry>();
+            return Array.FindAll(garrison, g => g != null && g.level == visitLevel);
+        }
+
         /// <summary>Authored grates (MV-688) a Grate Lurker garrisoned into this area may rise from and
         /// reappear at. Optional — most areas carry none.</summary>
         public WorldGrate[] grates = Array.Empty<WorldGrate>();
@@ -499,6 +512,104 @@ namespace MaxWorlds.Arena
         public WorldGateEndpoint to;
         public float width;
         public string opensWith = "start";
+    }
+
+    /// <summary>A world-space support column for a <see cref="WorldBridge"/> (MV-711) — built as ordinary
+    /// floor-level cover so it participates in <see cref="MapValidation.Cover"/> exactly like an authored
+    /// <see cref="WorldCover"/> box does.</summary>
+    [Serializable]
+    public sealed class WorldBridgePier
+    {
+        public float x;
+        public float z;
+    }
+
+    /// <summary>A deck span between two AREAS rather than within one (MV-711) — World 3's signature: the
+    /// route passes under a bridge on its first visit and over it on its second. <see cref="from"/>/
+    /// <see cref="to"/> are the same <c>{area, wall, pos}</c> shape a <see cref="WorldGate"/> endpoint
+    /// uses, but unlike a gate's two endpoints, a bridge's two walls are NOT required to sit on the same
+    /// line — the gap between them (<see cref="WorldArea.WallCoord"/> on one side, the other area's on
+    /// the other) is exactly what the bridge spans. <see cref="height"/> is the deck's top elevation
+    /// above the floor, metres; 0 (unauthored) falls back to <see cref="WorldDials.deckHeight"/>, same
+    /// idiom as <see cref="WorldDeck.height"/>.</summary>
+    [Serializable]
+    public sealed class WorldBridge
+    {
+        public string id;
+        public WorldGateEndpoint from;
+        public WorldGateEndpoint to;
+        public float width;
+        public float height;
+        public WorldBridgePier[] piers = Array.Empty<WorldBridgePier>();
+
+        /// <summary>Resolves this bridge's world-space footprint from <see cref="from"/>/<see cref="to"/>
+        /// against <paramref name="cfg"/>'s areas — the same averaged-fraction idiom
+        /// <see cref="WorldMapLoader.ResolveDoorPosition"/> uses for a gate, except the two wall
+        /// coordinates are left as the gap's own min/max rather than required to coincide. Named failures
+        /// throughout so <see cref="MapValidation"/> can report every bridge's problems in one pass rather
+        /// than stopping at the first.</summary>
+        public bool TryResolveFootprint(WorldConfig cfg, out Rect rect, out string reason)
+        {
+            rect = default;
+
+            WorldArea fromArea = cfg?.Area(from?.area);
+            WorldArea toArea = cfg?.Area(to?.area);
+
+            if (from == null) { reason = $"bridge '{id}' has no 'from' endpoint"; return false; }
+            if (to == null) { reason = $"bridge '{id}' has no 'to' endpoint"; return false; }
+            if (fromArea == null) { reason = $"bridge '{id}' references area '{from.area}', which does not exist"; return false; }
+            if (toArea == null) { reason = $"bridge '{id}' references area '{to.area}', which does not exist"; return false; }
+
+            if (!WallEnums.TryParse(from.wall, out Wall fromWall))
+            { reason = $"bridge '{id}' has an unknown from-wall '{from.wall}' — expected N, E, S or W"; return false; }
+            if (!WallEnums.TryParse(to.wall, out Wall toWall))
+            { reason = $"bridge '{id}' has an unknown to-wall '{to.wall}' — expected N, E, S or W"; return false; }
+
+            if (from.pos < 0f || from.pos > 1f)
+            { reason = $"bridge '{id}' does not land on floor — its from-pos {from.pos} is outside [0, 1]"; return false; }
+            if (to.pos < 0f || to.pos > 1f)
+            { reason = $"bridge '{id}' does not land on floor — its to-pos {to.pos} is outside [0, 1]"; return false; }
+
+            if (toWall != WallEnums.Opposite(fromWall))
+            {
+                reason = $"bridge '{id}' joins '{fromArea.id}'s {fromWall} wall to '{toArea.id}'s {toWall} wall — " +
+                         $"they must be opposite walls ({fromWall}↔{WallEnums.Opposite(fromWall)})";
+                return false;
+            }
+
+            Span fromSpan = fromArea.WallSpan(fromWall);
+            Span toSpan = toArea.WallSpan(toWall);
+            float posFrom = fromSpan.Min + Mathf.Clamp01(from.pos) * fromSpan.Length;
+            float posTo = toSpan.Min + Mathf.Clamp01(to.pos) * toSpan.Length;
+            float along = (posFrom + posTo) * 0.5f;
+            float half = width * 0.5f;
+
+            float c1 = fromArea.WallCoord(fromWall);
+            float c2 = toArea.WallCoord(toWall);
+            float cMin = Mathf.Min(c1, c2), cMax = Mathf.Max(c1, c2);
+
+            rect = fromArea.WallRunsAlongX(fromWall)
+                ? new Rect(along - half, cMin, width, cMax - cMin)
+                : new Rect(cMin, along - half, cMax - cMin, width);
+
+            reason = null;
+            return true;
+        }
+    }
+
+    /// <summary>One stop on a world's authored route (MV-711) — not the ordered list of AREAS, the
+    /// ordered list of VISITS: an id may appear more than once, at a different <see cref="level"/> each
+    /// time (The Reef's signature — under a bridge, then over it). Gate conditions and progress counting
+    /// must key off the visit's INDEX in this array, not <see cref="area"/> alone, or a second visit
+    /// reads as an area already cleared. <see cref="level"/> doubles as the visit selector for
+    /// <see cref="WorldArea.GarrisonForVisit"/> — the same field <see cref="WorldGarrisonEntry.level"/>
+    /// already carries for elevation tier, since the two meanings coincide by construction: the first
+    /// pass is the floor visit, the second is the deck/bridge visit.</summary>
+    [Serializable]
+    public sealed class WorldRouteVisit
+    {
+        public string area;
+        public int level;
     }
 
     /// <summary>The <c>band</c> dial — how far the fun ratio R = MPL÷EPL is allowed to swing in Max's
@@ -674,6 +785,15 @@ namespace MaxWorlds.Arena
 
         public WorldArea[] areas = Array.Empty<WorldArea>();
         public WorldGate[] gates = Array.Empty<WorldGate>();
+
+        /// <summary>World-level deck spans between areas (MV-711) — see <see cref="WorldBridge"/>.
+        /// Authored alongside <see cref="gates"/>, NOT nested inside a <see cref="WorldArea"/>: a bridge
+        /// belongs to no single area, it spans the gap between two.</summary>
+        public WorldBridge[] bridges = Array.Empty<WorldBridge>();
+
+        /// <summary>The world's ordered sequence of area VISITS (MV-711) — see <see cref="WorldRouteVisit"/>.
+        /// Empty for every world authored before this ticket; nothing yet requires it to be non-empty.</summary>
+        public WorldRouteVisit[] route = Array.Empty<WorldRouteVisit>();
 
         public WorldDials dials;
         public WorldEnemyTypes enemyTypes;
