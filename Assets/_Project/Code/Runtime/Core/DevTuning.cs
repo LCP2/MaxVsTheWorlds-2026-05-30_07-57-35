@@ -168,15 +168,11 @@ namespace MaxWorlds.Core
 
         // --- weapon/ability backbone (WV-230) ---
 
-        /// <summary>Water Balloon's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
+        /// <summary>Water Balloon's base cooldown, seconds.</summary>
         public static float? WaterBalloonCooldownSeconds { get; set; }
 
-        /// <summary>Teleport's base cooldown, seconds, before any Weapon Cooldown reduction.</summary>
+        /// <summary>Teleport's base cooldown, seconds.</summary>
         public static float? TeleportCooldownSeconds { get; set; }
-
-        /// <summary>Fraction each Weapon Cooldown ability level shaves off every other active
-        /// ability's cooldown.</summary>
-        public static float? WeaponCooldownReductionPerLevel { get; set; }
 
         /// <summary>Velocity (m/s) each spray hit shoves a robot — a near-zero cosmetic stagger
         /// only (WV-225), not the positional launch it used to be.</summary>
@@ -423,7 +419,7 @@ namespace MaxWorlds.Core
             StartingRobots.HasValue || RobotProductionPerMinute.HasValue || RobotHealthMultiplier.HasValue ||
             RobotMinSeparation.HasValue ||
             WaterBalloonCooldownSeconds.HasValue ||
-            TeleportCooldownSeconds.HasValue || WeaponCooldownReductionPerLevel.HasValue ||
+            TeleportCooldownSeconds.HasValue ||
             SprayKnockback.HasValue || PrimaryDepletionRate.HasValue ||
             WaterBalloonDamagePct.HasValue || WaterBalloonStopDurationSeconds.HasValue ||
             SpeedMultiplierPerLevel.HasValue ||
@@ -489,7 +485,6 @@ namespace MaxWorlds.Core
             RobotMinSeparation = null;
             WaterBalloonCooldownSeconds = null;
             TeleportCooldownSeconds = null;
-            WeaponCooldownReductionPerLevel = null;
             SprayKnockback = null;
             PrimaryDepletionRate = null;
             WaterBalloonDamagePct = null;
@@ -592,7 +587,6 @@ namespace MaxWorlds.Core
             (PrefsPrefix + nameof(RobotMinSeparation), () => RobotMinSeparation, v => RobotMinSeparation = v),
             (PrefsPrefix + nameof(WaterBalloonCooldownSeconds), () => WaterBalloonCooldownSeconds, v => WaterBalloonCooldownSeconds = v),
             (PrefsPrefix + nameof(TeleportCooldownSeconds), () => TeleportCooldownSeconds, v => TeleportCooldownSeconds = v),
-            (PrefsPrefix + nameof(WeaponCooldownReductionPerLevel), () => WeaponCooldownReductionPerLevel, v => WeaponCooldownReductionPerLevel = v),
             (PrefsPrefix + nameof(SprayKnockback), () => SprayKnockback, v => SprayKnockback = v),
             (PrefsPrefix + nameof(PrimaryDepletionRate), () => PrimaryDepletionRate, v => PrimaryDepletionRate = v),
             (PrefsPrefix + nameof(WaterBalloonDamagePct), () => WaterBalloonDamagePct, v => WaterBalloonDamagePct = v),

@@ -23,9 +23,6 @@ namespace MaxWorlds.Weapons
         /// <summary>Blink. Levels 1-4: an aimed blink at every level (MV-292), distance grows per level.</summary>
         Teleport,
 
-        /// <summary>Passive — shortens every OTHER active ability's cooldown. Levels 1-5.</summary>
-        WeaponCooldown,
-
         /// <summary>Unlocks the Water Balloon throw itself (MV-380, restoring MV-231's "each ability
         /// only works once acquired" rule that MV-370 silently dropped). A boolean unlock, not a
         /// leveled magnitude — cap 1 — since the actual throw/splash/repeat-fire numbers are owned by
