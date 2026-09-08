@@ -25,7 +25,7 @@
       "Once a category is unlocked, every ability is still taken individually - there is no cells-unlockable tier for an ability itself; the 'stat' kind from schema 2 no longer exists.",
       "Cells raise an OWNED ability from its current level toward maxLevel. Cells spent on an unowned ability are impossible, not merely disallowed.",
       "A non-root node is REACHED when its parent is at level >= 1, same as always.",
-      "MV-689: the Weapon Core morph re-grants p_dmg (LPPE DAMAGE) at level 1 and unlocks PRIMARY/SECONDARY directly (no shed draft) — SECONDARY reads `?` until s_rkt is bought."
+      "MV-689: the Weapon Core morph re-grants p_dmg (LPPE DAMAGE) at level 1 and unlocks PRIMARY directly (no shed draft). MV-727: SECONDARY stays LOCKED after the morph — it opens only when the player finds and collects World 2's Rack Module pickup (the first Replicator's drop), which unlocks it AND grants s_rkt at level 1 outright, for free; until then it reads `?` and cannot be bought into with cells."
     ]
   },
   "geometry": {

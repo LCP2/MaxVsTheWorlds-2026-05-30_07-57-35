@@ -101,6 +101,15 @@ namespace MaxWorlds.Pickups
         private readonly Stack<Pickup> _devicePool = new Stack<Pickup>(4);
         private readonly Stack<Pickup> _powerCellSecondaryPool = new Stack<Pickup>(8);
         private readonly Stack<Pickup> _weaponCorePool = new Stack<Pickup>(1);
+        private readonly Stack<Pickup> _rackModulePool = new Stack<Pickup>(1);
+
+        /// <summary>MV-727: true once this run's ONE Rack Module has dropped — gates every Replicator
+        /// after the first. Run-scoped like every other per-run flag in this codebase (RigState,
+        /// PickupWallet, ...): a fresh run always reaches this director through a scene reload
+        /// (RunFlow.QuitToMenu / StartNextWorld / HomeScreen.OnWorld2 all reload before a new run's
+        /// first frame), which destroys the old GameObject and recreates a fresh one, so no explicit
+        /// reset call is needed the way RigState.Reset()/PickupWallet.Reset() need one.</summary>
+        private bool _rackModuleDroppedThisRun;
 
         /// <summary>Live power cells in spawn order, oldest first (MV-626). <see
         /// cref="RecycleOldestCellIfAtCap"/> needs O(1) oldest-lookup, and an ordinary walk-over
@@ -325,13 +334,19 @@ namespace MaxWorlds.Pickups
             bool anyLocked = false;
             foreach (var _ in RigState.LockedCategoryIds()) { anyLocked = true; break; }
 
-            if (!anyLocked)
-            {
-                SpawnCellCache(pos);
-                return;
-            }
+            if (!anyLocked) SpawnCellCache(pos);
+            else SpawnDrop(PickupKind.Device, pos);
 
-            SpawnDrop(PickupKind.Device, pos);
+            // MV-727: the FIRST Replicator destroyed in a World 2 run ALSO drops a Rack Module — once
+            // per run, in ADDITION to the normal shed-equivalent drop above, never instead of it. Every
+            // later Replicator (and every MowerHutch, which never fires this signal from World 1) is
+            // untouched by this branch. Offset by ScatterRadius (the same spacing SpawnCellCache's own
+            // ring already uses) so the two drops never sit exactly co-located and read as one pickup.
+            if (RigBoard.ActiveWorldIndex == 1 && !_rackModuleDroppedThisRun)
+            {
+                _rackModuleDroppedThisRun = true;
+                SpawnDrop(PickupKind.RackModule, pos + Vector3.forward * ScatterRadius);
+            }
         }
 
         /// <summary>The "nothing left to unlock" cell-cache reward — one Supercell plus a
@@ -367,6 +382,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.Device => _devicePool,
                 PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
                 PickupKind.WeaponCore => _weaponCorePool,
+                PickupKind.RackModule => _rackModulePool,
                 _ => _cellPool,
             };
             Pickup p = pool.Count > 0 ? pool.Pop() : Pickup.Create(kind);
@@ -539,6 +555,16 @@ namespace MaxWorlds.Pickups
                         MaxWorlds.VFX.PickupArtDirector.CollectibleGlow);
                     HudSignals.EmitWeaponCoreCollected();
                     break;
+                case PickupKind.RackModule:
+                    // MV-727: unlocks SECONDARY AND grants s_rkt at level 1 outright, in the same
+                    // instant — unlike a Device's banked draft, there is no later "open THE RIG to
+                    // resolve it" step and no cell cost. UnlockCategory must run first: AcquireCap's
+                    // IsReached check for a root node is exactly "is its own category unlocked".
+                    RigState.UnlockCategory("SECONDARY");
+                    RigState.AcquireCap("s_rkt");
+                    HudSignals.EmitPickup(p.transform.position, "SHOULDER RACK",
+                        MaxWorlds.VFX.WeaponPartArt.RackModuleGlow);
+                    break;
                 default:
                     // MV-519: a Supercell grants its cells instantly, no bank/cash-in step — the HUD's
                     // own burst + "+10" flyup + readout count-up (HudSignals.EmitSupercellCollected) is
@@ -558,6 +584,7 @@ namespace MaxWorlds.Pickups
                 PickupKind.Device => _devicePool,
                 PickupKind.PowerCellSecondary => _powerCellSecondaryPool,
                 PickupKind.WeaponCore => _weaponCorePool,
+                PickupKind.RackModule => _rackModulePool,
                 _ => _cellPool,
             };
             pool.Push(p);

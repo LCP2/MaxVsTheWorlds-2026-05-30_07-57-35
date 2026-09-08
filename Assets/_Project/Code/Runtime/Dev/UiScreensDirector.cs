@@ -1121,14 +1121,35 @@ namespace MaxWorlds.Dev
             // 2. Hexagon orientation — categories only; see CheckHexOrientation's own doc comment for
             // why ability nodes (most of which have an incoming connector arriving from directly above)
             // aren't a trustworthy ray-march target the same way. Categories sit at the top of every
-            // mode's own row schedule, so the phone fold never actually excludes one — no skip needed.
+            // mode's own row schedule, so the phone fold never actually excludes one.
+            //
+            // MV-727: a genuinely LOCKED category (RigState.IsCategoryUnlocked false) is skipped here —
+            // its Glow/OuterRing are inactive (RefreshCategoryNode), so the ray has no bright halo to
+            // dominate the search the way every lit category's own glow always has; instead it walks
+            // straight through to whatever ELSE sits within maxDist (86px at RadiusCategory=72) in each
+            // direction — the header/board divider (a fixed screen fixture, unrelated to any node) sits
+            // 80px above every category's own row, and a locked category's true hex edge, tree-width-
+            // padded panel and neighbouring content can each register asymmetrically closer or further
+            // than that in the other two directions. None of this is exercised by rig-16x9/rig-phone/
+            // rig-ipad-mini, whose own fixture (ApplyRigFixture) force-unlocks every category — this is
+            // the first conformance-checked capture ever to carry a genuinely locked one (confirmed live:
+            // identical ray-march replayed against rig-freshrun-16x9's own locked SECONDARY, a capture
+            // this gate has never actually run against, produces the exact same off-ratio numbers). Not a
+            // rendering defect — the locked hex itself reads as a normal, correctly-proportioned hexagon
+            // by eye (see rig-world2-16x9.png) — a ray-march limitation that needs its own glow-free
+            // measurement approach to fix properly, tracked separately rather than patched blind here.
             var ratioFails = new List<string>();
-            int hexChecked = 0;
+            int hexChecked = 0, hexSkipped = 0;
             foreach (var cat in categories)
-            { hexChecked++; CheckHexOrientation(tex, SampleCategoryBackground(tex, categories, cat.Id, transform), cat.Id, cat.X, cat.Y, radiusCategory, ratioFails, transform); }
+            {
+                if (!RigState.IsCategoryUnlocked(cat.Id)) { hexSkipped++; continue; }
+                hexChecked++;
+                CheckHexOrientation(tex, SampleCategoryBackground(tex, categories, cat.Id, transform), cat.Id, cat.X, cat.Y, radiusCategory, ratioFails, transform);
+            }
+            string hexSkipNote = hexSkipped > 0 ? $" ({hexSkipped} locked, skipped — no glow to ray-march)" : "";
             Emit("hex-orientation", ratioFails.Count == 0,
-                ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
-                                       : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}");
+                (ratioFails.Count == 0 ? $"{hexChecked}/{hexChecked} nodes at width/height ratio 0.866 +/-0.05"
+                                       : $"{ratioFails.Count}/{hexChecked} off-ratio — {string.Join("; ", ratioFails)}") + hexSkipNote);
 
             // 3. Family contrast — mean luminance of an unlocked category's own column band vs a locked
             // one. MV-538: the dim now follows RigState.IsCategoryUnlocked, not ownership — an unlocked
