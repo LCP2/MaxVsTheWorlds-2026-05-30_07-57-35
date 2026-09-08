@@ -2,6 +2,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
+using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.VFX;
@@ -111,13 +112,7 @@ namespace MaxWorlds.UI
                 return;
             }
 
-            s_autoAimTargets.Clear();
-            var active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count; i++)
-            {
-                var robot = active[i];
-                if (robot != null && robot.IsAlive) s_autoAimTargets.Add(robot.transform.position);
-            }
+            BuildAutoAimTargets(_origin.position, RobotEnemy.Active, s_autoAimTargets);
 
             if (!WaterBalloonAutoAim.TryFindBestDirection(
                     _origin.position, PlayerAbilities.ThrowDistance, PlayerAbilities.SplashRadius,
@@ -128,6 +123,39 @@ namespace MaxWorlds.UI
             }
 
             StartCoroutine(AutoAimAndFire(direction));
+        }
+
+        /// <summary>MV-733: the auto-fire target scan, pulled out as its own testable static method —
+        /// same "pure function a test can drive directly, no live Update" idiom
+        /// <see cref="WaterBalloonAutoAim"/> already uses. A robot only survives into
+        /// <paramref name="targets"/> when it is <see cref="RobotEnemy.IsEngageable"/> AND standing in
+        /// the SAME area as <paramref name="playerPosition"/> — both conditions, not either. Reuses the
+        /// exact <see cref="AreaAccumulationDirector.AreaIndexOf"/> comparison
+        /// <see cref="RobotEnemy.IsWellBehindPlayer"/> already performs for the same "which area is
+        /// this point in" question. A robot whose area can't be resolved (no map, an unrecognised zone)
+        /// is excluded rather than guessed into range — the whole point of this filter is to never
+        /// throw at something that can't be confirmed reachable.</summary>
+        private static void BuildAutoAimTargets(Vector3 playerPosition, IReadOnlyList<RobotEnemy> robots, List<Vector3> targets)
+        {
+            targets.Clear();
+
+            MapData map = EnemyNavigation.Map;
+            MapZone playerZone = map != null ? map.ZoneAt(playerPosition.x, playerPosition.y, playerPosition.z) : null;
+            int playerArea = playerZone != null ? AreaAccumulationDirector.AreaIndexOf(playerZone.id) : 0;
+            if (playerArea <= 0) return;
+
+            for (int i = 0; i < robots.Count; i++)
+            {
+                var robot = robots[i];
+                if (robot == null || !robot.IsEngageable) continue;
+
+                Vector3 pos = robot.transform.position;
+                MapZone robotZone = map.ZoneAt(pos.x, pos.y, pos.z);
+                int robotArea = robotZone != null ? AreaAccumulationDirector.AreaIndexOf(robotZone.id) : 0;
+                if (robotArea != playerArea) continue;
+
+                targets.Add(pos);
+            }
         }
 
         /// <summary>Snaps the knob to the auto-chosen point, holds it there long enough to read, then

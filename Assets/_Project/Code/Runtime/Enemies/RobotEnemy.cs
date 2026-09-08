@@ -195,6 +195,15 @@ namespace MaxWorlds.Enemies
         /// individually, never off another robot waking).</summary>
         public bool IsDormant => Current == State.Dormant;
 
+        /// <summary>True only when this robot is alive, awake, AND physically present to be hit
+        /// (MV-733) — every future "can I engage this robot" caller belongs on this one property
+        /// rather than re-testing <see cref="Current"/> itself, which is what let
+        /// <c>WaterBalloonJoystickControl</c>'s auto-fire throw at a <see cref="State.Dormant"/> or
+        /// <see cref="State.Submerged"/> robot it could never actually hit.</summary>
+        public bool IsEngageable => IsAlive &&
+            Current != State.Dormant && Current != State.Submerged &&
+            Current != State.Emerging && Current != State.Teleport;
+
         /// <summary>Whether this robot can currently take damage (MV-688) — true for every kind in
         /// every state except a Grate Lurker outside its <see cref="LurkerCycle.Phase.Emerged"/> beat:
         /// SUBMERGED/RATTLE/SUBMERGING are all invulnerable, matching the ticket's "killing it while
