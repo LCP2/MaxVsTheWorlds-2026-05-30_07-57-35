@@ -158,6 +158,15 @@ namespace MaxWorlds.VFX
         /// brand-new colour.</summary>
         private static readonly Color StormdrainBody = new Color(0.55f, 0.28f, 0.10f);
 
+        /// <summary>World 3's "reef" skin (MV-715) — every one of its eight re-skins wears this one
+        /// barnacled dark-teal metal, the same "one flat tint per world skin" idiom as
+        /// <see cref="StormdrainBody"/> (kinds still tell apart by <see cref="EnemyArchetype.Shape"/>/
+        /// <see cref="EnemyArchetype.BodyScale"/>, which an override never touches). Cold (g/b > r, the
+        /// axis every enemy colour is already held to) and under <see cref="SunlitAlbedo.Ceiling"/>
+        /// (0.6) from the start, so it never needs the MV-348/328/578/584 clip-then-wash fix a later
+        /// pass would otherwise owe it.</summary>
+        private static readonly Color ReefBody = new Color(0.14f, 0.32f, 0.30f);
+
         /// <summary>The Grate Lurker (MV-688): oil-black — deliberately darker and more neutral than
         /// the Brute's own charcoal (0.20, 0.22, 0.27), so an ambusher that stands motionless at a grate
         /// until it rattles doesn't get mistaken for the tank tier at a glance. Its own single cyan eye
@@ -336,6 +345,7 @@ namespace MaxWorlds.VFX
         private static Color ResolveBodyColor(CharacterRole role, string skin, string colourRole)
         {
             if (skin == "stormdrain") return StormdrainBody;
+            if (skin == "reef") return ReefBody;
             if (!string.IsNullOrEmpty(colourRole) && Enum.TryParse(colourRole, ignoreCase: true, out CharacterRole r))
                 return BaseColorFor(r);
             return BaseColorFor(role);

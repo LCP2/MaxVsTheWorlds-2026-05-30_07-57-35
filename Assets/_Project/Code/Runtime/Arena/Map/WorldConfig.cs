@@ -171,6 +171,11 @@ namespace MaxWorlds.Arena
         public Vector3 bodyScale;
         public string colourRole;
         public string skin;
+
+        /// <summary>MV-715: World 3's Puffer Mine wants a longer telegraph than the base Launcher's
+        /// (a clearer "it's about to lob" tell) without restating every other stat — same 0-means-
+        /// "not authored" idiom as every other field here.</summary>
+        public float telegraphTime;
     }
 
     /// <summary>A sludge slow-zone (MV-692) — a rect in AREA-LOCAL metres (like <see cref="WorldArea.origin"/>,
