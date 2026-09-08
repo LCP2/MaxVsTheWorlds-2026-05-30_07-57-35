@@ -182,12 +182,13 @@ namespace MaxWorlds.Tests.EditMode
                 _screen.ApplyBoardScale(1.78f);  // force back to standard mode, rebuilds with the new padX
             }
 
-            // MV-694 shrank the interior gap on ENERGY's SECONDARY-facing side a little (the Shoulder
-            // Rack's own s_rkt/s_sal/s_rld widened the SECONDARY column) — 5/15 now saturates that side
-            // before 15px, so this probes a smaller, still-comfortably-unsaturated pair instead. The
-            // property under test (padX is actually read, not hardcoded) is unchanged; only the two
-            // synthetic calibration values move.
-            const float ProbeLow = 2f, ProbeHigh = 5f;
+            // MV-694 had shrunk the interior gap on ENERGY's SECONDARY-facing side (the Shoulder Rack's
+            // own s_rkt/s_sal/s_rld widened the SECONDARY column), which saturated the previous 5/15
+            // probe before 15px and forced a tighter 2/5 pair. MV-732 removed those nodes from World 1's
+            // board, restoring the wider gap, so the probe reverts to 5/15. The property under test
+            // (padX is actually read, not hardcoded) is unchanged; only the two synthetic calibration
+            // values move.
+            const float ProbeLow = 5f, ProbeHigh = 15f;
             RebuildStandardWith(ProbeLow);
             float widthAt5 = _screen.CategoryPanel("ENERGY").rectTransform.sizeDelta.x;
 
