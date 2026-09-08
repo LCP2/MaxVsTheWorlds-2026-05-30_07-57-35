@@ -38,7 +38,7 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(RigState.Level("p_spr"), Is.EqualTo(0));
             Assert.That(RigState.Level("e_ff"), Is.EqualTo(2));
             Assert.That(RigState.Level("e_cel"), Is.EqualTo(1));
-            Assert.That(RigState.Level("e_cd"), Is.EqualTo(3));
+            Assert.That(RigState.Level("e_mag"), Is.EqualTo(3));
             Assert.That(RigState.Level("u_sen"), Is.EqualTo(1));
             Assert.That(RigState.Level("u_dmg"), Is.EqualTo(2));
             Assert.That(RigState.Level("u_rng"), Is.EqualTo(1));
@@ -52,7 +52,7 @@ namespace MaxWorlds.Tests.EditMode
         {
             UiScreensDirector.ApplyRigFixture();
 
-            foreach (string cap in new[] { "s_bal", "e_mag", "m_spd", "m_tp" })
+            foreach (string cap in new[] { "s_bal", "m_spd", "m_tp" })
             {
                 Assert.That(RigState.IsOwned(cap), Is.False, $"{cap} must not be owned");
                 Assert.That(RigState.IsReached(cap), Is.True, $"{cap} must be reached");

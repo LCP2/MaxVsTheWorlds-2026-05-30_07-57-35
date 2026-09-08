@@ -266,13 +266,15 @@ namespace MaxWorlds.Dev
         }
 
         /// <summary>Matches the state shown in MV-423.png node-for-node (MV-421's own spec), so the
-        /// capture and the design image are directly comparable. Every node not spent here is left at
-        /// its <see cref="RigState.Reset"/> baseline — that alone gives s_bal/e_mag/m_spd/m_tp
-        /// their "reached, not owned" states and u_slt its "not reached" one, off the same
-        /// parent-level rule <see cref="RigState.IsReached"/> already enforces, with nothing extra to
-        /// stage for them. Public (and static — no scene/canvas needed) so <c>UiScreensFixtureTests</c>
-        /// can assert the resulting <see cref="RigState"/>/<see cref="PickupWallet"/> values directly,
-        /// without a play-mode capture.</summary>
+        /// capture and the design image are directly comparable. MV-734 removed the COOLDOWN node
+        /// (e_cd) this fixture used to own/level, and re-parented e_mag directly onto e_cel; e_mag now
+        /// stands in as the ENERGY branch's "owned, leveled" example in its place. Every node not spent
+        /// here is left at its <see cref="RigState.Reset"/> baseline — that alone gives
+        /// s_bal/m_spd/m_tp their "reached, not owned" states and u_slt its "not reached" one, off the
+        /// same parent-level rule <see cref="RigState.IsReached"/> already enforces, with nothing extra
+        /// to stage for them. Public (and static — no scene/canvas needed) so
+        /// <c>UiScreensFixtureTests</c> can assert the resulting <see cref="RigState"/>/<see cref="PickupWallet"/>
+        /// values directly, without a play-mode capture.</summary>
         public static void ApplyRigFixture()
         {
             ResetRunForFixture();
@@ -423,8 +425,8 @@ namespace MaxWorlds.Dev
             RigState.AcquireCap("e_ff");
             SpendToLevel("e_ff", 2);
             RigState.AcquireCap("e_cel");
-            RigState.AcquireCap("e_cd");
-            SpendToLevel("e_cd", 3);
+            RigState.AcquireCap("e_mag");
+            SpendToLevel("e_mag", 3);
 
             RigState.AcquireCap("u_sen");
             RigState.AcquireCap("u_dmg");
