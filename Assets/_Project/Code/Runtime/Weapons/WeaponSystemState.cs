@@ -328,7 +328,10 @@ namespace MaxWorlds.Weapons
             RigState.RestoreSnapshot(preservedLevels, preservedCategories);
             RigState.ActivateSecondaryMystery();
 
-            s_activePrimary = WeaponCatalog.PrimaryKind.Lppe;
+            // MV-714: World 3 morphs the primary to UNDERTOW via this same call — the existing
+            // per-world primary selection the ticket asks for, not a new path. SECONDARY's own World 3
+            // shape isn't part of this ticket, so it keeps the World 2 Shoulder Rack unchanged here.
+            s_activePrimary = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow : WeaponCatalog.PrimaryKind.Lppe;
             s_secondaryKind = SecondaryKind.ShoulderRack;
             RebuildAcquiredFromRigState();   // fires Changed
         }

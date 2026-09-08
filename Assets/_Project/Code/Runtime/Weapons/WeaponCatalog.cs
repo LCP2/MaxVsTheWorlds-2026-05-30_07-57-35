@@ -22,9 +22,11 @@ namespace MaxWorlds.Weapons
         public const string PrimaryShortName = "RCDA";
 
         /// <summary>Which primary is currently equipped (MV-708) — the RCDA from run start, replaced
-        /// by the LPPE for the rest of the campaign once World 2 begins. The swap itself is
-        /// MV-689/MV-698; this ticket only adds the weapon and makes it selectable.</summary>
-        public enum PrimaryKind { Rcda, Lppe }
+        /// by the LPPE for the rest of the campaign once World 2 begins, then by UNDERTOW once World 3
+        /// begins (MV-714). The swap itself is MV-689/MV-698 (World 2) and the same
+        /// <c>WeaponSystemState.ApplyWeaponCoreMorph</c> path extended for World 3; this ticket only
+        /// adds the weapon and makes it selectable.</summary>
+        public enum PrimaryKind { Rcda, Lppe, Undertow }
 
         /// <summary>World 2's primary (MV-708) — the Locked-Phase Pulse Emitter. Whether "LPPE" itself
         /// gets renamed is Lee's call; the code identifier stays <see cref="PrimaryKind.Lppe"/> either
@@ -32,10 +34,17 @@ namespace MaxWorlds.Weapons
         public const string LppeName = "LOCKED-PHASE PULSE EMITTER";
         public const string LppeShortName = "LPPE";
 
+        /// <summary>World 3's primary (MV-714) — UNDERTOW, a pressure lance with a charged cavitation
+        /// implosion. Short and long names are the same word — the ticket never gives it a longer
+        /// technical name the way RCDA/LPPE have one.</summary>
+        public const string UndertowName = "UNDERTOW";
+        public const string UndertowShortName = "UNDERTOW";
+
         public static string DisplayName(PrimaryKind kind) => kind switch
         {
             PrimaryKind.Rcda => PrimaryName,
             PrimaryKind.Lppe => LppeName,
+            PrimaryKind.Undertow => UndertowName,
             _ => kind.ToString(),
         };
 
@@ -43,6 +52,7 @@ namespace MaxWorlds.Weapons
         {
             PrimaryKind.Rcda => PrimaryShortName,
             PrimaryKind.Lppe => LppeShortName,
+            PrimaryKind.Undertow => UndertowShortName,
             _ => kind.ToString(),
         };
 

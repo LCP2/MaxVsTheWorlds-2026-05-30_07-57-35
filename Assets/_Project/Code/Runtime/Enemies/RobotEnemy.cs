@@ -925,6 +925,24 @@ namespace MaxWorlds.Enemies
             _knockback += impulse;
         }
 
+        /// <summary>UNDERTOW's cavitation implosion (MV-714): pulls this robot <paramref name="distance"/>
+        /// metres toward <paramref name="point"/>, applied instantly rather than decayed like
+        /// <see cref="ApplyKnockback(Vector3)"/> — the grouping is the point, so the moved robots need to
+        /// land at their resolved final position the same tick the implosion lands, not ease there over
+        /// several frames. Unlike <see cref="ApplyKnockback(Vector3)"/>'s impulse, this is a flat
+        /// displacement regardless of how close the robot already is to <paramref name="point"/> — a
+        /// robot seeded inside the pull distance ends up pulled straight through and past it, matching
+        /// the ticket's own AC (a robot 1m out and one 3.9m out both end up exactly 2.5m closer). Same
+        /// direct point-to-point <see cref="CharacterControllerMotion.SafeMove"/> idiom
+        /// <see cref="TickReplicatorSeeking"/> already uses.</summary>
+        public void ApplyPull(Vector3 point, float distance)
+        {
+            if (Current == State.Dead) return;
+            Vector3 toPoint = point - transform.position;
+            if (toPoint.sqrMagnitude < 1e-6f) return;
+            CharacterControllerMotion.SafeMove(_cc, toPoint.normalized * distance);
+        }
+
         private void ApplyKnockback(float dt)
         {
             if (_knockback.sqrMagnitude < 0.0004f) { _knockback = Vector3.zero; return; }
