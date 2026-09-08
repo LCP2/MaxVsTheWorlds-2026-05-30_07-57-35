@@ -7,8 +7,9 @@ namespace MaxWorlds.Tests.EditMode
 {
     /// <summary>
     /// MV-430 — the gear's teeth used to float 0.070 world units clear of the disc rim (a diameter, not
-    /// a radius, treated as the disc's world radius — the same trap <see cref="WeaponPartArt.BuildPowerCell"/>'s
-    /// CasingRadius doc already called out) and the machine-internals pool was ten designs that all
+    /// a radius, treated as the disc's world radius — the same stretched-primitive-radius trap
+    /// <see cref="WeaponPartArt.BuildPowerCell"/>'s hex-nut walls now avoid too, deriving their own
+    /// placement from <c>NutApothem</c>) and the machine-internals pool was ten designs that all
     /// collapsed to noise at the fixed 72° camera. This pins the fix: one design in the pool, its teeth
     /// seated against the disc with the ring radius derived from the disc's own scale, and a dark
     /// (not chrome) plinth on every part builder.

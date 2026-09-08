@@ -364,45 +364,59 @@ namespace MaxWorlds.VFX
 
         // ---------------------------------------------------------------- the power cell
 
-        /// <summary>The power cell — the common collectible that banks into the HUD counter. A stubby
-        /// battery: a dark casing with a bright cyan core band and a terminal nub, so it reads as
-        /// "energy" from across the lawn and is never mistaken for a part.</summary>
+        /// <summary>The nut's centre-to-face distance (its apothem) and matching flat-side length — a
+        /// hex ring built from six flat wall panels rather than a hand-authored hollow-prism mesh, the
+        /// same "primitives arranged around a circle" idiom <see cref="BuildGear"/>'s eight teeth already
+        /// use. A real nut is open both ends (nothing caps the bore), so six walls are the whole shape —
+        /// no separate mesh, no cap-face winding-order risk.</summary>
+        private const float NutApothem = 0.16f;
+        private const float NutWallLength = 0.185f;   // ~= NutApothem / cos(30°), a regular hexagon's side
+        private const float NutWallThickness = 0.03f;
+        private const float NutBottomY = 0.06f, NutTopY = 0.30f;
+
+        /// <summary>The power cell — the common collectible that banks into the HUD counter. MV-725: a
+        /// hex nut with a bolt through it, replacing the old cyan battery capsule now that MV-671 renamed
+        /// "Cells" to "Parts" but never re-skinned the icon. Cyan stays (the established currency colour,
+        /// and <see cref="PickupArtDirector"/>'s ground ring under the pickup is already cyan); only the
+        /// SHAPE changes, to something honestly "a scavenged machine part" instead of a battery — and,
+        /// being a hex prism with an axial bolt rather than a flat toothed disc, it can't be mistaken for
+        /// <see cref="BuildGear"/>'s cosmetic cog at gameplay distance.</summary>
         public static GameObject BuildPowerCell(Transform parent = null)
         {
             var root = Root("PowerCell", parent);
-            // Consistently CYAN (MV-304): the neutral Steel casing this used to wear was the majority
-            // of the prop's surface area, so next to the bright cyan "Core" band it still read as a
-            // grey/drab battery — inconsistent with the equally-cyan greybox sphere (Pickup.CellColor)
-            // a just-spawned, not-yet-dressed cell shows. Casing now wears the cell's own CellCyan
-            // instead of a neutral metal tone, so the whole body reads as one charged object. The caps
-            // stay Chrome as a small trim accent, matching every other prop in this catalog's
-            // "coloured body + chrome trim" language.
-            Material casing = MaterialLibrary.Tinted(SurfaceKind.Metal, CellCyan);
-            Material cap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+            Material nut = MaterialLibrary.Tinted(SurfaceKind.Metal, CellCyan);
+            Material bolt = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
 
-            Part(root, "Casing", PrimitiveType.Cylinder, new Vector3(0f, 0.18f, 0f),
-                 new Vector3(0.2f, 0.18f, 0.2f), null, casing);
-            // The bright core band — the "charge" the eye reads.
-            Glow(root, "Core", new Vector3(0f, 0.18f, 0f), 0.17f, CellCyan);
-            // ...but the band should ring the middle, not be a ball: squash it and let the casing hide
-            // its top and bottom, leaving a lit stripe. Cheap greybox: a slightly larger glow disc.
-            Part(root, "TopCap", PrimitiveType.Cylinder, new Vector3(0f, 0.36f, 0f),
-                 new Vector3(0.14f, 0.03f, 0.14f), null, cap);
-            Part(root, "Terminal", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
-                 new Vector3(0.06f, 0.04f, 0.06f), null, cap);
+            float nutCy = (NutBottomY + NutTopY) * 0.5f;
+            float nutHeight = NutTopY - NutBottomY;
+            for (int i = 0; i < 6; i++)
+            {
+                float a = i * 60f;
+                Vector3 dir = Quaternion.Euler(0f, a, 0f) * Vector3.forward;
+                Part(root, $"Wall{i}", PrimitiveType.Cube, dir * NutApothem + Vector3.up * nutCy,
+                     new Vector3(NutWallLength, nutHeight, NutWallThickness), Quaternion.Euler(0f, a, 0f), nut);
+            }
 
-            // The GLISTEN (YT-167, extended WV-236): the soft additive Core band above reads as a lit
-            // charge, but Lee's playtest on device still saw the cell as flat — an aura around a shape
-            // isn't the same as a shape looking SHINY. A specular highlight has to sit ON the surface,
-            // not haloed around it. Four dots, not two — "shine and glisten like DIAMONDS" (WV-236) reads
-            // as several facets catching light at once, not a single pair — at different heights/angles/
-            // sizes on the casing: PickupArtDirector spins this root and flickers each on its own phase,
-            // so between the spin and the twinkle a facet is sweeping across the eye almost constantly
-            // rather than one dot parked on the back half of the turn.
-            Glisten(root, GlistenPrefix + "0", OnCircle(35f, 0.24f, CasingRadius), 0.05f);
-            Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.13f, CasingRadius), 0.035f);
-            Glisten(root, GlistenPrefix + "2", OnCircle(120f, 0.30f, CasingRadius), 0.04f);
-            Glisten(root, GlistenPrefix + "3", OnCircle(300f, 0.05f, CasingRadius), 0.045f);
+            // The bolt running through the nut's open bore — protruding below (flush with the ground)
+            // and above the nut, capped with a head, so "a bolt through it" reads unambiguously even at
+            // the fixed 72° camera.
+            Part(root, "BoltShaft", PrimitiveType.Cylinder, new Vector3(0f, 0.20f, 0f),
+                 new Vector3(0.06f, 0.20f, 0.06f), null, bolt);
+            Part(root, "BoltHead", PrimitiveType.Cylinder, new Vector3(0f, 0.42f, 0f),
+                 new Vector3(0.11f, 0.03f, 0.11f), null, bolt);
+
+            // The charge — the "this is energy, bank it" read the old battery's core band gave, now
+            // glowing inside the open bore instead of behind a solid casing face.
+            Glow(root, "Core", new Vector3(0f, nutCy, 0f), 0.09f, CellCyan);
+
+            // The GLISTEN (YT-167, extended WV-236): four specular dots riding the nut's outer faces —
+            // unchanged in count/language from the old casing's four, just relocated onto the new hex
+            // walls. PickupArtDirector spins this root and flickers each on its own phase, and its
+            // PowerCell branch unconditionally drives all four slots, so the count must stay four.
+            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.24f, NutApothem), 0.05f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(160f, 0.12f, NutApothem), 0.035f);
+            Glisten(root, GlistenPrefix + "2", OnCircle(100f, 0.27f, NutApothem), 0.04f);
+            Glisten(root, GlistenPrefix + "3", OnCircle(280f, 0.09f, NutApothem), 0.045f);
             return root;
         }
 
@@ -442,14 +456,9 @@ namespace MaxWorlds.VFX
             return root;
         }
 
-        /// <summary>Unity's cylinder primitive has a 0.5 radius, so the power cell casing's 0.2 local
-        /// scale is an actual world radius of 0.1, not 0.2 — <see cref="OnCircle"/> callers sit just
-        /// outside that so a glint reads as sitting on the metal rather than buried inside it.</summary>
-        private const float CasingRadius = 0.105f;
-
         /// <summary>A point on a circle — <paramref name="angleDeg"/> around the vertical axis at height
         /// <paramref name="y"/> and the given <paramref name="radius"/>. Shared by the power cell's
-        /// casing glints and the Hydro device's coil-ring glints (WV-236) — both are "a sparkle riding a
+        /// nut-wall glints and the Hydro device's coil-ring glints (WV-236) — both are "a sparkle riding a
         /// cylindrical surface", just at different radii/heights.</summary>
         private static Vector3 OnCircle(float angleDeg, float y, float radius)
         {
@@ -490,9 +499,10 @@ namespace MaxWorlds.VFX
 
         /// <summary>A toothed cog — a flat disc ringed with square teeth around a hub. MV-430: rebuilt
         /// so the teeth sit flush against the disc rim instead of floating clear of it — the same
-        /// detached-geometry trap <see cref="BuildPowerCell"/>'s <see cref="CasingRadius"/> doc already
-        /// called out. The tooth ring radius is derived from the disc's own scale, not written as a
-        /// second literal, so the two can never drift apart again.</summary>
+        /// detached-geometry trap a stretched-primitive radius not matching its own scale can fall into
+        /// (<see cref="BuildPowerCell"/>'s hex-nut walls derive their own placement from
+        /// <see cref="NutApothem"/> for the same reason). The tooth ring radius is derived from the
+        /// disc's own scale, not written as a second literal, so the two can never drift apart again.</summary>
         public static GameObject BuildGear(Transform parent = null)
         {
             var root = Root("Gear", parent);

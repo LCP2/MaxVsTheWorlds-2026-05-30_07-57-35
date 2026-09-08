@@ -18,9 +18,17 @@ namespace MaxWorlds.VFX
 
         private static readonly Color CellCyan = new Color(0.31f, 0.86f, 0.98f, 1f);
         private static readonly Color CellDark = new Color(0.06f, 0.20f, 0.26f, 1f);
+        // MV-725: a near-neutral chrome for the bolt shaft/head, matching WeaponPartArt.Chrome's value
+        // (kept as its own literal, not a cross-file reference, so this file stays self-contained per
+        // its own doc comment above) — distinct from the nut's cyan so the bolt reads as its own part.
+        private static readonly Color BoltMetal = new Color(0.80f, 0.83f, 0.88f, 1f);
 
-        /// <summary>A little battery cell: a rounded casing, a terminal nub, and three charge segments.
-        /// White-cored cyan so it stays legible at the ~40 px it renders at in the HUD pill.</summary>
+        /// <summary>MV-725: a hex nut with a bolt through it — the everyday Part currency icon,
+        /// replacing the old battery capsule now that MV-671 renamed "Cells" to "Parts" but never
+        /// re-skinned the art. Cyan stays (the established currency colour); the shape changes to
+        /// something honestly "a scavenged machine part". The hex reads as a solid cyan hexagon with a
+        /// circular bore; the bolt is drawn UNDER the hex fill so it only shows where the hex doesn't
+        /// cover it — through the bore, and protruding past the hex's top and bottom.</summary>
         public static Sprite PowerCell(int size = 64)
         {
             const string key = "powercell";
@@ -29,50 +37,45 @@ namespace MaxWorlds.VFX
             var tex = NewTex(size, size);
             var px = new Color32[size * size];   // starts fully transparent
 
-            // Battery body: a rounded rectangle, taller than wide, centred, with a terminal nub on top.
-            float w = size * 0.5f, h = size * 0.66f;
-            float cx = size * 0.5f, cy = size * 0.46f;
-            float left = cx - w * 0.5f, right = cx + w * 0.5f;
-            float bottom = cy - h * 0.5f, top = cy + h * 0.5f;
-            float radius = size * 0.08f;
-            float border = size * 0.09f;
+            float cx = size * 0.5f, cy = size * 0.5f;
+            float hexR = size * 0.42f;
+            float bore = size * 0.17f;
 
-            // The terminal nub.
-            float nubW = w * 0.4f, nubH = size * 0.08f;
-            float nubL = cx - nubW * 0.5f, nubR = cx + nubW * 0.5f;
-            float nubB = top, nubT = top + nubH;
+            // The nut's solid cyan face — everywhere inside the hex silhouette except the bore.
+            for (int y = 0; y < size; y++)
+            {
+                for (int x = 0; x < size; x++)
+                {
+                    float fx = x + 0.5f, fy = y + 0.5f;
+                    if (!InsideHex(fx, fy, cx, cy, hexR)) continue;
+                    float dx = fx - cx, dy = fy - cy;
+                    if (dx * dx + dy * dy <= bore * bore) continue;   // the bore stays open
+                    px[y * size + x] = CellCyan;
+                }
+            }
+
+            // The bolt shaft (through the bore, protruding above/below) and its head (a cap above the
+            // nut). Only drawn where the nut's solid face wouldn't already cover it.
+            float shaftHalfW = size * 0.085f;
+            float shaftBottom = size * 0.06f, shaftTop = size * 0.94f;
+            float headHalfW = size * 0.15f;
+            float headBottom = shaftTop - size * 0.10f, headTop = shaftTop;
 
             for (int y = 0; y < size; y++)
             {
                 for (int x = 0; x < size; x++)
                 {
                     float fx = x + 0.5f, fy = y + 0.5f;
-                    Color c = new Color(0, 0, 0, 0);
+                    bool onShaft = Mathf.Abs(fx - cx) <= shaftHalfW && fy >= shaftBottom && fy <= shaftTop;
+                    bool onHead = Mathf.Abs(fx - cx) <= headHalfW && fy >= headBottom && fy <= headTop;
+                    if (!onShaft && !onHead) continue;
 
-                    if (fx >= nubL && fx <= nubR && fy >= nubB && fy <= nubT)
-                    {
-                        c = CellCyan;   // the nub
-                    }
-                    else if (RoundedInside(fx, fy, left, right, bottom, top, radius))
-                    {
-                        // Border cyan, interior dark, with three bright charge segments.
-                        bool onBorder = !RoundedInside(fx, fy, left + border, right - border,
-                                                       bottom + border, top - border, radius * 0.5f);
-                        if (onBorder)
-                        {
-                            c = CellCyan;
-                        }
-                        else
-                        {
-                            c = CellDark;
-                            // Three horizontal charge bars stacked in the interior.
-                            float rel = (fy - (bottom + border)) / (top - bottom - 2f * border);
-                            float band = rel * 3f;
-                            if (band - Mathf.Floor(band) < 0.66f) c = CellCyan;
-                        }
-                    }
+                    bool inHex = InsideHex(fx, fy, cx, cy, hexR);
+                    float dx = fx - cx, dy = fy - cy;
+                    bool inBore = dx * dx + dy * dy <= bore * bore;
+                    if (inHex && !inBore) continue;   // hidden behind the nut's solid face
 
-                    if (c.a > 0f) px[y * size + x] = c;
+                    px[y * size + x] = BoltMetal;
                 }
             }
 
@@ -83,6 +86,26 @@ namespace MaxWorlds.VFX
             sprite.name = key;
             s_cache[key] = sprite;
             return sprite;
+        }
+
+        /// <summary>Point-in-regular-hexagon test (flat-top/bottom, pointy left/right — vertices at
+        /// 0°/60°/.../300°) via the standard same-side-of-every-edge convexity test. Sign-agnostic (reads
+        /// its reference sign off the first edge) so it doesn't matter which rotation direction the
+        /// vertex walk turns out to be.</summary>
+        private static bool InsideHex(float fx, float fy, float cx, float cy, float r)
+        {
+            float refSign = 0f;
+            for (int i = 0; i < 6; i++)
+            {
+                float a0 = i * 60f * Mathf.Deg2Rad;
+                float a1 = ((i + 1) % 6) * 60f * Mathf.Deg2Rad;
+                float x0 = cx + Mathf.Cos(a0) * r, y0 = cy + Mathf.Sin(a0) * r;
+                float x1 = cx + Mathf.Cos(a1) * r, y1 = cy + Mathf.Sin(a1) * r;
+                float cross = (x1 - x0) * (fy - y0) - (y1 - y0) * (fx - x0);
+                if (i == 0) { refSign = Mathf.Sign(cross); continue; }
+                if (cross != 0f && Mathf.Sign(cross) != refSign) return false;
+            }
+            return true;
         }
 
         // MV-672 — Power Cells (the new secondary currency): amber, angular, deliberately unlike the
