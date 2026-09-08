@@ -1,61 +1,53 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 2 — Stormdrain",
- "revision": "PLACEHOLDER — replaced by MV-700",
- "note": "MV-687: stub config so the world-advance flow (WorldIndex, NEXT WORLD, world2_config loading) is testable before World 2's real level design lands. dials/enemyTypes copied verbatim from world1_config.json. Only two real areas are authored: a1 (Outfall Steps, 4 rushers) and a23 (the boss room, single big_bermuda, garrisonDensity none so it fields no ambient defenders). Do not treat this as a design pass — MV-700 replaces it wholesale.",
- "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
+ "revision": "WORLD 2 v1 2026-09-08 (MV-700): areas a1-a23 converted from world2_config.DESIGN.json (authored by the build chat from the World 2 brief; the xlsx/svg pair alongside it are the drawn source). Replaces the MV-687/696 placeholder (2 areas). Garrison/grate/replicator/boss/cover coordinates were area-local in the DESIGN file and were shifted to the engine's absolute-world convention here; sludge/deck/ramp/hatch rects stayed area-local, matching WorldRectOf. DESIGN's per-area \"floorComposition\" (extra floor-level composition on a13/a15/a19 when the deck overlay is revisited) has no engine equivalent (WorldArea carries one composition per area index) and was not carried over — see the MV-700 fix comment.",
+ "note": "DESIGN v1 2026-09-07 — authored by the build chat from the World 2 brief; not yet approved",
+ "units": "1 world unit = 1 metre",
  "wallHeight": 1.5,
  "dials": {
-  "areaCount": 30,
-  "baseThreat": 14.0,
+  "areaCount": 23,
+  "baseThreat": 20,
   "threatGrowth": 0.1,
   "band": {
    "up": 0.4,
    "down": -0.15
   },
   "pacingRhythm": [
-   0.35,
-   1.1,
+   0.4,
+   1,
    1.15,
-   0.9,
-   1.1,
-   1.2,
-   0.9,
-   1.25,
-   1.0,
    1.05,
-   1.3,
-   0.95,
+   1.05,
+   1.2,
    1.1,
-   1.35,
+   1.25,
    0.9,
+   1.1,
    1.15,
    1.4,
+   1,
+   1.2,
+   1.1,
+   1.15,
+   1.05,
+   1.1,
+   1.25,
    1.3,
-   0.354,
-   1.126,
-   1.191,
-   0.943,
-   1.166,
-   1.286,
-   0.976,
-   1.37,
-   1.108,
-   1.176,
-   1.472,
-   1.087
+   1.4,
+   1,
+   1.5
   ],
   "toughnessCurve": {
-   "heavyFromArea": 5,
-   "bruteFromArea": 8,
-   "toughSubstitutionPct": 0.25,
-   "tankShareEnd": 0.7,
-   "gunnerFromArea": 2,
-   "launcherFromArea": 3,
-   "blinkerFromArea": 4,
-   "specialSharePct": 12
+   "heavyFromArea": 8,
+   "bruteFromArea": 11,
+   "gunnerFromArea": 5,
+   "launcherFromArea": 10,
+   "blinkerFromArea": 9
   },
-  "powerupCadence": 2
+  "powerupCadence": 2,
+  "sludgeSpeedMultiplier": 0.6,
+  "deckHeight": 2.5
  },
  "enemyTypes": {
   "small": {
@@ -69,6 +61,18 @@
   },
   "brute": {
    "thv": 8.53
+  },
+  "lurker": {
+   "thv": 3
+  },
+  "sludger": {
+   "thv": 2
+  },
+  "charger": {
+   "thv": 3.4
+  },
+  "turret": {
+   "thv": 2.5
   }
  },
  "enemyOverrides": [
@@ -91,7 +95,7 @@
    "to": {
     "area": "a1",
     "wall": "W",
-    "pos": 0.55
+    "pos": 0.5
    },
    "width": 3,
    "opensWith": "start"
@@ -100,16 +104,361 @@
    "id": "g1",
    "from": {
     "area": "a1",
-    "wall": "S",
+    "wall": "E",
     "pos": 0.5
    },
    "to": {
-    "area": "a23",
+    "area": "a2",
+    "wall": "W",
+    "pos": 0.42
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g2",
+   "from": {
+    "area": "a2",
+    "wall": "E",
+    "pos": 0.21
+   },
+   "to": {
+    "area": "a3",
+    "wall": "W",
+    "pos": 0.3
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g3",
+   "from": {
+    "area": "a3",
+    "wall": "E",
+    "pos": 0.63
+   },
+   "to": {
+    "area": "a4",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g4",
+   "from": {
+    "area": "a3",
+    "wall": "S",
+    "pos": 0.85
+   },
+   "to": {
+    "area": "a5",
+    "wall": "N",
+    "pos": 0.48
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g5",
+   "from": {
+    "area": "a4",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a6",
+    "wall": "W",
+    "pos": 0.58
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g6",
+   "from": {
+    "area": "a5",
+    "wall": "E",
+    "pos": 0.46
+   },
+   "to": {
+    "area": "a7",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g7",
+   "from": {
+    "area": "a6",
+    "wall": "S",
+    "pos": 0.43
+   },
+   "to": {
+    "area": "a8",
     "wall": "N",
     "pos": 0.5
    },
    "width": 3,
    "opensWith": "primary"
+  },
+  {
+   "id": "g8",
+   "from": {
+    "area": "a7",
+    "wall": "E",
+    "pos": 0.58
+   },
+   "to": {
+    "area": "a8",
+    "wall": "W",
+    "pos": 0.38
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g9",
+   "from": {
+    "area": "a8",
+    "wall": "E",
+    "pos": 0.38
+   },
+   "to": {
+    "area": "a9",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g10",
+   "from": {
+    "area": "a9",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a10",
+    "wall": "W",
+    "pos": 0.62
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g11",
+   "from": {
+    "area": "a10",
+    "wall": "E",
+    "pos": 0.58
+   },
+   "to": {
+    "area": "a11",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g12",
+   "from": {
+    "area": "a11",
+    "wall": "E",
+    "pos": 0.27
+   },
+   "to": {
+    "area": "a12",
+    "wall": "W",
+    "pos": 0.33
+   },
+   "width": 9,
+   "opensWith": "replicators-destroyed:a2,a3,a5,a6,a7,a8,a9,a10,a11"
+  },
+  {
+   "id": "g13",
+   "from": {
+    "area": "a12",
+    "wall": "W",
+    "pos": 0.6
+   },
+   "to": {
+    "area": "a13",
+    "wall": "E",
+    "pos": 0.64
+   },
+   "width": 3,
+   "opensWith": "replicators-destroyed:a12[DECK]"
+  },
+  {
+   "id": "g14",
+   "from": {
+    "area": "a13",
+    "wall": "N",
+    "pos": 0.09
+   },
+   "to": {
+    "area": "a14",
+    "wall": "S",
+    "pos": 0.95
+   },
+   "width": 3,
+   "opensWith": "primary[DECK]"
+  },
+  {
+   "id": "g15",
+   "from": {
+    "area": "a14",
+    "wall": "W",
+    "pos": 0.67
+   },
+   "to": {
+    "area": "a15",
+    "wall": "E",
+    "pos": 0.08
+   },
+   "width": 3,
+   "opensWith": "primary[DECK]"
+  },
+  {
+   "id": "g16",
+   "from": {
+    "area": "a15",
+    "wall": "N",
+    "pos": 0.07
+   },
+   "to": {
+    "area": "a16",
+    "wall": "S",
+    "pos": 0.92
+   },
+   "width": 3,
+   "opensWith": "primary[DECK]"
+  },
+  {
+   "id": "g17",
+   "from": {
+    "area": "a16",
+    "wall": "W",
+    "pos": 0.43
+   },
+   "to": {
+    "area": "a17",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g18",
+   "from": {
+    "area": "a17",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a18",
+    "wall": "E",
+    "pos": 0.46
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g19",
+   "from": {
+    "area": "a17",
+    "wall": "S",
+    "pos": 0.1
+   },
+   "to": {
+    "area": "a19",
+    "wall": "N",
+    "pos": 0.74
+   },
+   "width": 3,
+   "opensWith": "primary[DECK]"
+  },
+  {
+   "id": "g20",
+   "from": {
+    "area": "a18",
+    "wall": "S",
+    "pos": 0.44
+   },
+   "to": {
+    "area": "a19",
+    "wall": "N",
+    "pos": 0.26
+   },
+   "width": 3,
+   "opensWith": "primary[DECK]"
+  },
+  {
+   "id": "g21",
+   "from": {
+    "area": "a19",
+    "wall": "S",
+    "pos": 0.26
+   },
+   "to": {
+    "area": "a20",
+    "wall": "N",
+    "pos": 0.56
+   },
+   "width": 3,
+   "opensWith": "primary[DECK]"
+  },
+  {
+   "id": "g22",
+   "from": {
+    "area": "a20",
+    "wall": "S",
+    "pos": 0.29
+   },
+   "to": {
+    "area": "a21",
+    "wall": "N",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "sluice"
+  },
+  {
+   "id": "g23",
+   "from": {
+    "area": "a21",
+    "wall": "E",
+    "pos": 0.52
+   },
+   "to": {
+    "area": "a22",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g24",
+   "from": {
+    "area": "a22",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a23",
+    "wall": "W",
+    "pos": 0.52
+   },
+   "width": 11,
+   "opensWith": "replicators-destroyed:all"
   }
  ],
  "areas": [
@@ -119,8 +468,8 @@
    "name": "Entry path",
    "role": "entry",
    "origin": {
-    "x": -6,
-    "z": 8
+    "x": 2,
+    "z": 107
    },
    "size": {
     "w": 6,
@@ -132,11 +481,11 @@
   {
    "id": "a1",
    "index": 1,
-   "name": "Area 1 - Outfall Steps",
+   "name": "Outfall Steps",
    "role": "normal",
    "origin": {
-    "x": 0,
-    "z": 0
+    "x": 8,
+    "z": 100
    },
    "size": {
     "w": 22,
@@ -144,43 +493,4076 @@
    },
    "hasShed": false,
    "garrisonDensity": "light",
-   "targetThreatBudget": 0,
-   "notes": "PLACEHOLDER (MV-687): 4 rushers, authored composition. Replaced by MV-700.",
+   "targetThreatBudget": 2.92,
    "composition": {
     "rusher": 4,
-    "bruiser": 0,
-    "heavy": 0,
-    "brute": 0,
-    "gunner": 0,
-    "launcher": 0,
-    "blinker": 0,
-    "bolter": 0
-   }
+    "turret": 1
+   },
+   "cover": [
+    {
+     "id": "a1_cover1",
+     "x": 14,
+     "z": 109,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a1_cover2",
+     "x": 22,
+     "z": 112,
+     "width": 2,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a1_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 22,
+     "d": 4
+    }
+   ],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "x": 16.5,
+     "z": 114.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 17.5,
+     "z": 114.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 23.5,
+     "z": 107.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 24.5,
+     "z": 107.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 28.5,
+     "z": 117.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a2",
+   "index": 2,
+   "name": "Grate Hall",
+   "role": "replicator",
+   "origin": {
+    "x": 30,
+    "z": 100
+   },
+   "size": {
+    "w": 24,
+    "d": 24
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 16,
+   "composition": {
+    "rusher": 5,
+    "sludger": 2,
+    "lurker": 2
+   },
+   "cover": [
+    {
+     "id": "a2_cover1",
+     "x": 34,
+     "z": 116,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a2_cover2",
+     "x": 47,
+     "z": 105,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a2_cover3",
+     "x": 40,
+     "z": 120,
+     "width": 8,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a2_grate1",
+     "x": 36,
+     "z": 106
+    },
+    {
+     "id": "a2_grate2",
+     "x": 48,
+     "z": 117
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a2_rep1",
+     "x": 42,
+     "z": 112,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "x": 35.5,
+     "z": 105.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 36.5,
+     "z": 105.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 49.5,
+     "z": 119.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 50.5,
+     "z": 119.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 42.5,
+     "z": 121.15,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 38.5,
+     "z": 112.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 46.5,
+     "z": 112.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 36.5,
+     "z": 106.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 48.5,
+     "z": 117.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a3",
+   "index": 3,
+   "name": "Junction Hall (floor)",
+   "role": "replicator",
+   "origin": {
+    "x": 54,
+    "z": 96
+   },
+   "size": {
+    "w": 36,
+    "d": 30
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 31.74,
+   "composition": {
+    "rusher": 6,
+    "charger": 2,
+    "bolter": 2,
+    "turret": 2,
+    "lurker": 1
+   },
+   "cover": [
+    {
+     "id": "a3_cover1",
+     "x": 57,
+     "z": 120,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a3_cover2",
+     "x": 85,
+     "z": 99,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a3_cover3",
+     "x": 67,
+     "z": 120,
+     "width": 10,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a3_cover4",
+     "x": 67,
+     "z": 101,
+     "width": 10,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a3_sludge1",
+     "x": 0,
+     "z": 13,
+     "w": 36,
+     "d": 5
+    }
+   ],
+   "decks": [
+    {
+     "id": "a3_deck1",
+     "x": 8,
+     "z": 0,
+     "w": 3,
+     "d": 30,
+     "height": 2.5
+    },
+    {
+     "id": "a3_deck2",
+     "x": 25,
+     "z": 0,
+     "w": 3,
+     "d": 30,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a3_ramp1",
+     "x": 5,
+     "z": 6,
+     "w": 3,
+     "d": 3
+    },
+    {
+     "id": "a3_ramp2",
+     "x": 28,
+     "z": 21,
+     "w": 3,
+     "d": 3
+    }
+   ],
+   "hatches": [
+    {
+     "id": "a3_hatch1",
+     "x": 8,
+     "z": 6,
+     "w": 1,
+     "d": 3
+    },
+    {
+     "id": "a3_hatch2",
+     "x": 25,
+     "z": 21,
+     "w": 1,
+     "d": 3
+    }
+   ],
+   "grates": [
+    {
+     "id": "a3_grate1",
+     "x": 73,
+     "z": 105
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a3_rep1",
+     "x": 86,
+     "z": 123,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "x": 57.5,
+     "z": 99.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 58.5,
+     "z": 99.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 87.5,
+     "z": 106.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 86.5,
+     "z": 106.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 69.5,
+     "z": 117.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 70.5,
+     "z": 117.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 74.5,
+     "z": 100.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 74.5,
+     "z": 122.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 87.5,
+     "z": 116.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 56.5,
+     "z": 116.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 55.5,
+     "z": 124.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 88.5,
+     "z": 97.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 73.5,
+     "z": 105.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a4",
+   "index": 4,
+   "name": "East Culvert",
+   "role": "normal",
+   "origin": {
+    "x": 90,
+    "z": 106
+   },
+   "size": {
+    "w": 34,
+    "d": 18
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 19.53,
+   "composition": {
+    "charger": 3,
+    "bolter": 3
+   },
+   "cover": [
+    {
+     "id": "a4_cover1",
+     "x": 96,
+     "z": 109,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a4_cover2",
+     "x": 103,
+     "z": 114,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a4_cover3",
+     "x": 110,
+     "z": 109,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a4_cover4",
+     "x": 117,
+     "z": 114,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a4_sludge1",
+     "x": 0,
+     "z": 13,
+     "w": 34,
+     "d": 5
+    }
+   ],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [],
+   "garrison": [
+    {
+     "kind": "charger",
+     "x": 120.5,
+     "z": 111.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 120.5,
+     "z": 113.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 94.5,
+     "z": 115.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 100.5,
+     "z": 116.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 107.5,
+     "z": 116.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 114.5,
+     "z": 116.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a5",
+   "index": 5,
+   "name": "South Gallery",
+   "role": "replicator",
+   "origin": {
+    "x": 74,
+    "z": 70
+   },
+   "size": {
+    "w": 22,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 23.94,
+   "composition": {
+    "lurker": 4,
+    "rusher": 4,
+    "gunner": 2
+   },
+   "cover": [
+    {
+     "id": "a5_cover1",
+     "x": 77,
+     "z": 83,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a5_cover2",
+     "x": 87,
+     "z": 83,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a5_cover3",
+     "x": 83,
+     "z": 74,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a5_cover4",
+     "x": 83,
+     "z": 90,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a5_grate1",
+     "x": 78,
+     "z": 74
+    },
+    {
+     "id": "a5_grate2",
+     "x": 91,
+     "z": 74
+    },
+    {
+     "id": "a5_grate3",
+     "x": 78,
+     "z": 91
+    },
+    {
+     "id": "a5_grate4",
+     "x": 91,
+     "z": 91
+    },
+    {
+     "id": "a5_grate5",
+     "x": 85,
+     "z": 81
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a5_rep1",
+     "x": 93,
+     "z": 79,
+     "capacity": 5
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "lurker",
+     "x": 78.5,
+     "z": 74.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 91.5,
+     "z": 74.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 78.5,
+     "z": 91.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 91.5,
+     "z": 91.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 84.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 85.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 84.5,
+     "z": 87.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 85.5,
+     "z": 87.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 77.5,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 92.5,
+     "z": 94.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a6",
+   "index": 6,
+   "name": "Trolley Yard (floor)",
+   "role": "replicator",
+   "origin": {
+    "x": 124,
+    "z": 100
+   },
+   "size": {
+    "w": 30,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 35.76,
+   "composition": {
+    "charger": 4,
+    "rusher": 6,
+    "sludger": 3,
+    "lurker": 1
+   },
+   "cover": [
+    {
+     "id": "a6_cover1",
+     "x": 131,
+     "z": 108,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a6_cover2",
+     "x": 142,
+     "z": 115,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a6_cover3",
+     "x": 134,
+     "z": 120,
+     "width": 8,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a6_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 30,
+     "d": 3
+    }
+   ],
+   "decks": [
+    {
+     "id": "a6_deck1",
+     "x": 0,
+     "z": 23,
+     "w": 30,
+     "d": 3,
+     "height": 2.5
+    },
+    {
+     "id": "a6_deck2",
+     "x": 27,
+     "z": 0,
+     "w": 3,
+     "d": 26,
+     "height": 2.5
+    },
+    {
+     "id": "a6_deck3",
+     "x": 0,
+     "z": 3,
+     "w": 3,
+     "d": 20,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a6_ramp1",
+     "x": 3,
+     "z": 20,
+     "w": 3,
+     "d": 2
+    },
+    {
+     "id": "a6_ramp2",
+     "x": 24,
+     "z": 3,
+     "w": 3,
+     "d": 3
+    }
+   ],
+   "hatches": [
+    {
+     "id": "a6_hatch1",
+     "x": 0,
+     "z": 20,
+     "w": 3,
+     "d": 1
+    },
+    {
+     "id": "a6_hatch2",
+     "x": 27,
+     "z": 3,
+     "w": 1,
+     "d": 3
+    }
+   ],
+   "grates": [
+    {
+     "id": "a6_grate1",
+     "x": 138,
+     "z": 106
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a6_rep1",
+     "x": 130,
+     "z": 115,
+     "capacity": 6
+    },
+    {
+     "id": "a6_rep2",
+     "x": 147,
+     "z": 107,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "charger",
+     "x": 134.5,
+     "z": 112.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 139.5,
+     "z": 110.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 144.5,
+     "z": 120.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 148.5,
+     "z": 112.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 130.5,
+     "z": 121.15,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 131.5,
+     "z": 121.15,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 137.5,
+     "z": 104.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 138.5,
+     "z": 104.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 149.5,
+     "z": 117.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 150.5,
+     "z": 117.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 133.5,
+     "z": 104.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 140.5,
+     "z": 120.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 146.5,
+     "z": 116.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 138.5,
+     "z": 106.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a7",
+   "index": 7,
+   "name": "Silt Beds",
+   "role": "replicator",
+   "origin": {
+    "x": 96,
+    "z": 70
+   },
+   "size": {
+    "w": 28,
+    "d": 24
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 21.15,
+   "composition": {
+    "sludger": 5,
+    "bruiser": 3,
+    "turret": 2
+   },
+   "cover": [
+    {
+     "id": "a7_cover1",
+     "x": 101,
+     "z": 75,
+     "width": 3,
+     "height": 1.6,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a7_cover2",
+     "x": 109,
+     "z": 75,
+     "width": 3,
+     "height": 1.6,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a7_cover3",
+     "x": 117,
+     "z": 75,
+     "width": 3,
+     "height": 1.6,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a7_cover4",
+     "x": 105,
+     "z": 85,
+     "width": 3,
+     "height": 1.6,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a7_cover5",
+     "x": 113,
+     "z": 85,
+     "width": 3,
+     "height": 1.6,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a7_sludge1",
+     "x": 0,
+     "z": 4,
+     "w": 28,
+     "d": 6
+    },
+    {
+     "id": "a7_sludge2",
+     "x": 0,
+     "z": 14,
+     "w": 28,
+     "d": 6
+    }
+   ],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [
+    {
+     "id": "a7_rep1",
+     "x": 121,
+     "z": 92,
+     "capacity": 5
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "sludger",
+     "x": 98.8,
+     "z": 76.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 106.5,
+     "z": 77.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 114.5,
+     "z": 77.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 102.8,
+     "z": 86.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 118.5,
+     "z": 86.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 109.5,
+     "z": 82.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 99.5,
+     "z": 91.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 116.5,
+     "z": 71.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 96.5,
+     "z": 93.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 123.5,
+     "z": 70.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a8",
+   "index": 8,
+   "name": "The Sump",
+   "role": "replicator",
+   "origin": {
+    "x": 124,
+    "z": 74
+   },
+   "size": {
+    "w": 26,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 38.45,
+   "composition": {
+    "heavy": 2,
+    "charger": 2,
+    "rusher": 6,
+    "sludger": 3
+   },
+   "cover": [
+    {
+     "id": "a8_cover1",
+     "x": 127,
+     "z": 77,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a8_cover2",
+     "x": 145,
+     "z": 77,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a8_cover3",
+     "x": 127,
+     "z": 95,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a8_cover4",
+     "x": 145,
+     "z": 95,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a8_sludge1",
+     "x": 8,
+     "z": 8,
+     "w": 10,
+     "d": 10
+    }
+   ],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a8_grate1",
+     "x": 137,
+     "z": 76
+    },
+    {
+     "id": "a8_grate2",
+     "x": 137,
+     "z": 97
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a8_rep1",
+     "x": 126,
+     "z": 87,
+     "capacity": 6
+    },
+    {
+     "id": "a8_rep2",
+     "x": 147.9,
+     "z": 88.5,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "heavy",
+     "x": 137.5,
+     "z": 87.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 130.5,
+     "z": 93.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 144.5,
+     "z": 80.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 130.5,
+     "z": 80.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 136.5,
+     "z": 79.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 138.5,
+     "z": 79.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 136.5,
+     "z": 95.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 138.5,
+     "z": 95.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 127.5,
+     "z": 87.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 147.5,
+     "z": 87.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 143.3,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 133.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 141.5,
+     "z": 96.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a9",
+   "index": 9,
+   "name": "Pump Alcove",
+   "role": "replicator",
+   "origin": {
+    "x": 150,
+    "z": 74
+   },
+   "size": {
+    "w": 20,
+    "d": 20
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 17.31,
+   "composition": {
+    "bruiser": 3,
+    "blinker": 2,
+    "bolter": 3
+   },
+   "cover": [
+    {
+     "id": "a9_cover1",
+     "x": 156.25,
+     "z": 84,
+     "width": 7.5,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a9_cover2",
+     "x": 153,
+     "z": 77,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a9_cover3",
+     "x": 165,
+     "z": 89,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [
+    {
+     "id": "a9_rep1",
+     "x": 167,
+     "z": 78,
+     "capacity": 5
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "bruiser",
+     "x": 156.5,
+     "z": 88.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 160.5,
+     "z": 88.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 164.5,
+     "z": 80.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 153.5,
+     "z": 90.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 166.5,
+     "z": 90.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 159.5,
+     "z": 77.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 161.5,
+     "z": 77.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 160.5,
+     "z": 91.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "index": 10,
+   "name": "Filter Bank",
+   "role": "replicator",
+   "origin": {
+    "x": 170,
+    "z": 68
+   },
+   "size": {
+    "w": 24,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 36.52,
+   "composition": {
+    "gunner": 4,
+    "launcher": 2,
+    "rusher": 5,
+    "turret": 2,
+    "lurker": 1
+   },
+   "cover": [
+    {
+     "id": "a10_cover1",
+     "x": 174,
+     "z": 73,
+     "width": 16,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a10_cover2",
+     "x": 177.5,
+     "z": 83,
+     "width": 9,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a10_cover3",
+     "x": 174,
+     "z": 87,
+     "width": 16,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a10_cover4",
+     "x": 171,
+     "z": 90,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a10_cover5",
+     "x": 191,
+     "z": 90,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a10_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 24,
+     "d": 3
+    }
+   ],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a10_grate1",
+     "x": 182,
+     "z": 78
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a10_rep1",
+     "x": 191,
+     "z": 72,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "gunner",
+     "x": 176.5,
+     "z": 77.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 188.5,
+     "z": 77.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 176.5,
+     "z": 84.15,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 188.5,
+     "z": 83.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 182.5,
+     "z": 91.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 182.67,
+     "z": 72.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 173.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 191.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 173.5,
+     "z": 84.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 191.5,
+     "z": 84.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 182.5,
+     "z": 92.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 170.5,
+     "z": 93.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 193.5,
+     "z": 93.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 182.5,
+     "z": 78.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "index": 11,
+   "name": "The Weir (floor)",
+   "role": "replicator",
+   "origin": {
+    "x": 194,
+    "z": 72
+   },
+   "size": {
+    "w": 22,
+    "d": 22
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 39.43,
+   "composition": {
+    "brute": 1,
+    "heavy": 2,
+    "charger": 3,
+    "rusher": 4
+   },
+   "cover": [
+    {
+     "id": "a11_cover1",
+     "x": 198,
+     "z": 74,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a11_cover2",
+     "x": 209,
+     "z": 74,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a11_cover3",
+     "x": 203,
+     "z": 77,
+     "width": 4,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a11_sludge1",
+     "x": 0,
+     "z": 18,
+     "w": 22,
+     "d": 4
+    }
+   ],
+   "decks": [
+    {
+     "id": "a11_deck1",
+     "x": 0,
+     "z": 12,
+     "w": 22,
+     "d": 3,
+     "height": 2.5
+    },
+    {
+     "id": "a11_deck2",
+     "x": 1,
+     "z": 15,
+     "w": 3,
+     "d": 7,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a11_ramp1",
+     "x": 0,
+     "z": 9,
+     "w": 3,
+     "d": 3
+    },
+    {
+     "id": "a11_ramp2",
+     "x": 19,
+     "z": 15,
+     "w": 3,
+     "d": 3
+    }
+   ],
+   "hatches": [
+    {
+     "id": "a11_hatch1",
+     "x": 0,
+     "z": 12,
+     "w": 3,
+     "d": 1
+    },
+    {
+     "id": "a11_hatch2",
+     "x": 19,
+     "z": 14,
+     "w": 3,
+     "d": 1
+    }
+   ],
+   "grates": [],
+   "replicators": [
+    {
+     "id": "a11_rep1",
+     "x": 213,
+     "z": 81,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "brute",
+     "x": 205.5,
+     "z": 75.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 198.5,
+     "z": 80.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 212.5,
+     "z": 76.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 196.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 214.5,
+     "z": 78.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 205.5,
+     "z": 88.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 200.5,
+     "z": 82.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 210.5,
+     "z": 82.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 197.5,
+     "z": 92.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 213.5,
+     "z": 92.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "index": 12,
+   "name": "Replicator Nest",
+   "role": "setpiece",
+   "origin": {
+    "x": 216,
+    "z": 68
+   },
+   "size": {
+    "w": 34,
+    "d": 30
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 82.28,
+   "composition": {
+    "heavy": 3,
+    "brute": 1,
+    "rusher": 8,
+    "sludger": 4,
+    "lurker": 3,
+    "turret": 3
+   },
+   "cover": [
+    {
+     "id": "a12_cover1",
+     "x": 225,
+     "z": 80,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a12_cover2",
+     "x": 241,
+     "z": 78,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a12_cover3",
+     "x": 231,
+     "z": 90,
+     "width": 4,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a12_cover4",
+     "x": 226,
+     "z": 77,
+     "width": 14,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a12_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 34,
+     "d": 3
+    },
+    {
+     "id": "a12_sludge2",
+     "x": 0,
+     "z": 27,
+     "w": 34,
+     "d": 3
+    }
+   ],
+   "decks": [
+    {
+     "id": "a12_deck1",
+     "x": 0,
+     "z": 17,
+     "w": 4,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a12_ramp1",
+     "x": 4,
+     "z": 17,
+     "w": 3,
+     "d": 3
+    }
+   ],
+   "hatches": [
+    {
+     "id": "a12_hatch1",
+     "x": 3,
+     "z": 17,
+     "w": 1,
+     "d": 3
+    }
+   ],
+   "grates": [
+    {
+     "id": "a12_grate1",
+     "x": 222,
+     "z": 80
+    },
+    {
+     "id": "a12_grate2",
+     "x": 246,
+     "z": 83
+    },
+    {
+     "id": "a12_grate3",
+     "x": 233,
+     "z": 94
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a12_rep1",
+     "x": 233,
+     "z": 72,
+     "capacity": 8
+    },
+    {
+     "id": "a12_rep2",
+     "x": 223,
+     "z": 93,
+     "capacity": 8
+    },
+    {
+     "id": "a12_rep3",
+     "x": 245,
+     "z": 93,
+     "capacity": 8
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "heavy",
+     "x": 226.5,
+     "z": 83.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 240.5,
+     "z": 83.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 233.82999999999998,
+     "z": 76.5,
+     "level": 0
+    },
+    {
+     "kind": "brute",
+     "x": 233.5,
+     "z": 82.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 224.5,
+     "z": 72.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 225.5,
+     "z": 72.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 241.5,
+     "z": 72.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 242.5,
+     "z": 72.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 228.5,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 229.5,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 237.5,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 238.5,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 225.5,
+     "z": 89.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 244.5,
+     "z": 88.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 233.5,
+     "z": 92.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 233.5,
+     "z": 72.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 222.5,
+     "z": 80.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 246.5,
+     "z": 83.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 233.5,
+     "z": 94.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 216.5,
+     "z": 97.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 249.5,
+     "z": 97.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 233.5,
+     "z": 68.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "index": 13,
+   "name": "The Weir (deck)",
+   "role": "replicator",
+   "origin": {
+    "x": 194,
+    "z": 72
+   },
+   "size": {
+    "w": 22,
+    "d": 22
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 50.62,
+   "level": 1,
+   "overlays": "a11",
+   "composition": {
+    "brute": 2,
+    "heavy": 2,
+    "bolter": 4
+   },
+   "cover": [],
+   "sludge": [],
+   "decks": [
+    {
+     "id": "a13_deck1",
+     "x": 0,
+     "z": 12,
+     "w": 22,
+     "d": 3,
+     "height": 2.5
+    },
+    {
+     "id": "a13_deck2",
+     "x": 1,
+     "z": 15,
+     "w": 3,
+     "d": 7,
+     "height": 2.5
+    }
+   ],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [
+    {
+     "id": "a13_rep1",
+     "x": 205,
+     "z": 85,
+     "capacity": 5
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "brute",
+     "x": 198.5,
+     "z": 85.5,
+     "level": 1
+    },
+    {
+     "kind": "brute",
+     "x": 212.5,
+     "z": 85.5,
+     "level": 1
+    },
+    {
+     "kind": "heavy",
+     "x": 196.5,
+     "z": 85.5,
+     "level": 1
+    },
+    {
+     "kind": "heavy",
+     "x": 214.5,
+     "z": 85.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 202.5,
+     "z": 85.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 208.5,
+     "z": 85.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 196.5,
+     "z": 91.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 196.5,
+     "z": 88.5,
+     "level": 1
+    }
+   ]
+  },
+  {
+   "id": "a14",
+   "index": 14,
+   "name": "Gantry Run",
+   "role": "bridge",
+   "origin": {
+    "x": 154,
+    "z": 94
+   },
+   "size": {
+    "w": 44,
+    "d": 12
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 30.72,
+   "level": 1,
+   "composition": {
+    "turret": 4,
+    "bolter": 3,
+    "launcher": 2
+   },
+   "cover": [
+    {
+     "id": "a14_cover1",
+     "x": 159,
+     "z": 95,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a14_cover2",
+     "x": 174,
+     "z": 104,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a14_cover3",
+     "x": 189,
+     "z": 95,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a14_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 44,
+     "d": 12
+    }
+   ],
+   "decks": [
+    {
+     "id": "a14_deck1",
+     "x": 0,
+     "z": 6,
+     "w": 44,
+     "d": 4,
+     "height": 2.5
+    },
+    {
+     "id": "a14_deck2",
+     "x": 12,
+     "z": 0,
+     "w": 3,
+     "d": 12,
+     "height": 2.5
+    },
+    {
+     "id": "a14_deck3",
+     "x": 29,
+     "z": 0,
+     "w": 3,
+     "d": 12,
+     "height": 2.5
+    },
+    {
+     "id": "a14_deck4",
+     "x": 40,
+     "z": 0,
+     "w": 4,
+     "d": 6,
+     "height": 2.5
+    }
+   ],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [],
+   "garrison": [
+    {
+     "kind": "turret",
+     "x": 167.5,
+     "z": 94.5,
+     "level": 1
+    },
+    {
+     "kind": "turret",
+     "x": 167.5,
+     "z": 105.5,
+     "level": 1
+    },
+    {
+     "kind": "turret",
+     "x": 184.5,
+     "z": 94.5,
+     "level": 1
+    },
+    {
+     "kind": "turret",
+     "x": 184.5,
+     "z": 105.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 162.5,
+     "z": 101.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 176.5,
+     "z": 102.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 191.5,
+     "z": 101.5,
+     "level": 1
+    },
+    {
+     "kind": "launcher",
+     "x": 170.5,
+     "z": 101.5,
+     "level": 1
+    },
+    {
+     "kind": "launcher",
+     "x": 187.5,
+     "z": 102.5,
+     "level": 1
+    }
+   ]
+  },
+  {
+   "id": "a15",
+   "index": 15,
+   "name": "Trolley Yard (deck)",
+   "role": "normal",
+   "origin": {
+    "x": 124,
+    "z": 100
+   },
+   "size": {
+    "w": 30,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 42.35,
+   "level": 1,
+   "overlays": "a6",
+   "composition": {
+    "gunner": 3,
+    "bolter": 4,
+    "blinker": 1
+   },
+   "cover": [],
+   "sludge": [],
+   "decks": [
+    {
+     "id": "a15_deck1",
+     "x": 0,
+     "z": 23,
+     "w": 30,
+     "d": 3,
+     "height": 2.5
+    },
+    {
+     "id": "a15_deck2",
+     "x": 27,
+     "z": 0,
+     "w": 3,
+     "d": 26,
+     "height": 2.5
+    },
+    {
+     "id": "a15_deck3",
+     "x": 0,
+     "z": 3,
+     "w": 3,
+     "d": 20,
+     "height": 2.5
+    }
+   ],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [],
+   "garrison": [
+    {
+     "kind": "gunner",
+     "x": 138.5,
+     "z": 124.5,
+     "level": 1
+    },
+    {
+     "kind": "gunner",
+     "x": 152.5,
+     "z": 112.5,
+     "level": 1
+    },
+    {
+     "kind": "gunner",
+     "x": 125.5,
+     "z": 112.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 130.5,
+     "z": 124.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 146.5,
+     "z": 124.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 152.5,
+     "z": 104.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 125.5,
+     "z": 104.5,
+     "level": 1
+    },
+    {
+     "kind": "blinker",
+     "x": 134.5,
+     "z": 124.5,
+     "level": 1
+    }
+   ]
+  },
+  {
+   "id": "a16",
+   "index": 16,
+   "name": "Pipe Gallery",
+   "role": "replicator",
+   "origin": {
+    "x": 104,
+    "z": 126
+   },
+   "size": {
+    "w": 24,
+    "d": 28
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 42.89,
+   "composition": {
+    "bruiser": 4,
+    "heavy": 2,
+    "blinker": 3,
+    "turret": 2,
+    "lurker": 2
+   },
+   "cover": [
+    {
+     "id": "a16_cover1",
+     "x": 108,
+     "z": 133,
+     "width": 14,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a16_cover2",
+     "x": 109.5,
+     "z": 143,
+     "width": 11,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a16_cover3",
+     "x": 110.25,
+     "z": 146,
+     "width": 9.5,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a16_cover4",
+     "x": 105,
+     "z": 128,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a16_cover5",
+     "x": 105.4,
+     "z": 151,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [],
+   "decks": [
+    {
+     "id": "a16_deck1",
+     "x": 20,
+     "z": 0,
+     "w": 4,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a16_ramp1",
+     "x": 20,
+     "z": 3,
+     "w": 4,
+     "d": 3
+    }
+   ],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a16_grate1",
+     "x": 116,
+     "z": 131
+    },
+    {
+     "id": "a16_grate2",
+     "x": 116,
+     "z": 150
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a16_rep1",
+     "x": 106,
+     "z": 138,
+     "capacity": 6
+    },
+    {
+     "id": "a16_rep2",
+     "x": 125,
+     "z": 149,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "bruiser",
+     "x": 110.5,
+     "z": 137.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 120.5,
+     "z": 137.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 110.5,
+     "z": 144.3,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 120.5,
+     "z": 143.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 115.83,
+     "z": 143.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 115.5,
+     "z": 137.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 107.5,
+     "z": 151.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 122.5,
+     "z": 151.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 116.5,
+     "z": 127.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 104.5,
+     "z": 153.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 127.5,
+     "z": 153.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 116.5,
+     "z": 131.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 116.5,
+     "z": 150.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a17",
+   "index": 17,
+   "name": "Valve Loft",
+   "role": "replicator",
+   "origin": {
+    "x": 78,
+    "z": 126
+   },
+   "size": {
+    "w": 26,
+    "d": 24
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 32.76,
+   "composition": {
+    "gunner": 4,
+    "launcher": 3,
+    "bolter": 3
+   },
+   "cover": [
+    {
+     "id": "a17_cover1",
+     "x": 84,
+     "z": 132,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a17_cover2",
+     "x": 95,
+     "z": 132,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a17_cover3",
+     "x": 84,
+     "z": 142,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a17_cover4",
+     "x": 95,
+     "z": 142,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a17_cover5",
+     "x": 88,
+     "z": 138,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [],
+   "decks": [
+    {
+     "id": "a17_deck1",
+     "x": 1,
+     "z": 0,
+     "w": 4,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a17_ramp1",
+     "x": 1,
+     "z": 3,
+     "w": 4,
+     "d": 3
+    }
+   ],
+   "hatches": [],
+   "grates": [],
+   "replicators": [
+    {
+     "id": "a17_rep1",
+     "x": 101,
+     "z": 147,
+     "capacity": 5
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "gunner",
+     "x": 85.5,
+     "z": 129.85,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 97.15,
+     "z": 130.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 85.5,
+     "z": 145.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 96.5,
+     "z": 145.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 90.5,
+     "z": 147.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 92.5,
+     "z": 147.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 91.5,
+     "z": 128.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 79.5,
+     "z": 138.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 102.5,
+     "z": 138.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 91.5,
+     "z": 140.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a18",
+   "index": 18,
+   "name": "Overflow Cistern",
+   "role": "replicator",
+   "origin": {
+    "x": 52,
+    "z": 126
+   },
+   "size": {
+    "w": 26,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 30.58,
+   "composition": {
+    "sludger": 6,
+    "charger": 2,
+    "lurker": 3
+   },
+   "cover": [
+    {
+     "id": "a18_cover1",
+     "x": 55,
+     "z": 129,
+     "width": 5,
+     "height": 1.6,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a18_cover2",
+     "x": 70,
+     "z": 129,
+     "width": 5,
+     "height": 1.6,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a18_cover3",
+     "x": 55,
+     "z": 144,
+     "width": 5,
+     "height": 1.6,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a18_cover4",
+     "x": 70,
+     "z": 144,
+     "width": 5,
+     "height": 1.6,
+     "depth": 5,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a18_cover5",
+     "x": 62,
+     "z": 136,
+     "width": 6,
+     "height": 1.6,
+     "depth": 6,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a18_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 26,
+     "d": 26
+    }
+   ],
+   "decks": [
+    {
+     "id": "a18_deck1",
+     "x": 8,
+     "z": 5,
+     "w": 10,
+     "d": 1,
+     "height": 2.5
+    },
+    {
+     "id": "a18_deck2",
+     "x": 8,
+     "z": 20,
+     "w": 10,
+     "d": 1,
+     "height": 2.5
+    },
+    {
+     "id": "a18_deck3",
+     "x": 5,
+     "z": 8,
+     "w": 1,
+     "d": 10,
+     "height": 2.5
+    },
+    {
+     "id": "a18_deck4",
+     "x": 20,
+     "z": 8,
+     "w": 1,
+     "d": 10,
+     "height": 2.5
+    },
+    {
+     "id": "a18_deck5",
+     "x": 10,
+     "z": 0,
+     "w": 4,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a18_ramp1",
+     "x": 10,
+     "z": 3,
+     "w": 4,
+     "d": 1
+    }
+   ],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a18_grate1",
+     "x": 65,
+     "z": 128
+    },
+    {
+     "id": "a18_grate2",
+     "x": 65,
+     "z": 149
+    },
+    {
+     "id": "a18_grate3",
+     "x": 54,
+     "z": 139
+    },
+    {
+     "id": "a18_grate4",
+     "x": 75,
+     "z": 139
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a18_rep1",
+     "x": 65,
+     "z": 150,
+     "capacity": 5
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "sludger",
+     "x": 61.5,
+     "z": 139.7,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 69.5,
+     "z": 139.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 65.7,
+     "z": 134.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 65.5,
+     "z": 144.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 58.5,
+     "z": 132.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 73.2,
+     "z": 146.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 53.5,
+     "z": 139.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 76.5,
+     "z": 139.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 65.5,
+     "z": 128.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 65.5,
+     "z": 149.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 54.5,
+     "z": 139.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a19",
+   "index": 19,
+   "name": "Junction Hall (deck)",
+   "role": "replicator",
+   "origin": {
+    "x": 54,
+    "z": 96
+   },
+   "size": {
+    "w": 36,
+    "d": 30
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 57.39,
+   "level": 1,
+   "overlays": "a3",
+   "composition": {
+    "bolter": 3,
+    "gunner": 1,
+    "blinker": 2,
+    "heavy": 1,
+    "brute": 1
+   },
+   "cover": [],
+   "sludge": [],
+   "decks": [
+    {
+     "id": "a19_deck1",
+     "x": 8,
+     "z": 0,
+     "w": 3,
+     "d": 30,
+     "height": 2.5
+    },
+    {
+     "id": "a19_deck2",
+     "x": 25,
+     "z": 0,
+     "w": 3,
+     "d": 30,
+     "height": 2.5
+    },
+    {
+     "id": "a19_deck3",
+     "x": 8,
+     "z": 14,
+     "w": 20,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [
+    {
+     "id": "a19_rep1",
+     "x": 81,
+     "z": 112,
+     "capacity": 4
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "bolter",
+     "x": 63.5,
+     "z": 100.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 80.5,
+     "z": 122.5,
+     "level": 1
+    },
+    {
+     "kind": "bolter",
+     "x": 80.5,
+     "z": 100.5,
+     "level": 1
+    },
+    {
+     "kind": "gunner",
+     "x": 72.5,
+     "z": 111.5,
+     "level": 1
+    },
+    {
+     "kind": "blinker",
+     "x": 63.5,
+     "z": 122.5,
+     "level": 1
+    },
+    {
+     "kind": "blinker",
+     "x": 80.5,
+     "z": 106.5,
+     "level": 1
+    },
+    {
+     "kind": "heavy",
+     "x": 63.5,
+     "z": 106.5,
+     "level": 1
+    },
+    {
+     "kind": "brute",
+     "x": 80.5,
+     "z": 116.5,
+     "level": 1
+    }
+   ]
+  },
+  {
+   "id": "a20",
+   "index": 20,
+   "name": "Sluice Approach",
+   "role": "replicator",
+   "origin": {
+    "x": 50,
+    "z": 62
+   },
+   "size": {
+    "w": 24,
+    "d": 34
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 72.41,
+   "composition": {
+    "heavy": 3,
+    "brute": 2,
+    "gunner": 4,
+    "turret": 3,
+    "lurker": 1
+   },
+   "cover": [
+    {
+     "id": "a20_cover1",
+     "x": 53,
+     "z": 70,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a20_cover2",
+     "x": 68,
+     "z": 70,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a20_cover3",
+     "x": 53,
+     "z": 82.5,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a20_cover4",
+     "x": 68,
+     "z": 82,
+     "width": 3,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a20_cover5",
+     "x": 53,
+     "z": 88,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a20_cover6",
+     "x": 65,
+     "z": 88,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a20_sludge1",
+     "x": 9,
+     "z": 0,
+     "w": 6,
+     "d": 28
+    }
+   ],
+   "decks": [
+    {
+     "id": "a20_deck1",
+     "x": 12,
+     "z": 31,
+     "w": 4,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a20_ramp1",
+     "x": 12,
+     "z": 28,
+     "w": 4,
+     "d": 3
+    }
+   ],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a20_grate1",
+     "x": 62,
+     "z": 76
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a20_rep1",
+     "x": 52,
+     "z": 77,
+     "capacity": 6
+    },
+    {
+     "id": "a20_rep2",
+     "x": 72,
+     "z": 77,
+     "capacity": 6
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "heavy",
+     "x": 55.5,
+     "z": 74.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 68.5,
+     "z": 74.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 62.5,
+     "z": 86.5,
+     "level": 0
+    },
+    {
+     "kind": "brute",
+     "x": 62.5,
+     "z": 66.5,
+     "level": 0
+    },
+    {
+     "kind": "brute",
+     "x": 62.5,
+     "z": 80.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 53.5,
+     "z": 93.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 70.5,
+     "z": 93.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 53.5,
+     "z": 65.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 70.5,
+     "z": 65.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 50.5,
+     "z": 79.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 73.5,
+     "z": 79.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 50.5,
+     "z": 95.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 62.5,
+     "z": 76.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a21",
+   "index": 21,
+   "name": "Pump Hall",
+   "role": "replicator",
+   "origin": {
+    "x": 40,
+    "z": 22
+   },
+   "size": {
+    "w": 34,
+    "d": 40
+   },
+   "hasShed": false,
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 162.15,
+   "composition": {
+    "brute": 2,
+    "heavy": 4,
+    "bruiser": 4,
+    "charger": 4,
+    "gunner": 2,
+    "launcher": 2,
+    "blinker": 2,
+    "bolter": 4,
+    "sludger": 4,
+    "turret": 4,
+    "lurker": 3
+   },
+   "cover": [
+    {
+     "id": "a21_cover1",
+     "x": 44,
+     "z": 30,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a21_cover2",
+     "x": 67,
+     "z": 28,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a21_cover3",
+     "x": 44,
+     "z": 54,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a21_cover4",
+     "x": 67,
+     "z": 54,
+     "width": 3,
+     "height": 1.6,
+     "depth": 3,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a21_cover5",
+     "x": 46,
+     "z": 34,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a21_cover6",
+     "x": 62,
+     "z": 34,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a21_cover7",
+     "x": 46,
+     "z": 49,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    },
+    {
+     "id": "a21_cover8",
+     "x": 62,
+     "z": 49,
+     "width": 6,
+     "height": 1.6,
+     "depth": 1,
+     "shape": "box",
+     "dressing": "pipe"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a21_sludge1",
+     "x": 14,
+     "z": 0,
+     "w": 6,
+     "d": 40
+    }
+   ],
+   "decks": [
+    {
+     "id": "a21_deck1",
+     "x": 0,
+     "z": 19,
+     "w": 34,
+     "d": 3,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a21_ramp1",
+     "x": 0,
+     "z": 16,
+     "w": 3,
+     "d": 3
+    },
+    {
+     "id": "a21_ramp2",
+     "x": 31,
+     "z": 22,
+     "w": 3,
+     "d": 3
+    }
+   ],
+   "hatches": [],
+   "grates": [
+    {
+     "id": "a21_grate1",
+     "x": 48,
+     "z": 46
+    },
+    {
+     "id": "a21_grate2",
+     "x": 66,
+     "z": 46
+    },
+    {
+     "id": "a21_grate3",
+     "x": 57,
+     "z": 60
+    }
+   ],
+   "replicators": [
+    {
+     "id": "a21_rep1",
+     "x": 42,
+     "z": 24,
+     "capacity": 8
+    },
+    {
+     "id": "a21_rep2",
+     "x": 72,
+     "z": 24,
+     "capacity": 8
+    },
+    {
+     "id": "a21_rep3",
+     "x": 57,
+     "z": 60,
+     "capacity": 8
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "brute",
+     "x": 49.5,
+     "z": 42.5,
+     "level": 0
+    },
+    {
+     "kind": "brute",
+     "x": 65.5,
+     "z": 42.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 48.5,
+     "z": 31.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 66.5,
+     "z": 31.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 48.5,
+     "z": 52.5,
+     "level": 0
+    },
+    {
+     "kind": "heavy",
+     "x": 66.5,
+     "z": 51.67,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 56.5,
+     "z": 32.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 58.5,
+     "z": 32.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 56.5,
+     "z": 52.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 58.5,
+     "z": 52.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 43.5,
+     "z": 37.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 71.5,
+     "z": 37.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 43.5,
+     "z": 47.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 71.5,
+     "z": 47.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 50.5,
+     "z": 58.5,
+     "level": 0
+    },
+    {
+     "kind": "gunner",
+     "x": 64.5,
+     "z": 58.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 50.5,
+     "z": 25.5,
+     "level": 0
+    },
+    {
+     "kind": "launcher",
+     "x": 64.5,
+     "z": 25.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 42.5,
+     "z": 32.5,
+     "level": 0
+    },
+    {
+     "kind": "blinker",
+     "x": 72.5,
+     "z": 32.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 52.5,
+     "z": 56.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 62.5,
+     "z": 56.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 52.5,
+     "z": 27.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 62.5,
+     "z": 27.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 56.5,
+     "z": 25.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 58.5,
+     "z": 25.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 56.5,
+     "z": 58.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 58.5,
+     "z": 58.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 40.5,
+     "z": 61.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 73.5,
+     "z": 61.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 40.5,
+     "z": 22.5,
+     "level": 0
+    },
+    {
+     "kind": "turret",
+     "x": 73.5,
+     "z": 22.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 48.5,
+     "z": 46.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 66.5,
+     "z": 46.5,
+     "level": 0
+    },
+    {
+     "kind": "lurker",
+     "x": 57.5,
+     "z": 60.5,
+     "level": 0
+    }
+   ]
+  },
+  {
+   "id": "a22",
+   "index": 22,
+   "name": "The Throat",
+   "role": "normal",
+   "origin": {
+    "x": 74,
+    "z": 30
+   },
+   "size": {
+    "w": 18,
+    "d": 26
+   },
+   "hasShed": false,
+   "garrisonDensity": "normal",
+   "targetThreatBudget": 23.43,
+   "composition": {
+    "charger": 4,
+    "bruiser": 3,
+    "bolter": 2
+   },
+   "cover": [
+    {
+     "id": "a22_cover1",
+     "x": 76,
+     "z": 38,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a22_cover2",
+     "x": 88,
+     "z": 38,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a22_cover3",
+     "x": 76,
+     "z": 47,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    },
+    {
+     "id": "a22_cover4",
+     "x": 88,
+     "z": 47,
+     "width": 2,
+     "height": 1.6,
+     "depth": 2,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a22_sludge1",
+     "x": 6,
+     "z": 0,
+     "w": 6,
+     "d": 26
+    }
+   ],
+   "decks": [],
+   "ramps": [],
+   "hatches": [],
+   "grates": [],
+   "replicators": [],
+   "garrison": [
+    {
+     "kind": "charger",
+     "x": 83.5,
+     "z": 52.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 77.5,
+     "z": 52.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 89.5,
+     "z": 52.5,
+     "level": 0
+    },
+    {
+     "kind": "charger",
+     "x": 83.5,
+     "z": 42.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 77.5,
+     "z": 34.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 89.5,
+     "z": 34.5,
+     "level": 0
+    },
+    {
+     "kind": "bruiser",
+     "x": 83.5,
+     "z": 34.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 75.5,
+     "z": 43.5,
+     "level": 0
+    },
+    {
+     "kind": "bolter",
+     "x": 90.5,
+     "z": 43.5,
+     "level": 0
+    }
+   ]
   },
   {
    "id": "a23",
    "index": 23,
-   "name": "The Outfall",
+   "name": "The Wet Well",
    "role": "boss",
    "origin": {
-    "x": -11,
-    "z": -44
+    "x": 92,
+    "z": 20
    },
    "size": {
     "w": 44,
     "d": 44
    },
    "hasShed": false,
-   "garrisonDensity": "none",
-   "targetThreatBudget": 0,
-   "notes": "PLACEHOLDER (MV-687): single big_bermuda boss, no ambient defenders (garrisonDensity none). Replaced by MV-700.",
+   "garrisonDensity": "heavy",
+   "targetThreatBudget": 16.2,
+   "composition": {
+    "sludger": 3,
+    "rusher": 4
+   },
+   "cover": [
+    {
+     "id": "a23_cover1",
+     "x": 112,
+     "z": 40,
+     "width": 4,
+     "height": 1.6,
+     "depth": 4,
+     "shape": "box",
+     "dressing": "none"
+    }
+   ],
+   "sludge": [
+    {
+     "id": "a23_sludge1",
+     "x": 0,
+     "z": 0,
+     "w": 44,
+     "d": 6
+    },
+    {
+     "id": "a23_sludge2",
+     "x": 0,
+     "z": 38,
+     "w": 44,
+     "d": 6
+    },
+    {
+     "id": "a23_sludge3",
+     "x": 0,
+     "z": 6,
+     "w": 6,
+     "d": 32
+    },
+    {
+     "id": "a23_sludge4",
+     "x": 38,
+     "z": 6,
+     "w": 6,
+     "d": 32
+    }
+   ],
+   "decks": [
+    {
+     "id": "a23_deck1",
+     "x": 9,
+     "z": 9,
+     "w": 6,
+     "d": 6,
+     "height": 2.5
+    },
+    {
+     "id": "a23_deck2",
+     "x": 29,
+     "z": 9,
+     "w": 6,
+     "d": 6,
+     "height": 2.5
+    },
+    {
+     "id": "a23_deck3",
+     "x": 9,
+     "z": 29,
+     "w": 6,
+     "d": 6,
+     "height": 2.5
+    },
+    {
+     "id": "a23_deck4",
+     "x": 29,
+     "z": 29,
+     "w": 6,
+     "d": 6,
+     "height": 2.5
+    }
+   ],
+   "ramps": [
+    {
+     "id": "a23_ramp1",
+     "x": 15,
+     "z": 11,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "id": "a23_ramp2",
+     "x": 27,
+     "z": 11,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "id": "a23_ramp3",
+     "x": 15,
+     "z": 31,
+     "w": 2,
+     "d": 2
+    },
+    {
+     "id": "a23_ramp4",
+     "x": 27,
+     "z": 31,
+     "w": 2,
+     "d": 2
+    }
+   ],
+   "hatches": [],
+   "grates": [],
+   "replicators": [],
+   "garrison": [
+    {
+     "kind": "sludger",
+     "x": 102.5,
+     "z": 40.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 125.5,
+     "z": 40.5,
+     "level": 0
+    },
+    {
+     "kind": "sludger",
+     "x": 114.5,
+     "z": 28.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 100.5,
+     "z": 28.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 127.5,
+     "z": 28.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 100.5,
+     "z": 55.5,
+     "level": 0
+    },
+    {
+     "kind": "rusher",
+     "x": 127.5,
+     "z": 55.5,
+     "level": 0
+    }
+   ],
    "boss": {
-    "id": "big_bermuda",
-    "x": 11,
-    "z": -22,
+    "id": "sludgequeen",
+    "x": 114,
+    "z": 59,
     "size": {
-     "w": 3.6,
-     "d": 3.6
+     "w": 6,
+     "d": 6
     }
    }
   }
