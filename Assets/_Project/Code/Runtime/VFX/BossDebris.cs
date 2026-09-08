@@ -66,12 +66,10 @@ namespace MaxWorlds.VFX
 
         private readonly List<Chunk> _chunks = new List<Chunk>(MaxChunks);
         private Material[] _mats;
-        private BigBermudaBoss _boss;
         private int _seed;            // varies the scatter without Random state (deterministic per index)
 
         private void Awake()
         {
-            _boss = FindFirstObjectByType<BigBermudaBoss>();
             gameObject.AddComponent<KeepsOwnMaterial>();   // the surface sweep leaves our shards alone
 
             _mats = new Material[ChunkColors.Length];
@@ -79,8 +77,13 @@ namespace MaxWorlds.VFX
                 _mats[i] = MaterialLibrary.Tinted(SurfaceKind.Metal, ChunkColors[i]);
         }
 
-        private void OnEnable() => HudSignals.BossDefeated += OnDefeated;
-        private void OnDisable() => HudSignals.BossDefeated -= OnDefeated;
+        // MV-721: BossKilled fires once per boss's OWN death, not only the area's last one
+        // (HudSignals.BossDefeated) — so a boss that dies with company still wrecks. Its payload
+        // carries the dying boss's position directly, so this never has to hunt an instance down via
+        // FindFirstObjectByType, which is ambiguous once a second boss exists and blind once the dying
+        // one deactivates.
+        private void OnEnable() => HudSignals.BossKilled += OnKilled;
+        private void OnDisable() => HudSignals.BossKilled -= OnKilled;
 
         private void OnDestroy()
         {
@@ -88,9 +91,9 @@ namespace MaxWorlds.VFX
             _chunks.Clear();
         }
 
-        private void OnDefeated()
+        private void OnKilled(Vector3 diedAt)
         {
-            Vector3 at = BossPos() + Vector3.up * 1.4f;   // burst from the machine's mass, not its feet
+            Vector3 at = diedAt + Vector3.up * 1.4f;   // burst from the machine's mass, not its feet
 
             for (int i = 0; i < MaxChunks; i++)
             {
@@ -197,12 +200,6 @@ namespace MaxWorlds.VFX
 
                 _chunks[i] = c;
             }
-        }
-
-        private Vector3 BossPos()
-        {
-            if (_boss == null) _boss = FindFirstObjectByType<BigBermudaBoss>();
-            return _boss != null ? _boss.transform.position : Vector3.zero;
         }
 
         /// <summary>Fractional part of x — a cheap deterministic hash-ish spread in [0,1) that keeps the

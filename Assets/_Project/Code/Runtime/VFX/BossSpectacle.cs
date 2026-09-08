@@ -68,14 +68,14 @@ namespace MaxWorlds.VFX
         {
             HudSignals.BossEngaged += OnEngaged;
             HudSignals.BossHealthChanged += OnHealth;
-            HudSignals.BossDefeated += OnDefeated;
+            HudSignals.BossKilled += OnKilled;
         }
 
         private void OnDisable()
         {
             HudSignals.BossEngaged -= OnEngaged;
             HudSignals.BossHealthChanged -= OnHealth;
-            HudSignals.BossDefeated -= OnDefeated;
+            HudSignals.BossKilled -= OnKilled;
 
             // A sequence interrupted part-way (scene change, replay) would otherwise leave the
             // shockwave ring stranded on the ground, mid-expansion, forever.
@@ -193,16 +193,21 @@ namespace MaxWorlds.VFX
 
         // --- defeat ---
 
-        private void OnDefeated() => StartCoroutine(Defeat());
+        /// <summary>MV-721: fires once per boss's OWN death (<see cref="HudSignals.BossKilled"/>), not
+        /// only for the area's last boss (<see cref="HudSignals.BossDefeated"/>) — so a boss that dies
+        /// with company still gets its own explosion. Takes the dying boss's position straight off the
+        /// signal payload rather than <see cref="BossPos"/>'s <c>FindFirstObjectByType</c>: that lookup
+        /// is ambiguous the moment a second boss exists and blind once the dying one deactivates.</summary>
+        private void OnKilled(Vector3 at) => StartCoroutine(Defeat(at));
 
         /// <summary>
         /// Staged, not one bang: three quick flashes that read as it coming apart, then the big one.
         /// Everything here waits on realtime and emits into unscaled-time systems, because the game
         /// is frozen from the same frame the boss dies (see the class summary).
         /// </summary>
-        private IEnumerator Defeat()
+        private IEnumerator Defeat(Vector3 diedAt)
         {
-            Vector3 at = BossPos() + Vector3.up * 1.2f;
+            Vector3 at = diedAt + Vector3.up * 1.2f;
             var shake = Shake();
 
             for (int i = 0; i < 3; i++)
