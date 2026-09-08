@@ -114,23 +114,30 @@ for (const g of cfg.gates) {
 }
 console.log(`total doorways within 0.01m of the 3m floor: ${doorwayViolations}`);
 
-console.log('\n--- Cover: cover-vs-replicator spawn ring clearance (MapValidation.Cover, SpawnRadius+SpawnClearance=4.3) ---');
+console.log('\n--- Cover: cover-vs-replicator/factory spawn ring clearance (MapValidation.Cover, MAP-WIDE, not area-scoped — SpawnRadius+SpawnClearance=4.3) ---');
 const REQUIRED_SPAWN_CLEARANCE = 3.5 + 0.8; // SpawnRadius + SpawnClearance, MapValidation.cs:37-40
+// MapValidation.Cover runs on the converted MapData: EVERY cover entity against EVERY factory/replicator
+// in the WHOLE MAP, not scoped by area (MapValidation.cs:292-297,331-335). A prior version of this script
+// only checked cover against replicators in the SAME area, which missed a9_cover1 x a8_rep2 (adjacent-area
+// crowd) - the live Unity run caught it, this rewrite matches the real (global) scope.
 let spawnRingViolations = 0;
+const allCovers = [];
+const allFactories = []; // sheds + replicators, matching MapValidation's Kind(Factory) + Kind(Replicator)
 for (const a of cfg.areas) {
-  const covers = a.cover || [];
-  const reps = a.replicators || [];
-  for (const c of covers) {
-    const xMin = c.x - c.width / 2, xMax = c.x + c.width / 2, zMin = c.z - c.depth / 2, zMax = c.z + c.depth / 2;
-    for (const r of reps) {
-      const dx = Math.max(xMin - r.x, 0, r.x - xMax);
-      const dz = Math.max(zMin - r.z, 0, r.z - zMax);
-      const dist = Math.sqrt(dx * dx + dz * dz);
-      if (dist < REQUIRED_SPAWN_CLEARANCE) {
-        console.log(`area '${a.id}': cover '${c.id}' (box ${c.width}x${c.depth} @ ${c.x},${c.z}) is ${dist.toFixed(3)} m from replicator '${r.id}' (${r.x},${r.z}) — needs ${REQUIRED_SPAWN_CLEARANCE.toFixed(1)} m`);
-        spawnRingViolations++;
-      }
+  for (const c of a.cover || []) allCovers.push({ ...c, areaId: a.id });
+  for (const s of (a.sheds || [])) allFactories.push({ id: s.id ?? `${a.id}_shed`, x: s.x, z: s.z, areaId: a.id });
+  for (const r of a.replicators || []) allFactories.push({ id: r.id, x: r.x, z: r.z, areaId: a.id });
+}
+for (const c of allCovers) {
+  const xMin = c.x - c.width / 2, xMax = c.x + c.width / 2, zMin = c.z - c.depth / 2, zMax = c.z + c.depth / 2;
+  for (const f of allFactories) {
+    const dx = Math.max(xMin - f.x, 0, f.x - xMax);
+    const dz = Math.max(zMin - f.z, 0, f.z - zMax);
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < REQUIRED_SPAWN_CLEARANCE) {
+      console.log(`cover '${c.id}' (area ${c.areaId}, box ${c.width}x${c.depth} @ ${c.x},${c.z}) is ${dist.toFixed(3)} m from '${f.id}' (area ${f.areaId}, ${f.x},${f.z}) — needs ${REQUIRED_SPAWN_CLEARANCE.toFixed(1)} m`);
+      spawnRingViolations++;
     }
   }
 }
-console.log(`total cover-vs-replicator spawn ring violations: ${spawnRingViolations}`);
+console.log(`total cover-vs-replicator/factory spawn ring violations (map-wide): ${spawnRingViolations}`);
