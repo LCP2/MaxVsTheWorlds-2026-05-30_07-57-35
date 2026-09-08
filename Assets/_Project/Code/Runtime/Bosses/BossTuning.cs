@@ -54,6 +54,27 @@ namespace MaxWorlds.Bosses
 
         public const float EnrageMoveScale = 1.2f;   // was 1.4
 
+        // ---------------------------------------------------------------- contact damage (MV-720)
+        //
+        // MV-588 locked the boss body to deal no contact/melee damage at all. Lee reversed that
+        // 2026-09-04 (device report: he could stand directly against Big Bermuda and take nothing) —
+        // standing against the boss now has to hurt. This is a passive damaging PRESENCE, not an
+        // attack move: the ram/charge MV-588 removed stays removed, and this is not an addition to
+        // the brood volley, which remains the boss's only actual attack.
+
+        /// <summary>Damage dealt to Max or a Sentinel per contact tick while touching the boss's
+        /// body, at <see cref="ContactCooldown"/> — 15 dmg / 1.0 s = 15 dps, comfortably under the
+        /// enrage blade-rain's own worst case (<see cref="BladeWorstCase"/> spread over
+        /// <see cref="BladeLife"/> =~ 26.25 dps): meaningful pressure, not a burst. ~33.3 s to kill a
+        /// full-health Max (500 HP, <see cref="MaxWorlds.Player.PlayerHealth"/>) standing in contact
+        /// and never moving or being hit by anything else.</summary>
+        public const float ContactDamagePerTick = 15f;
+
+        /// <summary>Seconds between contact-damage ticks (MV-720) — same per-cooldown idiom as
+        /// <see cref="MaxWorlds.Enemies.RobotCompositionTuning.DefaultContactCooldown"/>, kept as this
+        /// boss's own knob rather than sharing the robots' one.</summary>
+        public const float ContactCooldown = 1.0f;
+
         // ---------------------------------------------------------------- the fight escalates on its own clock
         //
         // MV-588: the charge is gone entirely — "kill it before its army outgrows you" replaces it. The

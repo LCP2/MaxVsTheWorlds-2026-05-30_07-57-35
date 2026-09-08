@@ -11,9 +11,11 @@ namespace MaxWorlds.Bosses
 {
     /// <summary>
     /// Big Bermuda — the Backyard boss (YT-27, slice version). Stays dormant beyond the gate until the
-    /// Mower Hutch dies, then engages: it simply walks at Max and stops at a standoff (MV-588 removed
-    /// the ram/charge entirely — no more telegraphed cross-arena hit). Its real weapon is the brood
-    /// volley, which escalates in composition the longer the fight runs (see
+    /// Mower Hutch dies, then engages: it simply walks at Max and settles into a slow drift at a
+    /// standoff (MV-588 removed the ram/charge entirely — no more telegraphed cross-arena hit; MV-720
+    /// replaced the resulting dead stop with a circling drift so the gait never stops, and reversed
+    /// MV-588's "no contact damage at all" half — standing against its body now hurts). Its real
+    /// weapon is still the brood volley, which escalates in composition the longer the fight runs (see
     /// <see cref="BigBermudaBrain.SpawnLevel"/> / <see cref="BroodSpawnLevels"/>): "kill it before its
     /// army outgrows you". At low HP it enrages — faster, and it rains mower blades (the slice's
     /// stand-in for the full M2 phase-2 choreography, spec §4.7). Takes Water-Blaster damage, drives
@@ -78,6 +80,12 @@ namespace MaxWorlds.Bosses
         private float _verticalVel;
         private float _introTimer;
         private float _bladeTimer;
+
+        /// <summary>MV-720: seconds left before the boss's body can land another contact-damage tick
+        /// on Max/a Sentinel — see <see cref="TickContactDamage"/>. Set to the full
+        /// <see cref="BossTuning.ContactCooldown"/> in <see cref="Awake"/>, same "no free first hit"
+        /// convention as <see cref="MaxWorlds.Enemies.RobotEnemy"/>'s own contact-cooldown timer.</summary>
+        private float _contactCooldownTimer;
 
         // The placeholder greybox tell flashes white on a hit (TakeDamage) and restores itself here —
         // MV-588 removed the old "next phase tick restores it" cycle along with the charge, so the
@@ -169,6 +177,7 @@ namespace MaxWorlds.Bosses
             _health.Destroyed += OnDeath;
             _brain = new BigBermudaBrain();
             _volley = new BroodVolley();
+            _contactCooldownTimer = BossTuning.ContactCooldown; // MV-720: no free first hit
             AcquireTarget();
             SetTell(idleColor);
         }
@@ -280,6 +289,7 @@ namespace MaxWorlds.Bosses
             float speedScale = _brain.Enraged ? BossTuning.EnrageMoveScale : 1f;
             Approach(dt, speedScale);
             FaceTarget();
+            TickContactDamage(dt);
 
             if (_flashTimer > 0f)
             {
@@ -300,9 +310,10 @@ namespace MaxWorlds.Bosses
             AdvanceAdds(dt);
         }
 
-        /// <summary>Walk toward Max at <see cref="BossTuning.MoveSpeed"/> and stop at a fixed
-        /// <see cref="BossTuning.Standoff"/> (MV-588 — replaces the old charge-cycle circling
-        /// entirely).</summary>
+        /// <summary>Walk toward Max at <see cref="BossTuning.MoveSpeed"/> and settle into a slow
+        /// circling drift once within <see cref="BossTuning.Standoff"/> (MV-588 removed the old
+        /// charge-cycle circling entirely; MV-720 replaced the dead stop MV-588 left behind with this
+        /// drift, see <see cref="DriftAtStandoff"/>).</summary>
         private void Approach(float dt, float speedScale)
         {
             if (_target == null) return;
@@ -319,14 +330,20 @@ namespace MaxWorlds.Bosses
         /// standing inside concave geometry has an actual way out instead of only a direction and a
         /// slide. The stop check below still measures the REAL distance to the target, not the route,
         /// so the boss still parks at its authored standoff from Max and not from some intermediate
-        /// waypoint.</summary>
+        /// waypoint. MV-720: reaching Standoff no longer returns immediately (a dead stop MV-588 left
+        /// behind) — see <see cref="DriftAtStandoff"/>.</summary>
         public void TickApproach(float dt, Vector3 targetPosition, float speedScale = 1f)
         {
             Vector3 to = targetPosition - transform.position;
             to.y = 0f;
-            if (to.magnitude <= BossTuning.Standoff) return;
 
             float move = DevTuning.Or(DevTuning.BossMoveSpeed, BossTuning.MoveSpeed);
+
+            if (to.magnitude <= BossTuning.Standoff)
+            {
+                DriftAtStandoff(dt, to, move * speedScale);
+                return;
+            }
 
             Vector3 waypoint = EnemyNavigation.Waypoint(transform.position, targetPosition,
                 useZoneRoute: true, budget: _routeBudget, dt: dt);
@@ -339,6 +356,73 @@ namespace MaxWorlds.Bosses
             CharacterControllerMotion.SafeMove(_cc, desired * move * speedScale * dt);
         }
 
+        /// <summary>MV-720: parked at Standoff no longer means a dead stop. <see cref="BigBermudaRig"/>'s
+        /// gait (<c>TickGait</c>) is driven purely by DISTANCE TRAVELLED, so a boss that stops moving
+        /// entirely has no leg animation and reads as a statue, not a machine (Lee, device,
+        /// 2026-09-04). This circles the target at a slow tangential drift, at the same
+        /// <see cref="BossTuning.MoveSpeed"/> pace <see cref="TickApproach"/> already walks at
+        /// (untouched by this ticket) — steered through the same <see cref="WallLatch"/> a real
+        /// approach uses, so it still slides off anything it grazes while circling instead of grinding
+        /// on it, and it never has to know or care which way it's orbiting beyond this robot's own
+        /// stable <see cref="_preferSign"/> tie-break.</summary>
+        private void DriftAtStandoff(float dt, Vector3 to, float speed)
+        {
+            if (to.sqrMagnitude < 0.0001f) return; // exactly on top of the target -- no ring to walk
+            Vector3 inward = to.normalized;
+            Vector3 tangent = new Vector3(-inward.z, 0f, inward.x) * _preferSign;
+
+            Vector3 desired = _wallLatch.Tick(tangent, transform.position, dt, _preferSign);
+            CharacterControllerMotion.SafeMove(_cc, desired * speed * dt);
+        }
+
+        /// <summary>MV-720 (Lee's 2026-09-04 reversal of MV-588's "no contact damage at all" rule): a
+        /// bad idea to stand pressed against the boss now — Max or a Sentinel touching its body takes
+        /// <see cref="BossTuning.ContactDamagePerTick"/> on a fixed <see cref="BossTuning.ContactCooldown"/>
+        /// cadence, the same rate-limited shape <see cref="MaxWorlds.Enemies.RobotEnemy.TickContactTouch"/>
+        /// already uses for its own standing melee — not per physics frame. Distance-based against the
+        /// boss's OWN collider radius rather than a collision event: Max can walk up against a
+        /// STATIONARY boss (parked at Standoff, no longer approaching, or drifting sideways rather
+        /// than into him), and a controller that isn't moving toward whatever leans on it never raises
+        /// <see cref="OnControllerColliderHit"/> — only the MOVER's own controller gets that callback.
+        /// Goes through the ordinary <see cref="IDamageable.TakeDamage"/> path like any other hit, so
+        /// it drains the Force Field first exactly like every other contact source (MV-586) for free —
+        /// nothing here needs to know the bubble exists. This is a passive damaging PRESENCE, not an
+        /// attack move: it never displaces or interrupts anything else the boss is doing.</summary>
+        private void TickContactDamage(float dt)
+        {
+            _contactCooldownTimer -= dt;
+            if (_contactCooldownTimer > 0f) return;
+
+            float reach = _cc.radius + EnemyArchetype.PlayerRadius;
+            bool hitSomething = DamageIfTouching(_target, reach);
+
+            IReadOnlyList<Sentinel> sentinels = Sentinel.Active;
+            for (int i = 0; i < sentinels.Count; i++)
+            {
+                Sentinel s = sentinels[i];
+                if (DamageIfTouching(s != null ? s.transform : null, reach)) hitSomething = true;
+            }
+
+            if (hitSomething) _contactCooldownTimer = BossTuning.ContactCooldown;
+        }
+
+        /// <summary>Deals <see cref="BossTuning.ContactDamagePerTick"/> to <paramref name="t"/> if it's
+        /// within <paramref name="reach"/> of the boss's own position and carries a live
+        /// <see cref="IDamageable"/>. Returns whether it actually landed, so
+        /// <see cref="TickContactDamage"/> only resets the shared cooldown when something was touching
+        /// — a boss standing alone must not silently burn its cadence against nothing.</summary>
+        private bool DamageIfTouching(Transform t, float reach)
+        {
+            if (t == null) return false;
+            Vector3 to = t.position - transform.position; to.y = 0f;
+            if (to.magnitude > reach) return false;
+
+            if (!t.TryGetComponent<IDamageable>(out var damageable) || !damageable.IsAlive) return false;
+            Vector3 dir = to.sqrMagnitude > 0.0001f ? to.normalized : Vector3.forward;
+            damageable.TakeDamage(new DamageInfo(BossTuning.ContactDamagePerTick, transform.position, dir, Team.Enemy));
+            return true;
+        }
+
         private void OnControllerColliderHit(ControllerColliderHit hit) => HandleWallContact(hit.collider, hit.normal);
 
         /// <summary>Feeds every non-floor, non-character contact into <see cref="_wallLatch"/> (MV-590),
@@ -347,7 +431,11 @@ namespace MaxWorlds.Bosses
         /// from overlapping it, and treating it as a "wall" to slide along would fight that. Split out
         /// of <see cref="OnControllerColliderHit"/>, same reasoning as
         /// <see cref="RobotEnemy.HandleWallContact"/> (MV-586): <see cref="ControllerColliderHit"/> has
-        /// no public constructor, so a test drives this seam directly.</summary>
+        /// no public constructor, so a test drives this seam directly. NOT where MV-720's contact
+        /// damage lives (see <see cref="TickContactDamage"/> instead): this only fires from the
+        /// BOSS's own <see cref="CharacterController.Move"/> sweeping into something, so a stationary
+        /// boss standing still while Max walks INTO it — exactly the bug MV-720 fixes — would never
+        /// reach here at all.</summary>
         private void HandleWallContact(Collider collider, Vector3 normal)
         {
             if (Mathf.Abs(normal.y) >= 0.5f) return; // floor/ramp, not a wall
