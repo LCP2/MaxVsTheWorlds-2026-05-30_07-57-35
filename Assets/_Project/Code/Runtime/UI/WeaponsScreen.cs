@@ -329,6 +329,16 @@ namespace MaxWorlds.UI
         /// deployable-sentinels read) rather than re-deriving it from the refresh formulas independently.</summary>
         public Text NodePillText(string id) => _abilityNodes.TryGetValue(id, out var v) ? v.PillText : null;
 
+        /// <summary>MV-729: a FORGE fusion node's own name label — test-only access, same idiom as
+        /// <see cref="NodeLabel"/>, so a test can confirm the real fusion name is shown even while
+        /// locked, never the old "? ? ?" placeholder.</summary>
+        public Text FusionNodeLabel(string id) => _fusionNodes.TryGetValue(id, out var v) ? v.Label : null;
+
+        /// <summary>MV-729: a FORGE fusion node's own sub-label — test-only access, same idiom as
+        /// <see cref="FusionNodeLabel"/>, so a test can read the RESOLVED unlock-requirement/cost/slot
+        /// text rather than re-deriving it from the refresh formulas independently.</summary>
+        public Text FusionNodeSub(string id) => _fusionNodes.TryGetValue(id, out var v) ? v.Sub : null;
+
         /// <summary>MV-433: the board's own scale-to-fit wrapper (never the same object as
         /// <see cref="BoardNode"/>'s parent frame, which stays fixed at 1920x1080 in its own local
         /// space regardless of this wrapper's scale) — test-only access to confirm the clamp applied.</summary>
@@ -1392,11 +1402,13 @@ namespace MaxWorlds.UI
             v.Button.interactable = spendable;
         }
 
-        /// <summary>A FORGE fusion diamond (MV-426, 5/5): faint with <c>? ? ?</c> and its two parent
-        /// category names until both are lit, then amber with its real name and cost/slot once
-        /// eligible — independent of the currently-banked CELLS count (MV-423.png vs -noparts.png) —
-        /// and a stronger solid amber once actually forged, matching an owned ability's own "solid,
-        /// no longer a prospect" read. MV-515: cost converted from parts to cells.</summary>
+        /// <summary>A FORGE fusion diamond: faint, but always naming the real fusion and stating its
+        /// two required categories (flagging whichever the player already has) and its part cost
+        /// while locked (MV-729 — the four bare <c>? ? ?</c> diamonds read as broken furniture, not a
+        /// legible goal), then amber with its real name and cost/slot once eligible — independent of
+        /// the currently-banked CELLS count (MV-423.png vs -noparts.png) — and a stronger solid amber
+        /// once actually forged, matching an owned ability's own "solid, no longer a prospect" read.
+        /// MV-515: cost converted from parts to cells.</summary>
         private void RefreshFusionNode(RigFusionLayout fusion, int cellsBanked)
         {
             if (!_fusionNodes.TryGetValue(fusion.Id, out var v)) return;
@@ -1437,14 +1449,30 @@ namespace MaxWorlds.UI
                 v.HexFill.color = new Color(amber.r, amber.g, amber.b, 0.045f);
                 v.HexOutline.color = new Color(amber.r, amber.g, amber.b, RigBoardLayout.LockedFusionBorderAlpha);
                 v.Icon.color = new Color(amber.r, amber.g, amber.b, RigBoardLayout.LockedFusionIconAlpha);
-                v.Label.text = "? ? ?";
+                // MV-729: the real name, not "? ? ?" — a player who hasn't met the unlock condition
+                // still deserves to know what they're working toward, same as the requirement/cost below.
+                v.Label.text = fusion.Label;
                 v.Label.color = Dim;
-                v.Sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
+                v.Sub.text = LockedFusionRequirementText(fusion);
                 var ink = RigBoardLayout.Colour("ink");
                 v.Sub.color = new Color(ink.r, ink.g, ink.b, 0.22f);
                 v.Sub.fontSize = Mathf.RoundToInt(FusionSubFontSize);
                 v.Button.interactable = false;
             }
+        }
+
+        /// <summary>MV-729: a locked fusion's plain-words unlock requirement — which two categories
+        /// must be lit (flagging whichever the player already has, per <see cref="RigFusionState.CategoryLit"/>)
+        /// and the part cost — replacing the old bare "PARENTA + PARENTB" line that named the
+        /// categories but never said which was already met or what forging would cost. Two lines,
+        /// not one: the worst-case category pairing (PRIMARY + SECONDARY) plus a HAVE flag and the
+        /// cost measured 344px against the sub-label's 280px box on a single line, bleeding into the
+        /// neighbouring diamond's own text — categories and cost read separately instead.</summary>
+        private static string LockedFusionRequirementText(RigFusionLayout fusion)
+        {
+            string a = RigFusionState.CategoryLit(fusion.ParentA) ? $"{fusion.ParentA} (HAVE)" : fusion.ParentA;
+            string b = RigFusionState.CategoryLit(fusion.ParentB) ? $"{fusion.ParentB} (HAVE)" : fusion.ParentB;
+            return $"{a} + {b}\n{fusion.CellCost} PARTS";
         }
 
         /// <summary>MV-443 defect 8: locked fusion diamond border, 2px — distinct from the eligible/
@@ -2204,11 +2232,16 @@ namespace MaxWorlds.UI
             shell.Label.color = Dim;
 
             // MV-446 defect 3: fontSize off rig_board.json (was a hardcoded 13, dropping to 12 in the
-            // locked state — both under the 16px readability floor); box grown to match.
+            // locked state — both under the 16px readability floor); box grown to match. MV-729: height
+            // grown again (24 -> 44) for the locked state's two-line requirement text — measured
+            // preferredWidth showed the worst-case category pairing (PRIMARY + SECONDARY, plus a HAVE
+            // flag and the cost) overflows the 280px box on one line (344px) and bleeds into the
+            // neighbouring diamond's own sub-label, so categories and cost now sit on separate lines.
             var sub = AddText(node, Mathf.RoundToInt(FusionSubFontSize), Dim, TextAnchor.UpperCenter);
             Anchor(sub.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            sub.rectTransform.sizeDelta = new Vector2(280f, 24f);
+            sub.rectTransform.sizeDelta = new Vector2(280f, 44f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
+            sub.lineSpacing = 1.1f;
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
             shell.Sub = sub;
 

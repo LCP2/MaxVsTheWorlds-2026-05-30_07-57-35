@@ -33,7 +33,11 @@ namespace MaxWorlds.Weapons
             return CategoryLit(def.ParentA) && CategoryLit(def.ParentB);
         }
 
-        private static bool CategoryLit(string category)
+        /// <summary>Whether <paramref name="category"/> alone is lit — at least one owned ability
+        /// anywhere in it. <see cref="IsEligible"/>'s own per-parent half, exposed publicly (MV-729)
+        /// so a locked FORGE row can tell the player which of its two required categories they
+        /// already have, instead of naming both as if neither were met.</summary>
+        public static bool CategoryLit(string category)
         {
             foreach (string abilityId in RigBoard.AllIds)
                 if (RigBoard.Category(abilityId) == category && RigState.IsOwned(abilityId)) return true;
