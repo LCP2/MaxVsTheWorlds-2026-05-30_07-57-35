@@ -128,6 +128,12 @@ namespace MaxWorlds.Arena
         /// ambient shed cadence (a Lurker only ever exists tied to an authored grate).</summary>
         public int lurker;
 
+        /// <summary>MV-691/MV-700: the Pipe Turret — authored-composition only, same footing as
+        /// <see cref="bolter"/>/<see cref="lurker"/>. Every garrisoned Turret must be covered by a count
+        /// here (<see cref="MaxWorlds.Arena.MapValidation"/>'s garrison-vs-composition rule) — MV-700
+        /// found World 2's turrets failing that check because this field didn't exist yet.</summary>
+        public int turret;
+
         /// <summary>MV-705: the Sludge Drone — authored-composition only, same footing as
         /// <see cref="bolter"/>, and (unlike <see cref="lurker"/>) drawn by the ambient shed cadence like
         /// any other authored kind — it needs no grate to exist.</summary>
@@ -146,10 +152,10 @@ namespace MaxWorlds.Arena
         /// null-check would wrongly treat an un-authored area as "authored: 0 robots everywhere".</summary>
         public bool IsAuthored =>
             rusher > 0 || bruiser > 0 || heavy > 0 || brute > 0 || gunner > 0 || launcher > 0 ||
-            blinker > 0 || bolter > 0 || lurker > 0 || sludger > 0 || charger > 0;
+            blinker > 0 || bolter > 0 || lurker > 0 || turret > 0 || sludger > 0 || charger > 0;
 
         public DifficultyEngine.Composition ToEngineComposition() =>
-            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger);
+            new DifficultyEngine.Composition(rusher, bruiser, heavy, brute, gunner, launcher, blinker, bolter, lurker, sludger, charger, turret);
     }
 
     /// <summary>A world's partial restat/reskin of one <see cref="EnemyKind"/> (MV-701) — e.g. World 2's
@@ -624,6 +630,10 @@ namespace MaxWorlds.Arena
         // MV-707: same optional/fallback footing as bolter above.
         public WorldEnemyTypeEntry charger;
 
+        // MV-700: same optional/fallback footing as bolter above — the Pipe Turret (MV-691) had no
+        // entry here yet, so an authored "turret" THV silently fell through to small's.
+        public WorldEnemyTypeEntry turret;
+
         public float Thv(EnemyKind kind)
         {
             WorldEnemyTypeEntry e = kind switch
@@ -638,6 +648,7 @@ namespace MaxWorlds.Arena
                 EnemyKind.Lurker => lurker,
                 EnemyKind.Sludger => sludger,
                 EnemyKind.Charger => charger,
+                EnemyKind.Turret => turret,
                 _ => small,
             };
             return e != null ? e.thv : ThreatValues.Of(kind);
