@@ -232,11 +232,56 @@ namespace MaxWorlds.Rendering
             Smoothness = 0.14f,            // wet sheen — higher than the lawn's matte 0.06
         };
 
-        /// <summary>The biome for a loaded world (MV-690), mirroring
+        /// <summary>
+        /// Reef — World 3's flooded ship interior (MV-713). Colours read straight off the ticket's
+        /// material set (shared with <see cref="MaxWorlds.Rendering.WorldMaterials"/>'s named Reef
+        /// materials, so the procedural biome sweep and the eight fixed-hex materials agree): hull
+        /// plate #132234/#1E3247 for the floor/wall pair, rust-dark #0C1622 standing in for both
+        /// <see cref="Metal"/> and — a ship has neither — <see cref="Wood"/>/<see cref="Stone"/>/
+        /// <see cref="Dirt"/>, and the bioluminescent growth colour (#5CF2A4) doing <see cref="Foliage"/>'s
+        /// job: the one organic material a sunken hull actually has growing on it.
+        ///
+        /// No wind, no clump relief, same as <see cref="Stormdrain"/>'s concrete — a riveted deck plate
+        /// doesn't sway and doesn't tuft.
+        /// </summary>
+        public static BiomePalette Reef => new BiomePalette
+        {
+            Tint = Color.white,
+            GroundBase = new Color(0.0745f, 0.1333f, 0.2039f),    // #132234 — M_ShipFloor
+            GroundAccent = new Color(0.1176f, 0.1961f, 0.2784f),  // #1E3247 — M_ShipWall, as the sunlit deck patch
+            GroundDry = new Color(0.0471f, 0.0863f, 0.1333f),     // #0C1622 — M_MetalDark, grime/wear
+            Wall = new Color(0.1176f, 0.1961f, 0.2784f),          // #1E3247 — M_ShipWall
+            Prop = new Color(0.0471f, 0.0863f, 0.1333f),          // #0C1622 — M_MetalDark
+
+            Wood = new Color(0.1176f, 0.1961f, 0.2784f),          // no timber on a ship — reuse the hull wall tone
+            Stone = new Color(0.1176f, 0.1961f, 0.2784f),         // no stone either — same hull tone
+            Dirt = new Color(0.0471f, 0.0863f, 0.1333f),          // rust/grime — M_MetalDark
+            Metal = new Color(0.0471f, 0.0863f, 0.1333f),         // #0C1622 — M_MetalDark
+            Foliage = new Color(0.3608f, 0.9490f, 0.6431f),       // #5CF2A4 — M_BioGlow, the growth on the machinery
+
+            GroundDetailScale = 0.45f,     // deck plate seams, same coarseness as Stormdrain's slab joints
+            GroundMacroScale = 0.05f,
+            GroundMacroStrength = 0.25f,
+            GroundLushShade = 0.65f,
+            GroundNormalStrength = 0.65f,  // riveted plate has more relief than wet concrete, less than turf
+            GroundClumpScale = 0.5f,
+            GroundClumpDepth = 0f,         // no tufting — this is a deck, not a lawn
+
+            GroundWindLean = 0f,           // sealed hull interior — nothing blows
+            GroundWindSpeed = 0f,
+            GroundWindShimmer = 0f,
+
+            GroundTiling = 5f,
+            Smoothness = 0.22f,            // wet, riveted metal — shinier than Stormdrain's concrete
+        };
+
+        /// <summary>The biome for a loaded world (MV-690, extended MV-713), mirroring
         /// <see cref="MaxWorlds.Weapons.RigBoardLibrary.ForWorld"/>'s own "world 0 gets the original,
-        /// anything past it gets World 2's" rule: index 0 is <see cref="Backyard"/>, everything else is
-        /// <see cref="Stormdrain"/> — there being only two worlds today.</summary>
-        public static BiomePalette ForWorld(int worldIndex) => worldIndex >= 1 ? Stormdrain : Backyard;
+        /// each world past it gets its own" rule: index 0 is <see cref="Backyard"/>, 1 is
+        /// <see cref="Stormdrain"/>, 2 (and anything past it, until a World 4 exists) is
+        /// <see cref="Reef"/>.</summary>
+        public static BiomePalette ForWorld(int worldIndex) =>
+            worldIndex >= 2 ? Reef : worldIndex >= 1 ? Stormdrain : Backyard;
 
         public Color ColorFor(SurfaceKind kind)
         {

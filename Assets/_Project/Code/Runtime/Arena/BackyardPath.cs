@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
+using MaxWorlds.Factories;
 using MaxWorlds.Rendering;
 using MaxWorlds.Save;
 
@@ -143,6 +144,29 @@ namespace MaxWorlds.Arena
             var wm = FindFirstObjectByType<WorldMaterials>();
             if (wm == null) wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
             wm.Apply(BiomePalette.ForWorld(worldIndex));
+
+            // MV-713: the hydroponic reactor and power hatch are IDamageable, so the shape-classified
+            // sweep above explicitly leaves them alone (WorldMaterials.IsWorldSurface) — gameplay owns
+            // their tint the same way it owns every other damageable's. Reef is the one biome so far
+            // that wants a cosmetic override of its own, applied here rather than at MapRuntime build
+            // time so it can never race the sweep above or run before a hutch/gate's own Awake has set
+            // up the renderer it recolours.
+            if (worldIndex >= 2) ApplyReefKit();
+        }
+
+        /// <summary>MV-713: World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor
+        /// (<see cref="MowerHutch"/>) and power hatch (<see cref="AreaGate"/>) already built in the
+        /// scene, and builds the ocean backdrop behind its observation windows. Called once per load,
+        /// only when the active world is Reef (index 2) — every other world leaves this untouched.</summary>
+        private static void ApplyReefKit()
+        {
+            foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
+                hutch.ApplyReefSkin();
+            foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
+                gate.ApplyReefSkin();
+
+            var backdropParent = FindFirstObjectByType<BackyardPath>();
+            if (backdropParent != null) ReefKit.BuildOceanBackdrop(backdropParent.transform);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the

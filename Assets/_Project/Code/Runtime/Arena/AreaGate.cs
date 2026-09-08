@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
+using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Arena
@@ -48,6 +49,7 @@ namespace MaxWorlds.Arena
         private const float HingeDuration = 0.5f;
 
         private DestructibleHealth _health;
+        private MaterialPropertyBlock _reefMpb;
 
         // --- MV-386: the closed slab used to be ONE collider that Open() disabled outright, so the
         // instant a gate broke, the visibly still-swinging (then fully open) door leaf had zero
@@ -103,6 +105,21 @@ namespace MaxWorlds.Arena
 
         /// <summary>The way is open — Max can walk (and shoot) through. True the instant HP hits zero.</summary>
         public bool IsOpen { get; private set; }
+
+        /// <summary>MV-713: re-skins this gate for World 3's Reef biome ("power hatch") — a
+        /// MaterialPropertyBlock tint on the leaf's own renderer, the same non-destructive idiom
+        /// <see cref="MaxWorlds.Factories.MowerHutch.ApplyReefSkin"/> uses. Touches no health, no
+        /// <c>_leafCollider</c>/<c>_thresholdCollider</c>, and no hinge geometry — nothing here can move
+        /// the numbers AC2's "collider and tuning unchanged" guard checks.</summary>
+        public void ApplyReefSkin()
+        {
+            var rend = GetComponent<Renderer>();
+            if (rend == null) return;
+            if (_reefMpb == null) _reefMpb = new MaterialPropertyBlock();
+            rend.GetPropertyBlock(_reefMpb);
+            _reefMpb.SetColor("_BaseColor", WorldMaterials.ReefHazard);
+            rend.SetPropertyBlock(_reefMpb);
+        }
 
         /// <summary>The world-fixed stand-in for the doorway while this gate is shut (MV-386) — the
         /// object <see cref="CoverLayer.Assign"/> should be pointed at instead of the gate itself, since

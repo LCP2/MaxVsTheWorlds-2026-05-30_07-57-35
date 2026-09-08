@@ -147,6 +147,21 @@ namespace MaxWorlds.Factories
         /// <summary>The authored factory HP, for the Settings panel's 100% reference (YT-126).</summary>
         public float AuthoredMax => factoryHealth;
 
+        /// <summary>MV-713: re-skins this hutch for World 3's Reef biome ("hydroponic reactor") — body,
+        /// bar and core tint only, re-applied through the exact same <see cref="TintBody"/>/<see cref="_barFill"/>
+        /// paths <see cref="Build"/> already uses. Never touches <c>factoryHealth</c>, the gate, the
+        /// spawner cadence, or the collider <see cref="MaxWorlds.Arena.Map.MapRuntime"/> sized this body
+        /// to — the "collider and tuning unchanged" guarantee AC2 asks for holds by construction, since
+        /// this method has no path that could reach any of those.</summary>
+        public void ApplyReefSkin()
+        {
+            bodyColor = WorldMaterials.ReefMetalDark;
+            barColor = WorldMaterials.ReefHazard;
+            coreColor = WorldMaterials.ReefBioGlow;
+            TintBody();
+            if (_barFill != null) _barFill.color = barColor;
+        }
+
         /// <summary>Re-read the Factory-health slider and retune this hutch live (YT-126). Raising it
         /// gives headroom, not a heal; lowering clamps. Same contract as PlayerHealth.RefreshMax.</summary>
         public void RefreshMax()
