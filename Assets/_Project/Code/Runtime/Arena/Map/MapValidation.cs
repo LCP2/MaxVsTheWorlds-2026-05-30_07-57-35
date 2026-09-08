@@ -758,6 +758,7 @@ namespace MaxWorlds.Arena
             EnemyKind.Blinker => c.Blinker,
             EnemyKind.Bolter => c.Bolter,
             EnemyKind.Lurker => c.Lurker,
+            EnemyKind.Turret => c.Turret,
             EnemyKind.Sludger => c.Sludger,
             EnemyKind.Charger => c.Charger,
             _ => 0,
