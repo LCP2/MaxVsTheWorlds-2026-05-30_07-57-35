@@ -231,7 +231,16 @@ namespace MaxWorlds.UI
         /// ceremony makes) — rather than hand-rolling that RigBoard/RigState transition a second time.
         /// Public static and side-effect-pure of any UI so an EditMode test can invoke it directly with
         /// no scene/GameObject involved. Never plays <see cref="IntroCinematic"/> — this is a
-        /// development shortcut, not a first launch.</summary>
+        /// development shortcut, not a first launch.
+        ///
+        /// MV-737: the direct-access start point must equal World 1's own exit state, not a fresh-World-1
+        /// RIG — a player who reaches World 2 the intended way has spent a whole World 1 on the board.
+        /// So after the morph above, ENERGY/MOVE/SUPPORT are additionally unlocked and every one of their
+        /// nodes raised to its own authored <c>maxLevel</c> (<see cref="UnlockAndMaxCategory"/>) — fully
+        /// owned, exactly as a player who cleared World 1 would arrive. PRIMARY/SECONDARY/FORGE/wallet
+        /// need no further seeding here: the morph above already leaves PRIMARY on the LPPE unupgraded
+        /// and SECONDARY mystery-locked, and <see cref="WipeForFreshRun"/>'s own
+        /// <see cref="PickupWallet.Reset"/> already empties the wallet and un-forges every FORGE fusion.</summary>
         public static void StartSlotWorld2(int slot)
         {
             WipeForFreshRun(slot);
@@ -243,6 +252,41 @@ namespace MaxWorlds.UI
             SaveSystem.Save(slot, data);
 
             WeaponSystemState.ApplyWeaponCoreMorph(1);
+
+            UnlockAndMaxCategory("ENERGY");
+            UnlockAndMaxCategory("MOVE");
+            UnlockAndMaxCategory("SUPPORT");
+        }
+
+        /// <summary>MV-737: unlocks <paramref name="category"/> and raises every one of its nodes to its
+        /// own authored <see cref="RigBoard.MaxLevel"/>, through the same public calls a shed
+        /// unlock/Morphing Module draft/part spend makes (<see cref="RigState.UnlockCategory"/>,
+        /// <see cref="WeaponSystemState.AcquireById"/>, <see cref="WeaponSystemState.RaiseLevelById"/>)
+        /// — no debug back door, and no direct call into the raw <see cref="RigState"/> grant/raise
+        /// primitives outside <see cref="WeaponSystemState"/> itself (MV-435: a raw call silently skips
+        /// <see cref="WeaponSystemState.Changed"/> and leaves anything gated on it stale). A child node
+        /// only becomes reachable once its parent is owned, so this sweeps the category repeatedly until
+        /// a pass makes no further progress, which converges in as many passes as the tree is deep
+        /// regardless of <see cref="RigBoard.AllIds"/>'s own authored order.</summary>
+        private static void UnlockAndMaxCategory(string category)
+        {
+            RigState.UnlockCategory(category);
+
+            bool progressed = true;
+            while (progressed)
+            {
+                progressed = false;
+                foreach (string id in RigBoard.AllIds)
+                {
+                    if (RigBoard.Category(id) != category) continue;
+                    if (RigState.Level(id) >= RigBoard.MaxLevel(id)) continue;
+
+                    if (RigState.Level(id) == 0)
+                        progressed |= WeaponSystemState.AcquireById(id);
+                    else
+                        progressed |= WeaponSystemState.RaiseLevelById(id);
+                }
+            }
         }
 
         /// <summary>MV-550's derived first-launch gate: true only when every save slot is empty
