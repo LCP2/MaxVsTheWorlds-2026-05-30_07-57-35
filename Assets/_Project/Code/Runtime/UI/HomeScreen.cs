@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -220,42 +221,82 @@ namespace MaxWorlds.UI
             return playIntro && IntroCinematic.TryPlay(force: true);
         }
 
-        /// <summary>WORLD 2 dev entry point (MV-726): reaching World 2 legitimately means clearing all
-        /// 30 areas of World 1 and collecting the Weapon Core, which makes World 2 untestable in
-        /// practice — this is one extra, unflagged entry point onto the same machinery, not new
-        /// machinery. Runs the same wipe PLAY does, then seeds a fresh Stormdrain run directly: World 2,
-        /// the LPPE primary, no Weapon Core pending. The SECONDARY column is left exactly as a real
-        /// Weapon Core morph leaves it — LOCKED, nothing owned (MV-727: it stays closed until the
-        /// player finds World 2's Rack Module pickup, same as a real run)
-        /// (<see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>, the same call THE RIG's own morph
-        /// ceremony makes) — rather than hand-rolling that RigBoard/RigState transition a second time.
-        /// Public static and side-effect-pure of any UI so an EditMode test can invoke it directly with
-        /// no scene/GameObject involved. Never plays <see cref="IntroCinematic"/> — this is a
-        /// development shortcut, not a first launch.
+        /// <summary>WORLD 2/3 dev entry points (MV-726, generalised MV-736): reaching either world
+        /// legitimately means clearing every area of the world(s) before it and collecting the Weapon
+        /// Core, which makes them untestable in practice — this is one extra, unflagged entry point
+        /// onto the same machinery, not new machinery. Runs the same wipe PLAY does, then seeds a fresh
+        /// run of <paramref name="worldIndex"/> directly via the same
+        /// <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> call THE RIG's own morph ceremony
+        /// makes — rather than hand-rolling that RigBoard/RigState transition a second time. Public
+        /// static and side-effect-pure of any UI so an EditMode test can invoke it directly with no
+        /// scene/GameObject involved. Never plays <see cref="IntroCinematic"/> — this is a development
+        /// shortcut, not a first launch.
         ///
-        /// MV-737: the direct-access start point must equal World 1's own exit state, not a fresh-World-1
-        /// RIG — a player who reaches World 2 the intended way has spent a whole World 1 on the board.
-        /// So after the morph above, ENERGY/MOVE/SUPPORT are additionally unlocked and every one of their
-        /// nodes raised to its own authored <c>maxLevel</c> (<see cref="UnlockAndMaxCategory"/>) — fully
-        /// owned, exactly as a player who cleared World 1 would arrive. PRIMARY/SECONDARY/FORGE/wallet
-        /// need no further seeding here: the morph above already leaves PRIMARY on the LPPE unupgraded
-        /// and SECONDARY mystery-locked, and <see cref="WipeForFreshRun"/>'s own
-        /// <see cref="PickupWallet.Reset"/> already empties the wallet and un-forges every FORGE fusion.</summary>
-        public static void StartSlotWorld2(int slot)
+        /// <paramref name="maxRig"/> selects which populated state the button hands the tester:
+        /// <list type="bullet">
+        /// <item>false (WORLD 2, MV-737): World 1's own EXIT state — ENERGY/MOVE/SUPPORT additionally
+        /// unlocked and maxed (<see cref="UnlockAndMaxCategory"/>), PRIMARY left on the morph's
+        /// owned-but-unupgraded floor, SECONDARY mystery-locked untouched, exactly as a player who
+        /// cleared World 1 would arrive.</item>
+        /// <item>true (WORLD 3, MV-736): a fully maxed rig — every category unlocked and every node on
+        /// <paramref name="worldIndex"/>'s own board raised to its <see cref="RigBoard.MaxLevel"/>, plus
+        /// every FORGE fusion forged (<see cref="MaxOutRig"/>) — World 3 exists to test World 3 content,
+        /// not to make the tester grind a rig first.</item>
+        /// </list>
+        /// <see cref="StartSlotWorld2"/> is a one-line call onto this with the original MV-726 shape
+        /// (world 1, maxRig: false) so the two paths can never drift (MV-726 AC4).</summary>
+        public static void StartSlotWorld(int slot, int worldIndex, bool maxRig)
         {
             WipeForFreshRun(slot);
 
             SaveSlotData data = SaveSystem.Load(slot);
-            data.WorldIndex = 1;
-            data.PrimaryKind = WeaponCatalog.PrimaryKind.Lppe;
+            data.WorldIndex = worldIndex;
+            data.PrimaryKind = worldIndex >= 2 ? WeaponCatalog.PrimaryKind.Undertow : WeaponCatalog.PrimaryKind.Lppe;
             data.WeaponCorePending = false;
             SaveSystem.Save(slot, data);
 
-            WeaponSystemState.ApplyWeaponCoreMorph(1);
+            WeaponSystemState.ApplyWeaponCoreMorph(worldIndex);
 
-            UnlockAndMaxCategory("ENERGY");
-            UnlockAndMaxCategory("MOVE");
-            UnlockAndMaxCategory("SUPPORT");
+            if (maxRig)
+            {
+                MaxOutRig();
+            }
+            else
+            {
+                UnlockAndMaxCategory("ENERGY");
+                UnlockAndMaxCategory("MOVE");
+                UnlockAndMaxCategory("SUPPORT");
+            }
+        }
+
+        /// <summary>WORLD 2 dev entry point (MV-726) — the original single-world shape, kept as a
+        /// one-line call onto <see cref="StartSlotWorld"/> so it can never drift from it (MV-726
+        /// AC4). Unchanged by MV-736: still world 1, maxRig: false.</summary>
+        public static void StartSlotWorld2(int slot) => StartSlotWorld(slot, worldIndex: 1, maxRig: false);
+
+        /// <summary>MV-736: fully maxes THE RIG for whichever board is currently active (already
+        /// switched onto <paramref name="worldIndex"/>'s board by the caller's own
+        /// <see cref="WeaponSystemState.ApplyWeaponCoreMorph"/> call) — every category unlocked and
+        /// every node id <see cref="RigBoard.AllIds"/> lists raised to its own
+        /// <see cref="RigBoard.MaxLevel"/>, through <see cref="RigState.RestoreSnapshot"/> (the same
+        /// shape a mid-run checkpoint restore already uses, so this needs no parallel state-setting
+        /// path), then every FORGE fusion forged through <see cref="RigFusionState.TryForge"/> (both
+        /// parent categories are lit by construction once every node is owned). The id/fusion lists are
+        /// read from the loaded board each time, never hard-coded, so this keeps working unmodified if
+        /// a node or fusion is ever added to the board. Maxing <c>s_rkt</c> here also clears
+        /// <see cref="RigState.SecondaryLocked"/> on its own (that flag is just "mystery armed AND
+        /// s_rkt owned") — no special case needed.</summary>
+        private static void MaxOutRig()
+        {
+            var levels = new Dictionary<string, int>();
+            foreach (string id in RigBoard.AllIds)
+                levels[id] = RigBoard.MaxLevel(id);
+
+            RigState.RestoreSnapshot(levels, RigBoard.AllCategoryIds);
+            WeaponSystemState.RebuildAcquiredFromRigState();
+
+            foreach (RigFusionDef fusion in RigBoard.Fusions)
+                RigFusionState.TryForge(fusion.Id);
         }
 
         /// <summary>MV-737: unlocks <paramref name="category"/> and raises every one of its nodes to its
@@ -314,17 +355,19 @@ namespace MaxWorlds.UI
             Close(introStarted);
         }
 
-        /// <summary>WORLD 2 tapped (MV-726). Unlike PLAY/RESUME, the arena for the freshly-seeded
-        /// world was never built — <see cref="MaxWorlds.Arena.BackyardPath"/> only resolves
-        /// <see cref="SaveSlotData.WorldIndex"/> on its own <c>Awake</c>, which already ran once at
-        /// boot, same as <see cref="MaxWorlds.UI.RunFlow.StartNextWorld"/> after a Victory — so this
-        /// reloads the scene the same way, letting that next <c>Awake</c> pick up the WorldIndex just
-        /// saved. <see cref="SaveSystem.ActiveSlot"/> is already set by the time the reload's own
+        /// <summary>WORLD 2/3 tapped (MV-726, generalised MV-736). Unlike PLAY/RESUME, the arena for
+        /// the freshly-seeded world was never built — <see cref="MaxWorlds.Arena.BackyardPath"/> only
+        /// resolves <see cref="SaveSlotData.WorldIndex"/> on its own <c>Awake</c>, which already ran
+        /// once at boot, same as <see cref="MaxWorlds.UI.RunFlow.StartNextWorld"/> after a Victory — so
+        /// this reloads the scene the same way, letting that next <c>Awake</c> pick up the WorldIndex
+        /// just saved. <see cref="SaveSystem.ActiveSlot"/> is already set by the time the reload's own
         /// <see cref="Start"/> runs, which is what stops Home reopening on it (same guard the
-        /// Replay-triggered reload relies on).</summary>
-        private void OnWorld2(int slot)
+        /// Replay-triggered reload relies on) — and <see cref="RigState"/>/<see cref="WeaponSystemState"/>
+        /// are plain static state, untouched by a scene reload, so the rig <see cref="StartSlotWorld"/>
+        /// just seeded survives it exactly as <c>WorldIndex</c> does.</summary>
+        private void OnWorldDevStart(int slot, int worldIndex, bool maxRig)
         {
-            StartSlotWorld2(slot);
+            StartSlotWorld(slot, worldIndex, maxRig);
             Time.timeScale = 1f;
             Scene scene = SceneManager.GetActiveScene();
             SceneManager.LoadScene(scene.buildIndex);
@@ -506,19 +549,27 @@ namespace MaxWorlds.UI
             resetBtn.sizeDelta = new Vector2(140f, 40f);
             resetBtn.anchoredPosition = new Vector2(-18f, -14f);
 
-            // WORLD 2 dev entry point (MV-726): visible on every slot, occupied or empty — an empty
-            // slot gets its profile created the same way PLAY does. CardRim, not Max's own orange, so
-            // it reads as secondary to PLAY. Top-anchored at a fixed offset (not RowHeight-relative)
-            // so its position is independent of the center-anchored RESUME/PLAY buttons above it: at
-            // y=-184 (row's own rect, inset -3px by the Stretch above, so effective height 222) it
-            // clears status's bottom edge (-166) by 18px, and clears the RESUME-row PLAY button's
-            // bottom edge (-177, the lowest existing element, itself derived from that row's vertical
-            // center at RowHeight=228) by 7px. Its own bottom edge lands at -214, 8px clear of the
-            // row's own bottom (-222) — every margin here is a computed clearance, not eyeballed.
-            var world2Btn = AddButton(row.rectTransform, "WORLD 2", CardRim, true, () => OnWorld2(slot));
+            // WORLD 2/3 dev entry points (MV-726; WORLD 3 added MV-736): visible on every slot,
+            // occupied or empty — an empty slot gets its profile created the same way PLAY does.
+            // CardRim, not Max's own orange, so both read as secondary to PLAY. Top-anchored at a
+            // fixed offset (not RowHeight-relative) so their position is independent of the
+            // center-anchored RESUME/PLAY buttons above them: at y=-184 (row's own rect, inset -3px by
+            // the Stretch above, so effective height 222) they clear status's bottom edge (-166) by
+            // 18px, and clear the RESUME-row PLAY button's bottom edge (-177, the lowest existing
+            // element, itself derived from that row's vertical center at RowHeight=228) by 7px. Their
+            // own bottom edge lands at -214, 8px clear of the row's own bottom (-222) — every margin
+            // here is a computed clearance, not eyeballed. The two buttons split left/right of centre
+            // (x=-160/+160, each 300 wide) with a 20px gap between their inner edges (-10 to +10), well
+            // clear of the row's own +-537 edges on either side.
+            var world2Btn = AddButton(row.rectTransform, "WORLD 2", CardRim, true, () => OnWorldDevStart(slot, 1, maxRig: false));
             Anchor(world2Btn, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
             world2Btn.sizeDelta = new Vector2(300f, 30f);
-            world2Btn.anchoredPosition = new Vector2(0f, -184f);
+            world2Btn.anchoredPosition = new Vector2(-160f, -184f);
+
+            var world3Btn = AddButton(row.rectTransform, "WORLD 3", CardRim, true, () => OnWorldDevStart(slot, 2, maxRig: true));
+            Anchor(world3Btn, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            world3Btn.sizeDelta = new Vector2(300f, 30f);
+            world3Btn.anchoredPosition = new Vector2(160f, -184f);
         }
 
         /// <summary>The RESET confirm/cancel dialog (MV-282) — a full-screen raycast-blocking scrim
