@@ -1,0 +1,167 @@
+// Throwaway audit: replicates MapValidation.WorldGarrison's cover-clearance rule and the MapData-level
+// doorway (Links) rule against the shipped world2_config.json, collecting EVERY violation instead of
+// stopping at the first (MapValidation itself short-circuits) — for a complete MV-700 hand-off list.
+const fs = require('fs');
+const cfg = JSON.parse(fs.readFileSync('Assets/_Project/Resources/Worlds/world2_config.json', 'utf8'));
+
+const COLLIDER_RADIUS = {
+  rusher: 0.4, bruiser: 0.55, heavy: 0.58, brute: 0.6, gunner: 0.4, launcher: 0.42,
+  blinker: 0.4, bolter: 0.4, lurker: 0.3, turret: 0.5, sludger: 0.45, charger: 0.55,
+};
+
+function boxDistanceToPoint(cx, cz, w, d, px, pz) {
+  const xMin = cx - w / 2, xMax = cx + w / 2, zMin = cz - d / 2, zMax = cz + d / 2;
+  const dx = Math.max(xMin - px, 0, px - xMax);
+  const dz = Math.max(zMin - pz, 0, pz - zMax);
+  return Math.sqrt(dx * dx + dz * dz);
+}
+
+console.log('--- WorldGarrison: garrison-vs-cover clearance ---');
+let garrisonViolations = 0;
+for (const a of cfg.areas) {
+  if (!a.garrison || !a.cover || a.cover.length === 0) continue;
+  for (const entry of a.garrison) {
+    const requiredGap = (COLLIDER_RADIUS[entry.kind] ?? 0.4) + 0.1;
+    for (const c of a.cover) {
+      const gap = boxDistanceToPoint(c.x, c.z, c.width, c.depth, entry.x, entry.z);
+      if (gap < requiredGap) {
+        console.log(`area '${a.id}': garrison ${entry.kind} (${entry.x}, ${entry.z}) is ${gap.toFixed(2)} m from cover '${c.id}' — needs ${requiredGap.toFixed(1)} m`);
+        garrisonViolations++;
+      }
+    }
+  }
+}
+console.log(`total garrison-vs-cover violations: ${garrisonViolations}`);
+
+console.log('\n--- WorldGarrison: footprint containment ---');
+let footprintViolations = 0;
+for (const a of cfg.areas) {
+  if (!a.garrison) continue;
+  const xMin = a.origin.x, xMax = a.origin.x + a.size.w, zMin = a.origin.z, zMax = a.origin.z + a.size.d;
+  for (const entry of a.garrison) {
+    if (entry.x < xMin || entry.x > xMax || entry.z < zMin || entry.z > zMax) {
+      console.log(`area '${a.id}': garrison ${entry.kind} (${entry.x}, ${entry.z}) is outside the area [${xMin},${xMax}]x[${zMin},${zMax}]`);
+      footprintViolations++;
+    }
+  }
+}
+console.log(`total footprint violations: ${footprintViolations}`);
+
+console.log('\n--- Links: doorway width (MinDoorway = 3) ---');
+const areaById = Object.fromEntries(cfg.areas.map(a => [a.id, a]));
+// Resolve overlay origin/size the way WorldMapLoader does, before computing zone bounds.
+for (const a of cfg.areas) {
+  if (a.overlays && areaById[a.overlays]) {
+    a.origin = areaById[a.overlays].origin;
+    a.size = areaById[a.overlays].size;
+  }
+}
+function bounds(a) {
+  return { xMin: a.origin.x, xMax: a.origin.x + a.size.w, zMin: a.origin.z, zMax: a.origin.z + a.size.d };
+}
+function wallSpan(a, wall) {
+  const b = bounds(a);
+  return (wall === 'N' || wall === 'S') ? [b.xMin, b.xMax] : [b.zMin, b.zMax];
+}
+function wallCoord(a, wall) {
+  const b = bounds(a);
+  if (wall === 'N') return b.zMax;
+  if (wall === 'S') return b.zMin;
+  if (wall === 'E') return b.xMax;
+  return b.xMin;
+}
+function runsAlongX(wall) { return wall === 'N' || wall === 'S'; }
+
+let doorwayViolations = 0;
+const mouths = []; // { gateId, x, z } — resolved doorway mouth, for the cover-blocks-doorway sweep below
+for (const g of cfg.gates) {
+  const fromArea = areaById[g.from.area], toArea = areaById[g.to.area];
+  if (!fromArea || !toArea) continue;
+  const [fMin, fMax] = wallSpan(fromArea, g.from.wall);
+  const [tMin, tMax] = wallSpan(toArea, g.to.wall);
+  const posFrom = fMin + Math.min(1, Math.max(0, g.from.pos)) * (fMax - fMin);
+  const posTo = tMin + Math.min(1, Math.max(0, g.to.pos)) * (tMax - tMin);
+  const along = (posFrom + posTo) / 2;
+
+  const fb = bounds(fromArea), tb = bounds(toArea);
+  let overlapMin, overlapMax, alongXAxis, fixedCoord;
+  if (Math.abs(fb.zMax - tb.zMin) < 1e-4 || Math.abs(fb.zMin - tb.zMax) < 1e-4) {
+    alongXAxis = true;
+    overlapMin = Math.max(fb.xMin, tb.xMin); overlapMax = Math.min(fb.xMax, tb.xMax);
+    fixedCoord = Math.abs(fb.zMax - tb.zMin) < 1e-4 ? fb.zMax : fb.zMin;
+  } else if (Math.abs(fb.xMax - tb.xMin) < 1e-4 || Math.abs(fb.xMin - tb.xMax) < 1e-4) {
+    alongXAxis = false;
+    overlapMin = Math.max(fb.zMin, tb.zMin); overlapMax = Math.min(fb.zMax, tb.zMax);
+    fixedCoord = Math.abs(fb.xMax - tb.xMin) < 1e-4 ? fb.xMax : fb.xMin;
+  } else {
+    console.log(`gate '${g.id}': ${g.from.area} and ${g.to.area} do not share an edge`);
+    continue;
+  }
+  const overlapLen = overlapMax - overlapMin;
+  if (overlapLen <= 0) { console.log(`gate '${g.id}': zero/negative overlap (${overlapLen})`); continue; }
+
+  let hole, centre = along;
+  if (g.width <= 0 || g.width >= overlapLen) {
+    hole = overlapLen;
+    centre = (overlapMin + overlapMax) / 2;
+  } else {
+    const half = g.width / 2;
+    centre = Math.min(Math.max(centre, overlapMin + half), overlapMax - half);
+    hole = 2 * half;
+  }
+  const margin = hole - 3;
+  if (margin < 0.01) {
+    console.log(`gate '${g.id}' (${g.from.area}->${g.to.area}): resolved hole ${hole.toFixed(4)} m, margin ${margin.toFixed(4)} m over MinDoorway=3 (posFrom=${posFrom.toFixed(4)}, posTo=${posTo.toFixed(4)}, along=${along.toFixed(4)}, overlap=[${overlapMin},${overlapMax}])`);
+    doorwayViolations++;
+  }
+
+  mouths.push({ gateId: g.id, from: g.from.area, to: g.to.area, x: alongXAxis ? centre : fixedCoord, z: alongXAxis ? fixedCoord : centre });
+}
+console.log(`total doorways within 0.01m of the 3m floor: ${doorwayViolations}`);
+
+console.log('\n--- Cover: cover-blocks-doorway (MapValidation.Cover, MAP-WIDE — DoorwayClearance=2m from every cover box to every gate mouth) ---');
+const DOORWAY_CLEARANCE = 2.0; // MapValidation.cs:44
+let doorwayBlockViolations = 0;
+for (const a of cfg.areas) {
+  for (const c of a.cover || []) {
+    const xMin = c.x - c.width / 2, xMax = c.x + c.width / 2, zMin = c.z - c.depth / 2, zMax = c.z + c.depth / 2;
+    for (const m of mouths) {
+      const dx = Math.max(xMin - m.x, 0, m.x - xMax);
+      const dz = Math.max(zMin - m.z, 0, m.z - zMax);
+      const dist = Math.sqrt(dx * dx + dz * dz);
+      if (dist < DOORWAY_CLEARANCE) {
+        console.log(`cover '${c.id}' (area ${a.id}, box ${c.width}x${c.depth} @ ${c.x},${c.z}) is ${dist.toFixed(3)} m from gate '${m.gateId}' (${m.from}->${m.to}) mouth (${m.x.toFixed(2)},${m.z.toFixed(2)}) — needs ${DOORWAY_CLEARANCE.toFixed(1)} m`);
+        doorwayBlockViolations++;
+      }
+    }
+  }
+}
+console.log(`total cover-blocks-doorway violations (map-wide): ${doorwayBlockViolations}`);
+
+console.log('\n--- Cover: cover-vs-replicator/factory spawn ring clearance (MapValidation.Cover, MAP-WIDE, not area-scoped — SpawnRadius+SpawnClearance=4.3) ---');
+const REQUIRED_SPAWN_CLEARANCE = 3.5 + 0.8; // SpawnRadius + SpawnClearance, MapValidation.cs:37-40
+// MapValidation.Cover runs on the converted MapData: EVERY cover entity against EVERY factory/replicator
+// in the WHOLE MAP, not scoped by area (MapValidation.cs:292-297,331-335). A prior version of this script
+// only checked cover against replicators in the SAME area, which missed a9_cover1 x a8_rep2 (adjacent-area
+// crowd) - the live Unity run caught it, this rewrite matches the real (global) scope.
+let spawnRingViolations = 0;
+const allCovers = [];
+const allFactories = []; // sheds + replicators, matching MapValidation's Kind(Factory) + Kind(Replicator)
+for (const a of cfg.areas) {
+  for (const c of a.cover || []) allCovers.push({ ...c, areaId: a.id });
+  for (const s of (a.sheds || [])) allFactories.push({ id: s.id ?? `${a.id}_shed`, x: s.x, z: s.z, areaId: a.id });
+  for (const r of a.replicators || []) allFactories.push({ id: r.id, x: r.x, z: r.z, areaId: a.id });
+}
+for (const c of allCovers) {
+  const xMin = c.x - c.width / 2, xMax = c.x + c.width / 2, zMin = c.z - c.depth / 2, zMax = c.z + c.depth / 2;
+  for (const f of allFactories) {
+    const dx = Math.max(xMin - f.x, 0, f.x - xMax);
+    const dz = Math.max(zMin - f.z, 0, f.z - zMax);
+    const dist = Math.sqrt(dx * dx + dz * dz);
+    if (dist < REQUIRED_SPAWN_CLEARANCE) {
+      console.log(`cover '${c.id}' (area ${c.areaId}, box ${c.width}x${c.depth} @ ${c.x},${c.z}) is ${dist.toFixed(3)} m from '${f.id}' (area ${f.areaId}, ${f.x},${f.z}) — needs ${REQUIRED_SPAWN_CLEARANCE.toFixed(1)} m`);
+      spawnRingViolations++;
+    }
+  }
+}
+console.log(`total cover-vs-replicator/factory spawn ring violations (map-wide): ${spawnRingViolations}`);
