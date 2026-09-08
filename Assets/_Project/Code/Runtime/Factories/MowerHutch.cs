@@ -318,7 +318,19 @@ namespace MaxWorlds.Factories
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
             if (_barPivot != null) _barPivot.gameObject.SetActive(false);
-            if (_core != null) _core.gameObject.SetActive(false);
+            if (_core != null)
+            {
+                // MV-715: a Hydroponic Reactor's bio-glow bloom dies dark, not just hidden — PulseCore
+                // never runs again once IsAlive is false, so without this the core's MaterialPropertyBlock
+                // would keep whatever emissive value it last pulsed to, and anything that re-showed the
+                // core (or read its property block directly, e.g. a test) would see a live bloom on a
+                // dead reactor. Same MaterialPropertyBlock path PulseCore/TintBody already use.
+                if (_coreMpb == null) _coreMpb = new MaterialPropertyBlock();
+                _core.GetPropertyBlock(_coreMpb);
+                _coreMpb.SetColor("_EmissionColor", Color.black);
+                _core.SetPropertyBlock(_coreMpb);
+                _core.gameObject.SetActive(false);
+            }
         }
 
         /// <summary>What the kill shouts. With one factory, breaking it opens the gate, and saying so

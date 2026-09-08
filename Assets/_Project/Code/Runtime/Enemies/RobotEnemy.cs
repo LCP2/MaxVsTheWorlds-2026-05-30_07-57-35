@@ -507,6 +507,58 @@ namespace MaxWorlds.Enemies
         /// (MV-447 cause 4). Between this and <see cref="StandoffBackOffFraction"/> it holds.</summary>
         private const float StandoffCloseInFraction = 1.15f;
 
+        // --- MV-715: World 3's Reef re-skins — each of the eight kinds keeps its base archetype and
+        // state machine (WorldEnemyOverride only ever renames/re-tints, see EnemyArchetype.WithOverride)
+        // and gets exactly ONE behaviour tweak, gated on Skin so a base-table (non-Reef) robot of the
+        // same Kind is never affected. ---
+        private const string ReefSkinTag = "reef";
+
+        /// <summary>Anglerfish-bot (Blinker's Reef reskin): invisible except its lure-light until Max
+        /// closes within this range, at which point the whole body renders normally.</summary>
+        private const float AnglerfishVisibleRange = 6f;
+
+        /// <summary>Dredge Hulk (Brute's Reef reskin): damage multiplier for a hit that arrived from
+        /// its front arc — armour plate there means it must be flanked. Full damage (1x) from every
+        /// other angle.</summary>
+        private const float DredgeHulkFrontArmorMultiplier = 0.4f;
+
+        /// <summary>Scrap Eel (Rusher's Reef reskin): how fast its S-curve wobble oscillates.</summary>
+        private const float ScrapEelWobbleFrequency = 2.4f;
+
+        /// <summary>Scrap Eel (Rusher's Reef reskin): how far the S-curve pushes sideways, as a
+        /// fraction of its forward direction — kept well under 1 so it still reads as "toward Max",
+        /// just harder to lance through in a straight line.</summary>
+        private const float ScrapEelWobbleAmplitude = 0.5f;
+
+        /// <summary>Salvage Crab (Bruiser's Reef reskin): fixed sideways bias on its approach, standing
+        /// in for the "charges sideways" tell now that MV-428 has removed the Bruiser's lunge outright
+        /// (there is no straight-line dash left to redirect) — see <see cref="LungesAsKind"/>.</summary>
+        private const float SalvageCrabSidewaysBias = 0.35f;
+
+        /// <summary>Anglerfish-bot's stealth (MV-715, AC2) — public, same "an EditMode test can drive
+        /// it directly" reasoning as <see cref="MaxWorlds.Factories.MowerHutch.Build"/>. A no-op for
+        /// every kind/skin other than the Reef Blinker.</summary>
+        public void ApplyReefStealthVisibility(float distanceToPlayer)
+        {
+            if (Kind != EnemyKind.Blinker || Skin != ReefSkinTag) return;
+            SetBodyVisible(distanceToPlayer <= AnglerfishVisibleRange);
+        }
+
+        /// <summary>Dredge Hulk's front-arc armour (MV-715, AC3). <paramref name="hitDirection"/> is
+        /// the same source-to-target travel convention every <see cref="DamageInfo"/> already uses
+        /// (e.g. WaterBlaster's own <c>transform.forward</c>): its reverse points back toward whoever
+        /// dealt the hit, so a positive dot with this robot's own forward means the attacker was in
+        /// front of it. Returns 1 (no reduction) for every kind/skin other than the Reef Brute.</summary>
+        private float DredgeHulkFrontArcMultiplier(Vector3 hitDirection)
+        {
+            if (Kind != EnemyKind.Brute || Skin != ReefSkinTag) return 1f;
+            Vector3 towardAttacker = -hitDirection;
+            towardAttacker.y = 0f;
+            if (towardAttacker.sqrMagnitude < 1e-6f) return 1f;
+            return Vector3.Dot(towardAttacker.normalized, transform.forward) > 0f
+                ? DredgeHulkFrontArmorMultiplier : 1f;
+        }
+
         [Tooltip("Speed while walking out of the factory door, as a fraction of chase speed (YT-100). " +
                  "Dropped further at YT-169 so the birth beat reads as a distinctly slower, more " +
                  "deliberate step than the chase that follows it, not almost the same pace.")]
@@ -865,6 +917,11 @@ namespace MaxWorlds.Enemies
             // skipped: _sight.HasSight freezes at whatever it last was, and a Dormant robot gated on it
             // (TickDormant/AmbushWake) can never wake again for the rest of its life.
             if (target == null) AcquireTarget();
+
+            // MV-715: ticked regardless of state, same reasoning as the corroded timer above — an
+            // Anglerfish-bot sitting Dormant/Chase/Telegraph must go visible/invisible on distance
+            // alone, not on whatever state it happens to be in.
+            if (target != null) ApplyReefStealthVisibility((transform.position - target.position).magnitude);
 
             // Look, once, before deciding anything. Everything below reads the memory, never the
             // transform — the robot no longer knows where Max is, only where it last saw him.
@@ -1377,6 +1434,27 @@ namespace MaxWorlds.Enemies
             {
                 if (dist < standoffRange * StandoffBackOffFraction) { dir = -dir; retreating = true; }
                 else if (dist <= standoffRange * StandoffCloseInFraction) { dir = to.normalized; inStandoffBand = true; }
+            }
+
+            // MV-715: Scrap Eel's shallow S-curve — a perpendicular wobble laid over the steered
+            // direction, harder to lance through in a straight line. Applied after every steering
+            // input above (formation, separation, wall latch, route dwell, standoff) so it never fights
+            // any of them, and before FaceAndMove so it actually reaches movement/facing.
+            if (Kind == EnemyKind.Rusher && Skin == ReefSkinTag)
+            {
+                Vector3 perp = new Vector3(-dir.z, 0f, dir.x);
+                float wobble = Mathf.Sin((Time.time + GetInstanceID() * 0.173f) * ScrapEelWobbleFrequency)
+                               * ScrapEelWobbleAmplitude;
+                dir = (dir + perp * wobble).normalized;
+            }
+            // MV-715: Salvage Crab's sideways approach — a fixed per-instance lateral bias standing in
+            // for the "charges sideways" tell, since MV-428 already removed the Bruiser's lunge (see
+            // SalvageCrabSidewaysBias's own doc comment for why there is no dash left to redirect).
+            else if (Kind == EnemyKind.Bruiser && Skin == ReefSkinTag)
+            {
+                Vector3 perp = new Vector3(-dir.z, 0f, dir.x);
+                float sign = (GetInstanceID() & 1) == 0 ? 1f : -1f;
+                dir = (dir + perp * sign * SalvageCrabSidewaysBias).normalized;
             }
 
             bool hunting = !_sight.HasSight;
@@ -1899,8 +1977,10 @@ namespace MaxWorlds.Enemies
                 return;
             }
             // MV-691: CORRODED amplifies the incoming hit itself, same rule PlayerHealth.TakeDamage
-            // applies (20 -> 25 at the ticket's own 1.25x).
-            float amount = info.Amount * DamageTakenMultiplier;
+            // applies (20 -> 25 at the ticket's own 1.25x). MV-715: the Dredge Hulk's front-arc armour
+            // multiplies it back down for a hit that arrived from in front — see
+            // DredgeHulkFrontArcMultiplier's own doc comment.
+            float amount = info.Amount * DamageTakenMultiplier * DredgeHulkFrontArcMultiplier(info.Direction);
             _health -= amount;
             // Floating damage number (YT-30 HUD). No-op if nothing is listening (tests).
             HudSignals.EmitDamage(transform.position, amount);

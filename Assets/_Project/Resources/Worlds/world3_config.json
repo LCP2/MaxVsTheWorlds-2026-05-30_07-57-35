@@ -80,6 +80,49 @@
    "thv": 3.3
   }
  },
+ "enemyOverrides": [
+  {
+   "kind": "rusher",
+   "displayName": "SCRAP EEL",
+   "skin": "reef"
+  },
+  {
+   "kind": "bruiser",
+   "displayName": "SALVAGE CRAB",
+   "skin": "reef"
+  },
+  {
+   "kind": "heavy",
+   "displayName": "CABLE TENTACLE",
+   "skin": "reef"
+  },
+  {
+   "kind": "brute",
+   "displayName": "DREDGE HULK",
+   "skin": "reef"
+  },
+  {
+   "kind": "gunner",
+   "displayName": "MINE URCHIN",
+   "skin": "reef"
+  },
+  {
+   "kind": "launcher",
+   "displayName": "PUFFER MINE",
+   "skin": "reef",
+   "telegraphTime": 1.2
+  },
+  {
+   "kind": "blinker",
+   "displayName": "ANGLERFISH-BOT",
+   "skin": "reef"
+  },
+  {
+   "kind": "bolter",
+   "displayName": "REEF BOLTER",
+   "skin": "reef"
+  }
+ ],
  "gates": [
   {
    "id": "g_f3_a",
