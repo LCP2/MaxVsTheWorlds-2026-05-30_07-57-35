@@ -83,6 +83,15 @@ namespace MaxWorlds.VFX
         private static readonly Color SentinelRecallCore = new Color(0.55f, 0.9f, 1f, 1f);
         private static readonly Color SentinelRecallDeep = new Color(0.35f, 0.55f, 0.75f, 1f);
 
+        // Max's own hit feedback (MV-722): its own reddish family, deliberately apart from the enemy
+        // hit sparks' gold above — a hit on MAX has to read as "something happened to YOU", not a
+        // re-skinned enemy spark. PlayerContact is duller/lower than PlayerHit on purpose: the ticket
+        // asks for a "continuous-feeling" read, not a repeated one-shot spark.
+        private static readonly Color PlayerHitCore = new Color(1f, 0.55f, 0.5f, 1f);
+        private static readonly Color PlayerHitDeep = new Color(0.85f, 0.15f, 0.15f, 1f);
+        private static readonly Color PlayerContactCore = new Color(0.95f, 0.4f, 0.25f, 1f);
+        private static readonly Color PlayerContactDeep = new Color(0.6f, 0.12f, 0.08f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -104,6 +113,8 @@ namespace MaxWorlds.VFX
         private VfxBurst _missileSputter;   // missile: dying thrust, just before it drops
         private VfxBurst _missileBounceDust; // missile: a kick of dust each time it hits the ground
         private VfxBurst _sentinelRecall;   // sentinel: the recall despawn (MV-604)
+        private VfxBurst _playerHitSpark;   // Max: an isolated hit (MV-722)
+        private VfxBurst _playerContactGlow; // Max: ongoing contact (MV-722)
 
         private void Awake()
         {
@@ -139,6 +150,10 @@ namespace MaxWorlds.VFX
             // Cheap and self-terminating by construction (MV-604 item 2): a single Emit() into the
             // shared, already-running ParticleSystem above, no GameObject of its own spawned per event.
             _sentinelRecall = new VfxBurst("SentinelRecall", additive, 60, 0f, perFrameCap: 4, stretched: true);
+            // MV-722: small budgets throughout — a crowd can raise several of these a second and the
+            // ticket asks for SUBTLE, not spectacle.
+            _playerHitSpark = new VfxBurst("PlayerHitSpark", additive, 60, 0.2f, perFrameCap: 4, stretched: true);
+            _playerContactGlow = new VfxBurst("PlayerContactGlow", additive, 80, -0.05f, perFrameCap: 6);
         }
 
         private void OnEnable()
@@ -152,6 +167,7 @@ namespace MaxWorlds.VFX
             HudSignals.MissileSputtering += OnMissileSputtering;
             HudSignals.MissileBounced += OnMissileBounced;
             HudSignals.SentinelRecalled += OnSentinelRecalled;
+            HudSignals.PlayerHit += OnPlayerHit;
         }
 
         private void OnDisable()
@@ -167,6 +183,7 @@ namespace MaxWorlds.VFX
             HudSignals.MissileSputtering -= OnMissileSputtering;
             HudSignals.MissileBounced -= OnMissileBounced;
             HudSignals.SentinelRecalled -= OnSentinelRecalled;
+            HudSignals.PlayerHit -= OnPlayerHit;
         }
 
         private void OnDestroy()
@@ -180,6 +197,7 @@ namespace MaxWorlds.VFX
             Dispose(_missileScorch); Dispose(_missileShock); Dispose(_missileAfterSmoke);
             Dispose(_missileSputter); Dispose(_missileBounceDust);
             Dispose(_sentinelRecall);
+            Dispose(_playerHitSpark); Dispose(_playerContactGlow);
         }
 
         // --- events ---
@@ -489,6 +507,38 @@ namespace MaxWorlds.VFX
             lifeMin: 0.2f, lifeMax: 0.38f,
             colorA: SentinelRecallCore, colorB: SentinelRecallDeep);
 
+        // --- Max's own hit feedback (MV-722) ---
+
+        /// <summary>Max took a hit: an isolated PROJECTILE reads as a small spark kicking back off the
+        /// impact point — "something struck you here" — while ongoing CONTACT reads as a softer, lower,
+        /// slightly longer-held glow sitting at the point instead of another spark, so a crowd standing
+        /// on Max doesn't stack a dozen identical bangs into noise. Both stay small on purpose — this is
+        /// the ticket's own "feedback, not spectacle": no full-screen flash, no shake, no hit-stop.</summary>
+        private void OnPlayerHit(Vector3 point, Vector3 direction, bool isContact)
+        {
+            if (isContact)
+            {
+                _playerContactGlow.Emit(point, 3,
+                    axis: Vector3.up, spreadDegrees: 130f,
+                    speedMin: 0.4f, speedMax: 1.2f,
+                    sizeMin: 0.14f, sizeMax: 0.26f,
+                    lifeMin: 0.22f, lifeMax: 0.36f,
+                    colorA: PlayerContactCore, colorB: PlayerContactDeep);
+            }
+            else
+            {
+                // Kicks back off the impact along the reverse of the hit direction, same "something
+                // struck you here" read as a real spark bouncing off a surface.
+                Vector3 kickback = direction.sqrMagnitude > 1e-6f ? -direction.normalized : Vector3.up;
+                _playerHitSpark.Emit(point, 4,
+                    axis: kickback, spreadDegrees: 55f,
+                    speedMin: 2.2f, speedMax: 4.5f,
+                    sizeMin: 0.08f, sizeMax: 0.16f,
+                    lifeMin: 0.12f, lifeMax: 0.2f,
+                    colorA: PlayerHitCore, colorB: PlayerHitDeep);
+            }
+        }
+
         private void LateUpdate()
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
@@ -498,6 +548,7 @@ namespace MaxWorlds.VFX
             _missileScorch.EndFrame(); _missileShock.EndFrame(); _missileAfterSmoke.EndFrame();
             _missileSputter.EndFrame(); _missileBounceDust.EndFrame();
             _sentinelRecall.EndFrame();
+            _playerHitSpark.EndFrame(); _playerContactGlow.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)

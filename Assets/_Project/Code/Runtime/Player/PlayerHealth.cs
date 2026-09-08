@@ -125,6 +125,10 @@ namespace MaxWorlds.Player
         {
             _health = Max;
 
+            // MV-722: no hit has ever landed yet, so the first one must resolve as an isolated
+            // PROJECTILE hit, not CONTACT — see IsContactHit below.
+            _timeSinceDamage = float.MaxValue;
+
             // Max's whole status lives over his head (YT-121): the water gauge stacked directly above
             // the life bar (MV-299, reinstating what MV-290 removed along with the primary's tank).
             WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
@@ -138,6 +142,23 @@ namespace MaxWorlds.Player
             if (_blaster == null) _blaster = GetComponent<WaterBlaster>();
             return _blaster != null ? _blaster.WaterNormalized : 1f;
         }
+
+        /// <summary>Every current contact-damage cooldown (<see cref="MaxWorlds.Enemies.RobotCompositionTuning.DefaultContactCooldown"/>,
+        /// the boss's own <c>BossTuning.ContactCooldown</c>) is 1.0 s, so a repeat hit landing within
+        /// this window — from the same attacker's next tick, or a second one in a crowd — still reads
+        /// as ongoing contact rather than a fresh isolated strike. The margin above that raw 1.0 s
+        /// absorbs frame-timing slack.</summary>
+        private const float ContactCadenceSeconds = 1.5f;
+
+        /// <summary>
+        /// Which subtle hit effect a landing blow should raise (MV-722): true (CONTACT) when the
+        /// previous hit landed less than <see cref="ContactCadenceSeconds"/> ago — the signature a
+        /// crowd, a boss's contact tick or a beam/flood produce by hitting repeatedly — false
+        /// (PROJECTILE) for a hit landing with nothing recent before it. Pure and static, same
+        /// "testable without a live timer" idiom as <see cref="Regenerate"/>, so it can be told apart
+        /// at the one site every hit already passes through, without touching any attacker.
+        /// </summary>
+        public static bool IsContactHit(float timeSinceLastHit) => timeSinceLastHit < ContactCadenceSeconds;
 
         public void TakeDamage(in DamageInfo info)
         {
@@ -155,6 +176,11 @@ namespace MaxWorlds.Player
             // case per attacker (contact lunge, beam tick, missile splash all arrive as one DamageInfo).
             float amount = Abilities != null ? Abilities.AbsorbForceFieldDamage(rawAmount) : rawAmount;
             if (amount <= 0f) return;
+
+            // MV-722: read the gap since the PREVIOUS hit before it resets below, so CombatVfx can
+            // raise a small directional spark for an isolated hit or a subtler, continuous-feeling
+            // read for one arriving on the heels of the last — feedback the health bar alone never gave.
+            HudSignals.EmitPlayerHit(info.Point, info.Direction, IsContactHit(_timeSinceDamage));
 
             _health = Mathf.Max(0f, _health - amount);
             _timeSinceDamage = 0f;
