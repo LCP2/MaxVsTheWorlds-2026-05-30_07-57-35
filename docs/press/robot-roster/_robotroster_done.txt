@@ -4,6 +4,8 @@ Launcher.png
 Blinker.png
 Gunner.png
 Bolter.png
+Sludger.png
+Charger.png
 Bruiser.png
 Heavy.png
 Brute.png

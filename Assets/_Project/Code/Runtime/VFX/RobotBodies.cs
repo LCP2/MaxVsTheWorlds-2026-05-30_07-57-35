@@ -394,7 +394,8 @@ namespace MaxWorlds.VFX
         /// Two wheel axles under a long, low chassis — the same two-lathe-halves torso every other
         /// kind builds, stretched non-uniformly into the long box the ticket's own silhouette calls
         /// for — chrome-grey lower half, rust-orange upper half, a push-handle arcing up at the rear,
-        /// and one red eye lens on the basket's forward face, per the roster's one-eye rule.</summary>
+        /// a gold filigree line at the chassis seam (MV-695), and one red eye lens on the basket's
+        /// forward face, per the roster's one-eye rule.</summary>
         private static void BuildCharger(Transform root, in RobotPalette p,
                                     List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
         {
@@ -414,6 +415,13 @@ namespace MaxWorlds.VFX
             // long box (the ticket's own 1.1/1.0/1.4 body proportions).
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.3f, 0f), new Vector2(0.42f, 0.06f), new Vector2(0.45f, 0.22f), new Vector2(0.44f, 0.3f) }, 24), p.Cool, new Vector3(0f, 0.32f, 0f), Quaternion.identity, new Vector3(0.75f, 1f, 1.55f));
             Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.44f, 0.3f), new Vector2(0.42f, 0.4f), new Vector2(0.3f, 0.46f), new Vector2(0.14f, 0.5f) }, 24), p.Warm, new Vector3(0f, 0.32f, 0f), Quaternion.identity, new Vector3(0.75f, 1f, 1.55f));
+
+            // The gold filigree line (MV-695) — a thin ring wrapping the chassis at the seam where
+            // the chrome-grey lower half meets the rust-orange upper half, the same "one gold part"
+            // Tier-2 tell every other Stormdrain kind already carries (Sludger's rivet, Lurker's neck
+            // ring, Turret's nozzle cap). Shares the chassis halves' own origin and non-uniform scale
+            // so the ring's ellipse hugs their seam exactly rather than reading as a separate circle.
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.44f, -0.012f), new Vector2(0.47f, 0f), new Vector2(0.44f, 0.012f) }, 24), p.Gold, new Vector3(0f, 0.62f, 0f), Quaternion.identity, new Vector3(0.75f, 1f, 1.55f));
 
             // The push handle, arcing up from the chassis at the rear.
             Add(root, CharacterMeshes.Beam(0.5f, 0.045f, 0.03f, 8), p.Dark, new Vector3(0f, 0.62f, -0.68f), Quaternion.Euler(-40f, 0f, 0f), Vector3.one);
