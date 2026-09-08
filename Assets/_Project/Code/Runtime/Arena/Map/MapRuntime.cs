@@ -279,7 +279,11 @@ namespace MaxWorlds.Arena
 
         /// <summary>Which of this deck's own walls a ramp actually climbs into (MV-692) — the mirror of
         /// the ramp's own <see cref="RampSlab.ClimbsToward"/>, found by matching each ramp's resolved
-        /// top point against this deck's footprint.</summary>
+        /// top point against this deck's footprint — PLUS, for a bridge deck (MV-711), the two short
+        /// ends it meets its areas on, carried on the otherwise-ramp-only <see cref="MapEntity.facing"/>
+        /// field as a comma-separated wall list (<see cref="WorldMapLoader"/>'s "reuse the shape, not
+        /// the meaning" idiom) — a bridge has no ramp, but Max must still be able to walk straight onto
+        /// and off it, so those two ends stay open exactly like a ramp mouth does.</summary>
         private static HashSet<Wall> DeckMouthWalls(MapData map, MapEntity deck)
         {
             var mouths = new HashSet<Wall>();
@@ -292,6 +296,11 @@ namespace MaxWorlds.Arena
                 var top = new Vector2(ramp.TopCenter.x, ramp.TopCenter.z);
                 if (expanded.Contains(top)) mouths.Add(WallEnums.Opposite(ramp.ClimbsToward));
             }
+
+            if (!string.IsNullOrEmpty(deck.facing))
+                foreach (string token in deck.facing.Split(','))
+                    if (WallEnums.TryParse(token.Trim(), out Wall w)) mouths.Add(w);
+
             return mouths;
         }
 

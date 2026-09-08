@@ -408,6 +408,53 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // World-level bridges (MV-711) — MapValidation.ValidateWorldConfig has already proven every
+            // bridge resolves and clears its checks, so building one is just resolving world coordinates.
+            // Built as an ordinary "deck" entity (MapRuntime.BuildDeck) — the SAME renderer/DeckVisibility
+            // path an area's own deck already builds through, per the ticket's own "do not author a
+            // second deck renderer" — with its short ends (the walls it meets each area on) left open via
+            // the facing field, so kerb rails only appear on its two long edges.
+            foreach (WorldBridge b in cfg.bridges ?? Array.Empty<WorldBridge>())
+            {
+                if (b == null) continue;
+                if (!b.TryResolveFootprint(cfg, out Rect bridgeRect, out _)) continue; // already refused by validation
+
+                WallEnums.TryParse(b.from.wall, out Wall bridgeFromWall);
+                WallEnums.TryParse(b.to.wall, out Wall bridgeToWall);
+                float bridgeHeight = b.height > 0f ? b.height : defaultDeckHeight;
+
+                entities.Add(new MapEntity
+                {
+                    id = b.id,
+                    kind = "deck",
+                    x = bridgeRect.center.x,
+                    z = bridgeRect.center.y,
+                    width = bridgeRect.width,
+                    depth = bridgeRect.height,
+                    height = bridgeHeight,
+                    facing = $"{bridgeFromWall},{bridgeToWall}",
+                });
+
+                WorldBridgePier[] piers = b.piers ?? Array.Empty<WorldBridgePier>();
+                for (int i = 0; i < piers.Length; i++)
+                {
+                    WorldBridgePier pier = piers[i];
+                    if (pier == null) continue;
+
+                    entities.Add(new MapEntity
+                    {
+                        id = $"{b.id}_pier{i + 1}",
+                        kind = "cover",
+                        x = pier.x,
+                        z = pier.z,
+                        width = MapValidation.BridgePierSize,
+                        height = bridgeHeight,
+                        depth = MapValidation.BridgePierSize,
+                        shape = "cylinder",
+                    });
+                }
+            }
+
             // The boss(es), built the same way MV-542 anticipated a 2+ boss fight would need
             // (BigBermudaBoss.FitColliderToRenderedBody's own comment). MV-561: one entity per
             // resolved boss (WorldArea.Bosses()), not one per area — an area can carry several.

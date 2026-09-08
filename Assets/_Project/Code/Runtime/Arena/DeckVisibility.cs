@@ -43,13 +43,16 @@ namespace MaxWorlds.Arena
                 _player = p.transform;
             }
 
-            Vector3 pos = _player.position;
-            bool underneath = _footprint.Contains(new Vector2(pos.x, pos.z)) && (_topY - pos.y) > FeetBelowThreshold;
-            float target = underneath ? UnderneathAlpha : 1f;
-            _alpha = Mathf.MoveTowards(_alpha, target, Time.deltaTime / FadeSeconds);
-
+            _alpha = Mathf.MoveTowards(_alpha, TargetAlphaFor(_player.position), Time.deltaTime / FadeSeconds);
             ApplyAlpha();
         }
+
+        /// <summary>The alpha a body at <paramref name="position"/> should fade this deck toward — the
+        /// resolved target <see cref="Update"/> smooths toward every frame, exposed directly (MV-711) so
+        /// an EditMode test can assert it without ticking real time through the fade.</summary>
+        public float TargetAlphaFor(Vector3 position) =>
+            _footprint.Contains(new Vector2(position.x, position.z)) && (_topY - position.y) > FeetBelowThreshold
+                ? UnderneathAlpha : 1f;
 
         private void ApplyAlpha()
         {
