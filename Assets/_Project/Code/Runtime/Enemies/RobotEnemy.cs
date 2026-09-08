@@ -614,6 +614,13 @@ namespace MaxWorlds.Enemies
         /// value <c>PulseLaserTests</c> asserts against (MV-708 AC1), never an authored constant.</summary>
         public float StunTimeRemaining => _stunTimer;
 
+        /// <summary>The damage-taken multiplier <see cref="Stun"/> was last called with (MV-707) — 1
+        /// for every ordinary Shock stun (MV-708 never asked for one), and the Cart Charger's own 1.5
+        /// while it's reeling from a wall/cover ram. Only read while <see cref="IsStunned"/> is true
+        /// (<see cref="DamageTakenMultiplier"/> gates on that), so a stale value left over from a
+        /// stun that already expired is never applied to a later hit.</summary>
+        private float _stunDamageMultiplier = 1f;
+
         /// <summary>Seconds left on the Pipe Turret's CORRODED status (MV-691) — 0 when not corroded.
         /// A robot can be corroded the same as Max ("Max (and robots)" per the ticket): a puddle
         /// doesn't care whose feet are standing in it.</summary>
@@ -626,8 +633,13 @@ namespace MaxWorlds.Enemies
         /// reads, never an authored constant.</summary>
         public float CorrodedTimeRemaining => _corrodedTimer;
 
-        /// <summary>What <see cref="TakeDamage"/> actually multiplies an incoming hit by right now.</summary>
-        public float DamageTakenMultiplier => CorrodedStatus.MultiplierFor(_corrodedTimer);
+        /// <summary>What <see cref="TakeDamage"/> actually multiplies an incoming hit by right now —
+        /// CORRODED's multiplier, or the current stun's own (MV-707: the Cart Charger's 1.5 while
+        /// reeling from a wall ram), whichever is larger. The two are independent sources, so a robot
+        /// that happens to be both takes the worse of the two rather than stacking them.</summary>
+        public float DamageTakenMultiplier => Mathf.Max(
+            CorrodedStatus.MultiplierFor(_corrodedTimer),
+            IsStunned ? _stunDamageMultiplier : 1f);
 
         /// <summary>Marks this robot CORRODED for a fresh <see cref="CorrodedStatus.Duration"/>
         /// (MV-691) — called every tick a <see cref="CorrosionPuddle"/> finds it standing inside.
@@ -647,11 +659,14 @@ namespace MaxWorlds.Enemies
         /// than resets an existing stun, same "never shortens" convention as <see cref="ApplyHalt"/>.
         /// A dead robot ignores it. Bosses are immune by construction: <see cref="MaxWorlds.Weapons.SeekerPulse"/>
         /// only ever locks onto a <see cref="RobotEnemy"/>, which a boss (e.g. <c>BigBermudaBoss</c>) is
-        /// never — no boss-specific check needed here.</summary>
-        public void Stun(float seconds)
+        /// never — no boss-specific check needed here. <paramref name="damageTakenMultiplier"/> defaults
+        /// to 1 (Shock's own behaviour, unchanged) — the Cart Charger's wall-ram stun (MV-707) is the
+        /// one caller that passes 1.5.</summary>
+        public void Stun(float seconds, float damageTakenMultiplier = 1f)
         {
             if (Current == State.Dead) return;
             _stunTimer = Mathf.Max(_stunTimer, seconds);
+            _stunDamageMultiplier = damageTakenMultiplier;
             SetTell(ShockTell);
             ShockZigzagVfx.Show(transform, _stunTimer);   // MV-702: the "yellow zigzag flash" the spec names
         }
@@ -719,6 +734,7 @@ namespace MaxWorlds.Enemies
             _knockback = Vector3.zero;
             _haltTimer = 0f;
             _stunTimer = 0f;
+            _stunDamageMultiplier = 1f;
             _corrodedTimer = 0f;
             // Full cooldown, not zero: a freshly spawned Blinker gets the same beat as everything
             // else before its first attack, rather than an instant blink the moment it's born.
@@ -1398,6 +1414,11 @@ namespace MaxWorlds.Enemies
             // (MV-293) — without this check it "retreats" for exactly one frame and then fires from
             // point-blank anyway, since Telegraph holds position and dist <= lungeRange was already
             // true before it took that one step back.
+            // MV-707: the Cart Charger's own "cannot charge while in sludge" — checked only for this
+            // kind, since it's the only one this rule was ever authored for.
+            if (Kind == EnemyKind.Charger && MapSlowZones.Instance.SpeedMultiplierAt(transform.position) < 1f)
+                return;
+
             if (_sight.HasSight && dist <= lungeRange && !retreating)
             {
                 // MV-428 Change 2: Rusher/Blinker must hold an attack token to commit. Without one, a
@@ -1525,6 +1546,7 @@ namespace MaxWorlds.Enemies
                 case EnemyKind.Launcher: TickMissileFire(dt); break;
                 case EnemyKind.Bolter: TickBolt(dt); break;
                 case EnemyKind.Turret: TickGlobFire(dt); break;
+                case EnemyKind.Charger: TickCharge(dt); break;
                 default:               TickMeleeLunge(dt); break;
             }
         }
@@ -1539,6 +1561,30 @@ namespace MaxWorlds.Enemies
             // rather than inside it.
             ClampBodySeparation();
             if (_stateTimer >= lungeTime) EnterRecover();
+        }
+
+        /// <summary>The Cart Charger's ram (MV-707): straight-line at <see cref="lungeSpeed"/> along
+        /// <see cref="_lungeDir"/> — locked at the end of the telegraph and never re-aimed, same as
+        /// every other melee kind's commit. Two ways this differs from <see cref="TickMeleeLunge"/>:
+        /// landing the hit on Max STOPS the charge right there (<see cref="EnterRecover"/> immediately,
+        /// rather than riding out the rest of <see cref="lungeTime"/>), and a wall/cover/deck-column hit
+        /// ends it differently too — <see cref="HandleWallContact"/> already left <see cref="Current"/>
+        /// pointed at <see cref="State.Recover"/> and started the stun by the time <see cref="SafeMove"/>
+        /// returns, so the early-return below is what stops this tick from also processing a Lunge that
+        /// has already ended underneath it.</summary>
+        private void TickCharge(float dt)
+        {
+            CharacterControllerMotion.SafeMove(_cc, _lungeDir * lungeSpeed * dt); // MV-386
+            if (Current != State.Lunge) return;   // a wall/cover hit already ended the charge, mid-move
+
+            if (!_dealtThisLunge)
+            {
+                TryContactDamage();
+                if (_dealtThisLunge) { EnterRecover(); return; }  // hit Max -- stop right there
+            }
+
+            ClampBodySeparation();
+            if (_stateTimer >= lungeTime) EnterRecover();   // travelled the full committed distance
         }
 
         /// <summary>Leave Telegraph/Lunge for Recover, handing back this robot's attack token
@@ -1791,7 +1837,20 @@ namespace MaxWorlds.Enemies
                 _forceFieldRamCooldownTimer = Mathf.Max(recoverTime, MinForceFieldRamInterval);
             }
             _wallLatch.NoteHit(normal);
+
+            // MV-707: a Cart Charger mid-charge that rams a wall/cover/deck-column is stunned rather
+            // than simply steering along it like every other kind's ordinary wall contact — scoped to
+            // Kind == Charger && Current == State.Lunge so an idle Charger merely walking into a wall
+            // (or any other kind ramming the same wall) is completely unaffected.
+            if (Kind == EnemyKind.Charger && Current == State.Lunge)
+            {
+                EnterRecover();
+                Stun(ChargerWallStunSeconds, ChargerWallStunDamageMultiplier);
+            }
         }
+
+        private const float ChargerWallStunSeconds = 1.2f;
+        private const float ChargerWallStunDamageMultiplier = 1.5f;
 
         private void ApplyGravity(float dt)
         {

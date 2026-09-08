@@ -8,7 +8,8 @@ namespace MaxWorlds.Enemies
     // archetype ROWS, not a renumbering of the existing tiers. Lurker (MV-688) follows the same rule.
     // Turret (MV-691) follows it too — a static, wall-mounted lobber, appended after Lurker.
     // Sludger (MV-705) follows it too — a sapper that splits in two on death, appended after Turret.
-    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger }
+    // Charger (MV-707) follows it too — a telegraphed straight-line rammer, appended after Sludger.
+    public enum EnemyKind { Rusher, Bruiser, Heavy, Brute, Gunner, Launcher, Blinker, Bolter, Lurker, Turret, Sludger, Charger }
 
     public enum EnemyShape { Capsule, Box }
 
@@ -32,6 +33,7 @@ namespace MaxWorlds.Enemies
                 case "lurker": kind = EnemyKind.Lurker; return true;
                 case "turret": kind = EnemyKind.Turret; return true;
                 case "sludger": kind = EnemyKind.Sludger; return true;
+                case "charger": kind = EnemyKind.Charger; return true;
                 default: kind = default; return false;
             }
         }
@@ -423,6 +425,36 @@ namespace MaxWorlds.Enemies
             touchDamage: 16f,
             displayName: "SLUDGER");
 
+        /// <summary>
+        /// Cart Charger (MV-707): a rusted motorised shopping cart — a long box body on wheels that
+        /// telegraphs, then commits to a straight-line ram along whatever direction it faced at the
+        /// end of the telegraph (no re-aim, same "commit to the line" idiom every other lunging kind
+        /// already uses — <see cref="RobotEnemy"/>'s own Telegraph never re-aims past the wind-up
+        /// either). <see cref="LungeRange"/> does double duty here: 12 m is both the engage distance
+        /// that commits the telegraph (<see cref="RobotEnemy.TickChase"/>'s existing <c>dist &lt;=
+        /// lungeRange</c> gate) AND the charge's own travel cap, expressed as <see cref="LungeTime"/>
+        /// (12 m / 9 m/s = 1.3333 s) rather than a second authored distance field, so the two numbers
+        /// can never drift apart. Ramming Max stops the charge immediately (<see cref="RobotEnemy"/>'s
+        /// own charge tick ends it there rather than riding out the rest of <see cref="LungeTime"/>,
+        /// unlike every other melee kind); ramming a wall/cover/deck-column instead stuns it for 1.2 s
+        /// at +50% damage taken, then a 1.4 s recovery before it walks again. Cannot charge while
+        /// standing in sludge (<see cref="RobotEnemy.TickChase"/> gate) — it never needs a deck check,
+        /// since the ticket's own brief is explicit that this kind is never placed on one.
+        /// </summary>
+        public static EnemyArchetype Charger => new EnemyArchetype(
+            EnemyKind.Charger, EnemyShape.Box, new Vector3(1.1f, 1.0f, 1.4f),
+            colliderHeight: 1.2f, colliderRadius: 0.55f,
+            moveSpeed: 1.6f, maxHealth: 140f,
+            contactDamage: 30f,    // applied once per charge, on contact — see RobotEnemy's charge tick
+            contactRadius: 1.4f,   // same footing as Bruiser's, which shares this archetype's 0.55 collider radius
+            lungeRange: 12f,       // engage distance AND (via LungeTime below) the charge's travel cap
+            telegraphTime: 0.9f,
+            lungeSpeed: 9f,
+            lungeTime: 12f / 9f,   // caps the charge at lungeRange's own 12 m, expressed as time*speed
+            recoverTime: 1.4f,
+            knockbackDecay: 60f,   // heavier than the base 28, lighter than the Bruiser's 100 HP -> 70
+            displayName: "CHARGER");
+
         public static EnemyArchetype Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -435,6 +467,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Lurker => Lurker,
             EnemyKind.Turret => Turret,
             EnemyKind.Sludger => Sludger,
+            EnemyKind.Charger => Charger,
             _ => Rusher,
         };
 
@@ -596,6 +629,9 @@ namespace MaxWorlds.Enemies
                 // MV-705: an ambient sapper, same footing as Bolter — bound here so a shed's release
                 // cadence actually emits it, unlike Lurker below which only ever exists at a grate.
                 _authored[(int)EnemyKind.Sludger] = composition.sludger;
+                // MV-707: a floor-only rammer, same "ambient shed cadence" footing as Bolter/Sludger —
+                // it never needs a grate coincidence the way Lurker does.
+                _authored[(int)EnemyKind.Charger] = composition.charger;
                 // MV-688: deliberately NOT bound here. A Lurker only ever exists tied to an authored
                 // grate (MapValidation enforces the coincidence) — a shed's ambient release cadence must
                 // never invent one with no grate under it, so this area's authored lurker count stays

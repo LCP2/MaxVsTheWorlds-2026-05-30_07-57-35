@@ -5,6 +5,7 @@
 // that generator is an interactive browser tool this worker cannot drive headlessly. Flagged for Lee to
 // fold into the design source and re-emit at his convenience; every other Build* method here is untouched.
 // MV-705 EXCEPTION: BuildSludger is hand-authored for the same reason.
+// MV-707 EXCEPTION: BuildCharger is hand-authored for the same reason.
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Enemies;
@@ -60,6 +61,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Lurker:   BuildLurker(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Turret:   BuildTurret(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Sludger:  BuildSludger(visualRoot, p, eyes, wheels, legs); break;
+                case EnemyKind.Charger:  BuildCharger(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Bruiser:  BuildBruiser(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Heavy:    BuildHeavy(visualRoot, p, eyes, wheels, legs); break;
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
@@ -384,6 +386,40 @@ namespace MaxWorlds.VFX
             eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0f, 0.6774f, 0.263f), Quaternion.Euler(-42f, 0f, 0f), new Vector3(0.19f, 0.19f, 0.06f)));
 
             Add(root, CharacterMeshes.Sphere(10), p.Gold, new Vector3(-0.12f, 0.58f, 0.2f), Quaternion.identity, new Vector3(0.03f, 0.03f, 0.03f));
+        }
+
+        /// <summary>Cart Charger (MV-707) — hand-authored, same exception as <see cref="BuildBolter"/>/
+        /// <see cref="BuildLurker"/>/<see cref="BuildTurret"/>/<see cref="BuildSludger"/> above
+        /// (robot-gen-mesh.html is an interactive browser tool this worker cannot drive headlessly).
+        /// Two wheel axles under a long, low chassis — the same two-lathe-halves torso every other
+        /// kind builds, stretched non-uniformly into the long box the ticket's own silhouette calls
+        /// for — chrome-grey lower half, rust-orange upper half, a push-handle arcing up at the rear,
+        /// and one red eye lens on the basket's forward face, per the roster's one-eye rule.</summary>
+        private static void BuildCharger(Transform root, in RobotPalette p,
+                                    List<MeshRenderer> eyes, List<Transform> wheels, List<Transform> legs)
+        {
+            // Rear axle — the handle end (-Z).
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0645f, -0.0725f), new Vector2(0.1849f, -0.0725f), new Vector2(0.215f, -0.0435f), new Vector2(0.215f, 0.0435f), new Vector2(0.1849f, 0.0725f), new Vector2(0.0645f, 0.0725f) }, 22), p.Dark, new Vector3(-0.4f, 0.215f, -0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1118f, -0.0261f), new Vector2(0.129f, 0f), new Vector2(0.1118f, 0.0261f) }, 16), p.Warm, new Vector3(-0.4f, 0.215f, -0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0645f, -0.0725f), new Vector2(0.1849f, -0.0725f), new Vector2(0.215f, -0.0435f), new Vector2(0.215f, 0.0435f), new Vector2(0.1849f, 0.0725f), new Vector2(0.0645f, 0.0725f) }, 22), p.Dark, new Vector3(0.4f, 0.215f, -0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1118f, -0.0261f), new Vector2(0.129f, 0f), new Vector2(0.1118f, 0.0261f) }, 16), p.Warm, new Vector3(0.4f, 0.215f, -0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+
+            // Front axle — the basket end (+Z).
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0645f, -0.0725f), new Vector2(0.1849f, -0.0725f), new Vector2(0.215f, -0.0435f), new Vector2(0.215f, 0.0435f), new Vector2(0.1849f, 0.0725f), new Vector2(0.0645f, 0.0725f) }, 22), p.Dark, new Vector3(-0.4f, 0.215f, 0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1118f, -0.0261f), new Vector2(0.129f, 0f), new Vector2(0.1118f, 0.0261f) }, 16), p.Warm, new Vector3(-0.4f, 0.215f, 0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.0645f, -0.0725f), new Vector2(0.1849f, -0.0725f), new Vector2(0.215f, -0.0435f), new Vector2(0.215f, 0.0435f), new Vector2(0.1849f, 0.0725f), new Vector2(0.0645f, 0.0725f) }, 22), p.Dark, new Vector3(0.4f, 0.215f, 0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+            wheels.Add(Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.1118f, -0.0261f), new Vector2(0.129f, 0f), new Vector2(0.1118f, 0.0261f) }, 16), p.Warm, new Vector3(0.4f, 0.215f, 0.5f), Quaternion.Euler(0f, 0f, 90f), Vector3.one));
+
+            // The chassis/basket — chrome-grey lower half, rust-orange upper half, stretched into a
+            // long box (the ticket's own 1.1/1.0/1.4 body proportions).
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.3f, 0f), new Vector2(0.42f, 0.06f), new Vector2(0.45f, 0.22f), new Vector2(0.44f, 0.3f) }, 24), p.Cool, new Vector3(0f, 0.32f, 0f), Quaternion.identity, new Vector3(0.75f, 1f, 1.55f));
+            Add(root, CharacterMeshes.Lathe(new[] { new Vector2(0.44f, 0.3f), new Vector2(0.42f, 0.4f), new Vector2(0.3f, 0.46f), new Vector2(0.14f, 0.5f) }, 24), p.Warm, new Vector3(0f, 0.32f, 0f), Quaternion.identity, new Vector3(0.75f, 1f, 1.55f));
+
+            // The push handle, arcing up from the chassis at the rear.
+            Add(root, CharacterMeshes.Beam(0.5f, 0.045f, 0.03f, 8), p.Dark, new Vector3(0f, 0.62f, -0.68f), Quaternion.Euler(-40f, 0f, 0f), Vector3.one);
+
+            // The single red eye lens, on the basket's forward face.
+            eyes.Add(Lens(root, CharacterMeshes.Sphere(20), new Vector3(0f, 0.55f, 0.68f), Quaternion.identity, new Vector3(0.16f, 0.16f, 0.06f)));
         }
 
         /// <summary>Bruiser — two long tread units under a low wide hull, with the garden-roller drum slung across the front. Keeps its two-eye visor: one kind breaking the one-eye rule is what makes the rule legible.</summary>

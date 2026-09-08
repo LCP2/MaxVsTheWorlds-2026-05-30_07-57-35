@@ -40,6 +40,10 @@ namespace MaxWorlds.Enemies
         /// exist), so the drone itself is billed as the lighter half of the pair's total threat.</summary>
         public const float Sludger = 2.0f;
 
+        /// <summary>MV-707: the ticket's own authored THV — placed just above the Blinker's 3.3, below
+        /// the Launcher's 3.6, on the same placeholder footing as every other kind here.</summary>
+        public const float Charger = 3.4f;
+
         public static float Of(EnemyKind kind) => kind switch
         {
             EnemyKind.Bruiser => Bruiser,
@@ -52,6 +56,7 @@ namespace MaxWorlds.Enemies
             EnemyKind.Lurker => Lurker,
             EnemyKind.Turret => Turret,
             EnemyKind.Sludger => Sludger,
+            EnemyKind.Charger => Charger,
             _ => Rusher,
         };
     }
