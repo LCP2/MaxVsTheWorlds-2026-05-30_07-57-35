@@ -50,6 +50,14 @@ namespace MaxWorlds.UI
         /// <summary>The boss was defeated — hide the bar.</summary>
         public static event Action BossDefeated;
 
+        /// <summary>A single boss died (MV-721). Distinct from <see cref="BossDefeated"/>, which fires
+        /// only once every boss IN ITS AREA is down (MV-591): this fires for every boss's own death, so
+        /// a boss that falls with company still gets its own spectacle. (worldPos) — carries where it
+        /// died so a listener (<c>BossSpectacle</c>, <c>BossDebris</c>) never has to hunt for the
+        /// instance via <c>FindFirstObjectByType</c>, which finds an arbitrary boss once more than one
+        /// exists and finds none at all once the dying one deactivates itself.</summary>
+        public static event Action<Vector3> BossKilled;
+
         /// <summary>The boss-death payoff has run its course (YT-152) — Max walked out through the exit
         /// gate, or the sequence timed out. This is the cue to finally show the results card, decoupled
         /// from <see cref="BossDefeated"/> so the blow-up, the flung parts and the walk-out can play
@@ -165,6 +173,9 @@ namespace MaxWorlds.UI
 
         public static void EmitBossDefeated()
             => BossDefeated?.Invoke();
+
+        public static void EmitBossKilled(Vector3 worldPos)
+            => BossKilled?.Invoke(worldPos);
 
         public static void EmitBossPayoffFinished()
             => BossPayoffFinished?.Invoke();

@@ -34,6 +34,16 @@ namespace MaxWorlds.Bosses
         private static readonly Dictionary<MonoBehaviour, float> SpawnProgressByBoss = new Dictionary<MonoBehaviour, float>(4);
         private static bool _engaged;
 
+        /// <summary>MV-721: sum of <c>Max</c> for every boss that has died so far in the CURRENT fight
+        /// (i.e. since the engage latch last re-armed), with an implicit <c>Current</c> of 0 for each.
+        /// <see cref="EmitCombinedHealth"/> folds this into its denominator so a death only ever removes
+        /// that boss's CURRENT from the numerator — its MAX stays counted against the bar for the rest
+        /// of the fight, instead of both vanishing together and instantly recomputing a higher fraction
+        /// from whoever is left standing. Reset alongside <see cref="_engaged"/> (both are scoped to
+        /// "the current fight", and — same as <see cref="_engaged"/> — only one fight is ever live at
+        /// once, so this needs no per-area keying).</summary>
+        private static float _deadMaxThisFight;
+
         public static int LivingCount => Living.Count;
 
         /// <summary>The area index <see cref="ReportDefeated"/> most recently cleared (MV-698) — set
@@ -55,6 +65,7 @@ namespace MaxWorlds.Bosses
             SpawnLevelByBoss.Clear();
             SpawnProgressByBoss.Clear();
             _engaged = false;
+            _deadMaxThisFight = 0f;
             LastDefeatedAreaIndex = 0;
         }
 
@@ -107,16 +118,27 @@ namespace MaxWorlds.Bosses
         /// results) must wait for the LAST one IN ITS OWN AREA — not the last one scene-wide (MV-591).
         /// Reading it scene-wide made a12's single boss the last boss in the game, which fired the
         /// whole victory chain 18 areas early. a20 authors two and a30 three; each area's payoff waits
-        /// for its own last one.</summary>
+        /// for its own last one.
+        ///
+        /// MV-721: EVERY death — not just the area's last one — raises <see cref="HudSignals.BossKilled"/>
+        /// with the position captured HERE, synchronously, before the caller's own OnDeath deactivates
+        /// the GameObject. That is this ticket's answer to "the spectacle must read the boss's position
+        /// before it disappears": hand the position to the signal itself rather than have
+        /// <c>BossSpectacle</c>/<c>BossDebris</c> go looking for the (about to vanish, and in a 2+ boss
+        /// fight, ambiguous) instance afterward.</summary>
         public static void ReportDefeated(MonoBehaviour boss)
         {
             if (boss == null || !Living.Remove(boss)) return;
+            Vector3 diedAt = boss.transform.position;
+            _deadMaxThisFight += MaxByBoss[boss];
             CurrentByBoss.Remove(boss);
             MaxByBoss.Remove(boss);
             SpawnLevelByBoss.Remove(boss);
             SpawnProgressByBoss.Remove(boss);
             int areaIndex = AreaByBoss.TryGetValue(boss, out int a) ? a : 0;
             AreaByBoss.Remove(boss);
+
+            HudSignals.EmitBossKilled(diedAt);
 
             if (!AnyLivingIn(areaIndex))
             {
@@ -136,7 +158,11 @@ namespace MaxWorlds.Bosses
             // their own BossEngaged: neither bar ever appeared for their fights. Engagement must be
             // per-fight instead: once literally no boss anywhere is left standing, the next Register
             // (whichever area it's in) is a fresh fight and must re-engage the bar.
-            if (Living.Count == 0) _engaged = false;
+            //
+            // MV-721: _deadMaxThisFight rides alongside the SAME latch, for the same reason — it is
+            // scoped to "the fight that just fully ended", and must not bleed its dead bosses' Max into
+            // the NEXT area's fresh combined bar.
+            if (Living.Count == 0) { _engaged = false; _deadMaxThisFight = 0f; }
         }
 
         /// <summary>This boss's GameObject went away without dying properly (a scene torn down, a
@@ -165,7 +191,7 @@ namespace MaxWorlds.Bosses
 
         private static void EmitCombinedHealth()
         {
-            float current = 0f, max = 0f;
+            float current = 0f, max = _deadMaxThisFight; // MV-721: a dead boss keeps its Max, at Current 0
             foreach (MonoBehaviour b in Living)
             {
                 current += CurrentByBoss[b];

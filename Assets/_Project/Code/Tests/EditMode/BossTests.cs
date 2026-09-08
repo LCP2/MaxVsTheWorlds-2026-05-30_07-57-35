@@ -121,7 +121,12 @@ namespace MaxWorlds.Tests.EditMode
 
                 BossCensus.ReportDefeated(boss1);
                 Assert.AreEqual(0, defeatedCount, "the FIRST boss dying must not fire BossDefeated -- boss2 is still up");
-                Assert.AreEqual(1f, lastHealth, 1e-4f, "combined bar must now read boss2's health alone");
+                // MV-721: this used to assert 1f here -- boss1's (0/100) contribution dropping out of
+                // BOTH sums entirely snapped the bar back to full, which is the exact "boss heals on a
+                // kill" defect that ticket fixed. boss1's Max now stays in the denominator at Current 0,
+                // so the bar reads the area's remaining share of the whole fight: (0 + 100) / (100 + 100).
+                Assert.AreEqual(0.5f, lastHealth, 1e-4f,
+                    "a death must never raise the combined bar -- boss1's Max stays counted, at Current 0");
 
                 BossCensus.ReportDefeated(boss2);
                 Assert.AreEqual(1, defeatedCount, "BossDefeated must fire once the LAST boss dies");
@@ -129,6 +134,65 @@ namespace MaxWorlds.Tests.EditMode
             finally
             {
                 HudSignals.BossHealthChanged -= onHealth;
+                HudSignals.BossDefeated -= onDefeated;
+                Object.DestroyImmediate(go1);
+                Object.DestroyImmediate(go2);
+            }
+        }
+
+        // ---- MV-721: a non-last boss's death must still get its own spectacle, and the combined
+        // HUD bar must never rise when a boss dies ----
+
+        /// <summary>Lee, on device 2026-09-04, in a30 (two bosses): killing the first of two bosses in
+        /// the same area produced no explosion at all (BossSpectacle/BossDebris only ever listened to
+        /// the AREA-last-boss signal), and the combined bar snapped back to full the instant the dead
+        /// boss's (0/max) contribution dropped out of the sum entirely. Registers two bosses in one
+        /// area, drains and defeats the first while the second is still standing, and asserts both
+        /// halves: (a) a per-boss death signal fires for the boss that actually died, distinct from the
+        /// area-last-boss <see cref="HudSignals.BossDefeated"/> which must NOT fire yet, and (b) the
+        /// resolved combined-health value emitted after the death is never greater than the value
+        /// emitted immediately before it.</summary>
+        [Test]
+        public void ReportDefeated_FiresAPerBossKillSignal_AndNeverRaisesTheCombinedHealthBar()
+        {
+            GameObject go1 = NewBossHandle();
+            GameObject go2 = NewBossHandle();
+            var boss1 = go1.GetComponent<BigBermudaBoss>();
+            var boss2 = go2.GetComponent<BigBermudaBoss>();
+
+            float lastHealth = -1f;
+            int killedCount = 0;
+            int defeatedCount = 0;
+            Vector3 killedAt = default;
+            System.Action<float> onHealth = h => lastHealth = h;
+            System.Action<Vector3> onKilled = p => { killedCount++; killedAt = p; };
+            System.Action onDefeated = () => defeatedCount++;
+            HudSignals.BossHealthChanged += onHealth;
+            HudSignals.BossKilled += onKilled;
+            HudSignals.BossDefeated += onDefeated;
+            try
+            {
+                BossCensus.Register(boss1, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 1);
+                BossCensus.Register(boss2, "BIG BERMUDA", 2, current: 100f, max: 100f, areaIndex: 1);
+
+                BossCensus.ReportHealth(boss1, current: 0f, max: 100f); // boss1 drained, still standing
+                float healthBeforeDeath = lastHealth;
+
+                BossCensus.ReportDefeated(boss1);
+
+                Assert.AreEqual(1, killedCount,
+                    "boss1 dying (while boss2 is still up) must fire the per-boss BossKilled signal");
+                Assert.AreEqual(boss1.transform.position, killedAt,
+                    "BossKilled must carry the dying boss's own position");
+                Assert.AreEqual(0, defeatedCount,
+                    "boss1 is not the LAST boss in the area -- BossDefeated must not fire yet");
+                Assert.LessOrEqual(lastHealth, healthBeforeDeath,
+                    $"combined health must never rise on a death: was {healthBeforeDeath} before, {lastHealth} after");
+            }
+            finally
+            {
+                HudSignals.BossHealthChanged -= onHealth;
+                HudSignals.BossKilled -= onKilled;
                 HudSignals.BossDefeated -= onDefeated;
                 Object.DestroyImmediate(go1);
                 Object.DestroyImmediate(go2);

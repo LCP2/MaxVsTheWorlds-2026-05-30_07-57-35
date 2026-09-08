@@ -663,11 +663,17 @@ namespace MaxWorlds.Bosses
         {
             _phase = Phase.Dead;
             // MV-542: waits for every living boss, not just this one — see BossCensus.
+            // MV-721: ReportDefeated must run BEFORE SetActive(false) below — it reads transform.position
+            // synchronously and hands it to HudSignals.BossKilled, which is how BossSpectacle/BossDebris
+            // get "what they need" (where to blow up) without ever touching this instance themselves.
+            // Reversing this order would hand them a deactivated GameObject with nothing left to read.
             BossCensus.ReportDefeated(this);
             // MV-698: the "RARE SHARD" toast here was a placeholder — no pickup ever backed it, and the
             // shard concept isn't in the design. The real finale reward (BossVictoryPayoff's Weapon
             // Core, World 1's last boss area only) carries its own toast on collection.
-            // The death spectacle hangs off the BossDefeated signal (BossSpectacle, YT-55).
+            // The death spectacle hangs off the per-boss BossKilled signal (BossSpectacle/BossDebris,
+            // YT-55/MV-721) — raised above, inside ReportDefeated, for every boss's own death, not just
+            // the area's last one.
             gameObject.SetActive(false);
         }
 
