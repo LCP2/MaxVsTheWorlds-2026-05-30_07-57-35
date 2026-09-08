@@ -103,6 +103,16 @@ namespace MaxWorlds.UI
         private const float FusionRotationDeg = 0f;
         private const float Sqrt3 = 1.7320508f;
 
+        // MV-731: the sub-label box under a FORGE fusion diamond used to be a flat 280px regardless of
+        // how close the column-layout pass (RigBoardLayout.BuildColumnLayout) happened to place that
+        // fusion's neighbours — measured as close as ~139px apart at standard aspect, so two 280px boxes
+        // overlapped by ~141px. FusionSubLabelWidth below shrinks the box to clear the resolved gap to
+        // the nearest neighbouring fusion, with GapMargin as clear space between adjacent boxes and
+        // MinWidth as a sanity floor (not expected to bind against real rig_board.json data).
+        private const float FusionSubLabelMaxWidth = 280f;
+        private const float FusionSubLabelGapMargin = 16f;
+        private const float FusionSubLabelMinWidth = 96f;
+
         // MV-433: owned/lit-category halo canvas size as a multiple of the node's own hex bounds.
         // MV-446 defect 2 AC: must not exceed 1.25 (the halo's rect vs. the node radius) — headroom for
         // HudTextures.PolygonGlow's blur to fade out in, not a size the shape itself grows to (the glow
@@ -1475,6 +1485,29 @@ namespace MaxWorlds.UI
             return $"{a} + {b}\n{fusion.CellCost} PARTS";
         }
 
+        /// <summary>MV-731: <see cref="RigBoardLayout"/>'s column-layout pass places each fusion at the
+        /// midpoint of its two parent categories, which can land two adjacent fusions' X far closer
+        /// together than <c>rig_board.json</c>'s raw authored x values suggest (their raw x is only a
+        /// fallback for a fusion with an unrecognised parent — see <c>BuildColumnLayout</c>). Root cause:
+        /// the sub-label box was a flat <see cref="FusionSubLabelMaxWidth"/> regardless of that resolved
+        /// spacing. This clamps the box to the resolved nearest-neighbour gap (minus <see
+        /// cref="FusionSubLabelGapMargin"/> of clear space) whenever that is tighter than the design
+        /// width, so two adjacent boxes can never overlap no matter how the layout pass happens to space
+        /// that particular pair. <paramref name="allFusions"/> must be the same aspect-correct list
+        /// (<see cref="Fusions"/>) the caller is iterating, not the unconditional standard-aspect one.</summary>
+        private static float FusionSubLabelWidth(RigFusionLayout fusion, IReadOnlyList<RigFusionLayout> allFusions)
+        {
+            float nearestGap = float.MaxValue;
+            foreach (var other in allFusions)
+            {
+                if (other.Id == fusion.Id) continue;
+                float dx = Mathf.Abs(other.X - fusion.X);
+                if (dx < nearestGap) nearestGap = dx;
+            }
+            if (nearestGap == float.MaxValue) return FusionSubLabelMaxWidth;
+            return Mathf.Clamp(nearestGap - FusionSubLabelGapMargin, FusionSubLabelMinWidth, FusionSubLabelMaxWidth);
+        }
+
         /// <summary>MV-443 defect 8: locked fusion diamond border, 2px — distinct from the eligible/
         /// forged states' shared <see cref="SolidPolygonOutlineSprite"/> (strokeOwned, 4px).</summary>
         private Sprite LockedFusionOutlineSprite(float r)
@@ -2239,7 +2272,11 @@ namespace MaxWorlds.UI
             // neighbouring diamond's own sub-label, so categories and cost now sit on separate lines.
             var sub = AddText(node, Mathf.RoundToInt(FusionSubFontSize), Dim, TextAnchor.UpperCenter);
             Anchor(sub.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
-            sub.rectTransform.sizeDelta = new Vector2(280f, 44f);
+            // MV-731: AddText defaults to Overflow, so the box width alone never actually clamped the
+            // rendered text — Wrap makes FusionSubLabelWidth's shrunk box a real clip boundary instead of
+            // just a number a different test happened to check preferredWidth against.
+            sub.horizontalOverflow = HorizontalWrapMode.Wrap;
+            sub.rectTransform.sizeDelta = new Vector2(FusionSubLabelWidth(fusion, Fusions), 44f);
             sub.rectTransform.anchoredPosition = new Vector2(0f, -(RigBoardLayout.LabelOffsetY(r) + 22f));
             sub.lineSpacing = 1.1f;
             sub.text = $"{fusion.ParentA} + {fusion.ParentB}";
