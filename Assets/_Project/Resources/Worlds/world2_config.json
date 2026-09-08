@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 2 — Stormdrain",
- "revision": "WORLD 2 v1 2026-09-08 (MV-700): areas a1-a23 converted from world2_config.DESIGN.json (authored by the build chat from the World 2 brief; the xlsx/svg pair alongside it are the drawn source). Replaces the MV-687/696 placeholder (2 areas). Garrison/grate/replicator/boss coordinates were area-local in the DESIGN file and were shifted to the engine's absolute-world convention here; sludge/deck/ramp/hatch/cover rects stayed area-local, matching WorldRectOf. DESIGN's per-area \"floorComposition\" (extra floor-level composition on a13/a15/a19 when the deck overlay is revisited) has no engine equivalent (WorldArea carries one composition per area index) and was not carried over — see the MV-700 fix comment.",
+ "revision": "WORLD 2 v1 2026-09-08 (MV-700): areas a1-a23 converted from world2_config.DESIGN.json (authored by the build chat from the World 2 brief; the xlsx/svg pair alongside it are the drawn source). Replaces the MV-687/696 placeholder (2 areas). Garrison/grate/replicator/boss/cover coordinates were area-local in the DESIGN file and were shifted to the engine's absolute-world convention here; sludge/deck/ramp/hatch rects stayed area-local, matching WorldRectOf. DESIGN's per-area \"floorComposition\" (extra floor-level composition on a13/a15/a19 when the deck overlay is revisited) has no engine equivalent (WorldArea carries one composition per area index) and was not carried over — see the MV-700 fix comment.",
  "note": "DESIGN v1 2026-09-07 — authored by the build chat from the World 2 brief; not yet approved",
  "units": "1 world unit = 1 metre",
  "wallHeight": 1.5,
@@ -501,8 +501,8 @@
    "cover": [
     {
      "id": "a1_cover1",
-     "x": 6,
-     "z": 9,
+     "x": 14,
+     "z": 109,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -511,8 +511,8 @@
     },
     {
      "id": "a1_cover2",
-     "x": 14,
-     "z": 12,
+     "x": 22,
+     "z": 112,
      "width": 2,
      "height": 1.6,
      "depth": 3,
@@ -591,8 +591,8 @@
    "cover": [
     {
      "id": "a2_cover1",
-     "x": 4,
-     "z": 16,
+     "x": 34,
+     "z": 116,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -601,8 +601,8 @@
     },
     {
      "id": "a2_cover2",
-     "x": 17,
-     "z": 5,
+     "x": 47,
+     "z": 105,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -611,8 +611,8 @@
     },
     {
      "id": "a2_cover3",
-     "x": 10,
-     "z": 20,
+     "x": 40,
+     "z": 120,
      "width": 8,
      "height": 1.6,
      "depth": 1,
@@ -727,8 +727,8 @@
    "cover": [
     {
      "id": "a3_cover1",
-     "x": 3,
-     "z": 24,
+     "x": 57,
+     "z": 120,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -737,8 +737,8 @@
     },
     {
      "id": "a3_cover2",
-     "x": 31,
-     "z": 3,
+     "x": 85,
+     "z": 99,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -747,8 +747,8 @@
     },
     {
      "id": "a3_cover3",
-     "x": 13,
-     "z": 24,
+     "x": 67,
+     "z": 120,
      "width": 10,
      "height": 1.6,
      "depth": 1,
@@ -757,8 +757,8 @@
     },
     {
      "id": "a3_cover4",
-     "x": 13,
-     "z": 5,
+     "x": 67,
+     "z": 101,
      "width": 10,
      "height": 1.6,
      "depth": 1,
@@ -944,8 +944,8 @@
    "cover": [
     {
      "id": "a4_cover1",
-     "x": 6,
-     "z": 3,
+     "x": 96,
+     "z": 109,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -954,8 +954,8 @@
     },
     {
      "id": "a4_cover2",
-     "x": 13,
-     "z": 8,
+     "x": 103,
+     "z": 114,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -964,8 +964,8 @@
     },
     {
      "id": "a4_cover3",
-     "x": 20,
-     "z": 3,
+     "x": 110,
+     "z": 109,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -974,8 +974,8 @@
     },
     {
      "id": "a4_cover4",
-     "x": 27,
-     "z": 8,
+     "x": 117,
+     "z": 114,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1060,8 +1060,8 @@
    "cover": [
     {
      "id": "a5_cover1",
-     "x": 3,
-     "z": 13,
+     "x": 77,
+     "z": 83,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -1070,8 +1070,8 @@
     },
     {
      "id": "a5_cover2",
-     "x": 13,
-     "z": 13,
+     "x": 87,
+     "z": 83,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -1080,8 +1080,8 @@
     },
     {
      "id": "a5_cover3",
-     "x": 9,
-     "z": 4,
+     "x": 83,
+     "z": 74,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -1090,8 +1090,8 @@
     },
     {
      "id": "a5_cover4",
-     "x": 9,
-     "z": 20,
+     "x": 83,
+     "z": 90,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -1226,8 +1226,8 @@
    "cover": [
     {
      "id": "a6_cover1",
-     "x": 7,
-     "z": 8,
+     "x": 131,
+     "z": 108,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -1236,8 +1236,8 @@
     },
     {
      "id": "a6_cover2",
-     "x": 18,
-     "z": 15,
+     "x": 142,
+     "z": 115,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -1246,8 +1246,8 @@
     },
     {
      "id": "a6_cover3",
-     "x": 10,
-     "z": 18,
+     "x": 134,
+     "z": 118,
      "width": 8,
      "height": 1.6,
      "depth": 1,
@@ -1454,8 +1454,8 @@
    "cover": [
     {
      "id": "a7_cover1",
-     "x": 5,
-     "z": 5,
+     "x": 101,
+     "z": 75,
      "width": 3,
      "height": 1.6,
      "depth": 4,
@@ -1464,8 +1464,8 @@
     },
     {
      "id": "a7_cover2",
-     "x": 13,
-     "z": 5,
+     "x": 109,
+     "z": 75,
      "width": 3,
      "height": 1.6,
      "depth": 4,
@@ -1474,8 +1474,8 @@
     },
     {
      "id": "a7_cover3",
-     "x": 21,
-     "z": 5,
+     "x": 117,
+     "z": 75,
      "width": 3,
      "height": 1.6,
      "depth": 4,
@@ -1484,8 +1484,8 @@
     },
     {
      "id": "a7_cover4",
-     "x": 9,
-     "z": 15,
+     "x": 105,
+     "z": 85,
      "width": 3,
      "height": 1.6,
      "depth": 4,
@@ -1494,8 +1494,8 @@
     },
     {
      "id": "a7_cover5",
-     "x": 17,
-     "z": 15,
+     "x": 113,
+     "z": 85,
      "width": 3,
      "height": 1.6,
      "depth": 4,
@@ -1619,8 +1619,8 @@
    "cover": [
     {
      "id": "a8_cover1",
-     "x": 3,
-     "z": 3,
+     "x": 127,
+     "z": 77,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1629,8 +1629,8 @@
     },
     {
      "id": "a8_cover2",
-     "x": 21,
-     "z": 3,
+     "x": 145,
+     "z": 77,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1639,8 +1639,8 @@
     },
     {
      "id": "a8_cover3",
-     "x": 3,
-     "z": 21,
+     "x": 127,
+     "z": 95,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1649,8 +1649,8 @@
     },
     {
      "id": "a8_cover4",
-     "x": 21,
-     "z": 21,
+     "x": 145,
+     "z": 95,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1801,8 +1801,8 @@
    "cover": [
     {
      "id": "a9_cover1",
-     "x": 5,
-     "z": 10,
+     "x": 155,
+     "z": 84,
      "width": 10,
      "height": 1.6,
      "depth": 1,
@@ -1811,8 +1811,8 @@
     },
     {
      "id": "a9_cover2",
-     "x": 3,
-     "z": 3,
+     "x": 153,
+     "z": 77,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1821,8 +1821,8 @@
     },
     {
      "id": "a9_cover3",
-     "x": 15,
-     "z": 15,
+     "x": 165,
+     "z": 89,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1920,8 +1920,8 @@
    "cover": [
     {
      "id": "a10_cover1",
-     "x": 4,
-     "z": 7,
+     "x": 174,
+     "z": 75,
      "width": 16,
      "height": 1.6,
      "depth": 1,
@@ -1930,8 +1930,8 @@
     },
     {
      "id": "a10_cover2",
-     "x": 4,
-     "z": 13,
+     "x": 174,
+     "z": 81,
      "width": 16,
      "height": 1.6,
      "depth": 1,
@@ -1940,8 +1940,8 @@
     },
     {
      "id": "a10_cover3",
-     "x": 4,
-     "z": 19,
+     "x": 174,
+     "z": 87,
      "width": 16,
      "height": 1.6,
      "depth": 1,
@@ -1950,8 +1950,8 @@
     },
     {
      "id": "a10_cover4",
-     "x": 1,
-     "z": 22,
+     "x": 171,
+     "z": 90,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -1960,8 +1960,8 @@
     },
     {
      "id": "a10_cover5",
-     "x": 21,
-     "z": 22,
+     "x": 191,
+     "z": 90,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -2108,8 +2108,8 @@
    "cover": [
     {
      "id": "a11_cover1",
-     "x": 4,
-     "z": 2,
+     "x": 198,
+     "z": 74,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -2118,8 +2118,8 @@
     },
     {
      "id": "a11_cover2",
-     "x": 15,
-     "z": 2,
+     "x": 209,
+     "z": 74,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -2128,8 +2128,8 @@
     },
     {
      "id": "a11_cover3",
-     "x": 9,
-     "z": 5,
+     "x": 203,
+     "z": 77,
      "width": 4,
      "height": 1.6,
      "depth": 2,
@@ -2295,8 +2295,8 @@
    "cover": [
     {
      "id": "a12_cover1",
-     "x": 9,
-     "z": 10,
+     "x": 225,
+     "z": 78,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -2305,8 +2305,8 @@
     },
     {
      "id": "a12_cover2",
-     "x": 25,
-     "z": 10,
+     "x": 241,
+     "z": 78,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -2315,8 +2315,8 @@
     },
     {
      "id": "a12_cover3",
-     "x": 15,
-     "z": 22,
+     "x": 231,
+     "z": 90,
      "width": 4,
      "height": 1.6,
      "depth": 3,
@@ -2325,8 +2325,8 @@
     },
     {
      "id": "a12_cover4",
-     "x": 10,
-     "z": 6,
+     "x": 226,
+     "z": 74,
      "width": 14,
      "height": 1.6,
      "depth": 1,
@@ -2680,8 +2680,8 @@
    "cover": [
     {
      "id": "a14_cover1",
-     "x": 5,
-     "z": 1,
+     "x": 159,
+     "z": 95,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -2690,8 +2690,8 @@
     },
     {
      "id": "a14_cover2",
-     "x": 20,
-     "z": 10,
+     "x": 174,
+     "z": 104,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -2700,8 +2700,8 @@
     },
     {
      "id": "a14_cover3",
-     "x": 35,
-     "z": 1,
+     "x": 189,
+     "z": 95,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -2945,8 +2945,8 @@
    "cover": [
     {
      "id": "a16_cover1",
-     "x": 4,
-     "z": 8,
+     "x": 108,
+     "z": 134,
      "width": 14,
      "height": 1.6,
      "depth": 1,
@@ -2955,8 +2955,8 @@
     },
     {
      "id": "a16_cover2",
-     "x": 4,
-     "z": 14,
+     "x": 108,
+     "z": 140,
      "width": 14,
      "height": 1.6,
      "depth": 1,
@@ -2965,8 +2965,8 @@
     },
     {
      "id": "a16_cover3",
-     "x": 4,
-     "z": 20,
+     "x": 108,
+     "z": 146,
      "width": 14,
      "height": 1.6,
      "depth": 1,
@@ -2975,8 +2975,8 @@
     },
     {
      "id": "a16_cover4",
-     "x": 1,
-     "z": 2,
+     "x": 105,
+     "z": 128,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -2985,8 +2985,8 @@
     },
     {
      "id": "a16_cover5",
-     "x": 1,
-     "z": 25,
+     "x": 105,
+     "z": 151,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -3146,8 +3146,8 @@
    "cover": [
     {
      "id": "a17_cover1",
-     "x": 6,
-     "z": 6,
+     "x": 84,
+     "z": 132,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3156,8 +3156,8 @@
     },
     {
      "id": "a17_cover2",
-     "x": 17,
-     "z": 6,
+     "x": 95,
+     "z": 132,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3166,8 +3166,8 @@
     },
     {
      "id": "a17_cover3",
-     "x": 6,
-     "z": 16,
+     "x": 84,
+     "z": 142,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3176,8 +3176,8 @@
     },
     {
      "id": "a17_cover4",
-     "x": 17,
-     "z": 16,
+     "x": 95,
+     "z": 142,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3186,8 +3186,8 @@
     },
     {
      "id": "a17_cover5",
-     "x": 10,
-     "z": 12,
+     "x": 88,
+     "z": 138,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -3312,8 +3312,8 @@
    "cover": [
     {
      "id": "a18_cover1",
-     "x": 3,
-     "z": 3,
+     "x": 55,
+     "z": 129,
      "width": 5,
      "height": 1.6,
      "depth": 5,
@@ -3322,8 +3322,8 @@
     },
     {
      "id": "a18_cover2",
-     "x": 18,
-     "z": 3,
+     "x": 70,
+     "z": 129,
      "width": 5,
      "height": 1.6,
      "depth": 5,
@@ -3332,8 +3332,8 @@
     },
     {
      "id": "a18_cover3",
-     "x": 3,
-     "z": 18,
+     "x": 55,
+     "z": 144,
      "width": 5,
      "height": 1.6,
      "depth": 5,
@@ -3342,8 +3342,8 @@
     },
     {
      "id": "a18_cover4",
-     "x": 18,
-     "z": 18,
+     "x": 70,
+     "z": 144,
      "width": 5,
      "height": 1.6,
      "depth": 5,
@@ -3352,8 +3352,8 @@
     },
     {
      "id": "a18_cover5",
-     "x": 10,
-     "z": 10,
+     "x": 62,
+     "z": 136,
      "width": 6,
      "height": 1.6,
      "depth": 6,
@@ -3662,8 +3662,8 @@
    "cover": [
     {
      "id": "a20_cover1",
-     "x": 3,
-     "z": 8,
+     "x": 53,
+     "z": 70,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -3672,8 +3672,8 @@
     },
     {
      "id": "a20_cover2",
-     "x": 18,
-     "z": 8,
+     "x": 68,
+     "z": 70,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -3682,8 +3682,8 @@
     },
     {
      "id": "a20_cover3",
-     "x": 3,
-     "z": 20,
+     "x": 53,
+     "z": 82,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -3692,8 +3692,8 @@
     },
     {
      "id": "a20_cover4",
-     "x": 18,
-     "z": 20,
+     "x": 68,
+     "z": 82,
      "width": 3,
      "height": 1.6,
      "depth": 2,
@@ -3702,8 +3702,8 @@
     },
     {
      "id": "a20_cover5",
-     "x": 3,
-     "z": 26,
+     "x": 53,
+     "z": 88,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -3712,8 +3712,8 @@
     },
     {
      "id": "a20_cover6",
-     "x": 15,
-     "z": 26,
+     "x": 65,
+     "z": 88,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -3884,8 +3884,8 @@
    "cover": [
     {
      "id": "a21_cover1",
-     "x": 4,
-     "z": 6,
+     "x": 44,
+     "z": 28,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3894,8 +3894,8 @@
     },
     {
      "id": "a21_cover2",
-     "x": 27,
-     "z": 6,
+     "x": 67,
+     "z": 28,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3904,8 +3904,8 @@
     },
     {
      "id": "a21_cover3",
-     "x": 4,
-     "z": 32,
+     "x": 44,
+     "z": 54,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3914,8 +3914,8 @@
     },
     {
      "id": "a21_cover4",
-     "x": 27,
-     "z": 32,
+     "x": 67,
+     "z": 54,
      "width": 3,
      "height": 1.6,
      "depth": 3,
@@ -3924,8 +3924,8 @@
     },
     {
      "id": "a21_cover5",
-     "x": 6,
-     "z": 12,
+     "x": 46,
+     "z": 34,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -3934,8 +3934,8 @@
     },
     {
      "id": "a21_cover6",
-     "x": 22,
-     "z": 12,
+     "x": 62,
+     "z": 34,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -3944,8 +3944,8 @@
     },
     {
      "id": "a21_cover7",
-     "x": 6,
-     "z": 27,
+     "x": 46,
+     "z": 49,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -3954,8 +3954,8 @@
     },
     {
      "id": "a21_cover8",
-     "x": 22,
-     "z": 27,
+     "x": 62,
+     "z": 49,
      "width": 6,
      "height": 1.6,
      "depth": 1,
@@ -4273,8 +4273,8 @@
    "cover": [
     {
      "id": "a22_cover1",
-     "x": 2,
-     "z": 8,
+     "x": 76,
+     "z": 38,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -4283,8 +4283,8 @@
     },
     {
      "id": "a22_cover2",
-     "x": 14,
-     "z": 8,
+     "x": 88,
+     "z": 38,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -4293,8 +4293,8 @@
     },
     {
      "id": "a22_cover3",
-     "x": 2,
-     "z": 17,
+     "x": 76,
+     "z": 47,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -4303,8 +4303,8 @@
     },
     {
      "id": "a22_cover4",
-     "x": 14,
-     "z": 17,
+     "x": 88,
+     "z": 47,
      "width": 2,
      "height": 1.6,
      "depth": 2,
@@ -4406,8 +4406,8 @@
    "cover": [
     {
      "id": "a23_cover1",
-     "x": 20,
-     "z": 20,
+     "x": 112,
+     "z": 40,
      "width": 4,
      "height": 1.6,
      "depth": 4,
