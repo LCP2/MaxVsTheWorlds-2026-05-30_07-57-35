@@ -705,10 +705,13 @@ namespace MaxWorlds.Arena
             return true;
         }
 
-        /// <summary>Every garrisoned Grate Lurker (MV-688, AC2) must sit exactly on one of its own
-        /// area's authored <see cref="WorldArea.grates"/> — the grate IS the Lurker's visible body while
-        /// submerged, so a Lurker authored off one has no body to stand in for it at all. Names the area
-        /// and the entry's index in the failure reason, per the ticket's own AC2 wording.</summary>
+        /// <summary>Every garrisoned Grate Lurker (MV-688, AC2; containment rule MV-724) must sit
+        /// somewhere on one of its own area's authored <see cref="WorldArea.grates"/> 1x1 tiles — the
+        /// grate IS the Lurker's visible body while submerged, so a Lurker authored off one has no body
+        /// to stand in for it at all. A grate is authored at its integer corner, but a robot standing on
+        /// that tile actually occupies the whole 1x1 square, so anywhere within it (inclusive of the
+        /// edges) counts, not just the corner itself. Names the area and the entry's index in the
+        /// failure reason, per the ticket's own AC2 wording.</summary>
         private static bool WorldLurkerGrates(WorldConfig cfg, out string reason)
         {
             foreach (WorldArea a in cfg.areas)
@@ -726,7 +729,9 @@ namespace MaxWorlds.Arena
                     foreach (WorldGrate grate in a.grates ?? Array.Empty<WorldGrate>())
                     {
                         if (grate == null) continue;
-                        if (Geo.Same(grate.x, entry.x) && Geo.Same(grate.z, entry.z)) { onGrate = true; break; }
+                        bool inX = entry.x >= grate.x - Geo.Epsilon && entry.x <= grate.x + 1f + Geo.Epsilon;
+                        bool inZ = entry.z >= grate.z - Geo.Epsilon && entry.z <= grate.z + 1f + Geo.Epsilon;
+                        if (inX && inZ) { onGrate = true; break; }
                     }
 
                     if (!onGrate)
