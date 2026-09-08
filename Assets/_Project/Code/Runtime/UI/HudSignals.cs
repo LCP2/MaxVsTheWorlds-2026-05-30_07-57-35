@@ -15,6 +15,13 @@ namespace MaxWorlds.UI
         /// <summary>A damageable took a hit. (worldPos, amount, crit)</summary>
         public static event Action<Vector3, float, bool> DamageDealt;
 
+        /// <summary>Max himself took a hit (MV-722) — the health bar moving was the only feedback he
+        /// had. (worldPos, hitDirection, isContact) — isContact is PlayerHealth's own resolved read of
+        /// whether this hit landed hot on the heels of the last one (a crowd/boss/beam signature) or in
+        /// isolation, so a listener can raise a different, SUBTLE effect for each without needing to
+        /// know which enemy or attack dealt it.</summary>
+        public static event Action<Vector3, Vector3, bool> PlayerHit;
+
         /// <summary>A pickup/reward dropped. (worldPos, label, colour)</summary>
         public static event Action<Vector3, string, Color> Pickup;
 
@@ -134,6 +141,9 @@ namespace MaxWorlds.UI
 
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
+
+        public static void EmitPlayerHit(Vector3 worldPos, Vector3 direction, bool isContact)
+            => PlayerHit?.Invoke(worldPos, direction, isContact);
 
         public static void EmitPickup(Vector3 worldPos, string label, Color color)
             => Pickup?.Invoke(worldPos, label, color);
