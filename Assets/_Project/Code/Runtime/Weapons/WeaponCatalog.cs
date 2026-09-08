@@ -72,10 +72,9 @@ namespace MaxWorlds.Weapons
 
         /// <summary>The abilities, in the shed drop-pool's fixed order (spec §4/§6; Power Efficiency
         /// retired by MV-290; Water Balloon and its Auto-fire sub-ability returned to the pool by
-        /// MV-380 after briefly leaving it under MV-370). <see cref="AbilityKind.WeaponCooldown"/> is
-        /// retired by MV-422 — THE RIG's canonical 23-ability tree has no global cooldown-reduction
-        /// node, so it is excluded here and can never be offered/acquired again (see
-        /// <see cref="WeaponSystemState"/>'s class doc).</summary>
+        /// MV-380 after briefly leaving it under MV-370). Weapon Cooldown — a global cooldown-reduction
+        /// passive with no node in THE RIG's canonical tree since MV-422 — was removed outright by
+        /// MV-728, having been an unreachable no-op the whole time it sat retired.</summary>
         public static readonly AbilityKind[] AllAbilityKinds =
         {
             AbilityKind.Speed,
@@ -234,16 +233,13 @@ namespace MaxWorlds.Weapons
         /// Force Field's cap rose to 5 with MV-422's RIG restructure (<c>e_ff</c>'s own
         /// <c>maxLevel</c>) — kept as a literal here, not read from <see cref="RigBoard"/> directly,
         /// since only this one value actually diverges from its pre-MV-422 number; change the two
-        /// together if <c>rig_board.json</c>'s <c>e_ff.maxLevel</c> is ever retuned.
-        /// <see cref="AbilityKind.WeaponCooldown"/> has no RIG node (retired, MV-422) — its cap is
-        /// dead weight, never reachable via <see cref="AllAbilityKinds"/>.</summary>
+        /// together if <c>rig_board.json</c>'s <c>e_ff.maxLevel</c> is ever retuned.</summary>
         public static int MaxLevel(AbilityKind kind)
         {
             switch (kind)
             {
                 case AbilityKind.Speed: return 4;
                 case AbilityKind.Teleport: return 4;
-                case AbilityKind.WeaponCooldown: return 5;
                 case AbilityKind.ForceField: return 5;
                 default: return 1;
             }
@@ -258,11 +254,10 @@ namespace MaxWorlds.Weapons
         /// and Reload cap at 3 (same shape as the Water Balloon's own three tracks).</summary>
         public static int MaxLevel(ShoulderRackTrackKind kind) => kind == ShoulderRackTrackKind.RocketDamage ? 4 : 3;
 
-        /// <summary>Base cooldown before any Weapon Cooldown reduction, seconds. Teleport is the only
-        /// remaining AbilityKind with an on-screen control (spec §6a) and a real cooldown — Water
-        /// Balloon's own base cooldown moved to <see cref="WaterBalloonBaseCooldownSeconds"/> when
-        /// MV-370 made it a primary add-on; Speed and Weapon Cooldown are passive — continuous, no
-        /// control to gate — so their base cooldown is 0.</summary>
+        /// <summary>Base cooldown, seconds. Teleport is the only remaining AbilityKind with an
+        /// on-screen control (spec §6a) and a real cooldown — Water Balloon's own base cooldown moved
+        /// to <see cref="WaterBalloonBaseCooldownSeconds"/> when MV-370 made it a primary add-on; Speed
+        /// is passive — continuous, no control to gate — so its base cooldown is 0.</summary>
         public static float BaseCooldownSeconds(AbilityKind kind)
         {
             switch (kind)
@@ -272,7 +267,7 @@ namespace MaxWorlds.Weapons
                 case AbilityKind.ForceField:
                     return DevTuning.Or(DevTuning.ForceFieldCooldownSeconds, DefaultForceFieldCooldownSeconds);
                 default:
-                    return 0f;   // Speed, Weapon Cooldown — passive, no cooldown
+                    return 0f;   // Speed — passive, no cooldown
             }
         }
 
@@ -299,7 +294,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.Speed: return "SPEED";
                 case AbilityKind.Teleport: return "TELEPORT";
-                case AbilityKind.WeaponCooldown: return "WEAPON COOLDOWN";
                 case AbilityKind.WaterBalloon: return "WATER BALLOON";
                 case AbilityKind.WaterBalloonAutoFire: return "AUTO-FIRE";
                 case AbilityKind.ForceField: return "FORCE FIELD";
@@ -344,7 +338,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.Speed: return "SPD";
                 case AbilityKind.Teleport: return "TP";
-                case AbilityKind.WeaponCooldown: return "CD";
                 case AbilityKind.WaterBalloon: return "WB";
                 case AbilityKind.WaterBalloonAutoFire: return "AF";
                 case AbilityKind.ForceField: return "FF";
@@ -362,7 +355,6 @@ namespace MaxWorlds.Weapons
             {
                 case AbilityKind.Speed: return "Passive move-speed boost.";
                 case AbilityKind.Teleport: return "Blink to a nearby spot, dodging in an instant.";
-                case AbilityKind.WeaponCooldown: return "Shortens the cooldown on every other active ability.";
                 case AbilityKind.WaterBalloon: return "Unlocks the Water Balloon throw — splash damage that halts robots.";
                 case AbilityKind.WaterBalloonAutoFire: return "Water Balloon aims and fires itself at the best cluster in range.";
                 case AbilityKind.ForceField: return "A bubble that absorbs incoming damage and blocks robots — Max can still move and fire out of it.";

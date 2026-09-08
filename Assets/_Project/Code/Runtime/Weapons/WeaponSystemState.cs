@@ -12,13 +12,10 @@ namespace MaxWorlds.Weapons
     /// (<see cref="RigBoard"/>) — this class is now a thin, enum-typed compatibility layer over that
     /// single source of truth, so every existing call site (<c>WaterBlaster</c>, <c>WeaponsScreen</c>,
     /// <c>HudController</c>, ...) keeps compiling unchanged while the actual levels/gating live in one
-    /// place. <see cref="AbilityKind.WeaponCooldown"/> has no node in the canonical <c>rig_board.json</c>
-    /// (it names exactly 22 abilities (MV-597: 23 -&gt; 22, PIERCE deleted), none of them a global
-    /// cooldown-reduction ability) — MV-422
-    /// retires it: <see cref="MapId(AbilityKind)"/> returns null for it, so it can never be acquired,
-    /// never appears in <see cref="Unacquired"/>, and <see cref="EffectiveCooldownSeconds"/> always
-    /// multiplies by 1x (unchanged code, since <see cref="AbilityTuning.CooldownMultiplier"/> at level
-    /// 0 is already a no-op).
+    /// place. THE RIG's canonical <c>rig_board.json</c> names exactly 22 abilities (MV-597: 23 -&gt; 22,
+    /// PIERCE deleted), none of them a global cooldown-reduction ability — the old Weapon Cooldown
+    /// AbilityKind, which had no node here since MV-422 and so could never be acquired, was removed
+    /// outright by MV-728 rather than left as permanent dead weight.
     /// </summary>
     public static class WeaponSystemState
     {
@@ -95,7 +92,6 @@ namespace MaxWorlds.Weapons
             _ => null,
         };
 
-        /// <summary>Null for <see cref="AbilityKind.WeaponCooldown"/> — see the class doc comment.</summary>
         private static string MapId(AbilityKind kind) => kind switch
         {
             AbilityKind.Speed => "m_spd",
@@ -126,8 +122,7 @@ namespace MaxWorlds.Weapons
 
         // ---------------------------------------------------------------- abilities
 
-        /// <summary>0 if not yet acquired from a shed; 1..cap once owned. Always 0 for
-        /// <see cref="AbilityKind.WeaponCooldown"/> (retired, MV-422).</summary>
+        /// <summary>0 if not yet acquired from a shed; 1..cap once owned.</summary>
         public static int AbilityLevel(AbilityKind kind)
         {
             string id = MapId(kind);
@@ -158,7 +153,7 @@ namespace MaxWorlds.Weapons
                 foreach (var kind in WeaponCatalog.AllAbilityKinds)
                 {
                     string id = MapId(kind);
-                    if (id == null) continue; // WeaponCooldown — retired, no RIG node
+                    if (id == null) continue;
                     if (RigState.IsOwned(id)) continue;
                     if (!RigState.IsReached(id)) continue;
                     yield return kind;
@@ -187,8 +182,7 @@ namespace MaxWorlds.Weapons
         /// <summary>Grant an ability at Level 1 — a shed's device (WV-229; a Morphing Module draft in
         /// RIG terms). Idempotent: granting an already-owned ability, or one whose RIG node isn't
         /// reached, is a no-op (returns false); a shed should draw from <see cref="Unacquired"/> so
-        /// this shouldn't normally happen. Always fails for <see cref="AbilityKind.WeaponCooldown"/>
-        /// (retired, MV-422).</summary>
+        /// this shouldn't normally happen.</summary>
         public static bool Acquire(AbilityKind kind)
         {
             string id = MapId(kind);
@@ -257,21 +251,11 @@ namespace MaxWorlds.Weapons
             return true;
         }
 
-        /// <summary>The Weapon Cooldown ability's own reduction-per-level fraction, read through
-        /// <see cref="DevTuning"/> so the panel can dial it live (WV-234). Retained for
-        /// <see cref="EffectiveCooldownSeconds"/>'s formula shape even though the ability itself is
-        /// retired (MV-422) — <see cref="AbilityLevel(AbilityKind)"/> for
-        /// <see cref="AbilityKind.WeaponCooldown"/> is always 0, so this multiplier is always a no-op
-        /// (1x) in practice now.</summary>
-        private static float WeaponCooldownReductionPerLevel => DevTuning.Or(
-            DevTuning.WeaponCooldownReductionPerLevel, AbilityTuning.DefaultWeaponCooldownReductionPerLevel);
-
-        /// <summary>An ability's cooldown after the (now-retired) Weapon Cooldown ability's per-level
-        /// reduction — the number its on-screen control (WV-240) sweeps against. Passive abilities
-        /// have a base cooldown of 0 and always return 0.</summary>
-        public static float EffectiveCooldownSeconds(AbilityKind kind) =>
-            WeaponCatalog.BaseCooldownSeconds(kind) *
-            AbilityTuning.CooldownMultiplier(AbilityLevel(AbilityKind.WeaponCooldown), WeaponCooldownReductionPerLevel);
+        /// <summary>An ability's cooldown — the number its on-screen control (WV-240) sweeps against.
+        /// Passive abilities have a base cooldown of 0 and always return 0. MV-728 removed the old
+        /// Weapon Cooldown ability's per-level reduction multiplier this used to apply here — it was
+        /// always a 1x no-op since Weapon Cooldown could never be acquired (MV-422).</summary>
+        public static float EffectiveCooldownSeconds(AbilityKind kind) => WeaponCatalog.BaseCooldownSeconds(kind);
 
         // ---------------------------------------------------------------- Water Balloon tracks (MV-370)
 
@@ -291,8 +275,7 @@ namespace MaxWorlds.Weapons
         }
 
         /// <summary>The Water Balloon's own Repeat Fire track's cooldown-cut-per-level fraction, read
-        /// through <see cref="DevTuning"/> so the panel can dial it live (MV-370, same idiom as
-        /// <see cref="WeaponCooldownReductionPerLevel"/>).</summary>
+        /// through <see cref="DevTuning"/> so the panel can dial it live (MV-370).</summary>
         private static float WaterBalloonRepeatFirePerLevel => DevTuning.Or(
             DevTuning.WaterBalloonRepeatFirePerLevel, AbilityTuning.DefaultWaterBalloonRepeatFirePerLevel);
 

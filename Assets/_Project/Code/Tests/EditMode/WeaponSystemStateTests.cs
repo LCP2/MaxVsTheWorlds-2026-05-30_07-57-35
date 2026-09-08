@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.IO;
+using System.Reflection;
 using NUnit.Framework;
 using UnityEngine;
 using MaxWorlds.Core;
@@ -11,8 +12,8 @@ namespace MaxWorlds.Tests.EditMode
     /// The weapon/ability backbone (WV-230), now a thin enum-typed layer over THE RIG's unified node
     /// model (MV-422, see <see cref="RigStateTests"/> for the model's own rules). Run start: only
     /// <c>p_dmg</c> (RCDA Damage) is owned, at Level 1 — every other track/ability starts at 0 and is
-    /// gated by <see cref="RigState.IsReached"/>. <see cref="AbilityKind.WeaponCooldown"/> is retired
-    /// (no RIG node) and can never be acquired.
+    /// gated by <see cref="RigState.IsReached"/>. The old Weapon Cooldown ability, retired (no RIG
+    /// node) since MV-422, was removed outright by MV-728.
     /// </summary>
     public sealed class WeaponSystemStateTests
     {
@@ -85,14 +86,25 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(WeaponSystemState.Acquired, Is.Empty);
         }
 
+        /// <summary>MV-728: the old Weapon Cooldown ability sat in the enum for the whole of MV-422's
+        /// retirement with a null RIG node id — a permanent, silent no-op nothing caught. Walking every
+        /// <see cref="AbilityKind"/> enum value (not just the catalog's pruned
+        /// <see cref="WeaponCatalog.AllAbilityKinds"/> array) makes that condition impossible to
+        /// reintroduce silently: a future kind added without a RIG mapping fails here instead of
+        /// shipping unreachable.</summary>
         [Test]
-        public void WeaponCooldownCanNeverBeAcquired_RetiredByMV422()
+        public void EveryAbilityKindResolvesToAnExistingRigNode_MV728()
         {
-            Assert.That(WeaponSystemState.Acquire(AbilityKind.WeaponCooldown), Is.False,
-                "WeaponCooldown has no node in the canonical rig_board.json — MV-422 retires it");
-            Assert.That(WeaponSystemState.IsAcquired(AbilityKind.WeaponCooldown), Is.False);
-            CollectionAssert.DoesNotContain(
-                new System.Collections.Generic.List<AbilityKind>(WeaponSystemState.Unacquired), AbilityKind.WeaponCooldown);
+            MethodInfo mapId = typeof(WeaponSystemState).GetMethod("MapId",
+                BindingFlags.NonPublic | BindingFlags.Static, null, new[] { typeof(AbilityKind) }, null);
+
+            foreach (AbilityKind kind in System.Enum.GetValues(typeof(AbilityKind)))
+            {
+                string id = (string)mapId.Invoke(null, new object[] { kind });
+                Assert.That(id, Is.Not.Null, $"{kind} has no RIG node id — it could never be acquired");
+                Assert.That(RigBoard.Exists(id), Is.True,
+                    $"{kind}'s RIG id '{id}' does not exist in the canonical rig_board.json");
+            }
         }
 
         // ---------------------------------------------------------------- tracks
@@ -448,7 +460,6 @@ namespace MaxWorlds.Tests.EditMode
         public void PassiveAbilitiesHaveZeroBaseCooldown()
         {
             Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Speed), Is.EqualTo(0f));
-            Assert.That(WeaponCatalog.BaseCooldownSeconds(AbilityKind.WeaponCooldown), Is.EqualTo(0f));
         }
 
         [Test]
@@ -464,11 +475,11 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void EffectiveCooldownIsAlwaysTheBase_WeaponCooldownRetiredByMV422()
+        public void EffectiveCooldownEqualsTheBaseCooldown_MV728()
         {
             Assert.That(WeaponSystemState.EffectiveCooldownSeconds(AbilityKind.Teleport),
                 Is.EqualTo(WeaponCatalog.BaseCooldownSeconds(AbilityKind.Teleport)).Within(1e-4f),
-                "WeaponCooldown can never be acquired any more, so this multiplier is always a no-op (1x)");
+                "MV-728 removed the Weapon Cooldown multiplier entirely — effective cooldown is now just the base");
         }
 
         [Test]

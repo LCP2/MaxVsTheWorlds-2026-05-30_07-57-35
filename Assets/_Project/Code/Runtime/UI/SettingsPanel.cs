@@ -651,10 +651,6 @@ namespace MaxWorlds.UI
                 () => DevTuning.Or(DevTuning.TeleportCooldownSeconds, WeaponCatalog.DefaultTeleportCooldownSeconds),
                 v => DevTuning.TeleportCooldownSeconds = v, tab: TabWeapons);
 
-            Add("Cooldown %/lvl", "x", 0f, 0.3f, AbilityTuning.DefaultWeaponCooldownReductionPerLevel,
-                () => DevTuning.Or(DevTuning.WeaponCooldownReductionPerLevel, AbilityTuning.DefaultWeaponCooldownReductionPerLevel),
-                v => DevTuning.WeaponCooldownReductionPerLevel = v, tab: TabWeapons);
-
             Add("Balloon base dist", "m", 1f, 15f, AbilityTuning.DefaultWaterBalloonBaseDistance,
                 () => DevTuning.Or(DevTuning.WaterBalloonBaseDistance, AbilityTuning.DefaultWaterBalloonBaseDistance),
                 v => DevTuning.WaterBalloonBaseDistance = v, tab: TabWeapons);
