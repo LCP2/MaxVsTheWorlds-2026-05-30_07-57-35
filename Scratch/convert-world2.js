@@ -58,6 +58,10 @@ function convertComposition(area) {
 }
 
 function convertCover(area) {
+  // WorldCover.x/z are ABSOLUTE (same convention as garrison/grates/replicators, confirmed against
+  // world1_config.json's a1_h1 sitting inside a1's own absolute bounds) — unlike sludge/deck/ramp/hatch,
+  // which WorldArea.WorldRectOf resolves as area-local. DESIGN authors cover area-local like those, so
+  // it needs the same area.origin shift here.
   return (area.cover || []).map((c, i) => {
     let dressing;
     if (c.kind === 'concrete') dressing = 'none';
@@ -65,7 +69,7 @@ function convertCover(area) {
     else throw new Error(`area ${area.id}: unrecognised cover kind '${c.kind}'`);
     return {
       id: `${area.id}_cover${i + 1}`,
-      x: c.x, z: c.z,
+      x: area.origin.x + c.x, z: area.origin.z + c.z,
       width: c.w, height: 1.6, depth: c.d,
       shape: 'box',
       dressing,
@@ -161,9 +165,9 @@ const config = {
   world: design.world,
   revision: 'WORLD 2 v1 2026-09-08 (MV-700): areas a1-a23 converted from world2_config.DESIGN.json ' +
     '(authored by the build chat from the World 2 brief; the xlsx/svg pair alongside it are the drawn ' +
-    'source). Replaces the MV-687/696 placeholder (2 areas). Garrison/grate/replicator/boss coordinates ' +
-    'were area-local in the DESIGN file and were shifted to the engine\'s absolute-world convention here; ' +
-    'sludge/deck/ramp/hatch/cover rects stayed area-local, matching WorldRectOf. DESIGN\'s per-area ' +
+    'source). Replaces the MV-687/696 placeholder (2 areas). Garrison/grate/replicator/boss/cover ' +
+    'coordinates were area-local in the DESIGN file and were shifted to the engine\'s absolute-world ' +
+    'convention here; sludge/deck/ramp/hatch rects stayed area-local, matching WorldRectOf. DESIGN\'s per-area ' +
     '"floorComposition" (extra floor-level composition on a13/a15/a19 when the deck overlay is revisited) ' +
     'has no engine equivalent (WorldArea carries one composition per area index) and was not carried over ' +
     '— see the MV-700 fix comment.',
