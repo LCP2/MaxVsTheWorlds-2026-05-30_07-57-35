@@ -254,19 +254,24 @@ namespace MaxWorlds.VFX
             lppeRoot.SetActive(false);   // RCDA is Max's run-start primary; MaxRig flips these on ActivePrimary
 
             // ---- MV-717: the two grip points, parented under the gun so the hands cannot come off it
-            // no matter how it is posed. HandR sits back near the trigger/stock (the RCDA's grip
-            // prisms around x=0.28-0.31, z<=0.23 — close to the shoulder that is already on this side
-            // of the body); HandL sits up on the tank/nose (x~0.27, z~0.3) — the far grip his left arm
-            // has to reach across his own chest for (see MaxRig's ShoulderAimOffset doc). A small dark
-            // knuckle ball on each stands in for the old static glove.
+            // no matter how it is posed. MV-730 (Lee: "his left arm comes right across his body to hold
+            // the device... to fire the weapon his right hand should come up above waist height") swaps
+            // which grip each hand takes: measured in the built rig at full aim, the coordinates near
+            // the tank/nose resolve to world y ~0.87-1.0 (clear of the waist) while the ones near the
+            // trigger/stock resolve to world y ~0.75-0.90 (barely above it) — an artefact of how far
+            // each point sits from the shoulder-roll pivot, not something visible in these local numbers
+            // alone. HandR now takes the tank/nose coordinates, so the RIGHT hand is the one that
+            // visibly rises to drive the gadget; HandL takes the trigger/stock coordinates, so the LEFT
+            // hand stays low and reads as bracing the gadget rather than crossing up to operate it. A
+            // small dark knuckle ball on each stands in for the old static glove.
             var handR = new GameObject("HandR").transform;
             handR.SetParent(gunAssembly.transform, worldPositionStays: false);
-            handR.localPosition = new Vector3(0.29f, 0.70f, 0.05f);
+            handR.localPosition = new Vector3(0.27f, 0.75f, 0.30f);
             Add(handR, CharacterMeshes.Sphere(10), p.Dark, Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.09f));
 
             var handL = new GameObject("HandL").transform;
             handL.SetParent(gunAssembly.transform, worldPositionStays: false);
-            handL.localPosition = new Vector3(0.27f, 0.75f, 0.30f);
+            handL.localPosition = new Vector3(0.29f, 0.70f, 0.05f);
             Add(handL, CharacterMeshes.Sphere(10), p.Dark, Vector3.zero, Quaternion.identity, new Vector3(0.09f, 0.09f, 0.09f));
 
             // ---- the Shoulder Rack mount (MV-702) — migrated from ShoulderRack's own placeholder ----

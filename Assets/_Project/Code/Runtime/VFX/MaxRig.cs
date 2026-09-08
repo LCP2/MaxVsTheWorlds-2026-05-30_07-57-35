@@ -215,8 +215,15 @@ namespace MaxWorlds.VFX
         public const float VisualScale = 1f;
 
         /// <summary>Where the gadget sits when he is just running: down at the hip, across the body,
-        /// held two-handed. This is the pose you see 90% of the time.</summary>
-        private static readonly Vector3 GunHipPos = new Vector3(0.03f, 0.155f, 0.30f);
+        /// held two-handed. This is the pose you see 90% of the time.
+        ///
+        /// MV-730: the Y was 0.155 (implying an absolute hip height of 0.895) but the gadget mesh
+        /// <see cref="MaxBody"/> actually builds sits at world y ≈ 0.75 — a stale constant nobody had
+        /// re-measured since the gadget was ported pre-MV-669. <see cref="BarrelHeight"/> is the number
+        /// <see cref="WaterVfx"/>'s jet is judged against, so a 14 cm gap between that formula and where
+        /// the gun is actually drawn read as the muzzle floating below the visible barrel. 0.01 matches
+        /// the real built mesh instead.</summary>
+        private static readonly Vector3 GunHipPos = new Vector3(0.03f, 0.01f, 0.30f);
         private static readonly Vector3 GunHipRot = new Vector3(17f, -13f, 0f);
 
         /// <summary>
@@ -225,11 +232,16 @@ namespace MaxWorlds.VFX
         /// The height is not a taste decision. <see cref="WaterBlaster"/> casts its damage from
         /// <c>transform.position</c> — Max's capsule centre, 1.0 m off the ground — and
         /// <see cref="WaterVfx"/> emits the stream from that same origin. In TORSO space (which starts
-        /// at <see cref="HipY"/>) that is y = 0.26. This pose puts the barrel's axis at 0.285, so the
+        /// at <see cref="HipY"/>) that is y = 0.26. This pose puts the barrel's axis at 0.30, so the
         /// water leaves the gadget at the height the gadget is actually held at, and the jet reads as
         /// coming out of the nozzle rather than out of his chest.
+        ///
+        /// MV-730 (Lee: "all the action happens below the waist"): raised from 0.285 — a small nudge on
+        /// top of the <see cref="GunHipPos"/> recalibration above, which is what actually does the work.
+        /// Together they put the built gadget's own muzzle glow at world y ≈ 1.06 at full aim (was 0.90),
+        /// comfortably clear of <see cref="HipY"/> (0.74).
         /// </summary>
-        private static readonly Vector3 GunAimPos = new Vector3(0.09f, 0.285f, 0.32f);
+        private static readonly Vector3 GunAimPos = new Vector3(0.09f, 0.30f, 0.32f);
         private static readonly Vector3 GunAimRot = new Vector3(0f, 0f, 0f);
 
         /// <summary>Shoulders roll forward and in when he presents the weapon. Without this the left
@@ -322,6 +334,11 @@ namespace MaxWorlds.VFX
                  "Smaller than the legs' own swing — this is a kid's arm, not a sprinter's.")]
         [SerializeField] private float armSwingAmplitude = 0.10f;
 
+        [Tooltip("MV-730: how far the SHOULDER itself travels through the same swing, in metres. " +
+                 "Without this the shoulder end of PoseArm's sleeve never moves while running (only the " +
+                 "hand end does), which reads as the top of the arm being welded to the torso.")]
+        [SerializeField] private float shoulderSwingAmplitude = 0.035f;
+
         [Header("Idle (MV-717)")]
         [Tooltip("How fast he breathes while standing still and not aiming, in Hz. He must never be " +
                  "perfectly frozen.")]
@@ -335,8 +352,13 @@ namespace MaxWorlds.VFX
         [SerializeField] private float headCatchUp = 8f;
 
         [Tooltip("How far he rolls toward the planted foot on each footfall, in degrees. Kept small — " +
-                 "this is a weight shift, not a stagger.")]
-        [SerializeField] private float weightShiftAngle = 2.5f;
+                 "this is a weight shift, not a stagger. MV-730 (Lee: \"it's now a bit of a waddle\"): " +
+                 "was 2.5 — this IS the lateral (roll) component TickRun adds on top of the legs' own " +
+                 "sagittal swing, and Lee's own diagnosis (\"a waddle is nearly always too much " +
+                 "side-to-side\") points straight at it. Halved rather than zeroed: some roll is what " +
+                 "keeps a stride reading as weight actually shifting underneath him rather than his legs " +
+                 "just windmilling in place.")]
+        [SerializeField] private float weightShiftAngle = 1.2f;
 
         // ---------------------------------------------------------------- state
 
@@ -409,6 +431,15 @@ namespace MaxWorlds.VFX
 
         /// <summary>Stride phase, in radians. Advances only while he is moving.</summary>
         public float Stride => _stride;
+
+        /// <summary>MV-730: the shoulder point <see cref="PoseArm"/> stretches the left sleeve from,
+        /// in torso space — the same claim <see cref="AimPose"/> makes for the gadget's own pose, here
+        /// so a test can prove the shoulder travels through the stride rather than sitting welded to
+        /// the torso while only the hand end of the sleeve moves.</summary>
+        public Vector3 ShoulderL { get; private set; }
+
+        /// <summary>The mirror of <see cref="ShoulderL"/>, for the right sleeve.</summary>
+        public Vector3 ShoulderR { get; private set; }
 
         // ---------------------------------------------------------------- build
 
@@ -898,16 +929,31 @@ namespace MaxWorlds.VFX
         /// they cannot drift out of sync with the walk — and blend out to the fixed hand-on-gun grip as
         /// <see cref="_aim"/> rises. The left arm swings opposite the LEFT leg (i.e. with the right, per
         /// a natural contralateral gait), and the right arm the mirror.
+        ///
+        /// MV-730 (Lee: "the top part of his arms are glued to his body when he walks"): the shoulder
+        /// point below now carries its own (smaller) share of the same swing — see
+        /// <see cref="shoulderSwingAmplitude"/>. Before this fix the shoulder passed to <see
+        /// cref="PoseArm"/> only ever moved via <see cref="ShoulderAimOffset"/> (aim-only), so while
+        /// running the near end of the sleeve sat at a completely static point and only the hand end
+        /// travelled — a box pivoting from a point that never moves reads as welded to the torso.
         /// </summary>
         private void PoseArms()
         {
             Vector3 aimOffset = Vector3.Lerp(ShoulderRestOffset, ShoulderAimOffset, _aim);
-            Vector3 shoulderL = new Vector3(-ShoulderX - aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z);
-            Vector3 shoulderR = new Vector3(ShoulderX + aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z);
 
             float speed01 = Mathf.Clamp01(_max.MoveInput.magnitude);
             float swingL = -Mathf.Sin(_stride) * armSwingAmplitude * speed01;
             float swingR = Mathf.Sin(_stride) * armSwingAmplitude * speed01;
+
+            // The shoulder travels through a fraction of the same swing, fading out as he aims (the aim
+            // pose fixes the shoulder via ShoulderAimOffset instead) — see this method's own doc.
+            float shoulderSwingL = -Mathf.Sin(_stride) * shoulderSwingAmplitude * speed01 * (1f - _aim);
+            float shoulderSwingR = Mathf.Sin(_stride) * shoulderSwingAmplitude * speed01 * (1f - _aim);
+
+            Vector3 shoulderL = new Vector3(-ShoulderX - aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z + shoulderSwingL);
+            Vector3 shoulderR = new Vector3(ShoulderX + aimOffset.x, ShoulderY + aimOffset.y, aimOffset.z + shoulderSwingR);
+            ShoulderL = shoulderL;
+            ShoulderR = shoulderR;
 
             // A relaxed arm hangs DOWN from the shoulder, not level with it — ArmHangDrop is that
             // vertical reach, roughly to hip height. Without it the swing target sits at shoulder
