@@ -24,6 +24,7 @@ namespace MaxWorlds.VFX
         Lurker,     // MV-688: the grate ambusher — oil-black, its own hue family
         Turret,     // MV-691: the wall-mounted lobber — gunmetal, its own hue family
         Sludger,    // MV-705: the sapper that splits on death — acid-green, its own hue family
+        Charger,    // MV-707: the straight-line rammer — burnt rust-copper, its own hue family
     }
 
     /// <summary>
@@ -178,6 +179,15 @@ namespace MaxWorlds.VFX
         /// hand-authored kind colour already sits at.</summary>
         private static readonly Color SludgerBody = new Color(0.42f, 0.58f, 0.05f);
 
+        /// <summary>The Cart Charger (MV-707): a burnt rust-copper, deliberately its own value/mix
+        /// rather than a repeat of the Bolter's straight orange (0.55, 0.275, 0.061) or World 2's
+        /// Stormdrain rust-orange (0.55, 0.28, 0.10) — both already claimed hues, and this kind can
+        /// share an area's ambient shed cadence with either. The box silhouette (versus their capsules)
+        /// already carries most of the read; the shifted hue is what keeps the colour-alone check
+        /// (YT-86) honest too. Authored directly under <see cref="SunlitAlbedo.Ceiling"/> (0.6) from
+        /// the start, same margin every other hand-authored kind colour already sits at.</summary>
+        private static readonly Color ChargerBody = new Color(0.50f, 0.20f, 0.07f);
+
         /// <summary>Big Bermuda: near-black, and it does not need to be anything else. It is the
         /// biggest silhouette in the game; what a boss needs is an EDGE, and the rim does that.</summary>
         private static readonly Color BossBody = new Color(0.10f, 0.13f, 0.20f);
@@ -287,6 +297,7 @@ namespace MaxWorlds.VFX
                 case CharacterRole.Blinker: return BlinkerBody;
                 case CharacterRole.Lurker: return LurkerBody;
                 case CharacterRole.Turret: return TurretBody;
+                case CharacterRole.Charger: return ChargerBody;
                 case CharacterRole.Sludger: return SludgerBody;
                 case CharacterRole.Boss: return BossBody;
                 case CharacterRole.Structure: return StructureBody;
@@ -311,6 +322,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Blinker: return CharacterRole.Blinker;
                 case EnemyKind.Lurker: return CharacterRole.Lurker;
                 case EnemyKind.Turret: return CharacterRole.Turret;
+                case EnemyKind.Charger: return CharacterRole.Charger;
                 case EnemyKind.Sludger: return CharacterRole.Sludger;
                 default: return CharacterRole.Robot;
             }
@@ -336,7 +348,7 @@ namespace MaxWorlds.VFX
             r == CharacterRole.Heavy || r == CharacterRole.Brute ||
             r == CharacterRole.Gunner || r == CharacterRole.Bolter ||
             r == CharacterRole.Blinker || r == CharacterRole.Lurker || r == CharacterRole.Turret ||
-            r == CharacterRole.Sludger || r == CharacterRole.Boss;
+            r == CharacterRole.Sludger || r == CharacterRole.Charger || r == CharacterRole.Boss;
 
         private void OnEnable()
         {

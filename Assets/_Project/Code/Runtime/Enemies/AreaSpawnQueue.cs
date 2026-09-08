@@ -123,6 +123,8 @@ namespace MaxWorlds.Enemies
             // MV-705: an ambient sapper, same footing as Bolter above — queued exactly like every other
             // authored-composition-only kind, no grate coincidence required.
             for (int i = 0; i < composition.Sludger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Sludger));
+            // MV-707: a floor-only rammer, same footing as Bolter/Sludger above.
+            for (int i = 0; i < composition.Charger; i++) _queued.Enqueue(new QueuedSpawn(areaIndex, EnemyKind.Charger));
         }
 
         private void FillInternal(int areaIndex, int largeCount, int smallCount, Func<int, EnemyKind> largeKindForSlot)

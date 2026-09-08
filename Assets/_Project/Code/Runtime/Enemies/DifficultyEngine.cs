@@ -56,16 +56,23 @@ namespace MaxWorlds.Enemies
             /// the ticket's own "they do not count as authored composition".</summary>
             public readonly int Sludger;
 
+            /// <summary>MV-707: the Cart Charger — same "authored-composition only" footing as
+            /// <see cref="Bolter"/>/<see cref="Lurker"/>/<see cref="Sludger"/> (no dial ever unlocks it
+            /// in <see cref="SolveComposition"/>).</summary>
+            public readonly int Charger;
+
             public Composition(int rusher, int bruiser, int heavy, int brute,
-                int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0, int sludger = 0)
+                int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
+                int sludger = 0, int charger = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
-                Sludger = sludger;
+                Sludger = sludger; Charger = charger;
             }
 
             public int TotalCount =>
-                Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker + Sludger;
+                Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
+                Sludger + Charger;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -77,7 +84,8 @@ namespace MaxWorlds.Enemies
                 Heavy * ThreatValues.Heavy + Brute * ThreatValues.Brute +
                 Gunner * ThreatValues.Gunner + Launcher * ThreatValues.Launcher +
                 Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter +
-                Lurker * ThreatValues.Lurker + Sludger * ThreatValues.Sludger;
+                Lurker * ThreatValues.Lurker + Sludger * ThreatValues.Sludger +
+                Charger * ThreatValues.Charger;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s
