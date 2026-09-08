@@ -1,0 +1,1466 @@
+{
+ "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
+ "world": "World 3 \u2014 The Reef",
+ "revision": "WORLD 3 v1 2026-09-09: areas a1-a30 authored per MV-712 from the MVW_World3_Level_Design_V1.xlsx dial table. Composition is fully dial-solved (no per-area authoring) with enemyTypes pinned to the engine's own ThreatValues placeholders, so the solved threat budget tracks each area's target budget by construction.",
+ "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
+ "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
+ "wallHeight": 1.5,
+ "dials": {
+  "areaCount": 30,
+  "baseThreat": 45.0,
+  "threatGrowth": 0.09,
+  "band": {
+   "up": 0.4,
+   "down": -0.15
+  },
+  "pacingRhythm": [
+   0.35,
+   1.1,
+   1.15,
+   0.9,
+   1.1,
+   1.2,
+   0.9,
+   1.25,
+   1.0,
+   1.05,
+   1.3,
+   0.95,
+   1.1,
+   1.35,
+   0.9,
+   1.15,
+   1.4,
+   1.3,
+   0.354,
+   1.126,
+   1.191,
+   0.943,
+   1.166,
+   1.286,
+   0.976,
+   1.37,
+   1.108,
+   1.176,
+   1.472,
+   1.087
+  ],
+  "toughnessCurve": {
+   "heavyFromArea": 1,
+   "bruteFromArea": 3,
+   "toughSubstitutionPct": 0.35,
+   "tankShareEnd": 0.8,
+   "gunnerFromArea": 1,
+   "launcherFromArea": 1,
+   "blinkerFromArea": 2,
+   "specialSharePct": 18
+  },
+  "powerupCadence": 2
+ },
+ "enemyTypes": {
+  "small": {
+   "thv": 1.0
+  },
+  "large": {
+   "thv": 2.5
+  },
+  "heavy": {
+   "thv": 4.5
+  },
+  "brute": {
+   "thv": 7.0
+  },
+  "gunner": {
+   "thv": 3.0
+  },
+  "launcher": {
+   "thv": 3.6
+  },
+  "blinker": {
+   "thv": 3.3
+  }
+ },
+ "gates": [
+  {
+   "id": "g_f3_a",
+   "from": {
+    "area": "a3",
+    "wall": "E",
+    "pos": 0.7727
+   },
+   "to": {
+    "area": "a4",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_f3_b",
+   "from": {
+    "area": "a3",
+    "wall": "E",
+    "pos": 0.2273
+   },
+   "to": {
+    "area": "a5",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_m3_a",
+   "from": {
+    "area": "a4",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a6",
+    "wall": "W",
+    "pos": 0.7727
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_m3_b",
+   "from": {
+    "area": "a5",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a6",
+    "wall": "W",
+    "pos": 0.2273
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g7",
+   "from": {
+    "area": "a7",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a8",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g8",
+   "from": {
+    "area": "a8",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a9",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g9",
+   "from": {
+    "area": "a9",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a10",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g10",
+   "from": {
+    "area": "a10",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a11",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g11",
+   "from": {
+    "area": "a11",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a12",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_f13_a",
+   "from": {
+    "area": "a13",
+    "wall": "E",
+    "pos": 0.7727
+   },
+   "to": {
+    "area": "a14",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_f13_b",
+   "from": {
+    "area": "a13",
+    "wall": "E",
+    "pos": 0.2273
+   },
+   "to": {
+    "area": "a15",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_m13_a",
+   "from": {
+    "area": "a14",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a16",
+    "wall": "W",
+    "pos": 0.7727
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_m13_b",
+   "from": {
+    "area": "a15",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a16",
+    "wall": "W",
+    "pos": 0.2273
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_f20_a",
+   "from": {
+    "area": "a20",
+    "wall": "E",
+    "pos": 0.7727
+   },
+   "to": {
+    "area": "a21",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_f20_b",
+   "from": {
+    "area": "a20",
+    "wall": "E",
+    "pos": 0.2273
+   },
+   "to": {
+    "area": "a22",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_m20_a",
+   "from": {
+    "area": "a21",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a23",
+    "wall": "W",
+    "pos": 0.7727
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g_m20_b",
+   "from": {
+    "area": "a22",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a23",
+    "wall": "W",
+    "pos": 0.2273
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g0",
+   "from": {
+    "area": "stub",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a1",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "start"
+  },
+  {
+   "id": "g101",
+   "from": {
+    "area": "a1",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a2",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g102",
+   "from": {
+    "area": "a2",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a3",
+    "wall": "W",
+    "pos": 0.2273
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g103",
+   "from": {
+    "area": "a6",
+    "wall": "E",
+    "pos": 0.2273
+   },
+   "to": {
+    "area": "a7",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g104",
+   "from": {
+    "area": "a12",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a13",
+    "wall": "W",
+    "pos": 0.2273
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g105",
+   "from": {
+    "area": "a16",
+    "wall": "E",
+    "pos": 0.2273
+   },
+   "to": {
+    "area": "a17",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g106",
+   "from": {
+    "area": "a17",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a18",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g107",
+   "from": {
+    "area": "a18",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a19",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g108",
+   "from": {
+    "area": "a19",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a20",
+    "wall": "W",
+    "pos": 0.2273
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g109",
+   "from": {
+    "area": "a23",
+    "wall": "E",
+    "pos": 0.2273
+   },
+   "to": {
+    "area": "a24",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g110",
+   "from": {
+    "area": "a24",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a25",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g111",
+   "from": {
+    "area": "a25",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a26",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g112",
+   "from": {
+    "area": "a26",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a27",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g113",
+   "from": {
+    "area": "a27",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a28",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g114",
+   "from": {
+    "area": "a28",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a29",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  },
+  {
+   "id": "g115",
+   "from": {
+    "area": "a29",
+    "wall": "E",
+    "pos": 0.5
+   },
+   "to": {
+    "area": "a30",
+    "wall": "W",
+    "pos": 0.5
+   },
+   "width": 3.0,
+   "opensWith": "primary"
+  }
+ ],
+ "bridges": [
+  {
+   "id": "b1",
+   "width": 4.0,
+   "height": 4.0,
+   "from": {
+    "area": "a7",
+    "wall": "E",
+    "pos": 0.15
+   },
+   "to": {
+    "area": "a9",
+    "wall": "W",
+    "pos": 0.15
+   }
+  },
+  {
+   "id": "b2",
+   "width": 4.0,
+   "height": 4.0,
+   "from": {
+    "area": "a8",
+    "wall": "E",
+    "pos": 0.375
+   },
+   "to": {
+    "area": "a10",
+    "wall": "W",
+    "pos": 0.375
+   }
+  },
+  {
+   "id": "b3",
+   "width": 4.0,
+   "height": 4.0,
+   "from": {
+    "area": "a9",
+    "wall": "E",
+    "pos": 0.6
+   },
+   "to": {
+    "area": "a11",
+    "wall": "W",
+    "pos": 0.6
+   }
+  },
+  {
+   "id": "b4",
+   "width": 4.0,
+   "height": 4.0,
+   "from": {
+    "area": "a10",
+    "wall": "E",
+    "pos": 0.825
+   },
+   "to": {
+    "area": "a12",
+    "wall": "W",
+    "pos": 0.825
+   }
+  }
+ ],
+ "route": [
+  {
+   "area": "a1",
+   "level": 0
+  },
+  {
+   "area": "a2",
+   "level": 0
+  },
+  {
+   "area": "a3",
+   "level": 0
+  },
+  {
+   "area": "a4",
+   "level": 0
+  },
+  {
+   "area": "a5",
+   "level": 0
+  },
+  {
+   "area": "a6",
+   "level": 0
+  },
+  {
+   "area": "a7",
+   "level": 0
+  },
+  {
+   "area": "a7",
+   "level": 1
+  },
+  {
+   "area": "a8",
+   "level": 0
+  },
+  {
+   "area": "a8",
+   "level": 1
+  },
+  {
+   "area": "a9",
+   "level": 0
+  },
+  {
+   "area": "a9",
+   "level": 1
+  },
+  {
+   "area": "a10",
+   "level": 0
+  },
+  {
+   "area": "a10",
+   "level": 1
+  },
+  {
+   "area": "a11",
+   "level": 0
+  },
+  {
+   "area": "a11",
+   "level": 1
+  },
+  {
+   "area": "a12",
+   "level": 0
+  },
+  {
+   "area": "a12",
+   "level": 1
+  },
+  {
+   "area": "a13",
+   "level": 0
+  },
+  {
+   "area": "a14",
+   "level": 0
+  },
+  {
+   "area": "a15",
+   "level": 0
+  },
+  {
+   "area": "a16",
+   "level": 0
+  },
+  {
+   "area": "a17",
+   "level": 0
+  },
+  {
+   "area": "a18",
+   "level": 0
+  },
+  {
+   "area": "a19",
+   "level": 0
+  },
+  {
+   "area": "a20",
+   "level": 0
+  },
+  {
+   "area": "a21",
+   "level": 0
+  },
+  {
+   "area": "a22",
+   "level": 0
+  },
+  {
+   "area": "a23",
+   "level": 0
+  },
+  {
+   "area": "a24",
+   "level": 0
+  },
+  {
+   "area": "a25",
+   "level": 0
+  },
+  {
+   "area": "a26",
+   "level": 0
+  },
+  {
+   "area": "a27",
+   "level": 0
+  },
+  {
+   "area": "a28",
+   "level": 0
+  },
+  {
+   "area": "a29",
+   "level": 0
+  },
+  {
+   "area": "a30",
+   "level": 0
+  }
+ ],
+ "areas": [
+  {
+   "id": "stub",
+   "index": 0,
+   "name": "stub",
+   "role": "entry",
+   "origin": {
+    "x": -6.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 6.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a1",
+   "index": 1,
+   "name": "a1",
+   "role": "normal",
+   "origin": {
+    "x": 0.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a1_shed",
+    "x": 10.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   }
+  },
+  {
+   "id": "a2",
+   "index": 2,
+   "name": "a2",
+   "role": "normal",
+   "origin": {
+    "x": 20.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a3",
+   "index": 3,
+   "name": "a3 - Branch point",
+   "role": "normal",
+   "origin": {
+    "x": 40.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 44.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a4",
+   "index": 4,
+   "name": "a4 - Upper limb",
+   "role": "normal",
+   "origin": {
+    "x": 60.0,
+    "z": 24.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a5",
+   "index": 5,
+   "name": "a5 - Lower limb",
+   "role": "normal",
+   "origin": {
+    "x": 60.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a6",
+   "index": 6,
+   "name": "a6 - Branch rejoin",
+   "role": "normal",
+   "origin": {
+    "x": 80.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 44.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a7",
+   "index": 7,
+   "name": "Area 7 - The Reef (double-pass)",
+   "role": "normal",
+   "origin": {
+    "x": 100.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 106.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 114.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 106.0,
+     "z": 14.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 114.0,
+     "z": 14.0
+    }
+   ]
+  },
+  {
+   "id": "a8",
+   "index": 8,
+   "name": "Area 8 - The Reef (double-pass)",
+   "role": "normal",
+   "origin": {
+    "x": 120.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 126.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 134.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 126.0,
+     "z": 14.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 134.0,
+     "z": 14.0
+    }
+   ]
+  },
+  {
+   "id": "a9",
+   "index": 9,
+   "name": "Area 9 - The Reef (double-pass)",
+   "role": "normal",
+   "origin": {
+    "x": 140.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 146.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 154.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 146.0,
+     "z": 14.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 154.0,
+     "z": 14.0
+    }
+   ]
+  },
+  {
+   "id": "a10",
+   "index": 10,
+   "name": "Area 10 - The Reef (double-pass)",
+   "role": "normal",
+   "origin": {
+    "x": 160.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 166.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 174.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 166.0,
+     "z": 14.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 174.0,
+     "z": 14.0
+    }
+   ]
+  },
+  {
+   "id": "a11",
+   "index": 11,
+   "name": "Area 11 - The Reef (double-pass)",
+   "role": "normal",
+   "origin": {
+    "x": 180.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 186.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 194.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 186.0,
+     "z": 14.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 194.0,
+     "z": 14.0
+    }
+   ]
+  },
+  {
+   "id": "a12",
+   "index": 12,
+   "name": "Area 12 - The Reef (double-pass)",
+   "role": "normal",
+   "origin": {
+    "x": 200.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 206.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 214.0,
+     "z": 6.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 206.0,
+     "z": 14.0
+    },
+    {
+     "kind": "rusher",
+     "level": 1,
+     "x": 214.0,
+     "z": 14.0
+    }
+   ]
+  },
+  {
+   "id": "a13",
+   "index": 13,
+   "name": "a13 - Branch point",
+   "role": "normal",
+   "origin": {
+    "x": 220.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 44.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a14",
+   "index": 14,
+   "name": "a14 - Upper limb",
+   "role": "normal",
+   "origin": {
+    "x": 240.0,
+    "z": 24.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a15",
+   "index": 15,
+   "name": "a15 - Lower limb",
+   "role": "normal",
+   "origin": {
+    "x": 240.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a16",
+   "index": 16,
+   "name": "a16 - Branch rejoin",
+   "role": "normal",
+   "origin": {
+    "x": 260.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 44.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a17",
+   "index": 17,
+   "name": "a17",
+   "role": "normal",
+   "origin": {
+    "x": 280.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a17_shed",
+    "x": 290.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   }
+  },
+  {
+   "id": "a18",
+   "index": 18,
+   "name": "a18",
+   "role": "boss",
+   "origin": {
+    "x": 300.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "none",
+   "boss": {
+    "id": "a18_boss",
+    "x": 310.0,
+    "z": 10.0,
+    "size": {
+     "w": 3.6,
+     "d": 3.6
+    }
+   }
+  },
+  {
+   "id": "a19",
+   "index": 19,
+   "name": "a19",
+   "role": "normal",
+   "origin": {
+    "x": 320.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a20",
+   "index": 20,
+   "name": "a20 - Branch point",
+   "role": "normal",
+   "origin": {
+    "x": 340.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 44.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a21",
+   "index": 21,
+   "name": "a21 - Upper limb",
+   "role": "normal",
+   "origin": {
+    "x": 360.0,
+    "z": 24.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a22",
+   "index": 22,
+   "name": "a22 - Lower limb",
+   "role": "normal",
+   "origin": {
+    "x": 360.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a23",
+   "index": 23,
+   "name": "a23 - Branch rejoin",
+   "role": "normal",
+   "origin": {
+    "x": 380.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 44.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a24",
+   "index": 24,
+   "name": "a24",
+   "role": "normal",
+   "origin": {
+    "x": 400.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a24_shed",
+    "x": 410.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   }
+  },
+  {
+   "id": "a25",
+   "index": 25,
+   "name": "a25",
+   "role": "normal",
+   "origin": {
+    "x": 420.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a26",
+   "index": 26,
+   "name": "a26",
+   "role": "boss",
+   "origin": {
+    "x": 440.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "none",
+   "boss": {
+    "id": "a26_boss",
+    "x": 450.0,
+    "z": 10.0,
+    "size": {
+     "w": 3.6,
+     "d": 3.6
+    }
+   }
+  },
+  {
+   "id": "a27",
+   "index": 27,
+   "name": "a27",
+   "role": "normal",
+   "origin": {
+    "x": 460.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a27_shed",
+    "x": 470.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   }
+  },
+  {
+   "id": "a28",
+   "index": 28,
+   "name": "a28",
+   "role": "normal",
+   "origin": {
+    "x": 480.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a29",
+   "index": 29,
+   "name": "a29",
+   "role": "normal",
+   "origin": {
+    "x": 500.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "normal"
+  },
+  {
+   "id": "a30",
+   "index": 30,
+   "name": "a30 - Anchorhead's Cargo Hold",
+   "role": "boss+exit",
+   "origin": {
+    "x": 520.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20.0,
+    "d": 20.0
+   },
+   "garrisonDensity": "none",
+   "boss": {
+    "id": "anchorhead",
+    "x": 530.0,
+    "z": 10.0,
+    "size": {
+     "w": 4.0,
+     "d": 4.0
+    }
+   }
+  }
+ ]
+}

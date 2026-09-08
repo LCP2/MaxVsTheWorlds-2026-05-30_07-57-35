@@ -22,9 +22,13 @@ namespace MaxWorlds.Arena
         /// the real level design.</summary>
         public const string World2 = "world2_config";
 
+        /// <summary>World 3 — The Reef (MV-712): 30 areas, a branching gate graph, and the a7-a12
+        /// double-pass loop MV-711's bridges/route engine exists for.</summary>
+        public const string World3 = "world3_config";
+
         /// <summary>Every world, in play order — index 0 is <see cref="World1"/>. What
         /// <see cref="MaxWorlds.Save.SaveSlotData.WorldIndex"/> counts against.</summary>
-        public static readonly string[] Keys = { World1, World2 };
+        public static readonly string[] Keys = { World1, World2, World3 };
 
         /// <summary>How many worlds exist.</summary>
         public static int Count => Keys.Length;
