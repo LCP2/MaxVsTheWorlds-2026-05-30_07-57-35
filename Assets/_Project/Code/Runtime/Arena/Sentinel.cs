@@ -58,7 +58,11 @@ namespace MaxWorlds.Arena
         /// <summary>Empties the registry ONLY — mirrors <see cref="MaxWorlds.Enemies.RobotEnemy.ResetRegistry"/>'s
         /// list-only contract for test isolation. Does not destroy any GameObject; see
         /// <see cref="DestroyAllActive"/> for the real teardown a fresh level or an area crossing needs.</summary>
-        public static void ResetRegistry() => _active.Clear();
+        public static void ResetRegistry()
+        {
+            _active.Clear();
+            _splicedLock = null; // MV-716: test isolation — see the field's own doc comment.
+        }
 
         /// <summary>Player-facing toggle for Attack Mode (MV-636 HUD button, gated on Move/u_mov &gt;= 1
         /// — same visibility gate <see cref="AbilityTuning.SentinelCanMove"/> already answers for the
@@ -91,6 +95,39 @@ namespace MaxWorlds.Arena
                 if (Application.isPlaying) UnityEngine.Object.Destroy(s.gameObject);
                 else UnityEngine.Object.DestroyImmediate(s.gameObject);
             }
+        }
+
+        /// <summary>MV-716: how long a Splicer's completed channel keeps a Sentinel flipped to
+        /// <see cref="Core.Team.Enemy"/> before it reverts to Max's own team at whatever health it
+        /// then has. See <see cref="BeginHijack"/>/<see cref="TickHijack"/>.</summary>
+        public const float HijackSeconds = 12f;
+
+        /// <summary>World-wide "at most one Sentinel spliced at a time" gate (MV-716) — held by the
+        /// target Sentinel from the instant a Splicer's channel begins (<see cref="TryAcquireSpliceLock"/>,
+        /// called by <see cref="MaxWorlds.Enemies.RobotEnemy.TryBeginSpliceChannel"/>) until the hijack
+        /// ends or the channel is cancelled. A single shared slot rather than per-instance state, since
+        /// the cap is world-wide, not per-Sentinel.</summary>
+        private static Sentinel _splicedLock;
+
+        /// <summary>True while any Sentinel, anywhere, is mid-splice-channel or currently hijacked.</summary>
+        public static bool AnySplicedOrChanneling => _splicedLock != null;
+
+        /// <summary>Claims the world-wide splice slot for <paramref name="sentinel"/>. Fails if another
+        /// Sentinel already holds it — the source of AC2's "a second Splicer cannot begin a channel
+        /// while one Sentinel is spliced".</summary>
+        public static bool TryAcquireSpliceLock(Sentinel sentinel)
+        {
+            if (_splicedLock != null) return false;
+            _splicedLock = sentinel;
+            return true;
+        }
+
+        /// <summary>Releases the world-wide splice slot, but only if <paramref name="sentinel"/> is the
+        /// one currently holding it — a stale release (e.g. from a cancelled channel that already lost
+        /// the race) must never clobber a different Sentinel's live lock.</summary>
+        public static void ReleaseSpliceLock(Sentinel sentinel)
+        {
+            if (_splicedLock == sentinel) _splicedLock = null;
         }
 
         private static readonly Color BodyColor = new Color(0.35f, 0.55f, 0.75f); // the primary's blue
@@ -217,7 +254,44 @@ namespace MaxWorlds.Arena
 
         public bool IsAlive => _health != null && _health.IsAlive;
 
-        public Team Team => Team.Player;
+        /// <summary>MV-716: mutable, not a hardcoded constant — a spliced Sentinel flips to
+        /// <see cref="Core.Team.Enemy"/> for <see cref="HijackSeconds"/> (see <see cref="BeginHijack"/>).
+        /// <see cref="Core.Team.Player"/> otherwise, exactly as before this ticket.</summary>
+        private Team _team = Team.Player;
+
+        public Team Team => _team;
+
+        /// <summary>True while this Sentinel is flipped to the enemy team by a completed Splicer channel
+        /// (MV-716).</summary>
+        public bool IsHijacked { get; private set; }
+
+        private float _hijackRemaining;
+
+        /// <summary>Called by <see cref="MaxWorlds.Enemies.RobotEnemy.TickSpliceChannel"/> the instant a
+        /// Splicer's 2.5s channel completes. Flips team and starts the <see cref="HijackSeconds"/>
+        /// countdown; the world-wide splice lock this Sentinel already holds (claimed when the channel
+        /// began) stays held until <see cref="TickHijack"/> lets it go.</summary>
+        public void BeginHijack(float seconds)
+        {
+            _team = Team.Enemy;
+            IsHijacked = true;
+            _hijackRemaining = seconds;
+        }
+
+        /// <summary>Counts the hijack down; reverts to Max's team, at whatever health this Sentinel then
+        /// has, the instant it elapses (AC3). Driven from <see cref="Update"/> in Play mode and directly
+        /// by tests in EditMode, the same split every other per-frame Sentinel behaviour here uses.</summary>
+        public void TickHijack(float deltaTime)
+        {
+            if (!IsHijacked) return;
+            _hijackRemaining -= deltaTime;
+            if (_hijackRemaining <= 0f)
+            {
+                _team = Team.Player;
+                IsHijacked = false;
+                ReleaseSpliceLock(this);
+            }
+        }
 
         public float Normalized => _health?.Normalized ?? 0f;
         public float HealthNormalized => Normalized;
@@ -461,6 +535,7 @@ namespace MaxWorlds.Arena
             if (!IsAlive) return;
             float dt = Time.deltaTime;
             _timeSinceDamage += dt;
+            TickHijack(dt);
 
             float regenPerSec = AbilityTuning.SentinelRegenPerSec(
                 RigState.Level("u_hp"), RigBoard.MaxLevel("u_hp"),
@@ -683,6 +758,7 @@ namespace MaxWorlds.Arena
             // Removing here makes the slot free the instant the sentinel dies, matching "read live
             // off Active, never a separately-tracked balance" above.
             _active.Remove(this);
+            ReleaseSpliceLock(this); // MV-716: a destroyed Sentinel must not leave the world-wide slot stuck held
             Died?.Invoke(this);
             if (Application.isPlaying) Destroy(gameObject);
             else DestroyImmediate(gameObject);

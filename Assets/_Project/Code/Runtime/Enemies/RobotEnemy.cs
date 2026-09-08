@@ -168,6 +168,7 @@ namespace MaxWorlds.Enemies
         {
             _active.Clear();
             _separationGrid.Clear();   // MV-611: test/level-reset hygiene — see SeparationGrid's own doc comment
+            _converted.Clear();        // MV-716: same test/level-reset hygiene for the conversion cap
         }
 
         /// <summary>Scratch buffer for <see cref="EnemySeparation"/>'s neighbour lookup (MV-321) — one
@@ -419,7 +420,13 @@ namespace MaxWorlds.Enemies
         /// of the way".</summary>
         public float LungeRange => lungeRange;
 
-        public Team Team => Team.Enemy;
+        /// <summary>MV-716: mutable, not a hardcoded constant — a converted robot flips to
+        /// <see cref="Core.Team.Player"/> for <see cref="ConvertedDurationSeconds"/> (see
+        /// <see cref="TryConvert"/>). <see cref="Core.Team.Enemy"/> otherwise, exactly as before this
+        /// ticket.</summary>
+        private Team _team = Team.Enemy;
+
+        public Team Team => _team;
 
         /// <summary>Fired on death (spawner decrements its live count). Arg = this enemy.</summary>
         public event Action<RobotEnemy> Died;
@@ -435,6 +442,174 @@ namespace MaxWorlds.Enemies
         /// <summary>The Sentinel currently being engaged, or null while targeting Max (MV-362).</summary>
         private Sentinel _engagedSentinel;
         private float _health;
+
+        // --- MV-716: Splicer (enemy -> Sentinel) ---------------------------------------------------
+
+        /// <summary>How far a Splicer's line-of-sight channel reaches (spec table).</summary>
+        public const float SpliceRange = 10f;
+
+        /// <summary>How long a Splicer's channel takes to complete (spec table).</summary>
+        public const float SpliceChannelSeconds = 2.5f;
+
+        /// <summary>A skin/role on the existing Gunner kind (spec: "not a new kind"), not gated on
+        /// <see cref="Kind"/> here — a Splicer is still Kind == Gunner, this flag is the role stamped on
+        /// top of it. Set by whatever placement path spawns a Splicer; cleared by <see cref="ResetState"/>
+        /// so a pooled robot never inherits the last life's role.</summary>
+        public bool IsSplicer { get; private set; }
+
+        public void MarkAsSplicer() => IsSplicer = true;
+
+        /// <summary>True while this Splicer is mid-channel on a Sentinel.</summary>
+        public bool IsChannelingSplice { get; private set; }
+
+        /// <summary>Seconds elapsed in the current channel — 0 while not channeling.</summary>
+        public float SpliceChannelElapsed { get; private set; }
+
+        private Sentinel _spliceTarget;
+
+        /// <summary>Begins channeling on <paramref name="target"/> — trigger conditions per the spec
+        /// table: this Splicer alive, not already channeling, the target within <see cref="SpliceRange"/>
+        /// and in line of sight, and no Sentinel anywhere already spliced (<see cref="Sentinel.TryAcquireSpliceLock"/>,
+        /// AC2). The lock is claimed here and held through the whole channel + hijack, released only by
+        /// <see cref="CancelSpliceChannel"/> or the Sentinel's own hijack expiry.</summary>
+        public bool TryBeginSpliceChannel(Sentinel target, float distance, bool hasLineOfSight)
+        {
+            if (!IsSplicer || !IsAlive || IsChannelingSplice) return false;
+            if (target == null || !target.IsAlive) return false;
+            if (distance > SpliceRange || !hasLineOfSight) return false;
+            if (!Sentinel.TryAcquireSpliceLock(target)) return false;
+
+            IsChannelingSplice = true;
+            SpliceChannelElapsed = 0f;
+            _spliceTarget = target;
+            return true;
+        }
+
+        /// <summary>Advances the channel. Cancels it (releasing the world-wide lock) the instant this
+        /// Splicer dies, its target dies, or line of sight breaks (spec table's "until" column) — never
+        /// lets a channel silently keep counting toward completion once any of those has happened.
+        /// Completes it into <see cref="Sentinel.BeginHijack"/> once <see cref="SpliceChannelSeconds"/>
+        /// have elapsed.</summary>
+        public void TickSpliceChannel(float deltaTime, bool hasLineOfSight)
+        {
+            if (!IsChannelingSplice) return;
+            if (!IsAlive || _spliceTarget == null || !_spliceTarget.IsAlive || !hasLineOfSight)
+            {
+                CancelSpliceChannel();
+                return;
+            }
+
+            SpliceChannelElapsed += deltaTime;
+            if (SpliceChannelElapsed >= SpliceChannelSeconds)
+            {
+                Sentinel target = _spliceTarget;
+                IsChannelingSplice = false;
+                _spliceTarget = null;
+                target.BeginHijack(Sentinel.HijackSeconds); // world-wide lock stays held, now owned by the hijack
+            }
+        }
+
+        /// <summary>Cancels a channel in progress and releases the world-wide splice lock. A no-op if
+        /// not currently channeling (safe to call unconditionally from <see cref="Die"/>).</summary>
+        public void CancelSpliceChannel()
+        {
+            if (!IsChannelingSplice) return;
+            IsChannelingSplice = false;
+            Sentinel.ReleaseSpliceLock(_spliceTarget);
+            _spliceTarget = null;
+        }
+
+        // --- MV-716: Override (Max -> robot) --------------------------------------------------------
+
+        /// <summary>HP fraction below which this robot exposes an override port (spec: "below 25%").</summary>
+        public const float OverrideHealthThreshold = 0.25f;
+
+        /// <summary>How close a cavitation implosion must land to a port-exposed robot to convert it
+        /// (spec table).</summary>
+        public const float OverrideRadius = 2f;
+
+        /// <summary>How long a converted robot fights for Max before it burns out (spec table).</summary>
+        public const float ConvertedDurationSeconds = 20f;
+
+        /// <summary>The burnout detonation's radius (spec: "a 3 m AoE detonation that damages robots
+        /// only").</summary>
+        public const float BurnoutRadius = 3f;
+
+        private const float BurnoutDamage = 20f;
+
+        /// <summary>Max may have at most this many converted robots at once (spec table); a further
+        /// conversion is refused, and the existing ones are unaffected (AC5).</summary>
+        public const int MaxConvertedRobots = 3;
+
+        private static readonly List<RobotEnemy> _converted = new List<RobotEnemy>(MaxConvertedRobots);
+
+        /// <summary>Every robot currently converted to Max's side, world-wide.</summary>
+        public static IReadOnlyList<RobotEnemy> Converted => _converted;
+
+        private static readonly Collider[] s_burnoutHits = new Collider[16];
+
+        /// <summary>True while this robot is alive, not already converted, and below
+        /// <see cref="OverrideHealthThreshold"/> HP — the "port exposed" condition a cavitation
+        /// implosion's distance check (see <see cref="MaxWorlds.Weapons.CavitationImplosion"/>) gates
+        /// <see cref="TryConvert"/> behind.</summary>
+        public bool IsPortExposed => IsAlive && !IsConverted && HealthNormalized < OverrideHealthThreshold;
+
+        /// <summary>True while this robot is converted to Max's side.</summary>
+        public bool IsConverted { get; private set; }
+
+        private float _convertedElapsed;
+
+        /// <summary>Attempts to convert this robot (spec: joins Max, cyan trim, fights other robots,
+        /// ignores Max, for <see cref="ConvertedDurationSeconds"/>). Refused if not port-exposed
+        /// (<see cref="IsPortExposed"/> — the caller is responsible for the distance-to-implosion half of
+        /// the trigger condition, see <see cref="MaxWorlds.Weapons.CavitationImplosion"/>) or if Max
+        /// already has <see cref="MaxConvertedRobots"/> converted (AC5) — the existing ones are left
+        /// untouched, never evicted for a newer one.</summary>
+        public bool TryConvert()
+        {
+            if (!IsPortExposed) return false;
+            if (_converted.Count >= MaxConvertedRobots) return false;
+
+            IsConverted = true;
+            _convertedElapsed = 0f;
+            _team = Team.Player;
+            _converted.Add(this);
+            return true;
+        }
+
+        /// <summary>Counts a converted robot toward its burnout. Driven from <see cref="Update"/> in Play
+        /// mode and directly by tests in EditMode.</summary>
+        public void TickConversion(float deltaTime)
+        {
+            if (!IsConverted) return;
+            _convertedElapsed += deltaTime;
+            if (_convertedElapsed >= ConvertedDurationSeconds) Burnout();
+        }
+
+        /// <summary>The end of a converted robot's borrowed time (spec: "burns out — a 3 m AoE
+        /// detonation that damages robots only"). Queries <see cref="RobotEnemy"/> components
+        /// specifically, not <see cref="IDamageable"/> in general, so Max and any Sentinel in range are
+        /// excluded by TYPE regardless of team state (AC6) rather than relying on <see cref="DamageRules"/>
+        /// alone. The attacking team is <see cref="Team.Player"/> — this robot's own team right up until
+        /// this call — so <see cref="TakeDamage"/>'s existing friendly-fire gate on each receiver still
+        /// rejects any OTHER currently-converted robot nearby, exactly as it would reject Max hitting his
+        /// own Sentinel.</summary>
+        private void Burnout()
+        {
+            Vector3 point = transform.position;
+            int count = Physics.OverlapSphereNonAlloc(point, BurnoutRadius, s_burnoutHits, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < count; i++)
+            {
+                if (s_burnoutHits[i] == null) continue;
+                if (!s_burnoutHits[i].TryGetComponent<RobotEnemy>(out var robot) || robot == this || !robot.IsAlive) continue;
+                robot.TakeDamage(new DamageInfo(BurnoutDamage, point, Vector3.up, Team.Player, source: DamageSource.Ability));
+            }
+
+            _converted.Remove(this);
+            IsConverted = false;
+            Die(Vector3.up);
+        }
+
         private float _stateTimer;
         private float _verticalVel;
         private Vector3 _lungeDir;
@@ -824,6 +999,15 @@ namespace MaxWorlds.Enemies
             _lurkerPhaseElapsed = LurkerCycle.CooldownDuration;
             _lurkerHitsThisEmergence = 0;
             _lurkerAwake = false;
+            // MV-716: a pooled robot must not carry the last life's Splicer role, mid-channel state, or
+            // conversion forward — CancelSpliceChannel releases the world-wide lock first (a no-op if not
+            // channeling), and a converted robot's slot is freed rather than left stuck occupied.
+            CancelSpliceChannel();
+            IsSplicer = false;
+            if (IsConverted) _converted.Remove(this);
+            IsConverted = false;
+            _convertedElapsed = 0f;
+            _team = Team.Enemy;
             AcquireTarget();
             SetTell(idleTell);
         }
@@ -1993,6 +2177,14 @@ namespace MaxWorlds.Enemies
             // MV-428: death mid-Telegraph/Lunge must not leak the attack token — nothing else on
             // this path ever visits Recover to release it.
             if (_holdsAttackToken) { LungeTokenPool.Release(); _holdsAttackToken = false; }
+            // MV-716: a Splicer killed mid-channel must cancel it (releasing the world-wide splice lock)
+            // rather than let TickSpliceChannel discover it next tick — AC1's "killing the Splicer at
+            // 2.0s leaves the Sentinel on Max's team" needs this to take effect the instant death lands,
+            // not on the next tick that may never come once this robot is deactivated below. A robot
+            // that dies while converted (e.g. to lethal burnout AoE from another conversion) frees its
+            // slot the same way.
+            if (IsChannelingSplice) CancelSpliceChannel();
+            if (IsConverted) { _converted.Remove(this); IsConverted = false; }
             Current = State.Dead;
             // Kill → HUD converts to XP + a SPARKS pickup and advances arena/boss (YT-30).
             // The death VFX also hangs off this signal (CombatVfx, YT-48).

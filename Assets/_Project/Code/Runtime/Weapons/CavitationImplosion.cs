@@ -26,6 +26,20 @@ namespace MaxWorlds.Weapons
             for (int i = 0; i < count; i++)
             {
                 if (s_hits[i] == null) continue;
+                bool isRobot = s_hits[i].TryGetComponent<RobotEnemy>(out var robot);
+
+                // MV-716 Override: a port-exposed robot (below 25% HP) within OverrideRadius of the
+                // implosion converts to Max's side INSTEAD of taking this same shot's damage — the whole
+                // point is to flip a critically-damaged robot rather than finish it off, so a successful
+                // conversion skips the ordinary damage/pull/stagger path below entirely. TryConvert
+                // itself gates on health/cap; only the distance half of the trigger is checked here,
+                // since only the caller knows the implosion point.
+                if (isRobot && Vector3.Distance(point, robot.transform.position) <= RobotEnemy.OverrideRadius &&
+                    robot.TryConvert())
+                {
+                    continue;
+                }
+
                 if (!s_hits[i].TryGetComponent<IDamageable>(out var d) || !d.IsAlive) continue;
                 if (!DamageRules.Applies(Team.Player, d.Team)) continue;
 
@@ -33,7 +47,7 @@ namespace MaxWorlds.Weapons
 
                 // Grouping, not the kill (spec) — the pull/stagger only exists for robots, not gates or
                 // other non-RobotEnemy damageables.
-                if (s_hits[i].TryGetComponent<RobotEnemy>(out var robot))
+                if (isRobot)
                 {
                     robot.ApplyPull(point, pullDistance);
                     robot.Stun(staggerSeconds);
