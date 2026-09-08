@@ -145,7 +145,7 @@ namespace MaxWorlds.Arena
                         return false;
                     }
 
-                    if (hole.Length < MinDoorway)
+                    if (hole.Length < MinDoorway - Geo.Epsilon)
                     {
                         reason = $"the doorway between '{link.from}' and '{link.to}' is {hole.Length:0.#} m — " +
                                  $"under {MinDoorway} m Max and the swarm cannot both get through";
