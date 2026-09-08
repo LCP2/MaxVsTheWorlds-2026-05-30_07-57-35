@@ -2,6 +2,7 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
 using UnityEngine.InputSystem.UI;
+using UnityEngine.SceneManagement;
 using MaxWorlds.Core;
 using MaxWorlds.Dev;
 using MaxWorlds.Intro;
@@ -56,7 +57,12 @@ namespace MaxWorlds.UI
         }
 
         private const float RefW = 1920f, RefH = 1080f;
-        private const float RowHeight = 190f;
+        // MV-726: +38 over the original 190 for the WORLD 2 button's own bottom strip. label/status/
+        // RESET keep their original offsets from the row's TOP edge (unaffected); RESUME/PLAY are
+        // anchored to the row's vertical CENTER, which shifts down by half the increase — the button's
+        // own Y (see BuildSlotRow) is chosen to clear both, worst case (the RESUME-present row's PLAY,
+        // the lowest existing element) by 7px, verified against RowHeight below rather than eyeballed.
+        private const float RowHeight = 228f;
         private const float RowGap = 20f;
 
         // Near-opaque so this reads as its own dedicated screen, not a thin overlay on the live
@@ -173,13 +179,11 @@ namespace MaxWorlds.UI
 
         // ------------------------------------------------------------------ actions
 
-        /// <summary>Picking a profile: create it if this is the first time (YT-218 — its identity
-        /// and personal best, seeded once, never reset by a later play), then drop the player into a
-        /// fresh run. MV-524: PLAY always clears any checkpoint the slot was carrying
-        /// (<see cref="SaveSystem.ClearCheckpoint"/>) — RESUME is the only path that restores one (see
-        /// <see cref="OnResume"/>). Returns true if this pick started <see cref="IntroCinematic"/>
-        /// (MV-550) — the caller uses that to decide who marks <c>BootTiming</c>'s "controllable".</summary>
-        private bool StartSlot(int slot, bool playIntro)
+        /// <summary>The fresh-run wipe both <see cref="StartSlot"/> (PLAY) and
+        /// <see cref="StartSlotWorld2"/> (the WORLD 2 dev entry point, MV-726) share verbatim — factored
+        /// out so the two can never drift apart (MV-726 AC4). World/primary seeding is the only
+        /// difference between the two callers, and stays in each caller, not here.</summary>
+        private static void WipeForFreshRun(int slot)
         {
             SaveSystem.ActiveSlot = slot;
             SaveSystem.EnsureProfile(slot);
@@ -199,10 +203,45 @@ namespace MaxWorlds.UI
             // otherwise a profile that died in Area 3 last run would find Area 3's part permanently
             // ungrantable on its next, unrelated run.
             MaxWorlds.Arena.DeathRunState.Reset();
+        }
+
+        /// <summary>Picking a profile: create it if this is the first time (YT-218 — its identity
+        /// and personal best, seeded once, never reset by a later play), then drop the player into a
+        /// fresh run. MV-524: PLAY always clears any checkpoint the slot was carrying
+        /// (<see cref="SaveSystem.ClearCheckpoint"/>) — RESUME is the only path that restores one (see
+        /// <see cref="OnResume"/>). Returns true if this pick started <see cref="IntroCinematic"/>
+        /// (MV-550) — the caller uses that to decide who marks <c>BootTiming</c>'s "controllable".</summary>
+        private bool StartSlot(int slot, bool playIntro)
+        {
+            WipeForFreshRun(slot);
             // force: true — MV-550's derived first-launch gate (or a manual IntroCinematic.Enabled
             // override, see ShouldPlayIntroOnFirstLaunch's caller) decides playIntro; TryPlay must not
             // re-apply its own Enabled check on top of that decision.
             return playIntro && IntroCinematic.TryPlay(force: true);
+        }
+
+        /// <summary>WORLD 2 dev entry point (MV-726): reaching World 2 legitimately means clearing all
+        /// 30 areas of World 1 and collecting the Weapon Core, which makes World 2 untestable in
+        /// practice — this is one extra, unflagged entry point onto the same machinery, not new
+        /// machinery. Runs the same wipe PLAY does, then seeds a fresh Stormdrain run directly: World 2,
+        /// the LPPE primary, no Weapon Core pending. The SECONDARY column is left exactly as a real
+        /// Weapon Core morph leaves it — reached but mystery-locked, nothing owned
+        /// (<see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>, the same call THE RIG's own morph
+        /// ceremony makes) — rather than hand-rolling that RigBoard/RigState transition a second time.
+        /// Public static and side-effect-pure of any UI so an EditMode test can invoke it directly with
+        /// no scene/GameObject involved. Never plays <see cref="IntroCinematic"/> — this is a
+        /// development shortcut, not a first launch.</summary>
+        public static void StartSlotWorld2(int slot)
+        {
+            WipeForFreshRun(slot);
+
+            SaveSlotData data = SaveSystem.Load(slot);
+            data.WorldIndex = 1;
+            data.PrimaryKind = WeaponCatalog.PrimaryKind.Lppe;
+            data.WeaponCorePending = false;
+            SaveSystem.Save(slot, data);
+
+            WeaponSystemState.ApplyWeaponCoreMorph(1);
         }
 
         /// <summary>MV-550's derived first-launch gate: true only when every save slot is empty
@@ -228,6 +267,22 @@ namespace MaxWorlds.UI
             bool playIntro = IntroCinematic.Enabled || ShouldPlayIntroOnFirstLaunch();
             bool introStarted = StartSlot(slot, playIntro);
             Close(introStarted);
+        }
+
+        /// <summary>WORLD 2 tapped (MV-726). Unlike PLAY/RESUME, the arena for the freshly-seeded
+        /// world was never built — <see cref="MaxWorlds.Arena.BackyardPath"/> only resolves
+        /// <see cref="SaveSlotData.WorldIndex"/> on its own <c>Awake</c>, which already ran once at
+        /// boot, same as <see cref="MaxWorlds.UI.RunFlow.StartNextWorld"/> after a Victory — so this
+        /// reloads the scene the same way, letting that next <c>Awake</c> pick up the WorldIndex just
+        /// saved. <see cref="SaveSystem.ActiveSlot"/> is already set by the time the reload's own
+        /// <see cref="Start"/> runs, which is what stops Home reopening on it (same guard the
+        /// Replay-triggered reload relies on).</summary>
+        private void OnWorld2(int slot)
+        {
+            StartSlotWorld2(slot);
+            Time.timeScale = 1f;
+            Scene scene = SceneManager.GetActiveScene();
+            SceneManager.LoadScene(scene.buildIndex);
         }
 
         /// <summary>RESUME tapped on a slot carrying a checkpoint (MV-524 part 3) — restores it and
@@ -405,6 +460,20 @@ namespace MaxWorlds.UI
             Anchor(resetBtn, new Vector2(1f, 1f), new Vector2(1f, 1f), new Vector2(1f, 1f));
             resetBtn.sizeDelta = new Vector2(140f, 40f);
             resetBtn.anchoredPosition = new Vector2(-18f, -14f);
+
+            // WORLD 2 dev entry point (MV-726): visible on every slot, occupied or empty — an empty
+            // slot gets its profile created the same way PLAY does. CardRim, not Max's own orange, so
+            // it reads as secondary to PLAY. Top-anchored at a fixed offset (not RowHeight-relative)
+            // so its position is independent of the center-anchored RESUME/PLAY buttons above it: at
+            // y=-184 (row's own rect, inset -3px by the Stretch above, so effective height 222) it
+            // clears status's bottom edge (-166) by 18px, and clears the RESUME-row PLAY button's
+            // bottom edge (-177, the lowest existing element, itself derived from that row's vertical
+            // center at RowHeight=228) by 7px. Its own bottom edge lands at -214, 8px clear of the
+            // row's own bottom (-222) — every margin here is a computed clearance, not eyeballed.
+            var world2Btn = AddButton(row.rectTransform, "WORLD 2", CardRim, true, () => OnWorld2(slot));
+            Anchor(world2Btn, new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0.5f, 1f));
+            world2Btn.sizeDelta = new Vector2(300f, 30f);
+            world2Btn.anchoredPosition = new Vector2(0f, -184f);
         }
 
         /// <summary>The RESET confirm/cancel dialog (MV-282) — a full-screen raycast-blocking scrim
