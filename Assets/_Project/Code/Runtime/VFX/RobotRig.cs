@@ -118,6 +118,20 @@ namespace MaxWorlds.VFX
                  "in a pack does not flash the whole pack.")]
         [SerializeField] private float flashRadius = 1.0f;
 
+        [Header("Strike (MV-723)")]
+        [Tooltip("How far the whole body pulls back through the wind-up, in metres — the anticipation " +
+                 "before a contact-damaging kind's strike lands. Scales with TelegraphProgress, so it " +
+                 "builds smoothly across the dodge window instead of snapping in.")]
+        [SerializeField] private float strikeWindupPullback = 0.10f;
+
+        [Tooltip("How far the whole body punches forward the instant Lunge begins (MV-723) — landing " +
+                 "the same frame RobotEnemy.TryContactDamage lands its hit, then easing back to rest.")]
+        [SerializeField] private float strikePunchDistance = 0.22f;
+
+        [Tooltip("How fast the strike punch eases back to rest, in punch-units/second. Linear, not " +
+                 "exponential, so the body actually reaches rest (0) rather than approaching it forever.")]
+        [SerializeField] private float strikePunchDecay = 5f;
+
         // ---------------------------------------------------------------- state
 
         private RobotEnemy _enemy;
@@ -148,6 +162,16 @@ namespace MaxWorlds.VFX
         private Transform[] _wheels;
         private float[] _wheelRadius;
         private Vector3 _lastPos;
+
+        /// <summary>0..1, 1 the instant a fresh Lunge begins, decaying to 0 (MV-723) — the punch half of
+        /// <see cref="UpdateStrike"/>. Tracked here, not on <see cref="RobotEnemy"/>: the rig reads
+        /// gameplay state, it never adds any of its own.</summary>
+        private float _strikePunch;
+
+        /// <summary>The last <see cref="RobotEnemy.Current"/> seen (MV-723) — comparing against it is
+        /// how <see cref="UpdateStrike"/> tells a fresh entry into Lunge from every other tick already
+        /// inside it, so the punch fires exactly once per attack rather than re-triggering every frame.</summary>
+        private RobotEnemy.State _lastState = RobotEnemy.State.Chase;
 
         /// <summary>The Gunner's laser (MV-312) — built lazily, and only ever for that one kind; see
         /// <see cref="UpdateBeamVfx"/>.</summary>
@@ -197,6 +221,17 @@ namespace MaxWorlds.VFX
             // Reset the odometer, or a pooled robot respawning across the map spins its wheels
             // through a full revolution on its first frame (MV-451).
             _lastPos = transform.position;
+
+            // MV-723: a pooled robot must not carry the last life's strike offset forward — without
+            // this a body reused mid-punch would spawn back in already lurched off its rest pose.
+            _strikePunch = 0f;
+            _lastState = _enemy != null ? _enemy.Current : RobotEnemy.State.Chase;
+            if (_model != null)
+            {
+                Vector3 p = _model.localPosition;
+                p.z = 0f;
+                _model.localPosition = p;
+            }
         }
 
         private void OnDisable()
@@ -329,6 +364,8 @@ namespace MaxWorlds.VFX
 
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
+
+            UpdateStrike(dt);
 
             if (_flash > 0f) _flash = Mathf.Max(0f, _flash - flashDecay * dt);
 
@@ -476,6 +513,63 @@ namespace MaxWorlds.VFX
             p.y = Mathf.MoveTowards(p.y, local, 3.5f * Mathf.Max(Time.deltaTime, 1e-4f));
             _model.localPosition = p;
         }
+
+        /// <summary>
+        /// A visible strike on the body itself (MV-723) — Lee's device note was that a melee robot's
+        /// contact damage lands with nothing showing where it came from. <see cref="RobotEnemy.TelegraphProgress"/>
+        /// pulls the whole model back through the wind-up (the dodge-window tell, made physical, not
+        /// just the eye's colour), and the instant <see cref="RobotEnemy.State.Lunge"/> begins the model
+        /// punches forward and eases back to rest — landing the same frame <c>TryContactDamage</c> lands
+        /// its hit, so the two read as one event.
+        ///
+        /// Cosmetic only, same "reads gameplay, writes none of it" contract as the eye tell and
+        /// <see cref="BigBermudaRig.SpawnWindup01"/>: this offsets <see cref="_model"/>, never the
+        /// robot's own transform or its <see cref="CharacterController"/>, so it can never feed back
+        /// into steering, collision or the state machine.
+        ///
+        /// A short forward lurch of the whole body was the shape picked (not a swung appendage): it is
+        /// the one motion every kind's differently-shaped body can carry identically, with no per-kind
+        /// rig work needed as the roster grows.
+        ///
+        /// Takes an explicit <paramref name="dt"/> rather than reading <see cref="Time.deltaTime"/>
+        /// itself, so a test can drive it tick-by-tick without depending on the editor's real clock —
+        /// same idiom <see cref="RobotEnemy"/>'s own Tick* methods already use.
+        /// </summary>
+        private void UpdateStrike(float dt)
+        {
+            if (_model == null) return;
+
+            bool strikes = StrikesOnLunge(_enemy.Kind);
+            RobotEnemy.State current = _enemy.Current;
+
+            // The instant Lunge begins — not a re-entry through Recover/Chase later — punch to full
+            // extension. Comparing against the last-seen state is what catches only the transition.
+            if (strikes && current == RobotEnemy.State.Lunge && _lastState != RobotEnemy.State.Lunge)
+                _strikePunch = 1f;
+            _lastState = current;
+
+            if (_strikePunch > 0f) _strikePunch = Mathf.Max(0f, _strikePunch - strikePunchDecay * dt);
+
+            // TelegraphProgress is already 0 outside State.Telegraph (its own getter's guard), so the
+            // pull-back naturally clears the instant the wind-up ends without this needing its own gate.
+            float pullback = strikes ? -strikeWindupPullback * _enemy.TelegraphProgress : 0f;
+            float punch = strikes ? strikePunchDistance * _strikePunch : 0f;
+
+            Vector3 p = _model.localPosition;
+            p.z = pullback + punch;
+            _model.localPosition = p;
+        }
+
+        /// <summary>Whether <paramref name="kind"/> commits its Lunge as a physical hit on Max, rather
+        /// than a ranged payoff (MV-723). Gunner/Launcher/Bolter/Turret all reach
+        /// <see cref="RobotEnemy.State.Lunge"/> too, but land their damage as a beam or a projectile —
+        /// animating a body strike on a kind that never actually touches Max would read as a lie. Every
+        /// kind that never reaches Lunge at all (Bruiser/Heavy/Brute/Sludger's touch-damage, a Lurker's
+        /// submerged cycle) is excluded already by that fact alone; this only needs to filter the ones
+        /// that DO reach Lunge but shouldn't strike.</summary>
+        private static bool StrikesOnLunge(EnemyKind kind) =>
+            kind != EnemyKind.Gunner && kind != EnemyKind.Launcher &&
+            kind != EnemyKind.Bolter && kind != EnemyKind.Turret;
 
         /// <summary>
         /// The Gunner's laser, drawn (MV-312) — before this, <see cref="BeamGeometry"/> and
