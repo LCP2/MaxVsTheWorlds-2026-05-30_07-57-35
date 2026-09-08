@@ -3,6 +3,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.TestTools;
 using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Tests.EditMode
@@ -26,16 +27,21 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class WeaponPartArtTests
     {
         [Test]
-        public void PowerCellCasing_IsTintedTheCellsOwnCyan()
+        public void PowerCellNutWalls_AreTintedTheCellsOwnCyan()
         {
+            // MV-725: the battery capsule's "Casing" is gone — the currency is now a hex nut built from
+            // six wall panels (WeaponPartArt.BuildPowerCell's Wall0..Wall5).
             var root = WeaponPartArt.BuildPowerCell();
-            var casing = root.transform.Find("Casing");
-            Assert.IsNotNull(casing, "the power cell prop has no Casing.");
-
-            var mr = casing.GetComponent<MeshRenderer>();
             var expected = MaterialLibrary.Tinted(SurfaceKind.Metal, WeaponPartArt.CellCyan);
-            Assert.AreSame(expected, mr.sharedMaterial,
-                "the power cell casing isn't tinted the cell's own cyan — it'll read drab next to the core band.");
+
+            for (int i = 0; i < 6; i++)
+            {
+                var wall = root.transform.Find($"Wall{i}");
+                Assert.IsNotNull(wall, $"the power cell nut has no Wall{i}.");
+                var mr = wall.GetComponent<MeshRenderer>();
+                Assert.AreSame(expected, mr.sharedMaterial,
+                    $"Wall{i} isn't tinted the cell's own cyan — the currency colour must stay cyan (MV-725).");
+            }
 
             Object.DestroyImmediate(root);
         }
@@ -70,6 +76,11 @@ namespace MaxWorlds.Tests.EditMode
                     Assert.That(shader,
                         Does.StartWith("Universal Render Pipeline").Or.StartWith("MaxWorlds").Or.StartWith("Sprites"),
                         $"'{key}/{r.name}' wears '{shader}' — a default-material primitive is magenta in the build.");
+
+                    // MV-725 AC2 — every renderer needs a real mesh too, not just a material; a
+                    // MeshRenderer with no MeshFilter mesh draws nothing regardless of material.
+                    var mf = r.GetComponent<MeshFilter>();
+                    Assert.IsNotNull(mf?.sharedMesh, $"'{key}/{r.name}' has no mesh — it draws nothing.");
                 }
 
                 Assert.IsEmpty(_built.GetComponentsInChildren<Collider>(),
@@ -162,13 +173,15 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         [Test]
-        public void ThePowerCell_CarriesSpecularGlintsOnItsCasing()
+        public void ThePowerCell_CarriesSpecularGlintsOnItsNutWalls()
         {
             // YT-167, extended WV-236: the soft additive Core band (YT-145) is the aura, not the glisten —
             // Lee's playtest still read the shipped cell as flat because a halo isn't a specular
             // highlight, and "shine and glisten like DIAMONDS" (WV-236) means several facets, not one
             // pair. Pin that the cell wears four distinct glint dots, separate from the Core, so this
-            // can't regress back to "just the aura" — or back to two facets — quietly.
+            // can't regress back to "just the aura" — or back to two facets — quietly. MV-725 moved these
+            // from the old battery casing onto the new hex-nut walls; the count/positions-differ contract
+            // is unchanged.
             _built = WeaponPartArt.Build(WeaponPartArt.Keys.PowerCell);
 
             var glints = new Transform[4];
@@ -223,6 +236,15 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(sprite.texture.width, 0, "the icon has no pixels.");
             // Cached: a second call hands back the same sprite, not a fresh texture every HUD tick.
             Assert.AreSame(sprite, WeaponHudIcons.PowerCell(), "the icon is not cached — it rebuilds every call.");
+
+            // MV-725 AC1 — HudController.BuildPowerCellCounter asks for 64; WeaponsScreen's cost icon
+            // asks for RigBoardLayout.CostIconSize/CostIconSizePhone (22/40). Every call site's size must
+            // resolve to a real sprite too, not just the default-argument size above.
+            Assert.IsNotNull(WeaponHudIcons.PowerCell(64), "the HUD counter's 64px icon failed to resolve.");
+            Assert.IsNotNull(WeaponHudIcons.PowerCell(Mathf.RoundToInt(RigBoardLayout.CostIconSize)),
+                "WeaponsScreen's desktop cost-icon size failed to resolve.");
+            Assert.IsNotNull(WeaponHudIcons.PowerCell(Mathf.RoundToInt(RigBoardLayout.CostIconSizePhone)),
+                "WeaponsScreen's phone cost-icon size failed to resolve.");
         }
 
         [Test]
@@ -254,6 +276,65 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.AreEqual(6, sideDirections.Length,
                 $"the facet mesh has {sideDirections.Length} distinct side directions, not six — it still reads round, not hexagonal.");
+        }
+
+        [Test]
+        public void PowerCellReadsAsAHexNutAndBolt_DistinctFromTheGearCog_WithPickupKindUnchanged()
+        {
+            // MV-725 — the currency renamed "Cells" to "Parts" (MV-671) but the art still drew a
+            // battery. Pins the fix (a hex nut with a bolt actually running through it) and its two
+            // guardrails: the new shape must not collide with WeaponPartArt.Keys.Gear's cosmetic cog
+            // silhouette, and the gameplay-facing PickupKind enum must be untouched by an art-only ticket.
+            var cell = WeaponPartArt.Build(WeaponPartArt.Keys.PowerCell);
+            var gear = WeaponPartArt.Build(WeaponPartArt.Keys.Gear);
+
+            // The bolt has to actually go THROUGH the nut: its resolved world bounds must clear the nut
+            // walls' bounds on both the top and the bottom, not just sit flush inside them.
+            var shaft = cell.transform.Find("BoltShaft");
+            Assert.IsNotNull(shaft, "the power cell has no BoltShaft — it doesn't read as a bolt through a nut.");
+            // Seeded from Wall0's own bounds, not a zero-size Bounds at the root's (0,0,0) position — the
+            // latter would silently union in the origin point and drag wallBounds.min.y down to 0
+            // regardless of where the walls actually start.
+            var wall0 = cell.transform.Find("Wall0");
+            Assert.IsNotNull(wall0, "the power cell nut has no Wall0.");
+            var wallBounds = wall0.GetComponent<MeshRenderer>().bounds;
+            for (int i = 1; i < 6; i++)
+            {
+                var wall = cell.transform.Find($"Wall{i}");
+                Assert.IsNotNull(wall, $"the power cell nut has no Wall{i}.");
+                wallBounds.Encapsulate(wall.GetComponent<MeshRenderer>().bounds);
+            }
+            var shaftBounds = shaft.GetComponent<MeshRenderer>().bounds;
+            Assert.Greater(shaftBounds.max.y, wallBounds.max.y,
+                "the bolt shaft doesn't protrude above the nut — it doesn't read as passing through it.");
+            Assert.Less(shaftBounds.min.y, wallBounds.min.y,
+                "the bolt shaft doesn't protrude below the nut — it doesn't read as passing through it.");
+
+            // AC3 — the Part pickup and the Keys.Gear cosmetic drop must not share a silhouette: compare
+            // renderer count and overall bounds aspect, the same "signature" idiom
+            // TheFiveParts_AreDistinctSilhouettes above already uses for exactly this kind of comparison.
+            var cellRenderers = cell.GetComponentsInChildren<MeshRenderer>();
+            var gearRenderers = gear.GetComponentsInChildren<MeshRenderer>();
+            var cellBounds = cellRenderers[0].bounds;
+            for (int i = 1; i < cellRenderers.Length; i++) cellBounds.Encapsulate(cellRenderers[i].bounds);
+            var gearBounds = gearRenderers[0].bounds;
+            for (int i = 1; i < gearRenderers.Length; i++) gearBounds.Encapsulate(gearRenderers[i].bounds);
+
+            bool sameCount = cellRenderers.Length == gearRenderers.Length;
+            bool sameAspect = Mathf.Approximately(
+                Mathf.Round(cellBounds.size.x / Mathf.Max(cellBounds.size.y, 0.01f) * 4f),
+                Mathf.Round(gearBounds.size.x / Mathf.Max(gearBounds.size.y, 0.01f) * 4f));
+            Assert.IsFalse(sameCount && sameAspect,
+                "the Part pickup and the Gear cosmetic drop share a renderer-count-and-aspect signature — " +
+                $"cell: {cellRenderers.Length} renderers, {cellBounds.size:F2}; gear: {gearRenderers.Length} renderers, {gearBounds.size:F2}.");
+
+            // AC4 — this is an art-only ticket; PickupKind must not have gained/lost/reordered a member.
+            var expectedKinds = new[] { "PowerCell", "Supercell", "Device", "PowerCellSecondary", "WeaponCore" };
+            CollectionAssert.AreEqual(expectedKinds, System.Enum.GetNames(typeof(MaxWorlds.Pickups.PickupKind)),
+                "PickupKind's members or their order changed — MV-725 is art-only, the enum must be untouched.");
+
+            Object.DestroyImmediate(cell);
+            Object.DestroyImmediate(gear);
         }
 
         [Test]
