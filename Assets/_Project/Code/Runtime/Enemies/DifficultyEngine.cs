@@ -50,6 +50,11 @@ namespace MaxWorlds.Enemies
             /// <see cref="Bolter"/> (no dial ever unlocks it in <see cref="SolveComposition"/>).</summary>
             public readonly int Lurker;
 
+            /// <summary>MV-691/MV-700: the Pipe Turret — same "authored-composition only" footing as
+            /// <see cref="Bolter"/>/<see cref="Lurker"/> (no dial ever unlocks it in
+            /// <see cref="SolveComposition"/>).</summary>
+            public readonly int Turret;
+
             /// <summary>MV-705: the Sludge Drone — same "authored-composition only" footing as
             /// <see cref="Bolter"/>/<see cref="Lurker"/> (no dial ever unlocks it in
             /// <see cref="SolveComposition"/>). Its own split-on-death Rushers are never counted here —
@@ -63,16 +68,16 @@ namespace MaxWorlds.Enemies
 
             public Composition(int rusher, int bruiser, int heavy, int brute,
                 int gunner = 0, int launcher = 0, int blinker = 0, int bolter = 0, int lurker = 0,
-                int sludger = 0, int charger = 0)
+                int sludger = 0, int charger = 0, int turret = 0)
             {
                 Rusher = rusher; Bruiser = bruiser; Heavy = heavy; Brute = brute;
                 Gunner = gunner; Launcher = launcher; Blinker = blinker; Bolter = bolter; Lurker = lurker;
-                Sludger = sludger; Charger = charger;
+                Sludger = sludger; Charger = charger; Turret = turret;
             }
 
             public int TotalCount =>
                 Rusher + Bruiser + Heavy + Brute + Gunner + Launcher + Blinker + Bolter + Lurker +
-                Sludger + Charger;
+                Sludger + Charger + Turret;
 
             /// <summary>Robots this composition counts as "large" for economy purposes (MV-375) —
             /// matches <see cref="MaxWorlds.Enemies.EnemyArchetype.IsLarge"/>: everything except the
@@ -85,7 +90,7 @@ namespace MaxWorlds.Enemies
                 Gunner * ThreatValues.Gunner + Launcher * ThreatValues.Launcher +
                 Blinker * ThreatValues.Blinker + Bolter * ThreatValues.Bolter +
                 Lurker * ThreatValues.Lurker + Sludger * ThreatValues.Sludger +
-                Charger * ThreatValues.Charger;
+                Charger * ThreatValues.Charger + Turret * ThreatValues.Turret;
 
             /// <summary>Heavy+Brute's realised share [0,1] of this composition's Σ THV — what
             /// actually landed, for comparing against <see cref="ToughnessCurve.TankShareForArea"/>'s

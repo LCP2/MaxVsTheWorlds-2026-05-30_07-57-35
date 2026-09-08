@@ -18,8 +18,7 @@ namespace MaxWorlds.Arena
         /// <summary>World 1 — Backyard, LOCKED v1 (2026-08-05), the 0.6 milestone's playable world.</summary>
         public const string World1 = "world1_config";
 
-        /// <summary>World 2 — Stormdrain (MV-687). Ships as a placeholder config until MV-700 lands
-        /// the real level design.</summary>
+        /// <summary>World 2 — Stormdrain (MV-687). MV-700 landed the real 23-area level design.</summary>
         public const string World2 = "world2_config";
 
         /// <summary>Every world, in play order — index 0 is <see cref="World1"/>. What
