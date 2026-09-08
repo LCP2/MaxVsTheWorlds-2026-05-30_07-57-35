@@ -11,6 +11,10 @@ namespace MaxWorlds.Tests.EditMode
     /// to the mystery-locked Shoulder Rack (fully reset, <see cref="RigState.SecondaryLocked"/> true),
     /// leave ENERGY/MOVE untouched, and flip <see cref="WeaponSystemState.ActivePrimary"/> to the LPPE.
     ///
+    /// MV-727 updated this test's SECONDARY assertions: the morph used to unlock SECONDARY outright
+    /// (s_rkt immediately cell-buyable, no shed draft needed); it now leaves SECONDARY LOCKED too —
+    /// only <c>MaxWorlds.Pickups.PickupDirector</c>'s Rack Module collection can open it.
+    ///
     /// Note on the ticket's own "s_bal L2": <c>s_bal</c>'s own <c>maxLevel</c> is 1 (world-1's board,
     /// unrelated to this ticket) — L2 isn't reachable through any real spend, so this drafts s_bal to its
     /// actual cap (L1, fully owned) instead; the morph's discard behaviour this AC exists to prove is
@@ -73,10 +77,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(0, RigState.Level("p_frk"));
             Assert.IsTrue(RigState.IsCategoryUnlocked("PRIMARY"));
 
-            // SECONDARY: fully reset to the Shoulder Rack, mystery-locked until s_rkt is bought.
+            // SECONDARY: fully reset to the Shoulder Rack, and LOCKED (MV-727 reverses MV-694's
+            // immediately-buyable shape) -- it only opens once the player finds World 2's Rack Module
+            // pickup (MaxWorlds.Pickups.PickupDirector), not the instant the morph lands.
             Assert.AreEqual(0, RigState.Level("s_rkt"), "s_bal's old investment must be discarded, not carried onto s_rkt");
             Assert.IsTrue(RigState.SecondaryLocked, "SECONDARY must read as the mystery '?' immediately after the morph");
-            Assert.IsTrue(RigState.IsCategoryUnlocked("SECONDARY"), "s_rkt must be immediately buyable, no shed draft needed");
+            Assert.IsFalse(RigState.IsCategoryUnlocked("SECONDARY"),
+                "MV-727: SECONDARY must stay LOCKED after the morph -- s_rkt is no longer cell-buyable until the Rack Module is found");
 
             // ENERGY/MOVE: untouched by the morph.
             Assert.AreEqual(1, RigState.Level("e_ff"));
@@ -86,9 +93,13 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(WeaponCatalog.PrimaryKind.Lppe, WeaponSystemState.ActivePrimary);
             Assert.AreEqual(SecondaryKind.ShoulderRack, WeaponSystemState.SecondaryKind);
 
-            // Buying into the Shoulder Rack's root (a cells unlock, L0 -> L1) clears the mystery lock.
-            Assert.IsTrue(RigState.AcquireCap("s_rkt"));
-            Assert.IsFalse(RigState.SecondaryLocked, "SECONDARY must stop reading '?' once s_rkt is owned");
+            // MV-727: SECONDARY being locked means s_rkt can no longer be acquired via the ordinary
+            // draft/cell path at all -- AcquireCap's IsReached check fails for a root node whose
+            // category isn't unlocked. Only PickupDirector's Rack Module collection path (which unlocks
+            // the category first) can ever grant it now.
+            Assert.IsFalse(RigState.AcquireCap("s_rkt"),
+                "s_rkt must not be acquirable while SECONDARY is still locked");
+            Assert.IsTrue(RigState.SecondaryLocked, "SECONDARY must still read as the mystery '?' -- s_rkt was never granted");
         }
     }
 }

@@ -225,7 +225,8 @@ namespace MaxWorlds.UI
         /// practice — this is one extra, unflagged entry point onto the same machinery, not new
         /// machinery. Runs the same wipe PLAY does, then seeds a fresh Stormdrain run directly: World 2,
         /// the LPPE primary, no Weapon Core pending. The SECONDARY column is left exactly as a real
-        /// Weapon Core morph leaves it — reached but mystery-locked, nothing owned
+        /// Weapon Core morph leaves it — LOCKED, nothing owned (MV-727: it stays closed until the
+        /// player finds World 2's Rack Module pickup, same as a real run)
         /// (<see cref="WeaponSystemState.ApplyWeaponCoreMorph"/>, the same call THE RIG's own morph
         /// ceremony makes) — rather than hand-rolling that RigBoard/RigState transition a second time.
         /// Public static and side-effect-pure of any UI so an EditMode test can invoke it directly with

@@ -328,8 +328,12 @@ namespace MaxWorlds.Tests.EditMode
                 "the Part pickup and the Gear cosmetic drop share a renderer-count-and-aspect signature — " +
                 $"cell: {cellRenderers.Length} renderers, {cellBounds.size:F2}; gear: {gearRenderers.Length} renderers, {gearBounds.size:F2}.");
 
-            // AC4 — this is an art-only ticket; PickupKind must not have gained/lost/reordered a member.
-            var expectedKinds = new[] { "PowerCell", "Supercell", "Device", "PowerCellSecondary", "WeaponCore" };
+            // AC4 — this is an art-only ticket; PickupKind must not have gained/lost/reordered a member
+            // relative to what MV-725 shipped. MV-727 later appended RackModule (a real, intentional
+            // gameplay addition, per that ticket's own "append it to the enum; never renumber") — this
+            // guard is only against an ART ticket sneaking a member in, so the expected list is updated
+            // to match, still in append-only order.
+            var expectedKinds = new[] { "PowerCell", "Supercell", "Device", "PowerCellSecondary", "WeaponCore", "RackModule" };
             CollectionAssert.AreEqual(expectedKinds, System.Enum.GetNames(typeof(MaxWorlds.Pickups.PickupKind)),
                 "PickupKind's members or their order changed — MV-725 is art-only, the enum must be untouched.");
 

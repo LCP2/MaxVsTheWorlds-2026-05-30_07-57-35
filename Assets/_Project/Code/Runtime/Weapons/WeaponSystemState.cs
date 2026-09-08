@@ -290,11 +290,13 @@ namespace MaxWorlds.Weapons
         // ---------------------------------------------------------------- Weapon Core morph (MV-689)
 
         /// <summary>The Weapon Core morph: PRIMARY swaps to the LPPE (<c>p_dmg</c> re-granted at level
-        /// 1, no RCDA levels carried — this is a new gadget) and SECONDARY swaps to the Shoulder Rack
-        /// (fully reset, mystery-"?"-locked via <see cref="RigState.SecondaryLocked"/> until <c>s_rkt</c>
-        /// is bought), while ENERGY/MOVE/SUPPORT carry across untouched. Switches <see cref="RigBoard"/>'s
-        /// active board to <paramref name="worldIndex"/>'s first (<see cref="RigBoardLibrary.ForWorld"/>)
-        /// — PRIMARY/SECONDARY's ids are redefined by the new file, so those two categories are rebuilt
+        /// 1, no RCDA levels carried — this is a new gadget) and SECONDARY swaps to the Shoulder Rack,
+        /// fully reset and LOCKED (MV-727: reverses MV-694's "immediately cell-buyable" shape — SECONDARY
+        /// now stays closed until the player finds and collects World 2's Rack Module pickup, which
+        /// unlocks it and grants <c>s_rkt</c> outright; see <see cref="MaxWorlds.Pickups.PickupDirector"/>),
+        /// while ENERGY/MOVE/SUPPORT carry across untouched. Switches <see cref="RigBoard"/>'s active
+        /// board to <paramref name="worldIndex"/>'s first (<see cref="RigBoardLibrary.ForWorld"/>) —
+        /// PRIMARY/SECONDARY's ids are redefined by the new file, so those two categories are rebuilt
         /// from scratch rather than merged; ENERGY/MOVE/SUPPORT keep the same ids in both boards, so their
         /// levels/unlocks are preserved by carrying them across the switch explicitly. Call directly to
         /// apply the morph immediately (fixtures, a pre-existing save's silent catch-up); THE RIG's own
@@ -318,7 +320,10 @@ namespace MaxWorlds.Weapons
 
             preservedLevels["p_dmg"] = 1;
             preservedCategories.Add("PRIMARY");
-            preservedCategories.Add("SECONDARY");
+            // MV-727: SECONDARY is deliberately NOT added here anymore — it stays locked until the
+            // World 2 Rack Module pickup unlocks it (PickupDirector.Collect), not the instant the morph
+            // lands. MV-694 used to add it here so s_rkt was immediately cell-buyable; this ticket
+            // reverses that.
 
             RigState.RestoreSnapshot(preservedLevels, preservedCategories);
             RigState.ActivateSecondaryMystery();

@@ -76,6 +76,12 @@ namespace MaxWorlds.VFX
         private static readonly Color AmberCrystal = new Color(0.82f, 0.58f, 0.14f);
         public static readonly Color PowerCellSecondaryGlow = new Color(1.00f, 0.80f, 0.20f);
 
+        // MV-727: the Rack Module (World 2's Shoulder Rack pickup) — cyan-on-rust, matching the
+        // Stormdrain palette's own rust-orange family (see CharacterSkin's World 2 skins) rather than
+        // any existing part's signature colour, so it never reads as a re-skin of an established drop.
+        private static readonly Color RackModuleRust = new Color(0.50f, 0.27f, 0.11f);
+        public static readonly Color RackModuleGlow = new Color(0.30f, 0.90f, 1f);
+
         /// <summary>Child name prefix for the power cell's and Hydro device's specular glint dots
         /// (YT-167, WV-236) — the director finds them by this to animate the sparkle without knowing
         /// either prop's geometry.</summary>
@@ -94,6 +100,7 @@ namespace MaxWorlds.VFX
             public const string HydroDevice = "hydro_device";
             public const string PowerCell = "power_cell";
             public const string PowerCellSecondary = "power_cell_secondary";
+            public const string RackModule = "rack_module";
 
             // WV-237 — the machine-internals designs a dropped part is randomly dressed as. Purely
             // cosmetic (see MachineInternalsKeys below, which PickupArtDirector draws from); unlike
@@ -149,6 +156,7 @@ namespace MaxWorlds.VFX
                 case Keys.HydroDevice: return BuildHydroDevice(parent);
                 case Keys.PowerCell: return BuildPowerCell(parent);
                 case Keys.PowerCellSecondary: return BuildPowerCellSecondary(parent);
+                case Keys.RackModule: return BuildRackModule(parent);
                 case Keys.Gear: return BuildGear(parent);
                 case Keys.Coil: return BuildCoil(parent);
                 case Keys.CircuitBlock: return BuildCircuitBlock(parent);
@@ -453,6 +461,44 @@ namespace MaxWorlds.VFX
 
             Glisten(root, GlistenPrefix + "0", OnCircle(35f, 0.30f, 0.155f), 0.045f);
             Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.16f, 0.13f), 0.04f);
+            return root;
+        }
+
+        // ---------------------------------------------------------------- Rack Module (MV-727)
+
+        /// <summary>World 2's Rack Module — a shoulder-mounted rocket pod: a boxy rust housing, four
+        /// barrel openings poking out the +Z face, a chrome shoulder strap across the top, and a cyan
+        /// charge core glowing in the gap between the barrels. Walking over it grants the Shoulder Rack
+        /// outright (see <see cref="MaxWorlds.Pickups.PickupDirector.Collect"/>), so the read this prop
+        /// needs is "an armed weapon waiting to be picked up", not another passive currency.</summary>
+        public static GameObject BuildRackModule(Transform parent = null)
+        {
+            var root = Root("RackModule", parent);
+            Material housing = MaterialLibrary.Tinted(SurfaceKind.Metal, RackModuleRust);
+            Material barrelMat = MaterialLibrary.Tinted(SurfaceKind.Metal, DarkSteel);
+            Material strap = MaterialLibrary.Tinted(SurfaceKind.Metal, Chrome);
+
+            Part(root, "Housing", PrimitiveType.Cube, new Vector3(0f, 0.22f, 0f),
+                 new Vector3(0.40f, 0.32f, 0.30f), null, housing);
+
+            // Four barrel openings, 2x2, poking out the +Z face — Cylinder's local Y axis rotated onto Z.
+            for (int i = 0; i < 4; i++)
+            {
+                float x = (i % 2 == 0) ? -0.12f : 0.12f;
+                float y = (i < 2) ? 0.30f : 0.14f;
+                Part(root, $"Barrel{i}", PrimitiveType.Cylinder, new Vector3(x, y, 0.20f),
+                     new Vector3(0.07f, 0.10f, 0.07f), Quaternion.Euler(90f, 0f, 0f), barrelMat);
+            }
+
+            // The shoulder strap — a chrome band across the top, the "mounted", not "dropped", read.
+            Part(root, "Strap", PrimitiveType.Cube, new Vector3(0f, 0.40f, 0f),
+                 new Vector3(0.44f, 0.03f, 0.10f), null, strap);
+
+            // The charge core — cyan against the rust housing, "armed and ready" between the barrels.
+            Glow(root, "Core", new Vector3(0f, 0.22f, 0.05f), 0.12f, RackModuleGlow);
+
+            Glisten(root, GlistenPrefix + "0", OnCircle(20f, 0.32f, 0.20f), 0.05f);
+            Glisten(root, GlistenPrefix + "1", OnCircle(200f, 0.14f, 0.20f), 0.045f);
             return root;
         }
 

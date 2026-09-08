@@ -121,12 +121,14 @@ namespace MaxWorlds.VFX
         private const float DeviceRingOuterRadius = 0.68f;
         private const float DeviceRingInnerRadius = 0.44f;
         private const float PowerCellSecondaryRingRadius = 0.50f;
+        private const float RackModuleRingRadius = 0.55f;
 
         private const float PowerCellRingAlpha = 0.85f;
         private const float PartRingAlpha = 0.70f;
         private const float DeviceRingOuterAlpha = 0.90f;
         private const float DeviceRingInnerAlpha = 0.50f;
         private const float PowerCellSecondaryRingAlpha = 0.85f;
+        private const float RackModuleRingAlpha = 0.90f;
 
         // MV-429 wore this as its own literal ahead of MV-431's colour pass on the prop itself; now that
         // WeaponPartArt.ModuleGlow exists, read it back so the ring and the prop's core can never drift
@@ -195,6 +197,7 @@ namespace MaxWorlds.VFX
                 PickupKind.Device => WeaponPartArt.Keys.HydroDevice,
                 PickupKind.Supercell => RollNewPartKey(pickup),
                 PickupKind.PowerCellSecondary => WeaponPartArt.Keys.PowerCellSecondary,
+                PickupKind.RackModule => WeaponPartArt.Keys.RackModule,
                 _ => null,
             };
             if (key == null) return;
@@ -314,6 +317,14 @@ namespace MaxWorlds.VFX
                         PulseGlisten(state.Glisten[1], 1.7f);
                         PulseSecondaryCore(state.Core);
                     }
+                    else if (pickup.Kind == PickupKind.RackModule)
+                    {
+                        // MV-727: same shimmer/breathe language as every other glowing pickup, cyan core
+                        // (PulseRackModuleCore) against the rust housing — "armed and ready to grab".
+                        PulseGlisten(state.Glisten[0], 0f);
+                        PulseGlisten(state.Glisten[1], 1.7f);
+                        PulseRackModuleCore(state.Core);
+                    }
                 }
 
                 DressGroundRing(pickup.transform, pickup.Kind, state);
@@ -359,6 +370,14 @@ namespace MaxWorlds.VFX
                 // read as either existing currency.
                 state.Ring = ShowRing(pickup, state.Ring, RingName, PowerCellSecondaryRingRadius,
                     WeaponPartArt.PowerCellSecondaryGlow, PowerCellSecondaryRingAlpha * pulse);
+                return;
+            }
+
+            if (kind == PickupKind.RackModule)
+            {
+                // MV-727: reads its own prop's cyan core back, not any existing currency's colour.
+                state.Ring = ShowRing(pickup, state.Ring, RingName, RackModuleRingRadius,
+                    WeaponPartArt.RackModuleGlow, RackModuleRingAlpha * pulse);
                 return;
             }
 
@@ -429,6 +448,19 @@ namespace MaxWorlds.VFX
             float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
             r.GetPropertyBlock(_mpb);
             _mpb.SetColor(BaseColorId, WeaponPartArt.PowerCellSecondaryGlow * (CellPulseMin + CellPulseRange * t));
+            r.SetPropertyBlock(_mpb);
+        }
+
+        /// <summary>MV-727: the Rack Module's own gentle radiance — same cadence as <see cref="PulseCellCore"/>,
+        /// its own cyan-on-rust <see cref="WeaponPartArt.RackModuleGlow"/> rather than the power cell's
+        /// slightly different cyan, so the two never read as literally the same charge colour.</summary>
+        private void PulseRackModuleCore(MeshRenderer r)
+        {
+            if (r == null) return;
+
+            float t = Mathf.Sin(Time.unscaledTime * CellPulseSpeed) * 0.5f + 0.5f;   // 0..1
+            r.GetPropertyBlock(_mpb);
+            _mpb.SetColor(BaseColorId, WeaponPartArt.RackModuleGlow * (CellPulseMin + CellPulseRange * t));
             r.SetPropertyBlock(_mpb);
         }
 

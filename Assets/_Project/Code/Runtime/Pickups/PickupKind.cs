@@ -12,7 +12,11 @@ namespace MaxWorlds.Pickups
     /// currency would collide with the wrong C# identity. <see cref="PickupKind.WeaponCore"/> (MV-689)
     /// is the World 1 finale drop (MV-698 spawns it): walking over it banks
     /// <see cref="MaxWorlds.Weapons.PendingMorphingModule.SetWeaponCore"/>, the same "banks, doesn't
-    /// force-open THE RIG" shape <see cref="Device"/> already uses.
+    /// force-open THE RIG" shape <see cref="Device"/> already uses. <see cref="PickupKind.RackModule"/>
+    /// (MV-727) is World 2's Shoulder Rack pickup: the FIRST Replicator destroyed each run drops one in
+    /// addition to its normal shed-equivalent drop; walking over it unlocks the SECONDARY category AND
+    /// grants <c>s_rkt</c> at level 1 outright, for free — reversing MV-694's "buy it with cells the
+    /// instant the Weapon Core morph lands" shape.
     /// </summary>
     public enum PickupKind
     {
@@ -21,5 +25,6 @@ namespace MaxWorlds.Pickups
         Device,
         PowerCellSecondary,
         WeaponCore,
+        RackModule,
     }
 }
