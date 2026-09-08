@@ -317,27 +317,15 @@
       "startLevel": 0
     },
     {
-      "id": "e_cd",
-      "category": "ENERGY",
-      "x": 1050,
-      "y": 580,
-      "icon": "cd",
-      "label": "COOLDOWN",
-      "maxLevel": 5,
-      "kind": "cap",
-      "parent": "e_cel",
-      "startLevel": 0
-    },
-    {
       "id": "e_mag",
       "category": "ENERGY",
       "x": 1050,
-      "y": 740,
+      "y": 580,
       "icon": "mag",
       "label": "MAGNETO",
       "maxLevel": 5,
       "kind": "cap",
-      "parent": "e_cd",
+      "parent": "e_cel",
       "startLevel": 0
     },
     {

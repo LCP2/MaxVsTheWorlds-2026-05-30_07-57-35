@@ -148,7 +148,7 @@ namespace MaxWorlds.Dev
         /// MV-499: also clamped to [<paramref name="xMin"/>, <paramref name="xMax"/>] in absolute
         /// json-space x. MV-472 made column width content-driven, so a node sitting near the wide end of
         /// its own family's spread (its checked annulus reaching outward toward the NEXT family's own
-        /// column) can have rOuter=1.95r cross the column boundary — confirmed live: p_rng/e_cel/e_cd/
+        /// column) can have rOuter=1.95r cross the column boundary — confirmed live: p_rng/e_cel/
         /// u_dmg (each the outermost sibling in a multi-child spread) read 35-51% ink not from their own
         /// halo but from sampling straight into the neighbouring family's differently-tinted panel, which
         /// was never what this check meant to police. Every other sibling closer to its own column's

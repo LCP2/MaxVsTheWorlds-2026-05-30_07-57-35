@@ -156,7 +156,7 @@ namespace MaxWorlds.Tests.EditMode
         [Test]
         public void MagnetoNeverPullsACellWhileTheReserveIsFull_AtEveryLevel()
         {
-            RigState.AcquireCap("e_cd");
+            RigState.AcquireCap("e_cel"); // MV-734: e_mag's prerequisite is now e_cel directly (e_cd removed)
             RigState.AcquireCap("e_mag");
             int maxLevel = RigBoard.MaxLevel("e_mag");
             Assert.That(maxLevel, Is.GreaterThan(0), "sanity: e_mag must actually have levels to test");
