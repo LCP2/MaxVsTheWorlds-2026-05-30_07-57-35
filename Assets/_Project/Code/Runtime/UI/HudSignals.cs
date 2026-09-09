@@ -136,8 +136,38 @@ namespace MaxWorlds.UI
         /// <summary>MV-706: which word the bottom banner counter should use — true for "REPLICATORS",
         /// false for "FACTORIES". Fired once by <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/> after
         /// a level finishes building, since only the map — not the HUD, built earlier — knows whether
-        /// this world's sources are sheds or Replicators.</summary>
+        /// this world's sources are sheds or Replicators.
+        ///
+        /// MV-741: <c>BackyardPath.Awake</c> calls <c>MapRuntime.Build</c> — which fires this — from ITS
+        /// OWN <c>Awake</c>, and Unity runs every object's <c>Awake</c> before any object's <c>OnEnable</c>
+        /// (where <c>HudController</c> subscribes). So this always fires before anything is listening,
+        /// and a plain event alone would drop it. <see cref="LastWorldFactoryWording"/> latches the value
+        /// so a subscriber that attaches after the fact can catch up instead of missing it — the bug this
+        /// ticket fixes: World 1's default (false) happened to already match "FACTORIES", so nobody
+        /// noticed the signal was never actually arriving until World 2 needed it to read true.</summary>
         public static event Action<bool> WorldFactoryWording;
+
+        private static bool? _lastWorldFactoryWording;
+
+        /// <summary>The value <see cref="WorldFactoryWording"/> most recently fired with, for a
+        /// subscriber that attaches after the emit already happened (MV-741). Null before any level has
+        /// ever built.</summary>
+        public static bool? LastWorldFactoryWording => _lastWorldFactoryWording;
+
+        /// <summary>MV-741: this world's Invasion Dial wording (<c>HudController.BuildInvasionDial</c>/
+        /// <c>UpdateInvasionDial</c>) — a fixed noun for the current pressure and the permanent caption
+        /// beneath it, read off <see cref="MaxWorlds.Arena.Map.MapData.pressureNoun"/>/
+        /// <see cref="MaxWorlds.Arena.Map.MapData.pressureCaption"/>. Both empty means "not authored" —
+        /// World 1's default three-band INVASION/INFESTATION/DOMINATION cycle and its caption. Fired at
+        /// the same point, and subject to the exact same Awake-before-OnEnable race, as
+        /// <see cref="WorldFactoryWording"/> above — see <see cref="LastPressureWording"/>.</summary>
+        public static event Action<string, string> PressureWording;
+
+        private static (string noun, string caption)? _lastPressureWording;
+
+        /// <summary>The value <see cref="PressureWording"/> most recently fired with (MV-741) — same
+        /// late-subscriber catch-up as <see cref="LastWorldFactoryWording"/>.</summary>
+        public static (string noun, string caption)? LastPressureWording => _lastPressureWording;
 
         public static void EmitDamage(Vector3 worldPos, float amount, bool crit = false)
             => DamageDealt?.Invoke(worldPos, amount, crit);
@@ -167,7 +197,16 @@ namespace MaxWorlds.UI
             => SentinelRecalled?.Invoke(worldPos);
 
         public static void EmitWorldFactoryWording(bool isReplicatorWorld)
-            => WorldFactoryWording?.Invoke(isReplicatorWorld);
+        {
+            _lastWorldFactoryWording = isReplicatorWorld;
+            WorldFactoryWording?.Invoke(isReplicatorWorld);
+        }
+
+        public static void EmitPressureWording(string noun, string caption)
+        {
+            _lastPressureWording = (noun ?? string.Empty, caption ?? string.Empty);
+            PressureWording?.Invoke(noun ?? string.Empty, caption ?? string.Empty);
+        }
 
         public static void EmitBossRegistered()
             => BossRegistered?.Invoke();
