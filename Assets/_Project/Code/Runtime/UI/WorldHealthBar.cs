@@ -107,6 +107,12 @@ namespace MaxWorlds.UI
         private string _shownName;
         private bool _alwaysShow;
 
+        /// <summary>MV-740: an area gate's pill has no HP figure a player can interpret — Lee's first
+        /// World 2 playthrough read every gate as "GATE 74" and "74 means nothing" to him. True for
+        /// every other unit (Max, robots), which is why this defaults on rather than becoming a new
+        /// required Attach() argument every existing call site would have to learn about.</summary>
+        private bool _showNumber = true;
+
         /// <summary>MV-569: forces the bar off regardless of <see cref="_alwaysShow"/> or the unit's own
         /// health — for a condition-locked gate (<see cref="MaxWorlds.Arena.AreaGate.Locked"/>), whose
         /// health can never move under fire, a full bar that never depletes is the clearest possible
@@ -150,7 +156,8 @@ namespace MaxWorlds.UI
                                             float heightAboveCentre, float worldWidth,
                                             bool alwaysShow = false,
                                             System.Func<float> secondary = null,
-                                            Color secondaryColor = default)
+                                            Color secondaryColor = default,
+                                            bool showNumber = true)
         {
             if (owner == null || source == null) return null;
 
@@ -163,6 +170,7 @@ namespace MaxWorlds.UI
             bar._alwaysShow = alwaysShow;
             bar._secondary = secondary;
             bar._secondaryColor = secondaryColor;
+            bar._showNumber = showNumber;
             bar.Build();
             return bar;
         }
@@ -292,6 +300,9 @@ namespace MaxWorlds.UI
             // describes are one object rather than two things to look between.
             _numberText = NewText(_barVisuals, NumberFontSize, Color.white, TextAnchor.MiddleCenter);
             Stretch(_numberText.rectTransform, 0f);
+            // MV-740: an area gate's pill has no HP figure worth printing — deactivated outright
+            // (not just left untouched) so Refresh() never has stale digits to leave behind.
+            if (!_showNumber) _numberText.gameObject.SetActive(false);
 
             SyncToBody();
             Refresh();
@@ -441,11 +452,14 @@ namespace MaxWorlds.UI
 
                 // Only rebuild the string when the printed number actually changes. At ~25 robots a
                 // per-frame ToString is 1500 allocations a second for text nobody can read changing.
-                int hp = Mathf.Max(0, Mathf.CeilToInt(_source.HealthCurrent));
-                if (hp != _shownHp)
+                if (_showNumber)
                 {
-                    _shownHp = hp;
-                    _numberText.text = hp.ToString();
+                    int hp = Mathf.Max(0, Mathf.CeilToInt(_source.HealthCurrent));
+                    if (hp != _shownHp)
+                    {
+                        _shownHp = hp;
+                        _numberText.text = hp.ToString();
+                    }
                 }
             }
 
