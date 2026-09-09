@@ -221,6 +221,29 @@ namespace MaxWorlds.Arena
         /// not authored, fall back to the default" idiom as <see cref="pressureNoun"/>.</summary>
         public string pressureCaption = "";
 
+        /// <summary>The value <see cref="dressingKit"/> carries for World 1's garden set (MV-750) —
+        /// fence panels, hedges, trees, flower beds and the shed clutter <see cref="BackyardDressingSet"/>
+        /// builds, plus the standalone <see cref="BackyardHomeShed"/>/<see cref="BackyardBackdrop"/>
+        /// landmarks. The only value that string ever needs to compare against, named once so nobody
+        /// has to spell "garden" correctly a second time.</summary>
+        public const string GardenDressingKit = "garden";
+
+        /// <summary>This world's <see cref="WorldConfig.dressingKit"/> (MV-750) — which Backyard-only
+        /// scenery set (see <see cref="GardenDressingKit"/>) this world's rooms get dressed with, if
+        /// any. Empty (unauthored, every world but World 1 today) means none: World 2 and World 3 keep
+        /// whatever their own material palette already paints (<see cref="MaxWorlds.Rendering.BiomePalette"/>)
+        /// and nothing more, rather than inheriting World 1's garden by default the way
+        /// <see cref="BackyardDressing"/>/<see cref="BackyardHomeShed"/>/<see cref="BackyardBackdrop"/>
+        /// used to (they keyed off "does a <see cref="BackyardPath"/> exist", true for every world
+        /// since MV-687 made that component a host for all of them, not "is this actually World 1").</summary>
+        public string dressingKit = "";
+
+        /// <summary>True when this map authored the garden dressing kit — the single check every
+        /// Backyard-only self-installer (<see cref="BackyardDressing"/>, <see cref="BackyardHomeShed"/>,
+        /// <see cref="BackyardBackdrop"/>) gates on, so "which worlds get the garden" is answered once,
+        /// here, rather than once per self-installer.</summary>
+        public bool WantsGardenDressing => dressingKit == GardenDressingKit;
+
         public MapZone Zone(string zoneId)
         {
             if (zones == null || string.IsNullOrEmpty(zoneId)) return null;

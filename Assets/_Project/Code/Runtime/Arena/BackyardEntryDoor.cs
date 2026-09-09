@@ -29,7 +29,7 @@ namespace MaxWorlds.Arena
         private static void Install()
         {
             if (FindFirstObjectByType<BackyardEntryDoor>() != null) return;
-            if (FindFirstObjectByType<BackyardPath>() == null) return;   // not the Backyard
+            if (FindFirstObjectByType<BackyardPath>() == null) return;   // no level loaded at all yet
             new GameObject("BackyardEntryDoor").AddComponent<BackyardEntryDoor>();
         }
 
@@ -65,6 +65,11 @@ namespace MaxWorlds.Arena
                 Debug.LogWarning("[BackyardEntryDoor] no map loaded — nothing for Max to have shut behind him.");
                 return;
             }
+
+            // MV-750: this door exists only to complete BackyardHomeShed's fiction (Max shutting his
+            // shed door behind him) — with no home shed in a non-garden world, it has nothing to pair
+            // with and no wall opening to explain.
+            if (!map.WantsGardenDressing) return;
 
             Center = PlaceFor(map);
 

@@ -810,6 +810,15 @@ namespace MaxWorlds.Arena
         /// to <see cref="MapData.DefaultWallHeight"/> rather than building unwalkable zero-height walls.</summary>
         public float wallHeight;
 
+        /// <summary>MV-750: which Backyard-only scenery set (see <see cref="MapData.GardenDressingKit"/>)
+        /// this world's rooms get dressed with — <c>"garden"</c> for World 1, empty for every other
+        /// world (the "empty means not authored" idiom <see cref="pressureNoun"/> already uses). Carried
+        /// straight onto <see cref="MapData.dressingKit"/> by <see cref="WorldMapLoader.TryLoad"/>, which
+        /// is what <see cref="MaxWorlds.Arena.BackyardDressing"/>, <see cref="MaxWorlds.Arena.BackyardHomeShed"/>
+        /// and <see cref="MaxWorlds.Arena.BackyardBackdrop"/> actually read at runtime — this field only
+        /// exists so a world config can author it.</summary>
+        public string dressingKit = "";
+
         public WorldArea[] areas = Array.Empty<WorldArea>();
         public WorldGate[] gates = Array.Empty<WorldGate>();
 

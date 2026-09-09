@@ -317,6 +317,7 @@ namespace MaxWorlds.Dev
             Add(BuildIntroHandoffFrame());
             Add(BuildMv738SludgeCheck());
             Add(BuildMv742StormdrainCheck());
+            Add(BuildMv750DressingCheck());
             return d;
         }
 
@@ -1392,6 +1393,58 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-742-stormdrain", NoSetup) },
+            };
+        }
+
+        // ---- MV750DressingCheck (MV-750 AC3) --------------------------------------------------
+
+        /// <summary>Same boot/frame idiom as <see cref="BuildMv742StormdrainCheck"/> — World 2's real
+        /// shipped config, Max's own spawn in area a1 (Outfall Steps), the fixed rig's own angle — shot
+        /// fresh under this ticket's own key so scoping the garden dressing to World 1
+        /// (<see cref="MapData.WantsGardenDressing"/>) doesn't overwrite MV-742's own evidence file.</summary>
+        private static CapturePreset BuildMv750DressingCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 2 built no PlayerController to shoot");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = player.transform.position + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv750dressing",
+                LogTag = "[MV750Capture]",
+                Flag = "-mv750shot",
+                ArmFile = "Temp/mv750.arm",
+                HeadlessMarker = "Temp/mv750.headless",
+                DoneFileName = "_mv750_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-750-dressing-fixed", NoSetup) },
             };
         }
     }
