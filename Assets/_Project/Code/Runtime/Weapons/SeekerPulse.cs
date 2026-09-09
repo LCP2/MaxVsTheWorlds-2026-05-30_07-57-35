@@ -36,6 +36,10 @@ namespace MaxWorlds.Weapons
         private Action<RobotEnemy, float> _onHit;
         private bool _spent;
 
+        // Reused every tick so the per-frame obstruction check (below) allocates nothing, the same
+        // idiom WaterBlaster.FireTick's static s_buffer/s_hits use.
+        private static readonly RaycastHit[] s_worldHits = new RaycastHit[8];
+
         /// <summary>The robot this pulse locked onto at fire time, or null if none qualified — the
         /// resolved value MV-708 AC1 asserts against.</summary>
         public RobotEnemy Target => _target;
@@ -138,6 +142,23 @@ namespace MaxWorlds.Weapons
             Vector3 from = transform.position;
             Vector3 next = from + transform.forward * (_speed * dt);
 
+            // MV-749: a pulse must damage ANY IDamageable its flight path reaches, not only the
+            // RobotEnemy it locked onto at fire time -- gates, Replicators and bosses all carry their
+            // own collider + IDamageable already; this is what was missing. Checked before the
+            // Cover-layer obstruction below (and ahead of a locked robot's own arrival check further
+            // down) so a gate standing in the way is what the pulse meets first, exactly like a player
+            // aiming squarely at it with no robot in the lock cone at all.
+            if (TryHitWorldDamageable(from, next, out IDamageable worldTarget, out Vector3 worldPoint))
+            {
+                transform.position = worldPoint;
+                worldTarget.TakeDamage(new DamageInfo(_damage, worldPoint, transform.forward, Team.Player,
+                    source: DamageSource.PrimaryWeapon));
+                // No onHit callback here (Shock is a robot stun -- rule 4: meaningless on a gate or a
+                // Replicator, so it's simply never invoked for one) and no error either way.
+                Retire();
+                return;
+            }
+
             if (HomingSteering.BlockedByGeometry(from, next, out RaycastHit hit))
             {
                 transform.position = hit.point;
@@ -159,6 +180,42 @@ namespace MaxWorlds.Weapons
             }
 
             if (_age >= _lifetime) Retire();
+        }
+
+        /// <summary>
+        /// Any live, non-Player, non-<see cref="RobotEnemy"/> <see cref="IDamageable"/> whose collider
+        /// the segment <paramref name="from"/>-&gt;<paramref name="to"/> actually crosses this tick
+        /// (MV-749). Deliberately a multi-hit query (RaycastNonAlloc over the segment), not a single
+        /// nearest-hit one: a closed <c>AreaGate</c>'s own leaf collider -- the one its
+        /// <see cref="IDamageable"/> lives on -- sits exactly co-located with its Cover-layer
+        /// <c>ThresholdObject</c> (MV-386's split), so a single-hit query could return either one
+        /// non-deterministically and silently miss the gate. Robots are excluded on purpose -- MV-708's
+        /// lock-on/arrival path (<see cref="ApplyHit"/>) is untouched by this ticket and must stay the
+        /// only way a pulse ever damages a <see cref="RobotEnemy"/>.
+        /// </summary>
+        private static bool TryHitWorldDamageable(Vector3 from, Vector3 to, out IDamageable hit, out Vector3 point)
+        {
+            hit = null;
+            point = to;
+            Vector3 delta = to - from;
+            float dist = delta.magnitude;
+            if (dist < 1e-4f) return false;
+
+            int count = Physics.RaycastNonAlloc(from, delta / dist, s_worldHits, dist, ~0,
+                QueryTriggerInteraction.Ignore);
+            float bestDist = float.MaxValue;
+            for (int i = 0; i < count; i++)
+            {
+                RaycastHit rh = s_worldHits[i];
+                if (rh.distance >= bestDist) continue;
+                if (!rh.collider.TryGetComponent(out IDamageable d)) continue;
+                if (d is RobotEnemy || !d.IsAlive || d.Team == Team.Player) continue;
+
+                bestDist = rh.distance;
+                hit = d;
+                point = rh.point;
+            }
+            return hit != null;
         }
 
         private void ApplyHit()
