@@ -132,7 +132,8 @@ namespace MaxWorlds.Player
             // Max's whole status lives over his head (YT-121): the water gauge stacked directly above
             // the life bar (MV-299, reinstating what MV-290 removed along with the primary's tank).
             WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
-                                  secondary: WaterNormalized, secondaryColor: WaterColor);
+                                  secondary: WaterNormalized, secondaryColor: WaterColor,
+                                  isPlayerBar: true);
         }
 
         /// <summary>Max's blaster tank, 0..1, for the floating water gauge. Resolved lazily and
