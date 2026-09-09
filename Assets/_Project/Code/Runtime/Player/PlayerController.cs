@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.InputSystem;
 using MaxWorlds.Arena;
+using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Upgrades;
 using MaxWorlds.Weapons;
@@ -98,6 +99,13 @@ namespace MaxWorlds.Player
             // WeaponSystemState.SecondaryKind still reads WaterBalloon, so attaching it unconditionally
             // costs nothing before World 2's morph flips the kind.
             if (GetComponent<ShoulderRack>() == null) gameObject.AddComponent<ShoulderRack>();
+
+            // MV-739: the LPPE self-attaches the same way — World 2's Weapon Core morph flips
+            // WeaponSystemState.ActivePrimary to Lppe, but nothing ever actually attached a live LPPE
+            // component to fire; WaterBlaster (baked into the scene, never torn down) kept firing the
+            // RCDA stream regardless. Attaching this unconditionally costs nothing before the morph —
+            // it self-gates on ActivePrimary the same way ShoulderRack gates on SecondaryKind.
+            if (GetComponent<PulseLaser>() == null) gameObject.AddComponent<PulseLaser>();
         }
 
         private void OnEnable()

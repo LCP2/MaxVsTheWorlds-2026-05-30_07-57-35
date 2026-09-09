@@ -308,7 +308,15 @@ namespace MaxWorlds.Combat
             if (_depleted && _tank.Normalized >= BlasterTuning.RechargeFraction) _depleted = false;
             else if (!_depleted && !_tank.CanSpend(costPerTick)) _depleted = true;
 
-            bool emitting = ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(costPerTick));
+            // MV-739: this component is baked once into the scene and never torn down, so without a
+            // gate here it kept auto-firing the RCDA stream straight through World 2's LPPE morph
+            // (MV-689) — WeaponSystemState.ActivePrimary flipped correctly, but nothing downstream
+            // ever actually read it. Gated on "not Lppe" rather than "is Rcda": World 3's UNDERTOW
+            // (MV-714) has no live primary component of its own yet, and that wiring isn't this
+            // ticket's to add — see WeaponSystemState.ApplyWeaponCoreMorph's own MV-714 comment for
+            // the same kind of explicit World-3 carve-out.
+            bool emitting = WeaponSystemState.ActivePrimary != WeaponCatalog.PrimaryKind.Lppe
+                && ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(costPerTick));
             _lastEmitting = emitting;
 
             if (_vfx != null) _vfx.SetStreaming(emitting);
