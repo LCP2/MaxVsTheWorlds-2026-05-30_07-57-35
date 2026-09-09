@@ -927,7 +927,7 @@ namespace MaxWorlds.Enemies
             // MV-473's de-clutter pass (WorldHealthBarDeclutter) is what now keeps a pile of these
             // always-on bars from stacking illegibly — see that class's own doc comment.
             _bar = WorldHealthBar.Attach(gameObject, this, BarHeightFor(EnemyArchetype.Rusher), BarWidth,
-                                         alwaysShow: true);
+                                         alwaysShow: true, groupable: true);
         }
 
         private WorldHealthBar _bar;

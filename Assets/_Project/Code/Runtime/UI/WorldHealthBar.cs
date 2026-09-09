@@ -55,6 +55,13 @@ namespace MaxWorlds.UI
         private static readonly Color NameColor = new Color(1f, 1f, 1f, 0.9f);
         private static readonly Color ReplicatorMarkerColor = new Color(0.3f, 1f, 1f, 0.95f); // MV-706: matches the Replicator's own cyan LED
 
+        /// <summary>MV-747: Max's bar always wins Unity's canvas draw order over any enemy nameplate,
+        /// regardless of whether their screen rects happen to intersect on a given frame — simpler and
+        /// stronger than detecting the intersection every frame, and it can never regress into
+        /// "usually behind, sometimes in front" as bars drift past each other on screen.</summary>
+        private const int PlayerSortingOrder = 10;
+        private const int EnemySortingOrder = 0;
+
         // Height of the optional secondary gauge (Max's water), as a fraction of the health bar's.
         private const float SecondaryHeightFraction = 0.62f;
 
@@ -106,6 +113,9 @@ namespace MaxWorlds.UI
         private int _shownHp = int.MinValue;
         private string _shownName;
         private bool _alwaysShow;
+        private bool _isPlayerBar;
+        private bool _groupable;
+        private Canvas _canvasComponent;
 
         /// <summary>MV-740: an area gate's pill has no HP figure a player can interpret — Lee's first
         /// World 2 playthrough read every gate as "GATE 74" and "74 means nothing" to him. True for
@@ -146,6 +156,11 @@ namespace MaxWorlds.UI
         /// without reading pixels.</summary>
         public bool Showing => _pivot != null && _pivot.gameObject.activeSelf;
 
+        /// <summary>Unity draw-order for this bar's world-space canvas (MV-747) — Max's is always
+        /// higher than any enemy's. Exposed so a test can assert the ORDERING directly rather than
+        /// re-deriving it from on-screen geometry, per the acceptance criterion's own wording.</summary>
+        public int SortingOrder => _canvasComponent != null ? _canvasComponent.sortingOrder : 0;
+
         /// <summary>
         /// Hang a bar over <paramref name="owner"/>.
         ///
@@ -157,7 +172,9 @@ namespace MaxWorlds.UI
                                             bool alwaysShow = false,
                                             System.Func<float> secondary = null,
                                             Color secondaryColor = default,
-                                            bool showNumber = true)
+                                            bool showNumber = true,
+                                            bool isPlayerBar = false,
+                                            bool groupable = false)
         {
             if (owner == null || source == null) return null;
 
@@ -171,6 +188,8 @@ namespace MaxWorlds.UI
             bar._secondary = secondary;
             bar._secondaryColor = secondaryColor;
             bar._showNumber = showNumber;
+            bar._isPlayerBar = isPlayerBar;
+            bar._groupable = groupable;
             bar.Build();
             return bar;
         }
@@ -237,6 +256,9 @@ namespace MaxWorlds.UI
             var canvasGo = new GameObject("Canvas", typeof(Canvas));
             var canvas = canvasGo.GetComponent<Canvas>();
             canvas.renderMode = RenderMode.WorldSpace;
+            canvas.overrideSorting = true;
+            canvas.sortingOrder = _isPlayerBar ? PlayerSortingOrder : EnemySortingOrder;
+            _canvasComponent = canvas;
             _canvas = (RectTransform)canvasGo.transform;
             _canvas.SetParent(_pivot, false);
             _canvas.sizeDelta = new Vector2(BarPixelWidth, BarPixelHeight);
@@ -410,6 +432,163 @@ namespace MaxWorlds.UI
         /// <c>RobotEnemy.ActiveCount</c> undercounts a pose-held capture rig (a disabled RobotEnemy
         /// still carries a live, showing bar).</summary>
         public static int LastShowingCount { get; private set; }
+
+        // ------------------------------------------------------------------ MV-747 nameplate grouping
+
+        /// <summary>XZ metres within which two SHOWING, same-kind <c>groupable</c> bars merge into one
+        /// combined plate. Wider than <see cref="WorldHealthBarDeclutter"/>'s own cluster-lift radius:
+        /// that pass staggers bars that are merely crowded, this one COLLAPSES bars that are the same
+        /// kind of robot — the actual "SALVAGE CRAB behind SALVAGE CRAB behind SALVAGE CRAB" stack
+        /// MV-747 reported.</summary>
+        public const float DefaultGroupRadius = 6f;
+
+        /// <summary>Most nameplates drawn at once, post-grouping (MV-747 change item 3) — a HUD with
+        /// more than a handful of readable plates stops being readable at all. Beyond this, only the
+        /// candidates nearest the reference position (the camera, in production) stay drawn; the rest
+        /// hide exactly like a non-leader group member already does.</summary>
+        public const int DefaultPlateCap = 10;
+
+        private sealed class GroupInfo
+        {
+            public WorldHealthBar Leader;
+            public int Count;
+            public float HealthCurrentSum;
+            public float NormalizedSum;
+            public bool CapVisible;
+        }
+
+        private static readonly List<WorldHealthBar> _groupScratch = new List<WorldHealthBar>();
+        private static readonly List<int> _unionParent = new List<int>();
+        private static readonly List<GroupInfo> _groupInfos = new List<GroupInfo>();
+        private static readonly List<GroupInfo> _capScratch = new List<GroupInfo>();
+
+        private static int Find(List<int> parent, int i)
+        {
+            while (parent[i] != i)
+            {
+                parent[i] = parent[parent[i]];
+                i = parent[i];
+            }
+            return i;
+        }
+
+        private static void Union(List<int> parent, int a, int b)
+        {
+            int ra = Find(parent, a), rb = Find(parent, b);
+            if (ra != rb) parent[ra] = rb;
+        }
+
+        /// <summary>
+        /// MV-747: collapse SHOWING, <c>groupable</c> bars of the same kind
+        /// (<see cref="IHealthReadout.ReadoutName"/>) within <paramref name="groupRadius"/> into one
+        /// combined plate — the fix for six Salvage Crabs drawing three overlapping "SALVAGE CRAB"
+        /// strings on top of each other and on top of Max's own bar. Grouping is TRANSITIVE (A-B and
+        /// B-C within radius merges all three even though A and C may not be directly in range) and
+        /// recomputed fresh from current positions every call — never tracked as sticky state — so a
+        /// group splits back into individual plates the instant its members move apart, with no
+        /// separate "ungroup" step to keep in sync.
+        ///
+        /// Only bars passed <c>groupable: true</c> at <see cref="Attach"/> (robots) take part — Max's
+        /// own bar and an area-gate's pill are never folded into a crowd.
+        ///
+        /// Beyond <paramref name="plateCap"/> resolved plates, only the ones nearest
+        /// <paramref name="referencePosition"/> stay drawn; the same "hide the pivot" mechanism a
+        /// non-leader group member already uses.
+        /// </summary>
+        internal static void ResolveGroups(float groupRadius, int plateCap, Vector3 referencePosition)
+        {
+            _groupScratch.Clear();
+            for (int i = 0; i < _active.Count; i++)
+                if (_active[i]._groupable && _active[i].Showing) _groupScratch.Add(_active[i]);
+
+            int n = _groupScratch.Count;
+            _unionParent.Clear();
+            for (int i = 0; i < n; i++) _unionParent.Add(i);
+
+            float radiusSqr = groupRadius * groupRadius;
+            for (int i = 0; i < n; i++)
+            {
+                for (int j = i + 1; j < n; j++)
+                {
+                    if (_groupScratch[i]._source.ReadoutName != _groupScratch[j]._source.ReadoutName) continue;
+                    Vector3 d = _groupScratch[i].transform.position - _groupScratch[j].transform.position;
+                    d.y = 0f;   // grouping, like the cluster test above, is planar
+                    if (d.sqrMagnitude <= radiusSqr) Union(_unionParent, i, j);
+                }
+            }
+
+            _groupInfos.Clear();
+            for (int i = 0; i < n; i++) _groupInfos.Add(null);
+
+            for (int i = 0; i < n; i++)
+            {
+                int root = Find(_unionParent, i);
+                var info = _groupInfos[root];
+                if (info == null)
+                {
+                    info = new GroupInfo();
+                    _groupInfos[root] = info;
+                }
+                var bar = _groupScratch[i];
+                info.Count++;
+                info.HealthCurrentSum += bar._source.HealthCurrent;
+                info.NormalizedSum += bar._source.HealthNormalized;
+                // Same deterministic tie-break as ResolveClutter's rank: lowest instance ID wins, so
+                // the same group leads with the same bar frame to frame instead of flickering.
+                if (info.Leader == null || bar.GetInstanceID() < info.Leader.GetInstanceID())
+                    info.Leader = bar;
+            }
+
+            _capScratch.Clear();
+            for (int i = 0; i < n; i++)
+                if (_groupInfos[i] != null) _capScratch.Add(_groupInfos[i]);
+
+            _capScratch.Sort((a, b) =>
+                (a.Leader.transform.position - referencePosition).sqrMagnitude
+                    .CompareTo((b.Leader.transform.position - referencePosition).sqrMagnitude));
+
+            for (int i = 0; i < _capScratch.Count; i++)
+                _capScratch[i].CapVisible = i < plateCap;
+
+            for (int i = 0; i < n; i++)
+            {
+                var bar = _groupScratch[i];
+                var info = _groupInfos[Find(_unionParent, i)];
+                bool isLeader = ReferenceEquals(bar, info.Leader);
+
+                if (!isLeader || !info.CapVisible)
+                {
+                    bar._pivot.gameObject.SetActive(false);
+                    continue;
+                }
+
+                bar.ApplyGroupDisplay(info.Count, info.HealthCurrentSum, info.NormalizedSum / info.Count);
+            }
+        }
+
+        /// <summary>Paints this bar as the leader of a group of <paramref name="count"/> (1 for an
+        /// ungrouped bar) — the merged "<c>NAME xN</c>" label, the group's summed HP figure, and a
+        /// fill reading the group's average normalized health. Writes straight to the Text/Image
+        /// components rather than through <see cref="Refresh"/>'s per-instance diff cache: a former
+        /// leader that drops back to a group of one must show its own plain name on the very next
+        /// call, not stay stuck on a stale "×N" until its own HP happens to change.</summary>
+        private void ApplyGroupDisplay(int count, float healthCurrentSum, float normalizedAvg)
+        {
+            // ASCII only (MV-600): LegacyRuntime.ttf has no glyph for U+00D7 outside the two files
+            // MV-600 already allow-listed (MapScreen.cs/WeaponsScreen.cs) — a lowercase "x" reads the
+            // same way ("SALVAGE CRAB x3") without risking a blank gap where the multiply sign would be.
+            _nameText.text = count > 1 ? $"{_source.ReadoutName} x{count}" : _source.ReadoutName;
+
+            if (_showNumber)
+                _numberText.text = Mathf.Max(0, Mathf.CeilToInt(healthCurrentSum)).ToString();
+
+            if (_fill != null)
+            {
+                float n = Mathf.Clamp01(normalizedAvg);
+                _fill.fillAmount = n;
+                _fill.color = HealthBarColor.At(n, Time.unscaledTime);
+            }
+        }
 
         private void Refresh()
         {

@@ -46,6 +46,11 @@ namespace MaxWorlds.UI
         private void LateUpdate()
         {
             Timer.Restart();
+            // MV-747: collapse same-kind overlapping bars into one combined plate FIRST, so the
+            // cluster-lift pass below only ever staggers what's left (different kinds, Max, gates) —
+            // a same-kind pile no longer needs staggering once it is already down to one plate.
+            Vector3 refPos = Camera.main != null ? Camera.main.transform.position : Vector3.zero;
+            WorldHealthBar.ResolveGroups(WorldHealthBar.DefaultGroupRadius, WorldHealthBar.DefaultPlateCap, refPos);
             WorldHealthBar.ResolveClutter(ClusterRadius, StackStep);
             Timer.Stop();
             LastResolveMicroseconds = Timer.Elapsed.TotalMilliseconds * 1000.0;
