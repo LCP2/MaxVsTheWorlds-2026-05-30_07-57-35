@@ -123,6 +123,22 @@ namespace MaxWorlds.Rendering
         /// </summary>
         private void ApplySky(BackyardLook l)
         {
+            // MV-745: World 3 is a sealed hull interior — every area edge is now an enclosing hull
+            // wall, and past it is meant to read as more hull or dark water, never the Backyard's
+            // daylight dome. MaterialLibrary.Palette is already resolved to this world's biome by the
+            // time this runs — BackyardPath.Awake sets it synchronously, and this fires later, from
+            // BackyardLighting's own AfterSceneLoad self-install — so comparing against
+            // BiomePalette.Reef is a safe, self-contained "is this World 3" check that adds no
+            // dependency from this (Rendering) assembly onto Arena.
+            if (MaterialLibrary.Palette.Equals(BiomePalette.Reef))
+            {
+                // Unconditional, not "only if it's mine": a stale skybox another world's own
+                // BackyardLighting instance left behind (this component's _sky is null the first time
+                // it ever applies) must never survive into a hull interior either.
+                RenderSettings.skybox = null;
+                return;
+            }
+
             var shader = Shader.Find(SkyShaderName);
             if (shader == null || !shader.isSupported)
             {

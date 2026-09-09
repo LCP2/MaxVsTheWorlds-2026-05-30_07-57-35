@@ -115,7 +115,13 @@ namespace MaxWorlds.Rendering
         /// <summary>The glass gradient's FAR (bottom) tone — darker, deeper water.</summary>
         public static readonly Color ReefGlassOceanFar = HexColor(0x052B49);
 
-        public static Material M_ShipFloor => ReefMaterial("M_ShipFloor", ReefShipFloor);
+        /// <summary>Panel-seam tiling for the floor's triplanar grain (MV-745, ticket change item 1):
+        /// the palette's own <see cref="BiomePalette.GroundDetailScale"/>, so the seam grid matches
+        /// whatever density the Reef ground shader already uses elsewhere rather than inventing a
+        /// second number for the same idea.</summary>
+        private static float ShipFloorDetailScale => BiomePalette.Reef.GroundDetailScale;
+
+        public static Material M_ShipFloor => ReefMaterial("M_ShipFloor", ReefShipFloor, detailScale: ShipFloorDetailScale);
         public static Material M_ShipWall => ReefMaterial("M_ShipWall", ReefShipWall);
         public static Material M_Circuit_Cyan => ReefMaterial("M_Circuit_Cyan", ReefCircuitCyan, emissive: true);
         public static Material M_Circuit_Purple => ReefMaterial("M_Circuit_Purple", ReefCircuitPurple, emissive: true);
@@ -130,11 +136,19 @@ namespace MaxWorlds.Rendering
         /// other surface in the game already uses.</summary>
         public static Material M_GlassOcean => ReefGlassMaterial();
 
-        private static Material ReefMaterial(string key, Color color, bool emissive = false)
+        /// <summary><paramref name="detailScale"/> &gt; 0 asks for the triplanar
+        /// <see cref="MaterialLibrary.StylizedSurfaceShader"/> (it is the one shader in the chain that
+        /// has a <c>_DetailScale</c> property at all) rather than the plain Lit/SimpleLit/Standard
+        /// chain every other Reef material uses — falling back to that chain if the stylised shader
+        /// isn't in the build, same "flat but correctly coloured, never magenta" degrade every other
+        /// caller of <see cref="MaterialLibrary.SurfaceShader"/> already gets (YT-58).</summary>
+        private static Material ReefMaterial(string key, Color color, bool emissive = false, float detailScale = 0f)
         {
             if (s_reefCache.TryGetValue(key, out var cached) && cached != null) return cached;
 
-            Shader shader = MaterialLibrary.SurfaceShader;
+            Shader shader = detailScale > 0f
+                ? MaterialLibrary.StylizedSurfaceShader ?? MaterialLibrary.SurfaceShader
+                : MaterialLibrary.SurfaceShader;
             if (shader == null) return null;
 
             var m = new Material(shader)
@@ -145,6 +159,7 @@ namespace MaxWorlds.Rendering
             };
             if (m.HasProperty("_BaseColor")) m.SetColor("_BaseColor", color);
             if (m.HasProperty("_Color")) m.SetColor("_Color", color);
+            if (detailScale > 0f && m.HasProperty("_DetailScale")) m.SetFloat("_DetailScale", detailScale);
 
             if (emissive)
             {
