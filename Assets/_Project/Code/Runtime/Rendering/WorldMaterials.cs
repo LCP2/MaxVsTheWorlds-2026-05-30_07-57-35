@@ -62,9 +62,18 @@ namespace MaxWorlds.Rendering
 
         /// <summary>Classify by shape rather than by name: a flat plane is ground, a tall box is a
         /// wall, anything else is a prop. Name-matching would break the moment the arena is
-        /// generated rather than scaffolded.</summary>
+        /// generated rather than scaffolded.
+        ///
+        /// The height check alone stopped being reliable the moment a world authored walls shorter
+        /// than its own cover (MV-742: World 2's wallHeight is 1.5 m, some of its cover is 1.6 m) — no
+        /// single threshold can separate the two in either direction for that data. A box built as a
+        /// boundary wall carries <see cref="StructuralWall"/>, put there by the one place that knows
+        /// for certain what it is (<c>MapRuntime.Build</c>), so that marker is checked before shape
+        /// ever has to guess.</summary>
         public static SurfaceKind KindOf(Renderer r)
         {
+            if (r.GetComponentInParent<StructuralWall>() != null) return SurfaceKind.Wall;
+
             var filter = r.GetComponent<MeshFilter>();
             var mesh = filter != null ? filter.sharedMesh : null;
             if (mesh != null && mesh.name.StartsWith("Plane")) return SurfaceKind.Ground;

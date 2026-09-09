@@ -316,6 +316,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv699Sludgequeen());
             Add(BuildIntroHandoffFrame());
             Add(BuildMv738SludgeCheck());
+            Add(BuildMv742StormdrainCheck());
             return d;
         }
 
@@ -1333,6 +1334,64 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-738-sludge", NoSetup) },
+            };
+        }
+
+        // ---- MV742StormdrainCheck (MV-742 AC3) ------------------------------------------------
+
+        /// <summary>Boots straight into World 2's real shipped config, same seeding as
+        /// <see cref="BuildMv738SludgeCheck"/>, and shoots wherever the fixed-angle rig frames Max's
+        /// own spawn naturally — no custom camera placement — so the shot proves what a player's first
+        /// frame of World 2 actually looks like: floor, wall and cover together, wearing the Stormdrain
+        /// palette rather than World 1's Backyard one (MV-742).</summary>
+        private static CapturePreset BuildMv742StormdrainCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                // CaptureDirector.Run disables the CinemachineBrain (DisableBrain defaults true) before
+                // every shot, so the camera never follows Max on its own here — frame him explicitly,
+                // same fixed top-down angle the rig itself uses, just aimed by hand (same idiom
+                // BuildMv738SludgeCheck uses for the sludge tile).
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 2 built no PlayerController to shoot");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = player.transform.position + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv742stormdrain",
+                LogTag = "[MV742Capture]",
+                Flag = "-mv742shot",
+                ArmFile = "Temp/mv742.arm",
+                HeadlessMarker = "Temp/mv742.headless",
+                DoneFileName = "_mv742_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // The same WorldIndex HomeScreen's WORLD 2 dev button seeds via StartSlotWorld —
+                    // just seeded before the first scene load rather than triggering a second one.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-742-stormdrain", NoSetup) },
             };
         }
     }
