@@ -508,6 +508,7 @@ namespace MaxWorlds.Arena
                 entities = entities.ToArray(),
                 pressureNoun = cfg.pressureNoun ?? "",
                 pressureCaption = cfg.pressureCaption ?? "",
+                dressingKit = cfg.dressingKit ?? "",
             };
 
             return MapValidation.Validate(map, out reason);

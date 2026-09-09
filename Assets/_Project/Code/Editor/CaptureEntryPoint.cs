@@ -65,6 +65,10 @@ namespace MaxWorlds.Editor
         public static void MenuIntroHandoffFrame() => RunFromMenu(CapturePresets.All["introhandoffframe"]);
         public static void CaptureIntroHandoffFrame() => Run(CapturePresets.All["introhandoffframe"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Dressing Check (MV-750)")]
+        public static void MenuMv750Dressing() => RunFromMenu(CapturePresets.All["mv750dressing"]);
+        public static void CaptureMv750Dressing() => Run(CapturePresets.All["mv750dressing"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

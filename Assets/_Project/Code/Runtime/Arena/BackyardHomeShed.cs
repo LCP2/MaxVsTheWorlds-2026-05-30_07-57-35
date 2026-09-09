@@ -33,7 +33,7 @@ namespace MaxWorlds.Arena
         private static void Install()
         {
             if (FindFirstObjectByType<BackyardHomeShed>() != null) return;
-            if (FindFirstObjectByType<BackyardPath>() == null) return;   // not the Backyard
+            if (FindFirstObjectByType<BackyardPath>() == null) return;   // no level loaded at all yet
             new GameObject("BackyardHomeShed").AddComponent<BackyardHomeShed>();
         }
 
@@ -70,6 +70,10 @@ namespace MaxWorlds.Arena
                 Debug.LogWarning("[BackyardHomeShed] no map loaded — nothing for Max to have left.");
                 return;
             }
+
+            // MV-750: this landmark (plank walls, the rust-red pitched roof) is World 1's own — it
+            // used to build for every world that loads through BackyardPath, not just the Backyard.
+            if (!map.WantsGardenDressing) return;
 
             Vector3 center = PlaceFor(map);
 

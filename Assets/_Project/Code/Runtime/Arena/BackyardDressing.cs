@@ -86,6 +86,11 @@ namespace MaxWorlds.Arena
                 return;
             }
 
+            // MV-750: this whole pass is World 1's garden kit, not something every world inherits by
+            // loading through BackyardPath. World 2/3 keep their own biome material palette
+            // (BiomePalette.ForWorld) and nothing else — an honest bare room beats a hedge underground.
+            if (!map.WantsGardenDressing) return;
+
             var set = BackyardDressingSet.Build(map);
 
             var cover = new List<ArenaCover>(path.CoverPieces.Count);

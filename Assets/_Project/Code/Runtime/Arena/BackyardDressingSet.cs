@@ -145,11 +145,14 @@ namespace MaxWorlds.Arena
 
         // ---------------------------------------------------------------- build
 
-        /// <summary>The whole dressing set for a map. Deterministic.</summary>
+        /// <summary>The whole dressing set for a map. Deterministic. Empty for any world that has not
+        /// authored the garden kit (MV-750, <see cref="MapData.WantsGardenDressing"/>) — this fence/
+        /// hedge/flower/shed set is World 1's Backyard, not a default every world gets until it grows
+        /// its own.</summary>
         public static List<DressingProp> Build(MapData map)
         {
             var props = new List<DressingProp>(256);
-            if (map == null) return props;
+            if (map == null || !map.WantsGardenDressing) return props;
 
             var rng = new System.Random(Seed);
             List<ArenaCover> cover = CoverIn(map);

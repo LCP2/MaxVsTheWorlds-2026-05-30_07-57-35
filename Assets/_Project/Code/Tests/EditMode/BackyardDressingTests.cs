@@ -634,6 +634,28 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
+        // --- MV-750: the garden dressing pass is Backyard-only -------------------------------
+
+        /// <summary>MV-750: <see cref="BackyardDressingSet.Build"/> fenced, foliated, flower-bedded
+        /// and shed-clad every world's rooms unconditionally — it never looked at which world it was
+        /// dressing. Lee saw this live as bright green foliage clumps and a garden-shed roof standing
+        /// in the Stormdrain. Reads the RESOLVED prop list <c>Build</c> actually returns for each
+        /// world, never an authored constant. Must fail on 291b403 (the commit before this fix),
+        /// where World 2 gets the same fence/tree/flower props World 1 does.</summary>
+        [Test]
+        public void OnlyTheGardenWorldGetsTheGardenDressing()
+        {
+            WorldConfig w2cfg = WorldLibrary.Load(WorldLibrary.World2);
+            Assert.IsTrue(WorldMapLoader.TryLoad(w2cfg, out MapData w2map, out string reason), reason);
+
+            List<DressingProp> world2Set = BackyardDressingSet.Build(w2map);
+            Assert.IsEmpty(world2Set,
+                "World 2 (Stormdrain) got Backyard garden dressing — fence/tree/hedge/flower props " +
+                "must be world-scoped, not built for every world that loads through BackyardPath");
+
+            Assert.IsNotEmpty(Set(), "World 1 lost its own garden dressing while scoping World 2's");
+        }
+
         [Test]
         public void NoKitPropWillRenderMagenta()
         {

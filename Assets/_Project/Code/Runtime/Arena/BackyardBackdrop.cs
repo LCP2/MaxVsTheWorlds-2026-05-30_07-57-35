@@ -33,7 +33,7 @@ namespace MaxWorlds.Arena
         private static void Install()
         {
             if (FindFirstObjectByType<BackyardBackdrop>() != null) return;
-            if (FindFirstObjectByType<BackyardPath>() == null) return;   // not the Backyard
+            if (FindFirstObjectByType<BackyardPath>() == null) return;   // no level loaded at all yet
             new GameObject("BackyardBackdrop").AddComponent<BackyardBackdrop>();
         }
 
@@ -60,6 +60,10 @@ namespace MaxWorlds.Arena
                 Debug.LogWarning("[BackyardBackdrop] no map loaded — nothing to stand behind.");
                 return;
             }
+
+            // MV-750: the neighbourhood (houses, hedges, foliage beyond the fence) is World 1's own —
+            // it used to build for every world that loads through BackyardPath, not just the Backyard.
+            if (!map.WantsGardenDressing) return;
 
             List<BackdropPiece> pieces = Build(map);
 
