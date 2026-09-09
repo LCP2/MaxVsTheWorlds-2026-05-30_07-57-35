@@ -42,7 +42,7 @@ jobs:
           # saved second found the entry already there and silently skipped saving).
           key: Library-editmode-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-editmode-
-      - uses: game-ci/unity-test-runner@v4
+      - uses: game-ci/unity-test-runner@v4.3.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
