@@ -42,16 +42,27 @@ namespace MaxWorlds.VFX
     /// placed. That cancellation is why Rusher, Heavy and Brute used to be the same size on screen
     /// despite three different <c>BodyScale</c> values.
     /// </summary>
-    public static class RobotBodies
+    public static partial class RobotBodies
     {
+        /// <summary>World 3's skin tag (MV-715/MV-746) — kept as its own copy rather than a shared
+        /// constant, the same "one literal per file that needs it" idiom <see cref="CharacterSkin"/>
+        /// and <see cref="MaxWorlds.Enemies.RobotEnemy"/> already use for it.</summary>
+        private const string ReefSkinTag = "reef";
+
         /// <summary>Build <paramref name="kind"/>'s body under <paramref name="root"/> and return the
-        /// emissive lenses the rig drives as its tell.</summary>
-        public static Body Build(EnemyKind kind, Transform root, in RobotPalette p)
+        /// emissive lenses the rig drives as its tell. <paramref name="skin"/> selects a world
+        /// reskin's OWN silhouette (MV-746) — null/anything else falls through to the base roster.</summary>
+        public static Body Build(EnemyKind kind, Transform root, in RobotPalette p, string skin = null)
         {
             var eyes = new List<MeshRenderer>(2);
             var wheels = new List<Transform>(6);
             var legs = new List<Transform>(4);
+            Transform inflatable = null;
             Transform visualRoot = VisualTrimRootFor(kind, root);
+
+            if (skin == ReefSkinTag && TryBuildReef(kind, visualRoot, p, eyes, wheels, legs, out inflatable))
+                return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), inflatable);
+
             switch (kind)
             {
                 case EnemyKind.Launcher: BuildLauncher(visualRoot, p, eyes, wheels, legs); break;
@@ -67,7 +78,7 @@ namespace MaxWorlds.VFX
                 case EnemyKind.Brute:    BuildBrute(visualRoot, p, eyes, wheels, legs); break;
                 default:                 BuildRusher(visualRoot, p, eyes, wheels, legs); break;
             }
-            return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray());
+            return new Body(eyes.ToArray(), wheels.ToArray(), legs.ToArray(), null);
         }
 
         /// <summary>MV-669 revision 3: reverting Max's own +10% scale-up re-exposed a pre-existing
@@ -108,9 +119,14 @@ namespace MaxWorlds.VFX
             /// need of one; wire it the same way here if a future mover needs it.</summary>
             public readonly Transform[] Legs;
 
-            public Body(MeshRenderer[] eyes, Transform[] wheels, Transform[] legs)
+            /// <summary>MV-746: the World 3 Puffer Mine's own inflatable-body transform, scaled up
+            /// over its telegraph by <see cref="MaxWorlds.VFX.RobotRig"/>. Null for every other kind
+            /// and every non-Reef build.</summary>
+            public readonly Transform Inflatable;
+
+            public Body(MeshRenderer[] eyes, Transform[] wheels, Transform[] legs, Transform inflatable = null)
             {
-                Eyes = eyes; Wheels = wheels; Legs = legs;
+                Eyes = eyes; Wheels = wheels; Legs = legs; Inflatable = inflatable;
             }
         }
 

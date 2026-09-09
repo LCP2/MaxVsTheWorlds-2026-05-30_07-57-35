@@ -91,6 +91,15 @@ namespace MaxWorlds.VFX
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
         private static readonly int EmissionId = Shader.PropertyToID("_EmissionColor");
 
+        /// <summary>World 3's skin tag (MV-715/MV-746) — its own copy, the same "one literal per file
+        /// that needs it" idiom <see cref="CharacterSkin"/> and <see cref="RobotEnemy"/> already use.</summary>
+        private const string ReefSkinTag = "reef";
+
+        /// <summary>How much bigger the Puffer Mine's inflatable core gets at the end of its telegraph
+        /// than at the start (MV-746 AC5) — a visible inflate, not a subtle one, since it IS the tell
+        /// for a kind whose whole gimmick is the wind-up.</summary>
+        private const float PufferInflateFactor = 1.5f;
+
         /// <summary>MV-584: the magenta-white pop that rides the teleport collapse/expand, on top of
         /// whatever body colour a robot wears — distinct from <see cref="EyeWarn"/> (the telegraph
         /// colour) so a blink never gets mistaken for a wind-up.</summary>
@@ -162,6 +171,11 @@ namespace MaxWorlds.VFX
         private Transform[] _wheels;
         private float[] _wheelRadius;
         private Vector3 _lastPos;
+
+        /// <summary>MV-746: the World 3 Puffer Mine's inflatable-body transform (see
+        /// <see cref="RobotBodies.Body.Inflatable"/>), or null for every other kind — see
+        /// <see cref="UpdateReefInflate"/>.</summary>
+        private Transform _reefInflatable;
 
         /// <summary>0..1, 1 the instant a fresh Lunge begins, decaying to 0 (MV-723) — the punch half of
         /// <see cref="UpdateStrike"/>. Tracked here, not on <see cref="RobotEnemy"/>: the rig reads
@@ -288,12 +302,20 @@ namespace MaxWorlds.VFX
             BuildCount++;
 
             CharacterRole role = CharacterSkin.RoleFor(_enemy.Kind);
-            Color body = CharacterSkin.BaseColorFor(role);
+
+            // MV-746: World 3's generated-mesh bodies read their colours from WorldMaterials' own
+            // Reef set, never from CharacterSkin — CharacterSkin's flat ReefBody tint only ever
+            // reaches the disabled greybox renderer, not the parts built here.
+            bool reef = _enemy.Skin == ReefSkinTag;
+            Color body = reef ? WorldMaterials.ReefHazard : CharacterSkin.BaseColorFor(role);
+            Color cool = reef ? WorldMaterials.ReefCircuitCyan : CharacterSkin.RobotCool;
+            Color dark = reef ? WorldMaterials.ReefMetalDark : CharacterSkin.RobotDark;
+            Color gold = reef ? WorldMaterials.ReefBioGlow : CharacterSkin.RobotGold;
 
             _bodyMat = NewCharacterMaterial($"Robot_{role}_Body", body);
-            _coolMat = NewCharacterMaterial("Robot_Cool", CharacterSkin.RobotCool);
-            _darkMat = NewCharacterMaterial("Robot_Dark", CharacterSkin.RobotDark);
-            _goldMat = NewCharacterMaterial("Robot_Gold", CharacterSkin.RobotGold);
+            _coolMat = NewCharacterMaterial("Robot_Cool", cool);
+            _darkMat = NewCharacterMaterial("Robot_Dark", dark);
+            _goldMat = NewCharacterMaterial("Robot_Gold", gold);
         }
 
         private static Material NewCharacterMaterial(string name, Color color)
@@ -332,8 +354,9 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
-                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat));
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat), _enemy.Skin);
             _eyes = body.Eyes;
+            _reefInflatable = body.Inflatable;
             _restModelScale = _model.localScale;
 
             _wheels = body.Wheels;
@@ -361,6 +384,7 @@ namespace MaxWorlds.VFX
             SpinWheels();
             UpdateBeamVfx();
             UpdateTeleportExpand();
+            UpdateReefInflate();
 
             float dt = Time.deltaTime;
             if (dt <= 0f) return;   // paused on the result screen — hold the pose
@@ -383,6 +407,17 @@ namespace MaxWorlds.VFX
             Color heat = EyeWarn * (windup * 0.30f) + Color.white * (_flash * 0.6f)
                        + TeleportFlashColor * (teleportPop * 0.8f);
             if (_bodyMat != null && _bodyMat.HasProperty(EmissionId)) _bodyMat.SetColor(EmissionId, heat);
+        }
+
+        /// <summary>MV-746: the World 3 Puffer Mine's own tell — its inflatable core grows from rest
+        /// to <see cref="PufferInflateFactor"/>x across <see cref="RobotEnemy.TelegraphProgress"/>, so
+        /// the wind-up itself is the visible warning rather than something read off the ground ring
+        /// alone. A no-op for every other kind, since <see cref="_reefInflatable"/> is null for them.</summary>
+        private void UpdateReefInflate()
+        {
+            if (_reefInflatable == null) return;
+            float scale = Mathf.Lerp(1f, PufferInflateFactor, _enemy.TelegraphProgress);
+            _reefInflatable.localScale = Vector3.one * scale;
         }
 
         /// <summary>
