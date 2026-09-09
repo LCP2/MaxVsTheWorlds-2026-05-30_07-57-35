@@ -315,6 +315,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv702LppeShoulderRack());
             Add(BuildMv699Sludgequeen());
             Add(BuildIntroHandoffFrame());
+            Add(BuildMv738SludgeCheck());
             return d;
         }
 
@@ -1272,6 +1273,66 @@ namespace MaxWorlds.Dev
                 Shots = new List<CaptureShot> { new CaptureShot("intro_handoff_frame", NoSetup) },
                 ExtraReport = () =>
                     $"spawn_world_pos={spawnPos:F3}\ncamera_pos={camPos:F3}\ncamera_rot_euler={camRot.eulerAngles:F3}\n",
+            };
+        }
+
+        // ---- MV738SludgeCheck (MV-738 AC3) ----------------------------------------------------
+
+        /// <summary>Boots straight into World 2's real shipped config — same <c>WorldIndex</c>
+        /// <see cref="MaxWorlds.UI.HomeScreen.StartSlotWorld2"/> seeds, just landed before the FIRST
+        /// scene load instead of a second one, since a capture preset only gets one boot to shoot
+        /// from — and frames whichever sludge tile <see cref="MaxWorlds.Arena.BackyardPath"/>'s own
+        /// <c>MapRuntime.Build</c> actually produced, so the shot proves the real end-to-end boot
+        /// path (not an isolated material call) renders acid-green rather than MV-738's magenta.</summary>
+        private static CapturePreset BuildMv738SludgeCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var sludge = FindFirstObjectByType<SludgeFlow>();
+                if (sludge == null) throw new CaptureAbortException("World 2 built no sludge tile to shoot");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = sludge.transform.position + Vector3.up * 0.5f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
+                // need — URP's Render Graph has crashed on exactly the first manual cam.Render() call
+                // in a headless -nographics run.
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv738sludge",
+                LogTag = "[MV738Capture]",
+                Flag = "-mv738shot",
+                ArmFile = "Temp/mv738.arm",
+                HeadlessMarker = "Temp/mv738.headless",
+                DoneFileName = "_mv738_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // The same WorldIndex HomeScreen's WORLD 2 dev button seeds via StartSlotWorld —
+                    // just seeded before the first scene load rather than triggering a second one.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-738-sludge", NoSetup) },
             };
         }
     }
