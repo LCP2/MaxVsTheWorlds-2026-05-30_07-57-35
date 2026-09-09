@@ -134,7 +134,7 @@ jobs:
           # MV-517: key is scoped per-job - see the matching note in qa.yml's test job.
           key: Library-webgl-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-webgl-
-      - uses: game-ci/unity-builder@v4
+      - uses: game-ci/unity-builder@v4.8.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
@@ -269,7 +269,7 @@ jobs:
           path: Library
           key: Library-webgl-${{ hashFiles('Packages/**', 'ProjectSettings/**') }}
           restore-keys: Library-webgl-
-      - uses: game-ci/unity-test-runner@v4
+      - uses: game-ci/unity-test-runner@v4.3.2
         env:
           UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
           UNITY_EMAIL: ${{ secrets.UNITY_EMAIL }}
