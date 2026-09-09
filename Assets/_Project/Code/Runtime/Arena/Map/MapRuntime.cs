@@ -115,7 +115,14 @@ namespace MaxWorlds.Arena
             Box(root, "Map Floor", floor.Center, floor.Size, blocksSight: false, isStatic: true);
 
             foreach (WallSegment w in MapGeometry.Walls(map))
-                Box(root, w.Name, w.Center, w.Size, blocksSight: true, isStatic: true);
+            {
+                // MV-742: mark it a wall explicitly — WorldMaterials.KindOf's height heuristic alone
+                // cannot tell a boundary wall from cover once a world authors walls shorter than its
+                // own cover (World 2's wallHeight 1.5 m vs cover up to 1.6 m), and this box is built
+                // knowing exactly what it is, so it says so rather than making KindOf guess from shape.
+                GameObject wallGo = Box(root, w.Name, w.Center, w.Size, blocksSight: true, isStatic: true);
+                wallGo.AddComponent<StructuralWall>();
+            }
 
             BuildProps(map, root, built);
             PlaceActors(map, root, built);
@@ -882,12 +889,13 @@ namespace MaxWorlds.Arena
             return found == null ? null : found.gameObject;
         }
 
-        private static void Box(Transform root, string name, Vector3 center, Vector3 size,
-                                bool blocksSight, bool isStatic)
+        private static GameObject Box(Transform root, string name, Vector3 center, Vector3 size,
+                                      bool blocksSight, bool isStatic)
         {
             GameObject go = Spawn(root, name, PrimitiveType.Cube, center, size);
             go.isStatic = isStatic;
             if (blocksSight) CoverLayer.Assign(go);
+            return go;
         }
 
         private static GameObject Spawn(Transform root, string name, PrimitiveType type,
