@@ -112,7 +112,8 @@ namespace MaxWorlds.Arena
         public float depth = 1f;
 
         public string shape = "box";      // box | cylinder
-        public string dressing = "none";  // none | tree | hedge | planter | shed  (art pass, YT-75; shed added YT-172)
+        public string dressing = "none";  // none | tree | hedge | planter | shed | machinery
+                                           // (art pass, YT-75; shed added YT-172; machinery added MV-744)
 
         /// <summary>Factory only — resolved from <see cref="WorldShed.mobile"/> (MV-548, shed roadmap
         /// stage 3). <see cref="MapRuntime"/> gives a mobile factory a <c>CharacterController</c> and

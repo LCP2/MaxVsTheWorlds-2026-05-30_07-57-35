@@ -95,7 +95,7 @@ namespace MaxWorlds.Arena
             // walls/props MapRuntime just built into this world's own biome — WorldMaterials.Install()'s
             // own AfterSceneLoad self-install runs later still, sees a WorldMaterials already here and
             // stands down, so this call is what decides the palette a run renders with, not that one.
-            ApplyWorldMaterials(worldIndex);
+            ApplyWorldMaterials(worldIndex, transform, _build.Cover);
 
             // ConfigureWorld MUST run before Configure (MV-311): Configure() fills area 1 synchronously,
             // so if the world config lands after that fill, area 1 permanently misses the budget-solver
@@ -139,7 +139,7 @@ namespace MaxWorlds.Arena
         /// Awake — so this call, not that one, is what actually decides the palette a World 2 run
         /// renders with; finding-or-creating it here rather than waiting for its own install means the
         /// floor/wall/prop sweep never runs twice with two different palettes.</summary>
-        private static void ApplyWorldMaterials(int worldIndex)
+        private static void ApplyWorldMaterials(int worldIndex, Transform host, IReadOnlyList<CoverPiece> cover)
         {
             var wm = FindFirstObjectByType<WorldMaterials>();
             if (wm == null) wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
@@ -151,22 +151,25 @@ namespace MaxWorlds.Arena
             // that wants a cosmetic override of its own, applied here rather than at MapRuntime build
             // time so it can never race the sweep above or run before a hutch/gate's own Awake has set
             // up the renderer it recolours.
-            if (worldIndex >= 2) ApplyReefKit();
+            if (worldIndex >= 2) ApplyReefKit(host, cover);
         }
 
-        /// <summary>MV-713: World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor
+        /// <summary>World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor
         /// (<see cref="MowerHutch"/>) and power hatch (<see cref="AreaGate"/>) already built in the
-        /// scene, and builds the ocean backdrop behind its observation windows. Called once per load,
-        /// only when the active world is Reef (index 2) — every other world leaves this untouched.</summary>
-        private static void ApplyReefKit()
+        /// scene, builds the ocean backdrop behind its observation windows (MV-713), and dresses every
+        /// authored "machinery" cover piece into a coolant turret (MV-744: <see cref="ReefDressing"/>
+        /// is the routing this world's own kit was missing — <c>ReefKit.BuildCoolantTurret</c> existed
+        /// since MV-713 but nothing ever called it). Called once per load, only when the active world
+        /// is Reef (index 2+) — every other world leaves this untouched.</summary>
+        private static void ApplyReefKit(Transform host, IReadOnlyList<CoverPiece> cover)
         {
             foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
                 hutch.ApplyReefSkin();
             foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
                 gate.ApplyReefSkin();
 
-            var backdropParent = FindFirstObjectByType<BackyardPath>();
-            if (backdropParent != null) ReefKit.BuildOceanBackdrop(backdropParent.transform);
+            ReefKit.BuildOceanBackdrop(host);
+            ReefDressing.DressCover(host, cover);
         }
 
         /// <summary>Gives each area a head start on its ambient population (MV-245): the moment the
