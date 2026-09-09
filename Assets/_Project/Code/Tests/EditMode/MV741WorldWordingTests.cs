@@ -47,9 +47,18 @@ namespace MaxWorlds.Tests.EditMode
                 InvokeLifecycle(hud2, "Awake");
                 InvokeLifecycle(hud2, "OnEnable");
 
-                Assert.That(GetPrivateText(hud2, "_arenaLabel").text, Does.StartWith("REPLICATORS"),
+                Text arenaLabel2 = GetPrivateText(hud2, "_arenaLabel");
+                Assert.That(arenaLabel2.text, Does.StartWith("REPLICATORS"),
                     "World 2's factories are Replicators, not sheds — MapRuntime already computes this correctly, " +
                     "so a wrong answer here means the HUD subscribed too late to hear it");
+
+                // AC2: "REPLICATORS" is longer than "FACTORIES" and must still fit its box — the label has
+                // no background chip to clip against (HorizontalWrapMode.Overflow), so the resolved check
+                // is whether Unity's own text layout would actually draw past the box, not a screenshot.
+                Canvas.ForceUpdateCanvases();
+                Assert.That(arenaLabel2.preferredWidth, Is.LessThanOrEqualTo(arenaLabel2.rectTransform.rect.width),
+                    $"'{arenaLabel2.text}' is wider ({arenaLabel2.preferredWidth:F1}px) than its box " +
+                    $"({arenaLabel2.rectTransform.rect.width:F1}px) and would overflow past it");
 
                 DifficultyDirector.Tick(DifficultyDirector.RunLengthSeconds + 100f); // push into the top band
                 InvokeUpdateInvasionDial(hud2, 0f);
