@@ -2410,6 +2410,8 @@
      "mobile": false
     }
    ],
+   "shedFittings": "spiker",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 10.76,
    "composition": {
@@ -3423,6 +3425,8 @@
      "mobile": false
     }
    ],
+   "shedFittings": "spiker",
+   "shedFittingCount": 2,
    "garrisonDensity": "light",
    "targetThreatBudget": 24.67,
    "composition": {
@@ -3624,6 +3628,8 @@
      "mobile": false
     }
    ],
+   "shedFittings": "spiker",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 24.67,
    "composition": {
@@ -3993,6 +3999,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "laser",
+   "shedFittingCount": 2,
    "garrisonDensity": "light",
    "targetThreatBudget": 38.58,
    "composition": {
@@ -4274,6 +4282,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "laser",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 33.2,
    "composition": {
@@ -4836,6 +4846,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "laser",
+   "shedFittingCount": 2,
    "garrisonDensity": "light",
    "targetThreatBudget": 33.2,
    "composition": {
@@ -5097,6 +5109,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "laser",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 26.9,
    "composition": {
@@ -5523,6 +5537,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "laser",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 61.94,
    "composition": {
@@ -6249,6 +6265,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "missile",
+   "shedFittingCount": 2,
    "garrisonDensity": "light",
    "targetThreatBudget": 63.25,
    "composition": {
@@ -6495,6 +6513,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "missile",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 24.67,
    "composition": {
@@ -6946,6 +6966,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "missile",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 0,
    "composition": {
@@ -7342,6 +7364,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "missile",
+   "shedFittingCount": 2,
    "garrisonDensity": "light",
    "targetThreatBudget": 66.4,
    "composition": {
@@ -7916,6 +7940,8 @@
      "mobile": true
     }
    ],
+   "shedFittings": "missile",
+   "shedFittingCount": 2,
    "garrisonDensity": "normal",
    "targetThreatBudget": 69.55,
    "composition": {

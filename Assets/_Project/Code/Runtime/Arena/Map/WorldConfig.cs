@@ -63,6 +63,19 @@ namespace MaxWorlds.Arena
         public bool mobile;
     }
 
+    /// <summary>Corner weapon-fitting tier a shed carries (MV-547, shed roadmap stage 2) — fixed per
+    /// area, per the World &amp; Difficulty Framework's authored-curve rule (never scaled to Max).
+    /// Resolved from <see cref="WorldArea.shedFittings"/> by <see cref="ShedFittingKindEnums.Parse"/>.</summary>
+    public enum ShedFittingKind { None, Spiker, Laser, Missile }
+
+    public static class ShedFittingKindEnums
+    {
+        /// <summary>Unrecognised or empty parses to <see cref="ShedFittingKind.None"/> — same
+        /// "0/empty means not authored" idiom every other optional world-config field uses.</summary>
+        public static ShedFittingKind Parse(string s) =>
+            Enum.TryParse(s, ignoreCase: true, out ShedFittingKind kind) ? kind : ShedFittingKind.None;
+    }
+
     /// <summary>One authored grate (MV-688) a Grate Lurker rises from and submerges back into — a 1 m
     /// round floor decal, flush with the ground. <see cref="x"/>/<see cref="z"/> are in the SAME
     /// coordinate space <see cref="WorldGarrisonEntry"/> already uses (absolute, not area-local like
@@ -407,6 +420,18 @@ namespace MaxWorlds.Arena
         /// barrage reads as "denied ground in the middle" rather than another far-wall cluster.
         /// Empty/unrecognised values fall back to ordinary placement.</summary>
         public string scenario = "";
+
+        /// <summary>Corner weapon-fitting tier authored onto every shed in this area (MV-547, shed
+        /// roadmap stage 2) — "none"|"spiker"|"laser"|"missile", parsed by
+        /// <see cref="ShedFittingKindEnums.Parse"/>. One fitting type per area; mixed types are out of
+        /// scope. Default "none" — most areas carry no fittings.</summary>
+        public string shedFittings = "none";
+
+        /// <summary>How many of a shed's (up to 4) roof corners actually carry a fitting (MV-547),
+        /// clamped 0-4 by <see cref="WorldMapLoader"/>. Meaningless when <see cref="shedFittings"/>
+        /// resolves to <see cref="ShedFittingKind.None"/>. Default 4 (every corner) once a tier IS
+        /// authored — an area has to explicitly dial this down, not opt in from zero.</summary>
+        public int shedFittingCount = 4;
 
         public float XMin => origin?.x ?? 0f;
         public float XMax => XMin + (size?.w ?? 0f);

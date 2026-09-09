@@ -168,6 +168,7 @@ namespace MaxWorlds.VFX
             HudSignals.MissileBounced += OnMissileBounced;
             HudSignals.SentinelRecalled += OnSentinelRecalled;
             HudSignals.PlayerHit += OnPlayerHit;
+            HudSignals.FittingDestroyed += OnFittingDestroyed;
         }
 
         private void OnDisable()
@@ -184,6 +185,7 @@ namespace MaxWorlds.VFX
             HudSignals.MissileBounced -= OnMissileBounced;
             HudSignals.SentinelRecalled -= OnSentinelRecalled;
             HudSignals.PlayerHit -= OnPlayerHit;
+            HudSignals.FittingDestroyed -= OnFittingDestroyed;
         }
 
         private void OnDestroy()
@@ -235,6 +237,28 @@ namespace MaxWorlds.VFX
                 speedMin: 2f, speedMax: 6f,
                 sizeMin: 0.12f, sizeMax: 0.26f,
                 lifeMin: 0.45f, lifeMax: 0.8f,
+                colorA: Debris, colorB: SparkGold);
+        }
+
+        /// <summary>A shed corner fitting (MV-547) coming apart — its own small burst, deliberately a
+        /// scaled-down <see cref="OnEnemyKilled"/> (same two-layer sparks+debris read) rather than the
+        /// factory's whole staggered sequence: a fitting is a small turret, not a building.</summary>
+        private void OnFittingDestroyed(Vector3 pos)
+        {
+            Vector3 at = pos + Vector3.up * 0.3f;
+
+            _deathSparks.Emit(at, 10,
+                axis: Vector3.up, spreadDegrees: 90f,
+                speedMin: 2.5f, speedMax: 6f,
+                sizeMin: 0.07f, sizeMax: 0.16f,
+                lifeMin: 0.18f, lifeMax: 0.4f,
+                colorA: SparkHot, colorB: SparkGold);
+
+            _deathDebris.Emit(at, 6,
+                axis: Vector3.up, spreadDegrees: 70f,
+                speedMin: 1.5f, speedMax: 4f,
+                sizeMin: 0.08f, sizeMax: 0.18f,
+                lifeMin: 0.3f, lifeMax: 0.6f,
                 colorA: Debris, colorB: SparkGold);
         }
 

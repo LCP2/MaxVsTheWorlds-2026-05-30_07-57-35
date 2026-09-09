@@ -178,6 +178,10 @@ namespace MaxWorlds.Arena
             foreach (WorldArea a in cfg.areas)
             {
                 WorldShed[] sheds = a.Sheds();
+                // MV-547: one fitting tier/count per AREA, applied to every shed that area carries —
+                // resolved once per area rather than per shed, since the schema authors it there.
+                ShedFittingKind fittingKind = ShedFittingKindEnums.Parse(a.shedFittings);
+                int fittingCount = fittingKind == ShedFittingKind.None ? 0 : Mathf.Clamp(a.shedFittingCount, 0, 4);
                 for (int i = 0; i < sheds.Length; i++)
                 {
                     WorldShed s = sheds[i];
@@ -192,6 +196,8 @@ namespace MaxWorlds.Arena
                         depth = ShedFootprint,  // MV-541: 25% smaller (0.75x the pre-541 3 m body)
                         dressing = "shed",
                         mobile = s.mobile,  // MV-548
+                        fittingKind = fittingKind.ToString().ToLowerInvariant(),  // MV-547
+                        fittingCount = fittingCount,  // MV-547
                     });
                 }
             }

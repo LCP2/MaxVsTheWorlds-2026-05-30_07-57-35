@@ -121,6 +121,16 @@ namespace MaxWorlds.Arena
         /// leaving it a static body.</summary>
         public bool mobile;
 
+        /// <summary>Factory only (MV-547, shed roadmap stage 2) — the corner weapon-fitting tier
+        /// authored for this shed's area, resolved from <see cref="WorldArea.shedFittings"/>. "none"
+        /// (the default) for every other kind, and for any shed whose area authors none.</summary>
+        public string fittingKind = "none";
+
+        /// <summary>Factory only (MV-547) — how many of the shed's (up to 4) roof corners actually
+        /// carry a fitting, resolved from <see cref="WorldArea.shedFittingCount"/> and clamped 0-4 by
+        /// <see cref="WorldMapLoader"/>. 0 for every other kind.</summary>
+        public int fittingCount;
+
         /// <summary>Ramp only (MV-692) — which wall of THIS rect abuts the deck it climbs to (N/E/S/W,
         /// <see cref="Wall"/>), resolved by <see cref="WorldMapLoader"/> from rect adjacency at load
         /// time. Empty for every other kind.</summary>
