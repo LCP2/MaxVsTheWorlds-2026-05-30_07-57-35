@@ -133,6 +133,13 @@ namespace MaxWorlds.UI
         /// must give it its own despawn beat rather than reusing the kill/death VFX.</summary>
         public static event Action<Vector3> SentinelRecalled;
 
+        /// <summary>A shed's corner weapon fitting (MV-547, shed roadmap stage 2) was destroyed —
+        /// whether by its own health reaching zero or its shed going down and taking it with it.
+        /// Deliberately NOT <see cref="EnemyKilled"/>: a fitting is authored structure hazard, not a
+        /// robot, so it must never feed the run's kill stat or economy listeners
+        /// <see cref="EnemyKilled"/> also drives — its own signal, its own small VFX beat, nothing else.</summary>
+        public static event Action<Vector3> FittingDestroyed;
+
         /// <summary>MV-706: which word the bottom banner counter should use — true for "REPLICATORS",
         /// false for "FACTORIES". Fired once by <see cref="MaxWorlds.Arena.Map.MapRuntime.Build"/> after
         /// a level finishes building, since only the map — not the HUD, built earlier — knows whether
@@ -195,6 +202,9 @@ namespace MaxWorlds.UI
 
         public static void EmitSentinelRecalled(Vector3 worldPos)
             => SentinelRecalled?.Invoke(worldPos);
+
+        public static void EmitFittingDestroyed(Vector3 worldPos)
+            => FittingDestroyed?.Invoke(worldPos);
 
         public static void EmitWorldFactoryWording(bool isReplicatorWorld)
         {

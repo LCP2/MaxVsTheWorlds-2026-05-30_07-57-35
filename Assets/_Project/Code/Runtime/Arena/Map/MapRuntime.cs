@@ -570,8 +570,50 @@ namespace MaxWorlds.Arena
                 if (zone != null) hutch.SetAreaFootprint(zone.Footprint);
             }
 
+            BuildShedFittings(body, e, hutch);
+
             built.Actors[e.id] = body;
             return hutch;
+        }
+
+        /// <summary>Roof-corner weapon fittings (MV-547, shed roadmap stage 2) — up to 4 small,
+        /// independently destroyable turrets riding on this shed. Parented to the shed's own body, so a
+        /// mobile shed's <see cref="MowerHutch.MoveBody"/> carries them along for free, with no separate
+        /// motion code of their own. World position is set BEFORE parenting (<c>worldPositionStays: true</c>)
+        /// so the corner offsets below are in plain metres regardless of the body's own
+        /// <see cref="MapEntity.Size"/> scale — the same trap <see cref="MowerHutch.BuildHealthBar"/>'s
+        /// own "cancel the parent's scale" comment documents.</summary>
+        private static readonly Vector2[] FittingCornerSigns =
+        {
+            new Vector2(-1f, -1f), new Vector2(1f, -1f), new Vector2(1f, 1f), new Vector2(-1f, 1f),
+        };
+
+        private const float FittingInset = 0.85f;   // fraction of the half-extent, so a corner turret doesn't overhang
+        private const float FittingSize = 0.5f;     // a small turret, not a shed-sized object
+
+        private static void BuildShedFittings(GameObject body, MapEntity e, MowerHutch hutch)
+        {
+            ShedFittingKind kind = ShedFittingKindEnums.Parse(e.fittingKind);
+            if (kind == ShedFittingKind.None) return;
+
+            int count = Mathf.Clamp(e.fittingCount, 0, FittingCornerSigns.Length);
+            Vector3 center = body.transform.position;
+            float halfW = e.width * 0.5f * FittingInset;
+            float halfD = e.depth * 0.5f * FittingInset;
+            float roofY = center.y + e.height * 0.5f + FittingSize * 0.5f;
+
+            for (int i = 0; i < count; i++)
+            {
+                Vector2 sign = FittingCornerSigns[i];
+                var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                go.name = $"{e.id}_fitting{i + 1}";
+                go.transform.position = new Vector3(center.x + sign.x * halfW, roofY, center.z + sign.y * halfD);
+                go.transform.localScale = Vector3.one * FittingSize;
+                go.transform.SetParent(body.transform, worldPositionStays: true);
+
+                var fitting = go.AddComponent<ShedFitting>();
+                fitting.Bind(hutch, kind);
+            }
         }
 
         /// <summary>
