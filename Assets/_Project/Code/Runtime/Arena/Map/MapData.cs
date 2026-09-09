@@ -212,6 +212,15 @@ namespace MaxWorlds.Arena
         public MapLink[] links = Array.Empty<MapLink>();
         public MapEntity[] entities = Array.Empty<MapEntity>();
 
+        /// <summary>This world's <see cref="WorldConfig.pressureNoun"/> (MV-741), carried here so
+        /// <see cref="MapRuntime.Build"/> can hand it to the HUD without threading the world config
+        /// through. Empty (unauthored) means the HUD falls back to World 1's default three-band wording.</summary>
+        public string pressureNoun = "";
+
+        /// <summary>This world's <see cref="WorldConfig.pressureCaption"/> (MV-741) — same "empty means
+        /// not authored, fall back to the default" idiom as <see cref="pressureNoun"/>.</summary>
+        public string pressureCaption = "";
+
         public MapZone Zone(string zoneId)
         {
             if (zones == null || string.IsNullOrEmpty(zoneId)) return null;

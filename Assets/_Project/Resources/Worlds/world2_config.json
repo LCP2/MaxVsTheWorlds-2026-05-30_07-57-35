@@ -5,6 +5,8 @@
  "note": "DESIGN v1 2026-09-07 — authored by the build chat from the World 2 brief; not yet approved",
  "units": "1 world unit = 1 metre",
  "wallHeight": 1.5,
+ "pressureNoun": "FLOOD",
+ "pressureCaption": "THE STORMDRAIN IS FILLING",
  "dials": {
   "areaCount": 23,
   "baseThreat": 20,

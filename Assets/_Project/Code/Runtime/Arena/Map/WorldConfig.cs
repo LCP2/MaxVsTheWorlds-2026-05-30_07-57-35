@@ -794,6 +794,17 @@ namespace MaxWorlds.Arena
         public string world = "Untitled World";
         public string revision;
 
+        /// <summary>MV-741: the fixed word the Invasion Dial shows for the current pressure on THIS
+        /// world (e.g. World 2's "FLOOD"), replacing the default three-band INVASION/INFESTATION/
+        /// DOMINATION cycle a world that leaves this empty (World 1) still gets. Same "empty means not
+        /// authored" idiom as <see cref="wallHeight"/>.</summary>
+        public string pressureNoun = "";
+
+        /// <summary>MV-741: the permanent line under the Invasion Dial saying what rising pressure does
+        /// on THIS world (e.g. World 2's "THE STORMDRAIN IS FILLING"). Empty falls back to World 1's
+        /// default caption, same idiom as <see cref="pressureNoun"/>.</summary>
+        public string pressureCaption = "";
+
         /// <summary>Height, in metres, of the arena's walls/fences (MV-277). 0 (the JSON default when
         /// the field is omitted) means "not authored" — <see cref="WorldMapLoader.TryLoad"/> falls back
         /// to <see cref="MapData.DefaultWallHeight"/> rather than building unwalkable zero-height walls.</summary>

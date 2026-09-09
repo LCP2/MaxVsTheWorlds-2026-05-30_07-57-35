@@ -213,6 +213,15 @@ namespace MaxWorlds.UI
         private DifficultyDirector.Stage? _shownStage;
         private float _dialStageFlash;
 
+        /// <summary>MV-741: this world's fixed pressure noun (e.g. World 2's "FLOOD"), or empty to use
+        /// the default INVASION/INFESTATION/DOMINATION cycle — set by <see cref="OnPressureWording"/>.</summary>
+        private string _pressureNoun = "";
+
+        /// <summary>The permanent caption under the Invasion Dial when no world overrides it
+        /// (<see cref="OnPressureWording"/>) — World 1's own wording, kept as a named default rather
+        /// than a bare literal so both <see cref="BuildInvasionDial"/> and the fallback below agree.</summary>
+        private const string DefaultPressureCaption = "ROBOTS GET FASTER & TOUGHER";
+
         // Boss
         private RectTransform _bossRoot;
         private Image _bossFill;
@@ -324,6 +333,7 @@ namespace MaxWorlds.UI
             HudSignals.FactoryRegistered += OnFactoryRegistered;
             HudSignals.FactoryDestroyed += OnFactoryDestroyed;
             HudSignals.WorldFactoryWording += OnWorldFactoryWording;
+            HudSignals.PressureWording += OnPressureWording;
             HudSignals.BossRegistered += OnBossRegistered;
             HudSignals.BossEngaged += OnBossEngaged;
             HudSignals.BossHealthChanged += OnBossHealth;
@@ -337,6 +347,19 @@ namespace MaxWorlds.UI
             WeaponSystemState.Changed += OnAbilitiesChanged;
             AbilityCreditBank.Changed += OnAbilityCreditsChanged;
             PendingMorphingModule.Changed += OnPendingModuleChanged;
+
+            // MV-741: MapRuntime.Build fires WorldFactoryWording/PressureWording from BackyardPath's own
+            // Awake, and every object's Awake runs before any object's OnEnable — so by the time this
+            // runs, the level (if any) has already built and its signal has already fired, with nobody
+            // subscribed yet to hear it. Catch up on whatever was last emitted rather than defaulting to
+            // World 1's wording just because this object subscribed too late to hear it live.
+            if (HudSignals.LastWorldFactoryWording.HasValue)
+                OnWorldFactoryWording(HudSignals.LastWorldFactoryWording.Value);
+            if (HudSignals.LastPressureWording.HasValue)
+            {
+                (string noun, string caption) = HudSignals.LastPressureWording.Value;
+                OnPressureWording(noun, caption);
+            }
         }
 
         private void OnDisable()
@@ -348,6 +371,7 @@ namespace MaxWorlds.UI
             HudSignals.FactoryRegistered -= OnFactoryRegistered;
             HudSignals.FactoryDestroyed -= OnFactoryDestroyed;
             HudSignals.WorldFactoryWording -= OnWorldFactoryWording;
+            HudSignals.PressureWording -= OnPressureWording;
             HudSignals.BossRegistered -= OnBossRegistered;
             HudSignals.BossEngaged -= OnBossEngaged;
             HudSignals.BossHealthChanged -= OnBossHealth;
@@ -541,6 +565,20 @@ namespace MaxWorlds.UI
         private void OnFactoryRegistered() => _model.RegisterFactory();
 
         private void OnWorldFactoryWording(bool isReplicatorWorld) => _model.Arena.SetReplicatorWorld(isReplicatorWorld);
+
+        /// <summary>MV-741: this world's Invasion Dial wording arrived (or is being caught up on from
+        /// <see cref="HudSignals.LastPressureWording"/> — see <see cref="OnEnable"/>). The caption applies
+        /// immediately since it never waits on a stage crossing; the stage label only needs a manual
+        /// refresh here if one was already showing (<see cref="UpdateInvasionDial"/> otherwise sets it
+        /// itself the next time the stage is evaluated).</summary>
+        private void OnPressureWording(string noun, string caption)
+        {
+            _pressureNoun = noun ?? "";
+            if (_dialCaption != null)
+                _dialCaption.text = string.IsNullOrEmpty(caption) ? DefaultPressureCaption : caption;
+            if (_dialStageLabel != null && _shownStage.HasValue)
+                _dialStageLabel.text = StageLabel(_shownStage.Value);
+        }
 
         private void OnFactoryDestroyed(Vector3 pos)
         {
@@ -1845,7 +1883,7 @@ namespace MaxWorlds.UI
             Anchor(_dialCaption.rectTransform, new Vector2(0.5f, 0f), new Vector2(0.5f, 0f), new Vector2(0.5f, 0f));
             _dialCaption.rectTransform.sizeDelta = new Vector2(260f, 16f);
             _dialCaption.rectTransform.anchoredPosition = new Vector2(0f, 84f); // rides below the fill
-            _dialCaption.text = "ROBOTS GET FASTER & TOUGHER";
+            _dialCaption.text = DefaultPressureCaption; // MV-741: overwritten by OnPressureWording once the world's own is known
         }
 
         private void UpdateInvasionDial(float dt)
@@ -1872,7 +1910,15 @@ namespace MaxWorlds.UI
             _dialStageLabel.color = Color.Lerp(BoneWhite, ReadyGlow, _dialStageFlash);
         }
 
-        private static string StageLabel(DifficultyDirector.Stage stage) => stage switch
+        /// <summary>MV-741: World 2's Replicators fix (this same ticket) is the sibling of this one — a
+        /// world that authors its own <see cref="_pressureNoun"/> shows that fixed word at every stage
+        /// (World 2's "FLOOD"; a flood doesn't have three named intensities the way an invasion does),
+        /// rather than needing a full three-word set of its own just to avoid World 1's copy leaking
+        /// through. A world that authors nothing here (World 1) keeps the original three-band cycle.</summary>
+        private string StageLabel(DifficultyDirector.Stage stage) =>
+            string.IsNullOrEmpty(_pressureNoun) ? DefaultStageLabel(stage) : _pressureNoun;
+
+        private static string DefaultStageLabel(DifficultyDirector.Stage stage) => stage switch
         {
             DifficultyDirector.Stage.Invasion => "INVASION",
             DifficultyDirector.Stage.Infestation => "INFESTATION",
