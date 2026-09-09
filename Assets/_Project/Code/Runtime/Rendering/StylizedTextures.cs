@@ -472,16 +472,26 @@ namespace MaxWorlds.Rendering
             return t;
         }
 
-        /// <summary>Drop every generated texture — the palette changed, so the albedos are stale.</summary>
+        /// <summary>Drop every generated texture the palette actually made stale.
+        ///
+        /// The <c>"albedo:tint:"</c> entries are exempt (MV-738), matching <see cref="MaterialLibrary.Clear"/>'s
+        /// own exemption for the <see cref="MaterialLibrary.Tinted"/> materials that reference them —
+        /// destroying the texture out from under a material this project deliberately kept alive would
+        /// just trade one orphaned reference (magenta) for another (a Tinted surface gone flat white,
+        /// since <c>_BaseColor</c> alone carries no tone for these — the albedo texture is the tone).</summary>
         public static void Clear()
         {
-            foreach (var t in s_cache.Values)
+            var keys = new List<string>(s_cache.Keys);
+            foreach (var key in keys)
             {
+                if (key.StartsWith("albedo:tint:", System.StringComparison.Ordinal)) continue;
+
+                var t = s_cache[key];
+                s_cache.Remove(key);
                 if (t == null) continue;
                 if (Application.isPlaying) Object.Destroy(t);
                 else Object.DestroyImmediate(t);
             }
-            s_cache.Clear();
             // The height field is palette-independent, so it survives: it is the expensive half.
         }
 

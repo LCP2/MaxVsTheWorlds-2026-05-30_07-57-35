@@ -23,6 +23,10 @@ namespace MaxWorlds.Rendering
             "Standard",
         };
 
+        /// <summary>Cache-key prefix minted by <see cref="Tinted"/> (see <see cref="Clear"/> for why it
+        /// matters which entries carry it).</summary>
+        private const string TintedKeyPrefix = "tint:";
+
         private static readonly Dictionary<string, Material> s_cache = new Dictionary<string, Material>();
         private static Shader s_shader;
         private static Shader s_groundShader;
@@ -197,7 +201,7 @@ namespace MaxWorlds.Rendering
         {
             // Quantised into the key, or a stray float in a kit colour would mint a new material —
             // and a new material per prop is a new draw call per prop. 217 of them share ~16 tones.
-            string key = $"tint:{kind}:{Mathf.RoundToInt(tone.r * 255f):X2}" +
+            string key = $"{TintedKeyPrefix}{kind}:{Mathf.RoundToInt(tone.r * 255f):X2}" +
                          $"{Mathf.RoundToInt(tone.g * 255f):X2}{Mathf.RoundToInt(tone.b * 255f):X2}";
             if (s_cache.TryGetValue(key, out var cached) && cached != null) return cached;
 
@@ -478,19 +482,36 @@ namespace MaxWorlds.Rendering
             m.SetColor("_DryColor", ElementPalette.Recolor(s_palette.GroundDry * s_palette.Tint, element));
         }
 
-        /// <summary>Drop every cached material — call after changing the palette.</summary>
+        /// <summary>Drop every cached material that actually depends on the palette — call after
+        /// changing it.
+        ///
+        /// <see cref="Tinted"/> entries are exempt (MV-738). Their colour comes entirely from the
+        /// caller's own tone, never from <see cref="Palette"/>, and every renderer wearing one is
+        /// marked <see cref="KeepsOwnMaterial"/> for that exact reason — <see cref="WorldMaterials.Apply"/>
+        /// deliberately never re-sweeps it. That combination used to be exactly the trap: World 2's
+        /// sludge (and every other <c>Tinted</c> consumer — decks, ramps, pickups, projectiles) got its
+        /// material baked by <c>MapRuntime.Build</c> under whatever palette was active a moment earlier,
+        /// then <c>BackyardPath.Awake</c>'s own call to set the REAL world palette destroyed that exact
+        /// cache entry here, and nothing was ever going to hand the orphaned renderer a replacement —
+        /// Unity's magenta error shader, on a build that looked correct in the editor because a fresh
+        /// domain reload there starts every palette the same.</summary>
         public static void Clear()
         {
-            foreach (var m in s_cache.Values)
+            var keys = new List<string>(s_cache.Keys);
+            foreach (var key in keys)
             {
+                if (key.StartsWith(TintedKeyPrefix, System.StringComparison.Ordinal)) continue;
+
+                var m = s_cache[key];
+                s_cache.Remove(key);
                 if (m == null) continue;
                 if (Application.isPlaying) Object.Destroy(m);
                 else Object.DestroyImmediate(m);
             }
-            s_cache.Clear();
 
             // The albedos are baked FROM the palette's colours, so a stale texture cache would hand
-            // the new materials the old lawn back. Materials first, then the textures they held.
+            // the new materials the old lawn back. Materials first, then the textures they held —
+            // StylizedTextures.Clear() keeps the same Tinted exemption for the same reason.
             StylizedTextures.Clear();
         }
 
