@@ -216,9 +216,12 @@ namespace MaxWorlds.Arena
             // already found it (MV-265: Lee couldn't tell the gate was damageable at all). Captured so
             // the Locked property (MV-569) can hide it again for a condition-locked gate, whose bar
             // would otherwise sit full forever under fire it is designed to ignore.
+            // MV-740: "GATE 74" — the HP figure WorldHealthBar prints under every unit's name reads
+            // fine on a robot but leaks a raw internal number here that a player cannot interpret
+            // ("74 means nothing" — Lee). The pill keeps the name and its open/locked state only.
             float halfHeight = transform.localScale.y * 0.5f;
             _healthBar = WorldHealthBar.Attach(gameObject, this, halfHeight + BarHeightClearance,
-                                               BarWorldWidth, alwaysShow: true);
+                                               BarWorldWidth, alwaysShow: true, showNumber: false);
             if (_locked && _healthBar != null) _healthBar.SetBarHiddenKeepLabel(true);
         }
 

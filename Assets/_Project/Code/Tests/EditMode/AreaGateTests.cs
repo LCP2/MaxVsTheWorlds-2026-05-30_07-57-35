@@ -1,7 +1,11 @@
 using System.Collections.Generic;
+using System.Reflection;
+using System.Text.RegularExpressions;
 using NUnit.Framework;
 using UnityEngine;
+using UnityEngine.UI;
 using MaxWorlds.Arena;
+using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.EditMode
 {
@@ -287,6 +291,87 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Object.DestroyImmediate(go);
             }
+        }
+
+        // --- MV-740: the gate pill leaked a raw HP figure a player cannot interpret ---
+
+        /// <summary>Pins MV-740: Lee's first World 2 playthrough showed every gate's pill as "GATE 74"
+        /// — the HP number <see cref="WorldHealthBar"/> prints under EVERY unit's name (YT-111), which
+        /// makes sense on a robot but means nothing on a gate ("74 means nothing" — Lee). Awake() never
+        /// runs on an AddComponent'd MonoBehaviour inside this project's EditMode harness (see the
+        /// MV-386 note below), so this invokes it by reflection to get the REAL production wiring
+        /// (<see cref="AreaGate.Awake"/> attaching its own <see cref="WorldHealthBar"/> with real HP,
+        /// not a hand-built stand-in bar), then reads the RESOLVED, currently-visible text off the
+        /// built pill — never the format string — for both an open and a locked gate.</summary>
+        [Test]
+        public void GatePill_NeverShowsABareNumber_OpenOrLocked()
+        {
+            var openGo = new GameObject("Open Gate Pill Probe");
+            var lockedGo = new GameObject("Locked Gate Pill Probe");
+            try
+            {
+                var openGate = openGo.AddComponent<AreaGate>();
+                InvokeAwake(openGate);
+                RefreshBar(openGo.GetComponent<WorldHealthBar>());
+
+                var lockedGate = lockedGo.AddComponent<AreaGate>();
+                InvokeAwake(lockedGate);
+                lockedGate.Locked = true;
+                lockedGate.SetLockProgress(3, 8);
+                RefreshBar(lockedGo.GetComponent<WorldHealthBar>());
+
+                AssertNoVisibleLabelIsABareNumber(openGo, "open gate");
+                AssertNoVisibleLabelIsABareNumber(lockedGo, "locked gate");
+
+                Assert.IsTrue(AnyVisibleLabelContains(lockedGo, "SHEDS") && AnyVisibleLabelContains(lockedGo, "3")
+                    && AnyVisibleLabelContains(lockedGo, "8"),
+                    "a locked gate's pill must carry its requirement in words, not go silent");
+            }
+            finally
+            {
+                Object.DestroyImmediate(openGo);
+                Object.DestroyImmediate(lockedGo);
+            }
+        }
+
+        /// <summary>Calls the private Awake() directly — the only way to get AreaGate's real
+        /// production wiring (health, threshold collider, health-bar attach) inside this project's
+        /// synchronous EditMode harness, which never invokes Awake() as a side effect of AddComponent
+        /// (see the MV-386 note below, confirmed empirically for this exact class).</summary>
+        private static void InvokeAwake(AreaGate gate)
+        {
+            var m = typeof(AreaGate).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance);
+            m.Invoke(gate, null);
+        }
+
+        /// <summary>Invokes the private Refresh() a real frame's LateUpdate would call — same
+        /// reflection idiom WorldHealthBarTests/WorldHealthBarNameplateTests already use, since
+        /// LateUpdate never fires outside Play mode.</summary>
+        private static void RefreshBar(WorldHealthBar bar)
+        {
+            var m = typeof(WorldHealthBar).GetMethod("Refresh", BindingFlags.NonPublic | BindingFlags.Instance);
+            m.Invoke(bar, null);
+        }
+
+        /// <summary>Fails if any CURRENTLY VISIBLE Text on the built pill is ENTIRELY digits — a label
+        /// token in the middle of a worded phrase ("SHEDS  3 / 8") is not what this guards against; a
+        /// label that is nothing but a raw number ("74") is exactly MV-740's bug. Active-hierarchy-only
+        /// (includeInactive: false) on purpose: a locked gate's bar strip is hidden, not cleared, via
+        /// SetBarHiddenKeepLabel (MV-571), so a stale number sitting in an inactive, unrendered Text
+        /// object is not a player-visible bug and must not fail this test.</summary>
+        private static void AssertNoVisibleLabelIsABareNumber(GameObject go, string label)
+        {
+            foreach (Text t in go.GetComponentsInChildren<Text>(false))
+                Assert.IsFalse(Regex.IsMatch(t.text.Trim(), @"^\d+$"),
+                    $"{label} pill shows a bare number '{t.text}' on its own label — a player can't " +
+                    "interpret it (MV-740)");
+        }
+
+        private static bool AnyVisibleLabelContains(GameObject go, string substring)
+        {
+            foreach (Text t in go.GetComponentsInChildren<Text>(false))
+                if (t.text.Contains(substring)) return true;
+            return false;
         }
 
         // --- MV-386: opening a gate must drop the doorway's threshold, but the physical leaf has to
