@@ -1,7 +1,7 @@
 {
  "$schema": "MaxVsTheWorlds/world-config@0.6-draft",
  "world": "World 3 \u2014 The Reef",
- "revision": "WORLD 3 v1 2026-09-09: areas a1-a30 authored per MV-712 from the MVW_World3_Level_Design_V1.xlsx dial table. Composition is fully dial-solved (no per-area authoring) with enemyTypes pinned to the engine's own ThreatValues placeholders, so the solved threat budget tracks each area's target budget by construction.",
+ "revision": "WORLD 3 v2 2026-09-09 (MV-743): areas a1-a30 re-authored as a designed level \u2014 varied footprints, authored cover/garrison/factories/decks/piers, ship-interior names, restructured double-pass route. Dials/enemyTypes/enemyOverrides unchanged from MV-712.",
  "note": "MV-712: baseThreat/threatGrowth/toughnessCurve are the ticket's proposed dial table, unchanged here. pacingRhythm is reused verbatim from world1_config.json (the framework's own saw-tooth shape, not bespoke to a world identity).",
  "units": "1 world unit = 1 metre = 1 Max-width (Max footprint 1x1)",
  "wallHeight": 1.5,
@@ -129,7 +129,7 @@
    "from": {
     "area": "a3",
     "wall": "E",
-    "pos": 0.7727
+    "pos": 0.725
    },
    "to": {
     "area": "a4",
@@ -144,7 +144,7 @@
    "from": {
     "area": "a3",
     "wall": "E",
-    "pos": 0.2273
+    "pos": 0.225
    },
    "to": {
     "area": "a5",
@@ -164,7 +164,7 @@
    "to": {
     "area": "a6",
     "wall": "W",
-    "pos": 0.7727
+    "pos": 0.725
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -179,7 +179,7 @@
    "to": {
     "area": "a6",
     "wall": "W",
-    "pos": 0.2273
+    "pos": 0.225
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -264,7 +264,7 @@
    "from": {
     "area": "a13",
     "wall": "E",
-    "pos": 0.7727
+    "pos": 0.7381
    },
    "to": {
     "area": "a14",
@@ -279,7 +279,7 @@
    "from": {
     "area": "a13",
     "wall": "E",
-    "pos": 0.2273
+    "pos": 0.2381
    },
    "to": {
     "area": "a15",
@@ -299,7 +299,7 @@
    "to": {
     "area": "a16",
     "wall": "W",
-    "pos": 0.7727
+    "pos": 0.7381
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -314,7 +314,7 @@
    "to": {
     "area": "a16",
     "wall": "W",
-    "pos": 0.2273
+    "pos": 0.2381
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -324,7 +324,7 @@
    "from": {
     "area": "a20",
     "wall": "E",
-    "pos": 0.7727
+    "pos": 0.76
    },
    "to": {
     "area": "a21",
@@ -339,7 +339,7 @@
    "from": {
     "area": "a20",
     "wall": "E",
-    "pos": 0.2273
+    "pos": 0.26
    },
    "to": {
     "area": "a22",
@@ -359,7 +359,7 @@
    "to": {
     "area": "a23",
     "wall": "W",
-    "pos": 0.7727
+    "pos": 0.76
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -374,7 +374,7 @@
    "to": {
     "area": "a23",
     "wall": "W",
-    "pos": 0.2273
+    "pos": 0.26
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -404,7 +404,7 @@
    "to": {
     "area": "a2",
     "wall": "W",
-    "pos": 0.5
+    "pos": 0.4545
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -419,7 +419,7 @@
    "to": {
     "area": "a3",
     "wall": "W",
-    "pos": 0.2273
+    "pos": 0.275
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -429,7 +429,7 @@
    "from": {
     "area": "a6",
     "wall": "E",
-    "pos": 0.2273
+    "pos": 0.25
    },
    "to": {
     "area": "a7",
@@ -449,7 +449,7 @@
    "to": {
     "area": "a13",
     "wall": "W",
-    "pos": 0.2273
+    "pos": 0.2381
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -459,7 +459,7 @@
    "from": {
     "area": "a16",
     "wall": "E",
-    "pos": 0.2273
+    "pos": 0.2381
    },
    "to": {
     "area": "a17",
@@ -479,7 +479,7 @@
    "to": {
     "area": "a18",
     "wall": "W",
-    "pos": 0.5
+    "pos": 0.3333
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -489,7 +489,7 @@
    "from": {
     "area": "a18",
     "wall": "E",
-    "pos": 0.5
+    "pos": 0.3333
    },
    "to": {
     "area": "a19",
@@ -509,7 +509,7 @@
    "to": {
     "area": "a20",
     "wall": "W",
-    "pos": 0.2273
+    "pos": 0.2
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -519,7 +519,7 @@
    "from": {
     "area": "a23",
     "wall": "E",
-    "pos": 0.2273
+    "pos": 0.24
    },
    "to": {
     "area": "a24",
@@ -534,7 +534,7 @@
    "from": {
     "area": "a24",
     "wall": "E",
-    "pos": 0.5
+    "pos": 0.4583
    },
    "to": {
     "area": "a25",
@@ -554,7 +554,7 @@
    "to": {
     "area": "a26",
     "wall": "W",
-    "pos": 0.5
+    "pos": 0.3929
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -564,7 +564,7 @@
    "from": {
     "area": "a26",
     "wall": "E",
-    "pos": 0.5
+    "pos": 0.3571
    },
    "to": {
     "area": "a27",
@@ -584,7 +584,7 @@
    "to": {
     "area": "a28",
     "wall": "W",
-    "pos": 0.5
+    "pos": 0.4545
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -599,7 +599,7 @@
    "to": {
     "area": "a29",
     "wall": "W",
-    "pos": 0.5
+    "pos": 0.4583
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -614,7 +614,7 @@
    "to": {
     "area": "a30",
     "wall": "W",
-    "pos": 0.5
+    "pos": 0.3529
    },
    "width": 3.0,
    "opensWith": "primary"
@@ -634,7 +634,13 @@
     "area": "a9",
     "wall": "W",
     "pos": 0.15
-   }
+   },
+   "piers": [
+    {
+     "x": 136.0,
+     "z": 10.0
+    }
+   ]
   },
   {
    "id": "b2",
@@ -649,7 +655,13 @@
     "area": "a10",
     "wall": "W",
     "pos": 0.375
-   }
+   },
+   "piers": [
+    {
+     "x": 158.0,
+     "z": 16.0
+    }
+   ]
   },
   {
    "id": "b3",
@@ -664,7 +676,13 @@
     "area": "a11",
     "wall": "W",
     "pos": 0.6
-   }
+   },
+   "piers": [
+    {
+     "x": 181.0,
+     "z": 10.0
+    }
+   ]
   },
   {
    "id": "b4",
@@ -679,7 +697,13 @@
     "area": "a12",
     "wall": "W",
     "pos": 0.825
-   }
+   },
+   "piers": [
+    {
+     "x": 204.0,
+     "z": 16.0
+    }
+   ]
   }
  ],
  "route": [
@@ -712,48 +736,24 @@
    "level": 0
   },
   {
-   "area": "a7",
-   "level": 1
-  },
-  {
    "area": "a8",
    "level": 0
-  },
-  {
-   "area": "a8",
-   "level": 1
   },
   {
    "area": "a9",
    "level": 0
   },
   {
-   "area": "a9",
-   "level": 1
-  },
-  {
    "area": "a10",
    "level": 0
-  },
-  {
-   "area": "a10",
-   "level": 1
   },
   {
    "area": "a11",
    "level": 0
   },
   {
-   "area": "a11",
-   "level": 1
-  },
-  {
    "area": "a12",
    "level": 0
-  },
-  {
-   "area": "a12",
-   "level": 1
   },
   {
    "area": "a13",
@@ -782,6 +782,30 @@
   {
    "area": "a19",
    "level": 0
+  },
+  {
+   "area": "a7",
+   "level": 1
+  },
+  {
+   "area": "a8",
+   "level": 1
+  },
+  {
+   "area": "a9",
+   "level": 1
+  },
+  {
+   "area": "a10",
+   "level": 1
+  },
+  {
+   "area": "a11",
+   "level": 1
+  },
+  {
+   "area": "a12",
+   "level": 1
   },
   {
    "area": "a20",
@@ -832,7 +856,7 @@
   {
    "id": "stub",
    "index": 0,
-   "name": "stub",
+   "name": "Boarding Ramp",
    "role": "entry",
    "origin": {
     "x": -6.0,
@@ -847,15 +871,15 @@
   {
    "id": "a1",
    "index": 1,
-   "name": "a1",
+   "name": "Cargo Elevator Bay",
    "role": "normal",
    "origin": {
     "x": 0.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 20,
+    "d": 20
    },
    "garrisonDensity": "normal",
    "hasShed": true,
@@ -864,646 +888,6116 @@
     "x": 10.0,
     "z": 10.0,
     "produces": "reinforcements + power-up on destroy"
-   }
+   },
+   "cover": [
+    {
+     "id": "a1_c1",
+     "x": 1.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c2",
+     "x": 1.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c3",
+     "x": 3.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c4",
+     "x": 1.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c5",
+     "x": 18.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c6",
+     "x": 18.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c7",
+     "x": 16.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c8",
+     "x": 18.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c9",
+     "x": 1.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c10",
+     "x": 1.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c11",
+     "x": 3.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c12",
+     "x": 1.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c13",
+     "x": 18.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c14",
+     "x": 18.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c15",
+     "x": 16.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a1_c16",
+     "x": 18.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 15.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 5.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 10.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 10.0,
+     "z": 5.0
+    }
+   ]
   },
   {
    "id": "a2",
    "index": 2,
-   "name": "a2",
+   "name": "Flooded Companionway",
    "role": "normal",
    "origin": {
     "x": 20.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a3",
-   "index": 3,
-   "name": "a3 - Branch point",
-   "role": "normal",
-   "origin": {
-    "x": 40.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 44.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a4",
-   "index": 4,
-   "name": "a4 - Upper limb",
-   "role": "normal",
-   "origin": {
-    "x": 60.0,
-    "z": 24.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 20.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a5",
-   "index": 5,
-   "name": "a5 - Lower limb",
-   "role": "normal",
-   "origin": {
-    "x": 60.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 20.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a6",
-   "index": 6,
-   "name": "a6 - Branch rejoin",
-   "role": "normal",
-   "origin": {
-    "x": 80.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 44.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a7",
-   "index": 7,
-   "name": "Area 7 - The Reef (double-pass)",
-   "role": "normal",
-   "origin": {
-    "x": 100.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 24,
+    "d": 22
    },
    "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a2_c1",
+     "x": 21.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c2",
+     "x": 21.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c3",
+     "x": 23.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c4",
+     "x": 21.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c5",
+     "x": 42.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c6",
+     "x": 42.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c7",
+     "x": 40.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c8",
+     "x": 42.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c9",
+     "x": 21.4,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c10",
+     "x": 21.4,
+     "z": 18.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c11",
+     "x": 23.6,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c12",
+     "x": 21.4,
+     "z": 16.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c13",
+     "x": 42.6,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c14",
+     "x": 42.6,
+     "z": 18.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c15",
+     "x": 40.4,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c16",
+     "x": 42.6,
+     "z": 16.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a2_c17",
+     "x": 32.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a2_c18",
+     "x": 32.0,
+     "z": 20.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",
      "level": 0,
-     "x": 106.0,
-     "z": 6.0
+     "x": 38.0,
+     "z": 11.0
     },
     {
      "kind": "rusher",
      "level": 0,
-     "x": 114.0,
-     "z": 6.0
+     "x": 26.0,
+     "z": 11.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 32.0,
+     "z": 17.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 32.0,
+     "z": 5.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 35.9,
+     "z": 14.9
+    }
+   ]
+  },
+  {
+   "id": "a3",
+   "index": 3,
+   "name": "Reactor Junction",
+   "role": "normal",
+   "origin": {
+    "x": 44.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20,
+    "d": 40
+   },
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a3_c1",
+     "x": 45.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c2",
+     "x": 45.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c3",
+     "x": 47.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c4",
+     "x": 45.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c5",
+     "x": 62.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c6",
+     "x": 62.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c7",
+     "x": 60.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c8",
+     "x": 62.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c9",
+     "x": 45.4,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c10",
+     "x": 45.4,
+     "z": 36.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c11",
+     "x": 47.6,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c12",
+     "x": 45.4,
+     "z": 34.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c13",
+     "x": 62.6,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c14",
+     "x": 62.6,
+     "z": 36.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c15",
+     "x": 60.4,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c16",
+     "x": 62.6,
+     "z": 34.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a3_c17",
+     "x": 45.6,
+     "z": 20.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a3_c18",
+     "x": 62.4,
+     "z": 20.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 59.0,
+     "z": 20.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 49.0,
+     "z": 20.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 54.0,
+     "z": 25.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 54.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 57.25,
+     "z": 23.25
+    }
+   ]
+  },
+  {
+   "id": "a4",
+   "index": 4,
+   "name": "Upper Cable Run",
+   "role": "normal",
+   "origin": {
+    "x": 64.0,
+    "z": 18
+   },
+   "size": {
+    "w": 20,
+    "d": 22
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a4_shed",
+    "x": 74.0,
+    "z": 29.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a4_c1",
+     "x": 65.4,
+     "z": 19.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c2",
+     "x": 65.4,
+     "z": 21.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c3",
+     "x": 65.4,
+     "z": 23.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c4",
+     "x": 82.6,
+     "z": 19.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c5",
+     "x": 82.6,
+     "z": 21.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c6",
+     "x": 82.6,
+     "z": 23.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c7",
+     "x": 65.4,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c8",
+     "x": 65.4,
+     "z": 36.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c9",
+     "x": 65.4,
+     "z": 34.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c10",
+     "x": 82.6,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c11",
+     "x": 82.6,
+     "z": 36.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a4_c12",
+     "x": 82.6,
+     "z": 34.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 79.0,
+     "z": 29.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 69.0,
+     "z": 29.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 74.0,
+     "z": 34.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 74.0,
+     "z": 24.0
+    }
+   ]
+  },
+  {
+   "id": "a5",
+   "index": 5,
+   "name": "Bilge Access",
+   "role": "normal",
+   "origin": {
+    "x": 64.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20,
+    "d": 18
+   },
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a5_c1",
+     "x": 65.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c2",
+     "x": 65.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c3",
+     "x": 65.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c4",
+     "x": 82.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c5",
+     "x": 82.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c6",
+     "x": 82.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c7",
+     "x": 65.4,
+     "z": 16.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c8",
+     "x": 65.4,
+     "z": 14.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c9",
+     "x": 65.4,
+     "z": 12.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c10",
+     "x": 82.6,
+     "z": 16.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c11",
+     "x": 82.6,
+     "z": 14.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a5_c12",
+     "x": 82.6,
+     "z": 12.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 78.0,
+     "z": 9.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 70.0,
+     "z": 9.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 74.0,
+     "z": 13.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 74.0,
+     "z": 5.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 76.6,
+     "z": 11.6
+    }
+   ]
+  },
+  {
+   "id": "a6",
+   "index": 6,
+   "name": "Manifold Convergence",
+   "role": "normal",
+   "origin": {
+    "x": 84.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20,
+    "d": 40
+   },
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a6_c1",
+     "x": 85.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c2",
+     "x": 85.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c3",
+     "x": 85.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c4",
+     "x": 102.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c5",
+     "x": 102.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c6",
+     "x": 102.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c7",
+     "x": 85.4,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c8",
+     "x": 85.4,
+     "z": 36.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c9",
+     "x": 85.4,
+     "z": 34.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c10",
+     "x": 102.6,
+     "z": 38.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c11",
+     "x": 102.6,
+     "z": 36.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c12",
+     "x": 102.6,
+     "z": 34.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a6_c13",
+     "x": 85.6,
+     "z": 20.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a6_c14",
+     "x": 102.4,
+     "z": 20.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 99.0,
+     "z": 20.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 89.0,
+     "z": 20.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 94.0,
+     "z": 25.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 94.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 97.25,
+     "z": 23.25
+    }
+   ]
+  },
+  {
+   "id": "a7",
+   "index": 7,
+   "name": "Coral-Choked Hold",
+   "role": "normal",
+   "origin": {
+    "x": 104.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20,
+    "d": 20
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a7_shed",
+    "x": 114.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a7_c1",
+     "x": 105.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c2",
+     "x": 105.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c3",
+     "x": 105.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c4",
+     "x": 105.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c5",
+     "x": 105.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c6",
+     "x": 105.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c7",
+     "x": 122.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c8",
+     "x": 122.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a7_c9",
+     "x": 122.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 119.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 109.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 106.0,
-     "z": 14.0
+     "x": 114.0,
+     "z": 15.0
     },
     {
      "kind": "rusher",
      "level": 1,
      "x": 114.0,
-     "z": 14.0
+     "z": 5.0
+    }
+   ],
+   "decks": [
+    {
+     "id": "a7_deck_b1",
+     "x": 17.0,
+     "z": 1.0,
+     "w": 3.0,
+     "d": 4.0
     }
    ]
   },
   {
    "id": "a8",
    "index": 8,
-   "name": "Area 8 - The Reef (double-pass)",
+   "name": "Ballast Chamber",
    "role": "normal",
    "origin": {
-    "x": 120.0,
+    "x": 124.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 24,
+    "d": 20
    },
    "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a8_c1",
+     "x": 125.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c2",
+     "x": 125.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c3",
+     "x": 125.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c4",
+     "x": 146.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c5",
+     "x": 146.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c6",
+     "x": 125.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c7",
+     "x": 125.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c8",
+     "x": 125.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c9",
+     "x": 146.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c10",
+     "x": 146.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c11",
+     "x": 146.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a8_c12",
+     "x": 136.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a8_c13",
+     "x": 136.0,
+     "z": 18.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",
      "level": 0,
-     "x": 126.0,
-     "z": 6.0
+     "x": 141.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 0,
-     "x": 134.0,
-     "z": 6.0
+     "x": 131.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 136.0,
+     "z": 15.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 126.0,
-     "z": 14.0
+     "x": 136.0,
+     "z": 5.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 134.0,
-     "z": 14.0
+     "x": 139.25,
+     "z": 13.25
+    }
+   ],
+   "decks": [
+    {
+     "id": "a8_deck_b2",
+     "x": 21.0,
+     "z": 5.5,
+     "w": 3.0,
+     "d": 4.0
     }
    ]
   },
   {
    "id": "a9",
    "index": 9,
-   "name": "Area 9 - The Reef (double-pass)",
+   "name": "Crushed Container Stack",
    "role": "normal",
    "origin": {
-    "x": 140.0,
+    "x": 148.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 20,
+    "d": 20
    },
    "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a9_shed",
+    "x": 158.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a9_c1",
+     "x": 166.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c2",
+     "x": 166.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c3",
+     "x": 166.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c4",
+     "x": 149.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c5",
+     "x": 149.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c6",
+     "x": 149.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c7",
+     "x": 166.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a9_c8",
+     "x": 166.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",
      "level": 0,
-     "x": 146.0,
-     "z": 6.0
+     "x": 163.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 0,
-     "x": 154.0,
-     "z": 6.0
+     "x": 153.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 146.0,
-     "z": 14.0
+     "x": 158.0,
+     "z": 15.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 154.0,
-     "z": 14.0
+     "x": 158.0,
+     "z": 5.0
+    }
+   ],
+   "decks": [
+    {
+     "id": "a9_deck_b1",
+     "x": 0.0,
+     "z": 1.0,
+     "w": 3.0,
+     "d": 4.0
+    },
+    {
+     "id": "a9_deck_b3",
+     "x": 17.0,
+     "z": 10.0,
+     "w": 3.0,
+     "d": 4.0
     }
    ]
   },
   {
    "id": "a10",
    "index": 10,
-   "name": "Area 10 - The Reef (double-pass)",
+   "name": "Drowned Mess Hall",
    "role": "normal",
    "origin": {
-    "x": 160.0,
+    "x": 168.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 26,
+    "d": 20
    },
    "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a10_c1",
+     "x": 169.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c2",
+     "x": 169.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c3",
+     "x": 192.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c4",
+     "x": 192.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c5",
+     "x": 192.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c6",
+     "x": 169.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c7",
+     "x": 169.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c8",
+     "x": 169.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a10_c9",
+     "x": 181.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a10_c10",
+     "x": 181.0,
+     "z": 18.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",
      "level": 0,
-     "x": 166.0,
-     "z": 6.0
+     "x": 186.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 0,
-     "x": 174.0,
-     "z": 6.0
+     "x": 176.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 181.0,
+     "z": 15.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 166.0,
-     "z": 14.0
+     "x": 181.0,
+     "z": 5.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 174.0,
-     "z": 14.0
+     "x": 184.25,
+     "z": 13.25
+    }
+   ],
+   "decks": [
+    {
+     "id": "a10_deck_b2",
+     "x": 0.0,
+     "z": 5.5,
+     "w": 3.0,
+     "d": 4.0
+    },
+    {
+     "id": "a10_deck_b4",
+     "x": 23.0,
+     "z": 14.5,
+     "w": 3.0,
+     "d": 4.0
     }
    ]
   },
   {
    "id": "a11",
    "index": 11,
-   "name": "Area 11 - The Reef (double-pass)",
+   "name": "Salvage Winch Room",
    "role": "normal",
    "origin": {
-    "x": 180.0,
+    "x": 194.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 20,
+    "d": 20
    },
    "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a11_shed",
+    "x": 204.0,
+    "z": 10.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a11_c1",
+     "x": 195.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c2",
+     "x": 195.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c3",
+     "x": 195.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c4",
+     "x": 212.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c5",
+     "x": 212.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c6",
+     "x": 212.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c7",
+     "x": 195.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c8",
+     "x": 195.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c9",
+     "x": 212.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c10",
+     "x": 212.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a11_c11",
+     "x": 212.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",
      "level": 0,
-     "x": 186.0,
-     "z": 6.0
+     "x": 209.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 0,
-     "x": 194.0,
-     "z": 6.0
+     "x": 199.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 186.0,
-     "z": 14.0
+     "x": 204.0,
+     "z": 15.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 194.0,
-     "z": 14.0
+     "x": 204.0,
+     "z": 5.0
+    }
+   ],
+   "decks": [
+    {
+     "id": "a11_deck_b3",
+     "x": 0.0,
+     "z": 10.0,
+     "w": 3.0,
+     "d": 4.0
     }
    ]
   },
   {
    "id": "a12",
    "index": 12,
-   "name": "Area 12 - The Reef (double-pass)",
+   "name": "Pressure Lock Antechamber",
    "role": "normal",
    "origin": {
-    "x": 200.0,
+    "x": 214.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 22,
+    "d": 20
    },
    "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a12_c1",
+     "x": 215.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c2",
+     "x": 215.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c3",
+     "x": 215.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c4",
+     "x": 234.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c5",
+     "x": 234.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c6",
+     "x": 234.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c7",
+     "x": 234.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c8",
+     "x": 234.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a12_c9",
+     "x": 234.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
    "garrison": [
     {
      "kind": "rusher",
      "level": 0,
-     "x": 206.0,
-     "z": 6.0
+     "x": 230.0,
+     "z": 10.0
     },
     {
      "kind": "rusher",
      "level": 0,
-     "x": 214.0,
-     "z": 6.0
+     "x": 220.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 225.0,
+     "z": 15.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 206.0,
-     "z": 14.0
+     "x": 225.0,
+     "z": 5.0
     },
     {
      "kind": "rusher",
      "level": 1,
-     "x": 214.0,
-     "z": 14.0
+     "x": 228.25,
+     "z": 13.25
+    }
+   ],
+   "decks": [
+    {
+     "id": "a12_deck_b4",
+     "x": 0.0,
+     "z": 14.5,
+     "w": 3.0,
+     "d": 4.0
     }
    ]
   },
   {
    "id": "a13",
    "index": 13,
-   "name": "a13 - Branch point",
+   "name": "Turbine Junction",
    "role": "normal",
    "origin": {
-    "x": 220.0,
+    "x": 236.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 44.0
+    "w": 20,
+    "d": 42
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a13_c1",
+     "x": 237.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c2",
+     "x": 237.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c3",
+     "x": 237.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c4",
+     "x": 254.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c5",
+     "x": 254.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c6",
+     "x": 254.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c7",
+     "x": 237.4,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c8",
+     "x": 237.4,
+     "z": 38.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c9",
+     "x": 237.4,
+     "z": 36.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c10",
+     "x": 254.6,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c11",
+     "x": 254.6,
+     "z": 38.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c12",
+     "x": 254.6,
+     "z": 36.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a13_c13",
+     "x": 237.6,
+     "z": 21.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a13_c14",
+     "x": 254.4,
+     "z": 21.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 251.0,
+     "z": 21.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 241.0,
+     "z": 21.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 246.0,
+     "z": 26.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 246.0,
+     "z": 16.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 249.25,
+     "z": 24.25
+    }
+   ]
   },
   {
    "id": "a14",
    "index": 14,
-   "name": "a14 - Upper limb",
+   "name": "Starboard Conduit",
    "role": "normal",
    "origin": {
-    "x": 240.0,
-    "z": 24.0
+    "x": 256.0,
+    "z": 20
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 22,
+    "d": 22
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a14_shed",
+    "x": 267.0,
+    "z": 31.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a14_c1",
+     "x": 257.4,
+     "z": 21.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c2",
+     "x": 257.4,
+     "z": 23.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c3",
+     "x": 259.6,
+     "z": 21.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c4",
+     "x": 257.4,
+     "z": 25.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c5",
+     "x": 276.6,
+     "z": 21.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c6",
+     "x": 276.6,
+     "z": 23.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c7",
+     "x": 274.4,
+     "z": 21.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c8",
+     "x": 276.6,
+     "z": 25.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c9",
+     "x": 257.4,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c10",
+     "x": 257.4,
+     "z": 38.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c11",
+     "x": 259.6,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c12",
+     "x": 257.4,
+     "z": 36.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c13",
+     "x": 276.6,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c14",
+     "x": 276.6,
+     "z": 38.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c15",
+     "x": 274.4,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a14_c16",
+     "x": 276.6,
+     "z": 36.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 273.0,
+     "z": 31.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 261.0,
+     "z": 31.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 267.0,
+     "z": 37.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 267.0,
+     "z": 25.0
+    }
+   ]
   },
   {
    "id": "a15",
    "index": 15,
-   "name": "a15 - Lower limb",
+   "name": "Keel Crawlspace",
    "role": "normal",
    "origin": {
-    "x": 240.0,
+    "x": 256.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 22,
+    "d": 20
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a15_c1",
+     "x": 257.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c2",
+     "x": 257.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c3",
+     "x": 259.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c4",
+     "x": 257.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c5",
+     "x": 276.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c6",
+     "x": 276.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c7",
+     "x": 274.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c8",
+     "x": 276.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c9",
+     "x": 257.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c10",
+     "x": 257.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c11",
+     "x": 259.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c12",
+     "x": 257.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c13",
+     "x": 276.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c14",
+     "x": 276.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c15",
+     "x": 274.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a15_c16",
+     "x": 276.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 272.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 262.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 267.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 267.0,
+     "z": 5.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 270.25,
+     "z": 13.25
+    }
+   ]
   },
   {
    "id": "a16",
    "index": 16,
-   "name": "a16 - Branch rejoin",
+   "name": "Coolant Confluence",
    "role": "normal",
    "origin": {
-    "x": 260.0,
+    "x": 278.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 44.0
+    "w": 20,
+    "d": 42
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a16_c1",
+     "x": 279.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c2",
+     "x": 279.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c3",
+     "x": 281.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c4",
+     "x": 279.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c5",
+     "x": 296.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c6",
+     "x": 296.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c7",
+     "x": 294.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c8",
+     "x": 296.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c9",
+     "x": 279.4,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c10",
+     "x": 279.4,
+     "z": 38.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c11",
+     "x": 281.6,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c12",
+     "x": 279.4,
+     "z": 36.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c13",
+     "x": 296.6,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c14",
+     "x": 296.6,
+     "z": 38.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c15",
+     "x": 294.4,
+     "z": 40.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c16",
+     "x": 296.6,
+     "z": 36.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a16_c17",
+     "x": 279.6,
+     "z": 21.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a16_c18",
+     "x": 296.4,
+     "z": 21.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 293.0,
+     "z": 21.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 283.0,
+     "z": 21.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 288.0,
+     "z": 26.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 288.0,
+     "z": 16.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 291.25,
+     "z": 24.25
+    }
+   ]
   },
   {
    "id": "a17",
    "index": 17,
-   "name": "a17",
+   "name": "Spare Parts Locker",
    "role": "normal",
    "origin": {
-    "x": 280.0,
+    "x": 298.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 26,
+    "d": 20
    },
    "garrisonDensity": "normal",
    "hasShed": true,
    "shed": {
     "id": "a17_shed",
-    "x": 290.0,
+    "x": 311.0,
     "z": 10.0,
     "produces": "reinforcements + power-up on destroy"
-   }
+   },
+   "cover": [
+    {
+     "id": "a17_c1",
+     "x": 299.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c2",
+     "x": 299.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c3",
+     "x": 301.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c4",
+     "x": 299.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c5",
+     "x": 322.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c6",
+     "x": 322.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c7",
+     "x": 320.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c8",
+     "x": 322.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c9",
+     "x": 299.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c10",
+     "x": 299.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c11",
+     "x": 301.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c12",
+     "x": 299.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c13",
+     "x": 322.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c14",
+     "x": 322.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c15",
+     "x": 320.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c16",
+     "x": 322.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a17_c17",
+     "x": 311.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a17_c18",
+     "x": 311.0,
+     "z": 18.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 316.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 306.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 311.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 311.0,
+     "z": 5.0
+    }
+   ]
   },
   {
    "id": "a18",
    "index": 18,
-   "name": "a18",
+   "name": "The Anchor Chain Well",
    "role": "boss",
    "origin": {
-    "x": 300.0,
+    "x": 324.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 30,
+    "d": 30
    },
    "garrisonDensity": "none",
    "boss": {
     "id": "a18_boss",
-    "x": 310.0,
-    "z": 10.0,
+    "x": 339.0,
+    "z": 15.0,
     "size": {
      "w": 3.6,
      "d": 3.6
     }
-   }
+   },
+   "cover": [
+    {
+     "id": "a18_c1",
+     "x": 325.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c2",
+     "x": 325.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c3",
+     "x": 327.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c4",
+     "x": 325.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c5",
+     "x": 352.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c6",
+     "x": 352.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c7",
+     "x": 350.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c8",
+     "x": 352.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c9",
+     "x": 325.4,
+     "z": 28.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c10",
+     "x": 325.4,
+     "z": 26.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c11",
+     "x": 327.6,
+     "z": 28.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c12",
+     "x": 325.4,
+     "z": 24.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c13",
+     "x": 352.6,
+     "z": 28.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c14",
+     "x": 352.6,
+     "z": 26.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c15",
+     "x": 350.4,
+     "z": 28.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c16",
+     "x": 352.6,
+     "z": 24.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a18_c17",
+     "x": 339.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a18_c18",
+     "x": 339.0,
+     "z": 28.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a18_c19",
+     "x": 325.6,
+     "z": 15.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a18_c20",
+     "x": 352.4,
+     "z": 15.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ]
   },
   {
    "id": "a19",
    "index": 19,
-   "name": "a19",
+   "name": "Flooded Officers' Quarters",
    "role": "normal",
    "origin": {
-    "x": 320.0,
+    "x": 354.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 20,
+    "d": 20
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a19_c1",
+     "x": 355.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c2",
+     "x": 355.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c3",
+     "x": 357.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c4",
+     "x": 355.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c5",
+     "x": 372.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c6",
+     "x": 372.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c7",
+     "x": 370.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c8",
+     "x": 372.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c9",
+     "x": 355.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c10",
+     "x": 355.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c11",
+     "x": 357.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c12",
+     "x": 355.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c13",
+     "x": 372.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c14",
+     "x": 372.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c15",
+     "x": 370.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a19_c16",
+     "x": 372.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 369.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 359.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 364.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 364.0,
+     "z": 5.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 367.25,
+     "z": 13.25
+    }
+   ]
   },
   {
    "id": "a20",
    "index": 20,
-   "name": "a20 - Branch point",
+   "name": "Hull Breach Junction",
    "role": "normal",
    "origin": {
-    "x": 340.0,
+    "x": 374.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 44.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a21",
-   "index": 21,
-   "name": "a21 - Upper limb",
-   "role": "normal",
-   "origin": {
-    "x": 360.0,
-    "z": 24.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 20.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a22",
-   "index": 22,
-   "name": "a22 - Lower limb",
-   "role": "normal",
-   "origin": {
-    "x": 360.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 20.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a23",
-   "index": 23,
-   "name": "a23 - Branch rejoin",
-   "role": "normal",
-   "origin": {
-    "x": 380.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 44.0
-   },
-   "garrisonDensity": "normal"
-  },
-  {
-   "id": "a24",
-   "index": 24,
-   "name": "a24",
-   "role": "normal",
-   "origin": {
-    "x": 400.0,
-    "z": 0.0
-   },
-   "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 24,
+    "d": 50
    },
    "garrisonDensity": "normal",
    "hasShed": true,
    "shed": {
-    "id": "a24_shed",
-    "x": 410.0,
-    "z": 10.0,
+    "id": "a20_shed",
+    "x": 386.0,
+    "z": 25.0,
     "produces": "reinforcements + power-up on destroy"
-   }
+   },
+   "cover": [
+    {
+     "id": "a20_c1",
+     "x": 375.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c2",
+     "x": 375.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c3",
+     "x": 377.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c4",
+     "x": 375.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c5",
+     "x": 396.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c6",
+     "x": 396.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c7",
+     "x": 394.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c8",
+     "x": 396.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c9",
+     "x": 375.4,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c10",
+     "x": 375.4,
+     "z": 46.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c11",
+     "x": 377.6,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c12",
+     "x": 375.4,
+     "z": 44.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c13",
+     "x": 396.6,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c14",
+     "x": 396.6,
+     "z": 46.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c15",
+     "x": 394.4,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c16",
+     "x": 396.6,
+     "z": 44.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a20_c17",
+     "x": 386.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a20_c18",
+     "x": 386.0,
+     "z": 48.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a20_c19",
+     "x": 375.6,
+     "z": 25.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a20_c20",
+     "x": 396.4,
+     "z": 25.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 392.0,
+     "z": 25.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 380.0,
+     "z": 25.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 386.0,
+     "z": 31.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 386.0,
+     "z": 19.0
+    }
+   ]
+  },
+  {
+   "id": "a21",
+   "index": 21,
+   "name": "Sonar Array Deck",
+   "role": "normal",
+   "origin": {
+    "x": 398.0,
+    "z": 26
+   },
+   "size": {
+    "w": 20,
+    "d": 24
+   },
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a21_c1",
+     "x": 399.4,
+     "z": 27.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c2",
+     "x": 399.4,
+     "z": 29.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c3",
+     "x": 401.6,
+     "z": 27.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c4",
+     "x": 399.4,
+     "z": 31.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c5",
+     "x": 416.6,
+     "z": 27.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c6",
+     "x": 416.6,
+     "z": 29.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c7",
+     "x": 414.4,
+     "z": 27.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c8",
+     "x": 416.6,
+     "z": 31.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c9",
+     "x": 399.4,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c10",
+     "x": 399.4,
+     "z": 46.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c11",
+     "x": 401.6,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c12",
+     "x": 399.4,
+     "z": 44.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c13",
+     "x": 416.6,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c14",
+     "x": 416.6,
+     "z": 46.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c15",
+     "x": 414.4,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a21_c16",
+     "x": 416.6,
+     "z": 44.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 413.0,
+     "z": 38.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 403.0,
+     "z": 38.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 408.0,
+     "z": 43.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 408.0,
+     "z": 33.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 411.25,
+     "z": 41.25
+    }
+   ]
+  },
+  {
+   "id": "a22",
+   "index": 22,
+   "name": "Rusted Fuel Bunker",
+   "role": "normal",
+   "origin": {
+    "x": 398.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20,
+    "d": 26
+   },
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a22_c1",
+     "x": 399.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c2",
+     "x": 399.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c3",
+     "x": 401.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c4",
+     "x": 399.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c5",
+     "x": 416.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c6",
+     "x": 416.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c7",
+     "x": 414.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c8",
+     "x": 416.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c9",
+     "x": 399.4,
+     "z": 24.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c10",
+     "x": 399.4,
+     "z": 22.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c11",
+     "x": 401.6,
+     "z": 24.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c12",
+     "x": 399.4,
+     "z": 20.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c13",
+     "x": 416.6,
+     "z": 24.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c14",
+     "x": 416.6,
+     "z": 22.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c15",
+     "x": 414.4,
+     "z": 24.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a22_c16",
+     "x": 416.6,
+     "z": 20.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 413.0,
+     "z": 13.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 403.0,
+     "z": 13.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 408.0,
+     "z": 18.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 408.0,
+     "z": 8.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 411.25,
+     "z": 16.25
+    }
+   ]
+  },
+  {
+   "id": "a23",
+   "index": 23,
+   "name": "Bulkhead Confluence",
+   "role": "normal",
+   "origin": {
+    "x": 418.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 24,
+    "d": 50
+   },
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a23_shed",
+    "x": 430.0,
+    "z": 25.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a23_c1",
+     "x": 419.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c2",
+     "x": 419.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c3",
+     "x": 421.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c4",
+     "x": 419.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c5",
+     "x": 440.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c6",
+     "x": 440.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c7",
+     "x": 438.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c8",
+     "x": 440.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c9",
+     "x": 419.4,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c10",
+     "x": 419.4,
+     "z": 46.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c11",
+     "x": 421.6,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c12",
+     "x": 419.4,
+     "z": 44.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c13",
+     "x": 440.6,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c14",
+     "x": 440.6,
+     "z": 46.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c15",
+     "x": 438.4,
+     "z": 48.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c16",
+     "x": 440.6,
+     "z": 44.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a23_c17",
+     "x": 430.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a23_c18",
+     "x": 430.0,
+     "z": 48.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a23_c19",
+     "x": 419.6,
+     "z": 25.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a23_c20",
+     "x": 440.4,
+     "z": 25.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 436.0,
+     "z": 25.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 424.0,
+     "z": 25.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 430.0,
+     "z": 31.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 430.0,
+     "z": 19.0
+    }
+   ]
+  },
+  {
+   "id": "a24",
+   "index": 24,
+   "name": "Reef-Grown Cargo Hold",
+   "role": "normal",
+   "origin": {
+    "x": 442.0,
+    "z": 0.0
+   },
+   "size": {
+    "w": 20,
+    "d": 24
+   },
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a24_c1",
+     "x": 443.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c2",
+     "x": 443.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c3",
+     "x": 445.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c4",
+     "x": 443.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c5",
+     "x": 460.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c6",
+     "x": 460.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c7",
+     "x": 458.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c8",
+     "x": 460.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c9",
+     "x": 443.4,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c10",
+     "x": 443.4,
+     "z": 20.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c11",
+     "x": 445.6,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c12",
+     "x": 443.4,
+     "z": 18.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c13",
+     "x": 460.6,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c14",
+     "x": 460.6,
+     "z": 20.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c15",
+     "x": 458.4,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a24_c16",
+     "x": 460.6,
+     "z": 18.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 457.0,
+     "z": 12.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 447.0,
+     "z": 12.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 452.0,
+     "z": 17.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 452.0,
+     "z": 7.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 455.25,
+     "z": 15.25
+    }
+   ]
   },
   {
    "id": "a25",
    "index": 25,
-   "name": "a25",
+   "name": "Sealed Escape Trunk",
    "role": "normal",
    "origin": {
-    "x": 420.0,
+    "x": 462.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 26,
+    "d": 22
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a25_shed",
+    "x": 475.0,
+    "z": 11.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a25_c1",
+     "x": 463.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c2",
+     "x": 463.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c3",
+     "x": 465.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c4",
+     "x": 463.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c5",
+     "x": 486.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c6",
+     "x": 486.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c7",
+     "x": 484.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c8",
+     "x": 486.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c9",
+     "x": 463.4,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c10",
+     "x": 463.4,
+     "z": 18.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c11",
+     "x": 465.6,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c12",
+     "x": 463.4,
+     "z": 16.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c13",
+     "x": 486.6,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c14",
+     "x": 486.6,
+     "z": 18.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c15",
+     "x": 484.4,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c16",
+     "x": 486.6,
+     "z": 16.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a25_c17",
+     "x": 475.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a25_c18",
+     "x": 475.0,
+     "z": 20.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 481.0,
+     "z": 11.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 469.0,
+     "z": 11.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 475.0,
+     "z": 17.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 475.0,
+     "z": 5.0
+    }
+   ]
   },
   {
    "id": "a26",
    "index": 26,
-   "name": "a26",
+   "name": "The Propeller Shaft",
    "role": "boss",
    "origin": {
-    "x": 440.0,
+    "x": 488.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 28,
+    "d": 28
    },
    "garrisonDensity": "none",
    "boss": {
     "id": "a26_boss",
-    "x": 450.0,
-    "z": 10.0,
+    "x": 502.0,
+    "z": 14.0,
     "size": {
-     "w": 3.6,
-     "d": 3.6
+     "w": 4.0,
+     "d": 4.0
     }
-   }
+   },
+   "cover": [
+    {
+     "id": "a26_c1",
+     "x": 489.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c2",
+     "x": 489.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c3",
+     "x": 491.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c4",
+     "x": 489.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c5",
+     "x": 514.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c6",
+     "x": 514.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c7",
+     "x": 512.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c8",
+     "x": 514.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c9",
+     "x": 489.4,
+     "z": 26.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c10",
+     "x": 489.4,
+     "z": 24.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c11",
+     "x": 491.6,
+     "z": 26.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c12",
+     "x": 489.4,
+     "z": 22.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c13",
+     "x": 514.6,
+     "z": 26.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c14",
+     "x": 514.6,
+     "z": 24.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c15",
+     "x": 512.4,
+     "z": 26.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c16",
+     "x": 514.6,
+     "z": 22.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a26_c17",
+     "x": 502.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a26_c18",
+     "x": 502.0,
+     "z": 26.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a26_c19",
+     "x": 514.4,
+     "z": 14.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ]
   },
   {
    "id": "a27",
    "index": 27,
-   "name": "a27",
+   "name": "Barnacle Reactor Bay",
    "role": "normal",
    "origin": {
-    "x": 460.0,
+    "x": 516.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 24,
+    "d": 20
    },
    "garrisonDensity": "normal",
    "hasShed": true,
    "shed": {
     "id": "a27_shed",
-    "x": 470.0,
+    "x": 528.0,
     "z": 10.0,
     "produces": "reinforcements + power-up on destroy"
-   }
+   },
+   "cover": [
+    {
+     "id": "a27_c1",
+     "x": 517.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c2",
+     "x": 517.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c3",
+     "x": 519.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c4",
+     "x": 517.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c5",
+     "x": 538.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c6",
+     "x": 538.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c7",
+     "x": 536.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c8",
+     "x": 538.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c9",
+     "x": 517.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c10",
+     "x": 517.4,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c11",
+     "x": 519.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c12",
+     "x": 517.4,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c13",
+     "x": 538.6,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c14",
+     "x": 538.6,
+     "z": 16.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c15",
+     "x": 536.4,
+     "z": 18.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c16",
+     "x": 538.6,
+     "z": 14.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a27_c17",
+     "x": 528.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a27_c18",
+     "x": 528.0,
+     "z": 18.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 533.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 523.0,
+     "z": 10.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 528.0,
+     "z": 15.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 528.0,
+     "z": 5.0
+    }
+   ]
   },
   {
    "id": "a28",
    "index": 28,
-   "name": "a28",
+   "name": "Collapsed Galley",
    "role": "normal",
    "origin": {
-    "x": 480.0,
+    "x": 540.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 24,
+    "d": 22
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "cover": [
+    {
+     "id": "a28_c1",
+     "x": 541.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c2",
+     "x": 541.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c3",
+     "x": 543.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c4",
+     "x": 541.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c5",
+     "x": 562.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c6",
+     "x": 562.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c7",
+     "x": 560.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c8",
+     "x": 562.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c9",
+     "x": 541.4,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c10",
+     "x": 541.4,
+     "z": 18.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c11",
+     "x": 543.6,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c12",
+     "x": 541.4,
+     "z": 16.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c13",
+     "x": 562.6,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c14",
+     "x": 562.6,
+     "z": 18.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c15",
+     "x": 560.4,
+     "z": 20.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c16",
+     "x": 562.6,
+     "z": 16.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a28_c17",
+     "x": 552.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a28_c18",
+     "x": 552.0,
+     "z": 20.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 558.0,
+     "z": 11.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 546.0,
+     "z": 11.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 552.0,
+     "z": 17.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 552.0,
+     "z": 5.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 555.9,
+     "z": 14.9
+    }
+   ]
   },
   {
    "id": "a29",
    "index": 29,
-   "name": "a29",
+   "name": "Final Pressure Lock",
    "role": "normal",
    "origin": {
-    "x": 500.0,
+    "x": 564.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 22,
+    "d": 24
    },
-   "garrisonDensity": "normal"
+   "garrisonDensity": "normal",
+   "hasShed": true,
+   "shed": {
+    "id": "a29_shed",
+    "x": 575.0,
+    "z": 12.0,
+    "produces": "reinforcements + power-up on destroy"
+   },
+   "cover": [
+    {
+     "id": "a29_c1",
+     "x": 565.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c2",
+     "x": 565.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c3",
+     "x": 567.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c4",
+     "x": 565.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c5",
+     "x": 584.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c6",
+     "x": 584.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c7",
+     "x": 582.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c8",
+     "x": 584.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c9",
+     "x": 565.4,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c10",
+     "x": 565.4,
+     "z": 20.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c11",
+     "x": 567.6,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c12",
+     "x": 565.4,
+     "z": 18.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c13",
+     "x": 584.6,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c14",
+     "x": 584.6,
+     "z": 20.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c15",
+     "x": 582.4,
+     "z": 22.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a29_c16",
+     "x": 584.6,
+     "z": 18.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    }
+   ],
+   "garrison": [
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 581.0,
+     "z": 12.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 569.0,
+     "z": 12.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 575.0,
+     "z": 18.0
+    },
+    {
+     "kind": "rusher",
+     "level": 0,
+     "x": 575.0,
+     "z": 6.0
+    }
+   ]
   },
   {
    "id": "a30",
    "index": 30,
-   "name": "a30 - Anchorhead's Cargo Hold",
+   "name": "Anchorhead's Cargo Hold",
    "role": "boss+exit",
    "origin": {
-    "x": 520.0,
+    "x": 586.0,
     "z": 0.0
    },
    "size": {
-    "w": 20.0,
-    "d": 20.0
+    "w": 34,
+    "d": 34
    },
    "garrisonDensity": "none",
    "boss": {
     "id": "anchorhead",
-    "x": 530.0,
-    "z": 10.0,
+    "x": 603.0,
+    "z": 17.0,
     "size": {
-     "w": 4.0,
-     "d": 4.0
+     "w": 4.5,
+     "d": 4.5
     }
-   }
+   },
+   "cover": [
+    {
+     "id": "a30_c1",
+     "x": 587.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c2",
+     "x": 587.4,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c3",
+     "x": 589.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c4",
+     "x": 587.4,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c5",
+     "x": 618.6,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c6",
+     "x": 618.6,
+     "z": 3.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c7",
+     "x": 616.4,
+     "z": 1.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c8",
+     "x": 618.6,
+     "z": 5.8,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c9",
+     "x": 587.4,
+     "z": 32.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c10",
+     "x": 587.4,
+     "z": 30.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c11",
+     "x": 589.6,
+     "z": 32.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c12",
+     "x": 587.4,
+     "z": 28.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c13",
+     "x": 618.6,
+     "z": 32.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c14",
+     "x": 618.6,
+     "z": 30.4,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c15",
+     "x": 616.4,
+     "z": 32.6,
+     "width": 1.8,
+     "height": 1.8,
+     "depth": 1.8,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c16",
+     "x": 618.6,
+     "z": 28.2,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "machinery"
+    },
+    {
+     "id": "a30_c17",
+     "x": 603.0,
+     "z": 1.6,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a30_c18",
+     "x": 603.0,
+     "z": 32.4,
+     "width": 2.4,
+     "height": 1.8,
+     "depth": 1.6,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a30_c19",
+     "x": 587.6,
+     "z": 17.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    },
+    {
+     "id": "a30_c20",
+     "x": 618.4,
+     "z": 17.0,
+     "width": 1.6,
+     "height": 1.8,
+     "depth": 2.4,
+     "shape": "box",
+     "dressing": "crate"
+    }
+   ]
   }
  ]
 }
