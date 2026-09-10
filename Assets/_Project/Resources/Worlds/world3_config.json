@@ -1261,7 +1261,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a2_c18",
@@ -1271,7 +1271,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -1490,7 +1490,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a3_c18",
@@ -1500,7 +1500,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -2018,7 +2018,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a6_c14",
@@ -2028,7 +2028,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -2346,7 +2346,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a8_c13",
@@ -2356,7 +2356,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -2650,7 +2650,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a10_c10",
@@ -2660,7 +2660,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -3172,7 +3172,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a13_c14",
@@ -3182,7 +3182,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -3820,7 +3820,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a16_c18",
@@ -3830,7 +3830,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -4056,7 +4056,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a17_c18",
@@ -4066,7 +4066,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -4288,7 +4288,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a18_c18",
@@ -4298,7 +4298,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a18_c19",
@@ -4308,7 +4308,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a18_c20",
@@ -4318,7 +4318,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ]
   },
@@ -4721,7 +4721,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a20_c18",
@@ -4731,7 +4731,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a20_c19",
@@ -4741,7 +4741,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a20_c20",
@@ -4751,7 +4751,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -5389,7 +5389,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a23_c18",
@@ -5399,7 +5399,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a23_c19",
@@ -5409,7 +5409,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a23_c20",
@@ -5419,7 +5419,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -5848,7 +5848,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a25_c18",
@@ -5858,7 +5858,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -6080,7 +6080,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a26_c18",
@@ -6090,7 +6090,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a26_c19",
@@ -6100,7 +6100,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ]
   },
@@ -6294,7 +6294,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a27_c18",
@@ -6304,7 +6304,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -6517,7 +6517,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a28_c18",
@@ -6527,7 +6527,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ],
    "garrison": [
@@ -6965,7 +6965,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a30_c18",
@@ -6975,7 +6975,7 @@
      "height": 1.8,
      "depth": 1.6,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a30_c19",
@@ -6985,7 +6985,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     },
     {
      "id": "a30_c20",
@@ -6995,7 +6995,7 @@
      "height": 1.8,
      "depth": 2.4,
      "shape": "box",
-     "dressing": "crate"
+     "dressing": "none"
     }
    ]
   }

@@ -338,16 +338,16 @@ namespace MaxWorlds.Arena
     public static class MapEnums
     {
         public static ZoneKind Zone(string s) =>
-            Parse(s, ZoneKind.Open);
+            Parse(s, ZoneKind.Open, nameof(Zone));
 
         public static EntityKind Entity(string s) =>
-            Parse(s, EntityKind.Unknown);
+            Parse(s, EntityKind.Unknown, nameof(Entity));
 
         public static CoverShape Shape(string s) =>
-            Parse(s, CoverShape.Box);
+            Parse(s, CoverShape.Box, nameof(Shape));
 
         public static CoverDressing Dressing(string s) =>
-            Parse(s, CoverDressing.None);
+            Parse(s, CoverDressing.None, nameof(Dressing));
 
         /// <summary>A comma-separated list of entity ids, as written by hand: <c>"a, b"</c> and
         /// <c>"a,b"</c> and <c>"a"</c> all say what they look like they say. Ids themselves are taken
@@ -367,12 +367,17 @@ namespace MaxWorlds.Arena
         }
 
         /// <summary>Case- and separator-insensitive: <c>playerSpawn</c>, <c>PlayerSpawn</c> and
-        /// <c>player_spawn</c> all mean the same thing, because a map file is written by hand.</summary>
-        private static T Parse<T>(string s, T fallback) where T : struct, Enum
+        /// <c>player_spawn</c> all mean the same thing, because a map file is written by hand.
+        /// A non-empty value that still fails to parse is a typo, not the "not authored" idiom
+        /// (that's what empty/whitespace is for) — so it logs a warning naming the field, the
+        /// offending string and the fallback used, instead of swallowing it silently (MV-764).</summary>
+        private static T Parse<T>(string s, T fallback, string fieldName) where T : struct, Enum
         {
             if (string.IsNullOrWhiteSpace(s)) return fallback;
             string cleaned = s.Replace("_", string.Empty).Replace("-", string.Empty).Replace(" ", string.Empty);
-            return Enum.TryParse(cleaned, ignoreCase: true, out T parsed) ? parsed : fallback;
+            if (Enum.TryParse(cleaned, ignoreCase: true, out T parsed)) return parsed;
+            Debug.LogWarning($"MapEnums.{fieldName}: unrecognised value \"{s}\", falling back to {fallback}.");
+            return fallback;
         }
     }
 }
