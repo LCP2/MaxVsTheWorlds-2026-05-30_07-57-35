@@ -170,15 +170,20 @@ namespace MaxWorlds.Rendering
                 KerbConcrete);
 
             // Pipe bank. Two runs, the upper one shorter and offset, so the wall has a diagonal in it.
+            // Verticals are proportional to wallHeight (MV-765) — the authored constants assumed a
+            // ~3.5 m wall (World 1's fence); every world's wall is actually 1.5 m.
+            float pipeLowY = 0.62f * wallHeight;
             float pipeOut = PipeRadius + 0.08f;
-            Tube(parent, "Pipe Low", mid + n * pipeOut + Vector3.up * PipeLowY,
+            Tube(parent, "Pipe Low", mid + n * pipeOut + Vector3.up * pipeLowY,
                  PipeRadius, length, lie, Rust);
 
-            if (length > 5f)
+            // On a low wall, one run with collars is the right amount of detail — a second run just
+            // floats above the wall with nothing behind it.
+            if (length > 5f && wallHeight >= 2.2f)
             {
                 float upperLen = length * 0.62f;
                 Vector3 upperMid = mid + along * (length * 0.14f);
-                Tube(parent, "Pipe High", upperMid + n * pipeOut + Vector3.up * (PipeLowY + PipeRise),
+                Tube(parent, "Pipe High", upperMid + n * pipeOut + Vector3.up * (pipeLowY + PipeRise),
                      PipeRadius * 0.75f, upperLen, lie, RustDark);
             }
 
@@ -187,20 +192,23 @@ namespace MaxWorlds.Rendering
             for (int i = 0; i < collars; i++)
             {
                 float t = (i + 0.5f) / collars;
-                Vector3 at = new Vector3(Mathf.Lerp(a.x, b.x, t), PipeLowY, Mathf.Lerp(a.y, b.y, t));
+                Vector3 at = new Vector3(Mathf.Lerp(a.x, b.x, t), pipeLowY, Mathf.Lerp(a.y, b.y, t));
                 Tube(parent, $"Collar{i}", at + n * pipeOut, PipeRadius * 1.35f, 0.22f, lie, RustDark);
             }
 
             // Lamps. Deterministic phase off the seed so two adjacent walls don't line their lamps up
-            // into a grid — a grid is exactly what makes generated dressing read as generated.
+            // into a grid — a grid is exactly what makes generated dressing read as generated. Height
+            // is proportional to wallHeight (MV-765): the proportion replaces the old clamp against
+            // wallHeight - 0.4f.
             int lamps = Mathf.FloorToInt(length / LampSpacing);
             float phase = Frac(seed * 0.6180339887f);
+            float lampHeight = 0.75f * wallHeight;
             for (int i = 0; i < lamps; i++)
             {
                 float t = (i + 0.25f + phase * 0.5f) / Mathf.Max(1, lamps);
                 if (t <= 0.02f || t >= 0.98f) continue;
                 Vector3 at = new Vector3(Mathf.Lerp(a.x, b.x, t), 0f, Mathf.Lerp(a.y, b.y, t));
-                BuildWallLamp(parent, at, n, along, Mathf.Min(LampHeight, wallHeight - 0.4f));
+                BuildWallLamp(parent, at, n, along, lampHeight);
             }
         }
 
@@ -232,9 +240,20 @@ namespace MaxWorlds.Rendering
                  Quaternion.Euler(90f, 0f, 0f), LampPool);
         }
 
+        /// <summary>How thick a coping cap is, and how far it overhangs each side of the wall it caps
+        /// — the low-wall (&lt;2.2 m) substitute for <see cref="BuildSoffit"/>'s 1.2 m overhang, which
+        /// on a 1.5 m wall hung a slab into the room at waist height (MV-765).</summary>
+        public const float CopingThickness = 0.18f;
+        public const float CopingOverhang = 0.25f;
+
         /// <summary>The soffit band — a slab overhanging the top of a wall, inward, so the room edge
         /// falls into shadow and the drain reads as a roofed tunnel with its roof cut away for the
-        /// camera. This is the cheapest single change that stops World 2 reading as outdoors.</summary>
+        /// camera. This is the cheapest single change that stops World 2 reading as outdoors.
+        ///
+        /// Below a 2.2 m wall the 1.2 m overhang reaches too far into playable space (MV-765): a
+        /// low wall instead gets a coping cap, flush on top and overhanging only 0.25 m each side —
+        /// it caps the wall and darkens its top edge without reaching into the room. A future taller
+        /// world still gets the full soffit.</summary>
         public static void BuildSoffit(Transform parent, Vector2 a, Vector2 b, Vector2 outward,
                                        float wallHeight)
         {
@@ -245,6 +264,15 @@ namespace MaxWorlds.Rendering
             Vector3 mid = new Vector3((a.x + b.x) * 0.5f, 0f, (a.y + b.y) * 0.5f);
             Vector3 n = new Vector3(outward.x, 0f, outward.y);
 
+            if (wallHeight < 2.2f)
+            {
+                Box(parent, "Soffit",
+                    mid + Vector3.up * (wallHeight + CopingThickness * 0.5f),
+                    new Vector3(length, CopingThickness, CopingOverhang * 2f).Oriented(dir),
+                    Soffit);
+                return;
+            }
+
             Box(parent, "Soffit",
                 mid + n * (SoffitOverhang * 0.5f) + Vector3.up * (wallHeight - SoffitThickness * 0.5f),
                 new Vector3(length, SoffitThickness, SoffitOverhang).Oriented(dir),
@@ -254,9 +282,13 @@ namespace MaxWorlds.Rendering
         // ---------------------------------------------------------------- cover reskins
 
         /// <summary>Standpipe — replaces a Tree. A vertical rust column with a flange base and a valve
-        /// wheel on top, the drain's answer to a tree's tall vertical silhouette.</summary>
-        public static GameObject BuildStandpipe(Transform parent, Vector3 at, float height)
+        /// wheel on top, the drain's answer to a tree's tall vertical silhouette. Clamped to 1.6x-2.6x
+        /// <paramref name="wallHeight"/> (MV-765) so it reads as a deliberate silhouette rising above
+        /// a low wall rather than an accident of an unrelated cover block's authored size.</summary>
+        public static GameObject BuildStandpipe(Transform parent, Vector3 at, float height, float wallHeight)
         {
+            height = Mathf.Clamp(height, 1.6f * wallHeight, 2.6f * wallHeight);
+
             var root = new GameObject("Standpipe");
             root.transform.SetParent(parent, false);
             root.transform.position = at;
