@@ -72,9 +72,16 @@ namespace MaxWorlds.Player
         /// The HUD (YT-30) reads this to light the movement joystick + direction arrow.</summary>
         public Vector2 MoveInput { get; private set; }
 
+        /// <summary>MV-752: authored World 2 ramps climb as steep as ~50 degrees (`world2_config.json`
+        /// AC), which the scene's `slopeLimit 45` (never touched by code before this) refused to climb
+        /// at all. Set here, not in the scene, so the value holds in every capture/test scene as well as
+        /// the play scene. `stepOffset` is untouched.</summary>
+        private const float SlopeLimitDegrees = 55f;
+
         private void Awake()
         {
             _cc = GetComponent<CharacterController>();
+            _cc.slopeLimit = SlopeLimitDegrees;
 
             _move = new InputAction("Move", InputActionType.Value);
             _move.AddCompositeBinding("2DVector")
@@ -153,21 +160,19 @@ namespace MaxWorlds.Player
             // point of use so installing the part speeds up the Max you're already controlling, not
             // just the next one.
             Vector3 planarVel = moveDir * WalkSpeed;
+            (Vector3 horizontalDisplacement, Vector3 verticalDisplacement) = ComputeSplitMotion(planarVel, dt);
 
-            // Keep grounded on the flat arena.
-            if (_cc.isGrounded && _verticalVel < 0f)
-            {
-                _verticalVel = -2f;
-            }
-            _verticalVel -= gravity * dt;
-
-            Vector3 velocity = planarVel + Vector3.up * _verticalVel;
-            Vector3 displacement = velocity * dt;
             Vector3 posBeforeMove = transform.position;
+            // MV-752: horizontal and vertical motion as two SEPARATE Move calls, matching RobotEnemy's
+            // proven FaceAndMove/ApplyGravity split -- summing them into one call let CharacterController
+            // project the combined vector onto a ramp's slope, cancelling most of the forward component
+            // against the downward one and grinding Max's climb to a tenth speed.
             // MV-386: SafeMove, not cc.Move directly -- a stall-inflated dt can otherwise tunnel
             // Max straight through a gate/fence in one oversized Move() call.
-            CharacterControllerMotion.SafeMove(_cc, displacement);
+            CharacterControllerMotion.SafeMove(_cc, horizontalDisplacement);
+            CharacterControllerMotion.SafeMove(_cc, verticalDisplacement);
             Vector3 actualDelta = transform.position - posBeforeMove;
+            Vector3 displacement = horizontalDisplacement + verticalDisplacement;
 
             EvaluateStuckDiagnostic(moveDir, displacement, actualDelta, dt);
 
@@ -176,6 +181,27 @@ namespace MaxWorlds.Player
                 Quaternion target = Quaternion.LookRotation(_facing, Vector3.up);
                 transform.rotation = Quaternion.RotateTowards(transform.rotation, target, rotationSpeed * dt);
             }
+        }
+
+        /// <summary>MV-752: this frame's motion as two separate vectors — horizontal (the walk, Y forced
+        /// to exactly 0) and vertical (gravity only, X/Z forced to exactly 0) — so <see cref="Update"/>
+        /// issues them as two distinct <see cref="CharacterControllerMotion.SafeMove"/> calls instead of
+        /// summing them into one and letting the slope projection cancel most of the climb. Split out so
+        /// a test can assert the split directly without a live Input System driving <see cref="Update"/>
+        /// (same idiom as <see cref="EvaluateStuckDiagnostic"/> below). Also updates <see cref="_verticalVel"/>
+        /// exactly as before — the grounded reset, then gravity accumulated over <paramref name="dt"/>.</summary>
+        private (Vector3 horizontal, Vector3 vertical) ComputeSplitMotion(Vector3 planarVel, float dt)
+        {
+            // Keep grounded on the flat arena.
+            if (_cc.isGrounded && _verticalVel < 0f)
+            {
+                _verticalVel = -2f;
+            }
+            _verticalVel -= gravity * dt;
+
+            Vector3 horizontal = new Vector3(planarVel.x, 0f, planarVel.z) * dt;
+            Vector3 vertical = new Vector3(0f, _verticalVel, 0f) * dt;
+            return (horizontal, vertical);
         }
 
         /// <summary>MV-503: fires at most once a second, and only while a move input is held but the

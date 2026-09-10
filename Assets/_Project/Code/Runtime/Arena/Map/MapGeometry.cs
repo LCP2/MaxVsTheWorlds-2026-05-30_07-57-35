@@ -127,6 +127,21 @@ namespace MaxWorlds.Arena
         {
             Id = id; BottomCenter = bottomCenter; TopCenter = topCenter; Width = width; ClimbsToward = climbsToward;
         }
+
+        /// <summary>The ramp's climb angle off horizontal, in degrees (MV-752) — derived from the
+        /// resolved rise (<see cref="TopCenter"/>.y) over the horizontal run between the two ends, the
+        /// same quantity a <see cref="CharacterController"/>'s slope-limited <c>Move</c> actually sees.
+        /// This is what MUST be asserted, never the authored footprint dimensions directly — a ramp's
+        /// run can come from either its width or its depth depending on <see cref="ClimbsToward"/>.</summary>
+        public float SlopeDegrees
+        {
+            get
+            {
+                float run = new Vector2(TopCenter.x - BottomCenter.x, TopCenter.z - BottomCenter.z).magnitude;
+                float rise = TopCenter.y - BottomCenter.y;
+                return run <= 0f ? 90f : Mathf.Atan2(rise, run) * Mathf.Rad2Deg;
+            }
+        }
     }
 
     /// <summary>A sludge slow-zone's resolved footprint (MV-692) — the movement hook every
