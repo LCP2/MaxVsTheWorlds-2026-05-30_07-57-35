@@ -19,12 +19,18 @@ namespace MaxWorlds.Tests.EditMode
     ///
     /// One consolidated test (testing policy MV-465, Rule 1: at most one new test per ticket — the
     /// ticket's own text asked for six; that text does not override the standing policy) asserting
-    /// RESOLVED state only, on DENSITY and VARIETY rather than presence (Rule 3 — a presence count lets
-    /// a skeleton pass; MV-712 shipped a world with zero cover and met every criterion phrased that way):
-    /// the exact kerb count against every qualifying wall face, that cover dressing spans at least 3
-    /// distinct kinds with every block dressed, that every sludge tile gets a flow chevron, that nothing
-    /// built here carries a collider, that a second <c>Dress()</c> call rebuilds rather than doubles the
-    /// count, and that World 1 gets none of it.
+    /// RESOLVED state only, on DENSITY rather than presence (Rule 3 — a presence count lets a skeleton
+    /// pass; MV-712 shipped a world with zero cover and met every criterion phrased that way): the
+    /// exact kerb count against every qualifying wall face, that every cover block is actually dressed
+    /// (its original renderer disabled, not just counted), that every sludge tile gets a flow chevron,
+    /// that nothing built here carries a collider, that a second <c>Dress()</c> call rebuilds rather
+    /// than doubles the count, and that World 1 gets none of it.
+    ///
+    /// The original AC2 ("at least 3 distinct cover kinds") is struck (Lee, 2026-09-10): every cover
+    /// piece in <c>world2_config.json</c> authors <c>dressing: "none"</c> or <c>"pipe"</c>, and
+    /// <c>"pipe"</c> isn't a <see cref="MaxWorlds.Arena.CoverDressing"/> member, so every piece
+    /// resolves to <c>CoverDressing.None</c> at runtime regardless of what this kit builds — a map-data
+    /// decision outside this ticket's two-file scope. Re-authoring it is MV-764.
     /// </summary>
     public sealed class MV755StormdrainDressingTests
     {
@@ -47,11 +53,21 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.AreEqual(expectedKerbs, report1.Kerbs,
                     "every room-facing wall face at least 1.2 m long must get exactly one kerb");
 
-                // ---- cover variety is real, not one reskin standing in for every class ----
-                Assert.GreaterOrEqual(report1.DistinctCoverKinds, 3,
-                    "the drain kit must dress at least 3 distinct cover kinds, not repeat one reskin");
+                // ---- every cover block is dressed; none left grey (AC2 revised 2026-09-10: the old
+                // "at least 3 distinct cover kinds" half is struck — world2_config.json's cover
+                // entries only ever author "none"/"pipe", and "pipe" isn't a CoverDressing member, so
+                // every piece resolves to CoverDressing.None today; re-authoring that data is MV-764,
+                // not this ticket) ----
                 Assert.AreEqual(build.Cover.Count, report1.CoverProps,
                     "every cover block in the map must be dressed; none left grey");
+                foreach (CoverPiece piece in build.Cover)
+                {
+                    if (piece.Body == null) continue;
+                    var origRenderer = piece.Body.GetComponent<Renderer>();
+                    if (origRenderer == null) continue;
+                    Assert.IsFalse(origRenderer.enabled,
+                        $"{piece.Body.name}'s original grey renderer is still enabled — its art was never swapped");
+                }
 
                 // ---- sludge tiles, each carrying a flow chevron ----
                 int expectedSludge = w2map.entities.Count(e => e != null && e.Kind == EntityKind.Sludge);
