@@ -69,6 +69,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv750Dressing() => RunFromMenu(CapturePresets.All["mv750dressing"]);
         public static void CaptureMv750Dressing() => Run(CapturePresets.All["mv750dressing"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Stormdrain Kit (MV-755)")]
+        public static void MenuMv755StormdrainDressing() => RunFromMenu(CapturePresets.All["mv-w2-kit"]);
+        public static void CaptureMv755StormdrainDressing() => Run(CapturePresets.All["mv-w2-kit"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
