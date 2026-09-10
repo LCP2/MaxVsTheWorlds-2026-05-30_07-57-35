@@ -4,6 +4,7 @@ using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Rendering;
 using MaxWorlds.Save;
+using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Arena
 {
@@ -76,6 +77,7 @@ namespace MaxWorlds.Arena
         private void Awake()
         {
             int worldIndex = ActiveWorldIndex();
+            ApplyPendingMorphAtRunStart(worldIndex);
             string key = string.IsNullOrWhiteSpace(worldKey) ? WorldLibrary.KeyForIndex(worldIndex) : worldKey;
 
             WorldConfig cfg = WorldLibrary.Load(key);
@@ -132,6 +134,23 @@ namespace MaxWorlds.Arena
             int slot = SaveSystem.ActiveSlot;
             return slot >= 0 ? SaveSystem.Load(slot).WorldIndex : 0;
         }
+
+        /// <summary>MV-753: RUN START's own trigger for a still-pending Weapon Core morph, called
+        /// first thing in <see cref="Awake"/> — before this, the morph only ever ran lazily on THE
+        /// RIG's first open (<c>WeaponsScreen.Open</c> -&gt; <see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/>),
+        /// which left <see cref="RigBoard.ActiveWorldIndex"/> on the OLD world for however long the
+        /// player fought before first opening WEAPONS.
+        /// <see cref="MaxWorlds.Pickups.PickupDirector.OnFactoryDestroyed"/> gates World 2's
+        /// one-per-run Rack Module drop on that index already reading 1, so every Replicator destroyed
+        /// in that window dropped no Rack Module (Lee: "something happened ... but I had no ability to
+        /// pick up"). Calling this here closes the window entirely. Public and static, taking the
+        /// already-resolved world index rather than reading the save itself, so an EditMode test can
+        /// drive the exact run-start step with no scene/map involved.
+        /// <see cref="WeaponSystemState.OpenWeaponCoreMorphIfPending"/> is already idempotent (a no-op
+        /// once nothing is banked), so THE RIG's own open ceremony keeps calling it too — a fallback for
+        /// anything that never runs a <see cref="BackyardPath"/> at all (the dev capture harness).</summary>
+        public static void ApplyPendingMorphAtRunStart(int worldIndex) =>
+            WeaponSystemState.OpenWeaponCoreMorphIfPending(worldIndex);
 
         /// <summary>Dresses the arena in the loaded world's own biome (MV-690) — World 1's lawn-green or
         /// World 2's wet concrete (<see cref="BiomePalette.ForWorld"/>). <see cref="WorldMaterials"/>

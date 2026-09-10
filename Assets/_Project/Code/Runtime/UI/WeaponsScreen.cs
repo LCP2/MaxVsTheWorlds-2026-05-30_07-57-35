@@ -147,6 +147,16 @@ namespace MaxWorlds.UI
         /// registered aspect, phone included.</summary>
         private bool _phoneMode;
 
+        /// <summary>MV-753: the world <see cref="RigBoardLayout"/> was last synced to — -1 until
+        /// <see cref="Build"/> seeds it, so the first <see cref="ApplyBoardScale(float)"/> call doesn't
+        /// redundantly rebuild content <see cref="Build"/> just built. Re-checked on every
+        /// <see cref="ApplyBoardScale(float)"/> call against <see cref="RigBoard.ActiveWorldIndex"/>,
+        /// same idiom as <see cref="_phoneMode"/> above — a Weapon Core morph landing while this screen
+        /// is already built must force the exact same rebuild a phone/standard verdict change does, or
+        /// the board keeps drawing the OLD world's ids against the NEW model (every one of them then
+        /// reads as a permanently parent-gated LOCK — the root cause MV-753 fixes).</summary>
+        private int _lastBoardWorldIndex = -1;
+
         /// <summary>The direct child of <see cref="_boardRoot"/> that owns everything
         /// <see cref="BuildBoardContent"/> builds this pass — a plain full-frame passthrough in standard
         /// mode, the scroll Viewport in phone mode. Torn down and rebuilt whole by
@@ -1194,6 +1204,7 @@ namespace MaxWorlds.UI
         public void RebuildBoard()
         {
             RigBoardLayout.UseWorld(RigBoard.ActiveWorldIndex);
+            _lastBoardWorldIndex = RigBoard.ActiveWorldIndex;
             DestroyBoardContent();
             BuildBoardContent();
             RefreshBoardState();
@@ -1719,6 +1730,11 @@ namespace MaxWorlds.UI
             // instance) can detect a change against.
             float initialAspect = Screen.height > 0 ? (float)Screen.width / Screen.height : RefW / RefH;
             _phoneMode = IsPhoneLayout(initialAspect);
+            // MV-753: BuildBoardContent below reads straight off RigBoardLayout, which must already
+            // match whatever world RigBoard is on — e.g. a Weapon Core morph already applied at run
+            // start, before THE RIG was ever opened — same sync ApplyBoardScale(float) re-checks below.
+            RigBoardLayout.UseWorld(RigBoard.ActiveWorldIndex);
+            _lastBoardWorldIndex = RigBoard.ActiveWorldIndex;
             BuildBoardContent();
 
             BuildTopBar(rootRt);   // drawn after the board so it sits above it in the hierarchy
@@ -1762,9 +1778,17 @@ namespace MaxWorlds.UI
             // nodes were built at the wrong radii/fonts/positions for this aspect, so rebuild them from
             // scratch before applying the scale-to-fit factor below.
             bool wantPhoneMode = IsPhoneLayout(aspect);
-            if (wantPhoneMode != _phoneMode || _nodeParent == null)
+            // MV-753: RigBoard is THE RIG's single source of truth for which world's ids even exist —
+            // a change here (a Weapon Core morph landing) must force the exact same rebuild a
+            // phone/standard verdict change already does, checked on every call (this runs from
+            // Refresh() on every state change), not just the one call site RebuildBoard used to
+            // require the capture harness to reach for by hand.
+            bool worldChanged = _lastBoardWorldIndex != RigBoard.ActiveWorldIndex;
+            if (wantPhoneMode != _phoneMode || worldChanged || _nodeParent == null)
             {
                 _phoneMode = wantPhoneMode;
+                RigBoardLayout.UseWorld(RigBoard.ActiveWorldIndex);
+                _lastBoardWorldIndex = RigBoard.ActiveWorldIndex;
                 DestroyBoardContent();
                 BuildBoardContent();
                 RefreshBoardState();
