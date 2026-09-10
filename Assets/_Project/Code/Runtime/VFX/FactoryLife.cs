@@ -47,29 +47,42 @@ namespace MaxWorlds.VFX
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
-            {
-                if (hutch == null || Runs(hutch)) continue;
+            InstallFor(FindObjectsByType<MowerHutch>(FindObjectsSortMode.None));
+            InstallFor(FindObjectsByType<Replicator>(FindObjectsSortMode.None));
+        }
 
-                var go = new GameObject($"FactoryLife ({hutch.name})");
+        /// <summary>MV-756: one machine per factory BODY, whichever concrete type it is — a
+        /// <see cref="Replicator"/> gets exactly the same impeller/vent/exhaust treatment a
+        /// <see cref="MowerHutch"/> already does.</summary>
+        private static void InstallFor<T>(T[] bodies) where T : Component, IFactoryBody
+        {
+            foreach (var body in bodies)
+            {
+                if (body == null || Runs(body)) continue;
+
+                var go = new GameObject($"FactoryLife ({body.name})");
                 go.SetActive(false);
-                go.AddComponent<FactoryLife>().Bind(hutch);
+                go.AddComponent<FactoryLife>().Bind(body);
                 go.SetActive(true);
             }
         }
 
-        /// <summary>True if some FactoryLife is already running this hutch.</summary>
-        private static bool Runs(MowerHutch hutch)
+        /// <summary>True if some FactoryLife is already running this factory body.</summary>
+        private static bool Runs(Component body)
         {
             foreach (var life in FindObjectsByType<FactoryLife>(FindObjectsSortMode.None))
-                if (life._hutch == hutch) return true;
+                if (life._body == body) return true;
 
             return false;
         }
 
         /// <summary>The factory this one runs. Must be called before the object is activated — Awake
         /// builds the machine around it.</summary>
-        public void Bind(MowerHutch hutch) => _hutch = hutch;
+        public void Bind(Component body)
+        {
+            _body = body;
+            _alive = body as IFactoryBody;
+        }
 
         [Header("Impeller")]
         [Tooltip("Degrees per second at full health. It winds UP as the factory dies — a machine " +
@@ -93,7 +106,8 @@ namespace MaxWorlds.VFX
 
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
-        private MowerHutch _hutch;
+        private Component _body;       // MowerHutch or Replicator (MV-756)
+        private IFactoryBody _alive;
         private EnemySpawner _spawner;
 
         private Transform _impeller;
@@ -117,11 +131,21 @@ namespace MaxWorlds.VFX
         {
             // Bound by Install before it switched us on. A hand-placed FactoryLife (a test fixture)
             // has no binding, so it takes the one factory it can find — which is what a fixture with
-            // exactly one factory in it means.
-            if (_hutch == null) _hutch = FindFirstObjectByType<MowerHutch>();
-            if (_hutch == null) return;
+            // exactly one factory in it means. Tries MowerHutch first, then Replicator, same order
+            // Install itself runs the two types in.
+            if (_body == null)
+            {
+                var hutch = FindFirstObjectByType<MowerHutch>();
+                if (hutch != null) Bind(hutch);
+                else
+                {
+                    var replicator = FindFirstObjectByType<Replicator>();
+                    if (replicator != null) Bind(replicator);
+                }
+            }
+            if (_body == null) return;
 
-            _spawner = _hutch.GetComponent<EnemySpawner>();
+            _spawner = _body.GetComponent<EnemySpawner>();
             _ventMpb = new MaterialPropertyBlock();
 
             // EVERY part of this machine brings its own material, and saying so is load-bearing.
@@ -136,12 +160,13 @@ namespace MaxWorlds.VFX
             // survive them), and it covers everything parented below this object.
             gameObject.AddComponent<KeepsOwnMaterial>();
 
-            // Measure the body ONCE, now, while it is still visible: MowerHutch disables its renderer
-            // the moment it dies, and a bounds read after that is a zero-sized box at the origin.
-            var body = _hutch.GetComponent<Renderer>();
-            Bounds b = body != null
-                ? body.bounds
-                : new Bounds(_hutch.transform.position + Vector3.up, new Vector3(3f, 2f, 3f));
+            // Measure the body ONCE, now, while it is still visible: the factory disables its own
+            // renderer the moment it dies, and a bounds read after that is a zero-sized box at the
+            // origin.
+            var rend = _body.GetComponent<Renderer>();
+            Bounds b = rend != null
+                ? rend.bounds
+                : new Bounds(_body.transform.position + Vector3.up, new Vector3(3f, 2f, 3f));
 
             Build(b);
             _lastLive = _spawner != null ? _spawner.LiveCount : 0;
@@ -320,9 +345,9 @@ namespace MaxWorlds.VFX
 
         private void Update()
         {
-            if (_hutch == null) return;
+            if (_body == null) return;
 
-            if (_running && !_hutch.IsAlive) Stop();
+            if (_running && !_alive.IsAlive) Stop();
             if (!_running) return;
 
             float dt = Time.deltaTime;
@@ -340,7 +365,7 @@ namespace MaxWorlds.VFX
 
             // Nearer death, it over-runs. Same idea as the core beating faster (YT-38) — the machine
             // is labouring, and that is a tell you can read from across the yard.
-            float urgency = Mathf.Lerp(1f, spinUrgency, 1f - _hutch.Normalized);
+            float urgency = Mathf.Lerp(1f, spinUrgency, 1f - _alive.Normalized);
             _impeller.Rotate(Vector3.up, spinSpeed * urgency * dt, Space.Self);
 
             // The vents breathe, and flare when it coughs.

@@ -27,7 +27,7 @@ namespace MaxWorlds.Factories
     /// <see cref="capacity"/> is the maximum number of doublings it can ever perform — never a live dial.
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
-    public sealed class Replicator : MonoBehaviour, IDamageable
+    public sealed class Replicator : MonoBehaviour, IDamageable, IFactoryBody
     {
         /// <summary>Same authored HP as <see cref="MowerHutch.factoryHealth"/> (MV-706 change 2) — a
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
@@ -39,8 +39,15 @@ namespace MaxWorlds.Factories
         /// <summary>A robot within this of Max is never pulled off him, whatever else is true.</summary>
         public const float MaxMeleeExclusionRadius = 4f;
 
-        /// <summary>How close a lured robot must get to the hatch before it's consumed.</summary>
-        public const float ArriveRadius = 1.2f;
+        /// <summary>How close a lured robot's surface must get to the box's own collider surface
+        /// before it's consumed (MV-756) — measured via <see cref="Collider.ClosestPoint"/> against
+        /// this box's own collider and the seeking robot's own <see cref="EnemyArchetype.ColliderRadius"/>,
+        /// never a flat centre-to-centre radius. A fixed centre-to-centre test (the box's old
+        /// ArriveRadius 1.2f) could never be reached: half-extent 1.0 m plus a robot's own 0.3-0.6 m
+        /// controller radius put the closest possible centre-to-centre distance at 1.3-1.6 m, always
+        /// outside a 1.2 m gate. A surface test stays correct however big a level ever authors this
+        /// box, or whichever kind of robot it lures.</summary>
+        public const float ArriveTolerance = 0.35f;
 
         /// <summary>Seconds between consumption and the doubled pair emerging.</summary>
         public const float ConsumeSeconds = 1.2f;
@@ -65,12 +72,15 @@ namespace MaxWorlds.Factories
         private Transform _target; // Max
         private Renderer _led;
         private MaterialPropertyBlock _ledMpb;
-        private Transform _hatch;
         private Renderer _hatchGlow;
         private MaterialPropertyBlock _hatchGlowMpb;
         private Renderer _emitFlash;
         private MaterialPropertyBlock _emitFlashMpb;
         private float _emitFlashTimer;
+        private Collider _collider;
+        /// <summary>The generated Body container (MV-693) — hidden whole on death (MV-756 change 4)
+        /// instead of the already-hidden root primitive.</summary>
+        private Transform _bodyRoot;
 
         private readonly struct PendingEmission
         {
@@ -115,6 +125,16 @@ namespace MaxWorlds.Factories
             _health = new DestructibleHealth(ReplicatorHealth);
             _health.Destroyed += OnDestroyed;
 
+            // MV-756: the arrive test below reads this box's own collider surface, not just its
+            // centre — kept live and enabled (never disabled) so a lured robot can still be judged
+            // to have arrived after the box is a wreck (OnDestroyed cancels seeking robots anyway,
+            // but nothing here should assume that ordering). Physics.SyncTransforms() is required
+            // here, same reasoning FactoryDoorway.ChooseFace's own doc comment gives for its probe:
+            // a Collider query reads the last-SYNCED transform, not the live one, and nothing else
+            // in this box's lifetime (it never moves) will trigger that sync for us.
+            _collider = GetComponent<Collider>();
+            Physics.SyncTransforms();
+
             _spawner = GetComponent<EnemySpawner>();
             // This factory never spawns on its own (MV-706 change 2) — SpawnExact bypasses the _running
             // latch entirely, so stopping it here permanently silences the ordinary cadence Update()
@@ -142,8 +162,8 @@ namespace MaxWorlds.Factories
 
             Transform bodyRoot = ParentScale.MakeMetreSpace(new GameObject("Body").transform, transform);
             FactoryBodies.ReplicatorParts parts = FactoryBodies.BuildReplicator(bodyRoot, transform.lossyScale);
+            _bodyRoot = bodyRoot;
 
-            _hatch = parts.Hatch;
             _hatchGlow = parts.HatchGlow;
             _hatchGlowMpb = new MaterialPropertyBlock();
             _emitFlash = parts.EmitFlash;
@@ -226,7 +246,7 @@ namespace MaxWorlds.Factories
                     continue;
                 }
 
-                if (Vector3.Distance(r.transform.position, transform.position) > ArriveRadius) continue;
+                if (DistanceToSurface(r) > ArriveTolerance) continue;
 
                 // Consumed: the robot is deactivated right away (no kill, no loot — Despawn, not Die),
                 // the pair it becomes emerges ConsumeSeconds later.
@@ -252,6 +272,19 @@ namespace MaxWorlds.Factories
                     _pending[i] = new PendingEmission(p.Kind, timer);
                 }
             }
+        }
+
+        /// <summary>How far a lured robot still has to close to be consumed (MV-756): the gap between
+        /// its own collider surface and this box's, via <see cref="Collider.ClosestPoint"/> against
+        /// its centre minus its own <see cref="EnemyArchetype.ColliderRadius"/>. Falls back to a raw
+        /// centre-to-centre read if this box somehow has no collider (never true for a level-built
+        /// Replicator, but keeps a stripped-down test fixture from throwing).</summary>
+        private float DistanceToSurface(RobotEnemy r)
+        {
+            float robotRadius = EnemyArchetype.Of(r.Kind).ColliderRadius;
+            if (_collider == null) return Vector3.Distance(r.transform.position, transform.position) - robotRadius;
+            Vector3 closest = _collider.ClosestPoint(r.transform.position);
+            return Vector3.Distance(r.transform.position, closest) - robotRadius;
         }
 
         private void Update()
@@ -289,20 +322,17 @@ namespace MaxWorlds.Factories
             // one call MowerHutch.OnDestroyed itself makes to get that exact drop.
             HudSignals.EmitFactoryDestroyed(transform.position);
 
-            var rend = GetComponent<Renderer>();
-            if (rend != null) rend.enabled = false;
             var col = GetComponent<Collider>();
             if (col != null) col.enabled = false;
-            if (_led != null) _led.gameObject.SetActive(false);
 
-            // MV-693 Reads: "sparks and a drooping hatch on destruction". The sparks are
-            // HudSignals.EmitFactoryDestroyed's own generic wreck sequence (CombatVfx) that every
-            // factory's death already fires above; the drooping hatch is this box's own tell. The
-            // hull/hazard band/hatch stay visible as a wreck — same "the body isn't hidden away"
-            // call MowerHutch made for its own core/bar (YT-107) — only the live tells go dark.
-            if (_hatch != null) _hatch.localRotation *= Quaternion.Euler(55f, 0f, 0f);
-            if (_hatchGlow != null) _hatchGlow.gameObject.SetActive(false);
-            if (_emitFlash != null) _emitFlash.gameObject.SetActive(false);
+            // MV-756 change 4: hide the GENERATED Body child (hull/band/hatch/LED/valve wheel), not
+            // the root's own renderer — that one was already switched off in BuildBody, the instant
+            // FactoryBodies replaced it, so re-hiding it here was a no-op and the real geometry stayed
+            // standing forever. FactoryHusk (generalised off MowerHutch's own, MV-756) now stands a
+            // proper shudder/collapse/sink wreck in this exact spot, so the live body has to disappear
+            // completely for that to read — the same "hide it, let the husk take over" contract
+            // MowerHutch already gives FactoryHusk.
+            if (_bodyRoot != null) _bodyRoot.gameObject.SetActive(false);
         }
 
         private void LateUpdate()
@@ -318,10 +348,14 @@ namespace MaxWorlds.Factories
                 _led.SetPropertyBlock(_ledMpb);
             }
 
-            // Hatch-open glow (MV-693 Reads): lit for exactly as long as something is mid-consume.
+            // Hatch-open glow (MV-693 Reads, MV-756 change 2): lit for as long as something is
+            // mid-consume, AND pulsed the instant a robot is still walking toward the hatch — a robot
+            // seeking the box must read as a thing about to happen, from the box itself, before
+            // anything is actually consumed. Every other tell here was downstream of a consume that
+            // could never happen (MV-756 Cause 2); this is the one that isn't.
             if (_hatchGlow != null)
             {
-                Color glow = _pending.Count > 0 ? hatchGlowColor : Color.clear;
+                Color glow = (_pending.Count > 0 || _seeking.Count > 0) ? hatchGlowColor : Color.clear;
                 _hatchGlow.GetPropertyBlock(_hatchGlowMpb);
                 _hatchGlowMpb.SetColor("_BaseColor", glow);
                 _hatchGlow.SetPropertyBlock(_hatchGlowMpb);
