@@ -158,7 +158,7 @@ namespace MaxWorlds.Arena
         /// Awake — so this call, not that one, is what actually decides the palette a World 2 run
         /// renders with; finding-or-creating it here rather than waiting for its own install means the
         /// floor/wall/prop sweep never runs twice with two different palettes.</summary>
-        private static void ApplyWorldMaterials(int worldIndex, Transform host, IReadOnlyList<CoverPiece> cover)
+        private void ApplyWorldMaterials(int worldIndex, Transform host, IReadOnlyList<CoverPiece> cover)
         {
             var wm = FindFirstObjectByType<WorldMaterials>();
             if (wm == null) wm = new GameObject("WorldMaterials").AddComponent<WorldMaterials>();
@@ -171,6 +171,9 @@ namespace MaxWorlds.Arena
             // time so it can never race the sweep above or run before a hutch/gate's own Awake has set
             // up the renderer it recolours.
             if (worldIndex >= 2) ApplyReefKit(host, cover);
+            // MV-755: World 2 never got a kit (MV-690's documented scope cut) and then lost the
+            // garden props it was borrowing (MV-750) — this is what replaces both.
+            else if (worldIndex == 1) StormdrainDressing.Dress(host, _map, cover);
         }
 
         /// <summary>World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor
