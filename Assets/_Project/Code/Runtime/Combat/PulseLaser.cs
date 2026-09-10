@@ -86,6 +86,8 @@ namespace MaxWorlds.Combat
         private readonly Dictionary<RobotEnemy, int> _hitStreak = new Dictionary<RobotEnemy, int>();
         private readonly Dictionary<RobotEnemy, float> _hitStreakTimer = new Dictionary<RobotEnemy, float>();
         private readonly List<RobotEnemy> _expiredStreaksScratch = new List<RobotEnemy>();
+        private readonly List<KeyValuePair<RobotEnemy, float>> _decrementedStreaksScratch =
+            new List<KeyValuePair<RobotEnemy, float>>();
 
         /// <summary>The pulse the most recent <see cref="FireTick"/> spawned, or null before the first
         /// shot — the same "public accessor for a test" idiom as <c>HomingMissile.ShaftColorForTests</c>.</summary>
@@ -148,12 +150,18 @@ namespace MaxWorlds.Combat
             if (_hitStreakTimer.Count == 0) return;
 
             _expiredStreaksScratch.Clear();
+            _decrementedStreaksScratch.Clear();
             foreach (var pair in _hitStreakTimer)
             {
                 float remaining = pair.Value - dt;
                 if (remaining <= 0f) _expiredStreaksScratch.Add(pair.Key);
-                else _hitStreakTimer[pair.Key] = remaining;
+                else _decrementedStreaksScratch.Add(new KeyValuePair<RobotEnemy, float>(pair.Key, remaining));
             }
+            // Apply writes only after the enumeration above has fully closed -- writing through the
+            // indexer to an EXISTING key still bumps Dictionary's version counter, so doing it inside
+            // the foreach throws InvalidOperationException on the very next MoveNext() (MV-751).
+            for (int i = 0; i < _decrementedStreaksScratch.Count; i++)
+                _hitStreakTimer[_decrementedStreaksScratch[i].Key] = _decrementedStreaksScratch[i].Value;
             for (int i = 0; i < _expiredStreaksScratch.Count; i++)
             {
                 _hitStreakTimer.Remove(_expiredStreaksScratch[i]);
