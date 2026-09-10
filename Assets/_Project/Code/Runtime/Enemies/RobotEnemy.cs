@@ -406,6 +406,15 @@ namespace MaxWorlds.Enemies
                 ? Mathf.Clamp01(_stateTimer / telegraphTime)
                 : 0f;
 
+        /// <summary>MV-757: how far through RATTLE this Grate Lurker is, 0..1 (0 outside RATTLE) — the
+        /// same "read-only window for VFX" idiom as <see cref="TelegraphProgress"/>, so
+        /// <see cref="MaxWorlds.VFX.TelegraphVfx"/> can draw a world-space ground tell for a wind-up
+        /// that happens while the body itself is still hidden (<see cref="SetBodyVisible"/>).</summary>
+        public float LurkerRattleProgress =>
+            Kind == EnemyKind.Lurker && _lurkerPhase == LurkerCycle.Phase.Rattle
+                ? Mathf.Clamp01(_lurkerPhaseElapsed / LurkerCycle.RattleDuration)
+                : 0f;
+
         /// <summary>The Gunner's committed beam length and half-width (MV-312) — the same
         /// <see cref="lungeRange"/>/<see cref="contactRadius"/> fields <see cref="TickBeam"/> already
         /// hit-tests against (see <see cref="EnemyArchetype.Gunner"/>'s own doc comment for why they
@@ -1294,6 +1303,7 @@ namespace MaxWorlds.Enemies
             _lurkerHitsThisEmergence = 0;
             _lurkerAwake = false;
             SetBodyVisible(false);
+            _bar?.SetForceHidden(true);   // MV-757: nothing built the bar's own submerged term until now
         }
 
         /// <summary>Nothing: the whole point (AC2) is that a dormant robot does not path toward Max,
@@ -1421,13 +1431,23 @@ namespace MaxWorlds.Enemies
                 _lurkerAwake, dist, _lurkerHitsThisEmergence);
 
             if (_lurkerPhase != before) OnLurkerPhaseChanged(_lurkerPhase);
-            if (_lurkerPhase == LurkerCycle.Phase.Emerged) TickLurkerContact(dt);
+            if (_lurkerPhase == LurkerCycle.Phase.Emerged)
+            {
+                TickLurkerLunge(dt);
+                TickLurkerContact(dt);
+            }
         }
 
         /// <summary>The visible/audible beat at each cycle transition (MV-688) — visibility, the tell
         /// colour, and (arriving back at SUBMERGED) the actual reappear warp.</summary>
         private void OnLurkerPhaseChanged(LurkerCycle.Phase to)
         {
+            // MV-757: the bar had no submerged term of its own — SetBodyVisible's Renderer sweep can
+            // never reach it (it's a Canvas/CanvasRenderer), so it used to keep tracking an invisible
+            // Lurker through every RATTLE/SUBMERGED beat. Tying it to IsDamageable is the same "only
+            // EMERGED is a normal target" rule the body's own visibility already follows.
+            _bar?.SetForceHidden(!IsDamageable);
+
             switch (to)
             {
                 case LurkerCycle.Phase.Rattle:
@@ -1454,12 +1474,37 @@ namespace MaxWorlds.Enemies
             }
         }
 
+        /// <summary>MV-757: the ambush strike itself. <see cref="EnemyArchetype.MoveSpeed"/> was
+        /// authored for the Lurker from the start but never read — this kind stayed put through its
+        /// whole EMERGED window, which is what made it read as "does nothing". Closes on Max at that
+        /// same authored speed, stopping just outside <see cref="contactRadius"/> so it arrives close
+        /// enough for <see cref="TickLurkerContact"/> to land rather than walking through him. This is
+        /// the one beat it ever moves in — it still never chases, and re-submerging (see
+        /// <see cref="OnLurkerPhaseChanged"/>'s <see cref="LurkerCycle.Phase.Submerged"/> case) warps it
+        /// straight back to its grate, so nothing here is a patrol.</summary>
+        private void TickLurkerLunge(float dt)
+        {
+            if (target == null) return;
+
+            Vector3 to = target.position - transform.position; to.y = 0f;
+            float dist = to.magnitude;
+            if (dist <= contactRadius) return;
+
+            Vector3 dir = to / dist;
+            float step = Mathf.Min(EffectiveMoveSpeed * dt, dist - contactRadius);
+            if (step <= 0f) return;
+
+            RotateToward(dir, dt);
+            CharacterControllerMotion.SafeMove(_cc, dir * step); // MV-386
+        }
+
         /// <summary>The Lurker's own "lunge-less quick melee" while EMERGED (MV-688) — same per-hit-
         /// cooldown idiom as <see cref="TickContactTouch"/>, but spends the archetype's own
         /// <see cref="contactDamage"/> (11, per the ticket) rather than <see cref="touchDamage"/>, and
         /// counts landed hits into <see cref="_lurkerHitsThisEmergence"/> — <see cref="LurkerCycle"/>'s
-        /// own "up to 2 hits" early re-submerge cap. It never chases (it fights from its grate), so this
-        /// only ever fires when Max walks into range himself.</summary>
+        /// own "up to 2 hits" early re-submerge cap. Named "contact" rather than "melee" because it is
+        /// still a range check, not a swing — <see cref="TickLurkerLunge"/> (MV-757) is what closes the
+        /// distance now, this just lands the hit once Max is inside it.</summary>
         private void TickLurkerContact(float dt)
         {
             _contactCooldownTimer -= dt;

@@ -84,8 +84,9 @@ namespace MaxWorlds.Tests.EditMode
                     "round 2 of the hunt needs the renderer dump on its own recognisable prefix, " +
                     "distinct from the existing spawn/+1s summary line");
 
-                // The rig's own greybox renderer (disabled, but still a MeshRenderer under this root)
-                // plus at least the body parts a bruiser is built from. MV-451: parts are generated
+                // At least the body parts a bruiser is built from — the rig's own greybox stand-in is
+                // destroyed by EnsureBuilt (MV-757), not merely disabled, so it never reaches this dump
+                // at all. MV-451: parts are generated
                 // geometry now, named generically "Part" (see CharacterPart) rather than "Chassis" —
                 // the material name is what still identifies which part is which in the dump.
                 Assert.That(report, Does.Contain("material=Robot_Bruiser_Body"),
