@@ -104,7 +104,7 @@ namespace MaxWorlds.Arena
                 {
                     i++;
                     if (piece.Body == null) continue;
-                    if (!BuildFor(props, piece, i)) continue;
+                    if (!BuildFor(props, piece, i, map.wallHeight)) continue;
 
                     // The block's own box stays the collider — only its art is replaced. Same
                     // contract ReefDressing keeps, and the reason a re-dressed room still plays
@@ -127,7 +127,7 @@ namespace MaxWorlds.Arena
         /// and here means silt sacks. That is the difference from <see cref="ReefDressing"/>, which
         /// deliberately dresses only one class: World 3's ticket said place nothing where there is no
         /// equivalent, and the result is a world of grey boxes. World 2 is not repeating that.</summary>
-        private static bool BuildFor(Transform parent, CoverPiece piece, int seed)
+        private static bool BuildFor(Transform parent, CoverPiece piece, int seed, float wallHeight)
         {
             ArenaCover c = piece.Cover;
             Vector3 at = new Vector3(c.CenterXz.x, 0f, c.CenterXz.y);
@@ -136,7 +136,8 @@ namespace MaxWorlds.Arena
             switch (c.Dressing)
             {
                 case CoverDressing.Tree:
-                    StormdrainKit.BuildStandpipe(parent, at, Mathf.Max(2.2f, size.y));
+                    // Wall-height-proportional (MV-765), not the cover block's own authored size.y.
+                    StormdrainKit.BuildStandpipe(parent, at, wallHeight, wallHeight);
                     return true;
                 case CoverDressing.Hedge:
                     StormdrainKit.BuildDebrisRake(parent, at, size);
