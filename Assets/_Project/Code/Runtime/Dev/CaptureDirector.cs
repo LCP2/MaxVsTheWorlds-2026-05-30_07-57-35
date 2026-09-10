@@ -321,6 +321,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv754LightCheck());
             Add(BuildMv755StormdrainDressingCheck());
             Add(BuildMv758LppeSalvo());
+            Add(BuildMv759GateDoorsCheck());
             return d;
         }
 
@@ -1659,6 +1660,97 @@ namespace MaxWorlds.Dev
                 {
                     if (laserGo != null) Destroy(laserGo);
                     if (targetGo != null) Destroy(targetGo);
+                },
+            };
+        }
+
+        // ---- Mv759GateDoorsCheck (MV-759 AC6) --------------------------------------------------
+
+        /// <summary>Before/after evidence for the World 2 gate re-skin (MV-759): the same World-2-real-
+        /// config boot idiom as <see cref="BuildMv755StormdrainDressingCheck"/>, framed on a specific,
+        /// ordinary-sized doorway gate ("g9" in the shipped map — 3.8 x 1.5 x 0.64, well clear of the
+        /// player's own spawn point) rather than whichever gate <c>FindFirstObjectByType</c> happens to
+        /// return first, which is unstable run to run and, for an 11.8 m-wide boss gate or a gate right
+        /// next to Max's own spawn, framed nothing recognisable at this preset's distance. Shot 1 is the
+        /// gate as <see cref="BackyardPath"/> left it (closed, ring + double doors shut); shot 2 calls
+        /// the same public <see cref="AreaGate.ForceOpen"/> every other gate test/preset uses and then
+        /// waits out real frames (this preset runs inside an actual Play session, so
+        /// <c>Time.deltaTime</c> ticks for real) well past the 0.45 s slide, so the doors are caught
+        /// fully open, not mid-slide.</summary>
+        private static CapturePreset BuildMv759GateDoorsCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const string gateId = "g9";   // an ordinary doorway gate well away from the player's spawn point
+            // A shallow, near-frontal pitch on purpose, not this game's ~72 deg in-game rig angle: the
+            // shipped map's gates are short (~1.5 m) and wide, so the production top-down angle
+            // forecloses almost the entire ring/door face behind the near wall crest — a design-review
+            // framing, the same departure BuildMv758LppeSalvo's own close-up angle already takes from
+            // the rig.
+            const float pitch = 14f;
+            const float distance = 5.5f;
+
+            AreaGate gate = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + the World 2 gate skin pass finish
+
+                GameObject gateGo = GameObject.Find(gateId);
+                gate = gateGo != null ? gateGo.GetComponent<AreaGate>() : null;
+                if (gate == null) gate = FindFirstObjectByType<AreaGate>();
+                if (gate == null) throw new CaptureAbortException("World 2 built no AreaGate to shoot");
+
+                // Out of frame, not out of the scene: Max's own spawn sits close enough to some gates
+                // that the camera ended up looking straight into his own head model (caught during this
+                // ticket's own QA pass) — nothing downstream of Awake needs him active for a single
+                // still frame.
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo != null) playerGo.SetActive(false);
+
+                // Faces the gate's own FRONT (its local forward), not a fixed world axis — a gate on an
+                // E/W wall is spun 90 deg by MapRuntime.BuildAreaGate, so a fixed approach direction
+                // would view half the gates in the map edge-on instead of framing the ring.
+                Vector3 approach = gate.transform.forward;
+                if (approach.sqrMagnitude < 0.01f) approach = Vector3.forward;
+                approach.Normalize();
+
+                Vector3 focus = gate.transform.position + Vector3.up * 0.15f;
+                Quaternion facing = Quaternion.LookRotation(approach, Vector3.up) * Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - facing * Vector3.forward * distance, facing);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            IEnumerator OpenGate(Camera cam)
+            {
+                gate.ForceOpen();
+                for (int i = 0; i < 40; i++) yield return null;   // >> 0.45s slide at the project's 60fps target
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv-w2-gate-doors",
+                LogTag = "[MV759Capture]",
+                Flag = "-mv759shot",
+                ArmFile = "Temp/mv759.arm",
+                HeadlessMarker = "Temp/mv759.headless",
+                DoneFileName = "_mv759_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv755StormdrainDressingCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-759-gate-closed", NoSetup),
+                    new CaptureShot("MV-759-gate-open", OpenGate),
                 },
             };
         }
