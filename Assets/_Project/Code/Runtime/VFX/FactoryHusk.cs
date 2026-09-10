@@ -30,28 +30,40 @@ namespace MaxWorlds.VFX
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
-            {
-                if (hutch == null || Watches(hutch)) continue;
+            InstallFor(FindObjectsByType<MowerHutch>(FindObjectsSortMode.None));
+            InstallFor(FindObjectsByType<Replicator>(FindObjectsSortMode.None));
+        }
 
-                var go = new GameObject($"FactoryHusk ({hutch.name})");
+        /// <summary>MV-756: one husk per factory BODY, whichever concrete type it is.</summary>
+        private static void InstallFor<T>(T[] bodies) where T : Component, IFactoryBody
+        {
+            foreach (var body in bodies)
+            {
+                if (body == null || Watches(body)) continue;
+
+                var go = new GameObject($"FactoryHusk ({body.name})");
                 go.SetActive(false);
-                go.AddComponent<FactoryHusk>().Bind(hutch);
+                go.AddComponent<FactoryHusk>().Bind(body);
                 go.SetActive(true);
             }
         }
 
-        private static bool Watches(MowerHutch hutch)
+        private static bool Watches(Component body)
         {
             foreach (var h in FindObjectsByType<FactoryHusk>(FindObjectsSortMode.None))
-                if (h._hutch == hutch) return true;
+                if (h._body == body) return true;
 
             return false;
         }
 
-        public void Bind(MowerHutch hutch) => _hutch = hutch;
+        public void Bind(Component body)
+        {
+            _body = body;
+            _alive = body as IFactoryBody;
+        }
 
-        private MowerHutch _hutch;
+        private Component _body;       // MowerHutch or Replicator (MV-756)
+        private IFactoryBody _alive;
         private Transform _husk;
         private Vector3 _standing;      // where the body was, while it was still there
         private Vector3 _size;
@@ -61,28 +73,37 @@ namespace MaxWorlds.VFX
 
         private void Awake()
         {
-            if (_hutch == null) _hutch = FindFirstObjectByType<MowerHutch>();
-            if (_hutch == null) return;
+            if (_body == null)
+            {
+                var hutch = FindFirstObjectByType<MowerHutch>();
+                if (hutch != null) Bind(hutch);
+                else
+                {
+                    var replicator = FindFirstObjectByType<Replicator>();
+                    if (replicator != null) Bind(replicator);
+                }
+            }
+            if (_body == null) return;
 
             gameObject.AddComponent<KeepsOwnMaterial>();
 
             // Measured NOW, while the body is still visible. After death its renderer is off and its
             // bounds are a zero-sized box at the origin — the husk would be a speck at the map origin.
-            var body = _hutch.GetComponent<Renderer>();
-            if (body == null) return;
+            var rend = _body.GetComponent<Renderer>();
+            if (rend == null) return;
 
-            _standing = body.bounds.center;
-            _size = body.bounds.size;
+            _standing = rend.bounds.center;
+            _size = rend.bounds.size;
             _across = Vector3.right;
         }
 
         private void Update()
         {
-            if (_hutch == null || _spent) return;
+            if (_body == null || _spent) return;
 
             if (_elapsed < 0f)
             {
-                if (_hutch.IsAlive) return;   // still standing; nothing to do
+                if (_alive.IsAlive) return;   // still standing; nothing to do
                 Raise();
             }
 

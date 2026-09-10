@@ -246,7 +246,9 @@ namespace MaxWorlds.Weapons
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
-            trail.time = 0.1f;
+            // MV-758: lengthened from 0.1s (spec: "reads as a line, not a dot" at 18 m/s) — at the old
+            // value the trail was under 2m long and read as barely more than the bolt mesh itself.
+            trail.time = 0.16f;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
             trail.widthMultiplier = 0.08f;
             trail.minVertexDistance = 0.02f;

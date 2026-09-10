@@ -320,6 +320,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv750DressingCheck());
             Add(BuildMv754LightCheck());
             Add(BuildMv755StormdrainDressingCheck());
+            Add(BuildMv758LppeSalvo());
             return d;
         }
 
@@ -1552,6 +1553,113 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-755-stormdrain-kit", NoSetup) },
+            };
+        }
+
+        // ---- MV758LppeSalvo (MV-758) ----------------------------------------------------------
+
+        /// <summary>Puts a standalone <see cref="PulseLaser"/>'s muzzle flash and impact/Shock beat on
+        /// screen together for one representative frame, via the same real production calls
+        /// <c>FireTick()</c>/<c>RegisterHit()</c> make (a real <c>FireTick()</c> invocation for the
+        /// muzzle, the same public <c>LppeVfx.Impact()</c> for the impact/Shock beat) — not a scripted
+        /// VFX call, but also not a wait on <see cref="SeekerPulse"/>'s own autonomous fire-and-lock
+        /// loop, which proved non-deterministic and slow against World 2's still-spawning roster (see
+        /// the method body comment). <c>Mv758LppeVfxTests</c> is what proves each call actually fires
+        /// off the real path; this preset only needs to frame the result.</summary>
+        private static CapturePreset BuildMv758LppeSalvo()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            const float pitch = 60f;
+            const float distance = 4.5f;
+
+            FieldInfo pulseLaserVfxField =
+                typeof(PulseLaser).GetField("_vfx", BindingFlags.NonPublic | BindingFlags.Instance);
+            FieldInfo[] burstFields = typeof(LppeVfx).GetFields(BindingFlags.NonPublic | BindingFlags.Instance);
+            MethodInfo fireTickMethod =
+                typeof(PulseLaser).GetMethod("FireTick", BindingFlags.NonPublic | BindingFlags.Instance);
+
+            GameObject laserGo = null;
+            GameObject targetGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                // Deliberately NOT waiting on SeekerPulse's own autonomous fire-and-lock loop here:
+                // World 2's still-spawning roster (dozens of robots sharing RobotEnemy.Active) made
+                // target acquisition non-deterministic, and the multi-second real-world wait for
+                // several 0.22s-cadence pulses to land made this preset fragile under the same
+                // frame-time spikes cc-verify's own gate records during scene load. The muzzle flash
+                // (via a single real FireTick() call) and the impact/Shock beat (via the same public
+                // Impact() RegisterHit calls) are each individually proven by the EditMode tests
+                // (Mv758LppeVfxTests) to fire off the real production path — this preset only needs to
+                // put them on screen together for one representative frame, fast and deterministically.
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                Vector3 focus = playerGo != null ? playerGo.transform.position : (CaptureDirector.OpenZoneCenter() ?? Vector3.zero);
+                Vector3 aimDir = playerGo != null ? playerGo.transform.forward : Vector3.forward;
+                aimDir.y = 0f;
+                if (aimDir.sqrMagnitude < 0.01f) aimDir = Vector3.forward; else aimDir.Normalize();
+
+                Vector3 laserPos = focus;
+                Vector3 targetPos = focus + aimDir * 4f;
+                laserGo = new GameObject("MV758CaptureLaser");
+                laserGo.transform.SetPositionAndRotation(laserPos,
+                    Quaternion.LookRotation(aimDir, Vector3.up));
+                PulseLaser laser = laserGo.AddComponent<PulseLaser>();
+
+                targetGo = BuildClusterRobot(EnemyKind.Bruiser, targetPos);
+                Physics.SyncTransforms();
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = targetPos + Vector3.up * 0.6f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                var vfx = (LppeVfx)pulseLaserVfxField.GetValue(laser);
+                foreach (var field in burstFields)
+                {
+                    var burst = field.GetValue(vfx) as VfxBurst;
+                    if (burst == null || burst.GameObject == null) continue;
+                    var m = burst.GameObject.GetComponent<ParticleSystem>().main;
+                    m.cullingMode = ParticleSystemCullingMode.AlwaysSimulate;
+                }
+
+                fireTickMethod.Invoke(laser, null);   // real FireTick() -> real Muzzle() call
+                yield return null;
+
+                Vector3 impactPoint = targetGo.transform.position + Vector3.up * 0.6f;
+                vfx.Impact(impactPoint, 9f, isShockHit: false);   // same public Impact() RegisterHit calls
+                yield return null;
+                vfx.Impact(impactPoint, 9f, isShockHit: true);    // the Shock-carrying 4th-hit beat
+
+                if (vfx.MuzzleFlashEmitCount < 1)
+                    throw new CaptureAbortException("FireTick did not produce a muzzle flash");
+
+                for (int settle = 0; settle < 2; settle++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv758lppesalvo",
+                LogTag = "[MV758Capture]",
+                Flag = "-mv758shot",
+                ArmFile = "Temp/mv758.arm",
+                HeadlessMarker = "Temp/mv758.headless",
+                DoneFileName = "_mv758_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same HomeScreen-modal-freezes-time dodge BuildMv616SentinelBeam uses.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-758", Setup) },
+                Cleanup = () =>
+                {
+                    if (laserGo != null) Destroy(laserGo);
+                    if (targetGo != null) Destroy(targetGo);
+                },
             };
         }
     }

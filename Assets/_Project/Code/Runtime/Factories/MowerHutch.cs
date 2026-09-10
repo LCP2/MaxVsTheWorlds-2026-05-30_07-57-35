@@ -21,7 +21,7 @@ namespace MaxWorlds.Factories
     /// player who stays to grind. Greybox — the primitive body is a stand-in until Phase C art.
     /// </summary>
     [RequireComponent(typeof(EnemySpawner))]
-    public sealed class MowerHutch : MonoBehaviour, IDamageable
+    public sealed class MowerHutch : MonoBehaviour, IDamageable, IFactoryBody
     {
         // ~4 s of focused fire to kill, so destroying it lands as a decisive beat (YT-65). Tunable.
         // Renamed from maxHealth so the lower value takes effect on the existing scene instance.

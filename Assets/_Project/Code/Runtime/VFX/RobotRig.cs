@@ -273,8 +273,18 @@ namespace MaxWorlds.VFX
             // The greybox goes — the capsule or cube EnemySpawner built as a stand-in. Its COLLIDERS
             // stay: the CharacterController is what the water hits and what Max walks into, and only the
             // visual is this rig's to change (docs/CODE_DRIVEN_SCENES.md).
+            //
+            // MV-757: DESTROYED, not merely disabled — RobotEnemy.SetBodyVisible re-enables every
+            // Renderer under this root (includeInactive: true) on every Lurker emerge, which used to
+            // switch this magenta stand-in (no URP subshader, YT-58) back ON over the real body. A
+            // destroyed component can never be found by that sweep again, so the fault is impossible
+            // rather than merely dormant.
             var greybox = GetComponent<MeshRenderer>();
-            if (greybox != null) greybox.enabled = false;
+            if (greybox != null)
+            {
+                if (Application.isPlaying) Destroy(greybox);
+                else DestroyImmediate(greybox);
+            }
 
             BuildModel();
 

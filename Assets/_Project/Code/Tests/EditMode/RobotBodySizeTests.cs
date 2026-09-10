@@ -81,8 +81,10 @@ namespace MaxWorlds.Tests.EditMode
                 "has fallen through to the other's body.");
         }
 
-        /// <summary>Combined world-space bounds of every built part, excluding the disabled greybox
-        /// stand-in — the same exclusion <see cref="RobotSkinSpawnPathTests"/> uses.</summary>
+        /// <summary>Combined world-space bounds of every built part. MV-757: the greybox stand-in is
+        /// now destroyed rather than disabled, so it never appears in this sweep at all — the
+        /// <c>r == greybox</c> exclusion below is now always false, but harmless to keep as the same
+        /// guard <see cref="RobotSkinSpawnPathTests"/> uses.</summary>
         private static float CombinedBoundsHeight(RobotRig rig)
         {
             var greybox = rig.GetComponent<MeshRenderer>();

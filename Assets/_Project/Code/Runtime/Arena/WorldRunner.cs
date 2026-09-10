@@ -142,6 +142,16 @@ namespace MaxWorlds.Arena
                     Replicator replicator = repGo.GetComponent<Replicator>();
                     if (replicator == null) continue;
 
+                    // MV-756 Cause 3: the shed loop above configures its spawner's composition and
+                    // world config; this loop skipped both, so an emitted twin resolved its archetype
+                    // with a null _worldConfig and missed every MV-701 enemyOverrides entry.
+                    EnemySpawner repSpawner = replicator.GetComponent<EnemySpawner>();
+                    if (repSpawner != null)
+                    {
+                        repSpawner.ConfigureAreaComposition(area.composition);
+                        repSpawner.ConfigureWorldConfig(cfg);
+                    }
+
                     FactoryCensus.RegisterReplicator(replicator, area.id);
                     _replicators.Add(replicator);
                 }
