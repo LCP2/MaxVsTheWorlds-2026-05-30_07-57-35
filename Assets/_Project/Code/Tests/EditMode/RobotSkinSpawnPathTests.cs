@@ -99,12 +99,17 @@ namespace MaxWorlds.Tests.EditMode
 
             Assert.IsTrue(rig.Built, "RobotRig must finish building the instant it's attached");
 
-            // AC2: the greybox stand-in must be hidden — a robot that fell through and never got a
-            // RobotRig would still show this renderer, wearing the primitive's own untinted material.
+            // AC2: the greybox stand-in must be gone. MV-757: DESTROYED, not merely disabled — a
+            // disabled MeshRenderer could still be found and switched back on by SetBodyVisible's
+            // GetComponentsInChildren<Renderer>(includeInactive: true) sweep (the Grate Lurker fault:
+            // its emerge cycle re-enabled exactly this renderer). A robot that fell through and never
+            // got a RobotRig would still show this renderer, wearing the primitive's own untinted
+            // material.
             var greybox = e.GetComponent<MeshRenderer>();
-            Assert.IsFalse(greybox.enabled,
-                "the greybox stand-in must be disabled once the real rig is built, or it — not the " +
-                "rig's own coloured parts — is what's actually on screen");
+            Assert.IsNull(greybox,
+                "the greybox stand-in must be DESTROYED once the real rig is built, or it can be " +
+                "switched back on later and is what's actually on screen instead of the rig's own " +
+                "coloured parts");
 
             // AC1: every built part wears the kind's own colour, read straight off the same mapping
             // RobotRig.BuildMaterials uses — not a re-derived expectation that could drift from it.
@@ -115,7 +120,7 @@ namespace MaxWorlds.Tests.EditMode
             bool foundTintedBody = false;
             foreach (var r in e.GetComponentsInChildren<MeshRenderer>(true))
             {
-                if (r == greybox || r.sharedMaterial == null) continue;
+                if (r.sharedMaterial == null) continue;
                 if (r.sharedMaterial.name != expectedBodyName) continue;
 
                 foundTintedBody = true;

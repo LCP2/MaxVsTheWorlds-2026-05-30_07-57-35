@@ -50,6 +50,11 @@ namespace MaxWorlds.VFX
             for (int i = _used; i < _pool.Count; i++) _pool[i].Hide();
         }
 
+        [Tooltip("MV-757: how far a Grate Lurker's RATTLE ring jitters sideways, world units — the " +
+                 "shake that sells a wind-up while the body itself is still hidden underground.")]
+        [SerializeField] private float lurkerRattleShakeAmplitude = 0.08f;
+        [SerializeField] private float lurkerRattleShakeFrequency = 40f;
+
         private void DrawEnemyWindups()
         {
             // RobotEnemy.Active (YT-186), not FindObjectsByType<RobotEnemy>(): that scanned and
@@ -60,7 +65,13 @@ namespace MaxWorlds.VFX
             {
                 var enemy = enemies[i];
                 if (!enemy.IsAlive) continue;
-                float p = enemy.TelegraphProgress;
+
+                // MV-757: a Grate Lurker's RATTLE happens while Current is still State.Submerged (the
+                // body hidden), so it never sets TelegraphProgress — LurkerRattleProgress is that same
+                // window read off the LurkerCycle phase instead, and this is the only ground tell a
+                // rattling Lurker gets since its own body has nothing visible to warn with.
+                float rattle = enemy.LurkerRattleProgress;
+                float p = Mathf.Max(enemy.TelegraphProgress, rattle);
                 if (p <= 0f) continue;
 
                 // The ring tightens and brightens as the strike approaches: the shrinking radius is
@@ -69,7 +80,17 @@ namespace MaxWorlds.VFX
                 Color c = Color.Lerp(warnColor, armedColor, p);
                 c.a = Mathf.Lerp(0.35f, 0.95f, p);
 
-                Next().Show(Ground(enemy.transform.position), radius, c);
+                Vector3 pos = Ground(enemy.transform.position);
+                if (rattle > 0f)
+                {
+                    // A small world-space shake on the grate itself, ramped by rattle so it builds
+                    // rather than snapping straight to full amplitude.
+                    float jitter = Mathf.Sin(Time.unscaledTime * lurkerRattleShakeFrequency)
+                                 * lurkerRattleShakeAmplitude * rattle;
+                    pos.x += jitter;
+                }
+
+                Next().Show(pos, radius, c);
             }
         }
 
