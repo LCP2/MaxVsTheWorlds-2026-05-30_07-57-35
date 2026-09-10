@@ -36,6 +36,16 @@ namespace MaxWorlds.Tests.EditMode
             typeof(PulseLaser).GetMethod("Awake", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo PulseLaserFireTick =
             typeof(PulseLaser).GetMethod("FireTick", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo PulseLaserUpdate =
+            typeof(PulseLaser).GetMethod("Update", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo PulseLaserRegisterHit =
+            typeof(PulseLaser).GetMethod("RegisterHit", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly MethodInfo PulseLaserTickHitStreaks =
+            typeof(PulseLaser).GetMethod("TickHitStreaks", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo PulseLaserHitStreakField =
+            typeof(PulseLaser).GetField("_hitStreak", BindingFlags.NonPublic | BindingFlags.Instance);
+        private static readonly FieldInfo PulseLaserHitStreakTimerField =
+            typeof(PulseLaser).GetField("_hitStreakTimer", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly FieldInfo PulseLaserTankField =
             typeof(PulseLaser).GetField("_tank", BindingFlags.NonPublic | BindingFlags.Instance);
         private static readonly MethodInfo WaterBlasterAwake =
@@ -202,6 +212,58 @@ namespace MaxWorlds.Tests.EditMode
             {
                 Object.DestroyImmediate(wbGo);
             }
+        }
+
+        /// <summary>
+        /// MV-751: <c>TickHitStreaks</c> wrote into <c>_hitStreakTimer</c> through the indexer WHILE
+        /// enumerating it — a write to an EXISTING key still bumps <c>Dictionary</c>'s version counter,
+        /// so the very next <c>Update()</c> throws <c>InvalidOperationException: Collection was
+        /// modified</c>, and the gun never fires again for the rest of the run. The bug only manifests
+        /// once a hit streak entry exists (created by <c>RegisterHit</c>, which only fires when a pulse
+        /// lands on a robot), which is why firing at scenery was fine but firing at a robot killed the
+        /// weapon dead. Also proves the fix's decrement is not a no-op (a streak still expires past its
+        /// window) and that its scratch buffer is a cached field, never reallocated per call.
+        ///
+        /// Fails on 009fcb6 (pre-fix): <c>PulseLaserUpdate.Invoke</c> throws
+        /// <c>System.Reflection.TargetInvocationException</c> wrapping
+        /// <c>System.InvalidOperationException: Collection was modified; enumeration operation may not
+        /// execute.</c> on the very first of the 120 ticks below, because <see cref="RobotEnemy"/>'s
+        /// hit-streak timer (a full 3s <c>ShockWindowSeconds</c> window) is always still &gt; 0 and
+        /// always hits the mutating branch on the first tick, regardless of the real (near-zero, outside
+        /// Play mode) <c>Time.deltaTime</c> the reflection call actually runs with.
+        /// </summary>
+        [Test]
+        public void HitStreak_SurvivesManyUpdateTicks_StillFiresAfter_AndStreaksStillExpire()
+        {
+            PulseLaser laser = _laserGo.GetComponent<PulseLaser>();
+
+            // Two distinct robots land a hit -- populates BOTH _hitStreak and _hitStreakTimer, which
+            // Update() -> TickHitStreaks() walks every frame, before the fire gate.
+            PulseLaserRegisterHit.Invoke(laser, new object[] { _rusher, 9f });
+            PulseLaserRegisterHit.Invoke(laser, new object[] { _bruiser, 9f });
+
+            Assert.DoesNotThrow(() =>
+            {
+                for (int i = 0; i < 120; i++) PulseLaserUpdate.Invoke(laser, null);
+            }, "PulseLaser.Update must survive many ticks once a hit streak exists on more than one " +
+               "robot -- mutating _hitStreakTimer while enumerating it throws and kills the weapon for " +
+               "the rest of the run (MV-751)");
+
+            // Still able to fire afterwards -- the gun isn't dead.
+            InvokeFireTick(laser);
+            Assert.IsNotNull(laser.LastSpawnedPulseForTests,
+                "the LPPE no longer fires after surviving 120 Update ticks with an active hit streak");
+
+            // A streak ticked past ShockWindowSeconds (3s) must actually be removed from BOTH
+            // dictionaries -- proves the fix's decrement isn't a no-op that never lets a streak expire.
+            var hitStreak = (System.Collections.IDictionary)PulseLaserHitStreakField.GetValue(laser);
+            var hitStreakTimer = (System.Collections.IDictionary)PulseLaserHitStreakTimerField.GetValue(laser);
+            for (int i = 0; i < 4; i++) PulseLaserTickHitStreaks.Invoke(laser, new object[] { 1f });
+            Assert.IsFalse(hitStreakTimer.Contains(_rusher),
+                "a hit streak older than ShockWindowSeconds should have expired and been removed, not " +
+                "kept alive forever by a decrement that silently became a no-op");
+            Assert.IsFalse(hitStreak.Contains(_rusher),
+                "the Shock hit COUNT must be cleared alongside its timer once the streak expires");
         }
     }
 }
