@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
+using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.Combat
@@ -82,6 +83,7 @@ namespace MaxWorlds.Combat
         private bool _lastEmitting;
         private bool _depleted;
         private EnergyPool _tank;
+        private LppeVfx _vfx;
 
         private readonly Dictionary<RobotEnemy, int> _hitStreak = new Dictionary<RobotEnemy, int>();
         private readonly Dictionary<RobotEnemy, float> _hitStreakTimer = new Dictionary<RobotEnemy, float>();
@@ -96,6 +98,12 @@ namespace MaxWorlds.Combat
         private void Awake()
         {
             _tank = new EnergyPool(BlasterTuning.MaxEnergy, BlasterTuning.RegenPerSec, BlasterTuning.RegenDelay);
+
+            // MV-758: same "resolve-or-attach, then Init explicitly" shape as WaterBlaster/WaterVfx —
+            // neither Awake nor OnEnable reliably run for AddComponent outside Play mode.
+            _vfx = GetComponent<LppeVfx>();
+            if (_vfx == null) _vfx = gameObject.AddComponent<LppeVfx>();
+            _vfx.Init();
 
             // MV-739: self-attached from PlayerController.Awake (code-driven scenes, no scene
             // wiring) — unlike WaterBlaster, which is baked into Backyard_Slice.unity with aimSource
@@ -177,6 +185,9 @@ namespace MaxWorlds.Combat
             SeekerPulse pulse = SeekerPulse.Fire(origin, dir, DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec,
                 DefaultPulseLifetime, EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit);
             LastSpawnedPulseForTests = pulse;
+
+            // MV-758: the muzzle punctuation — one per shot, under 0.22s cadence so it can't smear.
+            if (_vfx != null) _vfx.Muzzle(origin, dir);
         }
 
         /// <summary>Shock: every <see cref="ShockHitInterval"/>th pulse to land on the SAME robot within
@@ -190,7 +201,15 @@ namespace MaxWorlds.Combat
             _hitStreak[target] = count;
             _hitStreakTimer[target] = ShockWindowSeconds;
 
-            if (count % ShockHitInterval == 0) target.Stun(ShockStunSeconds);
+            bool isShockHit = count % ShockHitInterval == 0;
+            if (isShockHit) target.Stun(ShockStunSeconds);
+
+            // MV-758: the impact beat — a normal flash+sparks, or the Shock-carrying hit's own
+            // visibly distinct beat, so "a player must be able to count to the stun by eye" (spec).
+            // +0.6m: a robot's transform.position is its ground-level pivot (CombatVfx.OnDamage's own
+            // "pos + Vector3.up * 0.6f" convention) — landing the flash there instead reads as hitting
+            // the floor, not the robot.
+            if (_vfx != null) _vfx.Impact(target.transform.position + Vector3.up * 0.6f, damage, isShockHit);
         }
 
 #if UNITY_EDITOR
