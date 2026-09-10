@@ -4,7 +4,9 @@
 
 ## NEVER IDLE — the standing rule (read before anything else)
 
-The moment you finish a ticket (merged / handed off / proposal posted), **immediately pick the next actionable `needs-cc-web` ticket** (highest priority first, then key ascending) and keep going **without stopping**. Re-check the backlog after every completion.
+The moment you finish a ticket (merged / handed off / proposal posted), **immediately pick the next actionable** `needs-cc-web` ticket and keep going **without stopping**. Re-check the backlog after every completion.
+
+**Actionable** means all of: labelled `needs-cc-web`; not labelled `needs-lee`; status `Ready for Dev` or `Developing`; and **every ticket it "is blocked by" has already been pushed** - that is, the blocker's status is `QA Running`, `QA Passed`, `On Staging` or `Done`. A blocker still at Backlog / Shaping / Ready for Dev / Developing is unsatisfied, so the dependent ticket is NOT actionable: **skip it silently and take the next one.** Never set `needs-lee` because another ticket is unfinished - `needs-lee` means a human DECISION is required and nothing else. Among actionable tickets: highest priority first, then key ascending.
 
 Only STOP and wait for Lee when one of these is true:
 
@@ -43,7 +45,7 @@ Then query Jira:
 project = MV AND labels = needs-cc-web AND statusCategory != Done ORDER BY priority DESC, key ASC
 ```
 
-Pick the top ticket. Claim by adding `cc-active`. If none: report *"ready, nothing to claim"* and stop.
+Request links on that query (`fields=key,priority,status,issuelinks`). Walk the results in order and **skip any ticket with an unsatisfied "is blocked by" link** (see NEVER IDLE -> Actionable). The linked issue's status comes back inline, so no extra call is needed. Pick the top ticket that survives. Claim by adding `cc-active`. If none survives: report *"ready, nothing to claim"* and stop.
 
 > **Transition note:** MV-32 through MV-39 were created before this vocabulary existed and may not carry `needs-cc`. If the labelled queue is empty but MV-13 has open Backlog children, fall back to working them in numeric order (33 → 34 → 35 → 36 → 30 → 37 → 38 → 27 → 31 → 39) until the labels are backfilled.
 
