@@ -57,20 +57,27 @@ namespace MaxWorlds.VFX
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void Install()
         {
-            foreach (var hutch in FindObjectsByType<MowerHutch>(FindObjectsSortMode.None))
-            {
-                if (hutch == null || HasDoor(hutch)) continue;
+            InstallFor(FindObjectsByType<MowerHutch>(FindObjectsSortMode.None));
+            InstallFor(FindObjectsByType<Replicator>(FindObjectsSortMode.None));
+        }
 
-                var go = new GameObject($"FactoryDoorway ({hutch.name})");
+        /// <summary>MV-756: one door per factory BODY, whichever concrete type it is.</summary>
+        private static void InstallFor<T>(T[] bodies) where T : Component, IFactoryBody
+        {
+            foreach (var body in bodies)
+            {
+                if (body == null || HasDoor(body)) continue;
+
+                var go = new GameObject($"FactoryDoorway ({body.name})");
                 go.SetActive(false);
-                go.AddComponent<FactoryDoorway>().Bind(hutch);
+                go.AddComponent<FactoryDoorway>().Bind(body);
                 go.SetActive(true);
             }
         }
 
-        private static bool HasDoor(MowerHutch hutch)
+        private static bool HasDoor(Component body)
         {
-            foreach (var d in All) if (d != null && d._hutch == hutch) return true;
+            foreach (var d in All) if (d != null && d._body == body) return true;
             return false;
         }
 
@@ -95,9 +102,14 @@ namespace MaxWorlds.VFX
             return lift;
         }
 
-        public void Bind(MowerHutch hutch) => _hutch = hutch;
+        public void Bind(Component body)
+        {
+            _body = body;
+            _alive = body as IFactoryBody;
+        }
 
-        private MowerHutch _hutch;
+        private Component _body;       // MowerHutch or Replicator (MV-756)
+        private IFactoryBody _alive;
         private EnemySpawner _spawner;
 
         private Transform _shutter;
@@ -128,21 +140,30 @@ namespace MaxWorlds.VFX
 
         private void Awake()
         {
-            if (_hutch == null) _hutch = FindFirstObjectByType<MowerHutch>();
-            if (_hutch == null) return;
+            if (_body == null)
+            {
+                var hutch = FindFirstObjectByType<MowerHutch>();
+                if (hutch != null) Bind(hutch);
+                else
+                {
+                    var replicator = FindFirstObjectByType<Replicator>();
+                    if (replicator != null) Bind(replicator);
+                }
+            }
+            if (_body == null) return;
 
-            _spawner = _hutch.GetComponent<EnemySpawner>();
+            _spawner = _body.GetComponent<EnemySpawner>();
 
             // Same trap FactoryLife documents: two scene-wide sweeps re-material anything they
             // classify by shape, and a ramp is exactly the flat slab they read as a stone floor.
             gameObject.AddComponent<KeepsOwnMaterial>();
 
-            // Measured while the body is still visible — MowerHutch switches its renderer off the
+            // Measured while the body is still visible — the factory switches its renderer off the
             // moment it dies, and bounds read after that are a zero-sized box at the origin.
-            var body = _hutch.GetComponent<Renderer>();
-            Bounds b = body != null
-                ? body.bounds
-                : new Bounds(_hutch.transform.position + Vector3.up, new Vector3(3f, 2f, 3f));
+            var rend = _body.GetComponent<Renderer>();
+            Bounds b = rend != null
+                ? rend.bounds
+                : new Bounds(_body.transform.position + Vector3.up, new Vector3(3f, 2f, 3f));
 
             ChooseFace(b);
             Build(b);
@@ -281,12 +302,12 @@ namespace MaxWorlds.VFX
 
         private void Update()
         {
-            if (_hutch == null) return;
+            if (_body == null) return;
 
             // The source is gone: the door drops and stays down. A shutter still cycling on a dead
             // factory would advertise production that has stopped — the exact opposite of the read
             // this whole ticket exists to create.
-            if (_running && !_hutch.IsAlive) Die();
+            if (_running && !_alive.IsAlive) Die();
             if (!_running) return;
 
             float dt = Time.deltaTime;

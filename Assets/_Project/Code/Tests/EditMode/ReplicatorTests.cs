@@ -37,6 +37,7 @@ namespace MaxWorlds.Tests.EditMode
         private GameObject _playerGo;
         private GameObject _replicatorGo;
         private GameObject _rusherGo;
+        private GameObject _bruteGo;
 
         [SetUp]
         public void SetUp()
@@ -53,6 +54,7 @@ namespace MaxWorlds.Tests.EditMode
             if (_playerGo != null) Object.DestroyImmediate(_playerGo);
             if (_replicatorGo != null) Object.DestroyImmediate(_replicatorGo);
             if (_rusherGo != null) Object.DestroyImmediate(_rusherGo);
+            if (_bruteGo != null) Object.DestroyImmediate(_bruteGo);
         }
 
         private static readonly MethodInfo OnEnableMethod =
@@ -71,6 +73,63 @@ namespace MaxWorlds.Tests.EditMode
             OnEnableMethod.Invoke(e, null);
             e.transform.position = position;
             return e;
+        }
+
+        private RobotEnemy NewBrute(Vector3 position)
+        {
+            _bruteGo = new GameObject("Brute");
+            var cc = _bruteGo.AddComponent<CharacterController>();
+            var e = _bruteGo.AddComponent<RobotEnemy>();
+            CcField.SetValue(e, cc);
+            e.Apply(EnemyArchetype.Of(EnemyKind.Brute));
+            OnEnableMethod.Invoke(e, null);
+            e.transform.position = position;
+            return e;
+        }
+
+        /// <summary>
+        /// MV-756 Cause 1 — on `main` the arrive test is a flat 1.2 m CENTRE-TO-CENTRE radius
+        /// (<c>Replicator.ArriveRadius</c>) against a box whose collider half-extent is 1.0 m. A
+        /// Brute's own 0.6 m <c>CharacterController</c> radius means the closest its CENTRE can ever
+        /// physically get, pressed flat against the box's face, is 1.6 m — always outside that 1.2 m
+        /// gate, so a robot that has walked all the way to the hatch is never consumed. Fails on
+        /// current `main`: with the Brute placed at exactly that 1.6 m contact distance,
+        /// `TickConsumption` never satisfies `Vector3.Distance(...) <= ArriveRadius` (1.6 > 1.2), so
+        /// `spawner.LiveCountOf(EnemyKind.Brute)` stays 0, not 2. Tier 2 (resolved values): asserts
+        /// the resolved live count after ticking consumption, never an authored constant.
+        /// </summary>
+        [Test]
+        public void MV_RobotAtTheBoxIsConsumed()
+        {
+            LogAssert.ignoreFailingMessages = true; // same BuildBody collider-strip [Error], see below
+
+            _replicatorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _replicatorGo.name = "Replicator";
+            _replicatorGo.transform.position = RigOrigin;
+            _replicatorGo.transform.localScale = new Vector3(2f, 1.5f, 2f); // the ticket's authored 2x1.5x2 footprint
+            var replicator = _replicatorGo.AddComponent<Replicator>();
+            replicator.Build();
+            replicator.Configure(1); // capacity 1
+            Set(_replicatorGo.GetComponent<EnemySpawner>(), "startingRobots", 4); // room for the doubled pair
+
+            RobotEnemy brute = NewBrute(RigOrigin + new Vector3(5f, 0f, 0f)); // 5 m from the box, within lure radius
+
+            replicator.TickLure();
+            Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, brute.Current,
+                "within the 8 m lure radius, capacity > 0, and clear of the 4 m Max-melee exclusion — " +
+                "this Brute must be lured off Max");
+
+            // Touching the box's face, face-on: half-extent 1.0 m + this Brute's own 0.6 m
+            // CharacterController radius = 1.6 m from centre — the closest a real SafeMove-driven
+            // robot could ever get, never the box's own centre.
+            brute.transform.position = RigOrigin + new Vector3(1.6f, 0f, 0f);
+            replicator.TickConsumption(1.2f);
+
+            var spawner = _replicatorGo.GetComponent<EnemySpawner>();
+            Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Brute),
+                "a robot physically touching the box's face must be consumed and doubled — the " +
+                "arrive test has to read the box's own collider SURFACE, not a flat centre-to-centre " +
+                "radius that a real controller radius can never satisfy");
         }
 
         [Test]
