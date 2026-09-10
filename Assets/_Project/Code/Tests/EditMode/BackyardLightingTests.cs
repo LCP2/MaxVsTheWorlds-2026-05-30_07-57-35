@@ -171,5 +171,46 @@ namespace MaxWorlds.Tests.EditMode
             Assert.IsFalse(SunlitAlbedo.ClipsBloomUnderKey(bruiser, key, BackyardLook.Default.BloomThreshold),
                 "the shipped threshold still lets the Bruiser self-bloom under the key alone.");
         }
+
+        // ------------------------------------------------------------------ MV-754: per-world look
+
+        [Test]
+        public void MV_StormdrainHasItsOwnLook()
+        {
+            BackyardLook stormdrain = BackyardLook.ForWorld(1);
+
+            Assert.AreNotEqual(BackyardLook.Default, stormdrain,
+                "World 2 must not still be lit by the Backyard's own look.");
+            Assert.Less(stormdrain.KeyIntensity, 1.0f,
+                "the drain's key must be far dimmer than the yard's golden-hour sun.");
+            Assert.Greater(stormdrain.FogDensity, 0.03f,
+                "a tunnel needs its far end to dissolve into fog, not stay clear like the yard.");
+        }
+
+        [Test]
+        public void MV_StormdrainHasNoSky()
+        {
+            BiomePalette previous = MaterialLibrary.Palette;
+            try
+            {
+                MaterialLibrary.Palette = BiomePalette.Stormdrain;
+                var lighting = Build();
+                lighting.Apply(BackyardLook.Stormdrain);
+
+                Assert.IsNull(RenderSettings.skybox,
+                    "the Stormdrain is underground — it must never render the Backyard's daylight dome.");
+            }
+            finally
+            {
+                MaterialLibrary.Palette = previous;
+            }
+        }
+
+        [Test]
+        public void MV_BackyardLookUnchanged()
+        {
+            Assert.AreEqual(BackyardLook.Default, BackyardLook.ForWorld(0),
+                "World 1 must not shift by a single value.");
+        }
     }
 }

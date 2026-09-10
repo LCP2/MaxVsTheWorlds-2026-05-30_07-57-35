@@ -37,7 +37,23 @@ namespace MaxWorlds.Rendering
         private VolumeProfile _profile;
         private Material _sky;
 
-        private void Awake() => Apply(look);
+        // The look is resolved from the biome MaterialLibrary is already carrying, using the same
+        // "this Rendering assembly must not reach into Arena" trick ApplySky's Reef check uses:
+        // BackyardPath.Awake sets the palette synchronously, and this component self-installs from
+        // AfterSceneLoad, which is later. A serialized `look` that a scene author actually changed
+        // still wins — that is what the inspector field is for.
+        private void Awake()
+            => Apply(look.Equals(BackyardLook.Default) ? BackyardLook.ForWorld(WorldIndexFromPalette()) : look);
+
+        /// <summary>0 for the Backyard, 1 for the Stormdrain, 2 for the Reef — read off the palette
+        /// rather than the save, so a capture scene or a test that sets a palette directly is lit to
+        /// match it.</summary>
+        private static int WorldIndexFromPalette()
+        {
+            if (MaterialLibrary.Palette.Equals(BiomePalette.Reef)) return 2;
+            if (MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain)) return 1;
+            return 0;
+        }
 
         /// <summary>Build the whole look. Idempotent — safe to call again after a tweak.</summary>
         public void Apply(BackyardLook l)
@@ -130,7 +146,8 @@ namespace MaxWorlds.Rendering
             // BackyardLighting's own AfterSceneLoad self-install — so comparing against
             // BiomePalette.Reef is a safe, self-contained "is this World 3" check that adds no
             // dependency from this (Rendering) assembly onto Arena.
-            if (MaterialLibrary.Palette.Equals(BiomePalette.Reef))
+            if (MaterialLibrary.Palette.Equals(BiomePalette.Reef)
+                || MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain))
             {
                 // Unconditional, not "only if it's mine": a stale skybox another world's own
                 // BackyardLighting instance left behind (this component's _sky is null the first time

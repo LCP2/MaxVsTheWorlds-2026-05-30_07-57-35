@@ -197,5 +197,100 @@ namespace MaxWorlds.Rendering
             VignetteSmoothness = 0.5f,
             FilmGrain = 0.12f,
         };
+
+        /// <summary>
+        /// Stormdrain — World 2, underground (MV-754).
+        ///
+        /// World 2 has been lit by <see cref="Default"/> since it shipped: a 1.8-intensity
+        /// golden-hour key, a warm rim, a blue-sky ambient gradient and a live daylight sky dome. That
+        /// is the single largest reason the drain "feels like a garden, just a dirty one" — the paint
+        /// changed and the light never did.
+        ///
+        /// The direction here is the inverse of the Backyard's. The Backyard is a bright biome whose
+        /// mood comes from warm light against cool shadow; the drain is a DARK biome whose mood comes
+        /// from small pools of warm light against a lot of nothing. So the key drops to a fraction of
+        /// the yard's and turns cold (a shaft through a grate, not a sun), the fill turns green
+        /// (bounce off the sludge, the only bright thing down here), the rim stays warm and is the
+        /// ONLY warm light in the scene — which is what keeps Max and the robots legible against a
+        /// dark floor — and the fog goes up an order of magnitude, because the far end of a gallery
+        /// falling away into dark is what makes a tunnel a tunnel.
+        ///
+        /// The sky fields are still filled in even though <c>ApplySky</c> nulls the skybox for this
+        /// biome: a half-filled struct is a trap for the next person who reads it, and the values cost
+        /// nothing.
+        /// </summary>
+        public static BackyardLook Stormdrain => new BackyardLook
+        {
+            // A shaft of daylight down a grate, not a sun. Cold and dim: at the yard's 1.8 the wet
+            // concrete lifts to a mid grey and the whole world reads as an overcast car park.
+            KeyColor = new Color(0.74f, 0.83f, 0.88f),
+            KeyIntensity = 0.62f,
+            // Steeper than the yard's 40 degrees. Light gets into a drain from directly above or not
+            // at all, and a steep key throws short, hard shadows that read as "under something".
+            KeyEuler = new Vector3(62f, -30f, 0f),
+            // Harder than the Backyard's 0.45. Deep shadow is the point down here; the rim and the
+            // emissive lamps are what stop it becoming unreadable, not a lifted shadow.
+            ShadowStrength = 0.72f,
+
+            // Bounce off the sludge — the drain's own light source, and the reason the shadow side is
+            // green rather than blue. This is the single cue that says "there is something glowing on
+            // the floor" even in a frame with no sludge in it.
+            FillColor = new Color(0.34f, 0.46f, 0.26f),
+            FillIntensity = 0.42f,
+            FillEuler = new Vector3(20f, 140f, 0f),
+
+            // The only warm light in the world, and the whole reason a robot has a readable edge
+            // against a dark wall. Brighter than the yard's relative to the key on purpose.
+            RimColor = new Color(1f, 0.74f, 0.46f),
+            RimIntensity = 1.05f,
+            RimEuler = new Vector3(10f, 200f, 0f),
+
+            // No sky above, so the ambient sky term is what leaks down the grates: dim and cold. The
+            // ground term is sludge green, bouncing up.
+            AmbientSky = new Color(0.16f, 0.20f, 0.24f),
+            AmbientEquator = new Color(0.15f, 0.16f, 0.15f),
+            AmbientGround = new Color(0.17f, 0.22f, 0.10f),
+
+            // Twelve times the yard's density. This is deliberate and it is the most important number
+            // on this page: a long gallery whose far end is still crisp is a room, and a long gallery
+            // whose far end dissolves is a tunnel. Tuned so a 30 m sightline is still fightable and a
+            // 60 m one is atmosphere.
+            FogColor = new Color(0.09f, 0.12f, 0.11f),
+            FogDensity = 0.065f,
+
+            // Unused — ApplySky nulls the skybox for this biome — but filled so the struct is honest.
+            SkyZenith = new Color(0.05f, 0.07f, 0.08f),
+            SkyHorizon = new Color(0.09f, 0.12f, 0.11f),
+            SkyGroundHaze = new Color(0.07f, 0.09f, 0.08f),
+            SkySun = new Color(0.4f, 0.45f, 0.5f),
+            SkyCloud = new Color(0.1f, 0.12f, 0.12f),
+            SkySunGlow = 120f,
+            SkySunIntensity = 0.2f,
+            SkyCloudAmount = 0f,
+            SkyCloudScale = 1f,
+
+            // Stronger contact darkening than the yard: everything in a drain sits IN water or silt,
+            // and an AO that grips is what sells a pipe touching a wall.
+            AoIntensity = 0.85f,
+            AoRadius = 0.35f,
+
+            PostExposure = 0.15f,
+
+            // MV-754 capture check: every other grade field this struct leaves unset safely
+            // neutralises on its own (ShadowTint/HighlightTint go through BackyardLighting's
+            // ToTrackball, which maps a zero colour to (1,1,1,0); Contrast/Saturation are 0 =
+            // neutral in URP's -100..100 range; Bloom/Vignette/FilmGrain at intensity 0 add
+            // nothing). ColorFilter is the one exception — it has no such fallback and is applied
+            // to the frame verbatim, so leaving it at its Color default (0,0,0,0) multiplies every
+            // pixel by black. The first mv-w2-light capture came back solid black; this is why.
+            ColorFilter = Color.white,
+        };
+
+        /// <summary>The look for a loaded world, mirroring <see cref="BiomePalette.ForWorld"/>'s own
+        /// index rule. World 3 keeps <see cref="Default"/> for now — MV-745 gave the Reef its own
+        /// materials and killed its skybox, but never its lighting, and re-lighting it is that
+        /// world's own ticket, not this one's.</summary>
+        public static BackyardLook ForWorld(int worldIndex)
+            => worldIndex == 1 ? Stormdrain : Default;
     }
 }

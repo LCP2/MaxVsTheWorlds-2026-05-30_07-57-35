@@ -318,6 +318,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv738SludgeCheck());
             Add(BuildMv742StormdrainCheck());
             Add(BuildMv750DressingCheck());
+            Add(BuildMv754LightCheck());
             return d;
         }
 
@@ -1445,6 +1446,58 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-750-dressing-fixed", NoSetup) },
+            };
+        }
+
+        // ---- Mv754LightCheck (MV-754 AC4) -----------------------------------------------------
+
+        /// <summary>Same boot/frame idiom as <see cref="BuildMv742StormdrainCheck"/> — World 2's real
+        /// shipped config, Max's own spawn, the fixed rig's own angle — shot fresh under this ticket's
+        /// own key so re-lighting the drain (MV-754) has its own before/after evidence rather than
+        /// overwriting MV-742's file.</summary>
+        private static CapturePreset BuildMv754LightCheck()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var player = FindFirstObjectByType<PlayerController>();
+                if (player == null) throw new CaptureAbortException("World 2 built no PlayerController to shoot");
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = player.transform.position + Vector3.up * 1f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv-w2-light",
+                LogTag = "[MV754Capture]",
+                Flag = "-mv754shot",
+                ArmFile = "Temp/mv754.arm",
+                HeadlessMarker = "Temp/mv754.headless",
+                DoneFileName = "_mv754_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-754-w2-light", NoSetup) },
             };
         }
     }
