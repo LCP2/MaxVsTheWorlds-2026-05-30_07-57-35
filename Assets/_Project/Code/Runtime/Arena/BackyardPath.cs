@@ -173,7 +173,15 @@ namespace MaxWorlds.Arena
             if (worldIndex >= 2) ApplyReefKit(host, cover);
             // MV-755: World 2 never got a kit (MV-690's documented scope cut) and then lost the
             // garden props it was borrowing (MV-750) — this is what replaces both.
-            else if (worldIndex == 1) StormdrainDressing.Dress(host, _map, cover);
+            else if (worldIndex == 1)
+            {
+                StormdrainDressing.Dress(host, _map, cover);
+                // MV-759: every World 2 gate gets a round portal ring and sliding double doors instead
+                // of its plain slab — same "re-skin what MapRuntime already built" idiom ApplyReefKit
+                // uses for World 3's gates just above, scoped to this world only.
+                foreach (var gate in FindObjectsByType<AreaGate>(FindObjectsSortMode.None))
+                    gate.ApplyStormdrainGateSkin();
+            }
         }
 
         /// <summary>World 3's Reef-only cosmetic pass — re-skins every hydroponic reactor

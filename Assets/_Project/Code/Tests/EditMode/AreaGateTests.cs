@@ -5,6 +5,7 @@ using NUnit.Framework;
 using UnityEngine;
 using UnityEngine.UI;
 using MaxWorlds.Arena;
+using MaxWorlds.Feel;
 using MaxWorlds.UI;
 
 namespace MaxWorlds.Tests.EditMode
@@ -391,5 +392,112 @@ namespace MaxWorlds.Tests.EditMode
         // this split is PlayMode: AreaGatePlayTests.SustainedPrimaryFire_BreaksTheGateAtExactlyItsHp_NotBefore
         // now asserts leaf.enabled stays true and ThresholdObject's collider goes false after Open() --
         // CI runs it (CC_AUTONOMY.md: this worker never authors or runs PlayMode itself).
+
+        // --- MV-759: World 2 gates read as a round portal ring with sliding double doors ---
+
+        /// <summary>ONE consolidated EditMode test (Lee's comment on MV-759, superseding the
+        /// description's five-test list per MV-465 Rule 1 — the build, the lamp/hazard state and the
+        /// slide are all facets of the one feature landing together, not independent regressions).
+        /// Every assertion below is a RESOLVED value: an actually-built leaf count, a real material
+        /// colour read back off the lamp, a real collider's <c>enabled</c> flag, a real
+        /// <see cref="Span"/> computed from the gate's own hinge geometry — never an authored constant.
+        ///
+        /// Uses the same two reflection idioms this file already established for AreaGate:
+        /// <see cref="InvokeAwake"/> (Awake never runs on a freshly AddComponent'd MonoBehaviour in
+        /// this project's synchronous EditMode harness) and a direct private-method call with an
+        /// explicit step, because the new door slide is driven by <c>Time.deltaTime</c> in
+        /// <see cref="AreaGate"/>'s Update() exactly like the pre-existing hinge swing, which the
+        /// MV-386 note just above already established cannot tick a frame here either.</summary>
+        [Test]
+        public void StormdrainGateSkin_BuildsTwoLeaves_TracksLockAndOpenState_AndSlidesClearViaAnimSequence()
+        {
+            var go = new GameObject("Stormdrain Gate Probe");
+            try
+            {
+                go.transform.localScale = new Vector3(4f, 3f, 0.6f);
+                var gate = go.AddComponent<AreaGate>();
+                InvokeAwake(gate);
+
+                gate.ApplyStormdrainGateSkin();
+
+                // AC1 (two leaves, not the old single slab) + AC5 (no Animator anywhere under a gate).
+                var dressingRoot = (GameObject)GetPrivate(gate, "_dressingRoot");
+                var leafL = (GameObject)GetPrivate(gate, "_leafL");
+                var leafR = (GameObject)GetPrivate(gate, "_leafR");
+                Assert.IsNotNull(dressingRoot, "ApplyStormdrainGateSkin built no dressing root");
+                Assert.IsNotNull(leafL, "no left leaf was built");
+                Assert.IsNotNull(leafR, "no right leaf was built");
+                Assert.AreNotSame(leafL, leafR, "a World 2 gate must build TWO distinct leaves");
+                Assert.IsNull(go.GetComponentInChildren<Animator>(true),
+                    "no Animator may exist under the gate itself (project_animation_substrate)");
+                Assert.IsNull(dressingRoot.GetComponentInChildren<Animator>(true),
+                    "no Animator may exist under the gate's Stormdrain dressing (project_animation_substrate)");
+
+                // AC4: the lamp/hazard stripe follow Locked/IsOpen, recomputed each time off those
+                // existing properties -- not cached in any new field of their own.
+                var lampRenderer = ((GameObject)GetPrivate(gate, "_lampGlow")).GetComponentInChildren<Renderer>();
+                var hazardStripe = (GameObject)GetPrivate(gate, "_hazardStripe");
+
+                Color closedColor = lampRenderer.sharedMaterial.GetColor("_BaseColor");
+
+                gate.Locked = true;
+                Assert.IsTrue(hazardStripe.activeSelf, "the hazard stripe must show while locked");
+                Color lockedColor = lampRenderer.sharedMaterial.GetColor("_BaseColor");
+                Assert.AreNotEqual(closedColor, lockedColor,
+                    "the lamp must change colour the instant LockedChanged fires");
+
+                gate.Locked = false;
+                Assert.IsFalse(hazardStripe.activeSelf, "the hazard stripe must hide once unlocked");
+                Assert.AreEqual(closedColor, lampRenderer.sharedMaterial.GetColor("_BaseColor"),
+                    "unlocking with the gate still shut must return the lamp to its closed colour");
+
+                // AC3: the threshold still drops the instant IsOpen flips true -- unaffected by the
+                // new art riding on top of it (item 5 of the ticket).
+                GameObject threshold = gate.ThresholdObject;
+                Assert.IsTrue(threshold.GetComponent<Collider>().enabled, "the threshold starts enabled");
+
+                gate.ForceOpen();
+
+                Assert.IsFalse(threshold.GetComponent<Collider>().enabled,
+                    "the threshold must still drop the instant the gate opens (MV-386), unchanged by MV-759");
+                Color openColor = lampRenderer.sharedMaterial.GetColor("_BaseColor");
+                Assert.AreNotEqual(closedColor, openColor, "the lamp must change colour again once open");
+
+                // AC5 (driven by AnimSequence) + AC2 (clears the doorway once the slide completes). A
+                // single huge dt finishes the sequence in one step -- AnimSequence.Progress clamps at
+                // its step's duration, so this is "run the slide to completion", not a timing shortcut.
+                typeof(AreaGate).GetMethod("AdvanceStormdrainSlide", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .Invoke(gate, new object[] { 10f });
+
+                Assert.IsInstanceOf<AnimSequence>(GetPrivate(gate, "_doorSlide"),
+                    "the door slide must be driven by an AnimSequence (MV-684), not an Animator or a tween library");
+
+                Span doorSpan = gate.OpenLeafSpan(alongX: true);
+                AssertClearOfSpan(leafL, doorSpan, "left");
+                AssertClearOfSpan(leafR, doorSpan, "right");
+            }
+            finally
+            {
+                Object.DestroyImmediate(go);
+            }
+        }
+
+        private static object GetPrivate(object target, string fieldName) =>
+            target.GetType().GetField(fieldName, BindingFlags.NonPublic | BindingFlags.Instance)?.GetValue(target);
+
+        /// <summary>Fails if <paramref name="leaf"/>'s world-space footprint along X overlaps
+        /// <paramref name="doorSpan"/> -- the range <see cref="AreaGate.OpenLeafSpan"/> reports as
+        /// still covered by the gate's own (untouched) hinge-swung collision leaf, i.e. the part of the
+        /// doorway a routed waypoint has to avoid. A leaf that still straddles it once the slide has
+        /// finished would read as open but still visually block the doorway it just cleared.</summary>
+        private static void AssertClearOfSpan(GameObject leaf, Span doorSpan, string which)
+        {
+            var rend = leaf.GetComponent<Renderer>();
+            Bounds b = rend.bounds;
+            bool overlaps = b.min.x <= doorSpan.Max && b.max.x >= doorSpan.Min;
+            Assert.IsFalse(overlaps,
+                $"the {which} leaf's slid-open bounds [{b.min.x:0.##}, {b.max.x:0.##}] overlap the doorway " +
+                $"span {doorSpan} still covered by the gate's own hinge-swung collision leaf");
+        }
     }
 }

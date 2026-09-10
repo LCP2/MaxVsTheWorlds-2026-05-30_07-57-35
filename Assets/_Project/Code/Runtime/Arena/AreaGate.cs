@@ -2,6 +2,7 @@ using System;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Factories;
+using MaxWorlds.Feel;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 
@@ -119,6 +120,264 @@ namespace MaxWorlds.Arena
             rend.GetPropertyBlock(_reefMpb);
             _reefMpb.SetColor("_BaseColor", WorldMaterials.ReefHazard);
             rend.SetPropertyBlock(_reefMpb);
+        }
+
+        // --- MV-759: World 2's gate art — a round portal ring with two doors that slide apart,
+        // built entirely from this gate's own closed-pose geometry, exactly the way ApplyReefSkin
+        // re-skins the leaf above. The mechanic (health, threshold drop timing, the hinge-swing
+        // collision leaf itself) is completely untouched: this only hides the plain slab's renderer
+        // and adds art riding on top, wired off the gate's existing Opened/Closed/LockedChanged
+        // events so it never needs a field of its own to track state Locked/IsOpen already carry.
+
+        private const float StormdrainDressingProud = 0.04f; // same AntiZFightMargin idiom as MapRuntime.BuildAreaGate
+        private const float DoorSlideDuration = 0.45f;
+
+        private static readonly Color StormdrainLampLocked = new Color(0.90f, 0.15f, 0.10f);
+        // Deliberately brighter/more saturated than StormdrainKit.Hazard (the ring's own rust-adjacent
+        // warm tone) — the QA capture pass caught the Hazard shade blending into the surrounding rust
+        // ring under this world's dim lighting, so a "closed and unlockable" gate read as unlit rather
+        // than amber (readability beats palette-matching here, per the Craft Bible's tie-breaker order).
+        private static readonly Color StormdrainLampAmber = new Color(1.0f, 0.8f, 0.25f);
+        private static readonly Color StormdrainLampOpen = new Color(0.25f, 0.90f, 0.35f);
+
+        private GameObject _dressingRoot;
+        private GameObject _leafL, _leafR;
+        private GameObject _lampGlow;
+        private GameObject _hazardStripe;
+        private Vector3 _leafClosedLocalPosL, _leafClosedLocalPosR;
+        private float _doorSlideDistance;
+        private AnimSequence _doorSlide;
+        private bool _doorSlideOpening;
+
+        /// <summary>Builds World 2's portal ring + sliding double doors around this gate's doorway and
+        /// hides the plain slab CreatePrimitive gave it — called once, from <see cref="BackyardPath"/>'s
+        /// per-world dressing pass, only for a World 2 load (mirrors how <see cref="ApplyReefSkin"/> is
+        /// called only for World 3). Idempotent: a second call is a no-op, matching every other
+        /// dressing pass in this codebase.</summary>
+        public void ApplyStormdrainGateSkin()
+        {
+            if (_dressingRoot != null) return;
+
+            var rend = GetComponent<Renderer>();
+            if (rend != null) rend.enabled = false;
+
+            float width = transform.localScale.x;
+            float height = transform.localScale.y;
+            float depth = transform.localScale.z;
+
+            _dressingRoot = new GameObject(gameObject.name + " (Stormdrain Gate Dressing)");
+            _dressingRoot.transform.SetParent(transform.parent, worldPositionStays: false);
+            _dressingRoot.transform.SetPositionAndRotation(transform.position, transform.rotation);
+            // Same marker StormdrainDressing.Dress puts on its own root: WorldMaterials' generic
+            // shape-classified sweep (KeepsOwnMaterial's own doc: "the runtime sweep re-dresses anything
+            // that appears mid-run") otherwise repaints every box built here, lamp included, with its
+            // own flat biome tint the instant it appears -- which is exactly why the lamp read as a
+            // neutral grey prop instead of amber/red/green in this ticket's own QA capture, no matter
+            // what colour RefreshStormdrainLamp had just set (caught by diagnosing MV-759-gate-closed.png
+            // down to the actual material name and colour on the built lamp, not by eye).
+            _dressingRoot.AddComponent<KeepsOwnMaterial>();
+
+            BuildStormdrainPortalRing(_dressingRoot.transform, width, height, depth);
+            BuildStormdrainDoorLeaves(_dressingRoot.transform, width, height, depth);
+            BuildStormdrainLampAndHazard(_dressingRoot.transform, width, height, depth);
+
+            Opened += OnStormdrainOpened;
+            Closed += OnStormdrainClosed;
+            LockedChanged += OnStormdrainLockedChanged;
+
+            RefreshStormdrainLamp();
+        }
+
+        /// <summary>The arch: a segmented rib stepped around the top of the opening (a true torus is
+        /// not worth a mesh generator here — ticket's own call), plus a rust inner lip so the ring
+        /// reads as one built object rather than a row of loose boxes.
+        ///
+        /// An ELLIPTICAL arc, not a circular one: a real World 2 doorway is wide and short (the shipped
+        /// map's gates run ~3.8 x 1.5 x 0.64), so a single circular radius either overshoots the opening
+        /// (too tall) or, worse, drives the spring line negative once the radius exceeds the doorway's
+        /// own height — every jamb and rib collapsed to a sliver against the floor and the whole ring
+        /// read as one flat slab (caught opening MV-759-gate-closed.png during this ticket's own QA
+        /// pass). Decoupling the horizontal and vertical extents keeps the arc inside the doorway at
+        /// any aspect ratio: it always spans the full width and rises through a fixed FRACTION of the
+        /// height, never more.</summary>
+        private void BuildStormdrainPortalRing(Transform parent, float width, float height, float depth)
+        {
+            var ring = new GameObject("Portal Ring");
+            ring.transform.SetParent(parent, false);
+
+            // MapRuntime.BuildAreaGate centres the gate's own cube on its doorway (GroundedCenter-style
+            // Y), so THIS transform's local Y=0 is the doorway's VERTICAL CENTRE, not its floor — every
+            // position below is built relative to that centre (floor = -halfHeight, top = +halfHeight),
+            // not relative to 0 = floor as an early pass here assumed. That earlier assumption put the
+            // whole ring, both leaves and the lamp roughly one half-height too high, largely into the
+            // wall above the doorway instead of around it (caught opening MV-759-gate-closed.png during
+            // this ticket's own QA pass — the doorway gap below the visible mass was the REAL opening).
+            float halfHeight = height * 0.5f;
+
+            float ribDepth = depth + StormdrainDressingProud * 2f;
+            float horizontalRadius = width * 0.5f + 0.15f;
+            float archRise = height * 0.6f;                 // the top 60% of the doorway curves; the rest is jamb
+            float springY = height - archRise;               // always > 0 -- never depends on horizontalRadius
+            float ribSize = Mathf.Clamp(Mathf.Min(width, height) * 0.16f, 0.12f, 0.4f);
+
+            const int segments = 8;
+            for (int i = 0; i <= segments; i++)
+            {
+                // Steps across the arch (180 deg at the left jamb to 0 deg at the right jamb) — the
+                // sides below the spring line are plain jambs, not curved.
+                float angle = Mathf.Lerp(180f, 0f, i / (float)segments) * Mathf.Deg2Rad;
+                Vector3 pos = new Vector3(Mathf.Cos(angle) * horizontalRadius,
+                    springY - halfHeight + Mathf.Sin(angle) * archRise, 0f);
+                StormdrainKit.Box(ring.transform, $"Rib{i}", pos, new Vector3(ribSize, ribSize, ribDepth),
+                    StormdrainKit.Rust, SurfaceKind.Metal);
+            }
+
+            // Jambs: the straight run of the ring below the spring line, on each side of the opening.
+            StormdrainKit.Box(ring.transform, "Jamb L", new Vector3(-horizontalRadius, springY * 0.5f - halfHeight, 0f),
+                new Vector3(ribSize, springY, ribDepth), StormdrainKit.Rust, SurfaceKind.Metal);
+            StormdrainKit.Box(ring.transform, "Jamb R", new Vector3(horizontalRadius, springY * 0.5f - halfHeight, 0f),
+                new Vector3(ribSize, springY, ribDepth), StormdrainKit.Rust, SurfaceKind.Metal);
+
+            // Inner lip: a darker rust FRAME sitting proud of the wall, right against the doorway edge —
+            // four thin strips around the opening's perimeter (same hollow-border idiom as
+            // StormdrainKit.DressSludgeTile's own Lip N/S/E/W), never a filled slab: a filled box here
+            // would sit in front of the ring and both leaves and hide the whole feature behind a plain
+            // rectangle (the same MV-759-gate-closed.png QA pass caught this too, before the ellipse fix).
+            float lipThickness = ribSize * 0.5f;
+            float lipDepth = ribDepth * 0.5f;
+            StormdrainKit.Box(ring.transform, "Inner Lip Top", new Vector3(0f, halfHeight + lipThickness * 0.5f, 0f),
+                new Vector3(width + lipThickness * 2f, lipThickness, lipDepth), StormdrainKit.RustDark, SurfaceKind.Metal);
+            StormdrainKit.Box(ring.transform, "Inner Lip L", new Vector3(-width * 0.5f - lipThickness * 0.5f, 0f, 0f),
+                new Vector3(lipThickness, height, lipDepth), StormdrainKit.RustDark, SurfaceKind.Metal);
+            StormdrainKit.Box(ring.transform, "Inner Lip R", new Vector3(width * 0.5f + lipThickness * 0.5f, 0f, 0f),
+                new Vector3(lipThickness, height, lipDepth), StormdrainKit.RustDark, SurfaceKind.Metal);
+        }
+
+        /// <summary>Two half-leaves meeting at the doorway's centre line, each chamfered on its inner
+        /// edge so the closed pair reads as one round plug in the ring. Closed local positions are
+        /// captured here — <see cref="AdvanceStormdrainSlide"/> always lerps from/to these, never a
+        /// live, possibly-mid-slide position, so a second open/close cycle can never drift.</summary>
+        private void BuildStormdrainDoorLeaves(Transform parent, float width, float height, float depth)
+        {
+            float leafWidth = width * 0.5f;
+            Vector3 leafSize = new Vector3(leafWidth, height, depth);
+
+            _leafL = BuildStormdrainLeaf(parent, "Leaf L", -leafWidth * 0.5f, leafSize, chamferSign: 1f);
+            _leafR = BuildStormdrainLeaf(parent, "Leaf R", leafWidth * 0.5f, leafSize, chamferSign: -1f);
+
+            _leafClosedLocalPosL = _leafL.transform.localPosition;
+            _leafClosedLocalPosR = _leafR.transform.localPosition;
+
+            // MV-759 fix comment: a slide of only each leaf's own half-width left it straddling the
+            // span AreaGate.OpenLeafSpan still reports as covered by the (untouched, still hinge-
+            // swinging) collision leaf — that leaf's swing pivots on the doorway's own left jamb, so
+            // its footprint sits close against the doorway rather than clear of it. A full width's
+            // worth of slide tucks each leaf comfortably behind its own side of the ring instead.
+            _doorSlideDistance = width;
+        }
+
+        private static GameObject BuildStormdrainLeaf(Transform parent, string name, float localX,
+                                                       Vector3 size, float chamferSign)
+        {
+            // Y=0, not size.y*0.5 -- this transform's local origin is the doorway's vertical CENTRE
+            // (see BuildStormdrainPortalRing's halfHeight note), and a leaf spans the full height
+            // centred on that same origin.
+            GameObject leaf = StormdrainKit.Box(parent, name, new Vector3(localX, 0f, 0f),
+                size, StormdrainKit.KerbConcrete, SurfaceKind.Metal);
+
+            // Chamfer: a thin rust strip along the inner edge, angled slightly, so the closed pair
+            // reads as one bevelled, round plug rather than two flat slabs butted together. Built under
+            // PARENT first, in the same unscaled space as the leaf itself, then reparented onto the leaf
+            // with worldPositionStays -- built directly as a child of the leaf, Unity composes its
+            // localScale with the leaf's own (which IS the leaf's full width/height/depth), so a "thin
+            // strip" came out scaled up by the leaf's own size, dwarfing the whole ring (caught opening
+            // MV-759-gate-closed.png during this ticket's own QA pass). Reparenting with
+            // worldPositionStays recomputes the local transform to compensate, and the chamfer still
+            // slides with its leaf afterwards since it is genuinely that leaf's child from here on.
+            var chamfer = StormdrainKit.Box(parent, "Inner Chamfer",
+                new Vector3(localX + chamferSign * size.x * 0.42f, 0f, 0f),
+                new Vector3(Mathf.Min(size.x * 0.18f, 0.35f), size.y * 0.96f, size.z * 1.08f),
+                StormdrainKit.Rust, SurfaceKind.Metal);
+            chamfer.transform.rotation *= Quaternion.Euler(0f, chamferSign * 8f, 0f);
+            chamfer.transform.SetParent(leaf.transform, worldPositionStays: true);
+
+            return leaf;
+        }
+
+        /// <summary>The status lamp (red/amber/green off <see cref="Locked"/>/<see cref="IsOpen"/>,
+        /// never a field of its own — <see cref="RefreshStormdrainLamp"/> recomputes it every time) and
+        /// the hazard-stripe band across the seam, shown only while locked.</summary>
+        private void BuildStormdrainLampAndHazard(Transform parent, float width, float height, float depth)
+        {
+            // A small unlit CUBE, not StormdrainKit.Glow's Quad: a Quad is single-sided, and this
+            // ticket's own QA capture pass caught it reading invisible from the front on the specific
+            // gate the capture preset shoots regardless of which way it was rotated to face (the "lamp"
+            // that looked lit in that screenshot was the pre-existing health pill floating above the
+            // gate, not this object at all). A cube has no facing to get wrong.
+            _lampGlow = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            _lampGlow.name = "Gate Lamp";
+            _lampGlow.transform.SetParent(parent, false);
+            // height*0.5 (the doorway's top, relative to this transform's centre-origin) + a small rise
+            // above it, not height+0.22 against a floor origin this transform doesn't have. Well proud
+            // of the wall's own coping (depth*0.5 + 0.3, not + StormdrainDressingProud) so a thick wall
+            // crest running across the top of the doorway can never sit in front of it.
+            _lampGlow.transform.localPosition = new Vector3(0f, height * 0.5f + 0.22f, depth * 0.5f + 0.3f);
+            _lampGlow.transform.localScale = new Vector3(0.6f, 0.6f, 0.3f);
+            StormdrainKit.Strip(_lampGlow);
+            _lampGlow.GetComponent<Renderer>().sharedMaterial = StormdrainKit.Unlit(StormdrainLampAmber, "GateLamp");
+
+            _hazardStripe = StormdrainKit.Box(parent, "Hazard Stripe", Vector3.zero,
+                new Vector3(width * 1.02f, 0.2f, depth + StormdrainDressingProud * 2f),
+                StormdrainKit.Hazard, SurfaceKind.Metal);
+        }
+
+        private void OnStormdrainLockedChanged(bool locked) => RefreshStormdrainLamp();
+
+        private void OnStormdrainOpened()
+        {
+            RefreshStormdrainLamp();
+            StartStormdrainSlide(opening: true);
+        }
+
+        private void OnStormdrainClosed()
+        {
+            RefreshStormdrainLamp();
+            StartStormdrainSlide(opening: false);
+        }
+
+        private void RefreshStormdrainLamp()
+        {
+            if (_lampGlow == null) return;
+
+            Color color = Locked ? StormdrainLampLocked : IsOpen ? StormdrainLampOpen : StormdrainLampAmber;
+            Material mat = StormdrainKit.Unlit(color, "GateLamp");
+            foreach (var rend in _lampGlow.GetComponentsInChildren<Renderer>())
+                rend.sharedMaterial = mat;
+
+            if (_hazardStripe != null) _hazardStripe.SetActive(Locked);
+        }
+
+        private void StartStormdrainSlide(bool opening)
+        {
+            _doorSlideOpening = opening;
+            _doorSlide = new AnimSequence(new[] { new AnimStep(0f, DoorSlideDuration, AnimEase.OutQuad) });
+        }
+
+        /// <summary>Ticks the door slide by an explicit <paramref name="dt"/> — called from
+        /// <see cref="Update"/> with <c>Time.deltaTime</c>, exactly like the pre-existing hinge swing
+        /// above, and invoked directly (by reflection) from an EditMode test with a controlled step,
+        /// since neither this project's synchronous EditMode harness nor <c>Time.deltaTime</c> ticks a
+        /// frame there.</summary>
+        private void AdvanceStormdrainSlide(float dt)
+        {
+            if (_doorSlide == null || _leafL == null || _leafR == null) return;
+
+            _doorSlide.Tick(dt);
+            float u = _doorSlide.Progress(0);
+            float offset = _doorSlideOpening ? Mathf.Lerp(0f, _doorSlideDistance, u) : Mathf.Lerp(_doorSlideDistance, 0f, u);
+
+            _leafL.transform.localPosition = _leafClosedLocalPosL + Vector3.left * offset;
+            _leafR.transform.localPosition = _leafClosedLocalPosR + Vector3.right * offset;
         }
 
         /// <summary>The world-fixed stand-in for the doorway while this gate is shut (MV-386) — the
@@ -244,10 +503,21 @@ namespace MaxWorlds.Arena
 
         private void OnDestroy()
         {
-            if (_thresholdCollider == null) return;
-            GameObject thresholdObject = _thresholdCollider.gameObject;
-            if (Application.isPlaying) Destroy(thresholdObject);
-            else DestroyImmediate(thresholdObject);
+            if (_thresholdCollider != null)
+            {
+                GameObject thresholdObject = _thresholdCollider.gameObject;
+                if (Application.isPlaying) Destroy(thresholdObject);
+                else DestroyImmediate(thresholdObject);
+            }
+
+            // MV-759: the Stormdrain dressing is a sibling (see ApplyStormdrainGateSkin), not a child —
+            // same reason the threshold above is parented outside this transform, and the same reason
+            // it needs its own explicit teardown here rather than dying with this GameObject for free.
+            if (_dressingRoot != null)
+            {
+                if (Application.isPlaying) Destroy(_dressingRoot);
+                else DestroyImmediate(_dressingRoot);
+            }
         }
 
         public void TakeDamage(in DamageInfo info)
@@ -396,6 +666,8 @@ namespace MaxWorlds.Arena
 
         private void Update()
         {
+            AdvanceStormdrainSlide(Time.deltaTime);
+
             if (!_hinging) return;
 
             _hingeT += Time.deltaTime;

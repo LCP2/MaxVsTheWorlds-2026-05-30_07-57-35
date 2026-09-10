@@ -73,6 +73,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv755StormdrainDressing() => RunFromMenu(CapturePresets.All["mv-w2-kit"]);
         public static void CaptureMv755StormdrainDressing() => Run(CapturePresets.All["mv-w2-kit"]);
 
+        [MenuItem("MaxWorlds/Capture/World 2 Gate Doors (MV-759)")]
+        public static void MenuMv759GateDoors() => RunFromMenu(CapturePresets.All["mv-w2-gate-doors"]);
+        public static void CaptureMv759GateDoors() => Run(CapturePresets.All["mv-w2-gate-doors"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 
