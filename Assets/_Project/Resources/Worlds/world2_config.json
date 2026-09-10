@@ -509,7 +509,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a1_cover2",
@@ -599,7 +599,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a2_cover2",
@@ -619,7 +619,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "hedge"
     }
    ],
    "sludge": [],
@@ -735,7 +735,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a3_cover2",
@@ -755,7 +755,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     },
     {
      "id": "a3_cover4",
@@ -765,7 +765,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     }
    ],
    "sludge": [
@@ -952,7 +952,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a4_cover2",
@@ -972,7 +972,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a4_cover4",
@@ -1068,7 +1068,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     },
     {
      "id": "a5_cover2",
@@ -1078,7 +1078,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     },
     {
      "id": "a5_cover3",
@@ -1088,7 +1088,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a5_cover4",
@@ -1234,7 +1234,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a6_cover2",
@@ -1254,7 +1254,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -1462,7 +1462,7 @@
      "height": 1.6,
      "depth": 4,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a7_cover2",
@@ -1482,7 +1482,7 @@
      "height": 1.6,
      "depth": 4,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a7_cover4",
@@ -1492,7 +1492,7 @@
      "height": 1.6,
      "depth": 4,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a7_cover5",
@@ -1502,7 +1502,7 @@
      "height": 1.6,
      "depth": 4,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -1627,7 +1627,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a8_cover2",
@@ -1647,7 +1647,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a8_cover4",
@@ -1657,7 +1657,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     }
    ],
    "sludge": [
@@ -1809,7 +1809,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     },
     {
      "id": "a9_cover2",
@@ -1819,7 +1819,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a9_cover3",
@@ -1829,7 +1829,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     }
    ],
    "sludge": [],
@@ -1928,7 +1928,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "hedge"
     },
     {
      "id": "a10_cover2",
@@ -1938,7 +1938,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "hedge"
     },
     {
      "id": "a10_cover3",
@@ -1948,7 +1948,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "hedge"
     },
     {
      "id": "a10_cover4",
@@ -1958,7 +1958,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a10_cover5",
@@ -1968,7 +1968,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     }
    ],
    "sludge": [
@@ -2116,7 +2116,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a11_cover2",
@@ -2136,7 +2136,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -2303,7 +2303,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a12_cover2",
@@ -2313,7 +2313,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a12_cover3",
@@ -2323,7 +2323,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a12_cover4",
@@ -2333,7 +2333,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     }
    ],
    "sludge": [
@@ -2688,7 +2688,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a14_cover2",
@@ -2708,7 +2708,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -2953,7 +2953,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     },
     {
      "id": "a16_cover2",
@@ -2963,7 +2963,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     },
     {
      "id": "a16_cover3",
@@ -2973,7 +2973,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     },
     {
      "id": "a16_cover4",
@@ -2983,7 +2983,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a16_cover5",
@@ -3154,7 +3154,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a17_cover2",
@@ -3164,7 +3164,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a17_cover3",
@@ -3174,7 +3174,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a17_cover4",
@@ -3194,7 +3194,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     }
    ],
    "sludge": [],
@@ -3320,7 +3320,7 @@
      "height": 1.6,
      "depth": 5,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a18_cover2",
@@ -3340,7 +3340,7 @@
      "height": 1.6,
      "depth": 5,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a18_cover4",
@@ -3350,7 +3350,7 @@
      "height": 1.6,
      "depth": 5,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a18_cover5",
@@ -3360,7 +3360,7 @@
      "height": 1.6,
      "depth": 6,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -3670,7 +3670,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a20_cover2",
@@ -3690,7 +3690,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a20_cover4",
@@ -3700,7 +3700,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a20_cover5",
@@ -3710,7 +3710,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     },
     {
      "id": "a20_cover6",
@@ -3720,7 +3720,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -3892,7 +3892,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a21_cover2",
@@ -3902,7 +3902,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a21_cover3",
@@ -3912,7 +3912,7 @@
      "height": 1.6,
      "depth": 3,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "machinery"
     },
     {
      "id": "a21_cover4",
@@ -3932,7 +3932,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     },
     {
      "id": "a21_cover6",
@@ -3942,7 +3942,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     },
     {
      "id": "a21_cover7",
@@ -3952,7 +3952,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "machinery"
     },
     {
      "id": "a21_cover8",
@@ -3962,7 +3962,7 @@
      "height": 1.6,
      "depth": 1,
      "shape": "box",
-     "dressing": "pipe"
+     "dressing": "planter"
     }
    ],
    "sludge": [
@@ -4281,7 +4281,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "tree"
     },
     {
      "id": "a22_cover2",
@@ -4301,7 +4301,7 @@
      "height": 1.6,
      "depth": 2,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     },
     {
      "id": "a22_cover4",
@@ -4414,7 +4414,7 @@
      "height": 1.6,
      "depth": 4,
      "shape": "box",
-     "dressing": "none"
+     "dressing": "planter"
     }
    ],
    "sludge": [
