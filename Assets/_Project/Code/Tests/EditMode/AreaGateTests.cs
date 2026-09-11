@@ -435,7 +435,11 @@ namespace MaxWorlds.Tests.EditMode
 
                 // AC4: the lamp/hazard stripe follow Locked/IsOpen, recomputed each time off those
                 // existing properties -- not cached in any new field of their own.
-                var lampRenderer = ((GameObject)GetPrivate(gate, "_lampGlow")).GetComponentInChildren<Renderer>();
+                // MV-779: the lamp is now a Housing (fixed rust tone) + a Lens (the state colour) —
+                // find the Lens specifically, not "the first renderer found", since Housing no longer
+                // changes colour with Locked/IsOpen.
+                var lampRenderer = ((GameObject)GetPrivate(gate, "_lampGlow")).transform
+                    .Find("Lens").GetComponent<Renderer>();
                 var hazardStripe = (GameObject)GetPrivate(gate, "_hazardStripe");
 
                 Color closedColor = lampRenderer.sharedMaterial.GetColor("_BaseColor");

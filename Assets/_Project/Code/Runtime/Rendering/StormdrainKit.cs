@@ -118,20 +118,43 @@ namespace MaxWorlds.Rendering
             return go;
         }
 
-        /// <summary>A collider-free cylinder. Unity's cylinder is 2 m tall at scale 1, so
-        /// <paramref name="length"/> is halved into the Y scale — the caller thinks in metres.</summary>
+        /// <summary>A collider-free pipe — a lathed barrel with a raised collar ring at each end
+        /// (MV-779), not a bare cylinder: a cylinder has no end, and an end is what makes a pipe
+        /// read as a pipe rather than as a stick. The mesh's own local Y runs 0..length (bottom to
+        /// top), so the GameObject is offset back by half that so <paramref name="localPos"/> keeps
+        /// meaning "the pipe's own centre", exactly as every existing call site already assumes.</summary>
         public static GameObject Tube(Transform parent, string name, Vector3 localPos,
                                       float radius, float length, Quaternion rot, Color tone)
         {
             var go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             go.name = name;
             go.transform.SetParent(parent, false);
-            go.transform.localPosition = localPos;
             go.transform.localRotation = rot;
-            go.transform.localScale = new Vector3(radius * 2f, length * 0.5f, radius * 2f);
+            go.transform.localPosition = localPos - rot * Vector3.up * (length * 0.5f);
+            go.transform.localScale = Vector3.one;
+            go.GetComponent<MeshFilter>().sharedMesh = LathedPipeMesh(radius, length);
             Strip(go);
             Paint(go, SurfaceKind.Metal, tone);
             return go;
+        }
+
+        /// <summary>The lathed pipe profile MV-779 replaces a bare cylinder with: a plain barrel of
+        /// <paramref name="r"/> radius and <paramref name="l"/> length, with a collar ring standing
+        /// proud (1.18x radius) in the last/first 5% of the length at each end.</summary>
+        private static Mesh LathedPipeMesh(float r, float l)
+        {
+            var profile = new[]
+            {
+                new Vector2(0f, 0f),
+                new Vector2(r * 1.18f, 0f),
+                new Vector2(r * 1.18f, l * 0.05f),
+                new Vector2(r, l * 0.05f),
+                new Vector2(r, l * 0.95f),
+                new Vector2(r * 1.18f, l * 0.95f),
+                new Vector2(r * 1.18f, l),
+                new Vector2(0f, l),
+            };
+            return CharacterMeshes.Lathe(profile, 16);
         }
 
         /// <summary>An unlit emissive quad — a lamp lens, a status light, a flow chevron. Unlit so it
@@ -305,12 +328,35 @@ namespace MaxWorlds.Rendering
             root.transform.SetParent(parent, false);
             root.transform.position = at;
 
-            Tube(root.transform, "Column", Vector3.up * (height * 0.5f), 0.22f, height,
+            const float r = 0.22f;   // the column's own radius, per MV-779's flare/bell profiles
+            Tube(root.transform, "Column", Vector3.up * (height * 0.5f), r, height,
                  Quaternion.identity, Rust);
             Tube(root.transform, "Flange", Vector3.up * 0.12f, 0.42f, 0.24f,
                  Quaternion.identity, RustDark);
             Tube(root.transform, "Collar", Vector3.up * (height * 0.55f), 0.30f, 0.18f,
                  Quaternion.identity, RustDark);
+
+            // MV-779: a flared base at the floor and a bell top at the pipe's own top — the column
+            // reads as a fitted standpipe rather than a straight length of stock.
+            AddMeshPart(root.transform, "Flared Base", CharacterMeshes.Lathe(new[]
+                {
+                    new Vector2(0f, 0f),
+                    new Vector2(r * 1.9f, 0f),
+                    new Vector2(r * 1.9f, r * 0.5f),
+                    new Vector2(r * 1.15f, r * 0.9f),
+                    new Vector2(r, r * 1.1f),
+                }, 18),
+                Vector3.zero, SurfaceKind.Metal, RustDark);
+
+            AddMeshPart(root.transform, "Bell Top", CharacterMeshes.Lathe(new[]
+                {
+                    new Vector2(r, 0f),
+                    new Vector2(r * 1.1f, r * 0.3f),
+                    new Vector2(r * 1.7f, r * 0.85f),
+                    new Vector2(r * 1.62f, r * 1.0f),
+                    new Vector2(0f, r * 1.0f),
+                }, 18),
+                Vector3.up * height, SurfaceKind.Metal, RustDark);
 
             // Valve wheel: four spokes and a rim. A torus would be one draw call cheaper if Unity had
             // a torus primitive; it does not, and four thin boxes read as a wheel from this camera.
@@ -390,15 +436,48 @@ namespace MaxWorlds.Rendering
             root.transform.position = at;
 
             float h = Mathf.Max(1.4f, size.y);
-            Box(root.transform, "Shell", Vector3.up * (h * 0.5f), new Vector3(size.x, h, size.z),
-                new Color(0.30f, 0.32f, 0.31f), SurfaceKind.Metal);
+            // MV-779: the footprint was rectangular (size.x x size.z) for the old stacked-box Shell,
+            // but Body/Cap/Flange below are all radially symmetric — rBase is the housing's own
+            // single base radius, sized off the footprint's narrower axis.
+            float rBase = Mathf.Min(size.x, size.z) * 0.5f;
 
-            // Ribs: three raised bands across the roof. A machine has fabrication on it; a box does not.
-            for (int i = 0; i < 3; i++)
+            // Body — a tapered six-sided housing. This is the silhouette that says "machine"; it and
+            // Cap below replace the old Shell + three raised roof Ribs entirely.
+            AddMeshPart(root.transform, "Body", CharacterMeshes.Prism(6, rBase, rBase * 0.82f, h, 0.10f, twistDegrees: 0f),
+                Vector3.up * (h * 0.5f), SurfaceKind.Metal, new Color(0.30f, 0.32f, 0.31f));
+
+            // Cap — a lathed dome over the body.
+            float capH = h * 0.30f;
+            AddMeshPart(root.transform, "Cap", CharacterMeshes.Lathe(new[]
+                {
+                    new Vector2(rBase * 0.86f, 0f),
+                    new Vector2(rBase * 0.86f, capH * 0.15f),
+                    new Vector2(rBase * 0.7f, capH * 0.55f),
+                    new Vector2(rBase * 0.34f, capH * 0.85f),
+                    new Vector2(0f, capH),
+                }, 20),
+                Vector3.up * h, SurfaceKind.Metal, RustDark);
+
+            // Base flange — a lathed ring the body sits on.
+            float fh = h * 0.06f;
+            AddMeshPart(root.transform, "Base Flange", CharacterMeshes.Lathe(new[]
+                {
+                    new Vector2(0f, 0f),
+                    new Vector2(rBase * 1.22f, 0f),
+                    new Vector2(rBase * 1.22f, fh),
+                    new Vector2(rBase * 1.05f, fh),
+                }, 20),
+                Vector3.zero, SurfaceKind.Metal, RustDark);
+
+            // Four bolts around the flange — fabrication, the thing that tells a machine apart from a box.
+            float boltScale = h * 0.035f;
+            for (int i = 0; i < 4; i++)
             {
-                float t = (i + 0.5f) / 3f - 0.5f;
-                Box(root.transform, $"Rib{i}", new Vector3(0f, h + 0.04f, t * size.z * 0.8f),
-                    new Vector3(size.x * 1.02f, 0.10f, size.z * 0.12f), RustDark, SurfaceKind.Metal);
+                float a = i * 90f * Mathf.Deg2Rad;
+                Vector3 boltAt = new Vector3(Mathf.Cos(a) * rBase * 1.10f, fh * 0.5f, Mathf.Sin(a) * rBase * 1.10f);
+                var bolt = AddMeshPart(root.transform, $"Bolt{i}", CharacterMeshes.Sphere(8),
+                    boltAt, SurfaceKind.Metal, Rust);
+                bolt.transform.localScale = Vector3.one * boltScale;
             }
 
             Box(root.transform, "Hazard Band", Vector3.up * (h * 0.28f),
@@ -539,6 +618,23 @@ namespace MaxWorlds.Rendering
         {
             var rend = go.GetComponent<Renderer>();
             if (rend != null) rend.sharedMaterial = MaterialLibrary.Tinted(kind, tone);
+        }
+
+        /// <summary>A collider-free part built directly from a <see cref="CharacterMeshes"/> mesh
+        /// (MV-779) — the turned-form counterpart to <see cref="Box"/>, for pieces that are lathed or
+        /// prism-shaped rather than a chamfered cube. <paramref name="localPos"/> is the part's own
+        /// pivot in <paramref name="mesh"/>'s own local space; the caller sets <c>localScale</c>
+        /// afterwards if it needs one (e.g. a <see cref="CharacterMeshes.Sphere"/> bolt).</summary>
+        public static GameObject AddMeshPart(Transform parent, string name, Mesh mesh, Vector3 localPos,
+                                             SurfaceKind kind, Color tone)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>();
+            Paint(go, kind, tone);
+            return go;
         }
 
         /// <summary>An unlit flat-colour material, cached per colour. Unlit because these pieces are

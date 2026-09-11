@@ -5,6 +5,7 @@ using MaxWorlds.Factories;
 using MaxWorlds.Feel;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Arena
 {
@@ -143,6 +144,7 @@ namespace MaxWorlds.Arena
         private GameObject _dressingRoot;
         private GameObject _leafL, _leafR;
         private GameObject _lampGlow;
+        private Renderer _lampLensRenderer;
         private GameObject _hazardStripe;
         private Vector3 _leafClosedLocalPosL, _leafClosedLocalPosR;
         private float _doorSlideDistance;
@@ -309,22 +311,37 @@ namespace MaxWorlds.Arena
         /// the hazard-stripe band across the seam, shown only while locked.</summary>
         private void BuildStormdrainLampAndHazard(Transform parent, float width, float height, float depth)
         {
-            // A small unlit CUBE, not StormdrainKit.Glow's Quad: a Quad is single-sided, and this
-            // ticket's own QA capture pass caught it reading invisible from the front on the specific
-            // gate the capture preset shoots regardless of which way it was rotated to face (the "lamp"
-            // that looked lit in that screenshot was the pre-existing health pill floating above the
-            // gate, not this object at all). A cube has no facing to get wrong.
-            _lampGlow = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            _lampGlow.name = "Gate Lamp";
+            // MV-779: a lathed housing (fixed, the gate's rust tone) plus a Sphere lens carrying the
+            // state colour — a Sphere, not StormdrainKit.Glow's Quad, for the same single-sided-
+            // invisibility reason the plain cube this replaces was chosen over Glow in the first place
+            // (this ticket's own QA capture pass caught a Quad reading invisible from the front on the
+            // capture preset's gate regardless of which way it was rotated to face). A sphere has no
+            // facing to get wrong either.
+            _lampGlow = new GameObject("Gate Lamp");
             _lampGlow.transform.SetParent(parent, false);
             // height*0.5 (the doorway's top, relative to this transform's centre-origin) + a small rise
             // above it, not height+0.22 against a floor origin this transform doesn't have. Well proud
             // of the wall's own coping (depth*0.5 + 0.3, not + StormdrainDressingProud) so a thick wall
             // crest running across the top of the doorway can never sit in front of it.
             _lampGlow.transform.localPosition = new Vector3(0f, height * 0.5f + 0.22f, depth * 0.5f + 0.3f);
-            _lampGlow.transform.localScale = new Vector3(0.6f, 0.6f, 0.3f);
-            StormdrainKit.Strip(_lampGlow);
-            _lampGlow.GetComponent<Renderer>().sharedMaterial = StormdrainKit.Unlit(StormdrainLampAmber, "GateLamp");
+
+            StormdrainKit.AddMeshPart(_lampGlow.transform, "Housing", CharacterMeshes.Lathe(new[]
+                {
+                    new Vector2(0f, 0f),
+                    new Vector2(0.10f, 0f),
+                    new Vector2(0.12f, 0.04f),
+                    new Vector2(0.12f, 0.16f),
+                    new Vector2(0.09f, 0.20f),
+                }, 14),
+                Vector3.zero, SurfaceKind.Metal, StormdrainKit.Rust);
+
+            var lens = new GameObject("Lens");
+            lens.transform.SetParent(_lampGlow.transform, false);
+            lens.transform.localPosition = Vector3.up * 0.20f;
+            lens.transform.localScale = Vector3.one * 0.13f;
+            lens.AddComponent<MeshFilter>().sharedMesh = CharacterMeshes.Sphere(12);
+            _lampLensRenderer = lens.AddComponent<MeshRenderer>();
+            _lampLensRenderer.sharedMaterial = StormdrainKit.Unlit(StormdrainLampAmber, "GateLamp");
 
             _hazardStripe = StormdrainKit.Box(parent, "Hazard Stripe", Vector3.zero,
                 new Vector3(width * 1.02f, 0.2f, depth + StormdrainDressingProud * 2f),
@@ -350,9 +367,10 @@ namespace MaxWorlds.Arena
             if (_lampGlow == null) return;
 
             Color color = Locked ? StormdrainLampLocked : IsOpen ? StormdrainLampOpen : StormdrainLampAmber;
-            Material mat = StormdrainKit.Unlit(color, "GateLamp");
-            foreach (var rend in _lampGlow.GetComponentsInChildren<Renderer>())
-                rend.sharedMaterial = mat;
+            // MV-779: only the Lens carries the state colour — the Housing is a fixed rust-toned part,
+            // not a child of "the emissive material _lampGlow uses today" the way the old single-Cube
+            // lamp's whole (one) renderer was.
+            if (_lampLensRenderer != null) _lampLensRenderer.sharedMaterial = StormdrainKit.Unlit(color, "GateLamp");
 
             if (_hazardStripe != null) _hazardStripe.SetActive(Locked);
         }
