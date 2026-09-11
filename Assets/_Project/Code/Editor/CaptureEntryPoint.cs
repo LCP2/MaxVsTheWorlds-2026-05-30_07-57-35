@@ -81,6 +81,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv770RocketSalvo() => RunFromMenu(CapturePresets.All["mv770rocketsalvo"]);
         public static void CaptureMv770RocketSalvo() => Run(CapturePresets.All["mv770rocketsalvo"]);
 
+        [MenuItem("MaxWorlds/Capture/Grate Lurker (MV-773)")]
+        public static void MenuMv773GrateLurker() => RunFromMenu(CapturePresets.All["mv773gratelurker"]);
+        public static void CaptureMv773GrateLurker() => Run(CapturePresets.All["mv773gratelurker"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

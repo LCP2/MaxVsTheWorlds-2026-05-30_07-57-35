@@ -112,6 +112,10 @@ namespace MaxWorlds.Arena
             // walls.
             EnemyNavigation.Reset();
 
+            // MV-773: a fresh map owns its own grates — the last level's (or the last test's) registered
+            // GrateShudder instances are gone, so a stale entry can never eat a RobotEnemy's trigger.
+            GrateShudder.ClearRegistry();
+
             var root = new GameObject($"Map: {map.name}").transform;
             root.SetParent(parent, false);
 

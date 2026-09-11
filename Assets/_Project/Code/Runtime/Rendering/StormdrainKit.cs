@@ -575,16 +575,25 @@ namespace MaxWorlds.Rendering
             Box(root.transform, "Frame W", new Vector3(-ringOffset, frameY, 0f),
                 new Vector3(thickness, GrateFrameHeight, GrateFrameInner), Rust, SurfaceKind.Metal);
 
+            var bars = new Transform[GrateGrilleBarCount];
             for (int i = 0; i < GrateGrilleBarCount; i++)
             {
                 float t = (i + 0.5f) / GrateGrilleBarCount - 0.5f;
-                Box(root.transform, $"Grille Bar{i}",
+                GameObject bar = Box(root.transform, $"Grille Bar{i}",
                     new Vector3(t * GrateFrameInner, -GrateGrilleBarHeight * 0.5f, 0f),
                     new Vector3(GrateGrilleBarWidth, GrateGrilleBarHeight, GrateGrilleBarLength), Soffit, SurfaceKind.Metal);
+                bars[i] = bar.transform;
             }
 
             Glow(root.transform, "Void", new Vector3(0f, -GrateFrameHeight * 0.85f, 0f),
                  new Vector3(GrateFrameInner, GrateFrameInner, 1f), Quaternion.Euler(90f, 0f, 0f), Soffit);
+
+            // MV-773: the bars' own short vertical shudder as a garrisoned Lurker rises through them —
+            // triggered by RobotEnemy.OnLurkerPhaseChanged via GrateShudder.TriggerNear, keyed on this
+            // same authored MIN corner.
+            var shudder = root.AddComponent<GrateShudder>();
+            shudder.Configure(bars);
+            GrateShudder.Register(cornerXZ, shudder);
 
             return root;
         }
