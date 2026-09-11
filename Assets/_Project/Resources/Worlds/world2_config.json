@@ -722,8 +722,8 @@
    "composition": {
     "rusher": 6,
     "charger": 2,
-    "bolter": 2,
-    "turret": 2,
+    "bolter": 1,
+    "turret": 3,
     "lurker": 1
    },
    "cover": [
@@ -892,7 +892,7 @@
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 87.5,
      "z": 116.5,
      "level": 0
@@ -941,7 +941,8 @@
    "targetThreatBudget": 19.53,
    "composition": {
     "charger": 3,
-    "bolter": 3
+    "bolter": 1,
+    "turret": 2
    },
    "cover": [
     {
@@ -1019,7 +1020,7 @@
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 100.5,
      "z": 116.5,
      "level": 0
@@ -1031,7 +1032,7 @@
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 114.5,
      "z": 116.5,
      "level": 0
@@ -1057,7 +1058,8 @@
    "composition": {
     "lurker": 4,
     "rusher": 4,
-    "gunner": 2
+    "gunner": 1,
+    "turret": 1
    },
    "cover": [
     {
@@ -1196,7 +1198,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 92.5,
      "z": 94.5,
      "level": 0
@@ -1450,8 +1452,9 @@
    "targetThreatBudget": 21.15,
    "composition": {
     "sludger": 5,
-    "bruiser": 3,
-    "turret": 2
+    "bruiser": 1,
+    "turret": 2,
+    "charger": 2
    },
    "cover": [
     {
@@ -1565,7 +1568,7 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 109.5,
      "z": 82.5,
      "level": 0
@@ -1577,7 +1580,7 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 116.5,
      "z": 71.5,
      "level": 0
@@ -1613,8 +1616,8 @@
    "garrisonDensity": "heavy",
    "targetThreatBudget": 38.45,
    "composition": {
-    "heavy": 2,
-    "charger": 2,
+    "heavy": 1,
+    "charger": 3,
     "rusher": 6,
     "sludger": 3
    },
@@ -1700,7 +1703,7 @@
    ],
    "garrison": [
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 137.5,
      "z": 87.5,
      "level": 0
@@ -1796,9 +1799,11 @@
    "garrisonDensity": "normal",
    "targetThreatBudget": 17.31,
    "composition": {
-    "bruiser": 3,
+    "bruiser": 1,
     "blinker": 2,
-    "bolter": 3
+    "bolter": 2,
+    "charger": 2,
+    "turret": 1
    },
    "cover": [
     {
@@ -1847,7 +1852,7 @@
    ],
    "garrison": [
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 156.5,
      "z": 88.5,
      "level": 0
@@ -1859,7 +1864,7 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 164.5,
      "z": 80.5,
      "level": 0
@@ -1883,7 +1888,7 @@
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 161.5,
      "z": 77.5,
      "level": 0
@@ -1913,11 +1918,12 @@
    "garrisonDensity": "normal",
    "targetThreatBudget": 36.52,
    "composition": {
-    "gunner": 4,
-    "launcher": 2,
+    "gunner": 2,
+    "launcher": 1,
     "rusher": 5,
-    "turret": 2,
-    "lurker": 1
+    "turret": 4,
+    "lurker": 1,
+    "sludger": 1
    },
    "cover": [
     {
@@ -2006,7 +2012,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 188.5,
      "z": 77.5,
      "level": 0
@@ -2018,13 +2024,13 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 188.5,
      "z": 83.5,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "sludger",
      "x": 182.5,
      "z": 91.5,
      "level": 0
@@ -2103,8 +2109,7 @@
    "targetThreatBudget": 39.43,
    "composition": {
     "brute": 1,
-    "heavy": 2,
-    "charger": 3,
+    "charger": 5,
     "rusher": 4
    },
    "cover": [
@@ -2215,13 +2220,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 198.5,
      "z": 80.5,
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 212.5,
      "z": 76.5,
      "level": 0
@@ -2287,12 +2292,13 @@
    "garrisonDensity": "heavy",
    "targetThreatBudget": 82.28,
    "composition": {
-    "heavy": 3,
+    "heavy": 1,
     "brute": 1,
     "rusher": 8,
     "sludger": 4,
     "lurker": 3,
-    "turret": 3
+    "turret": 3,
+    "charger": 2
    },
    "cover": [
     {
@@ -2425,13 +2431,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 240.5,
      "z": 83.5,
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 233.82999999999998,
      "z": 76.5,
      "level": 0
@@ -2572,8 +2578,10 @@
    "overlays": "a11",
    "composition": {
     "brute": 2,
-    "heavy": 2,
-    "bolter": 4
+    "heavy": 1,
+    "bolter": 1,
+    "charger": 1,
+    "turret": 3
    },
    "cover": [],
    "sludge": [],
@@ -2626,19 +2634,19 @@
      "level": 1
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 214.5,
      "z": 85.5,
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 202.5,
      "z": 85.5,
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 208.5,
      "z": 85.5,
      "level": 1
@@ -2650,7 +2658,7 @@
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 196.5,
      "z": 88.5,
      "level": 1
@@ -2675,9 +2683,9 @@
    "targetThreatBudget": 30.72,
    "level": 1,
    "composition": {
-    "turret": 4,
-    "bolter": 3,
-    "launcher": 2
+    "turret": 5,
+    "bolter": 2,
+    "sludger": 2
    },
    "cover": [
     {
@@ -2790,7 +2798,7 @@
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 176.5,
      "z": 102.5,
      "level": 1
@@ -2802,13 +2810,13 @@
      "level": 1
     },
     {
-     "kind": "launcher",
+     "kind": "sludger",
      "x": 170.5,
      "z": 101.5,
      "level": 1
     },
     {
-     "kind": "launcher",
+     "kind": "sludger",
      "x": 187.5,
      "z": 102.5,
      "level": 1
@@ -2834,9 +2842,10 @@
    "level": 1,
    "overlays": "a6",
    "composition": {
-    "gunner": 3,
-    "bolter": 4,
-    "blinker": 1
+    "gunner": 2,
+    "bolter": 2,
+    "blinker": 1,
+    "turret": 3
    },
    "cover": [],
    "sludge": [],
@@ -2878,7 +2887,7 @@
      "level": 1
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 152.5,
      "z": 112.5,
      "level": 1
@@ -2890,7 +2899,7 @@
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 130.5,
      "z": 124.5,
      "level": 1
@@ -2902,7 +2911,7 @@
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 152.5,
      "z": 104.5,
      "level": 1
@@ -2938,11 +2947,12 @@
    "garrisonDensity": "heavy",
    "targetThreatBudget": 42.89,
    "composition": {
-    "bruiser": 4,
-    "heavy": 2,
-    "blinker": 3,
+    "bruiser": 1,
+    "heavy": 1,
+    "blinker": 1,
     "turret": 2,
-    "lurker": 2
+    "lurker": 4,
+    "charger": 4
    },
    "cover": [
     {
@@ -3045,7 +3055,7 @@
    ],
    "garrison": [
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 110.5,
      "z": 137.5,
      "level": 0
@@ -3057,19 +3067,19 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 110.5,
      "z": 144.3,
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 120.5,
      "z": 143.5,
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 115.83,
      "z": 143.5,
      "level": 0
@@ -3081,15 +3091,15 @@
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 107.5,
-     "z": 151.5,
+     "kind": "lurker",
+     "x": 116.75,
+     "z": 150.75,
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 122.5,
-     "z": 151.5,
+     "kind": "lurker",
+     "x": 116.25,
+     "z": 150.25,
      "level": 0
     },
     {
@@ -3141,9 +3151,11 @@
    "garrisonDensity": "normal",
    "targetThreatBudget": 32.76,
    "composition": {
-    "gunner": 4,
-    "launcher": 3,
-    "bolter": 3
+    "gunner": 2,
+    "launcher": 1,
+    "bolter": 1,
+    "turret": 4,
+    "sludger": 2
    },
    "cover": [
     {
@@ -3229,7 +3241,7 @@
    ],
    "garrison": [
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 85.5,
      "z": 129.85,
      "level": 0
@@ -3247,13 +3259,13 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 96.5,
      "z": 145.5,
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "sludger",
      "x": 90.5,
      "z": 147.5,
      "level": 0
@@ -3265,19 +3277,19 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "sludger",
      "x": 91.5,
      "z": 128.5,
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 79.5,
      "z": 138.5,
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 102.5,
      "z": 138.5,
      "level": 0
@@ -3542,11 +3554,12 @@
    "level": 1,
    "overlays": "a3",
    "composition": {
-    "bolter": 3,
+    "bolter": 1,
     "gunner": 1,
     "blinker": 2,
-    "heavy": 1,
-    "brute": 1
+    "brute": 1,
+    "turret": 2,
+    "charger": 1
    },
    "cover": [],
    "sludge": [],
@@ -3589,7 +3602,7 @@
    ],
    "garrison": [
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 63.5,
      "z": 100.5,
      "level": 1
@@ -3601,7 +3614,7 @@
      "level": 1
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 80.5,
      "z": 100.5,
      "level": 1
@@ -3625,7 +3638,7 @@
      "level": 1
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 63.5,
      "z": 106.5,
      "level": 1
@@ -3655,11 +3668,12 @@
    "garrisonDensity": "heavy",
    "targetThreatBudget": 72.41,
    "composition": {
-    "heavy": 3,
+    "heavy": 1,
     "brute": 2,
-    "gunner": 4,
-    "turret": 3,
-    "lurker": 1
+    "gunner": 2,
+    "turret": 5,
+    "lurker": 1,
+    "charger": 2
    },
    "cover": [
     {
@@ -3781,13 +3795,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 68.5,
      "z": 74.5,
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 62.5,
      "z": 86.5,
      "level": 0
@@ -3805,7 +3819,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 53.5,
      "z": 93.5,
      "level": 0
@@ -3817,7 +3831,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 53.5,
      "z": 65.5,
      "level": 0
@@ -3872,16 +3886,16 @@
    "targetThreatBudget": 162.15,
    "composition": {
     "brute": 2,
-    "heavy": 4,
-    "bruiser": 4,
-    "charger": 4,
-    "gunner": 2,
-    "launcher": 2,
-    "blinker": 2,
-    "bolter": 4,
-    "sludger": 4,
-    "turret": 4,
-    "lurker": 3
+    "heavy": 2,
+    "bruiser": 2,
+    "charger": 8,
+    "gunner": 1,
+    "launcher": 1,
+    "blinker": 1,
+    "bolter": 2,
+    "sludger": 5,
+    "turret": 7,
+    "lurker": 4
    },
    "cover": [
     {
@@ -4058,13 +4072,13 @@
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 66.5,
      "z": 31.5,
      "level": 0
     },
     {
-     "kind": "heavy",
+     "kind": "charger",
      "x": 48.5,
      "z": 52.5,
      "level": 0
@@ -4082,7 +4096,7 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 58.5,
      "z": 32.5,
      "level": 0
@@ -4094,7 +4108,7 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 58.5,
      "z": 52.5,
      "level": 0
@@ -4124,7 +4138,7 @@
      "level": 0
     },
     {
-     "kind": "gunner",
+     "kind": "turret",
      "x": 50.5,
      "z": 58.5,
      "level": 0
@@ -4136,7 +4150,7 @@
      "level": 0
     },
     {
-     "kind": "launcher",
+     "kind": "sludger",
      "x": 50.5,
      "z": 25.5,
      "level": 0
@@ -4154,9 +4168,9 @@
      "level": 0
     },
     {
-     "kind": "blinker",
-     "x": 72.5,
-     "z": 32.5,
+     "kind": "lurker",
+     "x": 66.75,
+     "z": 46.75,
      "level": 0
     },
     {
@@ -4166,7 +4180,7 @@
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 62.5,
      "z": 56.5,
      "level": 0
@@ -4178,7 +4192,7 @@
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 62.5,
      "z": 27.5,
      "level": 0
@@ -4268,9 +4282,10 @@
    "garrisonDensity": "normal",
    "targetThreatBudget": 23.43,
    "composition": {
-    "charger": 4,
-    "bruiser": 3,
-    "bolter": 2
+    "charger": 6,
+    "bruiser": 1,
+    "bolter": 1,
+    "turret": 1
    },
    "cover": [
     {
@@ -4354,7 +4369,7 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 77.5,
      "z": 34.5,
      "level": 0
@@ -4366,13 +4381,13 @@
      "level": 0
     },
     {
-     "kind": "bruiser",
+     "kind": "charger",
      "x": 83.5,
      "z": 34.5,
      "level": 0
     },
     {
-     "kind": "bolter",
+     "kind": "turret",
      "x": 75.5,
      "z": 43.5,
      "level": 0
