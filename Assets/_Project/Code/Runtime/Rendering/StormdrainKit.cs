@@ -29,17 +29,23 @@ namespace MaxWorlds.Rendering
     {
         // ---------------------------------------------------------------- palette
 
-        /// <summary>Rusted iron — pipes, collars, standpipes, valve wheels. W2 RUST #985025.</summary>
-        public static readonly Color Rust = new Color(0.596f, 0.314f, 0.145f);
+        /// <summary>Rusted iron — pipes, collars, standpipes, valve wheels. W2 RUST #985025.
+        /// MV-777: pushed to the rust/rail accent tier (~95-115 resolved luma), clearly above the
+        /// floor/wall/kerb value tiers below it.</summary>
+        public static readonly Color Rust = new Color(0.685f, 0.355f, 0.17f);
 
         /// <summary>Darker rust for collars and flanges, so a pipe run has joints in it.</summary>
         public static readonly Color RustDark = new Color(0.38f, 0.20f, 0.10f);
 
-        /// <summary>Wet concrete, one step darker than the wall so a kerb reads against it.</summary>
-        public static readonly Color KerbConcrete = new Color(0.21f, 0.23f, 0.20f);
+        /// <summary>Wet concrete, one step darker than the wall so a kerb reads against it. MV-777:
+        /// previously rendered within half a luma of <see cref="BiomePalette.Stormdrain"/>'s own floor
+        /// tone — a kerb that reads as the floor it sits on defeats the one job its doc comment
+        /// describes. Now sits deliberately between the floor and wall tiers.</summary>
+        public static readonly Color KerbConcrete = new Color(0.16f, 0.175f, 0.147f);
 
-        /// <summary>The soffit's underside — near black. This is the shadow that says "roof".</summary>
-        public static readonly Color Soffit = new Color(0.10f, 0.11f, 0.10f);
+        /// <summary>The soffit's underside — near black. This is the shadow that says "roof". MV-777:
+        /// darker than the floor tier, not just darker than the wall.</summary>
+        public static readonly Color Soffit = new Color(0.044f, 0.048f, 0.044f);
 
         /// <summary>Lamp glass. Warm amber, deliberately over 1.0 in no channel — the emissive
         /// material is unlit, so its albedo IS its output and clipping it just loses the colour.</summary>

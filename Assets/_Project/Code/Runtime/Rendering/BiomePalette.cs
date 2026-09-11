@@ -204,16 +204,19 @@ namespace MaxWorlds.Rendering
         public static BiomePalette Stormdrain => new BiomePalette
         {
             Tint = Color.white,
-            GroundBase = new Color(0.15f, 0.18f, 0.16f),      // shaded wet concrete
-            GroundAccent = new Color(0.26f, 0.29f, 0.26f),    // sunlit slab
-            GroundDry = new Color(0.30f, 0.31f, 0.27f),       // dust/algae-bleached slab, still concrete
-            Wall = new Color(0.30f, 0.33f, 0.29f),            // W2 WET CONCRETE #4d554a, sunlit-ceiling-safe
-            Prop = new Color(0.36f, 0.40f, 0.36f),            // concrete cover blocks
+            // MV-777: separated onto distinct value tiers instead of distinct hues at the same value.
+            // Floor is the darkest surface in the room ("the quiet half of the frame") — hues kept,
+            // values pulled apart so a wall/kerb/prop never reads as the same surface as the ground.
+            GroundBase = new Color(0.055f, 0.065f, 0.057f),   // shaded wet concrete — darkest tier
+            GroundAccent = new Color(0.085f, 0.10f, 0.085f),  // sunlit slab, still floor-family
+            GroundDry = new Color(0.11f, 0.115f, 0.10f),      // dust/algae-bleached slab, still concrete
+            Wall = new Color(0.19f, 0.21f, 0.185f),           // W2 WET CONCRETE #4d554a — ~2x the floor
+            Prop = new Color(0.29f, 0.32f, 0.29f),            // concrete cover blocks — brighter solids
 
             Wood = new Color(0.28f, 0.22f, 0.16f),
-            Stone = new Color(0.30f, 0.33f, 0.29f),           // == Wall: it's the same wet concrete
+            Stone = new Color(0.19f, 0.21f, 0.185f),          // == Wall: it's the same wet concrete
             Dirt = new Color(0.20f, 0.15f, 0.10f),
-            Metal = new Color(0.60f, 0.31f, 0.15f),           // W2 RUST #985025 — pipe banks, kerb rails
+            Metal = new Color(0.685f, 0.355f, 0.17f),         // W2 RUST #985025 — pipe banks, kerb rails
             Foliage = new Color(0.43f, 0.56f, 0.20f),         // algae creep, greener cousin of the sludge
 
             GroundDetailScale = 0.45f,     // slab joints, coarser than the lawn's blade-scale grain
