@@ -98,13 +98,26 @@ namespace MaxWorlds.Player
         /// class isn't a one-off number nobody can trace back to a rule.</summary>
         private const float BarHeight = 1.35f;
         private const float BarWidth = 2.1f;   // wider than a robot's — it's you; prominence comes from width now (YT-136)
-        private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f); // #33A0EB
+
+        /// <summary>The RCDA's own case of <see cref="PrimaryGaugeColor"/> — water blue (#33A0EB).</summary>
+        private static readonly Color WaterColor = new Color(0.20f, 0.62f, 0.92f);
+
+        /// <summary>MV-760: the LPPE's case of <see cref="PrimaryGaugeColor"/> — a cool cyan-white that
+        /// reads as charge rather than fluid, and separates it from Max's own blue health bar below it.</summary>
+        private static readonly Color LppeGaugeColor = new Color(0.55f, 0.95f, 1.00f);
+
+        /// <summary>MV-760: which tank the gauge above Max's head reads from, switched on the equipped
+        /// primary rather than hard-wired to the RCDA — so a World 4 primary is one further case here,
+        /// not a special branch bolted on elsewhere.</summary>
+        private static Color PrimaryGaugeColor =>
+            WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe ? LppeGaugeColor : WaterColor;
 
         private WaterBlaster _blaster;
+        private PulseLaser _pulseLaser;
         private PlayerAbilities _abilities;
 
         /// <summary>Max's abilities component, for the Force Field absorb hook below — resolved lazily
-        /// and cached, same reason/shape as <see cref="WaterNormalized"/>'s <see cref="_blaster"/> read.</summary>
+        /// and cached, same reason/shape as <see cref="PrimaryEnergyNormalized"/>'s <see cref="_blaster"/> read.</summary>
         private PlayerAbilities Abilities
         {
             get
@@ -129,17 +142,26 @@ namespace MaxWorlds.Player
             // PROJECTILE hit, not CONTACT — see IsContactHit below.
             _timeSinceDamage = float.MaxValue;
 
-            // Max's whole status lives over his head (YT-121): the water gauge stacked directly above
-            // the life bar (MV-299, reinstating what MV-290 removed along with the primary's tank).
+            // Max's whole status lives over his head (YT-121): the primary's gauge stacked directly
+            // above the life bar (MV-299, reinstating what MV-290 removed along with the primary's
+            // tank; MV-760 widens it from "the RCDA's tank" to "whichever primary is actually equipped").
             WorldHealthBar.Attach(gameObject, this, BarHeight, BarWidth, alwaysShow: true,
-                                  secondary: WaterNormalized, secondaryColor: WaterColor,
+                                  secondary: PrimaryEnergyNormalized, secondaryColor: PrimaryGaugeColor,
                                   isPlayerBar: true);
         }
 
-        /// <summary>Max's blaster tank, 0..1, for the floating water gauge. Resolved lazily and
-        /// cached — the blaster attaches itself to Max and may not exist on the frame this runs.</summary>
-        private float WaterNormalized()
+        /// <summary>MV-760: the equipped primary's tank, 0..1, for the floating gauge — the LPPE's
+        /// <see cref="PulseLaser.EnergyNormalized"/> while it's the active primary, the RCDA's
+        /// <see cref="WaterBlaster.WaterNormalized"/> otherwise. Both resolved lazily and cached, since
+        /// whichever primary is attached may not exist yet on the frame this runs.</summary>
+        private float PrimaryEnergyNormalized()
         {
+            if (WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe)
+            {
+                if (_pulseLaser == null) _pulseLaser = GetComponent<PulseLaser>();
+                return _pulseLaser != null ? _pulseLaser.EnergyNormalized : 1f;
+            }
+
             if (_blaster == null) _blaster = GetComponent<WaterBlaster>();
             return _blaster != null ? _blaster.WaterNormalized : 1f;
         }
