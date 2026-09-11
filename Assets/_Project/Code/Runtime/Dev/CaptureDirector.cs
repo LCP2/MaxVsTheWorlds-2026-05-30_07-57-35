@@ -325,6 +325,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv758LppeSalvo());
             Add(BuildMv759GateDoorsCheck());
             Add(BuildMv770RocketSalvo());
+            Add(BuildMv773GrateLurker());
             return d;
         }
 
@@ -1977,6 +1978,68 @@ namespace MaxWorlds.Dev
                 {
                     if (rackGo != null) Destroy(rackGo);
                     if (targetGo != null) Destroy(targetGo);
+                },
+            };
+        }
+
+        // ---- MV773GrateLurker (MV-773) --------------------------------------------------------
+
+        /// <summary>The AC's own "one capture of a grate with a Lurker on it" — builds a real
+        /// <see cref="MaxWorlds.Rendering.StormdrainKit.BuildGrate"/> and a real Lurker
+        /// (<see cref="BuildClusterRobot"/>, held at its default Chase/body-visible state, same as
+        /// every other stand-in in this file) centred on the SAME tile, proof of the actual result
+        /// rather than a description of one.</summary>
+        private static CapturePreset BuildMv773GrateLurker()
+        {
+            // Near-top-down (same departure BuildMv770RocketSalvo/BuildMv759GateDoorsCheck already take
+            // from the game's own ~60 deg rig angle) and pulled back far enough that the 1x1 m grate's
+            // own frame/bars/rim are visible around the Lurker's feet, not hidden entirely under its body.
+            const float pitch = 80f;
+            const float distance = 3.2f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            GameObject grateGo = null;
+            GameObject lurkerGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                var corner = new Vector2(focus.x - 0.5f, focus.z - 0.5f);
+
+                // floorTopY 0.02 (not the production default 0): this stand-in has no real floor slab
+                // under it the way a built map does, only Backyard_Slice's own grass plane — a hair
+                // above it avoids the two coplanar surfaces fighting for the same pixel in a still frame.
+                grateGo = MaxWorlds.Rendering.StormdrainKit.BuildGrate(null, "MV773CaptureGrate", corner, floorTopY: 0.02f);
+                lurkerGo = BuildClusterRobot(EnemyKind.Lurker, focus);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the rig build and settle
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * 0.15f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv773gratelurker",
+                LogTag = "[MV773Capture]",
+                Flag = "-mv773shot",
+                ArmFile = "Temp/mv773.arm",
+                HeadlessMarker = "Temp/mv773.headless",
+                DoneFileName = "_mv773_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                Shots = new List<CaptureShot> { new CaptureShot("MV-773-grate-lurker", Setup) },
+                Cleanup = () =>
+                {
+                    if (grateGo != null) Destroy(grateGo);
+                    if (lurkerGo != null) Destroy(lurkerGo);
                 },
             };
         }

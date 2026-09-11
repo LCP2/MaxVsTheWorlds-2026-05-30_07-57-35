@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
+using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
@@ -1452,6 +1453,9 @@ namespace MaxWorlds.Enemies
             {
                 case LurkerCycle.Phase.Rattle:
                     SetTell(windupTell);
+                    // MV-773: the grate's own bars shudder as this Lurker rises through them — the
+                    // physical answer to TelegraphVfx's RATTLE ring, which already marks this ground.
+                    GrateShudder.TriggerNear(transform.position);
                     break;
 
                 case LurkerCycle.Phase.Emerged:
