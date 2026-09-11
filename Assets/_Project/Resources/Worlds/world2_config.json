@@ -4,7 +4,7 @@
  "revision": "WORLD 2 v1 2026-09-08 (MV-700): areas a1-a23 converted from world2_config.DESIGN.json (authored by the build chat from the World 2 brief; the xlsx/svg pair alongside it are the drawn source). Replaces the MV-687/696 placeholder (2 areas). Garrison/grate/replicator/boss/cover coordinates were area-local in the DESIGN file and were shifted to the engine's absolute-world convention here; sludge/deck/ramp/hatch rects stayed area-local, matching WorldRectOf. DESIGN's per-area \"floorComposition\" (extra floor-level composition on a13/a15/a19 when the deck overlay is revisited) has no engine equivalent (WorldArea carries one composition per area index) and was not carried over — see the MV-700 fix comment.",
  "note": "DESIGN v1 2026-09-07 — authored by the build chat from the World 2 brief; not yet approved",
  "units": "1 world unit = 1 metre",
- "wallHeight": 1.5,
+ "wallHeight": 3.0,
  "pressureNoun": "FLOOD",
  "pressureCaption": "THE STORMDRAIN IS FILLING",
  "dials": {

