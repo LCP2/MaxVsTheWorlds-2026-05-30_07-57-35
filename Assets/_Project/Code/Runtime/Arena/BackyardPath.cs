@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using UnityEngine;
+using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
 using MaxWorlds.Rendering;
@@ -74,9 +75,17 @@ namespace MaxWorlds.Arena
         /// where no cover was placed.</summary>
         public IReadOnlyList<CoverPiece> CoverPieces => _build?.Cover ?? (IReadOnlyList<CoverPiece>)NoCover;
 
+        /// <summary>The world index this instance's <see cref="Awake"/> actually resolved (MV-766)
+        /// — read by the world probe instead of calling <see cref="ActiveWorldIndex"/> a second
+        /// time, so the probe reports what THIS run resolved rather than re-deriving it from
+        /// whatever the active save currently says (which can have moved on by the time the probe
+        /// is read).</summary>
+        public int ResolvedWorldIndex { get; private set; }
+
         private void Awake()
         {
             int worldIndex = ActiveWorldIndex();
+            ResolvedWorldIndex = worldIndex;
             ApplyPendingMorphAtRunStart(worldIndex);
             string key = string.IsNullOrWhiteSpace(worldKey) ? WorldLibrary.KeyForIndex(worldIndex) : worldKey;
 
@@ -229,6 +238,69 @@ namespace MaxWorlds.Arena
 
                 gate.Opened += () => _areaDirector.EnterArea(nextArea);
             }
+        }
+
+        // --- MV-766: runtime probe -------------------------------------------------------------
+        //
+        // Five candidate causes for World 2 rendering as the Backyard were traced through the
+        // source and all five were eliminated — on paper the merged code resolves World 2
+        // correctly. This is what makes the running build state what it actually resolved, read
+        // from the live objects, so nobody guesses again from a second static reading.
+
+        private static bool s_probeLogged;
+
+        /// <summary>Wired into <see cref="Bootstrap.WorldProbeLineProvider"/> once, from the one
+        /// assembly that can see both the Arena types (this world index, the Stormdrain dressing
+        /// host) and the Rendering types (the palette, the applied look) without Core reaching into
+        /// either.</summary>
+        [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+        private static void InstallWorldProbe() => Bootstrap.WorldProbeLineProvider = BuildWorldProbeLine;
+
+        /// <summary>
+        /// <c>W&lt;index&gt; &lt;paletteName&gt; / &lt;lookName&gt; fog&lt;density&gt; dress&lt;n&gt;</c>
+        /// — every field read off the live object that actually resolved it, never recomputed from
+        /// the world index. Static and self-contained (no instance required) so an EditMode test can
+        /// drive it with nothing but <see cref="MaterialLibrary.Palette"/> set.
+        /// </summary>
+        public static string BuildWorldProbeLine()
+        {
+            var path = FindFirstObjectByType<BackyardPath>();
+            int worldIndex = path != null ? path.ResolvedWorldIndex : -1;
+
+            string paletteName = NameOfPalette(MaterialLibrary.Palette);
+
+            var lighting = FindFirstObjectByType<BackyardLighting>();
+            string lookName = lighting != null ? NameOfLook(lighting.Look) : "none";
+
+            float fogDensity = RenderSettings.fogDensity;
+
+            GameObject dressing = GameObject.Find("Stormdrain Dressing");
+            int dressingCount = dressing != null ? dressing.transform.childCount : 0;
+
+            string line = $"W{worldIndex} {paletteName} / {lookName} fog{fogDensity:F3} dress{dressingCount}";
+
+            if (!s_probeLogged && lighting != null)
+            {
+                s_probeLogged = true;
+                Debug.Log($"[WorldProbe] {line}");
+            }
+
+            return line;
+        }
+
+        private static string NameOfPalette(BiomePalette p)
+        {
+            if (p.Equals(BiomePalette.Backyard)) return "Backyard";
+            if (p.Equals(BiomePalette.Stormdrain)) return "Stormdrain";
+            if (p.Equals(BiomePalette.Reef)) return "Reef";
+            return "custom";
+        }
+
+        private static string NameOfLook(BackyardLook l)
+        {
+            if (l.Equals(BackyardLook.Default)) return "Default";
+            if (l.Equals(BackyardLook.Stormdrain)) return "Stormdrain";
+            return "custom";
         }
     }
 }

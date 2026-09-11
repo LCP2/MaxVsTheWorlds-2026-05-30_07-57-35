@@ -1,3 +1,4 @@
+using System;
 using UnityEngine;
 
 namespace MaxWorlds.Core
@@ -35,6 +36,14 @@ namespace MaxWorlds.Core
         /// one-tick-site reasoning as <see cref="ActiveMeter"/>, so the overlay never samples a second,
         /// possibly-disagreeing measurement path.</summary>
         public static FrameTimingProbe ActiveTimingProbe { get; private set; }
+
+        /// <summary>MV-766: the world/palette/look diagnostic line, resolved and formatted by
+        /// <c>MaxWorlds.Arena.BackyardPath.BuildWorldProbeLine</c>. Wired in as a plain
+        /// <see cref="Func{TResult}"/> rather than a direct call, because this (Core) assembly must
+        /// not reference the Rendering/Arena types the probe actually reads — the same reason
+        /// <see cref="ActiveMeter"/>/<see cref="ActiveTimingProbe"/> flow the other way round, as a
+        /// value Gameplay pulls out rather than a type Core reaches into.</summary>
+        public static Func<string> WorldProbeLineProvider;
 
         private void Awake()
         {
@@ -125,6 +134,14 @@ namespace MaxWorlds.Core
 
             GUI.Label(new Rect(12f, 8f, 640f, 60f),
                 $"{fps}   (target {targetFrameRate})   build {Application.version}", _fpsStyle);
+
+            // MV-766: a second line, under the same "smoke-verification, not player UI" condition
+            // as the stamp above — what actually resolved, read from the live objects, never
+            // recomputed from the world index.
+            string probeLine = WorldProbeLineProvider?.Invoke();
+            if (string.IsNullOrEmpty(probeLine)) return;
+
+            GUI.Label(new Rect(12f, 8f + (_fpsStyle.fontSize * 1.2f), 640f, 60f), probeLine, _fpsStyle);
         }
     }
 }
