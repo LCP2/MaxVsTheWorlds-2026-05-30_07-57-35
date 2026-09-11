@@ -106,6 +106,11 @@ namespace MaxWorlds.Factories
             ReplicatorsStanding.Remove(replicator);
         }
 
+        /// <summary>How many Replicators are standing right now (MV-774) — what
+        /// <see cref="MaxWorlds.Arena.StormdrainFlood"/>'s own "every live Replicator adds to the rate"
+        /// rule reads, so the "REPLICATORS n/25" counter finally means something beyond a label.</summary>
+        public static int ReplicatorsAlive => ReplicatorsStanding.Count;
+
         /// <summary>True once every Replicator this run has is down. False in a run with none — same
         /// "never cleared, just never had a source" convention as <see cref="AllDown"/> (MV-703 AC1).</summary>
         public static bool AllReplicatorsDestroyed =>
