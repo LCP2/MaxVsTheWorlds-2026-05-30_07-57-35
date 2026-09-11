@@ -1886,17 +1886,30 @@ namespace MaxWorlds.UI
             _dialCaption.text = DefaultPressureCaption; // MV-741: overwritten by OnPressureWording once the world's own is known
         }
 
+        /// <summary>MV-741's own wording carve-out ("FLOOD" doesn't have three named intensities the
+        /// way an invasion does) is what a world with a real flood mechanic keys off of, ever since
+        /// MV-774: the exact word <c>world2_config.json</c> authors as <see cref="_pressureNoun"/>. A
+        /// world that ever authors this same word for something else would need its own gate — nothing
+        /// today does.</summary>
+        private const string FloodPressureNoun = "FLOOD";
+
         private void UpdateInvasionDial(float dt)
         {
             if (_dialFill == null) return;
 
-            float normalized = DifficultyDirector.Normalized;
+            // MV-774: World 2's FLOOD bar now reads the real StormdrainFlood clock instead of a
+            // re-skinned Invasion Level — the bug this ticket fixes ("fills across the run and nothing
+            // in the world changes"). Every other world keeps the original Invasion Level fill.
+            float normalized = _pressureNoun == FloodPressureNoun ? StormdrainFlood.Level01 : DifficultyDirector.Normalized;
             _dialFill.fillAmount = normalized;
-            // Calm white climbing to urgent red as the Invasion Level nears its ceiling — the same
-            // language HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one.
+            // Calm white climbing to urgent red as the level nears its ceiling — the same language
+            // HEALTH LOW/ENERGY OUT already speak, so a rising threat looks like one.
             _dialFill.color = Color.Lerp(BoneWhite, HpColor, normalized);
 
-            var stage = DifficultyDirector.CurrentStage;
+            // StageAt is a pure "which third" lookup, not an Invasion-Level-specific one — reused here
+            // off whichever normalized value is actually driving the bar so the crossing-flash beat
+            // below fires at the flood's own 1/3 and 2/3 ticks too, not just the Invasion Level's.
+            var stage = DifficultyDirector.StageAt(normalized);
             if (stage != _shownStage)
             {
                 _shownStage = stage;
