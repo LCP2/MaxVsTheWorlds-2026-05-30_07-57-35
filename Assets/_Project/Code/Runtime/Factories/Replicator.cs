@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Arena;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Feel;
 using MaxWorlds.Rendering;
 using MaxWorlds.UI;
 using MaxWorlds.VFX;
@@ -39,18 +40,30 @@ namespace MaxWorlds.Factories
         /// <summary>A robot within this of Max is never pulled off him, whatever else is true.</summary>
         public const float MaxMeleeExclusionRadius = 4f;
 
-        /// <summary>How close a lured robot's surface must get to the box's own collider surface
-        /// before it's consumed (MV-756) — measured via <see cref="Collider.ClosestPoint"/> against
-        /// this box's own collider and the seeking robot's own <see cref="EnemyArchetype.ColliderRadius"/>,
-        /// never a flat centre-to-centre radius. A fixed centre-to-centre test (the box's old
-        /// ArriveRadius 1.2f) could never be reached: half-extent 1.0 m plus a robot's own 0.3-0.6 m
-        /// controller radius put the closest possible centre-to-centre distance at 1.3-1.6 m, always
-        /// outside a 1.2 m gate. A surface test stays correct however big a level ever authors this
-        /// box, or whichever kind of robot it lures.</summary>
+        /// <summary>How close a lured robot's surface must get to the hatch it's walking to before the
+        /// Intake beat takes over (MV-756 original fix, MV-775 scoped to the hatch face specifically —
+        /// see <see cref="DistanceToHatchFace"/>): the seeking robot's own
+        /// <see cref="EnemyArchetype.ColliderRadius"/> subtracted from its distance to
+        /// <see cref="HatchPosition"/>, never a flat centre-to-centre radius. A fixed centre-to-centre
+        /// test (the box's old ArriveRadius 1.2f) could never be reached: half-extent 1.0 m plus a
+        /// robot's own 0.3-0.6 m controller radius put the closest possible centre-to-centre distance
+        /// at 1.3-1.6 m, always outside a 1.2 m gate.</summary>
         public const float ArriveTolerance = 0.35f;
 
-        /// <summary>Seconds between consumption and the doubled pair emerging.</summary>
-        public const float ConsumeSeconds = 1.2f;
+        /// <summary>MV-775 Intake beat: seconds a consumed robot spends being drawn from its arrival
+        /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
+        /// the Cycle beat. This is what keeps the robot's resolved position at the moment of removal
+        /// pinned to the hatch face rather than wherever <see cref="ArriveTolerance"/> first let it
+        /// through — see <see cref="TickIntake"/>.</summary>
+        public const float IntakeSeconds = 0.5f;
+
+        /// <summary>MV-775 Cycle beat: seconds from a robot being despawned into the box to the FIRST
+        /// of its doubled pair emerging.</summary>
+        public const float CycleSeconds = 3.0f;
+
+        /// <summary>MV-775 Output beat: the gap between the first and second emitted robot — the
+        /// ticket's own "walk out one after the other, not simultaneously".</summary>
+        public const float EmitStaggerSeconds = 0.4f;
 
         /// <summary>Seconds a freshly doubled pair refuses the lure (MV-706's "can't immediately walk
         /// back in" rule).</summary>
@@ -77,21 +90,43 @@ namespace MaxWorlds.Factories
         private Renderer _emitFlash;
         private MaterialPropertyBlock _emitFlashMpb;
         private float _emitFlashTimer;
-        private Collider _collider;
         /// <summary>The generated Body container (MV-693) — hidden whole on death (MV-756 change 4)
         /// instead of the already-hidden root primitive.</summary>
         private Transform _bodyRoot;
+
+        /// <summary>MV-775: the hatch this box actually draws a consumed robot into — the Lure/Intake
+        /// beats' steering target and arrive gate, and the swing-open transform LateUpdate drives.</summary>
+        private Transform _hatch;
+        private Quaternion _hatchClosedLocalRotation;
+        private float _hatchOpenAmount;
+
+        /// <summary>MV-775: the roof fan — "the only moving thing in a quiet room" — spun continuously
+        /// in <see cref="Update"/> while this box is alive.</summary>
+        private Transform _fan;
+        private const float FanIdleSpeedDegPerSec = 40f;
+        private const float HatchOpenAngleDeg = 70f;
+        private const float HatchSwingSeconds = 0.15f;
 
         private readonly struct PendingEmission
         {
             public readonly EnemyKind Kind;
             public readonly float Timer;
-            public PendingEmission(EnemyKind kind, float timer) { Kind = kind; Timer = timer; }
+            public readonly bool FirstEmitted;
+            public PendingEmission(EnemyKind kind, float timer, bool firstEmitted)
+            {
+                Kind = kind; Timer = timer; FirstEmitted = firstEmitted;
+            }
         }
 
         // Robots currently walking toward this box's hatch.
         private readonly List<RobotEnemy> _seeking = new List<RobotEnemy>(8);
-        // Robots that have reached the hatch and are mid-consume, waiting on ConsumeSeconds to emit.
+        // The one robot currently being drawn through the Intake beat (MV-775) — the hatch only ever
+        // has room for one at a time, so a second arrival waits in _seeking until this slot frees.
+        private RobotEnemy _intakeRobot;
+        private Vector3 _intakeStartPos;
+        private float _intakeTimer;
+        // Robots that have been despawned into the box and are mid-Cycle, waiting on CycleSeconds (and
+        // then EmitStaggerSeconds) to emit.
         private readonly List<PendingEmission> _pending = new List<PendingEmission>(4);
 
         public bool IsAlive => _health != null && _health.IsAlive;
@@ -124,16 +159,6 @@ namespace MaxWorlds.Factories
         {
             _health = new DestructibleHealth(ReplicatorHealth);
             _health.Destroyed += OnDestroyed;
-
-            // MV-756: the arrive test below reads this box's own collider surface, not just its
-            // centre — kept live and enabled (never disabled) so a lured robot can still be judged
-            // to have arrived after the box is a wreck (OnDestroyed cancels seeking robots anyway,
-            // but nothing here should assume that ordering). Physics.SyncTransforms() is required
-            // here, same reasoning FactoryDoorway.ChooseFace's own doc comment gives for its probe:
-            // a Collider query reads the last-SYNCED transform, not the live one, and nothing else
-            // in this box's lifetime (it never moves) will trigger that sync for us.
-            _collider = GetComponent<Collider>();
-            Physics.SyncTransforms();
 
             _spawner = GetComponent<EnemySpawner>();
             // This factory never spawns on its own (MV-706 change 2) — SpawnExact bypasses the _running
@@ -173,7 +198,19 @@ namespace MaxWorlds.Factories
             // destroyed (OnDestroyed hides it).
             _led = parts.Led;
             _ledMpb = new MaterialPropertyBlock();
+
+            // MV-775: the hatch a lured robot actually walks to and is drawn into, and the fan this
+            // box spins continuously to read as powered before anything ever reaches it.
+            _hatch = parts.Hatch;
+            _hatchClosedLocalRotation = _hatch != null ? _hatch.localRotation : Quaternion.identity;
+            _fan = parts.Fan;
         }
+
+        /// <summary>The hatch's own world position (MV-775) — where <see cref="TickLure"/> steers a
+        /// lured robot, where the arrive gate in <see cref="TickConsumption"/> measures against, and
+        /// where <see cref="TickIntake"/> draws a consumed robot to. Public so a test can read it back
+        /// without re-deriving <see cref="FactoryBodies.BuildReplicator"/>'s own hatch-offset formula.</summary>
+        public Vector3 HatchPosition => _hatch != null ? _hatch.position : transform.position;
 
         public void TakeDamage(in DamageInfo info)
         {
@@ -224,13 +261,16 @@ namespace MaxWorlds.Factories
                     Vector3.Distance(r.transform.position, _target.position) <= MaxMeleeExclusionRadius)
                     continue;
 
-                r.SeekReplicator(transform.position);
+                // MV-775: the steering target is the hatch's own face, not the box's centre — a robot
+                // must walk to the mouth it's actually consumed at, never "through the box" to whichever
+                // face happened to be nearest.
+                r.SeekReplicator(HatchPosition);
                 _seeking.Add(r);
             }
         }
 
-        /// <summary>Watches every robot this box has lured: consumes one the instant it reaches the
-        /// hatch, then emits the doubled pair <see cref="ConsumeSeconds"/> later (MV-706 change 4).
+        /// <summary>Watches every robot this box has lured, draws the one at the hatch through the
+        /// Intake beat, then ticks the Cycle/Output timers on whatever's already inside (MV-775).
         /// Public and explicitly dt-parameterized, same <see cref="MowerHutch.TickMobility"/> reasoning
         /// as <see cref="TickLure"/> above — a test drives this directly with a synthetic dt.</summary>
         public void TickConsumption(float dt)
@@ -246,50 +286,96 @@ namespace MaxWorlds.Factories
                     continue;
                 }
 
-                if (DistanceToSurface(r) > ArriveTolerance) continue;
+                if (_intakeRobot != null) continue; // MV-775: the hatch only fits one robot at a time
+                if (DistanceToHatchFace(r) > ArriveTolerance) continue;
 
-                // Consumed: the robot is deactivated right away (no kill, no loot — Despawn, not Die),
-                // the pair it becomes emerges ConsumeSeconds later.
-                EnemyKind kind = r.Kind;
-                r.Despawn();
+                // At the hatch: hand its position over to the Intake beat rather than despawning it
+                // here outright — TickIntake is what actually draws it in and despawns it.
                 _seeking.RemoveAt(i);
-                _pending.Add(new PendingEmission(kind, 0f));
+                _intakeRobot = r;
+                _intakeStartPos = r.transform.position;
+                _intakeTimer = 0f;
+                r.BeginReplicatorIntake();
             }
+
+            if (_intakeRobot != null) TickIntake(dt);
 
             for (int i = _pending.Count - 1; i >= 0; i--)
             {
                 PendingEmission p = _pending[i];
                 float timer = p.Timer + dt;
-                if (timer >= ConsumeSeconds)
+                bool firstEmitted = p.FirstEmitted;
+
+                if (!firstEmitted && timer >= CycleSeconds)
                 {
-                    _spawner.SpawnExact(p.Kind, 2, TwinNoReplicateSeconds);
+                    _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
+                    firstEmitted = true;
+                }
+
+                if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds)
+                {
+                    _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
                     capacity = Mathf.Max(0, capacity - 1);
                     _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
                     _pending.RemoveAt(i);
+                    continue;
                 }
-                else
-                {
-                    _pending[i] = new PendingEmission(p.Kind, timer);
-                }
+
+                _pending[i] = new PendingEmission(p.Kind, timer, firstEmitted);
             }
         }
 
-        /// <summary>How far a lured robot still has to close to be consumed (MV-756): the gap between
-        /// its own collider surface and this box's, via <see cref="Collider.ClosestPoint"/> against
-        /// its centre minus its own <see cref="EnemyArchetype.ColliderRadius"/>. Falls back to a raw
-        /// centre-to-centre read if this box somehow has no collider (never true for a level-built
-        /// Replicator, but keeps a stripped-down test fixture from throwing).</summary>
-        private float DistanceToSurface(RobotEnemy r)
+        /// <summary>MV-775 Intake beat: draws <see cref="_intakeRobot"/> from wherever it crossed the
+        /// arrive gate to the hatch mouth itself over <see cref="IntakeSeconds"/>, then despawns it
+        /// into the Cycle beat. Driving its position directly (rather than its own SafeMove) is what
+        /// pins the robot's resolved position at the moment of removal to the hatch face regardless of
+        /// its own collider radius — see <see cref="RobotEnemy.IsBeingDrawnIn"/>.</summary>
+        private void TickIntake(float dt)
+        {
+            RobotEnemy r = _intakeRobot;
+            if (r == null || !r.IsAlive)
+            {
+                _intakeRobot = null;
+                return;
+            }
+
+            _intakeTimer += dt;
+            float u = Mathf.Clamp01(_intakeTimer / IntakeSeconds);
+            Vector3 hatchPos = HatchPosition;
+            r.transform.position = Vector3.Lerp(_intakeStartPos, hatchPos, AnimSequence.OutQuad(u));
+
+            Vector3 face = hatchPos - _intakeStartPos; face.y = 0f;
+            if (face.sqrMagnitude > 0.0001f) r.transform.rotation = Quaternion.LookRotation(face.normalized, Vector3.up);
+
+            if (_intakeTimer < IntakeSeconds) return;
+
+            // Fully drawn in: gone, and the pair it becomes starts its Cycle beat now.
+            EnemyKind kind = r.Kind;
+            r.Despawn();
+            _intakeRobot = null;
+            _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false));
+        }
+
+        /// <summary>How far a lured robot still is from the hatch it's actually being consumed at
+        /// (MV-775) — a point on the hatch itself, never the box's nearest face (MV-756's original
+        /// collider-surface fix, but scoped to the one face a robot is meant to walk to). The robot's
+        /// own <see cref="EnemyArchetype.ColliderRadius"/> is still subtracted so a real
+        /// <see cref="CharacterController"/>-driven approach can actually satisfy this gate — the
+        /// Intake beat that follows is what then draws it the rest of the way to the exact hatch point.</summary>
+        private float DistanceToHatchFace(RobotEnemy r)
         {
             float robotRadius = EnemyArchetype.Of(r.Kind).ColliderRadius;
-            if (_collider == null) return Vector3.Distance(r.transform.position, transform.position) - robotRadius;
-            Vector3 closest = _collider.ClosestPoint(r.transform.position);
-            return Vector3.Distance(r.transform.position, closest) - robotRadius;
+            return Vector3.Distance(r.transform.position, HatchPosition) - robotRadius;
         }
 
         private void Update()
         {
             if (!IsAlive) return;
+
+            // MV-775: "the only moving thing in a quiet room" — spins whether or not anything has
+            // ever reached this box, so it reads as powered before the player touches it.
+            if (_fan != null) _fan.Rotate(Vector3.up, FanIdleSpeedDegPerSec * Time.deltaTime, Space.Self);
+
             _lureTimer += Time.deltaTime;
             if (_lureTimer >= LureIntervalSeconds)
             {
@@ -315,6 +401,15 @@ namespace MaxWorlds.Factories
                 if (r != null && r.IsAlive) r.CancelReplicatorSeeking();
             }
             _seeking.Clear();
+
+            // MV-775: a robot mid-Intake (already through the arrive gate, not yet despawned) resumes
+            // chasing Max too, same as one still walking in from further out — the box dying mid-draw-in
+            // must not leave it permanently handed over to a machine that no longer exists.
+            if (_intakeRobot != null)
+            {
+                if (_intakeRobot.IsAlive) _intakeRobot.CancelReplicatorSeeking();
+                _intakeRobot = null;
+            }
 
             // Exactly the shed drop (MV-706 change 5): PickupDirector.OnFactoryDestroyed is subscribed
             // to this same signal, and drops one Device if any RIG category is locked, otherwise one
@@ -352,13 +447,27 @@ namespace MaxWorlds.Factories
             // mid-consume, AND pulsed the instant a robot is still walking toward the hatch — a robot
             // seeking the box must read as a thing about to happen, from the box itself, before
             // anything is actually consumed. Every other tell here was downstream of a consume that
-            // could never happen (MV-756 Cause 2); this is the one that isn't.
+            // could never happen (MV-756 Cause 2); this is the one that isn't. MV-775 adds
+            // _intakeRobot: a robot mid-Intake has already left _seeking but the hatch is still open
+            // on it.
+            bool hatchWanted = _pending.Count > 0 || _seeking.Count > 0 || _intakeRobot != null;
             if (_hatchGlow != null)
             {
-                Color glow = (_pending.Count > 0 || _seeking.Count > 0) ? hatchGlowColor : Color.clear;
+                Color glow = hatchWanted ? hatchGlowColor : Color.clear;
                 _hatchGlow.GetPropertyBlock(_hatchGlowMpb);
                 _hatchGlowMpb.SetColor("_BaseColor", glow);
                 _hatchGlow.SetPropertyBlock(_hatchGlowMpb);
+            }
+
+            // MV-775: the hatch itself swings open through Lure and Intake only — it closes again the
+            // instant a robot is drawn fully in, rather than sitting open through the whole Cycle/Output
+            // beat the way the glow (above) does.
+            if (_hatch != null)
+            {
+                bool hatchSwingWanted = _seeking.Count > 0 || _intakeRobot != null;
+                float target = hatchSwingWanted ? 1f : 0f;
+                _hatchOpenAmount = Mathf.MoveTowards(_hatchOpenAmount, target, Time.deltaTime / HatchSwingSeconds);
+                _hatch.localRotation = _hatchClosedLocalRotation * Quaternion.AngleAxis(_hatchOpenAmount * HatchOpenAngleDeg, Vector3.up);
             }
 
             // The 0.6 s white "twin" flash (MV-693 Reads), decaying from the timer TickConsumption

@@ -378,8 +378,20 @@ namespace MaxWorlds.Enemies
             if (Current != State.ReplicatorSeeking) return;
             Current = State.Chase;
             _stateTimer = 0f;
+            IsBeingDrawnIn = false;
             _bar?.SetReplicatorMarker(false);
         }
+
+        /// <summary>True once a Replicator has pulled this robot past its hatch's arrive gate and
+        /// started the Intake beat (MV-775) — this robot's own <see cref="TickReplicatorSeeking"/>
+        /// stops moving it from here; the Replicator now drives its position directly (drawn into the
+        /// mouth) until it despawns it into the cycle.</summary>
+        public bool IsBeingDrawnIn { get; private set; }
+
+        /// <summary>Hands this robot's position over to the Replicator's own Intake beat (MV-775). A
+        /// no-op call site guard belongs to the caller (<see cref="MaxWorlds.Factories.Replicator"/>
+        /// only calls this once, right as it removes the robot from its own seeking list).</summary>
+        public void BeginReplicatorIntake() => IsBeingDrawnIn = true;
 
         /// <summary>Walks straight toward <see cref="ReplicatorSeekTarget"/> (MV-706) — the same
         /// direct point-to-point <see cref="CharacterControllerMotion.SafeMove"/> idiom
@@ -389,6 +401,8 @@ namespace MaxWorlds.Enemies
         /// distance and consumes the robot); this only ever closes the gap.</summary>
         private void TickReplicatorSeeking(float dt)
         {
+            if (IsBeingDrawnIn) return; // MV-775: the Replicator now moves this robot directly
+
             Vector3 to = ReplicatorSeekTarget - transform.position;
             to.y = 0f;
             float dist = to.magnitude;
@@ -1002,6 +1016,10 @@ namespace MaxWorlds.Enemies
             _noReplicate = false;
             _noReplicateTimer = 0f;
             _bar?.SetReplicatorMarker(false);
+            // MV-775: a pooled robot must not carry the last life's "being drawn into a hatch" latch
+            // forward — SeekReplicator/BeginReplicatorIntake re-stamp it fresh each time a Replicator
+            // actually captures this body.
+            IsBeingDrawnIn = false;
             // MV-688: a pooled Lurker must not carry the last life's cycle progress/wake latch forward —
             // BeginSubmerged() (called right after this by whoever placed it) re-stamps these anyway, but
             // a plain pooled reuse that skips BeginDormant/BeginSubmerged must never inherit them either.

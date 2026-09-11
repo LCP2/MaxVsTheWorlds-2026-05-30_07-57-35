@@ -25,19 +25,23 @@ namespace MaxWorlds.VFX
         private static Material s_rust;
 
         /// <summary>What <see cref="MaxWorlds.Factories.Replicator"/> needs back to drive its own
-        /// tells: the hatch (rotated to droop on destruction), the hatch-open glow lens (lit while
-        /// something is mid-consume), the emit-flash lens (the 0.6 s "twin" flash), and the status
-        /// LED renderer (driven exactly as MV-706 already drove it, just off a generated mesh now).</summary>
+        /// tells: the hatch (MV-775: swung open on its own local Y for the Lure/Intake beats, no
+        /// longer inert), the hatch-open glow lens (lit while something is mid-consume), the
+        /// emit-flash lens (the 0.6 s "twin" flash), the status LED renderer (driven exactly as
+        /// MV-706 already drove it, just off a generated mesh now), and the roof fan (MV-775: the
+        /// ticket's own "the only moving thing in a quiet room" — the rim/hub/spokes <see cref="BuildValveWheel"/>
+        /// already built as a static prop, now spun continuously by the Replicator that owns it).</summary>
         public readonly struct ReplicatorParts
         {
             public readonly Transform Hatch;
             public readonly MeshRenderer HatchGlow;
             public readonly MeshRenderer EmitFlash;
             public readonly MeshRenderer Led;
+            public readonly Transform Fan;
 
-            public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led)
+            public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led, Transform fan)
             {
-                Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led;
+                Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
             }
         }
 
@@ -101,27 +105,38 @@ namespace MaxWorlds.VFX
                 }, 12), MaterialLibrary.Character(),
                 new Vector3(hw * 0.5f, hh * 0.3f, -hd - 0.02f), Quaternion.Euler(90f, 0f, 0f), Vector3.one, "ReplicatorLed");
 
-            // The valve wheel on top — Sludgequeen's motif: a rusted rim, a dark hub, four spokes,
-            // laid flat on the roof.
-            BuildValveWheel(root, new Vector3(-hw * 0.4f, hh + 0.02f, hd * 0.15f));
+            // The extractor fan on top (MV-775) — Sludgequeen's own valve-wheel motif (a rusted rim, a
+            // dark hub, four spokes) repurposed as the box's one idle tell: this is the part
+            // Replicator.Update spins continuously, "the only moving thing in a quiet room".
+            Transform fan = BuildValveWheel(root, new Vector3(-hw * 0.4f, hh + 0.02f, hd * 0.15f));
 
-            return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>());
+            return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan);
         }
 
-        private static void BuildValveWheel(Transform root, Vector3 at)
+        /// <summary>Built under its own "Fan" parent, at <paramref name="at"/>, so the whole rim/hub/
+        /// spoke assembly can be spun as one unit about its own local Y — the children below are
+        /// therefore positioned relative to that parent, not <paramref name="root"/>.</summary>
+        private static Transform BuildValveWheel(Transform root, Vector3 at)
         {
-            Add(root, CharacterMeshes.Lathe(new[]
+            var fan = new GameObject("Fan").transform;
+            fan.SetParent(root, worldPositionStays: false);
+            fan.localPosition = at;
+            fan.localRotation = Quaternion.identity;
+
+            Add(fan, CharacterMeshes.Lathe(new[]
                 {
                     new Vector2(0.16f, 0f), new Vector2(0.22f, 0.02f), new Vector2(0.22f, 0.05f), new Vector2(0.16f, 0.07f),
-                }, 20), s_rust, at, Quaternion.identity, Vector3.one, "ValveRim");
-            Add(root, CharacterMeshes.Sphere(10), s_dark, at + Vector3.up * 0.035f, Quaternion.identity,
+                }, 20), s_rust, Vector3.zero, Quaternion.identity, Vector3.one, "ValveRim");
+            Add(fan, CharacterMeshes.Sphere(10), s_dark, Vector3.up * 0.035f, Quaternion.identity,
                 new Vector3(0.06f, 0.06f, 0.06f), "ValveHub");
             for (int i = 0; i < 4; i++)
             {
                 float thetaDeg = i * 90f;
-                Add(root, CharacterMeshes.Beam(0.32f, 0.02f, 0.014f, 6), s_rust,
-                    at + Vector3.up * 0.035f, Quaternion.Euler(90f, thetaDeg, 0f), Vector3.one, "ValveSpoke");
+                Add(fan, CharacterMeshes.Beam(0.32f, 0.02f, 0.014f, 6), s_rust,
+                    Vector3.up * 0.035f, Quaternion.Euler(90f, thetaDeg, 0f), Vector3.one, "ValveSpoke");
             }
+
+            return fan;
         }
 
         private static void EnsureMaterials()
