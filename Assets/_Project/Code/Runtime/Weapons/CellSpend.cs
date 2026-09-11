@@ -48,13 +48,14 @@ namespace MaxWorlds.Weapons
         /// price and charging another).</summary>
         private static readonly Dictionary<string, int> s_flatNodeCost = new() { { "u_slt", SlotCostCells } };
 
-        /// <summary>MV-689: World 2's PRIMARY/SECONDARY nodes (the LPPE/Shoulder Rack boards) price
-        /// 25% above World 1's curve — ENERGY/MOVE/SUPPORT are untouched (same ids/costs in both
-        /// boards), so this only ever applies while <see cref="RigBoard.ActiveWorldIndex"/> is on a
-        /// World 2+ board AND <paramref name="id"/> resolves to one of those two families on THE
-        /// CURRENTLY ACTIVE board (never World 1's own PRIMARY/SECONDARY, even though some ids are
-        /// textually reused between the two files).</summary>
-        private const float World2PrimarySecondaryCostMultiplier = 1.25f;
+        /// <summary>MV-767: World 2's PRIMARY/SECONDARY nodes (the LPPE/Shoulder Rack boards) price
+        /// 2.5x World 1's curve (raised from MV-689's 1.25x once the Parts economy was found running
+        /// a 2.33x oversupply against this multiplier) — ENERGY/MOVE/SUPPORT are untouched (same
+        /// ids/costs in both boards), so this only ever applies while
+        /// <see cref="RigBoard.ActiveWorldIndex"/> is on a World 2+ board AND <paramref name="id"/>
+        /// resolves to one of those two families on THE CURRENTLY ACTIVE board (never World 1's own
+        /// PRIMARY/SECONDARY, even though some ids are textually reused between the two files).</summary>
+        private const float World2PrimarySecondaryCostMultiplier = 2.5f;
 
         private static float CostMultiplierFor(string id)
         {

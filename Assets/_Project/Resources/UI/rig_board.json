@@ -310,7 +310,7 @@
       "x": 1050,
       "y": 420,
       "icon": "cel",
-      "label": "PART STORAGE",
+      "label": "PART CAPACITY",
       "maxLevel": 4,
       "kind": "cap",
       "parent": null,
