@@ -227,6 +227,29 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            // MV-781: the authored grates (MV-688 schema) — a Grate Lurker's visible body while
+            // submerged, and (change 1 of this ticket) the floor's own darkest value tier. x/z are
+            // already absolute (WorldGrate's own doc comment — unlike WorldSludge/WorldDeck/WorldRamp,
+            // NOT resolved through WorldArea.WorldRectOf), and are carried onto the entity UNCHANGED —
+            // MapValidation.WorldLurkerGrates' own convention treats them as the tile's MIN corner, and
+            // MapRuntime.BuildGrate centres the built geometry on x+0.5/z+0.5 itself.
+            foreach (WorldArea a in cfg.areas)
+            {
+                foreach (WorldGrate g in a.grates ?? Array.Empty<WorldGrate>())
+                {
+                    if (g == null) continue;
+                    entities.Add(new MapEntity
+                    {
+                        id = g.id,
+                        kind = "grate",
+                        x = g.x,
+                        z = g.z,
+                        width = 1f,
+                        depth = 1f,
+                    });
+                }
+            }
+
             // MV-644: PowerupCadence.EnsureCoverage (Confluence MVW 34439170 §5/§8.7) made real — an
             // area with no shed of its own, sitting at the cadence limit, gets a reachable parts-cache
             // pickup so the "never more than dials.powerupCadence unfed areas in a row" guarantee is

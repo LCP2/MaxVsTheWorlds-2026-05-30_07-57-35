@@ -19,6 +19,7 @@ namespace MaxWorlds.Arena
         Sludge, Deck, Ramp,   // MV-692
         Hatch,                // MV-697
         Replicator,           // MV-706
+        Grate,                // MV-781
     }
 
     /// <summary>One room. An axis-aligned rectangle on the XZ plane, authored by its centre and size
