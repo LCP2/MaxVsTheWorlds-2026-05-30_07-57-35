@@ -44,16 +44,22 @@ namespace MaxWorlds.Tests.EditMode
 
                 Renderer[] allRenderers = dressingHost.GetComponentsInChildren<Renderer>(true);
 
-                // ---- nothing but a deliberate standpipe clears the wall by more than half a metre ----
+                // ---- nothing but a deliberate standpipe (or a pump housing's own domed cap, MV-779)
+                // clears the wall by more than half a metre ----
                 foreach (Renderer r in allRenderers)
                 {
                     bool isStandpipePart = r.name == "Standpipe"
                         || r.GetComponentsInParent<Transform>(true).Any(t => t.name == "Standpipe");
-                    if (isStandpipePart) continue;
+                    // MV-779: the pump housing gained a real lathed dome (Cap, 30% of the body's own
+                    // height) replacing the old flush ribs — a deliberate roof feature, the same
+                    // category of exemption a Standpipe already gets, not the floating-run regression
+                    // this guard exists to catch.
+                    bool isPumpHousingPart = r.GetComponentsInParent<Transform>(true).Any(t => t.name == "Pump Housing");
+                    if (isStandpipePart || isPumpHousingPart) continue;
 
                     Assert.LessOrEqual(r.bounds.max.y, 2.0f,
                         $"{r.name} (under {Path(r.transform, dressingHost)}) reaches {r.bounds.max.y:F2} m " +
-                        "above a 1.5 m wall — only a Standpipe should clear 2.0 m");
+                        "above a 1.5 m wall — only a Standpipe or a Pump Housing's own cap should clear 2.0 m");
                 }
 
                 // ---- wall-hung pieces stay within half a metre of the face they dress ----

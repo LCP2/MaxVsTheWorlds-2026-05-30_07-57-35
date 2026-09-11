@@ -234,27 +234,43 @@ namespace MaxWorlds.VFX
             ramp.transform.position =
                 _doorway + _outward * (RampRun * 0.5f) + Vector3.up * (SillHeight * 0.5f)
                 - ramp.transform.up * (RampThickness * 0.5f);
-            ramp.transform.localScale = new Vector3(RampHalfWidth * 2f, RampThickness, length);
+            // MV-779: a Bevelled box, not the flat primitive cube — it is walked on, so its shape
+            // (a plain slab) is unchanged, only the edge is chamfered like every other kit box.
+            Vector3 rampSize = new Vector3(RampHalfWidth * 2f, RampThickness, length);
+            ramp.transform.localScale = Vector3.one;
+            ramp.GetComponent<MeshFilter>().sharedMesh =
+                CharacterMeshes.Bevelled(rampSize, CharacterMeshes.DefaultBevel(rampSize));
             Paint(ramp, SurfaceKind.Metal);
 
             // Kerbs down each side of the ramp — they catch the light and make the slope read as a
-            // slope from above, which a bare plate at 9 deg does not.
+            // slope from above, which a bare plate at 9 deg does not. MV-779: a 4-sided Prism, tapered
+            // toward the room, rather than a flat-sided cube — the taper reads as cast concrete.
+            const float diag = 1.41421356f;   // 1/cos(45deg): Prism's 4-sided case, see CharacterMeshes
+            const float kerbWidth = 0.12f;
             for (int s = -1; s <= 1; s += 2)
             {
                 var kerb = GameObject.CreatePrimitive(PrimitiveType.Cube);
                 kerb.name = s < 0 ? "KerbL" : "KerbR";
                 Strip(kerb);
                 kerb.transform.SetParent(transform, worldPositionStays: false);
-                kerb.transform.rotation = ramp.transform.rotation;
+                // The extra 90deg about X turns the Prism's own tapering axis (its local Y) onto the
+                // ramp's length axis (the box convention's local Z, carried by ramp.transform.rotation)
+                // — the Prism's TOP (the narrower end) lands on ramp local +Z, which is _outward: the
+                // room the ramp leads into.
+                kerb.transform.rotation = ramp.transform.rotation * Quaternion.Euler(90f, 0f, 0f);
                 kerb.transform.position = ramp.transform.position
                     + _across * (s * (RampHalfWidth - 0.06f)) + ramp.transform.up * 0.06f;
-                kerb.transform.localScale = new Vector3(0.12f, 0.16f, length);
+                kerb.transform.localScale = Vector3.one;
+                kerb.GetComponent<MeshFilter>().sharedMesh =
+                    CharacterMeshes.Prism(4, diag * kerbWidth, diag * kerbWidth * 0.74f, length, 0.12f);
                 Paint(kerb, SurfaceKind.Metal);
             }
 
             // The frame: two jambs and a lintel, standing proud of the wall so the opening reads as a
-            // hole in the building rather than a decal on it.
+            // hole in the building rather than a decal on it. MV-779: the jambs are a tapered 6-sided
+            // Prism instead of a cube, so the opening reads as framed rather than as a hole cut in a slab.
             float sillTop = _doorway.y + SillHeight;
+            float jambHeight = DoorHeight + FrameThickness;
             for (int s = -1; s <= 1; s += 2)
             {
                 var jamb = GameObject.CreatePrimitive(PrimitiveType.Cube);
@@ -266,11 +282,14 @@ namespace MaxWorlds.VFX
                     + _across * (s * (DoorWidth * 0.5f + FrameThickness * 0.5f))
                     + Vector3.up * (SillHeight + DoorHeight * 0.5f)
                     + _outward * Proud;
-                jamb.transform.localScale =
-                    new Vector3(FrameThickness, DoorHeight + FrameThickness, FrameThickness);
+                jamb.transform.localScale = Vector3.one;
+                jamb.GetComponent<MeshFilter>().sharedMesh = CharacterMeshes.Prism(
+                    6, FrameThickness * 0.62f, FrameThickness * 0.48f, jambHeight, 0.08f);
                 Paint(jamb, SurfaceKind.Metal);
             }
 
+            // MV-779: the lintel is a Bevelled box (same shape as before, chamfered) with five bolts
+            // along its front (outward-facing) face — the fabrication detail that reads as "built".
             var lintel = GameObject.CreatePrimitive(PrimitiveType.Cube);
             lintel.name = "Lintel";
             Strip(lintel);
@@ -278,24 +297,60 @@ namespace MaxWorlds.VFX
             lintel.transform.rotation = facing;
             lintel.transform.position = _doorway
                 + Vector3.up * (sillTop + DoorHeight + FrameThickness * 0.5f) + _outward * Proud;
-            lintel.transform.localScale =
-                new Vector3(DoorWidth + FrameThickness * 2f, FrameThickness, FrameThickness);
+            Vector3 lintelSize = new Vector3(DoorWidth + FrameThickness * 2f, FrameThickness, FrameThickness);
+            lintel.transform.localScale = Vector3.one;
+            lintel.GetComponent<MeshFilter>().sharedMesh =
+                CharacterMeshes.Bevelled(lintelSize, CharacterMeshes.DefaultBevel(lintelSize));
             Paint(lintel, SurfaceKind.Metal);
 
+            float lintelBoltScale = FrameThickness * 0.30f;
+            for (int i = 0; i < 5; i++)
+            {
+                float t = (i + 0.5f) / 5f - 0.5f;
+                var bolt = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                bolt.name = $"LintelBolt{i}";
+                Strip(bolt);
+                bolt.transform.SetParent(lintel.transform, false);
+                bolt.transform.localPosition = new Vector3(t * lintelSize.x, 0f, lintelSize.z * 0.5f);
+                bolt.transform.localRotation = Quaternion.identity;
+                bolt.transform.localScale = Vector3.one * lintelBoltScale;
+                bolt.GetComponent<MeshFilter>().sharedMesh = CharacterMeshes.Sphere(8);
+                Paint(bolt, SurfaceKind.Metal);
+            }
+
             // The shutter. It ROLLS UP: the top edge stays pinned under the lintel and the panel
-            // shortens, rather than a slab sliding up through the roof.
-            var shutter = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            shutter.name = "Shutter";
-            Strip(shutter);
-            shutter.transform.SetParent(transform, worldPositionStays: false);
-            shutter.transform.rotation = facing;
+            // shortens, rather than a slab sliding up through the roof. MV-779: seven horizontal slats
+            // under one empty "Shutter" parent, instead of one slab — ApplyOpenness still scales this
+            // same parent on Y exactly as before, so the slats compress with it for free; the slats'
+            // own sizes are fractions of the parent's [-0.5, 0.5] unit space, not metres, for exactly
+            // that reason.
+            var shutterParent = new GameObject("Shutter");
+            shutterParent.transform.SetParent(transform, worldPositionStays: false);
+            shutterParent.transform.rotation = facing;
             _shutterClosedCentre = _doorway
                 + Vector3.up * (sillTop + DoorHeight * 0.5f) + _outward * (Proud * 0.5f);
             _shutterClosedScale = new Vector3(DoorWidth, DoorHeight, 0.08f);
-            shutter.transform.position = _shutterClosedCentre;
-            shutter.transform.localScale = _shutterClosedScale;
-            Paint(shutter, SurfaceKind.Metal);
-            _shutter = shutter.transform;
+            shutterParent.transform.position = _shutterClosedCentre;
+            shutterParent.transform.localScale = _shutterClosedScale;
+            _shutter = shutterParent.transform;
+
+            const int slatCount = 7;
+            const float slatGapFraction = 0.12f;
+            float slotFrac = 1f / slatCount;
+            float slatHeightFrac = slotFrac * (1f - slatGapFraction);
+            Vector3 slatSize = new Vector3(1f, slatHeightFrac, 1f);
+            Mesh slatMesh = CharacterMeshes.Bevelled(slatSize, CharacterMeshes.DefaultBevel(slatSize));
+            for (int i = 0; i < slatCount; i++)
+            {
+                float centreY = -0.5f + slotFrac * (i + 0.5f);
+                var slat = new GameObject($"Slat{i}");
+                slat.transform.SetParent(shutterParent.transform, false);
+                slat.transform.localPosition = new Vector3(0f, centreY, 0f);
+                slat.transform.localScale = Vector3.one;
+                slat.AddComponent<MeshFilter>().sharedMesh = slatMesh;
+                slat.AddComponent<MeshRenderer>();
+                Paint(slat, SurfaceKind.Metal);
+            }
 
             ApplyOpenness();
         }
@@ -379,11 +434,16 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>Scenery. The ramp is something to look at, not something to collide with — the
-        /// robots walk a flat plane and an extra collider here would only trip them at the doorway.</summary>
+        /// robots walk a flat plane and an extra collider here would only trip them at the doorway.
+        /// MV-779: <c>Destroy</c> only in Play mode, else <c>DestroyImmediate</c> — same idiom
+        /// <see cref="MaxWorlds.Rendering.StormdrainKit.Strip"/> already uses, needed the moment an
+        /// EditMode test builds a door synchronously rather than only ever through a running frame.</summary>
         private static void Strip(GameObject go)
         {
             var col = go.GetComponent<Collider>();
-            if (col != null) Destroy(col);
+            if (col == null) return;
+            if (Application.isPlaying) Destroy(col);
+            else DestroyImmediate(col);
         }
     }
 }
