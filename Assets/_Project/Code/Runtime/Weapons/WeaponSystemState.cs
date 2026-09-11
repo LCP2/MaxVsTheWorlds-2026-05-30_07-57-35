@@ -89,6 +89,17 @@ namespace MaxWorlds.Weapons
             ShoulderRackTrackKind.RocketDamage => "s_rkt",
             ShoulderRackTrackKind.Salvo => "s_sal",
             ShoulderRackTrackKind.Reload => "s_rld",
+            ShoulderRackTrackKind.Cluster => "s_clu",
+            _ => null,
+        };
+
+        /// <summary>MV-768: the LPPE's own PRIMARY-family tracks with no legacy enum equivalent — see
+        /// <see cref="LppeTrackKind"/>'s class doc for why these aren't folded into
+        /// <see cref="MapId(WeaponTrackKind)"/>.</summary>
+        private static string MapId(LppeTrackKind kind) => kind switch
+        {
+            LppeTrackKind.Rate => "p_rof",
+            LppeTrackKind.Fork => "p_frk",
             _ => null,
         };
 
@@ -357,6 +368,11 @@ namespace MaxWorlds.Weapons
         /// "is the rack usable at all" gate (<see cref="ShoulderRack.Tick"/>), independent of the RIG
         /// tree's own reached-ness rules.</summary>
         public static int ShoulderRackTrackLevel(ShoulderRackTrackKind kind) => RigState.Level(MapId(kind));
+
+        /// <summary>MV-768: a LPPE-only track's current level (RATE/FORK, <see cref="LppeTrackKind"/>) —
+        /// routed through here exactly like <see cref="TrackLevel"/> reads <c>p_dmg</c>/<c>p_rng</c>, so
+        /// <see cref="MaxWorlds.Combat.PulseLaser"/> never reads <see cref="RigState"/> directly.</summary>
+        public static int LppeTrackLevel(LppeTrackKind kind) => RigState.Level(MapId(kind));
 
         /// <summary>Spend a part to raise a Shoulder Rack track by one level. Fails if its RIG node
         /// isn't reached yet or is already at its cap.</summary>

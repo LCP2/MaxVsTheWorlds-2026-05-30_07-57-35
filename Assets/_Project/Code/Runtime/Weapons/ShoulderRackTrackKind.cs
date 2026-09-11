@@ -19,5 +19,9 @@ namespace MaxWorlds.Weapons
 
         /// <summary>Shortens the reload between salvos.</summary>
         Reload,
+
+        /// <summary>MV-768: a rocket splits into 3 bomblets on impact (<c>s_clu</c>, a child of
+        /// <c>s_rld</c> on <c>rig_board.world2.json</c>). One level.</summary>
+        Cluster,
     }
 }

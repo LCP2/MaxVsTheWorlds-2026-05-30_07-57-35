@@ -209,9 +209,9 @@ namespace MaxWorlds.Weapons
             }
         }
 
-        /// <summary>MV-694 <c>s_clu</c>: three bomblets in a ring around the impact point, each its own
-        /// small splash — folded onto the Salvo track's own max level rather than a dedicated RIG node
-        /// (see <see cref="ShoulderRack"/>'s class doc for why).</summary>
+        /// <summary>MV-768 <c>s_clu</c>: three bomblets in a ring around the impact point, each its own
+        /// small splash — gated by <see cref="ShoulderRack"/> on <c>s_clu</c>'s own RIG node level, not
+        /// (as it was pre-MV-768) a maxed Salvo track.</summary>
         private static void SpawnClusterBomblets(Vector3 center)
         {
             for (int i = 0; i < ClusterBombletCount; i++)

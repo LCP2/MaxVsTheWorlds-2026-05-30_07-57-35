@@ -14,11 +14,11 @@ namespace MaxWorlds.Weapons
     /// (World 1) or the rack's own root track (<c>s_rkt</c>) is unowned — MV-689's morph and THE RIG
     /// purchase are what flip those, neither of which this ticket implements.
     ///
-    /// <c>s_clu</c> (cluster bomblets on impact) has no dedicated RIG node — the SECONDARY column had no
-    /// remaining slot wide enough for a fourth track without crowding into the ENERGY family's own node
-    /// spacing (rig_board.json's node-spacing convention, ~120px between siblings). Folded onto a maxed
-    /// Salvo track instead, as a capstone; a real node can follow once MV-689 gives THE RIG's buy-flow
-    /// its own layout pass.
+    /// <c>s_clu</c> (cluster bomblets on impact) has its own dedicated RIG node on
+    /// <c>rig_board.world2.json</c>, a child of <c>s_rld</c> (MV-768: this comment was true of World 1's
+    /// board only — World 2's board defines <c>s_clu</c>, and this class had never been updated to read
+    /// it, so the bomblet code below ran off a maxed Salvo track instead and the node itself did
+    /// nothing).
     ///
     /// MV-702 resolves the deviation this class used to carry: the mount mesh now lives on
     /// <see cref="MaxWorlds.VFX.MaxRig"/> (built once in <see cref="MaxWorlds.VFX.MaxBody.Build"/>,
@@ -133,7 +133,9 @@ namespace MaxWorlds.Weapons
                 AbilityTuning.DefaultShoulderRackBaseSplashRadius, AbilityTuning.DefaultShoulderRackMaxSplashRadius,
                 WeaponCatalog.MaxLevel(WaterBalloonTrackKind.SplashArea));
 
-            bool cluster = salvoLevel >= WeaponCatalog.MaxLevel(ShoulderRackTrackKind.Salvo);
+            // MV-768: gated on s_clu's own level, the same way s_spl/s_sal/s_rld are read -- not a
+            // maxed Salvo track (the stale pre-fix shape this class's own doc used to describe).
+            bool cluster = WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.Cluster) >= 1;
 
             for (int i = 0; i < salvoCount; i++)
                 PlayerRocket.Fire(transform.position, target.transform, RocketSpeed, damage, splash, cluster);

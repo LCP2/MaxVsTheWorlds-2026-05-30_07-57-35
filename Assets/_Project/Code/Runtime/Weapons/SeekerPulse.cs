@@ -34,6 +34,8 @@ namespace MaxWorlds.Weapons
         private float _lifetime;
         private float _age;
         private Action<RobotEnemy, float> _onHit;
+        private Action<RobotEnemy, Vector3> _onKill;
+        private bool _canFork;
         private bool _spent;
 
         // Reused every tick so the per-frame obstruction check (below) allocates nothing, the same
@@ -51,13 +53,20 @@ namespace MaxWorlds.Weapons
         /// <summary>
         /// Fire one pulse from <paramref name="origin"/> along <paramref name="aimDir"/>. Locks at fire
         /// time onto the nearest awake <see cref="RobotEnemy"/> within <paramref name="lockRange"/> and
-        /// <paramref name="lockHalfAngleDeg"/> of the aim direction; flies straight and dies at its
-        /// lifetime if none qualifies. <paramref name="onHit"/> (optional) lets the weapon track its own
-        /// Shock combo per target without this projectile knowing anything about that mechanic.
+        /// <paramref name="lockHalfAngleDeg"/> of the aim direction (unless <paramref name="forcedTarget"/>
+        /// is given — MV-768 FORK's own release at a specific robot, no cone check); flies straight and
+        /// dies at its lifetime if none qualifies. <paramref name="onHit"/> (optional) lets the weapon
+        /// track its own Shock combo per target without this projectile knowing anything about that
+        /// mechanic. <paramref name="onKill"/> (optional, MV-768 FORK) fires once, in addition to
+        /// <paramref name="onHit"/>, the instant a hit this pulse lands actually kills its target — but
+        /// only while <paramref name="canFork"/> is true; a pulse fired with it false (a fork's own
+        /// release) can still land a kill, it just never reports one, so FORK can never chain off its
+        /// own forked pulse.
         /// </summary>
         public static SeekerPulse Fire(Vector3 origin, Vector3 aimDir, float speed, float turnRateDegPerSec,
             float lifetime, float damage, float lockRange, float lockHalfAngleDeg,
-            Action<RobotEnemy, float> onHit = null)
+            Action<RobotEnemy, float> onHit = null, RobotEnemy forcedTarget = null, bool canFork = true,
+            Action<RobotEnemy, Vector3> onKill = null)
         {
             aimDir.y = 0f;
             if (aimDir.sqrMagnitude < 1e-4f) aimDir = Vector3.forward;
@@ -68,11 +77,13 @@ namespace MaxWorlds.Weapons
             go.transform.rotation = Quaternion.LookRotation(aimDir, Vector3.up);
             BuildVisual(go.transform);
 
-            RobotEnemy target = AcquireTarget(origin, aimDir, lockRange, lockHalfAngleDeg);
+            RobotEnemy target = forcedTarget != null
+                ? forcedTarget
+                : AcquireTarget(origin, aimDir, lockRange, lockHalfAngleDeg);
             LockBracketVfx.Show(target);   // MV-702: the reticle bracket MV-708 deferred as this ticket's own
 
             var pulse = go.AddComponent<SeekerPulse>();
-            pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit);
+            pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit, onKill, canFork);
             return pulse;
         }
 
@@ -111,7 +122,7 @@ namespace MaxWorlds.Weapons
         }
 
         private void Init(RobotEnemy target, float speed, float turnRateDegPerSec, float lifetime,
-            float damage, Action<RobotEnemy, float> onHit)
+            float damage, Action<RobotEnemy, float> onHit, Action<RobotEnemy, Vector3> onKill, bool canFork)
         {
             _target = target;
             _targetDamageable = target;
@@ -120,6 +131,8 @@ namespace MaxWorlds.Weapons
             _lifetime = lifetime;
             _damage = damage;
             _onHit = onHit;
+            _onKill = onKill;
+            _canFork = canFork;
         }
 
         private void Update() => Tick(Time.deltaTime);
@@ -222,9 +235,17 @@ namespace MaxWorlds.Weapons
         {
             if (_targetDamageable != null && _targetDamageable.IsAlive)
             {
-                _targetDamageable.TakeDamage(new DamageInfo(_damage, transform.position, transform.forward,
+                RobotEnemy killedTarget = _target;
+                Vector3 point = transform.position;
+                _targetDamageable.TakeDamage(new DamageInfo(_damage, point, transform.forward,
                     Team.Player, source: DamageSource.PrimaryWeapon));
-                _onHit?.Invoke(_target, _damage);
+                _onHit?.Invoke(killedTarget, _damage);
+
+                // MV-768 FORK: TakeDamage above is synchronous, so a kill is already reflected in
+                // IsAlive by the time we check it here -- see RobotEnemy.TakeDamage/Die. _canFork is
+                // false for a pulse FORK itself released (see Fire's own doc), so a forked pulse's own
+                // kill never reports one -- the "must not chain" rule.
+                if (_canFork && !killedTarget.IsAlive) _onKill?.Invoke(killedTarget, point);
             }
             Retire();
         }

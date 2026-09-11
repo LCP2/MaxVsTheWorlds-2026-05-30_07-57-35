@@ -264,6 +264,21 @@ namespace MaxWorlds.Weapons
         /// and Reload cap at 3 (same shape as the Water Balloon's own three tracks).</summary>
         public static int MaxLevel(ShoulderRackTrackKind kind) => kind == ShoulderRackTrackKind.RocketDamage ? 4 : 3;
 
+        /// <summary>The level cap for a LPPE-only track (MV-768), matching <c>rig_board.world2.json</c>'s
+        /// own per-node <c>maxLevel</c> — RATE caps at 4, FORK at 1.</summary>
+        public static int MaxLevel(LppeTrackKind kind) => kind == LppeTrackKind.Rate ? 4 : 1;
+
+        /// <summary>The LPPE's fire interval at a given RATE (<c>p_rof</c>) level, seconds (MV-768,
+        /// board comment: "fire rate 0.22s -&gt; 0.16s over these 4 levels") — linearly interpolated from
+        /// <paramref name="baseInterval"/> at level 0 down to <paramref name="floorInterval"/> at
+        /// <paramref name="maxLevel"/>. Unlike the RCDA's owned-from-level-1 tracks
+        /// (<see cref="EffectiveRange"/>, <see cref="EffectiveDamagePerTick"/>), RATE starts UNOWNED at
+        /// level 0 and its base interval IS the level-0 reading, so this interpolates over the full
+        /// 0..maxLevel span rather than the usual 1..maxLevel one.</summary>
+        public static float EffectivePulseInterval(float baseInterval, int rateLevel, float floorInterval, int maxLevel) =>
+            Mathf.Lerp(baseInterval, floorInterval,
+                Mathf.Clamp01((float)Mathf.Max(0, rateLevel) / Mathf.Max(1, maxLevel)));
+
         /// <summary>Base cooldown, seconds. Teleport is the only remaining AbilityKind with an
         /// on-screen control (spec §6a) and a real cooldown — Water Balloon's own base cooldown moved
         /// to <see cref="WaterBalloonBaseCooldownSeconds"/> when MV-370 made it a primary add-on; Speed

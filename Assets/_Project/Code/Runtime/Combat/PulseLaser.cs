@@ -26,6 +26,10 @@ namespace MaxWorlds.Combat
         public const float DefaultLockRange = 14f;
         public const float DefaultLockHalfAngle = 35f;
 
+        /// <summary>MV-768 RATE (<c>p_rof</c>): the fire interval a maxed track reaches (board comment:
+        /// "0.22s -&gt; 0.16s over these 4 levels").</summary>
+        public const float DefaultRateFloorInterval = 0.16f;
+
         /// <summary>Flat per-pulse cost from the same tank shape as <see cref="BlasterTuning"/> (spec:
         /// "2.7 per pulse ... matching the RCDA drain") — at the authored 0.22s cadence this is ~12.3/s,
         /// within a hair of the RCDA's own 12.16/s (<see cref="BlasterTuning.EnergyPerSecond"/>).</summary>
@@ -73,7 +77,13 @@ namespace MaxWorlds.Combat
         public float EffectiveDamagePerPulse => WeaponCatalog.EffectiveDamagePerTick(
             damagePerPulse, WeaponSystemState.TrackLevel(WeaponTrackKind.Damage), WeaponCatalog.DefaultRcdaDamagePerLevel);
 
-        public float PulseInterval => pulseInterval;
+        /// <summary>The interval between pulses right now — scaled by RATE (<c>p_rof</c>, MV-768),
+        /// exactly as <see cref="EffectiveDamagePerPulse"/>/<see cref="LockRange"/> are scaled by
+        /// Damage/Range. Routed through <see cref="WeaponSystemState"/>, never <see cref="RigState"/>
+        /// directly, same rule every other track here follows.</summary>
+        public float PulseInterval => WeaponCatalog.EffectivePulseInterval(
+            pulseInterval, WeaponSystemState.LppeTrackLevel(LppeTrackKind.Rate), DefaultRateFloorInterval,
+            WeaponCatalog.MaxLevel(LppeTrackKind.Rate));
 
         /// <summary>Energy one pulse costs — a flat authored number (spec), not track-scaled the way
         /// the RCDA's per-tick cost is.</summary>
@@ -94,6 +104,11 @@ namespace MaxWorlds.Combat
         /// <summary>The pulse the most recent <see cref="FireTick"/> spawned, or null before the first
         /// shot — the same "public accessor for a test" idiom as <c>HomingMissile.ShaftColorForTests</c>.</summary>
         public SeekerPulse LastSpawnedPulseForTests { get; private set; }
+
+        /// <summary>MV-768 FORK (<c>p_frk</c>): the pulse most recently released by
+        /// <see cref="RegisterKill"/>, or null if none has fired yet — the resolved value the ticket's
+        /// own test asserts against, same idiom as <see cref="LastSpawnedPulseForTests"/>.</summary>
+        public SeekerPulse LastForkedPulseForTests { get; private set; }
 
         private void Awake()
         {
@@ -144,7 +159,7 @@ namespace MaxWorlds.Combat
 
             _tickTimer -= dt;
             if (_tickTimer > 0f) return;
-            _tickTimer = pulseInterval;
+            _tickTimer = PulseInterval;
 
             if (!_tank.TrySpend(cost)) return;
             FireTick();
@@ -183,7 +198,8 @@ namespace MaxWorlds.Combat
             Vector3 dir = transform.forward;
 
             SeekerPulse pulse = SeekerPulse.Fire(origin, dir, DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec,
-                DefaultPulseLifetime, EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit);
+                DefaultPulseLifetime, EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
+                onKill: RegisterKill);
             LastSpawnedPulseForTests = pulse;
 
             // MV-758: the muzzle punctuation — one per shot, under 0.22s cadence so it can't smear.
@@ -210,6 +226,49 @@ namespace MaxWorlds.Combat
             // "pos + Vector3.up * 0.6f" convention) — landing the flash there instead reads as hitting
             // the floor, not the robot.
             if (_vfx != null) _vfx.Impact(target.transform.position + Vector3.up * 0.6f, damage, isShockHit);
+        }
+
+        /// <summary>MV-768 FORK (<c>p_frk</c>): a pulse whose damage KILLED its locked target releases
+        /// one further pulse at the nearest OTHER valid target within the LPPE's current lock range,
+        /// fired from the kill point. Never chains — <see cref="SeekerPulse.Fire"/> is called with
+        /// <c>canFork: false</c>, so however many targets the forked pulse itself goes on to kill, it
+        /// can never trigger a further fork (the board comment's own "must not chain" rule, enforced by
+        /// <see cref="SeekerPulse.ApplyHit"/> never reporting a kill for a pulse fired that way).</summary>
+        private void RegisterKill(RobotEnemy killedTarget, Vector3 point)
+        {
+            if (WeaponSystemState.LppeTrackLevel(LppeTrackKind.Fork) < 1) return;
+
+            RobotEnemy next = NearestOtherAliveRobotInRange(killedTarget, point, LockRange);
+            if (next == null) return;
+
+            LastForkedPulseForTests = SeekerPulse.Fire(point, next.transform.position - point,
+                DefaultPulseSpeed, DefaultPulseTurnRateDegPerSec, DefaultPulseLifetime,
+                EffectiveDamagePerPulse, LockRange, DefaultLockHalfAngle, RegisterHit,
+                forcedTarget: next, canFork: false);
+        }
+
+        /// <summary>The nearest alive, awake robot other than <paramref name="exclude"/> within
+        /// <paramref name="range"/> of <paramref name="from"/> — FORK's own target pick. No lock-cone
+        /// angle check: the cone gates the ORIGINAL shot's acquisition; a fork is a direct release at
+        /// whatever else is nearby, same shape as <see cref="SeekerPulse"/>'s own
+        /// <c>AcquireTarget</c> minus the angle term.</summary>
+        private static RobotEnemy NearestOtherAliveRobotInRange(RobotEnemy exclude, Vector3 from, float range)
+        {
+            var active = RobotEnemy.Active;
+            RobotEnemy best = null;
+            float bestSq = float.MaxValue;
+            float rangeSq = range * range;
+
+            for (int i = 0; i < active.Count; i++)
+            {
+                RobotEnemy candidate = active[i];
+                if (candidate == null || candidate == exclude || !candidate.IsAlive || candidate.IsDormant) continue;
+
+                float distSq = (candidate.transform.position - from).sqrMagnitude;
+                if (distSq > rangeSq) continue;
+                if (distSq < bestSq) { bestSq = distSq; best = candidate; }
+            }
+            return best;
         }
 
 #if UNITY_EDITOR
