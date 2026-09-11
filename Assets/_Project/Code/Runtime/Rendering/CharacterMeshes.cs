@@ -186,6 +186,132 @@ namespace MaxWorlds.VFX
         public static Mesh Beam(float length, float rBottom, float rTop, int sides = 8)
             => Prism(sides, rBottom, rTop, length, 0.10f);
 
+        // ------------------------------------------------------------------ Bevelled box (MV-778)
+
+        /// <summary>
+        /// A box of <paramref name="size"/> with all 12 edges chamfered inward by
+        /// <paramref name="bevel"/> metres — the environment's answer to <see cref="Prism"/>: a Unity
+        /// primitive cube has a perfectly sharp 90 degree edge that catches no light, so every wall,
+        /// kerb and cover block built from one reads as a flat silhouette. This is the fix, applied to
+        /// the box shape instead of the tapered-housing shape.
+        ///
+        /// Six shrunk faces, twelve flat bevel strips and eight corner triangles, each with its own
+        /// vertices — never shared across facets, which is what makes the shading HARD rather than
+        /// smoothed (a smoothed chamfer reads as a blurry cube, not a machined edge). The bounds still
+        /// come out to exactly <paramref name="size"/>: every corner triangle has one vertex sitting on
+        /// the box's true extreme in one axis, so the chamfer cuts in, it never inflates the box.
+        /// </summary>
+        public static Mesh Bevelled(Vector3 size, float bevel)
+        {
+            int key = Hash(3, 0, new[] { new Vector2(size.x, size.y), new Vector2(size.z, bevel) });
+            if (Cache.TryGetValue(key, out Mesh hit)) return hit;
+
+            float hx = size.x * 0.5f, hy = size.y * 0.5f, hz = size.z * 0.5f;
+            float b = Mathf.Clamp(bevel, 0f, Mathf.Min(hx, Mathf.Min(hy, hz)) * 0.99f);
+
+            var verts = new List<Vector3>(96);
+            var tris = new List<int>(144);
+
+            // 6 flat faces, each shrunk by b on the two axes perpendicular to its own normal.
+            AddQuad(verts, tris,
+                new Vector3(hx, -(hy - b), -(hz - b)), new Vector3(hx, -(hy - b), (hz - b)),
+                new Vector3(hx, (hy - b), (hz - b)), new Vector3(hx, (hy - b), -(hz - b)),
+                new Vector3(1f, 0f, 0f));
+            AddQuad(verts, tris,
+                new Vector3(-hx, -(hy - b), -(hz - b)), new Vector3(-hx, -(hy - b), (hz - b)),
+                new Vector3(-hx, (hy - b), (hz - b)), new Vector3(-hx, (hy - b), -(hz - b)),
+                new Vector3(-1f, 0f, 0f));
+            AddQuad(verts, tris,
+                new Vector3(-(hx - b), hy, -(hz - b)), new Vector3((hx - b), hy, -(hz - b)),
+                new Vector3((hx - b), hy, (hz - b)), new Vector3(-(hx - b), hy, (hz - b)),
+                new Vector3(0f, 1f, 0f));
+            AddQuad(verts, tris,
+                new Vector3(-(hx - b), -hy, -(hz - b)), new Vector3((hx - b), -hy, -(hz - b)),
+                new Vector3((hx - b), -hy, (hz - b)), new Vector3(-(hx - b), -hy, (hz - b)),
+                new Vector3(0f, -1f, 0f));
+            AddQuad(verts, tris,
+                new Vector3(-(hx - b), -(hy - b), hz), new Vector3((hx - b), -(hy - b), hz),
+                new Vector3((hx - b), (hy - b), hz), new Vector3(-(hx - b), (hy - b), hz),
+                new Vector3(0f, 0f, 1f));
+            AddQuad(verts, tris,
+                new Vector3(-(hx - b), -(hy - b), -hz), new Vector3((hx - b), -(hy - b), -hz),
+                new Vector3((hx - b), (hy - b), -hz), new Vector3(-(hx - b), (hy - b), -hz),
+                new Vector3(0f, 0f, -1f));
+
+            // 12 edge bevels — one per (free axis, pair of signs on the other two axes).
+            foreach (float sx in Signs)
+                foreach (float sz in Signs)   // free axis Y: between the X face and the Z face
+                    AddQuad(verts, tris,
+                        new Vector3(sx * hx, -(hy - b), sz * (hz - b)), new Vector3(sx * hx, (hy - b), sz * (hz - b)),
+                        new Vector3(sx * (hx - b), hy, sz * hz), new Vector3(sx * (hx - b), -(hy - b), sz * hz),
+                        new Vector3(sx, 0f, sz));
+
+            foreach (float sx in Signs)
+                foreach (float sy in Signs)   // free axis Z: between the X face and the Y face
+                    AddQuad(verts, tris,
+                        new Vector3(sx * hx, sy * (hy - b), -(hz - b)), new Vector3(sx * hx, sy * (hy - b), (hz - b)),
+                        new Vector3(sx * (hx - b), sy * hy, (hz - b)), new Vector3(sx * (hx - b), sy * hy, -(hz - b)),
+                        new Vector3(sx, sy, 0f));
+
+            foreach (float sy in Signs)
+                foreach (float sz in Signs)   // free axis X: between the Y face and the Z face
+                    AddQuad(verts, tris,
+                        new Vector3(-(hx - b), sy * hy, sz * (hz - b)), new Vector3((hx - b), sy * hy, sz * (hz - b)),
+                        new Vector3((hx - b), sy * (hy - b), sz * hz), new Vector3(-(hx - b), sy * (hy - b), sz * hz),
+                        new Vector3(0f, sy, sz));
+
+            // 8 corner triangles — one per octant, connecting the three faces that meet there.
+            foreach (float sx in Signs)
+                foreach (float sy in Signs)
+                    foreach (float sz in Signs)
+                        AddTri(verts, tris,
+                            new Vector3(sx * hx, sy * (hy - b), sz * (hz - b)),
+                            new Vector3(sx * (hx - b), sy * hy, sz * (hz - b)),
+                            new Vector3(sx * (hx - b), sy * (hy - b), sz * hz),
+                            new Vector3(sx, sy, sz));
+
+            return Store(key, verts, tris, smooth: false);
+        }
+
+        /// <summary>MV-778's default chamfer: proportional to an object's smallest dimension, clamped
+        /// so a small prop gets a bevel that actually reads and a 6 m wall does not get a 70 cm one.</summary>
+        public static float DefaultBevel(Vector3 size) =>
+            Mathf.Clamp(Mathf.Min(size.x, Mathf.Min(size.y, size.z)) * 0.12f, 0.015f, 0.06f);
+
+        private static readonly float[] Signs = { -1f, 1f };
+
+        /// <summary>Appends a quad as two triangles, picking whichever winding makes the triangles'
+        /// own cross-product normal agree with <paramref name="outward"/> — so every facet culls and
+        /// lights correctly regardless of which order its four corners were written in above.</summary>
+        private static void AddQuad(List<Vector3> verts, List<int> tris,
+                                    Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 outward)
+        {
+            int i = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c); verts.Add(d);
+            bool flip = Vector3.Dot(Vector3.Cross(b - a, c - a), outward) < 0f;
+            if (!flip)
+            {
+                tris.Add(i); tris.Add(i + 1); tris.Add(i + 2);
+                tris.Add(i); tris.Add(i + 2); tris.Add(i + 3);
+            }
+            else
+            {
+                tris.Add(i); tris.Add(i + 2); tris.Add(i + 1);
+                tris.Add(i); tris.Add(i + 3); tris.Add(i + 2);
+            }
+        }
+
+        /// <summary>Same idea as <see cref="AddQuad"/>, for the three-vertex corner facets.</summary>
+        private static void AddTri(List<Vector3> verts, List<int> tris,
+                                   Vector3 a, Vector3 b, Vector3 c, Vector3 outward)
+        {
+            int i = verts.Count;
+            verts.Add(a); verts.Add(b); verts.Add(c);
+            bool flip = Vector3.Dot(Vector3.Cross(b - a, c - a), outward) < 0f;
+            if (!flip) { tris.Add(i); tris.Add(i + 1); tris.Add(i + 2); }
+            else { tris.Add(i); tris.Add(i + 2); tris.Add(i + 1); }
+        }
+
         // ------------------------------------------------------------------ plumbing
 
         private static Mesh Store(int key, List<Vector3> verts, List<int> tris, bool smooth)

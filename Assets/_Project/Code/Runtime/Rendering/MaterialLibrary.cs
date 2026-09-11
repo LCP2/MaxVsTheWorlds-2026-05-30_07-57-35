@@ -327,7 +327,25 @@ namespace MaxWorlds.Rendering
             // reached a fifth of the sway they were given. This is the height of the plants that are
             // actually in the yard, so the plants that are actually in the yard actually bend.
             m.SetFloat("_WindHeight", FoliageBendHeight);
+
+            // MV-778: every surface gets the world's outline except the floor — Ground never reaches
+            // this method (it takes the GroundShader branch above), so "every SurfaceKind except
+            // Ground" falls out of that split for free rather than needing a check here.
+            m.SetFloat("_OutlineOn", 1f);
+            Color floorTone = s_palette.ColorFor(SurfaceKind.Ground);
+            m.SetColor("_OutlineColor", new Color(floorTone.r * OutlineDarken, floorTone.g * OutlineDarken,
+                                                  floorTone.b * OutlineDarken, 1f));
+            m.SetFloat("_OutlineWidth", OutlineWidthSurface);
         }
+
+        /// <summary>The floor's own colour, darkened to roughly this fraction of its luminance, reads
+        /// as the contour of a contact shadow rather than as a line of ink (MV-778).</summary>
+        private const float OutlineDarken = 0.4f;
+
+        /// <summary>Matches the character pass's own default screen-space width (MV-778) — see
+        /// <see cref="OutlineWidth"/> and StylizedCharacter.shader's comment on why this is a fraction
+        /// of clip space, not metres.</summary>
+        private const float OutlineWidthSurface = 0.009f;
 
         /// <summary>Metres of height over which a plant works up to its full bend (YT-78). The yard's
         /// greenery is shrubs, tufts and flower beds, not a forest — a bend curve scaled for a 2.5 m

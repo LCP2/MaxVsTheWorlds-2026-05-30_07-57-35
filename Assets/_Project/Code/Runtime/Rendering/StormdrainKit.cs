@@ -1,5 +1,6 @@
 using UnityEngine;
 using MaxWorlds.Core;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Rendering
 {
@@ -106,7 +107,12 @@ namespace MaxWorlds.Rendering
             go.name = name;
             go.transform.SetParent(parent, false);
             go.transform.localPosition = localPos;
-            go.transform.localScale = size;
+
+            // MV-778: the mesh now carries the box's true size — a chamfered box, not a flat-sided
+            // primitive — so the transform's own scale stays at 1 rather than stretching it again.
+            go.transform.localScale = Vector3.one;
+            go.GetComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, CharacterMeshes.DefaultBevel(size));
+
             Strip(go);
             Paint(go, kind, tone);
             return go;
