@@ -77,15 +77,15 @@ namespace MaxWorlds.Tests.EditMode
         }
 
         /// <summary>
-        /// MV-680: the authored default drop ratio was raised 0.1 -> 0.4 (too conservative for a
-        /// currency that gates both Balloons and Sentinel deployment). Unlike the test above, this
-        /// leaves <c>DevTuning.PowerCellDropRatio</c> unset (nulled by <c>DevTuning.Reset()</c> in
+        /// MV-767: the authored default drop ratio was raised 0.4 -> 1.0 (Rack ammo was the scarcest
+        /// thing in World 2 and the reason the secondary weapon went unused). Unlike the test above,
+        /// this leaves <c>DevTuning.PowerCellDropRatio</c> unset (nulled by <c>DevTuning.Reset()</c> in
         /// SetUp) so <c>PickupDirector</c> must fall through to
         /// <c>CellEconomyTuning.DefaultPowerCellDropRatio</c> on its own — proving the resolved
         /// accumulation rate actually tracks the authored default rather than only ever being
-        /// exercised via an explicit override. The expected multiplier is the literal 0.4 rather than
+        /// exercised via an explicit override. The expected multiplier is the literal 1.0 rather than
         /// a read of the constant itself (which would make the assertion self-referential and unable
-        /// to fail): on the pre-fix base commit the constant is still 0.1, so this fails there and
+        /// to fail): on the pre-MV-767 base commit the constant is still 0.4, so this fails there and
         /// only passes once the default is actually raised.
         /// </summary>
         [Test]
@@ -99,10 +99,10 @@ namespace MaxWorlds.Tests.EditMode
                 KillOneLargeRobot(_director, new Vector3(i, 0f, 0f));
 
             int secondaryDrops = LiveList(_director).Count(p => p.Kind == PickupKind.PowerCellSecondary);
-            int expected = Mathf.FloorToInt(kills * 0.4f);
+            int expected = Mathf.FloorToInt(kills * 1.0f);
 
             Assert.That(secondaryDrops, Is.InRange(expected - 1, expected + 1),
-                $"expected ~{expected} Power Cells across {kills} kills at the authored default ratio (0.4), got {secondaryDrops}");
+                $"expected ~{expected} Power Cells across {kills} kills at the authored default ratio (1.0), got {secondaryDrops}");
         }
     }
 }

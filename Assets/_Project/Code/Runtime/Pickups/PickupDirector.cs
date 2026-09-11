@@ -199,11 +199,22 @@ namespace MaxWorlds.Pickups
             // large kind, and not a periodic count (see IsLastBruiserInArea). MV-427: granted at most
             // once EVER, even across a death that wipes and respawns this same area's robots — without
             // DeathRunState's flag, a restored area's fresh last Bruiser would mint another Supercell and
-            // suicide-farming would be the optimal strategy.
-            if (kind == EnemyKind.Bruiser && IsLastBruiserInArea()
+            // suicide-farming would be the optimal strategy. MV-767: World 2+ only, every SECOND area
+            // (see GrantsSupercellForArea) — World 2's Parts supply was running 2.33x its weapon-board
+            // demand, and the per-area Supercell was 230 of the 828-part total.
+            if (kind == EnemyKind.Bruiser && IsLastBruiserInArea() && GrantsSupercellForArea(ResolveCurrentArea())
                 && MaxWorlds.Arena.DeathRunState.TryGrantAreaPart(ResolveCurrentArea()))
                 SpawnDrop(PickupKind.Supercell, pos, DecorativeKind());
         }
+
+        /// <summary>MV-767: World 1 grants the per-area Supercell every area, as before. World 2+
+        /// grants it on every SECOND area only — halving its contribution to that world's Parts supply
+        /// (828 -&gt; 718, against a 711-part weapon board at the new <see cref="CellSpend"/> multiplier).
+        /// Areas are 1-based (<see cref="ResolveCurrentArea"/>), so shifting to a 0-based index before
+        /// checking parity grants on areas 1, 3, 5... — the first area of a World 2+ run is never
+        /// shorted relative to World 1.</summary>
+        private static bool GrantsSupercellForArea(int areaIndex) =>
+            RigBoard.ActiveWorldIndex < 1 || (areaIndex - 1) % 2 == 0;
 
         /// <summary>How many cells drop for the large kill just reported (MV-375). Prefers the
         /// authored per-area budget (<see cref="CellEconomyTuning.CellsForArea"/>), spread evenly
