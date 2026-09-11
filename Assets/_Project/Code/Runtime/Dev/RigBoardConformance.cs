@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using System.Globalization;
 using UnityEngine;
 
@@ -201,5 +202,124 @@ namespace MaxWorlds.Dev
 
         public static string PassFailLine(string checkName, bool pass, string detail) =>
             $"{(pass ? "PASS" : "FAIL")} {checkName}: {detail}";
+    }
+
+    /// <summary>
+    /// MV-777 — the gate that should have caught every World 2 visual failure: every ticket that
+    /// touched the Stormdrain kit passed its own acceptance criteria while the actual frame collapsed
+    /// to 10 luma of usable contrast, because every one of those criteria counted objects instead of
+    /// measuring the image. This is a pure function over a <see cref="Texture2D"/> — no scene, no
+    /// camera — so it runs identically whether it is checking a synthetic EditMode texture or a real
+    /// capture PNG loaded off disk, and can be dropped into any capture preset that renders a play
+    /// frame as a blocking check, the same class as <c>cc-verify</c>'s frame-rate assertion.
+    /// </summary>
+    public static class FrameContrastGate
+    {
+        /// <summary>Below this p95-p5 luma range, the frame reads as one value with noise on it.</summary>
+        public const float MinRange = 90f;
+
+        /// <summary>How close (in luma) to the median a pixel has to be to count as "the same value"
+        /// for <see cref="Result.MedianBandShare"/>.</summary>
+        public const float MedianBandHalfWidth = 12f;
+
+        /// <summary>Above this share of the frame sitting within <see cref="MedianBandHalfWidth"/> of
+        /// the median, the frame is dominated by one value regardless of its overall range.</summary>
+        public const float MaxMedianBandShare = 0.60f;
+
+        /// <summary>Width of one luma tier bucket.</summary>
+        public const float TierBandWidth = 20f;
+
+        /// <summary>A tier only counts if it holds at least this share of the sampled frame — a
+        /// stray handful of outlier pixels must not manufacture a tier that was never actually there.</summary>
+        public const float TierMinShare = 0.04f;
+
+        public const int MinDistinctTiers = 4;
+
+        public readonly struct Result
+        {
+            public readonly float RangeP95P5;
+            public readonly float MedianBandShare;
+            public readonly int DistinctTiers;
+            public readonly bool Pass;
+            public readonly string FailReason;
+
+            public Result(float rangeP95P5, float medianBandShare, int distinctTiers, bool pass, string failReason)
+            {
+                RangeP95P5 = rangeP95P5;
+                MedianBandShare = medianBandShare;
+                DistinctTiers = distinctTiers;
+                Pass = pass;
+                FailReason = failReason;
+            }
+
+            public override string ToString() =>
+                $"range={RigBoardConformance.Fmt(RangeP95P5)} medianBandShare={RigBoardConformance.Fmt(MedianBandShare * 100f)}% " +
+                $"tiers={DistinctTiers} pass={Pass}" + (FailReason == null ? "" : $" ({FailReason})");
+        }
+
+        /// <summary>
+        /// Computes the play-area luminance histogram of <paramref name="tex"/> — sampled every
+        /// <paramref name="step"/> pixels, excluding the outer <paramref name="marginFrac"/> of the
+        /// frame on every side (the skybox wedge / HUD margin a real capture would need cropped out) —
+        /// and evaluates it against the three MV-777 thresholds: usable range, median-band dominance,
+        /// and distinct value tiers.
+        /// </summary>
+        public static Result Check(Texture2D tex, float marginFrac = 0.10f, int step = 4)
+        {
+            int w = tex.width, h = tex.height;
+            int mx = Mathf.RoundToInt(w * marginFrac);
+            int my = Mathf.RoundToInt(h * marginFrac);
+
+            var lumas = new List<float>();
+            for (int y = my; y < h - my; y += step)
+                for (int x = mx; x < w - mx; x += step)
+                {
+                    Color c = tex.GetPixel(x, y);
+                    lumas.Add((0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * 255f);
+                }
+
+            if (lumas.Count == 0) return new Result(0f, 1f, 0, false, "no pixels sampled inside the margin");
+
+            lumas.Sort();
+            float p5 = Percentile(lumas, 0.05f);
+            float p95 = Percentile(lumas, 0.95f);
+            float range = p95 - p5;
+            float median = Percentile(lumas, 0.5f);
+
+            int withinMedianBand = 0;
+            foreach (float l in lumas)
+                if (Mathf.Abs(l - median) <= MedianBandHalfWidth) withinMedianBand++;
+            float medianShare = (float)withinMedianBand / lumas.Count;
+
+            var bandCounts = new Dictionary<int, int>();
+            foreach (float l in lumas)
+            {
+                int band = Mathf.FloorToInt(l / TierBandWidth);
+                bandCounts.TryGetValue(band, out int count);
+                bandCounts[band] = count + 1;
+            }
+            int tiers = 0;
+            foreach (var kv in bandCounts)
+                if ((float)kv.Value / lumas.Count >= TierMinShare) tiers++;
+
+            var reasons = new List<string>();
+            if (range < MinRange) reasons.Add($"range {RigBoardConformance.Fmt(range)} < {RigBoardConformance.Fmt(MinRange)}");
+            if (medianShare > MaxMedianBandShare) reasons.Add($"median-band share {RigBoardConformance.Fmt(medianShare * 100f)}% > {RigBoardConformance.Fmt(MaxMedianBandShare * 100f)}%");
+            if (tiers < MinDistinctTiers) reasons.Add($"only {tiers} distinct tiers (need {MinDistinctTiers})");
+
+            bool pass = reasons.Count == 0;
+            return new Result(range, medianShare, tiers, pass, pass ? null : string.Join("; ", reasons));
+        }
+
+        /// <summary>Linear-interpolated percentile over an already-sorted list.</summary>
+        private static float Percentile(List<float> sorted, float p)
+        {
+            if (sorted.Count == 1) return sorted[0];
+            float idx = p * (sorted.Count - 1);
+            int lo = Mathf.FloorToInt(idx);
+            int hi = Mathf.CeilToInt(idx);
+            if (lo == hi) return sorted[lo];
+            return Mathf.Lerp(sorted[lo], sorted[hi], idx - lo);
+        }
     }
 }
