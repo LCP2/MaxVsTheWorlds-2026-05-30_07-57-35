@@ -72,7 +72,37 @@ namespace MaxWorlds.Rendering
         /// <summary>Cyan status lamps on machinery. The cold counterpoint to all that rust.</summary>
         public static readonly Color Status = new Color(0.35f, 0.85f, 0.95f);
 
+        /// <summary>The recessed panel-joint line (MV-781, change 2) — roughly half the floor's own
+        /// resolved luminance, sitting deliberately between the floor and <see cref="Soffit"/>.</summary>
+        public static readonly Color PanelJoint = new Color(0.028f, 0.033f, 0.029f);
+
+        /// <summary>Silt (MV-781, change 3) — warm-neutral, about 1.5x the floor's luminance.</summary>
+        public static readonly Color Silt = new Color(0.13f, 0.12f, 0.10f);
+
+        /// <summary>Standing water (MV-781, change 3) — green-shifted toward <see cref="Sludge"/>'s
+        /// hue, about 2.2x the floor's luminance so it reads as the brightest thing on the ground.</summary>
+        public static readonly Color StandingWater = new Color(0.50f, 0.68f, 0.24f);
+
         // ---------------------------------------------------------------- dimensions
+
+        /// <summary>A grate's built footprint (MV-781) — matches <c>WorldGrate</c>'s own authored 1x1
+        /// tile (the same tile <c>MapValidation.WorldLurkerGrates</c> already treats a Lurker as
+        /// occupying anywhere within).</summary>
+        public const float GrateSize = 1f;
+        public const float GrateFrameOuter = 1.0f;
+        public const float GrateFrameInner = 0.86f;
+        public const float GrateFrameHeight = 0.10f;
+        public const int GrateGrilleBarCount = 7;
+        public const float GrateGrilleBarWidth = 0.055f;
+        public const float GrateGrilleBarHeight = 0.06f;
+        public const float GrateGrilleBarLength = 0.86f;
+
+        public const float PanelJointWidth = 0.10f;
+        public const float PanelJointThickness = 0.06f;
+        public const float PanelJointSunk = 0.02f;
+
+        public const float FloorPatchLift = 0.015f;
+        public const float FloorPatchThickness = 0.03f;
 
         public const float KerbHeight = 0.45f;
         public const float KerbDepth = 0.32f;
@@ -512,6 +542,83 @@ namespace MaxWorlds.Rendering
                 sack.transform.localRotation = Quaternion.Euler(0f, (Frac(seed + i * 0.17f) - 0.5f) * 18f, 0f);
             }
             return root;
+        }
+
+        // ---------------------------------------------------------------- floor pieces (MV-781)
+
+        /// <summary>Builds one authored grate: a recessed rust frame, a 7-bar soffit-dark grille and
+        /// an unlit void beneath it, flush with the floor at <paramref name="floorTopY"/>.
+        /// <paramref name="cornerXZ"/> is the tile's own MIN corner (WorldGrate's authored point,
+        /// matching MapValidation's [x, x+1] x [z, z+1] convention) — the geometry itself is built
+        /// centred on the tile, at cornerXZ + (0.5, 0.5), while the caller (MapRuntime) keeps the
+        /// entity's own recorded position at the authored corner.</summary>
+        public static GameObject BuildGrate(Transform parent, string name, Vector2 cornerXZ, float floorTopY = 0f)
+        {
+            var root = new GameObject(name);
+            root.transform.SetParent(parent, false);
+            root.transform.position = new Vector3(cornerXZ.x + GrateSize * 0.5f, floorTopY, cornerXZ.y + GrateSize * 0.5f);
+            // MV-781: built directly under the map root, not under the "Stormdrain Dressing" host that
+            // already carries one — this needs its own, or WorldMaterials' generic shape sweep would
+            // repaint every rust/soffit tone here back to a flat biome colour.
+            root.AddComponent<KeepsOwnMaterial>();
+
+            float thickness = (GrateFrameOuter - GrateFrameInner) * 0.5f;
+            float ringOffset = GrateFrameInner * 0.5f + thickness * 0.5f;
+            float frameY = -GrateFrameHeight * 0.5f;
+
+            Box(root.transform, "Frame N", new Vector3(0f, frameY, ringOffset),
+                new Vector3(GrateFrameOuter, GrateFrameHeight, thickness), Rust, SurfaceKind.Metal);
+            Box(root.transform, "Frame S", new Vector3(0f, frameY, -ringOffset),
+                new Vector3(GrateFrameOuter, GrateFrameHeight, thickness), Rust, SurfaceKind.Metal);
+            Box(root.transform, "Frame E", new Vector3(ringOffset, frameY, 0f),
+                new Vector3(thickness, GrateFrameHeight, GrateFrameInner), Rust, SurfaceKind.Metal);
+            Box(root.transform, "Frame W", new Vector3(-ringOffset, frameY, 0f),
+                new Vector3(thickness, GrateFrameHeight, GrateFrameInner), Rust, SurfaceKind.Metal);
+
+            for (int i = 0; i < GrateGrilleBarCount; i++)
+            {
+                float t = (i + 0.5f) / GrateGrilleBarCount - 0.5f;
+                Box(root.transform, $"Grille Bar{i}",
+                    new Vector3(t * GrateFrameInner, -GrateGrilleBarHeight * 0.5f, 0f),
+                    new Vector3(GrateGrilleBarWidth, GrateGrilleBarHeight, GrateGrilleBarLength), Soffit, SurfaceKind.Metal);
+            }
+
+            Glow(root.transform, "Void", new Vector3(0f, -GrateFrameHeight * 0.85f, 0f),
+                 new Vector3(GrateFrameInner, GrateFrameInner, 1f), Quaternion.Euler(90f, 0f, 0f), Soffit);
+
+            return root;
+        }
+
+        /// <summary>A recessed panel-joint strip (MV-781, change 2) — sunk <see cref="PanelJointSunk"/>
+        /// below the floor's own top so it reads as a cut line, not a raised rib.</summary>
+        public static GameObject BuildPanelJoint(Transform parent, Rect worldRect, float floorTopY = 0f)
+        {
+            Vector3 center = new Vector3(worldRect.center.x,
+                floorTopY - PanelJointSunk - PanelJointThickness * 0.5f, worldRect.center.y);
+            return Box(parent, "Panel Joint", center,
+                new Vector3(worldRect.width, PanelJointThickness, worldRect.height), PanelJoint);
+        }
+
+        /// <summary>A silt or standing-water patch (MV-781, change 3) — a thin flat slab lifted
+        /// <see cref="FloorPatchLift"/> above the floor. Standing water gets a raised smoothness on
+        /// its own material instance so the key catches it, per the ticket's own wording.</summary>
+        public static GameObject BuildFloorPatch(Transform parent, Rect worldRect, bool isWater, float floorTopY = 0f)
+        {
+            Color tone = isWater ? StandingWater : Silt;
+            Vector3 center = new Vector3(worldRect.center.x,
+                floorTopY + FloorPatchLift + FloorPatchThickness * 0.5f, worldRect.center.y);
+            GameObject go = Box(parent, isWater ? "Standing Water" : "Silt", center,
+                new Vector3(worldRect.width, FloorPatchThickness, worldRect.height), tone,
+                isWater ? SurfaceKind.Prop : SurfaceKind.Dirt);
+
+            if (isWater)
+            {
+                Material mat = go.GetComponent<Renderer>()?.sharedMaterial;
+                if (mat != null && mat.HasProperty("_Smoothness"))
+                    mat.SetFloat("_Smoothness", Mathf.Max(mat.GetFloat("_Smoothness"), 0.55f));
+            }
+
+            return go;
         }
 
         // ---------------------------------------------------------------- sludge dressing

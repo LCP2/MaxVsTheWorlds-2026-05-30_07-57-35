@@ -119,8 +119,192 @@ namespace MaxWorlds.Arena
 
             int tiles = DressSludge(root, map);
 
+            DressFloorComposition(root, map);
+
             return new DressReport(kerbs, pipes, lamps, soffits, coverProps, tiles, kinds.Count);
         }
+
+        // ---------------------------------------------------------------- floor composition (MV-781)
+
+        /// <summary>Panel joints every this many metres, phased off world position (not each area's own
+        /// origin) so the grid is continuous across an area boundary.</summary>
+        private const float JointSpacing = 3.2f;
+
+        /// <summary>The entity kinds whose rects a joint or patch must never cross (the ticket's own
+        /// list) — all already resolved to world-space centre/size by <see cref="WorldMapLoader"/>.</summary>
+        private static bool IsFloorObstacle(EntityKind kind) =>
+            kind == EntityKind.Grate || kind == EntityKind.Deck || kind == EntityKind.Ramp ||
+            kind == EntityKind.Hatch || kind == EntityKind.Sludge;
+
+        private static List<Rect> FloorObstacles(MapData map)
+        {
+            var rects = new List<Rect>();
+            if (map.entities == null) return rects;
+            foreach (MapEntity e in map.entities)
+            {
+                if (e == null || !IsFloorObstacle(e.Kind)) continue;
+
+                // A Grate's x/z is its authored MIN CORNER (WorldGrate's own doc comment; WorldMapLoader
+                // carries it onto the entity unchanged) — every other obstacle kind here (Deck/Ramp/
+                // Hatch/Sludge) is centre-authored by WorldMapLoader, so only Grate needs the different
+                // corner-to-rect conversion.
+                Rect r = e.Kind == EntityKind.Grate
+                    ? new Rect(e.x, e.z, e.width, e.depth)
+                    : new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+                rects.Add(r);
+            }
+            return rects;
+        }
+
+        /// <summary>Builds every floor-level zone's panel joints (change 2) and silt/standing-water
+        /// patches (change 3) — skipped for a <see cref="MapZone.level"/> &gt; 0 zone (a deck overlay
+        /// shares its target's floor, MV-697, so it never gets a second pass of it).</summary>
+        private static void DressFloorComposition(Transform root, MapData map)
+        {
+            if (map.zones == null) return;
+
+            var floorHost = new GameObject("Floor Composition").transform;
+            floorHost.SetParent(root, false);
+
+            List<Rect> obstacles = FloorObstacles(map);
+
+            foreach (MapZone zone in map.zones)
+            {
+                if (zone == null || zone.level > 0) continue;
+                Rect zoneRect = zone.Footprint;
+
+                foreach (Rect seg in JointRects(zoneRect, obstacles))
+                    StormdrainKit.BuildPanelJoint(floorHost, seg);
+
+                foreach ((Rect rect, bool isWater) in PatchRects(zoneRect, zone.id, obstacles))
+                    StormdrainKit.BuildFloorPatch(floorHost, rect, isWater);
+            }
+        }
+
+        /// <summary>Panel-joint segments for one floor zone's rect (MV-781, change 2): a recessed line
+        /// every <see cref="JointSpacing"/> metres on both axes, split into one segment per bay so a
+        /// segment that would cross an obstacle can be dropped without breaking the rest of the line.
+        /// Pure function of its inputs — calling it twice for the same zone/obstacles is how
+        /// <c>MV781FloorCompositionTests</c> proves the layout is deterministic, not re-rolled.</summary>
+        public static List<Rect> JointRects(Rect zone, IReadOnlyList<Rect> obstacles)
+        {
+            var result = new List<Rect>();
+            AddJointAxis(result, zone, obstacles, alongX: true);
+            AddJointAxis(result, zone, obstacles, alongX: false);
+            return result;
+        }
+
+        private static void AddJointAxis(List<Rect> result, Rect zone, IReadOnlyList<Rect> obstacles, bool alongX)
+        {
+            // alongX: the joint LINE runs parallel to Z at a fixed X (a "vertical" line on the floor
+            // plan); otherwise the line runs parallel to X at a fixed Z.
+            float lineMin = alongX ? zone.xMin : zone.yMin;
+            float lineMax = alongX ? zone.xMax : zone.yMax;
+            float spanMin = alongX ? zone.yMin : zone.xMin;
+            float spanMax = alongX ? zone.yMax : zone.xMax;
+
+            float firstLine = Mathf.Ceil((lineMin + 0.01f) / JointSpacing) * JointSpacing;
+            for (float line = firstLine; line < lineMax - 0.01f; line += JointSpacing)
+            {
+                float firstBay = Mathf.Floor(spanMin / JointSpacing) * JointSpacing;
+                for (float bayStart = firstBay; bayStart < spanMax - 0.01f; bayStart += JointSpacing)
+                {
+                    float segMin = Mathf.Max(bayStart, spanMin);
+                    float segMax = Mathf.Min(bayStart + JointSpacing, spanMax);
+                    if (segMax - segMin < 0.05f) continue;
+
+                    Rect seg = alongX
+                        ? new Rect(line - StormdrainKit.PanelJointWidth * 0.5f, segMin, StormdrainKit.PanelJointWidth, segMax - segMin)
+                        : new Rect(segMin, line - StormdrainKit.PanelJointWidth * 0.5f, segMax - segMin, StormdrainKit.PanelJointWidth);
+
+                    if (Overlaps(seg, obstacles)) continue;
+                    result.Add(seg);
+                }
+            }
+        }
+
+        private static bool Overlaps(Rect r, IReadOnlyList<Rect> obstacles)
+        {
+            foreach (Rect o in obstacles)
+                if (r.Overlaps(o)) return true;
+            return false;
+        }
+
+        private const float PatchMinSize = 2f;
+        private const float PatchMaxSize = 4f;
+        private const int PatchCandidateGrid = 9; // a 3x3 interior grid of candidate centres
+
+        /// <summary>Silt/standing-water patches for one floor zone (MV-781, change 3): 2 to 4 flat
+        /// patches, alternating silt/water, deterministic from the zone's own id and rect (which are
+        /// themselves derived from the area's index and origin — <see cref="WorldMapLoader"/> resolves
+        /// a combat area's <see cref="MapZone.id"/> to "area{index}" — so hashing them gives back
+        /// exactly the "area index and origin" determinism the ticket asks for, never
+        /// <see cref="UnityEngine.Random"/>), that avoid every authored obstacle.</summary>
+        public static List<(Rect rect, bool isWater)> PatchRects(Rect zone, string zoneId, IReadOnlyList<Rect> obstacles)
+        {
+            var result = new List<(Rect, bool)>();
+            int seed = DeterministicSeed(zoneId, zone);
+            int count = 2 + (seed % 3); // 2..4
+
+            for (int i = 0; i < count; i++)
+            {
+                float size = PatchMinSize + Frac(seed, i * 7 + 1) * (PatchMaxSize - PatchMinSize);
+                if (TryPlacePatch(zone, size, obstacles, seed, i, out Rect rect))
+                    result.Add((rect, (i & 1) == 1));
+            }
+            return result;
+        }
+
+        private static bool TryPlacePatch(Rect zone, float size, IReadOnlyList<Rect> obstacles, int seed, int index, out Rect placed)
+        {
+            float half = size * 0.5f;
+            float marginX = Mathf.Max(half, zone.width * 0.22f);
+            float marginZ = Mathf.Max(half, zone.height * 0.22f);
+
+            for (int attempt = 0; attempt < PatchCandidateGrid; attempt++)
+            {
+                int slot = (seed + index * 3 + attempt) % PatchCandidateGrid;
+                float tx = (slot % 3 + 1) / 4f;   // 0.25, 0.5, 0.75
+                float tz = (slot / 3 + 1) / 4f;
+
+                float cx = Mathf.Lerp(zone.xMin + marginX, zone.xMax - marginX, tx);
+                float cz = Mathf.Lerp(zone.yMin + marginZ, zone.yMax - marginZ, tz);
+
+                var candidate = new Rect(cx - half, cz - half, size, size);
+                if (candidate.xMin < zone.xMin || candidate.xMax > zone.xMax ||
+                    candidate.yMin < zone.yMin || candidate.yMax > zone.yMax) continue;
+                if (Overlaps(candidate, obstacles)) continue;
+
+                placed = candidate;
+                return true;
+            }
+
+            placed = default;
+            return false;
+        }
+
+        /// <summary>Deterministic, non-negative hash of a zone's id and resolved world rect — the
+        /// "area index and origin" input the ticket's determinism rule asks for, expressed off what a
+        /// zone actually carries rather than reaching back into the raw <c>WorldArea</c> it came from.</summary>
+        private static int DeterministicSeed(string zoneId, Rect zone)
+        {
+            unchecked
+            {
+                int hash = 17;
+                if (!string.IsNullOrEmpty(zoneId))
+                    foreach (char c in zoneId) hash = hash * 31 + c;
+                hash = hash * 31 + Mathf.RoundToInt(zone.x * 100f);
+                hash = hash * 31 + Mathf.RoundToInt(zone.y * 100f);
+                return hash & 0x7fffffff;
+            }
+        }
+
+        /// <summary>Deterministic 0..1 from an integer seed and a salt — the same golden-ratio-hash
+        /// idiom <c>StormdrainKit.Frac</c>/<c>StormdrainDressing.DeterministicYaw</c> already use for
+        /// "same input, same output, never <see cref="UnityEngine.Random"/>", salted so two different
+        /// draws off the same seed don't move in lockstep.</summary>
+        private static float Frac(int seed, int salt) =>
+            Mathf.Abs((seed * 0.6180339887f + salt * 0.3247179572f) % 1f);
 
         /// <summary>Maps a cover piece's authored dressing class onto its drain equivalent. Every class
         /// has one — including <see cref="CoverDressing.None"/>, which in World 1 means "a bare crate"

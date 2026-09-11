@@ -192,6 +192,10 @@ namespace MaxWorlds.Arena
                     case EntityKind.Hatch:
                         BuildHatch(e, root, built);
                         break;
+
+                    case EntityKind.Grate:
+                        StormdrainKit.BuildGrate(root, e.id, new Vector2(e.x, e.z));
+                        break;
                 }
             }
         }
