@@ -316,6 +316,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv699Sludgequeen());
             Add(BuildIntroHandoffFrame());
             Add(BuildMv738SludgeCheck());
+            Add(BuildMv769SludgeTreatment());
             Add(BuildMv742StormdrainCheck());
             Add(BuildMv750DressingCheck());
             Add(BuildMv754LightCheck());
@@ -1339,6 +1340,121 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-738-sludge", NoSetup) },
+            };
+        }
+
+        // ---- MV769SludgeTreatment (MV-769) ----------------------------------------------------
+
+        /// <summary>MV-769's own AC: "one capture of a puddle and a sludge lane" — two shots off one
+        /// boot into World 2 (same <see cref="BuildMv738SludgeCheck"/> seeding). Shot 1 frames an
+        /// authored sludge lane close enough that the flow scroll and the new bubble emitters actually
+        /// read; shot 2 spawns a Sludge Drone's own <see cref="SludgePuddle"/> nearby and frames that —
+        /// proof of the irregular fan outline and the unlit glow, not a description of one.</summary>
+        private static CapturePreset BuildMv769SludgeTreatment()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+
+            Transform laneTransform = null;
+            SludgePuddle puddle = null;
+
+            IEnumerator Prepare(Camera cam)
+            {
+                for (int i = 0; i < 6; i++) yield return null;   // let BackyardPath.Awake + WorldMaterials finish
+
+                var sludge = FindFirstObjectByType<SludgeFlow>();
+                if (sludge == null) throw new CaptureAbortException("World 2 built no sludge tile to shoot");
+                laneTransform = sludge.transform;
+            }
+
+            // Bubbles rise for RiseFraction (0.7) of their 1.8 s loop, so ~75 real-time frames at the
+            // project's capped 60 fps (Bootstrap.cs) lands a shot mid-to-near-peak rise instead of the
+            // very bottom of the cycle — waiting only 3 frames (this preset's first pass) never let a
+            // single bubble clear the surface before the shot fired.
+            const int bubbleSettleFrames = 75;
+
+            IEnumerator SetupLane(Camera cam)
+            {
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                // Same distance MV738SludgeCheck already proved frames a lane tile cleanly — this
+                // preset's first pass shrank it to 6 m, which put the camera almost inside the (large)
+                // tile and filled the whole frame with a single flat green wall.
+                float distance = rig != null ? rig.Distance : 20f;
+
+                Vector3 focus = laneTransform.position + Vector3.up * 0.3f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                for (int i = 0; i < bubbleSettleFrames; i++) yield return null;
+
+                // Same first-manual-Render() warm-up MV693Replicator/MV699Sludgequeen's own presets
+                // need — URP's Render Graph has crashed on exactly the first manual cam.Render() call
+                // in a headless -nographics run.
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            IEnumerator SetupPuddle(Camera cam)
+            {
+                // Neither an offset from the lane tile NOR OpenZoneCenter() is safe: the former put the
+                // camera inside Stormdrain wall/pipe dressing, and the latter turned out to sit ON TOP
+                // of an authored sludge tile itself here — the puddle's own fan blobs (y=0.01/0.02) sit
+                // BELOW that tile's top surface (y=0.05) and rendered fully hidden underneath it. Max's
+                // own spawn point is guaranteed to be plain floor (same idiom BuildHealthBarCluster/
+                // BuildMissileTrail already use for a safe prop-spawn focus).
+                var max = GameObject.FindGameObjectWithTag("Player");
+                Vector3 spawnAt = max != null
+                    ? max.transform.position + max.transform.forward * 10f
+                    : laneTransform.position + new Vector3(10f, 0f, 10f);
+                // 3rd fix: this preset's previous pass put the puddle only 3 m ahead of Max, so his own
+                // floating "MAX" WorldHealthBar (always-show, billboarded) filled almost the whole
+                // frame — same reason BuildMv674TeleportCrackle hides HudController for its own shot.
+                // Hiding Max entirely (10 m away now anyway) is the cleanest way to guarantee this is a
+                // clean shot of the puddle, nothing else.
+                if (max != null) max.SetActive(false);
+                puddle = SludgePuddle.Spawn(spawnAt, radius: 2f, duration: 30f, seed: 11);
+
+                for (int i = 0; i < bubbleSettleFrames; i++) yield return null;
+
+                var rig = FindFirstObjectByType<FixedAngleCameraRig>();
+                float pitch = rig != null ? rig.Pitch : 60f;
+                const float distance = 5f;
+
+                Vector3 focus = spawnAt + Vector3.up * 0.3f;
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                cam.transform.SetPositionAndRotation(focus - rot * Vector3.forward * distance, rot);
+
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv769sludge",
+                LogTag = "[MV769Capture]",
+                Flag = "-mv769shot",
+                ArmFile = "Temp/mv769.arm",
+                HeadlessMarker = "Temp/mv769.headless",
+                DoneFileName = "_mv769_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same WorldIndex seeding as BuildMv742StormdrainCheck/BuildMv738SludgeCheck.
+                    SaveSlotData data = SaveSystem.Load(0);
+                    data.WorldIndex = 1;
+                    SaveSystem.Save(0, data);
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Prepare = Prepare,
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-769-sludge-lane", SetupLane),
+                    new CaptureShot("MV-769-sludge-puddle", SetupPuddle),
+                },
+                Cleanup = () => { if (puddle != null) Destroy(puddle.gameObject); },
             };
         }
 

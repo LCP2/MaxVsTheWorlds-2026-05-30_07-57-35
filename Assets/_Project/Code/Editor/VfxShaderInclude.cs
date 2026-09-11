@@ -25,6 +25,11 @@ namespace MaxWorlds.Editor
         {
             "Universal Render Pipeline/Particles/Unlit",   // VfxMaterials (YT-47/48)
             "Universal Render Pipeline/Lit",               // MaterialLibrary (YT-50)
+            "Universal Render Pipeline/Unlit",             // StormdrainKit.Unlit (MV-778) — lamps/glows,
+                                                            // and MV-769's own puddle base blob/bubbles;
+                                                            // without this the player build strips it and
+                                                            // every "unlit emissive" caller silently gets
+                                                            // MaterialLibrary's LIT fallback instead.
             "MaxWorlds/StylizedCharacter",                 // MaterialLibrary.Character (YT-57)
             "MaxWorlds/StylizedGround",                    // MaterialLibrary ground (YT-69)
             "MaxWorlds/StylizedSky",                       // BackyardLighting sky (YT-76)

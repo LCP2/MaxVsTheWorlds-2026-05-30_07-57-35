@@ -232,10 +232,16 @@ namespace MaxWorlds.Arena
         private const float DeckRailThickness = 0.08f;
         private const float RampThickness = 0.15f;
 
+        /// <summary>Roughly one bubble emitter's worth of bubbles per this many square metres of sludge
+        /// (MV-769) — low density, so a lane reads as textured without turning into a fizzing bath.</summary>
+        private const float SludgeBubbleDensityArea = 12f;
+
         /// <summary>A sludge slow-zone's ground overlay (MV-692) — visual only, no collider: a mover's
         /// slow is decided by <see cref="MapSlowZones"/> sampling its footprint, not by a physical
         /// trigger, so nothing here needs to catch anything. MV-690 gives it a flowing UV scroll
-        /// (<see cref="SludgeFlow"/>) and grades its tone toward teal near the outfall.</summary>
+        /// (<see cref="SludgeFlow"/>) and grades its tone toward teal near the outfall. MV-769 adds the
+        /// same rising-bubble treatment the Sludge Drone's own puddle now carries, at a low density, so
+        /// every body of sludge in the world reads as one living material.</summary>
         private static void BuildSludge(MapData map, Transform root, MapEntity e)
         {
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube,
@@ -243,9 +249,15 @@ namespace MaxWorlds.Arena
             StripCollider(body);
             body.isStatic = true;
 
-            Material material = MaterialLibrary.Tinted(SurfaceKind.Prop, SludgeToneAt(map, e.CenterXz));
+            Color tone = SludgeToneAt(map, e.CenterXz);
+            Material material = MaterialLibrary.Tinted(SurfaceKind.Prop, tone);
             Tint(body, material);
             body.AddComponent<SludgeFlow>().Configure(material, SludgeScrollSpeed);
+
+            int seed = Mathf.RoundToInt(e.x * 977f + e.z * 733f);
+            int bubbleCount = Mathf.Max(1, Mathf.RoundToInt((e.width * e.depth) / SludgeBubbleDensityArea));
+            SludgeBubbles.Attach(body.transform, "Bubbles", new Vector2(e.width * 0.5f, e.depth * 0.5f),
+                SludgeThickness * 0.5f, seed, bubbleCount, tone);
         }
 
         /// <summary>Plain acid green, graded toward <see cref="SludgeTealColor"/> the closer this tile
