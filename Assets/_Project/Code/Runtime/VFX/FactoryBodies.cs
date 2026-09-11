@@ -127,7 +127,11 @@ namespace MaxWorlds.VFX
         private static void EnsureMaterials()
         {
             if (s_dark != null) return;
-            s_dark = NewMaterial("Factory_Dark", new Color(0.06f, 0.06f, 0.07f));
+            // MV-780: was (0.06, 0.06, 0.07) — ~15 resolved luma, darker than World 2's own
+            // 18-26 luma floor tier (MV-777), so the hull had no silhouette against the ground it
+            // stands on. Lifted into the cover/props tier (~70-90 luma), hue kept neutral-cool —
+            // it's the machine chassis, not a warm surface.
+            s_dark = NewMaterial("Factory_Dark", new Color(0.32f, 0.33f, 0.36f));
             s_hazard = NewMaterial("Factory_Hazard", new Color(0.95f, 0.78f, 0.08f));
             s_rust = NewMaterial("Factory_Rust", new Color(0.55f, 0.27f, 0.11f));
         }
