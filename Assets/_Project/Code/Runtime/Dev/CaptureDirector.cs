@@ -326,6 +326,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv759GateDoorsCheck());
             Add(BuildMv770RocketSalvo());
             Add(BuildMv773GrateLurker());
+            Add(BuildMv775ReplicatorMachine());
             return d;
         }
 
@@ -2040,6 +2041,85 @@ namespace MaxWorlds.Dev
                 {
                     if (grateGo != null) Destroy(grateGo);
                     if (lurkerGo != null) Destroy(lurkerGo);
+                },
+            };
+        }
+
+        // ---- MV775ReplicatorMachine (MV-775) --------------------------------------------------
+
+        /// <summary>The AC's own "one capture mid-cycle" — builds a real Replicator and a real Rusher,
+        /// lures and consumes it through the Intake beat via the actual <see cref="Replicator.TickLure"/>/
+        /// <see cref="Replicator.TickConsumption"/> path (no scripted VFX call), then advances exactly
+        /// half of <see cref="Replicator.CycleSeconds"/> so the shot lands mid-Cycle: hatch shut again,
+        /// fan spinning, amber hatch-glow still lit while the pair it becomes is cooking — proof of the
+        /// actual staged result, not a description of one.</summary>
+        private static CapturePreset BuildMv775ReplicatorMachine()
+        {
+            const float pitch = 60f;
+            const float distance = 5f;
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images";
+
+            GameObject replicatorGo = null;
+            GameObject rusherGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+
+                replicatorGo = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                replicatorGo.name = "MV775CaptureReplicator";
+                replicatorGo.transform.position = focus;
+                replicatorGo.transform.localScale = new Vector3(2f, 2f, 1.5f);
+                var replicator = replicatorGo.AddComponent<Replicator>();
+                replicator.Configure(1);
+
+                for (int i = 0; i < 3; i++) yield return null;   // let the generated body (hatch/fan/LED) settle
+
+                rusherGo = BuildClusterRobot(EnemyKind.Rusher, replicator.HatchPosition + new Vector3(5f, 0f, 0f));
+                // BuildClusterRobot disables its RobotEnemy ("hold the pose") — re-enabling re-fires
+                // OnEnable, which is what actually populates RobotEnemy.Active for TickLure to find it.
+                rusherGo.GetComponent<RobotEnemy>().enabled = true;
+
+                // The real lure/intake path, not a scripted pose: TickLure hands it the hatch as its
+                // seek target, then TickConsumption draws it in and starts the Cycle beat.
+                replicator.TickLure();
+                rusherGo.transform.position = replicator.HatchPosition;
+                replicator.TickConsumption(Replicator.IntakeSeconds + 0.01f);
+                replicator.TickConsumption(Replicator.CycleSeconds * 0.5f);   // land the shot mid-Cycle
+
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = focus + Vector3.up * 1f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                cam.Render();
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv775replicatormachine",
+                LogTag = "[MV775Capture]",
+                Flag = "-mv775shot",
+                ArmFile = "Temp/mv775.arm",
+                HeadlessMarker = "Temp/mv775.headless",
+                DoneFileName = "_mv775_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same clean-profile guard MV616SentinelBeam/MV693Replicator's own presets use: on
+                    // a fresh profile HomeScreen's pick-a-slot modal freezes Time.timeScale at 0.
+                    SaveSystem.ActiveSlot = 0;
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-775-mid-cycle", Setup) },
+                Cleanup = () =>
+                {
+                    if (replicatorGo != null) Destroy(replicatorGo);
+                    if (rusherGo != null) Destroy(rusherGo);
                 },
             };
         }

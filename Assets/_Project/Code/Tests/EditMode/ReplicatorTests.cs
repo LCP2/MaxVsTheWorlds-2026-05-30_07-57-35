@@ -97,6 +97,11 @@ namespace MaxWorlds.Tests.EditMode
         /// `TickConsumption` never satisfies `Vector3.Distance(...) <= ArriveRadius` (1.6 > 1.2), so
         /// `spawner.LiveCountOf(EnemyKind.Brute)` stays 0, not 2. Tier 2 (resolved values): asserts
         /// the resolved live count after ticking consumption, never an authored constant.
+        ///
+        /// MV-775 update: the arrive gate now reads distance to the hatch FACE specifically (not any
+        /// face of the box), so the Brute is placed touching the hatch rather than an arbitrary side,
+        /// and the tick advances through the Intake+Cycle+stagger beats (not the old flat
+        /// ConsumeSeconds) for the doubled pair to fully emerge.
         /// </summary>
         [Test]
         public void MV_RobotAtTheBoxIsConsumed()
@@ -119,16 +124,16 @@ namespace MaxWorlds.Tests.EditMode
                 "within the 8 m lure radius, capacity > 0, and clear of the 4 m Max-melee exclusion — " +
                 "this Brute must be lured off Max");
 
-            // Touching the box's face, face-on: half-extent 1.0 m + this Brute's own 0.6 m
-            // CharacterController radius = 1.6 m from centre — the closest a real SafeMove-driven
-            // robot could ever get, never the box's own centre.
-            brute.transform.position = RigOrigin + new Vector3(1.6f, 0f, 0f);
-            replicator.TickConsumption(1.2f);
+            // Touching the hatch face, face-on: this Brute's own 0.6 m CharacterController radius is
+            // the closest a real SafeMove-driven robot could ever get to the exact hatch point.
+            float robotRadius = EnemyArchetype.Of(EnemyKind.Brute).ColliderRadius;
+            brute.transform.position = replicator.HatchPosition + new Vector3(0f, 0f, -robotRadius);
+            replicator.TickConsumption(Replicator.IntakeSeconds + Replicator.CycleSeconds + Replicator.EmitStaggerSeconds + 0.01f);
 
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Brute),
-                "a robot physically touching the box's face must be consumed and doubled — the " +
-                "arrive test has to read the box's own collider SURFACE, not a flat centre-to-centre " +
+                "a robot physically touching the hatch face must be consumed and doubled — the " +
+                "arrive test has to read the hatch's own position, not a flat centre-to-centre " +
                 "radius that a real controller radius can never satisfy");
         }
 
@@ -156,12 +161,12 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, rusher.Current,
                 "within the 8 m lure radius, capacity > 0, and clear of the 4 m Max-melee exclusion — " +
                 "this Rusher must be lured off Max");
-            Assert.AreEqual(RigOrigin, rusher.ReplicatorSeekTarget,
-                "the lured robot's steering target must be the Replicator's own hatch position, not Max");
+            Assert.AreEqual(replicator.HatchPosition, rusher.ReplicatorSeekTarget,
+                "the lured robot's steering target must be the Replicator's own hatch face, not the box's centre (MV-775)");
 
-            // --- Move it to the hatch, advance 1.2 s: consumed, then the doubled pair emerges ---
-            rusher.transform.position = RigOrigin;
-            replicator.TickConsumption(1.2f);
+            // --- Move it to the hatch, advance through Intake+Cycle+stagger: consumed, then the doubled pair emerges ---
+            rusher.transform.position = replicator.HatchPosition;
+            replicator.TickConsumption(Replicator.IntakeSeconds + Replicator.CycleSeconds + Replicator.EmitStaggerSeconds + 0.01f);
 
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
             Assert.AreEqual(2, spawner.LiveCountOf(EnemyKind.Rusher),
