@@ -2289,7 +2289,11 @@ namespace MaxWorlds.Enemies
                 IgnorePlayerCollision(go);
             }
 
-            SludgePuddle.Spawn(deathPos, SludgerPuddleRadius, SludgerPuddleDuration);
+            // Deterministic-from-position seed (MV-769), not Random — same idiom as
+            // StormdrainDressing.DeterministicYaw — so the puddle's irregular outline varies per death
+            // site without needing an authored per-instance value.
+            int puddleSeed = Mathf.RoundToInt(deathPos.x * 977f + deathPos.z * 733f);
+            SludgePuddle.Spawn(deathPos, SludgerPuddleRadius, SludgerPuddleDuration, puddleSeed);
         }
 
         /// <summary>Robots must never be able to WALL MAX IN (YT-74) — the same rule
