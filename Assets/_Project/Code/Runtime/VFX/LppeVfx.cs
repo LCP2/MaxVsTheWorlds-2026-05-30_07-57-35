@@ -30,11 +30,16 @@ namespace MaxWorlds.VFX
         private static readonly Color ShockFlashColor = new Color(1f, 0.86f, 0.1f, 1f);
         private static readonly Color ShockSparkColor = new Color(1f, 0.95f, 0.45f, 1f);
 
+        // MV-770: brighter than MuzzleColor — the windup has to read as the emitter charging UP to
+        // the shot, not just another muzzle flash at the wrong time.
+        private static readonly Color WindupColor = new Color(1.4f, 2.1f, 2.2f, 1f);
+
         private VfxBurst _muzzleFlash;
         private VfxBurst _impactFlash;
         private VfxBurst _impactSparks;
         private VfxBurst _shockFlash;
         private VfxBurst _shockSparks;
+        private VfxBurst _windupRing;
         private bool _initialized;
 
         /// <summary>How many muzzle flashes this instance has ever emitted — the resolved count a
@@ -57,6 +62,10 @@ namespace MaxWorlds.VFX
             _impactSparks = new VfxBurst("LppeImpactSparks", additive, 60, 0.8f, perFrameCap: 4, stretched: true);
             _shockFlash = new VfxBurst("LppeShockFlash", additive, 24, 0f, perFrameCap: 4);
             _shockSparks = new VfxBurst("LppeShockSparks", additive, 60, 0.8f, perFrameCap: 4, stretched: true);
+
+            // MV-770: its own burst, never sharing _muzzleFlash — sharing would double-count a fire
+            // cycle's flashes against the "one FireTick, one muzzle flash" contract (Mv758LppeVfxTests).
+            _windupRing = new VfxBurst("LppeWindupRing", VfxMaterials.Additive(VfxMaterials.Ring()), 24, 0f, perFrameCap: 4);
         }
 
         /// <summary>The muzzle punctuation (spec item 1) — a short, hard flash at the emitter, along
@@ -90,6 +99,24 @@ namespace MaxWorlds.VFX
                 Emit(_impactFlash, _impactSparks, point, CombatVfxTuning.LppeImpact(damage), ImpactColor, SparkColor);
         }
 
+        /// <summary>The pre-Shock tell (spec part 2, item 1): a bright ring collapsing into the muzzle
+        /// over the <see cref="CombatVfxTuning.LppeWindupTuning.LeadSeconds"/> before the shot that will
+        /// land Shock actually fires — see <see cref="MaxWorlds.Combat.PulseLaser"/>'s own prediction of
+        /// which shot that is (it never delays firing to play this).</summary>
+        public void Windup(Vector3 position, Vector3 forward)
+        {
+            if (!_initialized) return;
+            CombatVfxTuning.LppeWindupTuning t = CombatVfxTuning.LppeWindup();
+            Vector3 axis = forward.sqrMagnitude > 1e-6f ? forward : Vector3.forward;
+
+            _windupRing.Emit(position + axis.normalized * t.ForwardOffset, 1,
+                axis: axis, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: t.RingSize, sizeMax: t.RingSize,
+                lifeMin: t.LeadSeconds, lifeMax: t.LeadSeconds,
+                colorA: WindupColor, colorB: WindupColor);
+        }
+
         private static void Emit(VfxBurst flash, VfxBurst sparks, Vector3 point,
             CombatVfxTuning.LppeImpactTuning t, Color flashColor, Color sparkColor)
         {
@@ -112,13 +139,13 @@ namespace MaxWorlds.VFX
         {
             if (!_initialized) return;
             _muzzleFlash.EndFrame(); _impactFlash.EndFrame(); _impactSparks.EndFrame();
-            _shockFlash.EndFrame(); _shockSparks.EndFrame();
+            _shockFlash.EndFrame(); _shockSparks.EndFrame(); _windupRing.EndFrame();
         }
 
         private void OnDestroy()
         {
             Dispose(_muzzleFlash); Dispose(_impactFlash); Dispose(_impactSparks);
-            Dispose(_shockFlash); Dispose(_shockSparks);
+            Dispose(_shockFlash); Dispose(_shockSparks); Dispose(_windupRing);
         }
 
         private static void Dispose(VfxBurst b)

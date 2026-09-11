@@ -2,8 +2,10 @@ using UnityEngine;
 using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
+using MaxWorlds.Feel;
 using MaxWorlds.Player;
 using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.Weapons;
 
 namespace MaxWorlds.VFX
@@ -329,6 +331,20 @@ namespace MaxWorlds.VFX
         [Tooltip("How far the gadget dips down during the anticipation beat, in metres.")]
         [SerializeField] private float anticipationDip = 0.02f;
 
+        [Header("Weapon recoil (MV-770)")]
+        [Tooltip("How far the gun/rack kicks back on an LPPE pulse or a Rack rocket launch, in metres " +
+                 "(spec: \"kicks back 0.08m and returns over 0.10s\").")]
+        [SerializeField] private float weaponRecoilDistance = 0.08f;
+        [SerializeField] private float weaponRecoilKickSeconds = 0.02f;
+        [SerializeField] private float weaponRecoilReturnSeconds = 0.10f;
+
+        [Tooltip("How far the whole body leans, in degrees, on the LPPE's own Shock (4th) hit landing " +
+                 "(spec: \"on the SHOCK pulse the whole body leans\" — no magnitude given, picked to " +
+                 "read against the existing run-lean's own leanAngle without swamping it).")]
+        [SerializeField] private float shockLeanAngle = 6f;
+        [SerializeField] private float shockLeanKickSeconds = 0.03f;
+        [SerializeField] private float shockLeanReturnSeconds = 0.12f;
+
         [Header("Arms (MV-717)")]
         [Tooltip("How far the arms swing opposite the legs while not aiming, in metres at the hand. " +
                  "Smaller than the legs' own swing — this is a kid's arm, not a sprinter's.")]
@@ -400,6 +416,13 @@ namespace MaxWorlds.VFX
         private GameObject _rcdaGadget, _lppeGadget, _rackMount;
         private MeshRenderer[] _lppeGlow, _rackTubeGlow;
         private ShoulderRack _shoulderRack;
+        private Vector3 _rackMountBasePos;
+
+        /// <summary>MV-770: the two weapon-arm recoil kicks (one per LPPE pulse, one per Rack rocket)
+        /// and the Shock body lean — each a fresh two-step AnimSequence started by its own
+        /// <see cref="HudSignals"/> event, ticked and applied in <see cref="TickGadget"/>/
+        /// <see cref="TickShoulderRackMount"/>/<see cref="TickRun"/> respectively.</summary>
+        private AnimSequence _gunRecoilSeq, _rackRecoilSeq, _shockLeanSeq;
 
         private Material _skinMat, _hairMat, _jacketMat, _hoodMat, _fabricMat, _darkMat,
                          _bootMat, _soleMat, _metalMat, _eyeMat, _goggleMat, _beltMat, _pouchMat;
@@ -479,6 +502,12 @@ namespace MaxWorlds.VFX
             // by the unsubscribe in OnDestroy.
             ApplyPrimaryVisual();
             WeaponSystemState.Changed += ApplyPrimaryVisual;
+
+            // MV-770: one recoil kick per shot/rocket, one body lean per Shock hit — matched by the
+            // unsubscribe in OnDestroy, same pairing as WeaponSystemState.Changed just above.
+            HudSignals.LppePulseFired += OnLppePulseFired;
+            HudSignals.RocketMuzzle += OnRocketMuzzle;
+            HudSignals.ShockPulseLanded += OnShockPulseLanded;
 
             // Stand him on Max BEFORE the first frame, or he spends frame one at the world origin and
             // frame two three metres away — and the hair, which reads its whip off how far he actually
@@ -611,6 +640,9 @@ namespace MaxWorlds.VFX
             _lppeGlow = body.LppeGlow;
             _rackMount = body.RackMount;
             _rackTubeGlow = body.RackTubeGlow;
+            // MV-770: the rack's resting local pose, so a per-rocket recoil kick has a fixed point to
+            // offset from and return to rather than drifting off whatever TickShoulderRackMount last set.
+            if (_rackMount != null) _rackMountBasePos = _rackMount.transform.localPosition;
 
             // MV-717: wire up the moving parts MV-451's fused mesh dropped (see the class doc's "HE
             // CARRIES THE GADGET" section). All of this happens here, in Build, still inside Awake and
@@ -809,6 +841,27 @@ namespace MaxWorlds.VFX
                 _body.localRotation,
                 Quaternion.Euler(moveLocal.z * leanAngle, 0f, -moveLocal.x * leanAngle),
                 1f - Mathf.Exp(-14f * dt));
+
+            // MV-770 spec part 2, item 2: "on the SHOCK pulse the whole body leans" — additive on top
+            // of the movement lean above, not replacing it, so a Shock landing mid-backpedal still
+            // reads as a punch through whatever he is already doing.
+            if (_shockLeanSeq != null)
+            {
+                _shockLeanSeq.Tick(dt);
+                float u = RecoilAmount(_shockLeanSeq);
+                if (u > 0f) _body.localRotation *= Quaternion.Euler(-shockLeanAngle * u, 0f, 0f);
+            }
+        }
+
+        /// <summary>MV-770: the eased 0..1 "how far into its kick-then-return" a two-step recoil/lean
+        /// <see cref="AnimSequence"/> (step 0 = kick out, step 1 = return) is right now — 0 before it
+        /// starts, back to 0 once <see cref="AnimSequence.IsComplete"/>, peaking at 1 exactly at the
+        /// step-0/step-1 boundary. Shared by the gun kick, the rack kick and the Shock lean so all
+        /// three "kick then return" the same way.</summary>
+        private static float RecoilAmount(AnimSequence seq)
+        {
+            float kickU = seq.Progress(0);
+            return kickU < 1f ? kickU : 1f - seq.Progress(1);
         }
 
         /// <summary>
@@ -861,6 +914,15 @@ namespace MaxWorlds.VFX
                 pos -= rot * Vector3.forward * (recoil * shudder);
             }
 
+            // MV-770 spec part 2, item 2: one discrete kick per LPPE pulse, on top of (not instead of)
+            // the RCDA's own continuous shudder above — the two primaries are never live at once
+            // (WeaponSystemState.ActivePrimary), so in practice only one of these is ever non-zero.
+            if (_gunRecoilSeq != null)
+            {
+                _gunRecoilSeq.Tick(dt);
+                pos -= rot * Vector3.forward * (weaponRecoilDistance * RecoilAmount(_gunRecoilSeq));
+            }
+
             // MV-717: the gadget is a real rig point again (see Build) — the gun raises to aim, and the
             // arms follow it (see PoseArms).
             if (_gun == null) return;
@@ -875,6 +937,17 @@ namespace MaxWorlds.VFX
         {
             bool bought = _shoulderRack != null && _shoulderRack.IsBought;
             if (_rackMount != null && _rackMount.activeSelf != bought) _rackMount.SetActive(bought);
+
+            // MV-770 spec part 2, item 2: "on a rocket salvo, one kick per rocket" — ticked whether or
+            // not the mount is currently shown, same "the rocket already left, the visual finishes"
+            // shape as ProcessPendingLaunches keeps firing regardless of IsBought.
+            if (_rackMount != null && _rackRecoilSeq != null)
+            {
+                _rackRecoilSeq.Tick(Time.deltaTime);
+                float u = RecoilAmount(_rackRecoilSeq);
+                _rackMount.transform.localPosition = _rackMountBasePos + Vector3.back * (weaponRecoilDistance * u);
+            }
+
             if (!bought || _rackTubeGlow == null) return;
 
             Color glow = Color.Lerp(RackTubeCharging, RackTubeReady, _shoulderRack.ReloadFraction01);
@@ -887,6 +960,24 @@ namespace MaxWorlds.VFX
                 r.SetPropertyBlock(_lensMpb);
             }
         }
+
+        // ---------------------------------------------------------------- weapon recoil (MV-770)
+
+        private AnimSequence NewRecoilSequence() => new AnimSequence(new[]
+        {
+            new AnimStep(0f, weaponRecoilKickSeconds, AnimEase.OutQuad),
+            new AnimStep(weaponRecoilKickSeconds, weaponRecoilReturnSeconds, AnimEase.OutQuad),
+        });
+
+        private void OnLppePulseFired(Vector3 worldPos, Vector3 forward) => _gunRecoilSeq = NewRecoilSequence();
+
+        private void OnRocketMuzzle(Vector3 worldPos, Vector3 forward) => _rackRecoilSeq = NewRecoilSequence();
+
+        private void OnShockPulseLanded(Vector3 worldPos) => _shockLeanSeq = new AnimSequence(new[]
+        {
+            new AnimStep(0f, shockLeanKickSeconds, AnimEase.OutQuad),
+            new AnimStep(shockLeanKickSeconds, shockLeanReturnSeconds, AnimEase.OutQuad),
+        });
 
         /// <summary>
         /// The hair and the charms lag behind him, then catch up.
@@ -1007,6 +1098,9 @@ namespace MaxWorlds.VFX
         private void OnDestroy()
         {
             WeaponSystemState.Changed -= ApplyPrimaryVisual;
+            HudSignals.LppePulseFired -= OnLppePulseFired;
+            HudSignals.RocketMuzzle -= OnRocketMuzzle;
+            HudSignals.ShockPulseLanded -= OnShockPulseLanded;
 
             // Instances, and ours: nothing else points at them, so nothing else has to be told.
             Kill(_skinMat); Kill(_hairMat); Kill(_jacketMat); Kill(_hoodMat); Kill(_fabricMat);

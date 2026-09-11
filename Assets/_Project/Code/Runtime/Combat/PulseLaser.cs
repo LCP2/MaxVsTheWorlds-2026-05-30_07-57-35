@@ -3,6 +3,7 @@ using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Player;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 using MaxWorlds.Weapons;
 
@@ -92,6 +93,7 @@ namespace MaxWorlds.Combat
         private float _tickTimer;
         private bool _lastEmitting;
         private bool _depleted;
+        private bool _windupFired;
         private EnergyPool _tank;
         private LppeVfx _vfx;
 
@@ -155,14 +157,41 @@ namespace MaxWorlds.Combat
             bool emitting = WeaponSystemState.ActivePrimary == WeaponCatalog.PrimaryKind.Lppe
                 && ShouldEmit(IsFiring, !_depleted && _tank.CanSpend(cost));
             _lastEmitting = emitting;
-            if (!emitting) { _tickTimer = 0f; return; }
+            if (!emitting) { _tickTimer = 0f; _windupFired = false; return; }
 
             _tickTimer -= dt;
+
+            // MV-770 spec part 2, item 1: the windup plays inside this SAME countdown, never by
+            // delaying it (the ticket's own "do not change fire cadence" line) — once within the lead
+            // window of a shot that will land Shock (predicted off the existing hit-streak state, not
+            // by re-deriving SeekerPulse's own target lock), play it once and wait for the real fire.
+            if (!_windupFired && _tickTimer > 0f
+                && _tickTimer <= CombatVfxTuning.LppeWindup().LeadSeconds && AnyStreakAtShockThreshold())
+            {
+                _windupFired = true;
+                if (_vfx != null) _vfx.Windup(transform.position, transform.forward);
+            }
+
             if (_tickTimer > 0f) return;
             _tickTimer = PulseInterval;
+            _windupFired = false;
 
             if (!_tank.TrySpend(cost)) return;
             FireTick();
+        }
+
+        /// <summary>True while some tracked robot's hit streak sits one hit away from Shock (spec:
+        /// "every 4th pulse hit") and its window hasn't lapsed — the windup's own prediction of "the
+        /// next pulse that lands will trigger Shock", built entirely from state <see cref="RegisterHit"/>
+        /// already tracks rather than re-deriving <see cref="SeekerPulse"/>'s own target lock.</summary>
+        private bool AnyStreakAtShockThreshold()
+        {
+            foreach (var pair in _hitStreak)
+            {
+                if (pair.Value % ShockHitInterval != ShockHitInterval - 1) continue;
+                if (_hitStreakTimer.TryGetValue(pair.Key, out float remaining) && remaining > 0f) return true;
+            }
+            return false;
         }
 
         /// <summary>Decays every tracked robot's Shock hit-streak window, dropping it once it lapses —
@@ -204,6 +233,10 @@ namespace MaxWorlds.Combat
 
             // MV-758: the muzzle punctuation — one per shot, under 0.22s cadence so it can't smear.
             if (_vfx != null) _vfx.Muzzle(origin, dir);
+
+            // MV-770 spec part 2, item 2: one weapon-arm recoil kick per pulse — MaxRig owns the actual
+            // kick (same "signal in, presentation elsewhere" split as ShockPulseLanded/RocketMuzzle).
+            HudSignals.EmitLppePulseFired(origin, dir);
         }
 
         /// <summary>Shock: every <see cref="ShockHitInterval"/>th pulse to land on the SAME robot within
@@ -218,7 +251,14 @@ namespace MaxWorlds.Combat
             _hitStreakTimer[target] = ShockWindowSeconds;
 
             bool isShockHit = count % ShockHitInterval == 0;
-            if (isShockHit) target.Stun(ShockStunSeconds);
+            if (isShockHit)
+            {
+                target.Stun(ShockStunSeconds);
+                // MV-770: "this half matters more than the pixels" — the punctuation hit is the one
+                // GameFeel wires hitstop/shake to, never a plain pulse (a stream of hitstops on every
+                // hit would read as lag, not weight).
+                HudSignals.EmitShockPulseLanded(target.transform.position);
+            }
 
             // MV-758: the impact beat — a normal flash+sparks, or the Shock-carrying hit's own
             // visibly distinct beat, so "a player must be able to count to the stun by eye" (spec).
