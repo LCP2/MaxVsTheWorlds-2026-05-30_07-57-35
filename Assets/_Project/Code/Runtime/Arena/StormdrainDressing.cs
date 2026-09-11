@@ -137,22 +137,49 @@ namespace MaxWorlds.Arena
             {
                 case CoverDressing.Tree:
                     // Wall-height-proportional (MV-765), not the cover block's own authored size.y.
-                    StormdrainKit.BuildStandpipe(parent, at, wallHeight, wallHeight);
+                    GameObject standpipe = StormdrainKit.BuildStandpipe(parent, at, wallHeight, wallHeight);
+                    standpipe.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
                     return true;
                 case CoverDressing.Hedge:
-                    StormdrainKit.BuildDebrisRake(parent, at, size);
+                    GameObject rake = StormdrainKit.BuildDebrisRake(parent, at, size);
+                    Vector2 rakeLean = DeterministicLean(at);
+                    rake.transform.rotation = Quaternion.Euler(rakeLean.x, DeterministicYaw(at), rakeLean.y);
                     return true;
                 case CoverDressing.Planter:
-                    StormdrainKit.BuildSiltBin(parent, at, size);
+                    GameObject bin = StormdrainKit.BuildSiltBin(parent, at, size);
+                    bin.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
                     return true;
                 case CoverDressing.Shed:
                 case CoverDressing.Machinery:
+                    // Heavy fixed machinery, not loose debris — stays square (MV-778 change 3 lists
+                    // standpipes, debris rakes, silt sacks and silt bins only).
                     StormdrainKit.BuildPumpHousing(parent, at, size);
                     return true;
                 default:
-                    StormdrainKit.BuildSiltSacks(parent, at, size, seed);
+                    GameObject sacks = StormdrainKit.BuildSiltSacks(parent, at, size, seed);
+                    Vector2 sackLean = DeterministicLean(at);
+                    sacks.transform.rotation = Quaternion.Euler(sackLean.x, DeterministicYaw(at), sackLean.y);
                     return true;
             }
+        }
+
+        /// <summary>
+        /// MV-778, change 3 ("break the axis"): nothing in the drain sat off 90 degrees, which reads
+        /// as machine-generated. This is the ticket's own formula, hashed from world position — not
+        /// <see cref="Random"/> — so the level lays out identically every run: the same map always
+        /// jitters the same piece the same way.
+        /// </summary>
+        private static float DeterministicYaw(Vector3 at)
+            => ((Mathf.Abs(at.x * 73.1f + at.z * 149.7f) % 1f) - 0.5f) * 24f;
+
+        /// <summary>Up to 6 degrees of lean on X and on Z (MV-778) — for the loose debris and sacks
+        /// only, never for anything with a fixed footprint. Different hash constants than
+        /// <see cref="DeterministicYaw"/> so a piece's yaw and its lean don't move in lockstep.</summary>
+        private static Vector2 DeterministicLean(Vector3 at)
+        {
+            float lx = ((Mathf.Abs(at.x * 191.3f + at.z * 269.9f) % 1f) - 0.5f) * 12f;
+            float lz = ((Mathf.Abs(at.x * 337.9f + at.z * 431.3f) % 1f) - 0.5f) * 12f;
+            return new Vector2(lx, lz);
         }
 
         /// <summary>The id <c>MapRuntime</c> already uses for the gate the sludge grades toward. Reused

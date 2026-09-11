@@ -127,6 +127,7 @@ namespace MaxWorlds.Arena
                 // own cover (World 2's wallHeight 1.5 m vs cover up to 1.6 m), and this box is built
                 // knowing exactly what it is, so it says so rather than making KindOf guess from shape.
                 GameObject wallGo = Box(root, w.Name, w.Center, w.Size, blocksSight: true, isStatic: true);
+                ApplyBevelledBoxMesh(wallGo, w.Size);
                 wallGo.AddComponent<StructuralWall>();
             }
 
@@ -277,6 +278,7 @@ namespace MaxWorlds.Arena
             if (!found) return;
 
             GameObject body = Spawn(root, e.id, PrimitiveType.Cube, slab.Center, slab.Size);
+            ApplyBevelledBoxMesh(body, slab.Size);
             Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
             body.isStatic = false; // MV-692: DeckVisibility repaints it every frame it's near Max
 
@@ -377,7 +379,7 @@ namespace MaxWorlds.Arena
             body.transform.SetParent(root, false);
             body.transform.localPosition = mid;
             body.transform.localRotation = rot;
-            body.transform.localScale = new Vector3(slab.Width, RampThickness, slopeLength);
+            ApplyBevelledBoxMesh(body, new Vector3(slab.Width, RampThickness, slopeLength));
             Tint(body, MaterialLibrary.Tinted(SurfaceKind.Metal, DeckGrateColor));
             body.isStatic = true;
         }
@@ -432,6 +434,10 @@ namespace MaxWorlds.Arena
             GameObject body = Spawn(root, e.id,
                 cover.Shape == CoverShape.Cylinder ? PrimitiveType.Cylinder : PrimitiveType.Cube,
                 cover.Center, scale);
+
+            // MV-778: cylinders (hedges) are untouched — only the box shape gets a chamfered mesh.
+            if (cover.Shape != CoverShape.Cylinder)
+                ApplyBevelledBoxMesh(body, scale);
 
             // This is the line that turns a prop from scenery into a mechanic (YT-83) — except for a
             // hedge row (MV-400): Lee wants plants to keep blocking a footstep (the collider Spawn()
@@ -974,6 +980,20 @@ namespace MaxWorlds.Arena
             go.transform.localPosition = center;
             go.transform.localScale = scale;
             return go;
+        }
+
+        /// <summary>Swaps a freshly spawned primitive cube's flat mesh for a chamfered one (MV-778) —
+        /// walls, cover blocks, deck slabs and ramp slabs, never the floor or a Prop entity, which keep
+        /// their flat sides. The box's true size now lives in the mesh rather than the transform's
+        /// scale (reset to one here), so the collider's own size is set explicitly to match; the
+        /// position, rotation, material, name and parent are all untouched.</summary>
+        private static void ApplyBevelledBoxMesh(GameObject go, Vector3 size)
+        {
+            go.transform.localScale = Vector3.one;
+            go.GetComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, CharacterMeshes.DefaultBevel(size));
+
+            var collider = go.GetComponent<BoxCollider>();
+            if (collider != null) collider.size = size;
         }
     }
 }
