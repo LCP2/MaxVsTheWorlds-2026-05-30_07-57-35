@@ -28,8 +28,11 @@ namespace MaxWorlds.VFX
         private static readonly int BaseColorId = Shader.PropertyToID("_BaseColor");
 
         /// <summary>Create a ground-hugging quad. <paramref name="texture"/> defaults to the filled
-        /// danger disc (YT-53); pass another to make a different kind of mark.</summary>
-        public static GroundRing Create(string name, Texture2D texture = null)
+        /// danger disc (YT-53); pass another to make a different kind of mark. <paramref name="additive"/>
+        /// (MV-770) swaps the alpha-blended danger-mark material for an additive one — a glow that
+        /// tracks something (the LPPE's own ground glow under a flying bolt) has to read as LIGHT, the
+        /// same reason every other "this is a light source" mark in the project is additive.</summary>
+        public static GroundRing Create(string name, Texture2D texture = null, bool additive = false)
         {
             var quad = GameObject.CreatePrimitive(PrimitiveType.Quad);
             quad.name = name;
@@ -44,8 +47,9 @@ namespace MaxWorlds.VFX
             var ring = quad.AddComponent<GroundRing>();
             ring._renderer = quad.GetComponent<MeshRenderer>();
             ring._mpb = new MaterialPropertyBlock();
-            ring._renderer.sharedMaterial =
-                VfxMaterials.AlphaBlend(texture != null ? texture : VfxMaterials.Ring());
+            ring._renderer.sharedMaterial = additive
+                ? VfxMaterials.Additive(texture != null ? texture : VfxMaterials.Glow())
+                : VfxMaterials.AlphaBlend(texture != null ? texture : VfxMaterials.Ring());
             ring._renderer.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             ring._renderer.receiveShadows = false;
             quad.transform.rotation = Quaternion.Euler(90f, 0f, 0f);   // lie flat

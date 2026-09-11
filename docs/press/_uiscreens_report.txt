@@ -1,7 +1,7 @@
 ﻿== rig-16x9 (1920x1080) ==
 PASS node-position: 26/26 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.167 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.168 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor
@@ -9,7 +9,7 @@ PASS y-bounds-containment: 30/30 nodes within [0,1080] visible frame
 == rig-phone (2340x1080) ==
 PASS node-position: 26/26 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.187 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.186 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 18px-at-ref floor
@@ -17,7 +17,7 @@ PASS y-bounds-containment: 30/30 nodes within [0,1210] scroll content
 == rig-ipad-mini (1078x815) ==
 PASS node-position: 26/26 nodes present at their json coordinate
 PASS hex-orientation: 5/5 nodes at width/height ratio 0.866 +/-0.05
-PASS family-contrast: lit=0.166 unlit=0 ratio=999 (need >=1.5)
+PASS family-contrast: lit=0.164 unlit=0 ratio=999 (need >=1.5)
 PASS glow-containment: 12/12 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor
@@ -25,7 +25,7 @@ PASS y-bounds-containment: 30/30 nodes within [0,1080] visible frame
 == rig-world2-16x9 (1920x1080) ==
 PASS node-position: 26/26 nodes present at their json coordinate
 PASS hex-orientation: 4/4 nodes at width/height ratio 0.866 +/-0.05 (1 locked, skipped — no glow to ray-march)
-PASS family-contrast: lit=0.146 unlit=0.031 ratio=4.738 (need >=1.5)
+PASS family-contrast: lit=0.147 unlit=0.031 ratio=4.757 (need >=1.5)
 PASS glow-containment: 8/8 owned nodes under 25% annulus ink
 PASS colour-probes: 6/6 sampled points match rig_board.json
 PASS glyph-height: 5/5 category labels clear 10.5px-at-ref floor

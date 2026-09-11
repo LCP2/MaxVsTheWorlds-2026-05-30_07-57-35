@@ -13,6 +13,7 @@ using MaxWorlds.Combat;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Factories;
+using MaxWorlds.Pickups;
 using MaxWorlds.Player;
 using MaxWorlds.Save;
 using MaxWorlds.UI;
@@ -323,6 +324,7 @@ namespace MaxWorlds.Dev
             Add(BuildMv755StormdrainDressingCheck());
             Add(BuildMv758LppeSalvo());
             Add(BuildMv759GateDoorsCheck());
+            Add(BuildMv770RocketSalvo());
             return d;
         }
 
@@ -1867,6 +1869,114 @@ namespace MaxWorlds.Dev
                 {
                     new CaptureShot("MV-759-gate-closed", NoSetup),
                     new CaptureShot("MV-759-gate-open", OpenGate),
+                },
+            };
+        }
+
+        // ---- MV770RocketSalvo (MV-770) --------------------------------------------------------
+
+        /// <summary>Frames a stand-in <see cref="ShoulderRack"/> firing a real, auto-triggered salvo at
+        /// a live target robot — proof the staggered launch (MV-770: three rockets over a 0.24s window,
+        /// not one same-frame burst) and the rescaled body/nose/fins/exhaust are what actually lands on
+        /// screen, not a description of them. Same stand-in-emitter idiom
+        /// <see cref="BuildMv758LppeSalvo"/> uses (a fresh GameObject, not the real Player-tagged Max) —
+        /// sidesteps the real Max's own camera rig/nameplate/HUD entanglement entirely, since this
+        /// preset only needs the rack's own real firing/timing path on screen, not Max himself. Same
+        /// "set the RIG state directly, don't drive the whole morph choreography" shortcut
+        /// <c>MV768WeaponNodesAreWiredTests.AssertCluster</c> uses in EditMode.</summary>
+        private static CapturePreset BuildMv770RocketSalvo()
+        {
+            const string outDir = @"C:\Dev\MaxVsTheWorlds-Images\_screens";
+            // Near-top-down rather than the game's own ~60 deg rig angle — a design-review framing,
+            // the same departure BuildMv759GateDoorsCheck's own close-up angle already takes from the
+            // rig, and one that can never show sky/horizon by construction (this ticket's own capture
+            // pass burned several iterations on a horizon-line artifact at pitch 60 whose actual cause
+            // was never pinned down; looking straight down sidesteps the whole class of bug).
+            const float pitch = 88f;
+            const float distance = 8f;
+            // Just past two of the three staggered launches (0s/0.12s/0.24s spacing) — enough for
+            // multiple rockets to be visibly in flight at once without waiting out the third.
+            const float settleSeconds = 0.16f;
+            const float maxWaitSeconds = 3f; // >> the rack's own 1.8s base reload window
+
+            GameObject rackGo = null;
+            GameObject targetGo = null;
+
+            IEnumerator Setup(Camera cam)
+            {
+                for (int i = 0; i < 4; i++) yield return null;   // let the self-installing systems dress the world first
+
+                var hud = FindFirstObjectByType<HudController>();
+                if (hud != null) hud.gameObject.SetActive(false);
+
+                // Out of frame, not out of the scene: the REAL Max's always-on nameplate/health bar
+                // otherwise sits right on top of the stand-in rack and dominates the shot (caught during
+                // this ticket's own capture pass). Same "hide the real Max for a single still frame"
+                // idiom BuildMv759GateDoorsCheck already uses.
+                var playerGo = GameObject.FindGameObjectWithTag("Player");
+                if (playerGo != null) playerGo.SetActive(false);
+
+                // The largest open room on the map. Vector3.left, not Max's own spawn facing (world
+                // +Z) — the same direction BuildWaterGroundTrail/BuildMv617WaterReach/BuildMv674TeleportCrackle
+                // all deliberately fire/blink toward, specifically because the Entry room's own
+                // fences/hedges sit directly in front of Max's default spawn facing and clipped straight
+                // through an earlier version of this capture (caught during this ticket's own pass).
+                Vector3 focus = CaptureDirector.OpenZoneCenter() ?? Vector3.zero;
+                Vector3 aimDir = Vector3.left;
+
+                rackGo = new GameObject("MV770CaptureRack");
+                rackGo.transform.SetPositionAndRotation(focus, Quaternion.LookRotation(aimDir, Vector3.up));
+                rackGo.AddComponent<CharacterController>();
+                rackGo.AddComponent<ShoulderRack>();
+
+                Vector3 targetPos = focus + aimDir * 6f;
+                targetGo = BuildClusterRobot(EnemyKind.Rusher, targetPos);
+                Physics.SyncTransforms();
+
+                float waitStart = Time.time;
+                while (PlayerRocket.Active.Count < 1 && Time.time - waitStart < maxWaitSeconds) yield return null;
+                if (PlayerRocket.Active.Count < 1)
+                    throw new CaptureAbortException("the Shoulder Rack never fired a salvo within the capture window");
+
+                float firstLaunchAt = Time.time;
+                while (Time.time - firstLaunchAt < settleSeconds) yield return null;
+
+                // Framed on the midpoint between rack and target — same "frame the pair, not just one
+                // end" recipe BuildMv616SentinelBeam uses for its own beam-between-two-actors shot.
+                var rot = Quaternion.Euler(pitch, 0f, 0f);
+                Vector3 camFocus = Vector3.Lerp(focus, targetPos, 0.5f) + Vector3.up * 0.6f;
+                cam.transform.SetPositionAndRotation(camFocus - rot * Vector3.forward * distance, rot);
+
+                yield return null;
+            }
+
+            return new CapturePreset
+            {
+                Key = "mv770rocketsalvo",
+                LogTag = "[MV770Capture]",
+                Flag = "-mv770shot",
+                ArmFile = "Temp/mv770.arm",
+                HeadlessMarker = "Temp/mv770.headless",
+                DoneFileName = "_mv770_done.txt",
+                Width = 1600,
+                Height = 1000,
+                OutputDirs = new[] { outDir },
+                TimeoutSeconds = 90,
+                BeforeSceneLoad = () =>
+                {
+                    // Same HomeScreen-modal-freezes-time dodge BuildMv616SentinelBeam uses.
+                    SaveSystem.ActiveSlot = 0;
+                    RigBoard.UseWorld(1);   // s_rkt/s_sal live only on rig_board.world2.json
+                    WeaponSystemState.SecondaryKind = SecondaryKind.ShoulderRack;
+                    RigState.RestoreSnapshot(new Dictionary<string, int> { { "s_rkt", 1 }, { "s_sal", 3 } },
+                        new[] { "SECONDARY" });
+                    PickupWallet.SetPowerCellSecondary(3);
+                },
+                Shots = new List<CaptureShot> { new CaptureShot("MV-770-rocket-salvo", Setup) },
+                Cleanup = () =>
+                {
+                    if (rackGo != null) Destroy(rackGo);
+                    if (targetGo != null) Destroy(targetGo);
                 },
             };
         }

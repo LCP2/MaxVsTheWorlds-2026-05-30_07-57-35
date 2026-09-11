@@ -1,7 +1,10 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
 using MaxWorlds.Pickups;
+using MaxWorlds.UI;
+using MaxWorlds.VFX;
 
 namespace MaxWorlds.Weapons
 {
@@ -61,12 +64,36 @@ namespace MaxWorlds.Weapons
 
         private void Update() => Tick(Time.deltaTime);
 
+        /// <summary>A salvo rocket queued to leave the tube later than its siblings (MV-770) — the
+        /// staggered-launch state a real <see cref="Update"/>/<see cref="Tick"/> loop needs that a
+        /// single same-frame for-loop never did.</summary>
+        private struct PendingLaunch
+        {
+            public float Delay;
+            public Transform Target;
+            public float Damage;
+            public float Splash;
+            public bool Cluster;
+        }
+
+        private readonly List<PendingLaunch> _pending = new List<PendingLaunch>();
+
         /// <summary>The auto-fire salvo loop, pulled out of <see cref="Update"/> as an explicit-dt
         /// method so a test can drive deterministic time without a live PlayerLoop — same split
         /// <see cref="MaxWorlds.Arena.Sentinel"/>'s own fire-cooldown tick uses. Public for
         /// <c>MV694ShoulderRackTests</c>, same visibility <see cref="MaxWorlds.Enemies.HomingMissile.ClearTrailForRespawn"/>
         /// uses for its own test-only entry point.</summary>
         public void Tick(float dt)
+        {
+            TickFireDecision(dt);
+
+            // Runs AFTER the decision above, not before: a fresh salvo's own delay-0 first rocket must
+            // leave on this SAME Tick call, matching the pre-MV-770 immediate-fire timing exactly (see
+            // MV694ShoulderRackTests's own float-overshoot margin, which assumes exactly that).
+            ProcessPendingLaunches(dt);
+        }
+
+        private void TickFireDecision(float dt)
         {
             int rocketLevel = WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.RocketDamage);
 
@@ -88,8 +115,31 @@ namespace MaxWorlds.Weapons
                 return;
             }
 
-            FireSalvo(target, rocketLevel);
+            QueueSalvo(target, rocketLevel);
             _reloadCooldown = ReloadSecondsNow(rocketLevel);
+        }
+
+        /// <summary>Counts every queued launch's delay down and fires the ones that have come due.
+        /// Runs every <see cref="Tick"/> regardless of whether the rack is still equipped/bought —
+        /// once a salvo is decided, the rockets already committed to leaving finish leaving.</summary>
+        private void ProcessPendingLaunches(float dt)
+        {
+            for (int i = _pending.Count - 1; i >= 0; i--)
+            {
+                PendingLaunch p = _pending[i];
+                p.Delay -= dt;
+                if (p.Delay > 0f)
+                {
+                    _pending[i] = p;
+                    continue;
+                }
+
+                _pending.RemoveAt(i);
+                PlayerRocket.Fire(transform.position, p.Target, RocketSpeed, p.Damage, p.Splash, p.Cluster);
+
+                Vector3 aim = p.Target != null ? p.Target.position - transform.position : transform.forward;
+                HudSignals.EmitRocketMuzzle(transform.position, aim);   // MV-770: one flash per rocket
+            }
         }
 
         private static float ReloadSecondsNow(int rocketLevel) => AbilityTuning.ShoulderRackReloadSeconds(
@@ -117,7 +167,11 @@ namespace MaxWorlds.Weapons
             return best;
         }
 
-        private void FireSalvo(RobotEnemy target, int rocketLevel)
+        /// <summary>Decides the salvo's numbers once and queues its rockets to leave staggered across
+        /// <see cref="CombatVfxTuning.ShoulderRackSalvoWindowSeconds"/> (MV-770) rather than firing them
+        /// all on this frame — spread evenly across the window by count, not at a fixed interval, so
+        /// the window stays this exact length whatever <c>s_sal</c>'s current level is worth.</summary>
+        private void QueueSalvo(RobotEnemy target, int rocketLevel)
         {
             int salvoLevel = WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.Salvo);
             int salvoCount = AbilityTuning.ShoulderRackSalvoCount(salvoLevel, AbilityTuning.DefaultShoulderRackMaxSalvoCount);
@@ -137,8 +191,21 @@ namespace MaxWorlds.Weapons
             // maxed Salvo track (the stale pre-fix shape this class's own doc used to describe).
             bool cluster = WeaponSystemState.ShoulderRackTrackLevel(ShoulderRackTrackKind.Cluster) >= 1;
 
+            float spacing = salvoCount > 1
+                ? CombatVfxTuning.ShoulderRackSalvoWindowSeconds / (salvoCount - 1)
+                : 0f;
+
             for (int i = 0; i < salvoCount; i++)
-                PlayerRocket.Fire(transform.position, target.transform, RocketSpeed, damage, splash, cluster);
+            {
+                _pending.Add(new PendingLaunch
+                {
+                    Delay = spacing * i,
+                    Target = target.transform,
+                    Damage = damage,
+                    Splash = splash,
+                    Cluster = cluster,
+                });
+            }
         }
     }
 }

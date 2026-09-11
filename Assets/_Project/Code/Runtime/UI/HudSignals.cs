@@ -111,6 +111,27 @@ namespace MaxWorlds.UI
         /// <summary>An out-of-fuel missile bounced off the ground (MV-349 AC3). (worldPos)</summary>
         public static event Action<Vector3> MissileBounced;
 
+        /// <summary>The LPPE's own 4th-hit Shock pulse landed (MV-770) — (worldPos). Fired only for the
+        /// hit that actually lands Shock, never a plain pulse hit, so a listener (<c>GameFeel</c>) can
+        /// wire hitstop/shake to "the punctuation hit" without re-deriving <c>PulseLaser</c>'s own
+        /// streak-of-4 rule.</summary>
+        public static event Action<Vector3> ShockPulseLanded;
+
+        /// <summary>A Shoulder Rack rocket detonated — a direct hit or an out-of-fuel ground impact,
+        /// same "either way" shape as <see cref="MissileImpact"/> (MV-770). (worldPos, damage).</summary>
+        public static event Action<Vector3, float> RocketImpact;
+
+        /// <summary>One rocket left the tube (MV-770) — fired once per rocket in a staggered
+        /// <c>ShoulderRack</c> salvo, not once per salvo, so "each with its own muzzle flash" (spec)
+        /// falls out of firing this once per launch rather than needing a count parameter.
+        /// (worldPos, forward)</summary>
+        public static event Action<Vector3, Vector3> RocketMuzzle;
+
+        /// <summary>The LPPE fired one pulse (MV-770) — fired once per <c>PulseLaser.FireTick</c>, the
+        /// weapon-recoil hook (<c>MaxRig</c> kicks the gun back on this) rather than a HUD/VFX concern,
+        /// same "one per shot" shape as <see cref="RocketMuzzle"/>. (worldPos, forward)</summary>
+        public static event Action<Vector3, Vector3> LppePulseFired;
+
         /// <summary>Teleport's joystick started being aimed (MV-371) — (the ability's full blink
         /// distance at the current level, metres). The camera-zoom controller listens rather than
         /// taking a direct reference, so the joystick control doesn't have to know the camera zoom
@@ -262,6 +283,18 @@ namespace MaxWorlds.UI
 
         public static void EmitMissileBounced(Vector3 worldPos)
             => MissileBounced?.Invoke(worldPos);
+
+        public static void EmitShockPulseLanded(Vector3 worldPos)
+            => ShockPulseLanded?.Invoke(worldPos);
+
+        public static void EmitRocketImpact(Vector3 worldPos, float damage)
+            => RocketImpact?.Invoke(worldPos, damage);
+
+        public static void EmitRocketMuzzle(Vector3 worldPos, Vector3 forward)
+            => RocketMuzzle?.Invoke(worldPos, forward);
+
+        public static void EmitLppePulseFired(Vector3 worldPos, Vector3 forward)
+            => LppePulseFired?.Invoke(worldPos, forward);
 
         public static void EmitTeleportAimStarted(float maxRangeMetres)
             => TeleportAimStarted?.Invoke(maxRangeMetres);

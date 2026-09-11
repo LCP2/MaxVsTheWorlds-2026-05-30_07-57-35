@@ -2,7 +2,6 @@ using System;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Enemies;
-using MaxWorlds.Rendering;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Weapons
@@ -21,8 +20,10 @@ namespace MaxWorlds.Weapons
     {
         private const float ContactRadius = 0.5f;
 
-        /// <summary>Bolt length in metres (spec: "each pulse is a 0.35m cyan-white bolt").</summary>
-        private const float BoltLength = 0.35f;
+        /// <summary>The bolt's own resolved shape (MV-770) — was a 0.35m/0.08m-wide bolt, 3.8px across
+        /// at the play camera and thinner than the nameplate text above the robot it hits. Read once;
+        /// every renderer <see cref="BuildVisual"/> builds sizes off this same struct.</summary>
+        private static readonly CombatVfxTuning.LppeBoltTuning BoltTuning = CombatVfxTuning.LppeBolt();
 
         private static readonly Color BoltColor = new Color(0.55f, 0.95f, 1f);
 
@@ -37,6 +38,11 @@ namespace MaxWorlds.Weapons
         private Action<RobotEnemy, Vector3> _onKill;
         private bool _canFork;
         private bool _spent;
+        private GroundRing _groundGlow;
+
+        /// <summary>Alpha the ground glow renders at — dim enough it reads as a light spilling onto
+        /// the floor under the bolt, not a second bolt lying flat (MV-770).</summary>
+        private static readonly Color GroundGlowColor = new Color(BoltColor.r, BoltColor.g, BoltColor.b, 0.5f);
 
         // Reused every tick so the per-frame obstruction check (below) allocates nothing, the same
         // idiom WaterBlaster.FireTick's static s_buffer/s_hits use.
@@ -84,7 +90,19 @@ namespace MaxWorlds.Weapons
 
             var pulse = go.AddComponent<SeekerPulse>();
             pulse.Init(target, speed, turnRateDegPerSec, lifetime, damage, onHit, onKill, canFork);
+            pulse.BuildGroundGlow(origin);
             return pulse;
+        }
+
+        /// <summary>MV-770: a ground-hugging additive disc that tracks the bolt's XZ position — the
+        /// weapon bolt has to be its own light source, and a light source spills onto the floor it
+        /// passes over. Its own top-level object (not a child of <c>transform</c>) so it can stay flat
+        /// on the ground while the bolt's own transform pitches/yaws under steering.</summary>
+        private void BuildGroundGlow(Vector3 origin)
+        {
+            _groundGlow = GroundRing.Create("SeekerPulseGroundGlow", additive: true);
+            _groundGlow.Show(new Vector3(origin.x, 0f, origin.z), BoltTuning.GroundGlowDiameter * 0.5f,
+                GroundGlowColor);
         }
 
         /// <summary>Nearest awake, alive robot within range and the lock cone — "awake" excludes a
@@ -180,6 +198,7 @@ namespace MaxWorlds.Weapons
             }
 
             transform.position = next;
+            UpdateGroundGlow();
 
             if (targetLive)
             {
@@ -193,6 +212,13 @@ namespace MaxWorlds.Weapons
             }
 
             if (_age >= _lifetime) Retire();
+        }
+
+        private void UpdateGroundGlow()
+        {
+            if (_groundGlow == null) return;
+            Vector3 pos = transform.position;
+            _groundGlow.Show(new Vector3(pos.x, 0f, pos.z), BoltTuning.GroundGlowDiameter * 0.5f, GroundGlowColor);
         }
 
         /// <summary>
@@ -256,26 +282,38 @@ namespace MaxWorlds.Weapons
             _spent = true;
             // Same Application.isPlaying guard as HomingMissile.Strip() — Destroy is illegal outside
             // Play mode, which an EditMode test driving Tick() directly hits every time.
+            if (_groundGlow != null)
+            {
+                GameObject glowGo = _groundGlow.gameObject;
+                if (Application.isPlaying) Destroy(glowGo); else DestroyImmediate(glowGo);
+                _groundGlow = null;
+            }
             if (Application.isPlaying) Destroy(gameObject);
             else DestroyImmediate(gameObject);
         }
 
-        /// <summary>A slim cyan-white bolt with a short trail (spec: "0.35m cyan-white bolt with a
-        /// short trail") — same build idiom as <see cref="HomingMissile.BuildVisual"/>.</summary>
+        /// <summary>A bolt with weight and a short trail (MV-770: rescaled from a 0.35m/0.08m sliver
+        /// to <see cref="BoltTuning"/>'s own numbers, and switched from a LIT surface material to an
+        /// unlit additive one — a weapon bolt in a world this dark has to be its own light source, not
+        /// a dimly-shaded sliver of metal). Same build idiom as <see cref="HomingMissile.BuildVisual"/>.
+        /// </summary>
         private static void BuildVisual(Transform parent)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
+            Material boltMat = VfxMaterials.AdditiveTinted(BoltColor);
+
             var trail = parent.gameObject.AddComponent<TrailRenderer>();
-            // MV-758: lengthened from 0.1s (spec: "reads as a line, not a dot" at 18 m/s) — at the old
-            // value the trail was under 2m long and read as barely more than the bolt mesh itself.
-            trail.time = 0.16f;
+            // MV-770: a taut, fast taper (0.12s) rather than MV-758's 0.16s — the bolt itself is now
+            // wide enough to read on its own, so the trail's job is a short streak behind it, not
+            // carrying the bolt's own visibility.
+            trail.time = BoltTuning.TrailLifetime;
             trail.widthCurve = new AnimationCurve(new Keyframe(0f, 1f), new Keyframe(1f, 0f));
-            trail.widthMultiplier = 0.08f;
+            trail.widthMultiplier = BoltTuning.TrailWidth;
             trail.minVertexDistance = 0.02f;
             trail.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             trail.receiveShadows = false;
-            trail.sharedMaterial = MaterialLibrary.Tinted(SurfaceKind.Metal, BoltColor);
+            trail.sharedMaterial = boltMat;
             trail.Clear();
 
             var bolt = GameObject.CreatePrimitive(PrimitiveType.Capsule);
@@ -287,9 +325,9 @@ namespace MaxWorlds.Weapons
             }
             bolt.transform.SetParent(parent, false);
             bolt.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            bolt.transform.localScale = new Vector3(0.08f, BoltLength * 0.5f, 0.08f);
-            Material mat = MaterialLibrary.Tinted(SurfaceKind.Metal, BoltColor);
-            if (mat != null) bolt.GetComponent<MeshRenderer>().sharedMaterial = mat;
+            bolt.transform.localScale = new Vector3(BoltTuning.CrossSection, BoltTuning.Length * 0.5f,
+                BoltTuning.CrossSection);
+            if (boltMat != null) bolt.GetComponent<MeshRenderer>().sharedMaterial = boltMat;
         }
     }
 }

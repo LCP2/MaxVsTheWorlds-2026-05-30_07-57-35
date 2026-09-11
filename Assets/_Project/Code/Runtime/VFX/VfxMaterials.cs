@@ -57,6 +57,26 @@ namespace MaxWorlds.VFX
         /// <summary>Alpha-blended — droplets and spray that should read as water volume, not light.</summary>
         public static Material AlphaBlend(Texture2D tex) => Get("alpha:" + tex.name, tex, additive: false);
 
+        /// <summary>MV-770: a flat, unlit, additive material carrying its own baked colour — for a
+        /// persistent mesh (a bolt, an exhaust flame) rather than a one-shot particle burst, where
+        /// <see cref="Additive"/>'s shared-per-texture cache would mean every tint fought over the
+        /// same instance. Keyed by the quantised colour, same idiom as
+        /// <see cref="MaxWorlds.Rendering.MaterialLibrary.Tinted"/> — a weapon's bolt colour is fixed,
+        /// so this mints one material per distinct tone, not one per bolt.</summary>
+        public static Material AdditiveTinted(Color color)
+        {
+            string key = $"addtint:{Mathf.RoundToInt(color.r * 255f):X2}{Mathf.RoundToInt(color.g * 255f):X2}" +
+                         $"{Mathf.RoundToInt(color.b * 255f):X2}";
+            if (s_materials.TryGetValue(key, out var cached) && cached != null) return cached;
+
+            Material m = Get(key, Solid(), additive: true);
+            if (m == null) return null;
+
+            m.SetColor("_BaseColor", color);
+            m.SetColor("_Color", color);
+            return m;
+        }
+
         // --- textures ---
 
         /// <summary>Round droplet: opaque core, soft falloff. The workhorse water particle.</summary>

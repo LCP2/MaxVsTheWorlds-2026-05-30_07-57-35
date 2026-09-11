@@ -65,6 +65,19 @@ namespace MaxWorlds.Feel
         [SerializeField] private float missileStopSeconds = 0.09f;
         [SerializeField] private float missileStopScale = 0.07f;
 
+        [Header("LPPE Shock (MV-770)")]
+        [Tooltip("A SHOCK pulse is the punctuation hit, not a plain pulse — a stream of these at the " +
+                 "LPPE's 0.22s cadence would read as lag, so it is deliberately excluded (see " +
+                 "PulseLaser.RegisterHit).")]
+        [SerializeField] private float shockStopSeconds = 0.09f;
+        [SerializeField] private float shockStopScale = 0.08f;
+        [SerializeField] private float shockTrauma = 0.35f;
+
+        [Header("Shoulder Rack rocket impact (MV-770)")]
+        [SerializeField] private float rocketStopSeconds = 0.06f;
+        [SerializeField] private float rocketStopScale = 0.08f;
+        [SerializeField] private float rocketTrauma = 0.65f;
+
         [Header("Teleport")]
         [Tooltip("MV-338 AC3: a brief slow-mo while Max's teleport VFX plays. Noticeably softer than a " +
                  "kill/factory hit-stop (which reads as a near-freeze) — this has to read as time " +
@@ -90,6 +103,8 @@ namespace MaxWorlds.Feel
             HudSignals.BossDefeated += OnBossDefeated;
             HudSignals.MaxTeleported += OnMaxTeleported;
             HudSignals.MissileImpact += OnMissileImpact;
+            HudSignals.ShockPulseLanded += OnShockPulseLanded;
+            HudSignals.RocketImpact += OnRocketImpact;
         }
 
         private void OnDisable()
@@ -100,6 +115,8 @@ namespace MaxWorlds.Feel
             HudSignals.BossDefeated -= OnBossDefeated;
             HudSignals.MaxTeleported -= OnMaxTeleported;
             HudSignals.MissileImpact -= OnMissileImpact;
+            HudSignals.ShockPulseLanded -= OnShockPulseLanded;
+            HudSignals.RocketImpact -= OnRocketImpact;
         }
 
         /// <summary>The shake lives on the camera, not here — it has to run after the Cinemachine
@@ -153,6 +170,23 @@ namespace MaxWorlds.Feel
         /// second the way a damage stream can), so the shared <see cref="minStopInterval"/> guard built
         /// for that spam case doesn't need to gate this too.</summary>
         private void OnMaxTeleported(Vector3 from, Vector3 to) => _stop.Request(teleportSlowSeconds, teleportSlowScale);
+
+        /// <summary>MV-770 — the LPPE's own "punctuation hit". Every 4th pulse to land on the same
+        /// robot, never a plain pulse (see <see cref="MaxWorlds.Combat.PulseLaser.RegisterHit"/>), so
+        /// this never fights the sustained-stream rate limit <see cref="TryStop"/> exists for.</summary>
+        private void OnShockPulseLanded(Vector3 pos)
+        {
+            Shake()?.AddTrauma(shockTrauma);
+            TryStop(shockStopSeconds, shockStopScale);
+        }
+
+        /// <summary>MV-770 — a Shoulder Rack rocket detonating, direct hit or ground impact alike (same
+        /// "either way" shape as <see cref="OnMissileImpact"/>).</summary>
+        private void OnRocketImpact(Vector3 pos, float damage)
+        {
+            Shake()?.AddTrauma(rocketTrauma);
+            TryStop(rocketStopSeconds, rocketStopScale);
+        }
 
         private void TryStop(float seconds, float scale)
         {

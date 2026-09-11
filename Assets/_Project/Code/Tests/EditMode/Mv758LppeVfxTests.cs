@@ -59,10 +59,14 @@ namespace MaxWorlds.Tests.EditMode
                 var muzzleParticles = new ParticleSystem.Particle[muzzlePs.particleCount];
                 int muzzleCount = muzzlePs.GetParticles(muzzleParticles);
                 Assert.That(muzzleCount, Is.GreaterThan(0), "the muzzle burst must actually emit a particle to read back");
+                // MV-770 raised the muzzle flash from 0.08s to 0.14s alongside the bolt/rocket weight
+                // pass — the invariant this guards (never smear into the next shot) is against the
+                // FASTEST the LPPE can fire, PulseLaser.DefaultRateFloorInterval (a maxed RATE track),
+                // not the old hardcoded 0.08s literal.
                 for (int i = 0; i < muzzleCount; i++)
                 {
-                    Assert.That(muzzleParticles[i].startLifetime, Is.LessThanOrEqualTo(0.08f),
-                        "the muzzle flash must punctuate the 0.22s cadence, not smear into the next shot");
+                    Assert.That(muzzleParticles[i].startLifetime, Is.LessThanOrEqualTo(PulseLaser.DefaultRateFloorInterval),
+                        "the muzzle flash must punctuate even the fastest (maxed RATE) cadence, not smear into the next shot");
                 }
 
                 // --- AC2: the Shock-carrying 4th hit's impact must be a structurally DIFFERENT

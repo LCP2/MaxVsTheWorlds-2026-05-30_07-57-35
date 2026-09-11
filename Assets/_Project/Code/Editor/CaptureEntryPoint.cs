@@ -77,6 +77,10 @@ namespace MaxWorlds.Editor
         public static void MenuMv759GateDoors() => RunFromMenu(CapturePresets.All["mv-w2-gate-doors"]);
         public static void CaptureMv759GateDoors() => Run(CapturePresets.All["mv-w2-gate-doors"]);
 
+        [MenuItem("MaxWorlds/Capture/Rocket Salvo (MV-770)")]
+        public static void MenuMv770RocketSalvo() => RunFromMenu(CapturePresets.All["mv770rocketsalvo"]);
+        public static void CaptureMv770RocketSalvo() => Run(CapturePresets.All["mv770rocketsalvo"]);
+
         private static string PrimaryOutDir(CapturePreset preset) => preset.OutputDirs[0];
         private static string DoneFile(CapturePreset preset) => Path.Combine(PrimaryOutDir(preset), preset.DoneFileName);
 

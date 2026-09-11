@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.Rendering;
+using MaxWorlds.UI;
 using MaxWorlds.VFX;
 
 namespace MaxWorlds.Weapons
@@ -85,21 +86,73 @@ namespace MaxWorlds.Weapons
             s_active.Clear();
         }
 
+        /// <summary>MV-770: the body's own resolved length — was a bare 0.16m capsule (7.7px at the
+        /// play camera, barely wider than its own smoke trail).</summary>
+        private static readonly CombatVfxTuning.RocketBodyTuning BodyTuning = CombatVfxTuning.RocketBody();
+
         private static void BuildVisual(Transform parent)
         {
             parent.gameObject.AddComponent<KeepsOwnMaterial>();
 
             Material bodyMat = MaterialLibrary.Tinted(SurfaceKind.Metal, BodyColor);
+            float halfLength = BodyTuning.Length * 0.5f;
 
             var shaft = GameObject.CreatePrimitive(PrimitiveType.Capsule);
             shaft.name = "Shaft";
             Strip(shaft);
             shaft.transform.SetParent(parent, false);
             shaft.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
-            shaft.transform.localScale = new Vector3(0.10f, 0.16f, 0.10f);
+            shaft.transform.localScale = new Vector3(0.12f, halfLength, 0.12f);
             if (bodyMat != null) shaft.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
 
+            // Nose cone (MV-770 "a 0.5m body with a nose cone and 3 fins") — a squashed sphere at the
+            // tip. Greybox/free-kit only (spec), so this is a primitive doing a cone's JOB, not a
+            // custom mesh: readable as a pointed tip from the fixed ~72° camera, not a faithful cone.
+            var nose = GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            nose.name = "NoseCone";
+            Strip(nose);
+            nose.transform.SetParent(parent, false);
+            nose.transform.localPosition = new Vector3(0f, 0f, halfLength + 0.06f);
+            nose.transform.localScale = new Vector3(0.13f, 0.13f, 0.16f);
+            if (bodyMat != null) nose.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
+
+            BuildFins(parent, halfLength, bodyMat);
+            BuildExhaustFlame(parent, halfLength);
             BuildSmokeTrail(parent);
+        }
+
+        /// <summary>Three thin blades at the tail, 120 degrees apart — the silhouette detail that
+        /// reads "rocket" rather than "capsule" from the fixed top-down camera.</summary>
+        private static void BuildFins(Transform parent, float halfLength, Material bodyMat)
+        {
+            for (int i = 0; i < 3; i++)
+            {
+                var fin = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                fin.name = $"Fin{i}";
+                Strip(fin);
+                fin.transform.SetParent(parent, false);
+                fin.transform.localRotation = Quaternion.Euler(0f, 0f, i * 120f);
+                fin.transform.localPosition =
+                    fin.transform.localRotation * new Vector3(0f, 0.13f, -halfLength + 0.05f);
+                fin.transform.localScale = new Vector3(0.02f, 0.14f, 0.09f);
+                if (bodyMat != null) fin.GetComponent<MeshRenderer>().sharedMaterial = bodyMat;
+            }
+        }
+
+        /// <summary>The amber unlit flame (MV-770) layered behind the existing grey smoke trail — an
+        /// exhaust needs to look like it's BURNING, which a lit grey-tinted capsule never could.</summary>
+        private static void BuildExhaustFlame(Transform parent, float halfLength)
+        {
+            var flame = GameObject.CreatePrimitive(PrimitiveType.Capsule);
+            flame.name = "ExhaustFlame";
+            Strip(flame);
+            flame.transform.SetParent(parent, false);
+            flame.transform.localRotation = Quaternion.Euler(90f, 0f, 0f);
+            float flameLength = BodyTuning.ExhaustFlameSize;
+            flame.transform.localPosition = new Vector3(0f, 0f, -halfLength - flameLength * 0.5f);
+            flame.transform.localScale = new Vector3(0.07f, flameLength * 0.5f, 0.07f);
+            Material flameMat = VfxMaterials.AdditiveTinted(ExhaustFlameColor);
+            if (flameMat != null) flame.GetComponent<MeshRenderer>().sharedMaterial = flameMat;
         }
 
         /// <summary>The ticket's "rocket smoke trail" — same build idiom
@@ -132,6 +185,11 @@ namespace MaxWorlds.Weapons
         /// <summary>The smoke trail's colour (MV-702) — pale grey, distinct from every weapon-coloured
         /// trail in the cast (the LPPE bolt's cyan-white, the missile's own shaft tint).</summary>
         private static readonly Color SmokeColor = new Color(0.6f, 0.6f, 0.58f);
+
+        /// <summary>The exhaust flame's colour (MV-770) — pushed past 1.0 the same way
+        /// <c>LppeVfx.MuzzleColor</c> is, so it actually clears the bloom threshold rather than sitting
+        /// at the same brightness as everything else on screen.</summary>
+        private static readonly Color ExhaustFlameColor = new Color(1.6f, 0.9f, 0.3f, 1f);
 
         private static void Strip(GameObject go)
         {
@@ -187,6 +245,10 @@ namespace MaxWorlds.Weapons
             ApplySplashDamage(transform.position, _damage, _splashRadius);
             RocketImpactVfx.PlaySplashRing(transform.position, _splashRadius);
             if (_cluster) SpawnClusterBomblets(transform.position);
+
+            // MV-770: the impact's own flash+sparks (CombatVfx) and feel (GameFeel's hitstop/shake) —
+            // same "either way" bus idiom HomingMissile.Detonate uses for HudSignals.MissileImpact.
+            HudSignals.EmitRocketImpact(transform.position, _damage);
 
             Destroy(gameObject);
         }

@@ -92,6 +92,13 @@ namespace MaxWorlds.VFX
         private static readonly Color PlayerContactCore = new Color(0.95f, 0.4f, 0.25f, 1f);
         private static readonly Color PlayerContactDeep = new Color(0.6f, 0.12f, 0.08f, 1f);
 
+        // The Shoulder Rack's own rocket (MV-770): the same scorched-orange family
+        // RocketImpactVfx.RingColor already uses for the splash ring, so the muzzle/impact beats read
+        // as the SAME weapon rather than a re-skinned missile.
+        private static readonly Color RocketMuzzleColor = new Color(1.7f, 1.1f, 0.5f, 1f);
+        private static readonly Color RocketImpactCore = new Color(1.5f, 0.85f, 0.35f, 1f);
+        private static readonly Color RocketImpactDeep = new Color(0.85f, 0.45f, 0.2f, 1f);
+
         private VfxBurst _hitSparks;    // enemy took a hit
         private VfxBurst _deathSparks;  // enemy died: bright bits
         private VfxBurst _deathDebris;  // enemy died: dark chunks
@@ -115,6 +122,9 @@ namespace MaxWorlds.VFX
         private VfxBurst _sentinelRecall;   // sentinel: the recall despawn (MV-604)
         private VfxBurst _playerHitSpark;   // Max: an isolated hit (MV-722)
         private VfxBurst _playerContactGlow; // Max: ongoing contact (MV-722)
+        private VfxBurst _rocketMuzzle;     // Shoulder Rack: one flash per rocket launched (MV-770)
+        private VfxBurst _rocketImpactFlash; // Shoulder Rack: the detonation's own flash (MV-770)
+        private VfxBurst _rocketImpactSparks; // Shoulder Rack: the detonation's own sparks (MV-770)
 
         private void Awake()
         {
@@ -154,6 +164,11 @@ namespace MaxWorlds.VFX
             // ticket asks for SUBTLE, not spectacle.
             _playerHitSpark = new VfxBurst("PlayerHitSpark", additive, 60, 0.2f, perFrameCap: 4, stretched: true);
             _playerContactGlow = new VfxBurst("PlayerContactGlow", additive, 80, -0.05f, perFrameCap: 6);
+            // MV-770: small budgets — a maxed salvo is only 3 rockets, nothing like the missile's own
+            // volume of events.
+            _rocketMuzzle = new VfxBurst("RocketMuzzleFlash", additive, 24, 0f, perFrameCap: 4);
+            _rocketImpactFlash = new VfxBurst("RocketImpactFlash", additive, 24, 0f, perFrameCap: 4);
+            _rocketImpactSparks = new VfxBurst("RocketImpactSparks", additive, 40, 0.3f, perFrameCap: 4, stretched: true);
         }
 
         private void OnEnable()
@@ -169,6 +184,8 @@ namespace MaxWorlds.VFX
             HudSignals.SentinelRecalled += OnSentinelRecalled;
             HudSignals.PlayerHit += OnPlayerHit;
             HudSignals.FittingDestroyed += OnFittingDestroyed;
+            HudSignals.RocketMuzzle += OnRocketMuzzle;
+            HudSignals.RocketImpact += OnRocketImpact;
         }
 
         private void OnDisable()
@@ -186,6 +203,8 @@ namespace MaxWorlds.VFX
             HudSignals.SentinelRecalled -= OnSentinelRecalled;
             HudSignals.PlayerHit -= OnPlayerHit;
             HudSignals.FittingDestroyed -= OnFittingDestroyed;
+            HudSignals.RocketMuzzle -= OnRocketMuzzle;
+            HudSignals.RocketImpact -= OnRocketImpact;
         }
 
         private void OnDestroy()
@@ -200,6 +219,7 @@ namespace MaxWorlds.VFX
             Dispose(_missileSputter); Dispose(_missileBounceDust);
             Dispose(_sentinelRecall);
             Dispose(_playerHitSpark); Dispose(_playerContactGlow);
+            Dispose(_rocketMuzzle); Dispose(_rocketImpactFlash); Dispose(_rocketImpactSparks);
         }
 
         // --- events ---
@@ -563,6 +583,47 @@ namespace MaxWorlds.VFX
             }
         }
 
+        // --- the Shoulder Rack's own rocket (MV-770) ---
+
+        /// <summary>One flash per rocket leaving the tube — fired once per launch by a staggered
+        /// <see cref="MaxWorlds.Weapons.ShoulderRack"/> salvo, so "each with its own muzzle flash"
+        /// (spec) falls out of the event firing once per rocket rather than needing a count.</summary>
+        private void OnRocketMuzzle(Vector3 pos, Vector3 forward)
+        {
+            CombatVfxTuning.RocketBodyTuning t = CombatVfxTuning.RocketBody();
+            Vector3 axis = forward.sqrMagnitude > 1e-6f ? forward.normalized : Vector3.forward;
+
+            _rocketMuzzle.Emit(pos + axis * 0.2f, 1,
+                axis: axis, spreadDegrees: 18f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: t.ExhaustFlameSize * 1.4f, sizeMax: t.ExhaustFlameSize * 1.4f,
+                lifeMin: 0.06f, lifeMax: 0.06f,
+                colorA: RocketMuzzleColor, colorB: RocketMuzzleColor);
+        }
+
+        /// <summary>The detonation's own flash+sparks (spec: "1.4m flash, 0.22s, plus 6 sparks"),
+        /// layered on top of the existing splash ring <see cref="MaxWorlds.Weapons.RocketImpactVfx"/>
+        /// already draws rather than replacing it.</summary>
+        private void OnRocketImpact(Vector3 pos, float damage)
+        {
+            CombatVfxTuning.RocketImpactFlashTuning t = CombatVfxTuning.RocketImpact();
+            Vector3 at = pos + Vector3.up * 0.15f;
+
+            _rocketImpactFlash.Emit(at, 1,
+                axis: Vector3.up, spreadDegrees: 0f,
+                speedMin: 0f, speedMax: 0f,
+                sizeMin: t.FlashSize, sizeMax: t.FlashSize,
+                lifeMin: t.FlashLifetime, lifeMax: t.FlashLifetime,
+                colorA: RocketImpactCore, colorB: RocketImpactCore);
+
+            _rocketImpactSparks.Emit(at, t.SparkCount,
+                axis: Vector3.up, spreadDegrees: 85f,
+                speedMin: 3f, speedMax: 7f,
+                sizeMin: 0.1f, sizeMax: 0.2f,
+                lifeMin: 0.18f, lifeMax: 0.3f,
+                colorA: RocketImpactCore, colorB: RocketImpactDeep);
+        }
+
         private void LateUpdate()
         {
             _hitSparks.EndFrame(); _deathSparks.EndFrame(); _deathDebris.EndFrame();
@@ -573,6 +634,7 @@ namespace MaxWorlds.VFX
             _missileSputter.EndFrame(); _missileBounceDust.EndFrame();
             _sentinelRecall.EndFrame();
             _playerHitSpark.EndFrame(); _playerContactGlow.EndFrame();
+            _rocketMuzzle.EndFrame(); _rocketImpactFlash.EndFrame(); _rocketImpactSparks.EndFrame();
         }
 
         private static void Dispose(VfxBurst b)
