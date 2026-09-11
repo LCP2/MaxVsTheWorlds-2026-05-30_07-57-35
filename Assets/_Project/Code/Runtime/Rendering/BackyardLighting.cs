@@ -69,6 +69,11 @@ namespace MaxWorlds.Rendering
         /// <summary>The profile this built, so tests (and a future tuning UI) can inspect it.</summary>
         public VolumeProfile Profile => _profile;
 
+        /// <summary>The look this instance actually applied (MV-766) — read by the world probe
+        /// instead of re-deriving a look from the world index, so the probe reports what the game
+        /// resolved rather than what it ought to have resolved.</summary>
+        public BackyardLook Look => look;
+
         /// <summary>The sky material this built, so tests can look at it without a camera.</summary>
         public Material Sky => _sky;
 
