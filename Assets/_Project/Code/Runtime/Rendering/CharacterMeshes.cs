@@ -186,6 +186,86 @@ namespace MaxWorlds.VFX
         public static Mesh Beam(float length, float rBottom, float rTop, int sides = 8)
             => Prism(sides, rBottom, rTop, length, 0.10f);
 
+        // ------------------------------------------------------------------ Ring (MV-786)
+
+        /// <summary>A flat washer: a hollow disc of <paramref name="thickness"/> between
+        /// <paramref name="innerRadius"/> and <paramref name="outerRadius"/>, centred on the origin and
+        /// lying flat in XZ. A rust rim proud of a hopper's mouth, a bezel — anywhere a shape needs to
+        /// read as an annulus rather than a solid disc. Flat-shaded, same reasoning as
+        /// <see cref="Prism"/>: a rim wants a hard machined edge, not a blurred one.</summary>
+        public static Mesh Ring(float innerRadius, float outerRadius, float thickness = 0.05f, int segments = 24)
+        {
+            int key = Hash(4, segments, new[] { new Vector2(innerRadius, outerRadius), new Vector2(thickness, 0f) });
+            if (Cache.TryGetValue(key, out Mesh hit)) return hit;
+
+            var verts = new List<Vector3>();
+            var tris = new List<int>();
+            float hh = thickness * 0.5f;
+
+            AddAnnulusCap(verts, tris, innerRadius, outerRadius, hh, segments, topFacing: true);
+            AddAnnulusCap(verts, tris, innerRadius, outerRadius, -hh, segments, topFacing: false);
+            AddCylinderWall(verts, tris, outerRadius, hh, -hh, segments, outward: true);
+            AddCylinderWall(verts, tris, innerRadius, hh, -hh, segments, outward: false);
+
+            return Store(key, verts, tris, smooth: false);
+        }
+
+        private static void AddAnnulusCap(List<Vector3> verts, List<int> tris, float rInner, float rOuter,
+                                          float y, int segments, bool topFacing)
+        {
+            int start = verts.Count;
+            for (int s = 0; s <= segments; s++)
+            {
+                float a = (float)s / segments * Mathf.PI * 2f;
+                float cx = Mathf.Cos(a), cz = Mathf.Sin(a);
+                verts.Add(new Vector3(cx * rInner, y, cz * rInner));
+                verts.Add(new Vector3(cx * rOuter, y, cz * rOuter));
+            }
+            for (int s = 0; s < segments; s++)
+            {
+                int a = start + s * 2, b = a + 2;
+                int ai = a + 1, bi = b + 1;
+                if (topFacing)
+                {
+                    tris.Add(a); tris.Add(b); tris.Add(ai);
+                    tris.Add(ai); tris.Add(b); tris.Add(bi);
+                }
+                else
+                {
+                    tris.Add(a); tris.Add(ai); tris.Add(b);
+                    tris.Add(ai); tris.Add(bi); tris.Add(b);
+                }
+            }
+        }
+
+        private static void AddCylinderWall(List<Vector3> verts, List<int> tris, float r,
+                                            float yTop, float yBottom, int segments, bool outward)
+        {
+            int start = verts.Count;
+            for (int s = 0; s <= segments; s++)
+            {
+                float a = (float)s / segments * Mathf.PI * 2f;
+                float cx = Mathf.Cos(a), cz = Mathf.Sin(a);
+                verts.Add(new Vector3(cx * r, yTop, cz * r));
+                verts.Add(new Vector3(cx * r, yBottom, cz * r));
+            }
+            for (int s = 0; s < segments; s++)
+            {
+                int a = start + s * 2, b = a + 2;
+                int at = a, ab = a + 1, bt = b, bb = b + 1;
+                if (outward)
+                {
+                    tris.Add(at); tris.Add(bt); tris.Add(ab);
+                    tris.Add(ab); tris.Add(bt); tris.Add(bb);
+                }
+                else
+                {
+                    tris.Add(at); tris.Add(ab); tris.Add(bt);
+                    tris.Add(bt); tris.Add(ab); tris.Add(bb);
+                }
+            }
+        }
+
         // ------------------------------------------------------------------ Bevelled box (MV-778)
 
         /// <summary>

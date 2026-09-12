@@ -427,202 +427,310 @@ namespace MaxWorlds.Rendering
 
         // ---------------------------------------------------------------- cover reskins
 
-        /// <summary>Standpipe — replaces a Tree. A vertical rust column with a flange base and a valve
-        /// wheel on top, the drain's answer to a tree's tall vertical silhouette. Clamped to 1.6x-2.6x
-        /// <paramref name="wallHeight"/> (MV-765) so it reads as a deliberate silhouette rising above
-        /// a low wall rather than an accident of an unrelated cover block's authored size.</summary>
-        public static GameObject BuildStandpipe(Transform parent, Vector3 at, float height, float wallHeight)
+        /// <summary>Standpipe cluster — replaces a Tree (MV-786). Five lathed pipes of varied radius
+        /// and height, jittered on a ring across the cover's own footprint, each collared at
+        /// mid-height, rising off one shared lathed base plate. Deterministic from world position —
+        /// never <see cref="UnityEngine.Random"/> — so the same map always clusters the same pipes the
+        /// same way.</summary>
+        public static GameObject BuildStandpipe(Transform parent, Vector3 at, Vector3 size)
         {
-            height = Mathf.Clamp(height, 1.6f * wallHeight, 2.6f * wallHeight);
-
             var root = new GameObject("Standpipe");
             root.transform.SetParent(parent, false);
             root.transform.position = at;
 
-            const float r = 0.22f;   // the column's own radius, per MV-779's flare/bell profiles
-            Tube(root.transform, "Column", Vector3.up * (height * 0.5f), r, height,
-                 Quaternion.identity, Rust);
-            Tube(root.transform, "Flange", Vector3.up * 0.12f, 0.42f, 0.24f,
-                 Quaternion.identity, RustDark);
-            Tube(root.transform, "Collar", Vector3.up * (height * 0.55f), 0.30f, 0.18f,
-                 Quaternion.identity, RustDark);
+            float footprint = Mathf.Min(size.x, size.z);
+            float h = size.y;
+            float baseR = footprint * 0.5f + 0.08f;
 
-            // MV-779: a flared base at the floor and a bell top at the pipe's own top — the column
-            // reads as a fitted standpipe rather than a straight length of stock.
-            AddMeshPart(root.transform, "Flared Base", CharacterMeshes.Lathe(new[]
+            AddMeshPart(root.transform, "Base Plate", CharacterMeshes.Lathe(new[]
                 {
                     new Vector2(0f, 0f),
-                    new Vector2(r * 1.9f, 0f),
-                    new Vector2(r * 1.9f, r * 0.5f),
-                    new Vector2(r * 1.15f, r * 0.9f),
-                    new Vector2(r, r * 1.1f),
-                }, 18),
+                    new Vector2(baseR, 0f),
+                    new Vector2(baseR, 0.06f),
+                    new Vector2(baseR * 0.88f, 0.09f),
+                }, 20),
                 Vector3.zero, SurfaceKind.Metal, RustDark);
 
-            AddMeshPart(root.transform, "Bell Top", CharacterMeshes.Lathe(new[]
-                {
-                    new Vector2(r, 0f),
-                    new Vector2(r * 1.1f, r * 0.3f),
-                    new Vector2(r * 1.7f, r * 0.85f),
-                    new Vector2(r * 1.62f, r * 1.0f),
-                    new Vector2(0f, r * 1.0f),
-                }, 18),
-                Vector3.up * height, SurfaceKind.Metal, RustDark);
-
-            // Valve wheel: four spokes and a rim. A torus would be one draw call cheaper if Unity had
-            // a torus primitive; it does not, and four thin boxes read as a wheel from this camera.
-            var wheel = new GameObject("Valve Wheel");
-            wheel.transform.SetParent(root.transform, false);
-            wheel.transform.localPosition = Vector3.up * (height + 0.06f);
-            for (int i = 0; i < 4; i++)
+            for (int i = 0; i < 5; i++)
             {
-                Box(wheel.transform, $"Spoke{i}", Vector3.zero, new Vector3(0.72f, 0.06f, 0.09f),
-                    Hazard, SurfaceKind.Metal).transform.localRotation = Quaternion.Euler(0f, i * 45f, 0f);
+                float hash = at.x * 12.9898f + at.z * 78.233f + i * 37.719f;
+                float radius = Mathf.Lerp(0.105f, 0.155f, Frac(hash * 0.6180339887f));
+                float height = h * Mathf.Lerp(0.85f, 1.60f, Frac(hash * 0.3247179572f + 11f));
+                float ringT = Mathf.Lerp(0.13f, 0.29f, Frac(hash * 0.1284f + 23f));
+                float ringR = footprint * ringT;
+                float ang = (i / 5f + Frac(hash * 0.918f)) * Mathf.PI * 2f;
+                Vector3 pipeAt = new Vector3(Mathf.Cos(ang) * ringR, 0.09f, Mathf.Sin(ang) * ringR);
+
+                Tube(root.transform, $"Pipe{i}", pipeAt + Vector3.up * (height * 0.5f), radius, height,
+                     Quaternion.identity, Rust);
+                Tube(root.transform, $"Collar{i}", pipeAt + Vector3.up * (height * 0.5f), radius * 1.3f, 0.12f,
+                     Quaternion.identity, RustDark);
             }
+
             return root;
         }
 
-        /// <summary>Debris rake — replaces a Hedge. The hedge is the ONE see-through cover class
-        /// (<c>reference_cover_sight_and_wake</c>: only hedges let sight and shots pass), so its
-        /// replacement must be visually see-through too or the player will read it as solid and take
-        /// the wrong fight. Five thin bars with air between them, not a panel.</summary>
-        public static GameObject BuildDebrisRake(Transform parent, Vector3 at, Vector3 size)
+        /// <summary>Collapsed grating — replaces a Hedge (MV-786). Two frame rails and nine cross bars
+        /// pitched at 22 degrees, propped at one corner by a hexagonal stub — a fallen grate, not a
+        /// hedge. The hedge is the ONE see-through cover class (only hedges let sight and shots pass),
+        /// and a lattice of bars with air between them keeps that true by construction, not by a
+        /// special case.</summary>
+        public static GameObject BuildCollapsedGrating(Transform parent, Vector3 at, Vector3 size)
         {
-            var root = new GameObject("Debris Rake");
+            var root = new GameObject("Collapsed Grating");
             root.transform.SetParent(parent, false);
             root.transform.position = at;
 
             bool alongX = size.x >= size.z;
             float span = alongX ? size.x : size.z;
-            float h = Mathf.Max(0.9f, size.y);
+            float crossSpan = Mathf.Max(0.5f, alongX ? size.z : size.x);
+            const float pitchDeg = 22f;
+            float lift = crossSpan * 0.5f * Mathf.Sin(pitchDeg * Mathf.Deg2Rad) + 0.04f;
 
-            for (int i = 0; i < 5; i++)
+            // Pitched about the rails' OWN long axis (local Z), not across it — a 16 m hedge run's
+            // rails must tilt as one rigid, uniformly-raised plane, never stretch into a ramp along
+            // their own length the way rotating about local X would.
+            var panel = new GameObject("Panel").transform;
+            panel.SetParent(root.transform, false);
+            panel.localPosition = Vector3.up * lift;
+            panel.localRotation = Quaternion.Euler(0f, 0f, pitchDeg);
+
+            for (int i = 0; i < 2; i++)
             {
-                float t = (i + 0.5f) / 5f - 0.5f;
-                Vector3 p = alongX ? new Vector3(t * span, h * 0.5f, 0f) : new Vector3(0f, h * 0.5f, t * span);
-                Vector3 s = alongX ? new Vector3(0.09f, h, 0.14f) : new Vector3(0.14f, h, 0.09f);
-                Box(root.transform, $"Bar{i}", p, s, RustDark, SurfaceKind.Metal);
+                float t = i == 0 ? -0.5f : 0.5f;
+                var rail = AddMeshPart(panel, $"Rail{i}", CharacterMeshes.Beam(span, 0.045f, 0.045f),
+                    new Vector3(t * crossSpan * 0.88f, 0f, 0f), SurfaceKind.Metal, RustDark);
+                rail.transform.localRotation = Quaternion.FromToRotation(Vector3.up, Vector3.forward);
             }
 
-            // Caught rubbish along the bottom — what a rake is FOR, and the thing that tells the
-            // player the sludge in this room flows that way.
-            Vector3 sill = alongX ? new Vector3(span, 0.22f, 0.30f) : new Vector3(0.30f, 0.22f, span);
-            Box(root.transform, "Caught Silt", Vector3.up * 0.11f, sill, Algae);
+            for (int i = 0; i < 9; i++)
+            {
+                float t = (i + 0.5f) / 9f - 0.5f;
+                var bar = AddMeshPart(panel, $"Bar{i}", CharacterMeshes.Beam(crossSpan * 0.9f, 0.03f, 0.03f),
+                    new Vector3(0f, 0f, t * span), SurfaceKind.Metal, RustDark);
+                bar.transform.localRotation = Quaternion.FromToRotation(Vector3.up, Vector3.right);
+            }
+
+            Vector3 cornerLocal = new Vector3(crossSpan * 0.42f, 0f, span * 0.42f);
+            AddMeshPart(root.transform, "Prop Stub", CharacterMeshes.Prism(6, 0.06f, 0.05f, lift),
+                cornerLocal + Vector3.up * (lift * 0.5f), SurfaceKind.Metal, RustDark);
+
             return root;
         }
 
-        /// <summary>Silt bin — replaces a Planter. A concrete kerb-box with a sludge-crusted top and
-        /// hazard corner posts: waist-high, solid, obviously a thing to hide behind.</summary>
-        public static GameObject BuildSiltBin(Transform parent, Vector3 at, Vector3 size)
+        /// <summary>Silt hopper — replaces a Planter (MV-786). A turned bin: an outer flared body, a
+        /// darker bore nested inside it, a proud rust rim at the mouth, three leg braces, and a silt
+        /// spill pooling at the foot.</summary>
+        public static GameObject BuildSiltHopper(Transform parent, Vector3 at, Vector3 size)
         {
-            var root = new GameObject("Silt Bin");
+            var root = new GameObject("Silt Hopper");
             root.transform.SetParent(parent, false);
             root.transform.position = at;
 
-            float h = Mathf.Max(0.8f, size.y);
-            Box(root.transform, "Shell", Vector3.up * (h * 0.5f), new Vector3(size.x, h, size.z), KerbConcrete);
-            Box(root.transform, "Rim", Vector3.up * (h + 0.05f),
-                new Vector3(size.x * 1.06f, 0.12f, size.z * 1.06f), Rust, SurfaceKind.Metal);
-            Glow(root.transform, "Crust", Vector3.up * (h + 0.13f),
-                 new Vector3(size.x * 0.86f, size.z * 0.86f, 1f), Quaternion.Euler(90f, 0f, 0f), Sludge);
+            float r = Mathf.Min(size.x, size.z) * 0.5f;
+            float h = size.y;
+            float outerH = h * 0.84f;
+            float innerH = h * 0.80f;
 
-            for (int i = 0; i < 4; i++)
+            AddMeshPart(root.transform, "Outer", CharacterMeshes.Prism(8, r * 0.58f, r * 0.98f, outerH),
+                Vector3.up * (outerH * 0.5f), SurfaceKind.Stone, KerbConcrete);
+
+            AddMeshPart(root.transform, "Bore", CharacterMeshes.Prism(8, r * 0.46f, r * 0.84f, innerH),
+                Vector3.up * (innerH * 0.5f), SurfaceKind.Stone, Soffit);
+
+            AddMeshPart(root.transform, "Rim", CharacterMeshes.Ring(r * 0.86f, r * 1.06f, 0.05f),
+                Vector3.up * outerH, SurfaceKind.Metal, Rust);
+
+            for (int i = 0; i < 3; i++)
             {
-                float sx = (i == 0 || i == 3) ? -1f : 1f;
-                float sz = (i < 2) ? -1f : 1f;
-                Box(root.transform, $"Post{i}",
-                    new Vector3(sx * size.x * 0.5f, h * 0.62f, sz * size.z * 0.5f),
-                    new Vector3(0.12f, h * 1.24f, 0.12f), Hazard, SurfaceKind.Metal);
+                float a = i * 120f * Mathf.Deg2Rad;
+                float legH = h * 0.40f;
+                Vector3 legAt = new Vector3(Mathf.Cos(a) * r * 0.78f, legH * 0.5f, Mathf.Sin(a) * r * 0.78f);
+                AddMeshPart(root.transform, $"Leg{i}", CharacterMeshes.Beam(legH, r * 0.10f, r * 0.07f),
+                    legAt, SurfaceKind.Metal, RustDark);
             }
+
+            float spillSeed = at.x * 0.371f + at.z * 0.593f;
+            AddMeshPart(root.transform, "Silt Spill",
+                BuildBlobMesh(r * 0.95f, 9, StainSegmentMinT, StainSegmentMaxT, spillSeed),
+                Vector3.up * 0.01f, SurfaceKind.Dirt, Silt);
+
             return root;
         }
 
-        /// <summary>Pump housing — replaces a Shed or Machinery cover piece. A ribbed machine box with
-        /// a hazard band and a cyan status light: the drain's only cold colour, so it reads as the one
-        /// thing in the room that is still switched on.</summary>
+        /// <summary>Pump set — replaces a Shed or Machinery cover piece (MV-786). A tapered six-sided
+        /// housing, a lathed dome cap, a lathed base flange, four bolts around the flange, and an LED
+        /// panel — the drain's only cold colour, so it still reads as the one machine still switched
+        /// on.</summary>
         public static GameObject BuildPumpHousing(Transform parent, Vector3 at, Vector3 size)
         {
             var root = new GameObject("Pump Housing");
             root.transform.SetParent(parent, false);
             root.transform.position = at;
 
-            float h = Mathf.Max(1.4f, size.y);
-            // MV-779: the footprint was rectangular (size.x x size.z) for the old stacked-box Shell,
-            // but Body/Cap/Flange below are all radially symmetric — rBase is the housing's own
-            // single base radius, sized off the footprint's narrower axis.
-            float rBase = Mathf.Min(size.x, size.z) * 0.5f;
+            float r = Mathf.Min(size.x, size.z) * 0.5f;
+            float h = size.y;
+            float bodyH = h * 0.78f;
 
-            // Body — a tapered six-sided housing. This is the silhouette that says "machine"; it and
-            // Cap below replace the old Shell + three raised roof Ribs entirely.
-            AddMeshPart(root.transform, "Body", CharacterMeshes.Prism(6, rBase, rBase * 0.82f, h, 0.10f, twistDegrees: 0f),
-                Vector3.up * (h * 0.5f), SurfaceKind.Metal, new Color(0.30f, 0.32f, 0.31f));
+            AddMeshPart(root.transform, "Body", CharacterMeshes.Prism(6, r, r * 0.84f, bodyH),
+                Vector3.up * (bodyH * 0.5f), SurfaceKind.Metal, new Color(0.30f, 0.32f, 0.31f));
 
-            // Cap — a lathed dome over the body.
-            float capH = h * 0.30f;
+            float capH = h - bodyH;
             AddMeshPart(root.transform, "Cap", CharacterMeshes.Lathe(new[]
                 {
-                    new Vector2(rBase * 0.86f, 0f),
-                    new Vector2(rBase * 0.86f, capH * 0.15f),
-                    new Vector2(rBase * 0.7f, capH * 0.55f),
-                    new Vector2(rBase * 0.34f, capH * 0.85f),
+                    new Vector2(r * 0.84f, 0f),
+                    new Vector2(r * 0.84f, capH * 0.15f),
+                    new Vector2(r * 0.58f, capH * 0.55f),
+                    new Vector2(r * 0.26f, capH * 0.85f),
                     new Vector2(0f, capH),
                 }, 20),
-                Vector3.up * h, SurfaceKind.Metal, RustDark);
+                Vector3.up * bodyH, SurfaceKind.Metal, RustDark);
 
-            // Base flange — a lathed ring the body sits on.
             float fh = h * 0.06f;
             AddMeshPart(root.transform, "Base Flange", CharacterMeshes.Lathe(new[]
                 {
                     new Vector2(0f, 0f),
-                    new Vector2(rBase * 1.22f, 0f),
-                    new Vector2(rBase * 1.22f, fh),
-                    new Vector2(rBase * 1.05f, fh),
+                    new Vector2(r * 1.18f, 0f),
+                    new Vector2(r * 1.18f, fh),
+                    new Vector2(r, fh),
                 }, 20),
                 Vector3.zero, SurfaceKind.Metal, RustDark);
 
-            // Four bolts around the flange — fabrication, the thing that tells a machine apart from a box.
-            float boltScale = h * 0.035f;
+            float boltScale = h * 0.045f;
             for (int i = 0; i < 4; i++)
             {
                 float a = i * 90f * Mathf.Deg2Rad;
-                Vector3 boltAt = new Vector3(Mathf.Cos(a) * rBase * 1.10f, fh * 0.5f, Mathf.Sin(a) * rBase * 1.10f);
+                Vector3 boltAt = new Vector3(Mathf.Cos(a) * r * 1.05f, fh + boltScale * 0.5f, Mathf.Sin(a) * r * 1.05f);
                 var bolt = AddMeshPart(root.transform, $"Bolt{i}", CharacterMeshes.Sphere(8),
                     boltAt, SurfaceKind.Metal, Rust);
                 bolt.transform.localScale = Vector3.one * boltScale;
             }
 
-            Box(root.transform, "Hazard Band", Vector3.up * (h * 0.28f),
-                new Vector3(size.x * 1.03f, 0.18f, size.z * 1.03f), Hazard, SurfaceKind.Metal);
-
-            Tube(root.transform, "Outlet", new Vector3(size.x * 0.5f, h * 0.62f, 0f), 0.14f, 0.9f,
-                 Quaternion.Euler(0f, 0f, 90f), Rust);
-
-            Glow(root.transform, "Status", new Vector3(0f, h * 0.72f, -size.z * 0.5f - 0.02f),
-                 new Vector3(0.18f, 0.18f, 1f), Quaternion.identity, Status);
+            // MV-786's "LED panel": a small tinted panel, not a Glow() quad — every mesh under a cover
+            // piece must be a generated one (this ticket's own AC1), and Glow()'s Unlit material is
+            // built on the primitive Quad mesh unchanged.
+            Box(root.transform, "LED Panel", new Vector3(0f, bodyH * 0.72f, -r * 0.84f - 0.02f),
+                new Vector3(0.18f, 0.18f, 0.03f), Status, SurfaceKind.Metal);
             return root;
         }
 
-        /// <summary>Silt sacks — replaces a bare crate (<c>CoverDressing.None</c>). Three staggered,
-        /// slightly rotated sacks: the cheapest way to make a cover block stop being a cube.</summary>
-        public static GameObject BuildSiltSacks(Transform parent, Vector3 at, Vector3 size, int seed)
+        /// <summary>Burst main — replaces a bare crate (<c>CoverDressing.None</c>) (MV-786). A lathed
+        /// tube on its side with a darker bore lathed into one end and a raised collar at that
+        /// opening — the cheapest way to make a cover block read as failed plumbing instead of a bare
+        /// crate.</summary>
+        public static GameObject BuildBurstMain(Transform parent, Vector3 at, Vector3 size)
         {
-            var root = new GameObject("Silt Sacks");
+            var root = new GameObject("Burst Main");
             root.transform.SetParent(parent, false);
             root.transform.position = at;
 
-            float h = Mathf.Max(0.7f, size.y);
-            for (int i = 0; i < 3; i++)
-            {
-                float jx = (Frac(seed * 0.7548f + i * 0.31f) - 0.5f) * size.x * 0.30f;
-                float jz = (Frac(seed * 0.5698f + i * 0.53f) - 0.5f) * size.z * 0.30f;
-                float layerH = h / 3f;
-                var sack = Box(root.transform, $"Sack{i}",
-                    new Vector3(jx, layerH * (i + 0.5f), jz),
-                    new Vector3(size.x * 0.92f, layerH * 0.94f, size.z * 0.82f),
-                    i == 1 ? Algae : new Color(0.30f, 0.27f, 0.21f), SurfaceKind.Dirt);
-                sack.transform.localRotation = Quaternion.Euler(0f, (Frac(seed + i * 0.17f) - 0.5f) * 18f, 0f);
-            }
+            float footprint = Mathf.Min(size.x, size.z);
+            float h = size.y;
+            float outerR = Mathf.Min(h * 0.52f, footprint * 0.46f);
+            bool longX = size.x >= size.z;
+            float longSide = longX ? size.x : size.z;
+            float length = longSide * 0.92f;
+            Vector3 along = longX ? Vector3.right : Vector3.forward;
+            Quaternion lie = Quaternion.LookRotation(along, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+
+            Tube(root.transform, "Outer", Vector3.up * outerR, outerR, length, lie, Rust);
+
+            float boreR = outerR * 0.6f;
+            float boreLen = length * 0.30f;
+            Vector3 boreAt = along * (length * 0.5f - boreLen * 0.45f) + Vector3.up * outerR;
+            Tube(root.transform, "Bore", boreAt, boreR, boreLen, lie, Soffit);
+
+            var collar = AddMeshPart(root.transform, "Collar",
+                CharacterMeshes.Ring(outerR * 1.02f, outerR * 1.24f, 0.10f),
+                along * (length * 0.5f) + Vector3.up * outerR, SurfaceKind.Metal, RustDark);
+            collar.transform.localRotation = lie;
+
             return root;
+        }
+
+        // ---------------------------------------------------------------- wall panels (MV-786, change 2)
+
+        /// <summary>MV-786, change 2: a wall run stops being one long slab. Panels every 4 m at 93% of
+        /// the segment length and 88% of the wall height, three recessed ribs per panel at quarter
+        /// points, a hexagonal pilaster at every panel joint including both ends, a coping along the
+        /// top of the whole run and a kerb at its foot. <paramref name="wallMaterial"/> is the wall's
+        /// own already-resolved material, reused directly on the panels/coping/kerb so they read as the
+        /// SAME wall broken into forms, not a new tint guess.</summary>
+        public static void BuildWallPanels(Transform parent, Vector3 center, Vector3 size, bool alongX,
+                                           Material wallMaterial)
+        {
+            float length = alongX ? size.x : size.z;
+            float thickness = alongX ? size.z : size.x;
+            float height = size.y;
+            if (length < 0.01f) return;
+
+            int panelCount = Mathf.Max(1, Mathf.RoundToInt(length / 4f));
+            float segLen = length / panelCount;
+            float panelLen = segLen * 0.93f;
+            float panelHeight = height * 0.88f;
+
+            var run = new GameObject("Wall Run").transform;
+            run.SetParent(parent, false);
+            run.localPosition = center;
+
+            Vector3 along = alongX ? Vector3.right : Vector3.forward;
+
+            for (int i = 0; i < panelCount; i++)
+            {
+                float offset = -length * 0.5f + (i + 0.5f) * segLen;
+                Vector3 panelCenter = along * offset;
+                Vector3 panelSize = alongX
+                    ? new Vector3(panelLen, panelHeight, thickness)
+                    : new Vector3(thickness, panelHeight, panelLen);
+
+                BevelledPart(run, $"Panel{i}", panelCenter, panelSize, wallMaterial);
+
+                for (int rib = 0; rib < 3; rib++)
+                {
+                    float rt = (rib + 1) / 4f - 0.5f;
+                    Vector3 ribCenter = panelCenter + along * (rt * panelLen);
+                    Vector3 ribSize = alongX
+                        ? new Vector3(panelLen * 0.05f, panelHeight * 0.9f, thickness * 1.02f)
+                        : new Vector3(thickness * 1.02f, panelHeight * 0.9f, panelLen * 0.05f);
+                    Box(run, $"Panel{i} Rib{rib}", ribCenter, ribSize, GroundDry, SurfaceKind.Ground);
+                }
+            }
+
+            for (int i = 0; i <= panelCount; i++)
+            {
+                float offset = -length * 0.5f + i * segLen;
+                AddMeshPart(run, $"Pilaster{i}", CharacterMeshes.Prism(6, 0.30f, 0.24f, height * 0.94f),
+                    along * offset, SurfaceKind.Metal, RustDark);
+            }
+
+            Vector3 copingSize = alongX
+                ? new Vector3(length, 0.16f, 0.44f)
+                : new Vector3(0.44f, 0.16f, length);
+            BevelledPart(run, "Coping", Vector3.up * (height * 0.5f + 0.08f), copingSize, wallMaterial);
+
+            Vector3 kerbSize = alongX
+                ? new Vector3(length, 0.24f, 0.40f)
+                : new Vector3(0.40f, 0.24f, length);
+            BevelledPart(run, "Kerb", Vector3.up * (-height * 0.5f + 0.12f), kerbSize, wallMaterial);
+        }
+
+        /// <summary>A collider-free chamfered box painted with an explicit material rather than a
+        /// resolved tone (MV-786) — for a piece that must read as exactly the same surface as something
+        /// already built (a wall run's own panels/coping/kerb, reusing the wall's own resolved
+        /// material) rather than a new tint guess.</summary>
+        private static GameObject BevelledPart(Transform parent, string name, Vector3 localPos, Vector3 size,
+                                               Material material)
+        {
+            var go = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            go.name = name;
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.transform.localScale = Vector3.one;
+            go.GetComponent<MeshFilter>().sharedMesh = CharacterMeshes.Bevelled(size, CharacterMeshes.DefaultBevel(size));
+            Strip(go);
+            var rend = go.GetComponent<Renderer>();
+            if (rend != null && material != null) rend.sharedMaterial = material;
+            return go;
         }
 
         // ---------------------------------------------------------------- floor pieces (MV-781)
