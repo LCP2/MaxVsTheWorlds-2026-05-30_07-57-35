@@ -147,7 +147,7 @@ namespace MaxWorlds.Tests.EditMode
             var pipeHost = new GameObject("MV779 standpipe host").transform;
             try
             {
-                GameObject standpipe = StormdrainKit.BuildStandpipe(pipeHost, Vector3.zero, 3f, 1.5f);
+                GameObject standpipe = StormdrainKit.BuildStandpipe(pipeHost, Vector3.zero, new Vector3(1f, 1.6f, 1f));
                 foreach (MeshFilter mf in standpipe.GetComponentsInChildren<MeshFilter>(true))
                     Assert.IsFalse(PrimitiveMeshName.IsMatch(mf.sharedMesh.name),
                         $"{mf.name} under Standpipe still wears a primitive mesh '{mf.sharedMesh.name}'");

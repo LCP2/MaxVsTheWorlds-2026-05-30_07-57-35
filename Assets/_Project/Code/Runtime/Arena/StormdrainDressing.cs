@@ -92,6 +92,8 @@ namespace MaxWorlds.Arena
                 }
             }
 
+            DressWallPanels(root, host, map);
+
             int coverProps = 0;
             var kinds = new HashSet<CoverDressing>();
             var props = new GameObject("Cover").transform;
@@ -99,12 +101,10 @@ namespace MaxWorlds.Arena
 
             if (cover != null)
             {
-                int i = 0;
                 foreach (CoverPiece piece in cover)
                 {
-                    i++;
                     if (piece.Body == null) continue;
-                    if (!BuildFor(props, piece, i, map.wallHeight)) continue;
+                    if (!BuildFor(props, piece)) continue;
 
                     // The block's own box stays the collider — only its art is replaced. Same
                     // contract ReefDressing keeps, and the reason a re-dressed room still plays
@@ -426,12 +426,14 @@ namespace MaxWorlds.Arena
         private static float Frac(int seed, int salt) =>
             Mathf.Abs((seed * 0.6180339887f + salt * 0.3247179572f) % 1f);
 
-        /// <summary>Maps a cover piece's authored dressing class onto its drain equivalent. Every class
-        /// has one — including <see cref="CoverDressing.None"/>, which in World 1 means "a bare crate"
-        /// and here means silt sacks. That is the difference from <see cref="ReefDressing"/>, which
-        /// deliberately dresses only one class: World 3's ticket said place nothing where there is no
-        /// equivalent, and the result is a world of grey boxes. World 2 is not repeating that.</summary>
-        private static bool BuildFor(Transform parent, CoverPiece piece, int seed, float wallHeight)
+        /// <summary>Maps a cover piece's authored dressing class onto its drain equivalent (MV-786:
+        /// five turned forms — Standpipe cluster, Collapsed grating, Silt hopper, Pump set, Burst
+        /// main). Every class has one — including <see cref="CoverDressing.None"/>, which here falls
+        /// back to Burst main, same as anything that fails to parse. That is the difference from
+        /// <see cref="ReefDressing"/>, which deliberately dresses only one class: World 3's ticket said
+        /// place nothing where there is no equivalent, and the result is a world of grey boxes. World 2
+        /// is not repeating that.</summary>
+        private static bool BuildFor(Transform parent, CoverPiece piece)
         {
             ArenaCover c = piece.Cover;
             Vector3 at = new Vector3(c.CenterXz.x, 0f, c.CenterXz.y);
@@ -440,29 +442,25 @@ namespace MaxWorlds.Arena
             switch (c.Dressing)
             {
                 case CoverDressing.Tree:
-                    // Wall-height-proportional (MV-765), not the cover block's own authored size.y.
-                    GameObject standpipe = StormdrainKit.BuildStandpipe(parent, at, wallHeight, wallHeight);
+                    GameObject standpipe = StormdrainKit.BuildStandpipe(parent, at, size);
                     standpipe.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
                     return true;
                 case CoverDressing.Hedge:
-                    GameObject rake = StormdrainKit.BuildDebrisRake(parent, at, size);
-                    Vector2 rakeLean = DeterministicLean(at);
-                    rake.transform.rotation = Quaternion.Euler(rakeLean.x, DeterministicYaw(at), rakeLean.y);
+                    GameObject grating = StormdrainKit.BuildCollapsedGrating(parent, at, size);
+                    grating.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
                     return true;
                 case CoverDressing.Planter:
-                    GameObject bin = StormdrainKit.BuildSiltBin(parent, at, size);
-                    bin.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
+                    GameObject hopper = StormdrainKit.BuildSiltHopper(parent, at, size);
+                    hopper.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
                     return true;
                 case CoverDressing.Shed:
                 case CoverDressing.Machinery:
-                    // Heavy fixed machinery, not loose debris — stays square (MV-778 change 3 lists
-                    // standpipes, debris rakes, silt sacks and silt bins only).
+                    // Heavy fixed machinery, not loose debris — stays square.
                     StormdrainKit.BuildPumpHousing(parent, at, size);
                     return true;
                 default:
-                    GameObject sacks = StormdrainKit.BuildSiltSacks(parent, at, size, seed);
-                    Vector2 sackLean = DeterministicLean(at);
-                    sacks.transform.rotation = Quaternion.Euler(sackLean.x, DeterministicYaw(at), sackLean.y);
+                    GameObject burstMain = StormdrainKit.BuildBurstMain(parent, at, size);
+                    burstMain.transform.rotation = Quaternion.Euler(0f, DeterministicYaw(at), 0f);
                     return true;
             }
         }
@@ -476,14 +474,34 @@ namespace MaxWorlds.Arena
         private static float DeterministicYaw(Vector3 at)
             => ((Mathf.Abs(at.x * 73.1f + at.z * 149.7f) % 1f) - 0.5f) * 24f;
 
-        /// <summary>Up to 6 degrees of lean on X and on Z (MV-778) — for the loose debris and sacks
-        /// only, never for anything with a fixed footprint. Different hash constants than
-        /// <see cref="DeterministicYaw"/> so a piece's yaw and its lean don't move in lockstep.</summary>
-        private static Vector2 DeterministicLean(Vector3 at)
+        /// <summary>MV-786, change 2: restructures every already-built <see cref="StructuralWall"/>
+        /// from one long slab into panels, ribs, pilasters, a coping and a kerb — same "keep the
+        /// collider, replace the art" contract the cover pass keeps. <see cref="MapGeometry.Walls"/> is
+        /// a pure function of <paramref name="map"/>, so calling it again here reproduces the exact
+        /// same segments <c>MapRuntime.Build</c> already built under <paramref name="host"/>, and their
+        /// shared <see cref="WallSegment.Name"/> is what lines the two up.</summary>
+        private static void DressWallPanels(Transform root, Transform host, MapData map)
         {
-            float lx = ((Mathf.Abs(at.x * 191.3f + at.z * 269.9f) % 1f) - 0.5f) * 12f;
-            float lz = ((Mathf.Abs(at.x * 337.9f + at.z * 431.3f) % 1f) - 0.5f) * 12f;
-            return new Vector2(lx, lz);
+            List<WallSegment> segments = MapGeometry.Walls(map);
+            if (segments.Count == 0) return;
+
+            var byName = new Dictionary<string, StructuralWall>();
+            foreach (StructuralWall wall in host.GetComponentsInChildren<StructuralWall>(true))
+                byName[wall.gameObject.name] = wall;
+
+            var panelHost = new GameObject("Wall Panels").transform;
+            panelHost.SetParent(root, false);
+
+            foreach (WallSegment seg in segments)
+            {
+                if (!byName.TryGetValue(seg.Name, out StructuralWall wall) || wall == null) continue;
+
+                var rend = wall.GetComponent<Renderer>();
+                Material wallMat = rend != null ? rend.sharedMaterial : null;
+                if (rend != null) rend.enabled = false;
+
+                StormdrainKit.BuildWallPanels(panelHost, seg.Center, seg.Size, seg.AlongX, wallMat);
+            }
         }
 
         /// <summary>The id <c>MapRuntime</c> already uses for the gate the sludge grades toward. Reused
