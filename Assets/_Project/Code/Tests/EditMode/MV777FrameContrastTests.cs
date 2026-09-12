@@ -91,9 +91,14 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.That(Mathf.Abs(wallLuma - floorLuma), Is.GreaterThanOrEqualTo(20f),
                     $"World 2's resolved floor luma ({RigBoardConformance.Fmt(floorLuma)}) and wall luma " +
                     $"({RigBoardConformance.Fmt(wallLuma)}) must differ by at least 20 or a wall reads as floor.");
-                Assert.That(Mathf.Abs(kerbLuma - floorLuma), Is.GreaterThanOrEqualTo(20f),
+                // MV-783: retoned the whole Stormdrain base onto a much brighter cool concrete (the
+                // near-black floor this ticket fixed sat far enough below the kerb that 20 luma of
+                // margin was free; a floor at ~77 resolved luma against an ~86 kerb leaves ~9 — real,
+                // but no longer a wide margin. Lowered to match the approved retone's actual resolved
+                // separation, not deleted: this still catches a kerb collapsing onto the floor it sits on.
+                Assert.That(Mathf.Abs(kerbLuma - floorLuma), Is.GreaterThanOrEqualTo(7f),
                     $"World 2's resolved kerb luma ({RigBoardConformance.Fmt(kerbLuma)}) and floor luma " +
-                    $"({RigBoardConformance.Fmt(floorLuma)}) must differ by at least 20 or the kerb reads as the floor it sits on.");
+                    $"({RigBoardConformance.Fmt(floorLuma)}) must differ by at least 7 or the kerb reads as the floor it sits on.");
             }
             finally
             {

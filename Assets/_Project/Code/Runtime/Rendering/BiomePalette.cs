@@ -204,20 +204,23 @@ namespace MaxWorlds.Rendering
         public static BiomePalette Stormdrain => new BiomePalette
         {
             Tint = Color.white,
-            // MV-777: separated onto distinct value tiers instead of distinct hues at the same value.
-            // Floor is the darkest surface in the room ("the quiet half of the frame") — hues kept,
-            // values pulled apart so a wall/kerb/prop never reads as the same surface as the ground.
-            GroundBase = new Color(0.055f, 0.065f, 0.057f),   // shaded wet concrete — darkest tier
-            GroundAccent = new Color(0.085f, 0.10f, 0.085f),  // sunlit slab, still floor-family
-            GroundDry = new Color(0.11f, 0.115f, 0.10f),      // dust/algae-bleached slab, still concrete
-            Wall = new Color(0.19f, 0.21f, 0.185f),           // W2 WET CONCRETE #4d554a — ~2x the floor
-            Prop = new Color(0.29f, 0.32f, 0.29f),            // concrete cover blocks — brighter solids
+            // MV-783: the previous pass (MV-777) separated VALUE tiers but left every neutral so dark
+            // in linear terms (sRGB^2.2) that it contributed no colour at all — rust and sludge were
+            // the only two things with any chroma in the whole world. Approved by Lee, 2026-09-12,
+            // from the rendered "Stormdrain Surface Kit" design review: a cool wet-concrete base at a
+            // usable value, rust pulled back to an accent, and a third mid-tone (algae/silt) family
+            // filling the gap between black and white.
+            GroundBase = new Color(0.255f, 0.285f, 0.315f),   // wet concrete, the cool base
+            GroundAccent = new Color(0.300f, 0.330f, 0.360f), // the lighter of the three bay tones
+            GroundDry = new Color(0.205f, 0.230f, 0.260f),    // the darker of the three bay tones
+            Wall = new Color(0.355f, 0.385f, 0.420f),         // drier concrete above the waterline
+            Prop = new Color(0.470f, 0.495f, 0.520f),         // cast cover blocks — the brightest solids
 
             Wood = new Color(0.28f, 0.22f, 0.16f),
-            Stone = new Color(0.19f, 0.21f, 0.185f),          // == Wall: it's the same wet concrete
-            Dirt = new Color(0.20f, 0.15f, 0.10f),
-            Metal = new Color(0.685f, 0.355f, 0.17f),         // W2 RUST #985025 — pipe banks, kerb rails
-            Foliage = new Color(0.43f, 0.56f, 0.20f),         // algae creep, greener cousin of the sludge
+            Stone = new Color(0.355f, 0.385f, 0.420f),        // == Wall: it's the same wet concrete
+            Dirt = new Color(0.360f, 0.330f, 0.280f),         // silt — the only warm ground tone
+            Metal = new Color(0.560f, 0.330f, 0.215f),        // rust, desaturated and darker — an accent now
+            Foliage = new Color(0.305f, 0.345f, 0.275f),      // algae stain, the third family
 
             GroundDetailScale = 0.45f,     // slab joints, coarser than the lawn's blade-scale grain
             GroundMacroScale = 0.05f,
