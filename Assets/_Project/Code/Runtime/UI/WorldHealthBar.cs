@@ -48,6 +48,19 @@ namespace MaxWorlds.UI
         /// something has been hit is information.</summary>
         private const float FullEnough = 0.999f;
 
+        /// <summary>MV-788: seconds a bar stays fully visible after its last damage/target trigger,
+        /// before the fade below starts. Lee's own numbers from the "Stormdrain Surface Kit" design
+        /// review — not to be substituted.</summary>
+        private const float TriggerHoldSeconds = 3.0f;
+
+        /// <summary>MV-788: how long the fade itself takes once <see cref="TriggerHoldSeconds"/> has
+        /// elapsed with no further damage and no longer being the target.</summary>
+        private const float TriggerFadeSeconds = 0.4f;
+
+        /// <summary>MV-788: a frame-to-frame health DROP of at least this much counts as "took damage"
+        /// — floors out float noise between two reads of the same unchanged value.</summary>
+        private const float DamageDetectEpsilon = 0.0001f;
+
         // Near-black, mostly opaque: the outline that makes the capsule pop. The track (unfilled
         // part) is a translucent dark, so a drained bar reads as an empty capsule, not a black slab.
         private static readonly Color OutlineColor = new Color(0.02f, 0.03f, 0.02f, 0.92f);
@@ -101,6 +114,25 @@ namespace MaxWorlds.UI
         private Text _numberText;
         private Text _replicatorMarker;
         private Camera _camera;
+        private CanvasGroup _canvasGroup;
+
+        /// <summary>MV-788: optional "this is Max's current target" hook — null for every existing call
+        /// site (no such tracking exists in this codebase yet; see the ticket's own PR notes), so it is
+        /// simply never true until something wires it up. Kept as a hook rather than omitted so the
+        /// visibility rule below reads as the ticket's actual two-trigger design, not just "on damage".</summary>
+        private System.Func<bool> _isTarget;
+
+        /// <summary>MV-788: Max's own bar and an AreaGate's additionally desaturate their healthy-band
+        /// colour — see <see cref="HealthBarColor.At"/>'s own doc comment for why those two specifically.</summary>
+        private bool _desaturateWhenHealthy;
+
+        /// <summary>MV-788: seconds since this bar's last damage/target trigger — seeded already past
+        /// <see cref="TriggerHoldSeconds"/> + <see cref="TriggerFadeSeconds"/> so a freshly built,
+        /// untouched bar starts at alpha 0 without needing an infinity sentinel.</summary>
+        private float _secondsSinceTrigger = TriggerHoldSeconds + TriggerFadeSeconds;
+
+        private float _lastNormalizedHealth = -1f;
+        private bool _hasNormalizedHealthBaseline;
 
         // Optional secondary gauge stacked ABOVE the life bar (YT-121 — Max's water level). Null for
         // robots, who carry only a life bar.
@@ -156,6 +188,12 @@ namespace MaxWorlds.UI
         /// without reading pixels.</summary>
         public bool Showing => _pivot != null && _pivot.gameObject.activeSelf;
 
+        /// <summary>MV-788: the whole plate's current opacity (0..1) — 1 while held/always-shown, then
+        /// ramping to 0 over <see cref="TriggerFadeSeconds"/> once <see cref="TriggerHoldSeconds"/> has
+        /// elapsed with no damage and no longer being the target. Exposed so a test can assert the fade
+        /// itself, not just the binary <see cref="Showing"/> it eventually drives.</summary>
+        public float VisibilityAlpha => _canvasGroup != null ? _canvasGroup.alpha : 1f;
+
         /// <summary>Unity draw-order for this bar's world-space canvas (MV-747) — Max's is always
         /// higher than any enemy's. Exposed so a test can assert the ORDERING directly rather than
         /// re-deriving it from on-screen geometry, per the acceptance criterion's own wording.</summary>
@@ -174,7 +212,9 @@ namespace MaxWorlds.UI
                                             Color secondaryColor = default,
                                             bool showNumber = true,
                                             bool isPlayerBar = false,
-                                            bool groupable = false)
+                                            bool groupable = false,
+                                            System.Func<bool> isTarget = null,
+                                            bool desaturateWhenHealthy = false)
         {
             if (owner == null || source == null) return null;
 
@@ -190,6 +230,8 @@ namespace MaxWorlds.UI
             bar._showNumber = showNumber;
             bar._isPlayerBar = isPlayerBar;
             bar._groupable = groupable;
+            bar._isTarget = isTarget;
+            bar._desaturateWhenHealthy = desaturateWhenHealthy;
             bar.Build();
             return bar;
         }
@@ -262,6 +304,10 @@ namespace MaxWorlds.UI
             _canvas = (RectTransform)canvasGo.transform;
             _canvas.SetParent(_pivot, false);
             _canvas.sizeDelta = new Vector2(BarPixelWidth, BarPixelHeight);
+
+            // MV-788: one CanvasGroup over the whole plate (bar + label + number + water gauge) so the
+            // damage/target fade dims everything together instead of needing a per-part alpha.
+            _canvasGroup = canvasGo.AddComponent<CanvasGroup>();
 
             // MV-571: everything that reads as "the bar" (outline, track, fill, water gauge, HP
             // number) lives under one container, so SetBarHiddenKeepLabel can hide all of it with a
@@ -586,14 +632,39 @@ namespace MaxWorlds.UI
             {
                 float n = Mathf.Clamp01(normalizedAvg);
                 _fill.fillAmount = n;
-                _fill.color = HealthBarColor.At(n, Time.unscaledTime);
+                _fill.color = HealthBarColor.At(n, Time.unscaledTime, _desaturateWhenHealthy);
             }
         }
+
+        /// <summary>MV-788: alpha for a bar this many seconds past its last damage/target trigger —
+        /// full through <see cref="TriggerHoldSeconds"/>, then a linear fade to 0 over
+        /// <see cref="TriggerFadeSeconds"/>. Pure, so a test can assert it without a live clock — same
+        /// "time as a parameter, not read off Time.unscaledTime itself" idiom as
+        /// <see cref="HealthBarColor.At"/>.</summary>
+        internal static float AlphaSinceTrigger(float secondsSinceTrigger) =>
+            secondsSinceTrigger <= TriggerHoldSeconds
+                ? 1f
+                : Mathf.Clamp01(1f - (secondsSinceTrigger - TriggerHoldSeconds) / TriggerFadeSeconds);
 
         private void Refresh()
         {
             float n = Mathf.Clamp01(_source.HealthNormalized);
-            bool wouldShowBar = _alwaysShow || n < FullEnough;
+
+            // MV-788: a bar earns its visibility by something happening — taking damage, or being
+            // Max's current target — not by health alone. A field of untouched robots each carrying a
+            // full bar was exactly the clutter the ticket fixed. _alwaysShow (Max's own bar, an
+            // AreaGate's) is untouched and still wins outright, same as before.
+            bool triggeredNow = (_hasNormalizedHealthBaseline && n < _lastNormalizedHealth - DamageDetectEpsilon)
+                                 || (_isTarget != null && _isTarget());
+            if (triggeredNow) _secondsSinceTrigger = 0f;
+            else _secondsSinceTrigger += Time.unscaledDeltaTime;
+            _lastNormalizedHealth = n;
+            _hasNormalizedHealthBaseline = true;
+
+            float visibilityAlpha = _alwaysShow ? 1f : AlphaSinceTrigger(_secondsSinceTrigger);
+            if (_canvasGroup != null) _canvasGroup.alpha = visibilityAlpha;
+
+            bool wouldShowBar = _alwaysShow || visibilityAlpha > 0f;
             // MV-571: a bar-hidden-keep-label gate still needs the pivot (and so the label) on screen
             // even though it has nothing bar-shaped to draw — that's the whole point of the flag.
             bool show = !_forceHidden && _source.IsAlive && (_barHiddenKeepLabel || wouldShowBar);
@@ -622,9 +693,10 @@ namespace MaxWorlds.UI
             if (showBarVisuals)
             {
                 _fill.fillAmount = n;
-                // Shared ramp: green → yellow → orange → red, flashing when critical (YT-121). unscaled
-                // time so it keeps pulsing even if the game is paused on a low-health beat.
-                _fill.color = HealthBarColor.At(n, Time.unscaledTime);
+                // Shared ramp: cool neutral → yellow → orange → red, flashing when critical (YT-121,
+                // MV-788). unscaled time so it keeps pulsing even if the game is paused on a low-health
+                // beat.
+                _fill.color = HealthBarColor.At(n, Time.unscaledTime, _desaturateWhenHealthy);
 
                 if (_secondaryFill != null && _secondary != null)
                     _secondaryFill.fillAmount = Mathf.Clamp01(_secondary());

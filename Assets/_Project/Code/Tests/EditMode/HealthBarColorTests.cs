@@ -11,11 +11,13 @@ namespace MaxWorlds.Tests.EditMode
     public sealed class HealthBarColorTests
     {
         [Test]
-        public void ItRampsGreenYellowOrangeRedAsItDrains()
+        public void ItRampsFromACoolNeutralThroughYellowOrangeRedAsItDrains()
         {
-            // A representative fill in each band, and the expected dominant channel.
-            AssertGreen(HealthBarColor.Ramp(1.0f));
-            AssertGreen(HealthBarColor.Ramp(0.80f));
+            // MV-788: full health is a desaturated cool neutral, not bright green — colour means HURT,
+            // not "exists". A representative fill in each of the other bands still checks the expected
+            // dominant channel.
+            AssertDesaturatedNeutral(HealthBarColor.Ramp(1.0f));
+            AssertDesaturatedNeutral(HealthBarColor.Ramp(0.80f));
 
             AssertYellow(HealthBarColor.Ramp(0.50f));   // between Hurt (0.35) and Healthy (0.60)
             AssertOrange(HealthBarColor.Ramp(0.25f));   // between Critical (0.15) and Hurt (0.35)
@@ -56,8 +58,16 @@ namespace MaxWorlds.Tests.EditMode
             Assert.That(a, Is.EqualTo(b), "a healthy bar must sit still — only critical flashes");
         }
 
-        private static void AssertGreen(Color c) =>
-            Assert.That(c.g, Is.GreaterThan(c.r).And.GreaterThan(c.b), $"expected green, got {c}");
+        /// <summary>MV-788: "healthy" is now a cool, low-saturation neutral rather than a green-dominant
+        /// colour — the ticket's own AC3 formula (max-min)/max, which must sit under 0.25.</summary>
+        private static void AssertDesaturatedNeutral(Color c)
+        {
+            float max = Mathf.Max(c.r, c.g, c.b);
+            float min = Mathf.Min(c.r, c.g, c.b);
+            float saturation = max > 0f ? (max - min) / max : 0f;
+            Assert.That(saturation, Is.LessThan(0.25f),
+                $"expected a desaturated neutral (saturation < 0.25), got {c} (saturation {saturation:0.000})");
+        }
         private static void AssertYellow(Color c) =>
             Assert.That(c.r, Is.GreaterThan(0.8f).And.GreaterThan(c.b).And.EqualTo(c.g).Within(0.25f),
                         $"expected yellow (r≈g, both high), got {c}");
