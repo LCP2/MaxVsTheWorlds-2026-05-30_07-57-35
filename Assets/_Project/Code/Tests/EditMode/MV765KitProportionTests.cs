@@ -79,6 +79,15 @@ namespace MaxWorlds.Tests.EditMode
                     if (meshFilter != null && meshFilter.sharedMesh != null
                         && meshFilter.sharedMesh.name == "Quad") continue;
 
+                    // MV-787: a bulkhead lamp's own lens/bezel/back plate is a real generated mesh
+                    // (Sphere/Lathe), not a Quad, and is deliberately meant to stand proud of the wall
+                    // on its own bracket — the same "a deliberate new form, not the floating-run
+                    // regression this guard exists to catch" category MV-779's Pump Housing exemption
+                    // above already established.
+                    bool isBulkheadLampPart = r.GetComponentsInParent<Transform>(true)
+                        .Any(t => t.name == "Bulkhead Lamp" || t.name == "Hazard Bulkhead");
+                    if (isBulkheadLampPart) continue;
+
                     WallFace? face = OwningFace(faces, r.bounds);
                     Assert.IsTrue(face.HasValue,
                         $"{r.name} at {r.bounds.center} does not lie flat along any dressable wall face's own span");

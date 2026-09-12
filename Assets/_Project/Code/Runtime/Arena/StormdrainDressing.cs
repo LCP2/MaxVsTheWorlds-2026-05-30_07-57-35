@@ -87,7 +87,7 @@ namespace MaxWorlds.Arena
                     string n = walls.GetChild(i).name;
                     if (n.StartsWith("Kerb")) kerbs++;
                     else if (n.StartsWith("Pipe") || n.StartsWith("Collar")) pipes++;
-                    else if (n.StartsWith("Wall Lamp")) lamps++;
+                    else if (n.StartsWith("Bulkhead Lamp")) lamps++;
                     else if (n.StartsWith("Soffit")) soffits++;
                 }
             }
@@ -121,7 +121,51 @@ namespace MaxWorlds.Arena
 
             DressFloorComposition(root, map);
 
+            DressHazardBulkheads(root, host, map);
+
             return new DressReport(kerbs, pipes, lamps, soffits, coverProps, tiles, kinds.Count);
+        }
+
+        // ---------------------------------------------------------------- hazard bulkheads (MV-787, change 2)
+
+        /// <summary>Hazard bulkheads — the red, pulsing variant of <see cref="StormdrainKit.DressWallFace"/>'s
+        /// own amber fitting — one at every gate and one at every outfall (the ticket's own table). One
+        /// per gate rather than a literal pair either side of it: the lens is a sphere, so a single
+        /// fixture already reads from both approaches to the doorway, and World 2 authors enough gated
+        /// rooms that a pair at every one of them would have pushed red past the ticket's own 20% cap
+        /// (change 3) on this map — this ticket's own numbers win, not a placement reading of a table
+        /// cell. Gates are read back off what <see cref="MapRuntime.Build"/> already built under
+        /// <paramref name="host"/> (the same lookup <see cref="BackyardPath"/> already uses to reskin
+        /// them), not re-derived from <paramref name="map"/>, so a gate this pass sees is always one
+        /// that actually exists in the built scene.</summary>
+        private static void DressHazardBulkheads(Transform root, Transform host, MapData map)
+        {
+            var fittingHost = new GameObject("Light Fittings").transform;
+            fittingHost.SetParent(root, false);
+
+            float mountHeight = Mathf.Min(StormdrainLightKit.BulkheadHeight, map.wallHeight * 0.9f);
+
+            foreach (AreaGate gate in host.GetComponentsInChildren<AreaGate>(true))
+            {
+                Transform t = gate.transform;
+                Vector3 inward = gate.AwayFromPlayerDirection.sqrMagnitude > 0.001f
+                    ? gate.AwayFromPlayerDirection.normalized
+                    : t.forward;
+                Vector3 along = t.right;
+
+                Vector3 at = t.position;
+                at.y = 0f;
+                StormdrainLightKit.BuildBulkheadLamp(fittingHost, "Hazard Bulkhead", at, inward, along,
+                    StormdrainLightKit.Red, pulsing: true, mountHeight);
+            }
+
+            MapEntity outfall = map.Entity(OutfallGateId);
+            if (outfall != null)
+            {
+                Vector3 at = new Vector3(outfall.x, 0f, outfall.z);
+                StormdrainLightKit.BuildBulkheadLamp(fittingHost, "Hazard Bulkhead", at, Vector3.forward, Vector3.right,
+                    StormdrainLightKit.Red, pulsing: true, mountHeight);
+            }
         }
 
         // ---------------------------------------------------------------- floor composition (MV-781)
