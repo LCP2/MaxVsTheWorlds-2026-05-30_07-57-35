@@ -82,6 +82,19 @@ namespace MaxWorlds.Rendering
         /// floor and <see cref="Soffit"/>. MV-783: retoned onto the approved cool base.</summary>
         public static readonly Color PanelJoint = new Color(0.150f, 0.170f, 0.195f);
 
+        /// <summary>A bay crack (MV-784, change 3) — darker than <see cref="PanelJoint"/> so a hairline
+        /// reads as damage IN the slab rather than another joint line.</summary>
+        public static readonly Color Crack = new Color(PanelJoint.r * 0.55f, PanelJoint.g * 0.55f, PanelJoint.b * 0.55f);
+
+        /// <summary>The three cast-bay tones (MV-784, change 1) — duplicated as constants rather than
+        /// read off <see cref="MaterialLibrary.Palette"/> for the same reason <see cref="Sludge"/> is
+        /// (Rendering must not depend on which palette happens to be active when this kit builds), kept
+        /// bit-identical to <see cref="BiomePalette.Stormdrain"/>'s own GroundDry/GroundBase/GroundAccent
+        /// so the bay grid and the ground shader agree on what "the floor" looks like.</summary>
+        public static readonly Color GroundDry = new Color(0.205f, 0.230f, 0.260f);
+        public static readonly Color GroundBase = new Color(0.255f, 0.285f, 0.315f);
+        public static readonly Color GroundAccent = new Color(0.300f, 0.330f, 0.360f);
+
         /// <summary>Silt (MV-781, change 3) — warm-neutral, the only warm ground tone in the room.
         /// MV-783: retoned onto the approved cool base, matching <see cref="BiomePalette.Stormdrain"/>'s
         /// own <c>Dirt</c>.</summary>
@@ -105,12 +118,38 @@ namespace MaxWorlds.Rendering
         public const float GrateGrilleBarHeight = 0.06f;
         public const float GrateGrilleBarLength = 0.86f;
 
-        public const float PanelJointWidth = 0.10f;
-        public const float PanelJointThickness = 0.06f;
+        /// <summary>MV-784, change 2: narrowed from 0.10/0.06 so the line reads as a cut, not a rib.</summary>
+        public const float PanelJointWidth = 0.07f;
+        public const float PanelJointThickness = 0.05f;
         public const float PanelJointSunk = 0.02f;
 
-        public const float FloorPatchLift = 0.015f;
-        public const float FloorPatchThickness = 0.03f;
+        /// <summary>MV-784, change 1: each cast bay is this much short of the grid pitch, so the joint
+        /// gap shows all the way round it.</summary>
+        public const float BayInset = 0.12f;
+        public const float BayThickness = 0.10f;
+
+        /// <summary>MV-784, change 3: the crack blob's own base radius before the (1.35, 1, 0.035)
+        /// squash-and-stretch turns it into a long hairline (a number this ticket doesn't fix, since
+        /// only the SHAPE ratio is specified — chosen so the finished sliver reads at bay scale rather
+        /// than swallowing one whole or vanishing).</summary>
+        public const float CrackBaseRadius = 0.55f;
+        public const float CrackLift = 0.003f;
+
+        /// <summary>MV-784, change 4: mean core radius range for a silt/water stain, and silt's halo
+        /// as a multiple of its own core (the ticket's own 1.6x). Both stains stack a wider under-layer
+        /// with a denser layer on top — that two-step edge is what makes a smear read as soaked INTO the
+        /// floor rather than cut out of it.</summary>
+        public const float StainCoreRadiusMin = 0.9f;
+        public const float StainCoreRadiusMax = 1.6f;
+        public const float SiltHaloScale = 1.6f;
+        public const int SiltSegments = 11;
+        public const float StainSegmentMinT = 0.70f;
+        public const float StainSegmentMaxT = 1.30f;
+        public const int WaterSegments = 13;
+        public const float WaterMeniscusWidth = 0.02f;
+        public const float WaterMeniscusLumaScale = 1.4f;
+        public const float StainLift = 0.004f;
+        public const float StainLayerGap = 0.002f;
 
         public const float KerbHeight = 0.45f;
         public const float KerbDepth = 0.32f;
@@ -606,107 +645,162 @@ namespace MaxWorlds.Rendering
             return root;
         }
 
-        /// <summary>A recessed panel-joint strip (MV-781, change 2) — sunk <see cref="PanelJointSunk"/>
-        /// below the floor's own top so it reads as a cut line, not a raised rib.</summary>
+        /// <summary>A recessed panel-joint strip (MV-781, change 2; narrowed MV-784, change 2) — sunk
+        /// <see cref="PanelJointSunk"/> below the floor's own top so it reads as a cut line, not a
+        /// raised rib.</summary>
         public static GameObject BuildPanelJoint(Transform parent, Rect worldRect, float floorTopY = 0f)
         {
             Vector3 center = new Vector3(worldRect.center.x,
                 floorTopY - PanelJointSunk - PanelJointThickness * 0.5f, worldRect.center.y);
-            return Box(parent, "Panel Joint", center,
+            GameObject go = Box(parent, "Panel Joint", center,
                 new Vector3(worldRect.width, PanelJointThickness, worldRect.height), PanelJoint);
-        }
-
-        /// <summary>A silt or standing-water patch (MV-781, change 3) — a thin irregular disc lifted
-        /// <see cref="FloorPatchLift"/> above the floor (MV-782: was an axis-aligned box, which reads as
-        /// a block laid ON the floor rather than a stain IN it). Standing water gets a raised smoothness
-        /// on its own material instance so the key catches it, per the ticket's own wording.</summary>
-        public static GameObject BuildFloorPatch(Transform parent, Rect worldRect, bool isWater, float floorTopY = 0f)
-        {
-            Color tone = isWater ? StandingWater : Silt;
-            Vector3 center = new Vector3(worldRect.center.x,
-                floorTopY + FloorPatchLift + FloorPatchThickness * 0.5f, worldRect.center.y);
-
-            // Mean half-extent of the original rect — same footprint scale as before, just a lumpy
-            // outline instead of a rectangle. Seeded off the patch's own centre so two patches never
-            // share an outline, and the same call always builds the same shape (MV781FloorCompositionTests
-            // asserts determinism on the layout that feeds this).
-            float meanHalfExtent = (worldRect.width + worldRect.height) * 0.25f;
-            float seed = worldRect.center.x * 12.9898f + worldRect.center.y * 78.233f;
-            Mesh mesh = BuildIrregularPatchMesh(meanHalfExtent, FloorPatchThickness, seed);
-
-            GameObject go = AddMeshPart(parent, isWater ? "Standing Water" : "Silt", mesh, center,
-                isWater ? SurfaceKind.Prop : SurfaceKind.Dirt, tone);
-
-            if (isWater)
-            {
-                Material mat = go.GetComponent<Renderer>()?.sharedMaterial;
-                if (mat != null && mat.HasProperty("_Smoothness"))
-                    mat.SetFloat("_Smoothness", Mathf.Max(mat.GetFloat("_Smoothness"), 0.55f));
-            }
-
+            ZeroOutline(go);
             return go;
         }
 
-        /// <summary>A thin disc whose outer radius varies PER SEGMENT — 7 to 9 vertices, each at a
-        /// deterministic +/-25% jitter around <paramref name="meanRadius"/>, seeded from the patch's own
-        /// position. Deliberately not <see cref="CharacterMeshes.Lathe"/>: Lathe revolves one radius per
-        /// row around the full circle, so every angular slice at a given height is the same distance
-        /// from the axis — a perfect circle, which is exactly what a stamped-out floor stain must NOT
-        /// be. Two rings (top/bottom) plus a rim band, wound the same way <c>Lathe</c>'s own cap/body
-        /// loops are (top cap centre-then-current-then-next, bottom cap centre-then-next-then-current,
-        /// rim (bottom,top,bottom-next)/(bottom-next,top,top-next)) so the faces cull the same way every
-        /// other generated part in this file already does.</summary>
-        private static Mesh BuildIrregularPatchMesh(float meanRadius, float thickness, float seed)
+        /// <summary>A cast bay slab (MV-784, change 1) — one <see cref="CharacterMeshes.Bevelled"/> box
+        /// per grid cell, inset <see cref="BayInset"/> short of the grid pitch so the joint gap shows all
+        /// the way round it, in whichever of the three bay tones <paramref name="tone"/> resolves the
+        /// bay's own hash to.</summary>
+        public static GameObject BuildBay(Transform parent, Rect worldRect, Color tone, float floorTopY = 0f)
         {
-            int segments = 7 + Mathf.Clamp(Mathf.FloorToInt(Frac(seed * 0.8372f) * 3f), 0, 2);
-            float half = thickness * 0.5f;
+            Vector3 center = new Vector3(worldRect.center.x, floorTopY - BayThickness * 0.5f, worldRect.center.y);
+            GameObject go = Box(parent, "Bay", center,
+                new Vector3(worldRect.width, BayThickness, worldRect.height), tone);
+            ZeroOutline(go);
+            return go;
+        }
 
-            var rimX = new float[segments];
-            var rimZ = new float[segments];
+        /// <summary>A hairline crack in one bay (MV-784, change 3) — a <see cref="BuildBlobMesh"/> blob
+        /// squashed and stretched into a long sliver, rotated by the same hash that decided the bay gets
+        /// one at all, so a level always cracks the same bays the same way.</summary>
+        public static GameObject BuildCrack(Transform parent, Vector3 worldCenter, float hash, float floorTopY = 0f)
+        {
+            var go = new GameObject("Crack");
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(worldCenter.x, floorTopY + CrackLift, worldCenter.z);
+            go.transform.localRotation = Quaternion.Euler(0f, hash * 360f, 0f);
+            go.transform.localScale = new Vector3(1.35f, 1f, 0.035f);
+
+            Mesh mesh = BuildBlobMesh(CrackBaseRadius, 7, StainSegmentMinT, StainSegmentMaxT, hash * 97.13f);
+            go.AddComponent<MeshFilter>().sharedMesh = mesh;
+            go.AddComponent<MeshRenderer>();
+            Paint(go, SurfaceKind.Dirt, Crack);
+            ZeroOutline(go);
+            return go;
+        }
+
+        /// <summary>A silt drift (MV-784, change 4) — two stacked <see cref="BuildBlobMesh"/> blobs: a
+        /// wide soft halo halfway in tone between the floor and <see cref="Silt"/>, and a denser core at
+        /// full <see cref="Silt"/> inside it. The two-step edge is what makes this read as soaked into
+        /// the floor rather than cut out of it.</summary>
+        public static GameObject BuildSiltStain(Transform parent, Vector3 worldCenter, float coreRadius,
+                                                float seed, float floorTopY = 0f)
+        {
+            var root = new GameObject("Silt");
+            root.transform.SetParent(parent, false);
+            root.transform.localPosition = new Vector3(worldCenter.x, floorTopY + StainLift, worldCenter.z);
+
+            Color haloTone = Color.Lerp(GroundBase, Silt, 0.5f);
+            BuildStainLayer(root.transform, "Halo", coreRadius * SiltHaloScale, SiltSegments, seed, 0f,
+                SurfaceKind.Dirt, haloTone);
+            BuildStainLayer(root.transform, "Core", coreRadius, SiltSegments, seed + 11f, StainLayerGap,
+                SurfaceKind.Dirt, Silt);
+
+            return root;
+        }
+
+        /// <summary>A standing-water pool (MV-784, change 4) — a dark, cool <see cref="StandingWater"/>
+        /// core ringed by a <see cref="WaterMeniscusWidth"/> meniscus at roughly
+        /// <see cref="WaterMeniscusLumaScale"/>x the floor's luminance, built the same "wider layer under
+        /// a denser one" way <see cref="BuildSiltStain"/> is.</summary>
+        public static GameObject BuildWaterStain(Transform parent, Vector3 worldCenter, float coreRadius,
+                                                 float seed, float floorTopY = 0f)
+        {
+            var root = new GameObject("Standing Water");
+            root.transform.SetParent(parent, false);
+            root.transform.localPosition = new Vector3(worldCenter.x, floorTopY + StainLift, worldCenter.z);
+
+            Color meniscusTone = GroundBase * WaterMeniscusLumaScale;
+            BuildStainLayer(root.transform, "Meniscus", coreRadius + WaterMeniscusWidth, WaterSegments, seed, 0f,
+                SurfaceKind.Prop, meniscusTone);
+            GameObject core = BuildStainLayer(root.transform, "Water", coreRadius, WaterSegments, seed + 13f,
+                StainLayerGap, SurfaceKind.Prop, StandingWater);
+
+            Material mat = core.GetComponent<Renderer>()?.sharedMaterial;
+            if (mat != null && mat.HasProperty("_Smoothness"))
+                mat.SetFloat("_Smoothness", Mathf.Max(mat.GetFloat("_Smoothness"), 0.55f));
+
+            return root;
+        }
+
+        /// <summary>One flat blob layer, shared by <see cref="BuildSiltStain"/> and
+        /// <see cref="BuildWaterStain"/> — both stack a wider under-layer with a denser layer this same
+        /// height above it.</summary>
+        private static GameObject BuildStainLayer(Transform parent, string name, float radius, int segments,
+                                                   float seed, float liftY, SurfaceKind kind, Color tone)
+        {
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = new Vector3(0f, liftY, 0f);
+            go.AddComponent<MeshFilter>().sharedMesh =
+                BuildBlobMesh(radius, segments, StainSegmentMinT, StainSegmentMaxT, seed);
+            go.AddComponent<MeshRenderer>();
+            Paint(go, kind, tone);
+            ZeroOutline(go);
+            return go;
+        }
+
+        /// <summary>The flat, per-segment-jittered "Blob" every irregular MV-784 shape (crack, silt
+        /// halo/core, water core/meniscus) is built from: a centre vertex plus <paramref name="segments"/>
+        /// rim vertices, each at <c>radius * (radiusMinT + Frac(...) * (radiusMaxT - radiusMinT))</c> —
+        /// deterministic from <paramref name="seed"/>, never <see cref="Random"/>. Same
+        /// "pick the winding so the triangle's own normal faces up" idiom as
+        /// <see cref="MaxWorlds.Enemies.SludgePuddle.BuildFanMesh"/>, so this always renders face-up
+        /// regardless of which way the angle sweep runs.</summary>
+        private static Mesh BuildBlobMesh(float radius, int segments, float radiusMinT, float radiusMaxT, float seed)
+        {
+            segments = Mathf.Max(3, segments);
+            var vertices = new Vector3[segments + 1];
+            vertices[0] = Vector3.zero;
+
             for (int i = 0; i < segments; i++)
             {
-                float angle = (float)i / segments * Mathf.PI * 2f;
-                float jitter = (Frac(seed * 1.317f + i * 0.4177f) * 2f - 1f) * 0.25f;
-                float r = meanRadius * (1f + jitter);
-                rimX[i] = Mathf.Cos(angle) * r;
-                rimZ[i] = Mathf.Sin(angle) * r;
+                float angle = i / (float)segments * Mathf.PI * 2f;
+                float t = radiusMinT + Frac(seed * 1.317f + i * 0.4177f) * (radiusMaxT - radiusMinT);
+                float r = radius * t;
+                vertices[i + 1] = new Vector3(Mathf.Cos(angle) * r, 0f, Mathf.Sin(angle) * r);
             }
 
-            var verts = new List<Vector3>(segments * 2 + 2);
-            var tris = new List<int>(segments * 12);
-
-            int botCentre = verts.Count;
-            verts.Add(new Vector3(0f, -half, 0f));
-            int botRingStart = verts.Count;
-            for (int i = 0; i < segments; i++) verts.Add(new Vector3(rimX[i], -half, rimZ[i]));
-
-            int topCentre = verts.Count;
-            verts.Add(new Vector3(0f, half, 0f));
-            int topRingStart = verts.Count;
-            for (int i = 0; i < segments; i++) verts.Add(new Vector3(rimX[i], half, rimZ[i]));
-
+            var triangles = new int[segments * 3];
             for (int i = 0; i < segments; i++)
             {
-                int i2 = (i + 1) % segments;
-                int bot = botRingStart + i, botNext = botRingStart + i2;
-                int top = topRingStart + i, topNext = topRingStart + i2;
-
-                // Bottom cap (normal -Y): centre, next, current.
-                tris.Add(botCentre); tris.Add(botNext); tris.Add(bot);
-                // Top cap (normal +Y): centre, current, next.
-                tris.Add(topCentre); tris.Add(top); tris.Add(topNext);
-                // Rim band, outward-facing.
-                tris.Add(bot); tris.Add(top); tris.Add(botNext);
-                tris.Add(botNext); tris.Add(top); tris.Add(topNext);
+                int b = i + 1;
+                int c = (i + 1) % segments + 1;
+                Vector3 normal = Vector3.Cross(vertices[b] - vertices[0], vertices[c] - vertices[0]);
+                int t = i * 3;
+                if (normal.y >= 0f) { triangles[t] = 0; triangles[t + 1] = b; triangles[t + 2] = c; }
+                else { triangles[t] = 0; triangles[t + 1] = c; triangles[t + 2] = b; }
             }
 
-            var mesh = new Mesh { name = "StormdrainFloorPatch", hideFlags = HideFlags.HideAndDontSave };
-            mesh.SetVertices(verts);
-            mesh.SetTriangles(tris, 0);
+            var mesh = new Mesh { name = "StormdrainBlob", hideFlags = HideFlags.HideAndDontSave };
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles, 0);
             mesh.RecalculateNormals();
             mesh.RecalculateBounds();
             mesh.UploadMeshData(markNoLongerReadable: false);
             return mesh;
+        }
+
+        /// <summary>MV-784, change 5: nothing at floor level carries the world's inverted-hull outline —
+        /// on a floor stain it draws an ink border and turns the floor into sticker art. Reaches back
+        /// into the resolved material the same way the water smoothness override already does, rather
+        /// than adding a per-kind branch to <see cref="MaterialLibrary.Build"/> that every other surface
+        /// would have to keep not tripping.</summary>
+        private static void ZeroOutline(GameObject go)
+        {
+            Material mat = go.GetComponent<Renderer>()?.sharedMaterial;
+            if (mat != null && mat.HasProperty("_OutlineOn")) mat.SetFloat("_OutlineOn", 0f);
         }
 
         // ---------------------------------------------------------------- sludge dressing

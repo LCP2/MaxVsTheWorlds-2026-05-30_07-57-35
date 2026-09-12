@@ -47,7 +47,7 @@ namespace MaxWorlds.Tests.EditMode
             }
 
             AssertGrilleBelowFloorAndWaterSeparatedFromFloor();
-            AssertJointAndPatchDeterminismAndNoOverlap(map);
+            AssertJointDeterminismAndNoOverlap(map);
         }
 
         private static void AssertGrateEntitiesMatchAuthoredCoordinates(WorldConfig cfg, MapData map)
@@ -130,7 +130,12 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        private static void AssertJointAndPatchDeterminismAndNoOverlap(MapData map)
+        /// <summary>MV-784 culled this method's patch-determinism/no-overlap half (testing policy
+        /// MV-465 culling rule: redundant once <c>StormdrainDressing.PatchRects</c> stopped existing) —
+        /// <c>MV784FloorStructureTests</c> now covers silt/water determinism and obstacle avoidance
+        /// under the new bay/stain layout. The joint half is unchanged and still guards real coverage.
+        /// </summary>
+        private static void AssertJointDeterminismAndNoOverlap(MapData map)
         {
             var obstacles = new List<Rect>();
             foreach (MapEntity e in map.entities)
@@ -158,24 +163,9 @@ namespace MaxWorlds.Tests.EditMode
                 for (int i = 0; i < joints1.Count; i++)
                     Assert.AreEqual(joints1[i], joints2[i], $"zone '{zone.id}': joint {i} position is not deterministic");
 
-                List<(Rect rect, bool isWater)> patches1 = StormdrainDressing.PatchRects(rect, zone.id, obstacles);
-                List<(Rect rect, bool isWater)> patches2 = StormdrainDressing.PatchRects(rect, zone.id, obstacles);
-                Assert.AreEqual(patches1.Count, patches2.Count, $"zone '{zone.id}': patch count is not deterministic");
-                for (int i = 0; i < patches1.Count; i++)
-                {
-                    Assert.AreEqual(patches1[i].rect, patches2[i].rect,
-                        $"zone '{zone.id}': patch {i} position is not deterministic");
-                    Assert.AreEqual(patches1[i].isWater, patches2[i].isWater,
-                        $"zone '{zone.id}': patch {i} silt/water flag is not deterministic");
-                }
-
                 foreach (Rect j in joints1)
                     foreach (Rect o in obstacles)
                         Assert.IsFalse(j.Overlaps(o), $"zone '{zone.id}': a panel joint crosses obstacle rect {o}");
-
-                foreach ((Rect pRect, bool _) in patches1)
-                    foreach (Rect o in obstacles)
-                        Assert.IsFalse(pRect.Overlaps(o), $"zone '{zone.id}': a patch crosses obstacle rect {o}");
             }
             Assert.IsTrue(anyFloorZone, "World 2's map has no floor-level zones to test against");
         }
