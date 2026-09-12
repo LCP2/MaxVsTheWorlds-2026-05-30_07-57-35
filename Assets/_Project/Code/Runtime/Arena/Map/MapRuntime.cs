@@ -204,8 +204,10 @@ namespace MaxWorlds.Arena
             }
         }
 
-        /// <summary>Acid-green (MV-692).</summary>
-        private static readonly Color SludgeColor = new Color(0.55f, 0.85f, 0.15f);
+        /// <summary>MV-785: retoned onto <see cref="StormdrainKit.Sludge"/> — closing the divergence
+        /// MV-783 documented on that constant (it retoned the dressing kit's own copy but explicitly left
+        /// this tile fill out of scope). No longer acid-green (MV-692's original value).</summary>
+        private static readonly Color SludgeColor = new Color(0.200f, 0.300f, 0.115f);
 
         /// <summary>W2 TEAL (MV-690, palette bridge #2fa3b0) — what the sludge grades toward within
         /// <see cref="OutfallGradeRadius"/> of the outfall gate, per the palette bridge's "teal in,
