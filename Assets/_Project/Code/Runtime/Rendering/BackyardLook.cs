@@ -251,12 +251,19 @@ namespace MaxWorlds.Rendering
             AmbientEquator = new Color(0.15f, 0.16f, 0.15f),
             AmbientGround = new Color(0.17f, 0.22f, 0.10f),
 
-            // Twelve times the yard's density. This is deliberate and it is the most important number
-            // on this page: a long gallery whose far end is still crisp is a room, and a long gallery
-            // whose far end dissolves is a tunnel. Tuned so a 30 m sightline is still fightable and a
-            // 60 m one is atmosphere.
-            FogColor = new Color(0.09f, 0.12f, 0.11f),
-            FogDensity = 0.065f,
+            // MV-782: was 12x the yard's density (0.065) and pushed the camera's own 26 m sightline to
+            // 94% fogged — past the point BiomePalette.Stormdrain's own separated value tiers (MV-777)
+            // ever reach the eye, because fog composites every surface toward FogColor's own luminance
+            // the further it sits from the camera. 0.018 keeps the drain closed-in (~21% fog at 26 m,
+            // ~3% at 10 m) while leaving the tiers intact at gameplay range — some falloff is still
+            // correct here, just not enough to erase the palette underneath it.
+            //
+            // FogColor is pushed BELOW the floor's own luminance (was 0.113, sitting between the floor's
+            // 0.062 and the wall's 0.204 — exactly the value that drags every surface toward one flat
+            // mid-tone as fog increases with distance). Fog darker than everything deepens a frame; fog
+            // that sits mid-range flattens it.
+            FogColor = new Color(0.035f, 0.045f, 0.042f),
+            FogDensity = 0.018f,
 
             // Unused — ApplySky nulls the skybox for this biome — but filled so the struct is honest.
             SkyZenith = new Color(0.05f, 0.07f, 0.08f),

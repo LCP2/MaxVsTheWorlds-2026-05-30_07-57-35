@@ -223,9 +223,14 @@ namespace MaxWorlds.Rendering
             GroundMacroScale = 0.05f,
             GroundMacroStrength = 0.30f,
             GroundLushShade = 0.70f,
-            GroundNormalStrength = 0.6f,   // wet concrete is flatter than turf, not glassy
+            // MV-782: GroundNormalStrength was already flatter than the lawn (0.6 vs 0.85) — correct,
+            // wet concrete isn't glassy — but GroundClumpDepth used to sit at 0, and clump depth is
+            // surface RELIEF, not wind: with it zeroed the floor had no relief at all and read as a flat
+            // fill. 0.07 (worn, pitted concrete, shallower than turf's 0.12) restores it without giving
+            // the slab a tuft it shouldn't have; 0.9 lets the light actually break across that relief.
+            GroundNormalStrength = 0.9f,
             GroundClumpScale = 0.5f,
-            GroundClumpDepth = 0f,         // no tufting — this is paving, not a lawn
+            GroundClumpDepth = 0.07f,      // pitted concrete relief — still no tufting, this isn't a lawn
 
             GroundWindLean = 0f,           // concrete doesn't sway
             GroundWindSpeed = 0f,

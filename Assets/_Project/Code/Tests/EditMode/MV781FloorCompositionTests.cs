@@ -46,7 +46,7 @@ namespace MaxWorlds.Tests.EditMode
                 UnityEngine.Object.DestroyImmediate(host.gameObject);
             }
 
-            AssertGrilleBelowFloorAndWaterAboveFloorByAtLeast25();
+            AssertGrilleBelowFloorAndWaterAboveFloorByAtLeast15();
             AssertJointAndPatchDeterminismAndNoOverlap(map);
         }
 
@@ -93,7 +93,7 @@ namespace MaxWorlds.Tests.EditMode
             }
         }
 
-        private static void AssertGrilleBelowFloorAndWaterAboveFloorByAtLeast25()
+        private static void AssertGrilleBelowFloorAndWaterAboveFloorByAtLeast15()
         {
             BiomePalette previous = MaterialLibrary.Palette;
             try
@@ -113,8 +113,14 @@ namespace MaxWorlds.Tests.EditMode
                 Assert.Less(grilleLuma, floorLuma,
                     $"the grille-bar material ({grilleLuma:F1} luma) must resolve darker than the World 2 " +
                     $"floor material ({floorLuma:F1} luma) — it is the floor's darkest tier");
-                Assert.That(waterLuma - floorLuma, Is.GreaterThanOrEqualTo(25f),
-                    $"standing water ({waterLuma:F1} luma) must resolve at least 25 luma above the floor " +
+                // MV-782: was ">= 25", calibrated against a StandingWater that was itself 9.79x the
+                // floor's raw luminance — 4.5x brighter than MV-781's own 2.2x spec, which is why it
+                // read as a neon block. MV-782 retones StandingWater onto that 2.2x spec (see
+                // MV782FrameReadabilityTests), which resolves this MaterialLibrary-baked margin to
+                // ~17.6 rather than the old ~117 — still a real, visible separation from the floor, just
+                // no longer inflated by the defect this ticket fixes.
+                Assert.That(waterLuma - floorLuma, Is.GreaterThanOrEqualTo(15f),
+                    $"standing water ({waterLuma:F1} luma) must resolve at least 15 luma above the floor " +
                     $"({floorLuma:F1} luma)");
             }
             finally
