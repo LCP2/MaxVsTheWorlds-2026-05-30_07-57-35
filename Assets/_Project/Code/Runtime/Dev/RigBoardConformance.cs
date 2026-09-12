@@ -215,16 +215,21 @@ namespace MaxWorlds.Dev
     /// </summary>
     public static class FrameContrastGate
     {
-        /// <summary>Below this p95-p5 luma range, the frame reads as one value with noise on it.</summary>
-        public const float MinRange = 90f;
+        /// <summary>MV-790 floor only — a genuinely flat frame still has to fail, but range is no
+        /// longer the primary signal: it rewarded exactly the neon-on-near-black failure it was
+        /// written to catch (two extremes with nothing between them scored 127 of range against the
+        /// approved design's 50). Value tiers and colour dominance below now carry the real weight.</summary>
+        public const float MinRange = 28f;
 
         /// <summary>How close (in luma) to the median a pixel has to be to count as "the same value"
         /// for <see cref="Result.MedianBandShare"/>.</summary>
         public const float MedianBandHalfWidth = 12f;
 
         /// <summary>Above this share of the frame sitting within <see cref="MedianBandHalfWidth"/> of
-        /// the median, the frame is dominated by one value regardless of its overall range.</summary>
-        public const float MaxMedianBandShare = 0.60f;
+        /// the median, the frame is dominated by one value regardless of its overall range. MV-790:
+        /// raised from 0.60 to the value the approved design actually reaches (0.70) — 0.60 was a gate
+        /// nothing could pass.</summary>
+        public const float MaxMedianBandShare = 0.70f;
 
         /// <summary>Width of one luma tier bucket.</summary>
         public const float TierBandWidth = 20f;
@@ -233,36 +238,49 @@ namespace MaxWorlds.Dev
         /// stray handful of outlier pixels must not manufacture a tier that was never actually there.</summary>
         public const float TierMinShare = 0.04f;
 
+        /// <summary>MV-790: unchanged from MV-777, now the gate's primary signal.</summary>
         public const int MinDistinctTiers = 4;
+
+        /// <summary>MV-790: RGB quantised to this many levels per channel before counting which single
+        /// colour dominates the frame.</summary>
+        public const int DominantColorQuantizeLevels = 12;
+
+        /// <summary>Above this share of the sampled frame being the single most common quantised
+        /// colour, the frame reads as neon-on-flat-background even when its luma range and tier count
+        /// both look fine (a two-colour frame can still clear both if a stray gradient adds noise).</summary>
+        public const float MaxDominantColorShare = 0.35f;
 
         public readonly struct Result
         {
             public readonly float RangeP95P5;
             public readonly float MedianBandShare;
             public readonly int DistinctTiers;
+            public readonly float DominantColorShare;
             public readonly bool Pass;
             public readonly string FailReason;
 
-            public Result(float rangeP95P5, float medianBandShare, int distinctTiers, bool pass, string failReason)
+            public Result(float rangeP95P5, float medianBandShare, int distinctTiers, float dominantColorShare, bool pass, string failReason)
             {
                 RangeP95P5 = rangeP95P5;
                 MedianBandShare = medianBandShare;
                 DistinctTiers = distinctTiers;
+                DominantColorShare = dominantColorShare;
                 Pass = pass;
                 FailReason = failReason;
             }
 
             public override string ToString() =>
                 $"range={RigBoardConformance.Fmt(RangeP95P5)} medianBandShare={RigBoardConformance.Fmt(MedianBandShare * 100f)}% " +
-                $"tiers={DistinctTiers} pass={Pass}" + (FailReason == null ? "" : $" ({FailReason})");
+                $"tiers={DistinctTiers} dominantColorShare={RigBoardConformance.Fmt(DominantColorShare * 100f)}% pass={Pass}" +
+                (FailReason == null ? "" : $" ({FailReason})");
         }
 
         /// <summary>
         /// Computes the play-area luminance histogram of <paramref name="tex"/> — sampled every
         /// <paramref name="step"/> pixels, excluding the outer <paramref name="marginFrac"/> of the
         /// frame on every side (the skybox wedge / HUD margin a real capture would need cropped out) —
-        /// and evaluates it against the three MV-777 thresholds: usable range, median-band dominance,
-        /// and distinct value tiers.
+        /// and evaluates it against the MV-790 thresholds: distinct value tiers (primary), single-colour
+        /// dominance, median-band dominance, and a usable-range floor.
         /// </summary>
         public static Result Check(Texture2D tex, float marginFrac = 0.10f, int step = 4)
         {
@@ -271,14 +289,22 @@ namespace MaxWorlds.Dev
             int my = Mathf.RoundToInt(h * marginFrac);
 
             var lumas = new List<float>();
+            var colorCounts = new Dictionary<int, int>();
             for (int y = my; y < h - my; y += step)
                 for (int x = mx; x < w - mx; x += step)
                 {
                     Color c = tex.GetPixel(x, y);
                     lumas.Add((0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b) * 255f);
+
+                    int rq = Mathf.Clamp(Mathf.FloorToInt(c.r * DominantColorQuantizeLevels), 0, DominantColorQuantizeLevels - 1);
+                    int gq = Mathf.Clamp(Mathf.FloorToInt(c.g * DominantColorQuantizeLevels), 0, DominantColorQuantizeLevels - 1);
+                    int bq = Mathf.Clamp(Mathf.FloorToInt(c.b * DominantColorQuantizeLevels), 0, DominantColorQuantizeLevels - 1);
+                    int key = (rq * DominantColorQuantizeLevels + gq) * DominantColorQuantizeLevels + bq;
+                    colorCounts.TryGetValue(key, out int ccount);
+                    colorCounts[key] = ccount + 1;
                 }
 
-            if (lumas.Count == 0) return new Result(0f, 1f, 0, false, "no pixels sampled inside the margin");
+            if (lumas.Count == 0) return new Result(0f, 1f, 0, 1f, false, "no pixels sampled inside the margin");
 
             lumas.Sort();
             float p5 = Percentile(lumas, 0.05f);
@@ -302,13 +328,19 @@ namespace MaxWorlds.Dev
             foreach (var kv in bandCounts)
                 if ((float)kv.Value / lumas.Count >= TierMinShare) tiers++;
 
+            int dominantColorCount = 0;
+            foreach (var kv in colorCounts)
+                if (kv.Value > dominantColorCount) dominantColorCount = kv.Value;
+            float dominantColorShare = (float)dominantColorCount / lumas.Count;
+
             var reasons = new List<string>();
-            if (range < MinRange) reasons.Add($"range {RigBoardConformance.Fmt(range)} < {RigBoardConformance.Fmt(MinRange)}");
-            if (medianShare > MaxMedianBandShare) reasons.Add($"median-band share {RigBoardConformance.Fmt(medianShare * 100f)}% > {RigBoardConformance.Fmt(MaxMedianBandShare * 100f)}%");
             if (tiers < MinDistinctTiers) reasons.Add($"only {tiers} distinct tiers (need {MinDistinctTiers})");
+            if (dominantColorShare > MaxDominantColorShare) reasons.Add($"dominant colour {RigBoardConformance.Fmt(dominantColorShare * 100f)}% > {RigBoardConformance.Fmt(MaxDominantColorShare * 100f)}%");
+            if (medianShare > MaxMedianBandShare) reasons.Add($"median-band share {RigBoardConformance.Fmt(medianShare * 100f)}% > {RigBoardConformance.Fmt(MaxMedianBandShare * 100f)}%");
+            if (range < MinRange) reasons.Add($"range {RigBoardConformance.Fmt(range)} < {RigBoardConformance.Fmt(MinRange)}");
 
             bool pass = reasons.Count == 0;
-            return new Result(range, medianShare, tiers, pass, pass ? null : string.Join("; ", reasons));
+            return new Result(range, medianShare, tiers, dominantColorShare, pass, pass ? null : string.Join("; ", reasons));
         }
 
         /// <summary>Linear-interpolated percentile over an already-sorted list.</summary>
