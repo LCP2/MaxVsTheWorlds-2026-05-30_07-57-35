@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Core;
 using MaxWorlds.VFX;
@@ -76,12 +77,17 @@ namespace MaxWorlds.Rendering
         /// resolved luminance, sitting deliberately between the floor and <see cref="Soffit"/>.</summary>
         public static readonly Color PanelJoint = new Color(0.028f, 0.033f, 0.029f);
 
-        /// <summary>Silt (MV-781, change 3) — warm-neutral, about 1.5x the floor's luminance.</summary>
-        public static readonly Color Silt = new Color(0.13f, 0.12f, 0.10f);
+        /// <summary>Silt (MV-781, change 3) — warm-neutral, about 1.5x the floor's luminance. MV-782:
+        /// MV-781 shipped this at 1.94x (its own spec's own miss) — retoned onto the same hue at ~1.5x
+        /// the floor's resolved luminance (<see cref="BiomePalette.Stormdrain"/>'s GroundBase).</summary>
+        public static readonly Color Silt = new Color(0.101f, 0.093f, 0.077f);
 
         /// <summary>Standing water (MV-781, change 3) — green-shifted toward <see cref="Sludge"/>'s
-        /// hue, about 2.2x the floor's luminance so it reads as the brightest thing on the ground.</summary>
-        public static readonly Color StandingWater = new Color(0.50f, 0.68f, 0.24f);
+        /// hue, about 2.2x the floor's luminance so it reads as the brightest thing on the ground.
+        /// MV-782: MV-781 shipped this at 9.79x the floor — four and a half times brighter than its own
+        /// spec, which is why it read as a neon block rather than a pool. Retoned onto the same hue at
+        /// ~2.2x.</summary>
+        public static readonly Color StandingWater = new Color(0.112f, 0.153f, 0.054f);
 
         // ---------------------------------------------------------------- dimensions
 
@@ -608,17 +614,26 @@ namespace MaxWorlds.Rendering
                 new Vector3(worldRect.width, PanelJointThickness, worldRect.height), PanelJoint);
         }
 
-        /// <summary>A silt or standing-water patch (MV-781, change 3) — a thin flat slab lifted
-        /// <see cref="FloorPatchLift"/> above the floor. Standing water gets a raised smoothness on
-        /// its own material instance so the key catches it, per the ticket's own wording.</summary>
+        /// <summary>A silt or standing-water patch (MV-781, change 3) — a thin irregular disc lifted
+        /// <see cref="FloorPatchLift"/> above the floor (MV-782: was an axis-aligned box, which reads as
+        /// a block laid ON the floor rather than a stain IN it). Standing water gets a raised smoothness
+        /// on its own material instance so the key catches it, per the ticket's own wording.</summary>
         public static GameObject BuildFloorPatch(Transform parent, Rect worldRect, bool isWater, float floorTopY = 0f)
         {
             Color tone = isWater ? StandingWater : Silt;
             Vector3 center = new Vector3(worldRect.center.x,
                 floorTopY + FloorPatchLift + FloorPatchThickness * 0.5f, worldRect.center.y);
-            GameObject go = Box(parent, isWater ? "Standing Water" : "Silt", center,
-                new Vector3(worldRect.width, FloorPatchThickness, worldRect.height), tone,
-                isWater ? SurfaceKind.Prop : SurfaceKind.Dirt);
+
+            // Mean half-extent of the original rect — same footprint scale as before, just a lumpy
+            // outline instead of a rectangle. Seeded off the patch's own centre so two patches never
+            // share an outline, and the same call always builds the same shape (MV781FloorCompositionTests
+            // asserts determinism on the layout that feeds this).
+            float meanHalfExtent = (worldRect.width + worldRect.height) * 0.25f;
+            float seed = worldRect.center.x * 12.9898f + worldRect.center.y * 78.233f;
+            Mesh mesh = BuildIrregularPatchMesh(meanHalfExtent, FloorPatchThickness, seed);
+
+            GameObject go = AddMeshPart(parent, isWater ? "Standing Water" : "Silt", mesh, center,
+                isWater ? SurfaceKind.Prop : SurfaceKind.Dirt, tone);
 
             if (isWater)
             {
@@ -628,6 +643,68 @@ namespace MaxWorlds.Rendering
             }
 
             return go;
+        }
+
+        /// <summary>A thin disc whose outer radius varies PER SEGMENT — 7 to 9 vertices, each at a
+        /// deterministic +/-25% jitter around <paramref name="meanRadius"/>, seeded from the patch's own
+        /// position. Deliberately not <see cref="CharacterMeshes.Lathe"/>: Lathe revolves one radius per
+        /// row around the full circle, so every angular slice at a given height is the same distance
+        /// from the axis — a perfect circle, which is exactly what a stamped-out floor stain must NOT
+        /// be. Two rings (top/bottom) plus a rim band, wound the same way <c>Lathe</c>'s own cap/body
+        /// loops are (top cap centre-then-current-then-next, bottom cap centre-then-next-then-current,
+        /// rim (bottom,top,bottom-next)/(bottom-next,top,top-next)) so the faces cull the same way every
+        /// other generated part in this file already does.</summary>
+        private static Mesh BuildIrregularPatchMesh(float meanRadius, float thickness, float seed)
+        {
+            int segments = 7 + Mathf.Clamp(Mathf.FloorToInt(Frac(seed * 0.8372f) * 3f), 0, 2);
+            float half = thickness * 0.5f;
+
+            var rimX = new float[segments];
+            var rimZ = new float[segments];
+            for (int i = 0; i < segments; i++)
+            {
+                float angle = (float)i / segments * Mathf.PI * 2f;
+                float jitter = (Frac(seed * 1.317f + i * 0.4177f) * 2f - 1f) * 0.25f;
+                float r = meanRadius * (1f + jitter);
+                rimX[i] = Mathf.Cos(angle) * r;
+                rimZ[i] = Mathf.Sin(angle) * r;
+            }
+
+            var verts = new List<Vector3>(segments * 2 + 2);
+            var tris = new List<int>(segments * 12);
+
+            int botCentre = verts.Count;
+            verts.Add(new Vector3(0f, -half, 0f));
+            int botRingStart = verts.Count;
+            for (int i = 0; i < segments; i++) verts.Add(new Vector3(rimX[i], -half, rimZ[i]));
+
+            int topCentre = verts.Count;
+            verts.Add(new Vector3(0f, half, 0f));
+            int topRingStart = verts.Count;
+            for (int i = 0; i < segments; i++) verts.Add(new Vector3(rimX[i], half, rimZ[i]));
+
+            for (int i = 0; i < segments; i++)
+            {
+                int i2 = (i + 1) % segments;
+                int bot = botRingStart + i, botNext = botRingStart + i2;
+                int top = topRingStart + i, topNext = topRingStart + i2;
+
+                // Bottom cap (normal -Y): centre, next, current.
+                tris.Add(botCentre); tris.Add(botNext); tris.Add(bot);
+                // Top cap (normal +Y): centre, current, next.
+                tris.Add(topCentre); tris.Add(top); tris.Add(topNext);
+                // Rim band, outward-facing.
+                tris.Add(bot); tris.Add(top); tris.Add(botNext);
+                tris.Add(botNext); tris.Add(top); tris.Add(topNext);
+            }
+
+            var mesh = new Mesh { name = "StormdrainFloorPatch", hideFlags = HideFlags.HideAndDontSave };
+            mesh.SetVertices(verts);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+            mesh.UploadMeshData(markNoLongerReadable: false);
+            return mesh;
         }
 
         // ---------------------------------------------------------------- sludge dressing

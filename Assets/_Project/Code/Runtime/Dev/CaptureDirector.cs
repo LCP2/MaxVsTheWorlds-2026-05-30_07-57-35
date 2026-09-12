@@ -1674,6 +1674,41 @@ namespace MaxWorlds.Dev
                 },
                 Prepare = Prepare,
                 Shots = new List<CaptureShot> { new CaptureShot("MV-755-stormdrain-kit", NoSetup) },
+                // MV-782: FrameContrastGate (MV-777) existed only as a pure function proven against a
+                // checked-in fixture and a synthetic texture in EditMode — nothing ever ran it against a
+                // frame this preset actually produced, so a real regression (this ticket's own fog
+                // defect) shipped straight past it. Loading the shot back in and logging the gate's own
+                // figures into the done-report is the fix: diagnostic only (this never blocks
+                // cc-verify, which doesn't run this preset), but it means the next World 2 visual
+                // ticket has real numbers to quote instead of none. Same 40%-width skybox-wedge crop
+                // MV777FrameContrastTests already applies to this exact preset's own captures.
+                ExtraReport = () =>
+                {
+                    string path = Path.Combine(outDir, "MV-755-stormdrain-kit.png");
+                    if (!File.Exists(path)) return "FrameContrastGate: capture file missing\n";
+
+                    var full = new Texture2D(2, 2, TextureFormat.RGB24, false);
+                    Texture2D playArea = null;
+                    try
+                    {
+                        if (!ImageConversion.LoadImage(full, File.ReadAllBytes(path)))
+                            return "FrameContrastGate: could not decode capture\n";
+
+                        int cropX0 = Mathf.RoundToInt(full.width * 0.40f);
+                        int cropWidth = full.width - cropX0;
+                        playArea = new Texture2D(cropWidth, full.height, TextureFormat.RGB24, false);
+                        playArea.SetPixels(full.GetPixels(cropX0, 0, cropWidth, full.height));
+                        playArea.Apply();
+
+                        FrameContrastGate.Result result = FrameContrastGate.Check(playArea);
+                        return $"FrameContrastGate: {result}\n";
+                    }
+                    finally
+                    {
+                        Destroy(full);
+                        if (playArea != null) Destroy(playArea);
+                    }
+                },
             };
         }
 

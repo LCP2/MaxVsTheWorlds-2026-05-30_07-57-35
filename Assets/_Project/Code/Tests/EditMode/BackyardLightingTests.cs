@@ -183,7 +183,13 @@ namespace MaxWorlds.Tests.EditMode
                 "World 2 must not still be lit by the Backyard's own look.");
             Assert.Less(stormdrain.KeyIntensity, 1.0f,
                 "the drain's key must be far dimmer than the yard's golden-hour sun.");
-            Assert.Greater(stormdrain.FogDensity, 0.03f,
+            // MV-782: was "> 0.03f", set when the drain's fog was still 0.065 — 12x the yard's own
+            // density and enough to fog the fixed camera's 26 m sightline to 94%, erasing MV-777's
+            // separated floor/wall/prop value tiers before they ever reached the eye. MV-782 corrects
+            // FogDensity to 0.018 (see MV782FrameReadabilityTests for the resolved-fog-factor proof);
+            // 0.01 keeps this test's own intent — denser than the yard's 0.0055, so the far end still
+            // dissolves rather than staying clear — without re-asserting the density this ticket fixes.
+            Assert.Greater(stormdrain.FogDensity, 0.01f,
                 "a tunnel needs its far end to dissolve into fog, not stay clear like the yard.");
         }
 

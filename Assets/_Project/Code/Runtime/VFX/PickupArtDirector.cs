@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using UnityEngine;
 using MaxWorlds.Pickups;
+using MaxWorlds.Rendering;
 
 namespace MaxWorlds.VFX
 {
@@ -409,11 +410,22 @@ namespace MaxWorlds.VFX
             }
             ring.Lift = RingLift;
 
+            // MV-782: this ring is an additive filled disc (VfxMaterials.Ring/Glow) — on World 1's
+            // bright grass that reads as a soft glow, but additive blending against World 2's
+            // 0.062-luminance floor IS the ring's own colour at full strength, so it reads as a solid
+            // neon blob instead. Scaling alpha only for the Stormdrain palette keeps World 1/3 untouched.
+            float biomeAlpha = MaterialLibrary.Palette.Equals(BiomePalette.Stormdrain) ? alpha * StormdrainRingAlphaScale : alpha;
+
             Vector3 groundPos = pickup.position;
             groundPos.y = 0f;   // the lawn plane (GroundAnchorTuning) — the ring never reads the bob
-            ring.Show(groundPos, radius, new Color(color.r, color.g, color.b, alpha));
+            ring.Show(groundPos, radius, new Color(color.r, color.g, color.b, biomeAlpha));
             return ring;
         }
+
+        /// <summary>MV-782: how far a pickup's ground ring alpha is scaled back on the Stormdrain
+        /// palette, so an additive disc that reads as a soft glow on grass doesn't read as a solid
+        /// neon blob against the drain's dark floor.</summary>
+        private const float StormdrainRingAlphaScale = 0.45f;
 
         // MV-304: the cell's own gentle radiance — slower and lower-amplitude than the ground ring's
         // pulse, so it reads as a quiet inner charge rather than competing with the "grab me" tell.
