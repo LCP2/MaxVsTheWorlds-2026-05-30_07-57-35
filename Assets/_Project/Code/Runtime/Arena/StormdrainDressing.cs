@@ -156,9 +156,10 @@ namespace MaxWorlds.Arena
             return rects;
         }
 
-        /// <summary>Builds every floor-level zone's panel joints (change 2) and silt/standing-water
-        /// patches (change 3) — skipped for a <see cref="MapZone.level"/> &gt; 0 zone (a deck overlay
-        /// shares its target's floor, MV-697, so it never gets a second pass of it).</summary>
+        /// <summary>Builds every floor-level zone's cast bays and cracks (MV-784, changes 1 and 3),
+        /// panel joints (change 2), and silt/standing-water stains (change 4) — skipped for a
+        /// <see cref="MapZone.level"/> &gt; 0 zone (a deck overlay shares its target's floor, MV-697, so
+        /// it never gets a second pass of it).</summary>
         private static void DressFloorComposition(Transform root, MapData map)
         {
             if (map.zones == null) return;
@@ -173,12 +174,184 @@ namespace MaxWorlds.Arena
                 if (zone == null || zone.level > 0) continue;
                 Rect zoneRect = zone.Footprint;
 
+                foreach (Bay bay in BayRects(zoneRect, zone.id))
+                {
+                    StormdrainKit.BuildBay(floorHost, bay.Rect, bay.Tone);
+                    if (bay.HasCrack)
+                        StormdrainKit.BuildCrack(floorHost,
+                            new Vector3(bay.Rect.center.x, 0f, bay.Rect.center.y), bay.CrackHash);
+                }
+
                 foreach (Rect seg in JointRects(zoneRect, obstacles))
                     StormdrainKit.BuildPanelJoint(floorHost, seg);
 
-                foreach ((Rect rect, bool isWater) in PatchRects(zoneRect, zone.id, obstacles))
-                    StormdrainKit.BuildFloorPatch(floorHost, rect, isWater);
+                foreach (Stain silt in SiltRects(zoneRect, zone.id, obstacles))
+                    StormdrainKit.BuildSiltStain(floorHost,
+                        new Vector3(silt.Center.x, 0f, silt.Center.y), silt.CoreRadius, silt.Seed);
+
+                foreach (Stain water in WaterRects(zoneRect, zone.id, obstacles))
+                    StormdrainKit.BuildWaterStain(floorHost,
+                        new Vector3(water.Center.x, 0f, water.Center.y), water.CoreRadius, water.Seed);
             }
+        }
+
+        // ---------------------------------------------------------------- cast bays and cracks (MV-784)
+
+        private const float BayPitch = JointSpacing; // same 3.2 m grid the joints already phase off
+        private const float BayInset = StormdrainKit.BayInset;
+        private const float BayDarkThreshold = 0.33f;
+        private const float BayLightThreshold = 0.78f;
+        private const float BayCrackThreshold = 0.62f;
+
+        /// <summary>One cast bay (MV-784, change 1): its own inset footprint, the tone its grid-coordinate
+        /// hash resolved to, and whether a second, different-salted hash gave it a crack (change 3) —
+        /// carrying that hash forward so the crack's own rotation is "the same hash", per the ticket.
+        /// </summary>
+        public readonly struct Bay
+        {
+            public readonly Rect Rect;
+            public readonly Color Tone;
+            public readonly bool HasCrack;
+            public readonly float CrackHash;
+
+            public Bay(Rect rect, Color tone, bool hasCrack, float crackHash)
+            {
+                Rect = rect; Tone = tone; HasCrack = hasCrack; CrackHash = crackHash;
+            }
+        }
+
+        /// <summary>Every cast bay in one floor zone (MV-784, change 1) — a <see cref="BayPitch"/> grid
+        /// local to the zone's own origin, so a zone's own bay count always matches
+        /// floor(width/pitch) * floor(height/pitch) exactly (the ticket's own acceptance count), rather
+        /// than a world-anchored grid that could clip a partial row/column at the zone edge. Each bay's
+        /// tone and crack are both a hash of the bay's own grid coordinates AND the zone's id, so two
+        /// zones never tile identically — never <see cref="UnityEngine.Random"/>, so the same map always
+        /// casts the same bays.</summary>
+        public static List<Bay> BayRects(Rect zone, string zoneId)
+        {
+            var result = new List<Bay>();
+            int cols = Mathf.FloorToInt(zone.width / BayPitch);
+            int rows = Mathf.FloorToInt(zone.height / BayPitch);
+            if (cols <= 0 || rows <= 0) return result;
+
+            int zoneSeed = DeterministicSeed(zoneId, zone);
+            float size = BayPitch - BayInset;
+
+            for (int col = 0; col < cols; col++)
+            {
+                for (int row = 0; row < rows; row++)
+                {
+                    var rect = new Rect(zone.xMin + col * BayPitch + BayInset * 0.5f,
+                                         zone.yMin + row * BayPitch + BayInset * 0.5f, size, size);
+
+                    float toneHash = BayHash(zoneSeed, col, row, 0);
+                    Color tone = toneHash < BayDarkThreshold ? StormdrainKit.GroundDry
+                               : toneHash > BayLightThreshold ? StormdrainKit.GroundAccent
+                               : StormdrainKit.GroundBase;
+
+                    float crackHash = BayHash(zoneSeed, col, row, 1);
+                    result.Add(new Bay(rect, tone, crackHash > BayCrackThreshold, crackHash));
+                }
+            }
+            return result;
+        }
+
+        /// <summary>Deterministic 0..1 from a zone seed, a bay's own grid coordinates, and a salt (never
+        /// <see cref="UnityEngine.Random"/>) — same integer-mix idiom
+        /// <c>MaxWorlds.Enemies.SludgePuddle.Hash01</c> already uses, extended to four inputs so the
+        /// tone draw (salt 0) and the crack draw (salt 1) off the same bay never move in lockstep.
+        /// </summary>
+        private static float BayHash(int zoneSeed, int col, int row, int salt)
+        {
+            unchecked
+            {
+                int h = zoneSeed;
+                h = h * 374761393 + col * 668265263;
+                h = h * 1274126177 + row * 374761393;
+                h = h * 668265263 + salt * 1013904223;
+                h = (h ^ (h >> 13)) * 1274126177;
+                h ^= h >> 16;
+                return (h & 0xFFFF) / 65535f;
+            }
+        }
+
+        // ---------------------------------------------------------------- silt/water stains (MV-784)
+
+        private const int SiltGridSize = 3;  // 3x3 -> nine per area
+        private const int WaterGridSize = 2; // 2x2 -> four per area
+        private const int SiltSalt = 101;
+        private const int WaterSalt = 202;
+
+        /// <summary>One silt drift or standing-water pool's placement (MV-784, change 4): its centre,
+        /// its own core radius, and the seed its builder derives every per-segment jitter from.</summary>
+        public readonly struct Stain
+        {
+            public readonly Vector2 Center;
+            public readonly float CoreRadius;
+            public readonly float Seed;
+
+            public Stain(Vector2 center, float coreRadius, float seed)
+            {
+                Center = center; CoreRadius = coreRadius; Seed = seed;
+            }
+        }
+
+        /// <summary>Nine silt drifts per area (MV-784, change 4), one per cell of a 3x3 jittered grid
+        /// across the zone so they never clump.</summary>
+        public static List<Stain> SiltRects(Rect zone, string zoneId, IReadOnlyList<Rect> obstacles) =>
+            StainGrid(zone, zoneId, obstacles, SiltGridSize, SiltSalt);
+
+        /// <summary>Four standing-water pools per area (MV-784, change 4), one per cell of a 2x2
+        /// jittered grid across the zone.</summary>
+        public static List<Stain> WaterRects(Rect zone, string zoneId, IReadOnlyList<Rect> obstacles) =>
+            StainGrid(zone, zoneId, obstacles, WaterGridSize, WaterSalt);
+
+        private static List<Stain> StainGrid(Rect zone, string zoneId, IReadOnlyList<Rect> obstacles,
+                                              int gridSize, int salt)
+        {
+            var result = new List<Stain>();
+            int zoneSeed = DeterministicSeed(zoneId, zone) + salt;
+            float cellW = zone.width / gridSize;
+            float cellH = zone.height / gridSize;
+
+            for (int cx = 0; cx < gridSize; cx++)
+            {
+                for (int cz = 0; cz < gridSize; cz++)
+                {
+                    int cellSeed = zoneSeed * 31 + cx * 7 + cz;
+                    float radius = StormdrainKit.StainCoreRadiusMin + Frac(cellSeed, 3) *
+                        (StormdrainKit.StainCoreRadiusMax - StormdrainKit.StainCoreRadiusMin);
+
+                    var cell = new Rect(zone.xMin + cx * cellW, zone.yMin + cz * cellH, cellW, cellH);
+                    if (TryPlaceStain(cell, radius, obstacles, cellSeed, out Vector2 center))
+                        result.Add(new Stain(center, radius, cellSeed));
+                }
+            }
+            return result;
+        }
+
+        private static bool TryPlaceStain(Rect cell, float radius, IReadOnlyList<Rect> obstacles, int seed,
+                                          out Vector2 center)
+        {
+            float margin = Mathf.Min(Mathf.Max(radius, Mathf.Min(cell.width, cell.height) * 0.15f),
+                                     Mathf.Min(cell.width, cell.height) * 0.49f);
+
+            for (int attempt = 0; attempt < 5; attempt++)
+            {
+                float tx = Frac(seed, attempt * 2 + 1);
+                float tz = Frac(seed, attempt * 2 + 2);
+                float cx = Mathf.Lerp(cell.xMin + margin, cell.xMax - margin, tx);
+                float cz = Mathf.Lerp(cell.yMin + margin, cell.yMax - margin, tz);
+
+                var footprint = new Rect(cx - radius, cz - radius, radius * 2f, radius * 2f);
+                if (Overlaps(footprint, obstacles)) continue;
+
+                center = new Vector2(cx, cz);
+                return true;
+            }
+
+            center = default;
+            return false;
         }
 
         /// <summary>Panel-joint segments for one floor zone's rect (MV-781, change 2): a recessed line
@@ -227,59 +400,6 @@ namespace MaxWorlds.Arena
         {
             foreach (Rect o in obstacles)
                 if (r.Overlaps(o)) return true;
-            return false;
-        }
-
-        private const float PatchMinSize = 2f;
-        private const float PatchMaxSize = 4f;
-        private const int PatchCandidateGrid = 9; // a 3x3 interior grid of candidate centres
-
-        /// <summary>Silt/standing-water patches for one floor zone (MV-781, change 3): 2 to 4 flat
-        /// patches, alternating silt/water, deterministic from the zone's own id and rect (which are
-        /// themselves derived from the area's index and origin — <see cref="WorldMapLoader"/> resolves
-        /// a combat area's <see cref="MapZone.id"/> to "area{index}" — so hashing them gives back
-        /// exactly the "area index and origin" determinism the ticket asks for, never
-        /// <see cref="UnityEngine.Random"/>), that avoid every authored obstacle.</summary>
-        public static List<(Rect rect, bool isWater)> PatchRects(Rect zone, string zoneId, IReadOnlyList<Rect> obstacles)
-        {
-            var result = new List<(Rect, bool)>();
-            int seed = DeterministicSeed(zoneId, zone);
-            int count = 2 + (seed % 3); // 2..4
-
-            for (int i = 0; i < count; i++)
-            {
-                float size = PatchMinSize + Frac(seed, i * 7 + 1) * (PatchMaxSize - PatchMinSize);
-                if (TryPlacePatch(zone, size, obstacles, seed, i, out Rect rect))
-                    result.Add((rect, (i & 1) == 1));
-            }
-            return result;
-        }
-
-        private static bool TryPlacePatch(Rect zone, float size, IReadOnlyList<Rect> obstacles, int seed, int index, out Rect placed)
-        {
-            float half = size * 0.5f;
-            float marginX = Mathf.Max(half, zone.width * 0.22f);
-            float marginZ = Mathf.Max(half, zone.height * 0.22f);
-
-            for (int attempt = 0; attempt < PatchCandidateGrid; attempt++)
-            {
-                int slot = (seed + index * 3 + attempt) % PatchCandidateGrid;
-                float tx = (slot % 3 + 1) / 4f;   // 0.25, 0.5, 0.75
-                float tz = (slot / 3 + 1) / 4f;
-
-                float cx = Mathf.Lerp(zone.xMin + marginX, zone.xMax - marginX, tx);
-                float cz = Mathf.Lerp(zone.yMin + marginZ, zone.yMax - marginZ, tz);
-
-                var candidate = new Rect(cx - half, cz - half, size, size);
-                if (candidate.xMin < zone.xMin || candidate.xMax > zone.xMax ||
-                    candidate.yMin < zone.yMin || candidate.yMax > zone.yMax) continue;
-                if (Overlaps(candidate, obstacles)) continue;
-
-                placed = candidate;
-                return true;
-            }
-
-            placed = default;
             return false;
         }
 
