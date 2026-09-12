@@ -1652,6 +1652,16 @@ namespace MaxWorlds.Dev
                 for (int i = 0; i < 3; i++) yield return null;
             }
 
+            // MV-791: the whole point of sinking the floor away from the bays is that the camera can
+            // move without the depth buffer's pick between two coplanar surfaces changing frame to
+            // frame — so the second frame's own setup is a lateral translation, not a state change, and
+            // the pass/fail read is "the same surface visible in both", not any pixel measurement.
+            IEnumerator TranslateCamera2m(Camera cam)
+            {
+                cam.transform.position += cam.transform.right * 2f;
+                for (int i = 0; i < 3; i++) yield return null;
+            }
+
             return new CapturePreset
             {
                 Key = "mv-w2-kit",
@@ -1673,7 +1683,13 @@ namespace MaxWorlds.Dev
                     SaveSystem.ActiveSlot = 0;
                 },
                 Prepare = Prepare,
-                Shots = new List<CaptureShot> { new CaptureShot("MV-755-stormdrain-kit", NoSetup) },
+                Shots = new List<CaptureShot>
+                {
+                    new CaptureShot("MV-755-stormdrain-kit", NoSetup),
+                    // MV-791: same rig, camera translated 2 m sideways — the floor/bay depth fix's own
+                    // evidence that no surface's visibility flips between the two frames.
+                    new CaptureShot("MV-791-floor-depth-shifted", TranslateCamera2m),
+                },
                 // MV-782: FrameContrastGate (MV-777) existed only as a pure function proven against a
                 // checked-in fixture and a synthetic texture in EditMode — nothing ever ran it against a
                 // frame this preset actually produced, so a real regression (this ticket's own fog

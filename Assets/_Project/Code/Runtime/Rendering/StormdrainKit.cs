@@ -131,7 +131,11 @@ namespace MaxWorlds.Rendering
         /// only the SHAPE ratio is specified — chosen so the finished sliver reads at bay scale rather
         /// than swallowing one whole or vanishing).</summary>
         public const float CrackBaseRadius = 0.55f;
-        public const float CrackLift = 0.003f;
+
+        /// <summary>MV-791: was 0.003 — 3 mm of separation from the bay top face is inside depth-buffer
+        /// precision at this world's ~26 m camera distance on the WebGL target, and read on device as
+        /// left-to-right banding. Raised to a margin the depth buffer can actually resolve.</summary>
+        public const float CrackLift = 0.012f;
 
         /// <summary>MV-784, change 4: mean core radius range for a silt/water stain, and silt's halo
         /// as a multiple of its own core (the ticket's own 1.6x). Both stains stack a wider under-layer
@@ -146,8 +150,17 @@ namespace MaxWorlds.Rendering
         public const int WaterSegments = 13;
         public const float WaterMeniscusWidth = 0.02f;
         public const float WaterMeniscusLumaScale = 1.4f;
-        public const float StainLift = 0.004f;
+
+        /// <summary>MV-791: was 0.004 — same depth-precision trap as <see cref="CrackLift"/>, raised the
+        /// same way.</summary>
+        public const float StainLift = 0.020f;
         public const float StainLayerGap = 0.002f;
+
+        /// <summary>MV-791: the water meniscus ring's own lift above <see cref="StainLift"/> (i.e. above
+        /// the pool floor plane), replacing the old shared <see cref="StainLayerGap"/> it used to stack
+        /// on — that gap is <see cref="BuildSiltStain"/>'s halo/core spacing, not a number this ticket
+        /// touches, so the meniscus gets its own named constant rather than overloading that one.</summary>
+        public const float WaterMeniscusLift = 0.006f;
 
         /// <summary>MV-785 "Stormdrain Surface Kit" review, approved by Lee 2026-09-12 — the ticket's own
         /// numbers for the sludge channel's flow dressing. One lip per bank, 5.5 cm wide; ten flow bands
@@ -822,7 +835,9 @@ namespace MaxWorlds.Rendering
         /// <summary>A standing-water pool (MV-784, change 4) — a dark, cool <see cref="StandingWater"/>
         /// core ringed by a <see cref="WaterMeniscusWidth"/> meniscus at roughly
         /// <see cref="WaterMeniscusLumaScale"/>x the floor's luminance, built the same "wider layer under
-        /// a denser one" way <see cref="BuildSiltStain"/> is.</summary>
+        /// a denser one" way <see cref="BuildSiltStain"/> is — except (MV-791) the meniscus sits ABOVE
+        /// the pool by its own <see cref="WaterMeniscusLift"/>, not below it, since a meniscus is the
+        /// rim curling up at the water's edge.</summary>
         public static GameObject BuildWaterStain(Transform parent, Vector3 worldCenter, float coreRadius,
                                                  float seed, float floorTopY = 0f)
         {
@@ -831,10 +846,10 @@ namespace MaxWorlds.Rendering
             root.transform.localPosition = new Vector3(worldCenter.x, floorTopY + StainLift, worldCenter.z);
 
             Color meniscusTone = GroundBase * WaterMeniscusLumaScale;
-            BuildStainLayer(root.transform, "Meniscus", coreRadius + WaterMeniscusWidth, WaterSegments, seed, 0f,
-                SurfaceKind.Prop, meniscusTone);
+            BuildStainLayer(root.transform, "Meniscus", coreRadius + WaterMeniscusWidth, WaterSegments, seed,
+                WaterMeniscusLift, SurfaceKind.Prop, meniscusTone);
             GameObject core = BuildStainLayer(root.transform, "Water", coreRadius, WaterSegments, seed + 13f,
-                StainLayerGap, SurfaceKind.Prop, StandingWater);
+                0f, SurfaceKind.Prop, StandingWater);
 
             Material mat = core.GetComponent<Renderer>()?.sharedMaterial;
             if (mat != null && mat.HasProperty("_Smoothness"))
