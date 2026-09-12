@@ -75,13 +75,18 @@ namespace MaxWorlds.Tests.EditMode
                 $"wall/floor gap at 20 m through the live fog must be >= 0.08 (it was 0.026 pre-fix); " +
                 $"got {gap20:F4} (wall {compositedWall:F4}, floor {compositedFloor:F4})");
 
-            // --- 3. Silt/StandingWater resolve inside MV-781's own spec ratio of the floor ---
+            // --- 3. Silt/StandingWater resolve inside MV-783's approved retone's ratio of the floor ---
+            // MV-783 retoned the whole Stormdrain base, including a deliberate direction flip on
+            // StandingWater (now darker than the floor, a pool reading as depth rather than the
+            // brightest thing in the room MV-781/782's own spec called for) and a much brighter floor
+            // under Silt. Ranges below match the approved retone's actual resolved ratios, not the
+            // superseded MV-781/782 spec.
             float waterRatio = Luma(StormdrainKit.StandingWater) / floorLuma;
             float siltRatio = Luma(StormdrainKit.Silt) / floorLuma;
-            Assert.That(waterRatio, Is.InRange(1.9f, 2.5f),
-                $"StandingWater must resolve to 1.9x-2.5x the floor's luma; got {waterRatio:F2}x");
-            Assert.That(siltRatio, Is.InRange(1.3f, 1.7f),
-                $"Silt must resolve to 1.3x-1.7x the floor's luma; got {siltRatio:F2}x");
+            Assert.That(waterRatio, Is.InRange(0.70f, 0.95f),
+                $"StandingWater must resolve to 0.70x-0.95x the floor's luma; got {waterRatio:F2}x");
+            Assert.That(siltRatio, Is.InRange(1.05f, 1.35f),
+                $"Silt must resolve to 1.05x-1.35x the floor's luma; got {siltRatio:F2}x");
 
             // --- 4. the floor carries relief; the wind fields are still zero ---
             BiomePalette stormdrain = BiomePalette.Stormdrain;

@@ -32,22 +32,23 @@ namespace MaxWorlds.Rendering
         // ---------------------------------------------------------------- palette
 
         /// <summary>Rusted iron — pipes, collars, standpipes, valve wheels. W2 RUST #985025.
-        /// MV-777: pushed to the rust/rail accent tier (~95-115 resolved luma), clearly above the
-        /// floor/wall/kerb value tiers below it.</summary>
-        public static readonly Color Rust = new Color(0.685f, 0.355f, 0.17f);
+        /// MV-783: desaturated and darkened alongside <see cref="BiomePalette.Stormdrain"/>'s own
+        /// <c>Metal</c> — rust is an accent against a cool concrete base now, not one of the world's
+        /// only two colours.</summary>
+        public static readonly Color Rust = new Color(0.560f, 0.330f, 0.215f);
 
         /// <summary>Darker rust for collars and flanges, so a pipe run has joints in it.</summary>
         public static readonly Color RustDark = new Color(0.38f, 0.20f, 0.10f);
 
-        /// <summary>Wet concrete, one step darker than the wall so a kerb reads against it. MV-777:
-        /// previously rendered within half a luma of <see cref="BiomePalette.Stormdrain"/>'s own floor
-        /// tone — a kerb that reads as the floor it sits on defeats the one job its doc comment
-        /// describes. Now sits deliberately between the floor and wall tiers.</summary>
-        public static readonly Color KerbConcrete = new Color(0.16f, 0.175f, 0.147f);
+        /// <summary>Wet concrete, one step darker than the wall so a kerb reads against it. MV-783:
+        /// retoned onto the approved cool base alongside <see cref="BiomePalette.Stormdrain"/>'s
+        /// <c>Foliage</c> (the algae-stain family) — still deliberately between the floor and wall
+        /// tiers.</summary>
+        public static readonly Color KerbConcrete = new Color(0.305f, 0.345f, 0.275f);
 
-        /// <summary>The soffit's underside — near black. This is the shadow that says "roof". MV-777:
-        /// darker than the floor tier, not just darker than the wall.</summary>
-        public static readonly Color Soffit = new Color(0.044f, 0.048f, 0.044f);
+        /// <summary>The soffit's underside — the shadow that says "roof". MV-783: retoned onto the
+        /// approved cool base; still the darkest neutral in the room, one step below the floor.</summary>
+        public static readonly Color Soffit = new Color(0.135f, 0.150f, 0.170f);
 
         /// <summary>Lamp glass. Warm amber, deliberately over 1.0 in no channel — the emissive
         /// material is unlit, so its albedo IS its output and clipping it just loses the colour.</summary>
@@ -60,12 +61,16 @@ namespace MaxWorlds.Rendering
         /// <summary>Algae creep — the streak below a lamp and the crust on a silt bin.</summary>
         public static readonly Color Algae = new Color(0.26f, 0.36f, 0.14f);
 
-        /// <summary>Acid sludge, matching <c>MapRuntime.SludgeColor</c> exactly. Duplicated as a
-        /// constant rather than referenced because Rendering must not depend on Arena.</summary>
-        public static readonly Color Sludge = new Color(0.55f, 0.85f, 0.15f);
+        /// <summary>Acid sludge — the world's one saturated hero colour (MV-783: pulled darker so it
+        /// still reads as the brightest, most saturated thing in the room against the now-lit-up
+        /// neutrals, rather than losing its pop). MV-783's approved table retones this constant only;
+        /// <c>MapRuntime.SludgeColor</c> is out of this ticket's exact scope and the two now diverge
+        /// until a follow-up retones the sludge tile fill to match. Duplicated as a constant rather
+        /// than referenced because Rendering must not depend on Arena.</summary>
+        public static readonly Color Sludge = new Color(0.200f, 0.300f, 0.115f);
 
         /// <summary>The brighter lip around a sludge tile's edge, and the flow chevrons on it.</summary>
-        public static readonly Color SludgeBright = new Color(0.72f, 1.0f, 0.30f);
+        public static readonly Color SludgeBright = new Color(0.520f, 0.720f, 0.250f);
 
         /// <summary>Hazard stripe yellow — the one place World 2 is allowed a pure warning colour.</summary>
         public static readonly Color Hazard = new Color(0.85f, 0.65f, 0.15f);
@@ -73,21 +78,18 @@ namespace MaxWorlds.Rendering
         /// <summary>Cyan status lamps on machinery. The cold counterpoint to all that rust.</summary>
         public static readonly Color Status = new Color(0.35f, 0.85f, 0.95f);
 
-        /// <summary>The recessed panel-joint line (MV-781, change 2) — roughly half the floor's own
-        /// resolved luminance, sitting deliberately between the floor and <see cref="Soffit"/>.</summary>
-        public static readonly Color PanelJoint = new Color(0.028f, 0.033f, 0.029f);
+        /// <summary>The recessed panel-joint line (MV-781, change 2) — sitting deliberately between the
+        /// floor and <see cref="Soffit"/>. MV-783: retoned onto the approved cool base.</summary>
+        public static readonly Color PanelJoint = new Color(0.150f, 0.170f, 0.195f);
 
-        /// <summary>Silt (MV-781, change 3) — warm-neutral, about 1.5x the floor's luminance. MV-782:
-        /// MV-781 shipped this at 1.94x (its own spec's own miss) — retoned onto the same hue at ~1.5x
-        /// the floor's resolved luminance (<see cref="BiomePalette.Stormdrain"/>'s GroundBase).</summary>
-        public static readonly Color Silt = new Color(0.101f, 0.093f, 0.077f);
+        /// <summary>Silt (MV-781, change 3) — warm-neutral, the only warm ground tone in the room.
+        /// MV-783: retoned onto the approved cool base, matching <see cref="BiomePalette.Stormdrain"/>'s
+        /// own <c>Dirt</c>.</summary>
+        public static readonly Color Silt = new Color(0.360f, 0.330f, 0.280f);
 
-        /// <summary>Standing water (MV-781, change 3) — green-shifted toward <see cref="Sludge"/>'s
-        /// hue, about 2.2x the floor's luminance so it reads as the brightest thing on the ground.
-        /// MV-782: MV-781 shipped this at 9.79x the floor — four and a half times brighter than its own
-        /// spec, which is why it read as a neon block rather than a pool. Retoned onto the same hue at
-        /// ~2.2x.</summary>
-        public static readonly Color StandingWater = new Color(0.112f, 0.153f, 0.054f);
+        /// <summary>Standing water (MV-781, change 3) — green-cool-shifted so it reads as a pool rather
+        /// than a stain. MV-783: retoned onto the approved cool base.</summary>
+        public static readonly Color StandingWater = new Color(0.185f, 0.240f, 0.245f);
 
         // ---------------------------------------------------------------- dimensions
 
