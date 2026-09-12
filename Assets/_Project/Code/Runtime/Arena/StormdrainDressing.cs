@@ -120,10 +120,33 @@ namespace MaxWorlds.Arena
             int tiles = DressSludge(root, map);
 
             DressFloorComposition(root, map);
+            LowerMapFloor(host);
 
             DressHazardBulkheads(root, host, map);
 
             return new DressReport(kerbs, pipes, lamps, soffits, coverProps, tiles, kinds.Count);
+        }
+
+        /// <summary>MV-791: <c>MapGeometry.Floor</c>'s single "Map Floor" slab and this kit's cast bays
+        /// are both authored with their top face at y = 0 — exact coincidence, not a tight tolerance, so
+        /// which one wins is decided by floating-point noise and flickers as the camera moves. Bays
+        /// don't reach every zone (a connector stub narrower than one bay pitch gets none, per
+        /// <see cref="BayRects"/>), so Map Floor must stay VISIBLE rather than being switched off —
+        /// sinking it below the bays removes the coincidence everywhere at once without leaving a hole
+        /// where nothing else is drawing floor. World 1 and World 3 never call this and keep their own
+        /// ground plane exactly where it is.</summary>
+        private const float MapFloorLowerY = 0.25f;
+
+        private static void LowerMapFloor(Transform host)
+        {
+            foreach (Transform t in host.GetComponentsInChildren<Transform>(true))
+            {
+                if (t.name != "Map Floor") continue;
+                Vector3 pos = t.localPosition;
+                pos.y -= MapFloorLowerY;
+                t.localPosition = pos;
+                return;
+            }
         }
 
         // ---------------------------------------------------------------- hazard bulkheads (MV-787, change 2)
