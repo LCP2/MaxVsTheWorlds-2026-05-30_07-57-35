@@ -50,17 +50,6 @@ namespace MaxWorlds.Rendering
         /// approved cool base; still the darkest neutral in the room, one step below the floor.</summary>
         public static readonly Color Soffit = new Color(0.135f, 0.150f, 0.170f);
 
-        /// <summary>Lamp glass. Warm amber, deliberately over 1.0 in no channel — the emissive
-        /// material is unlit, so its albedo IS its output and clipping it just loses the colour.</summary>
-        public static readonly Color LampAmber = new Color(0.98f, 0.72f, 0.34f);
-
-        /// <summary>The floor pool under a lamp. Same hue, far lower value: it is added onto whatever
-        /// the floor already is, so a bright pool blows out to white paper.</summary>
-        public static readonly Color LampPool = new Color(0.42f, 0.28f, 0.11f);
-
-        /// <summary>Algae creep — the streak below a lamp and the crust on a silt bin.</summary>
-        public static readonly Color Algae = new Color(0.26f, 0.36f, 0.14f);
-
         /// <summary>Acid sludge — the world's one saturated hero colour (MV-783: pulled darker so it
         /// still reads as the brightest, most saturated thing in the room against the now-lit-up
         /// neutrals, rather than losing its pop). MV-785 retoned <c>MapRuntime.SludgeColor</c> to match
@@ -196,12 +185,6 @@ namespace MaxWorlds.Rendering
         /// <summary>Metres between pipe collars. Short enough that a long gallery has rhythm in it.</summary>
         public const float CollarSpacing = 4.0f;
 
-        /// <summary>Metres between wall lamps. A drain wants pools of light with dark between them,
-        /// not an evenly lit corridor — 7 m at this camera is roughly one pool per screen-third.</summary>
-        public const float LampSpacing = 7.0f;
-        public const float LampHeight = 2.35f;
-        public const float LampPoolRadius = 2.6f;
-
         /// <summary>How far the soffit band overhangs inward from the top of a wall.</summary>
         public const float SoffitOverhang = 1.2f;
         public const float SoffitThickness = 0.35f;
@@ -289,8 +272,10 @@ namespace MaxWorlds.Rendering
         // ---------------------------------------------------------------- wall pieces
 
         /// <summary>
-        /// Dresses one inner wall face: a kerb along its foot, a two-pipe bank with collars, and a
-        /// lamp every <see cref="LampSpacing"/> metres with an algae streak under it.
+        /// Dresses one inner wall face: a kerb along its foot with a cyan kerb strip running its
+        /// length, a two-pipe bank with collars, and a bulkhead lamp every 6-9 m
+        /// (<see cref="StormdrainLightKit.MinLampSpacing"/>-<see cref="StormdrainLightKit.MaxLampSpacing"/>,
+        /// MV-787).
         ///
         /// <paramref name="a"/> and <paramref name="b"/> are the face's endpoints in XZ (world), and
         /// <paramref name="outward"/> points INTO the room. Everything is offset along that normal so
@@ -314,6 +299,10 @@ namespace MaxWorlds.Rendering
                 mid + n * (KerbDepth * 0.5f) + Vector3.up * (KerbHeight * 0.5f),
                 new Vector3(length, KerbHeight, KerbDepth).Oriented(dir),
                 KerbConcrete);
+
+            // Kerb strip (MV-787, change 2) — a continuous cyan guide-rail along the kerb's own line,
+            // not a fitting: it never gets a pool, and it does not count against the fitting budget.
+            StormdrainLightKit.BuildKerbStrip(parent, a, b, n);
 
             // Pipe bank. Two runs, the upper one shorter and offset, so the wall has a diagonal in it.
             // Verticals are proportional to wallHeight (MV-765) — the authored constants assumed a
@@ -342,48 +331,27 @@ namespace MaxWorlds.Rendering
                 Tube(parent, $"Collar{i}", at + n * pipeOut, PipeRadius * 1.35f, 0.22f, lie, RustDark);
             }
 
-            // Lamps. Deterministic phase off the seed so two adjacent walls don't line their lamps up
-            // into a grid — a grid is exactly what makes generated dressing read as generated. Height
-            // is proportional to wallHeight (MV-765): the proportion replaces the old clamp against
-            // wallHeight - 0.4f.
-            int lamps = Mathf.FloorToInt(length / LampSpacing);
+            // Bulkhead lamps (MV-787, "Stormdrain Surface Kit" lighting pass, change 1) — amber caged
+            // fittings every 6-9 m, the spread itself seeded off this face's own seed so two adjacent
+            // walls never line their lamps up into a grid (a grid is exactly what makes generated
+            // dressing read as generated). Replaces the old fixed-7 m single-lens "Wall Lamp".
+            // MV-787: "one every 6-9 m along each wall run" still means a run SHORTER than one full
+            // spacing gets its own lamp — a dark run just because it never reached a whole 6 m span
+            // would be exactly the kind of unlit dead patch this ticket exists to remove — so this is a
+            // floor of 1, not floor(length/spacing) alone.
+            float faceLampSpacing = Mathf.Lerp(StormdrainLightKit.MinLampSpacing, StormdrainLightKit.MaxLampSpacing,
+                Frac(seed * 0.7548776662f));
+            int lamps = Mathf.Max(1, Mathf.FloorToInt(length / faceLampSpacing));
             float phase = Frac(seed * 0.6180339887f);
-            float lampHeight = 0.75f * wallHeight;
+            float mountHeight = Mathf.Min(StormdrainLightKit.BulkheadHeight, wallHeight * 0.9f);
             for (int i = 0; i < lamps; i++)
             {
                 float t = (i + 0.25f + phase * 0.5f) / Mathf.Max(1, lamps);
                 if (t <= 0.02f || t >= 0.98f) continue;
                 Vector3 at = new Vector3(Mathf.Lerp(a.x, b.x, t), 0f, Mathf.Lerp(a.y, b.y, t));
-                BuildWallLamp(parent, at, n, along, lampHeight);
+                StormdrainLightKit.BuildBulkheadLamp(parent, "Bulkhead Lamp", at, n, along,
+                    StormdrainLightKit.Amber, pulsing: false, mountHeight);
             }
-        }
-
-        /// <summary>A wall lamp: a dark hood, an amber lens facing into the room, an algae streak down
-        /// the wall under it, and a flat additive pool on the floor. No Light component — see the
-        /// performance contract in this class's summary.</summary>
-        public static void BuildWallLamp(Transform parent, Vector3 groundAt, Vector3 inward,
-                                         Vector3 along, float height)
-        {
-            var root = new GameObject("Wall Lamp");
-            root.transform.SetParent(parent, false);
-            root.transform.position = groundAt;
-
-            Quaternion faceIn = Quaternion.LookRotation(-inward, Vector3.up);
-
-            Box(root.transform, "Hood", inward * 0.16f + Vector3.up * height,
-                new Vector3(0.34f, 0.20f, 0.30f), Soffit, SurfaceKind.Metal);
-
-            Glow(root.transform, "Lens", inward * 0.30f + Vector3.up * (height - 0.08f),
-                 new Vector3(0.26f, 0.20f, 1f), faceIn, LampAmber);
-
-            // Streak: the wall stains under a lamp because that is where the condensation runs.
-            Glow(root.transform, "Algae Streak", inward * 0.03f + Vector3.up * (height * 0.45f),
-                 new Vector3(0.5f, height * 0.85f, 1f), faceIn, Algae);
-
-            // Floor pool, laid flat and pushed 1 cm up so it never z-fights the slab.
-            Glow(root.transform, "Light Pool", inward * (LampPoolRadius * 0.55f) + Vector3.up * 0.012f,
-                 new Vector3(LampPoolRadius * 2f, LampPoolRadius * 2f, 1f),
-                 Quaternion.Euler(90f, 0f, 0f), LampPool);
         }
 
         /// <summary>How thick a coping cap is, and how far it overhangs each side of the wall it caps
@@ -606,11 +574,10 @@ namespace MaxWorlds.Rendering
                 bolt.transform.localScale = Vector3.one * boltScale;
             }
 
-            // MV-786's "LED panel": a small tinted panel, not a Glow() quad — every mesh under a cover
-            // piece must be a generated one (this ticket's own AC1), and Glow()'s Unlit material is
-            // built on the primitive Quad mesh unchanged.
-            Box(root.transform, "LED Panel", new Vector3(0f, bodyH * 0.72f, -r * 0.84f - 0.02f),
-                new Vector3(0.18f, 0.18f, 0.03f), Status, SurfaceKind.Metal);
+            // MV-787, change 2: the single tinted "LED panel" box MV-786 built here is now a real
+            // 5x3-cell fitting with its own pool (StormdrainLightKit.BuildLedPanel) — machinery is one
+            // of the two places the ticket's table puts an LED panel.
+            StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, bodyH * 0.72f, -r * 0.84f - 0.02f));
             return root;
         }
 
@@ -1223,6 +1190,7 @@ namespace MaxWorlds.Rendering
             foreach (var m in _unlit.Values)
                 if (m != null) { if (Application.isPlaying) Object.Destroy(m); else Object.DestroyImmediate(m); }
             _unlit.Clear();
+            StormdrainLightKit.ClearCache();
         }
     }
 
