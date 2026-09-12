@@ -942,16 +942,17 @@ namespace MaxWorlds.Enemies
             // needing to be reattached on reuse. The bar re-derives its own metre space every frame,
             // so it does not care that Apply() stamps this body's scale on after Awake has run.
             //
-            // alwaysShow (YT-122): every robot carries its bar from the moment it spawns, not only
-            // once it has been hit. YT-111 hid a full-health robot's bar to cut clutter, but the
-            // result on device read as "the robots have no life bars" — and a green bar you can see
-            // approaching is exactly the read the ticket wants. The shared ramp keeps a healthy
-            // robot's bar green and quiet, so a wall of full robots stays calm rather than loud.
+            // MV-788: was alwaysShow (YT-122) — every robot carried its bar from the moment it spawned.
+            // That read fine on World 1's bright grass but on World 2's floor a bright-green full-health
+            // pill on every untouched unit was the brightest thing in the room ("what are the neon green
+            // shapes", Lee). A robot's bar now earns its visibility (WorldHealthBar.Refresh's own
+            // damage/target trigger) instead of always carrying one — Max's own bar and an AreaGate's
+            // stay alwaysShow, both being navigational.
             //
-            // MV-473's de-clutter pass (WorldHealthBarDeclutter) is what now keeps a pile of these
-            // always-on bars from stacking illegibly — see that class's own doc comment.
+            // MV-473's de-clutter pass (WorldHealthBarDeclutter) is what keeps a pile of currently-
+            // showing bars from stacking illegibly — see that class's own doc comment.
             _bar = WorldHealthBar.Attach(gameObject, this, BarHeightFor(EnemyArchetype.Rusher), BarWidth,
-                                         alwaysShow: true, groupable: true);
+                                         groupable: true);
         }
 
         private WorldHealthBar _bar;

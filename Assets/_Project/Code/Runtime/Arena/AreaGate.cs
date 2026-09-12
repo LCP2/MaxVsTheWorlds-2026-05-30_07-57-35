@@ -498,7 +498,8 @@ namespace MaxWorlds.Arena
             // ("74 means nothing" — Lee). The pill keeps the name and its open/locked state only.
             float halfHeight = transform.localScale.y * 0.5f;
             _healthBar = WorldHealthBar.Attach(gameObject, this, halfHeight + BarHeightClearance,
-                                               BarWorldWidth, alwaysShow: true, showNumber: false);
+                                               BarWorldWidth, alwaysShow: true, showNumber: false,
+                                               desaturateWhenHealthy: true);
             if (_locked && _healthBar != null) _healthBar.SetBarHiddenKeepLabel(true);
         }
 
