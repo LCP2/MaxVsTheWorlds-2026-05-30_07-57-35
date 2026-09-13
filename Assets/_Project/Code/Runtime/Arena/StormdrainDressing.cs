@@ -583,7 +583,6 @@ namespace MaxWorlds.Arena
             var host = new GameObject("Sludge").transform;
             host.SetParent(root, false);
 
-            MapEntity outfall = map.Entity(OutfallGateId);
             int tiles = 0, seed = 0;
 
             foreach (MapEntity e in map.entities)
@@ -592,15 +591,53 @@ namespace MaxWorlds.Arena
                 if (e == null || e.Kind != EntityKind.Sludge) continue;
 
                 Vector3 center = new Vector3(e.x, 0f, e.z);
-                Vector3 flow = outfall != null
-                    ? new Vector3(outfall.x - e.x, 0f, outfall.z - e.z)
-                    : Vector3.forward;
+                Vector3 flow = SludgeFlowDirection(map, e);
 
                 StormdrainKit.DressSludgeTile(host, center, e.width, e.depth, flow, seed);
                 tiles++;
             }
 
             return tiles;
+        }
+
+        /// <summary>MV-792: a rect's own shape, not a lookup that can fail, gives the flow AXIS — the
+        /// wider dimension is always the channel's run, for every one of World 2's 20 authored sludge
+        /// rects. The lookup only ever decides the SENSE along that axis: toward the map's <c>outfall</c>
+        /// entity if one is authored (none is, today), otherwise toward this rect's own area's exit gate
+        /// — the <see cref="MapLink"/> whose <see cref="MapLink.from"/> is the zone this rect sits in.
+        /// If neither resolves (an interior rect with no outgoing link, or an exit gate that lands
+        /// exactly on the rect's own axis coordinate), the rect still gets a valid, resolvable direction
+        /// — +X for a width-run rect, +Z for a depth-run rect — logged once by name rather than silently
+        /// defaulting, so a future author can see which rects still need a real link.</summary>
+        public static Vector3 SludgeFlowDirection(MapData map, MapEntity sludge)
+        {
+            bool axisX = sludge.width >= sludge.depth;
+            Vector3 axis = axisX ? Vector3.right : Vector3.forward;
+
+            MapEntity target = map.Entity(OutfallGateId);
+            if (target == null)
+            {
+                MapZone zone = map.ZoneAt(sludge.x, sludge.z);
+                if (zone != null && map.links != null)
+                {
+                    foreach (MapLink link in map.links)
+                    {
+                        if (link == null || link.from != zone.id) continue;
+                        target = map.Entity(link.gate);
+                        break;
+                    }
+                }
+            }
+
+            if (target != null)
+            {
+                float delta = axisX ? target.x - sludge.x : target.z - sludge.z;
+                if (Mathf.Abs(delta) > 0.0001f) return delta > 0f ? axis : -axis;
+            }
+
+            Debug.Log($"StormdrainDressing: sludge rect '{sludge.id}' has no resolvable downstream gate — " +
+                      $"defaulting flow to +{(axisX ? "X" : "Z")}.");
+            return axis;
         }
     }
 }
