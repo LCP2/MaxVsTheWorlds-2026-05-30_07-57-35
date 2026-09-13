@@ -379,6 +379,7 @@ namespace MaxWorlds.VFX
         // ---------------------------------------------------------------- state
 
         private PlayerController _max;
+        private CharacterController _maxCc;
         private WaterBlaster _blaster;
 
         private Transform _body;       // lean pivot, at the ground
@@ -471,6 +472,7 @@ namespace MaxWorlds.VFX
             _max = FindFirstObjectByType<PlayerController>();
             if (_max == null) return;
 
+            _maxCc = _max.GetComponent<CharacterController>();
             _blaster = _max.GetComponent<WaterBlaster>();
             _shoulderRack = _max.GetComponent<ShoulderRack>();
 
@@ -762,19 +764,23 @@ namespace MaxWorlds.VFX
         }
 
         /// <summary>
-        /// Max stands on the LAWN, under his own capsule, facing where he faces.
+        /// Max stands wherever his own feet actually are, facing where he faces.
         ///
-        /// His transform's y is his capsule's CENTRE (1 m up) and it drifts with the controller's skin
-        /// width and gravity — so it is thrown away and the ground is used instead, exactly as the
-        /// boss's rig does. Yaw only: <see cref="PlayerController"/> only ever turns him on the spot,
+        /// His transform's y is his capsule's CENTRE, not his feet — <see cref="_maxCc"/>'s own
+        /// <c>center.y</c> and <c>height</c> say by how much, and are read live rather than assumed,
+        /// so a future tuning pass to either can never silently detach the drawn kid from his own
+        /// collider again. MV-793: this used to hard-code the ground at world y = 0, which is why it
+        /// never showed in World 1 (flat ground, always 0) but pinned Max to the floor on every one of
+        /// World 2's 33 decks. Yaw only: <see cref="PlayerController"/> only ever turns him on the spot,
         /// and taking his full rotation would let any pitch the controller picks up tip the kid into
         /// the grass.
         /// </summary>
         private void Follow()
         {
             Vector3 p = _max.transform.position;
+            float feetY = p.y + _maxCc.center.y - _maxCc.height * 0.5f;
             transform.SetPositionAndRotation(
-                new Vector3(p.x, 0f, p.z),
+                new Vector3(p.x, feetY, p.z),
                 Quaternion.Euler(0f, _max.transform.eulerAngles.y, 0f));
         }
 

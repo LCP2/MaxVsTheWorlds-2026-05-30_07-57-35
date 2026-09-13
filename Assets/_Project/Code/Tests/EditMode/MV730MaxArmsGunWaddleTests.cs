@@ -38,6 +38,12 @@ namespace MaxWorlds.Tests.EditMode
         public void SetUp()
         {
             _playerGo = new GameObject("Player-MV730-Test", typeof(CharacterController));
+            // MV-793: MaxRig.Follow now reads Max's real world height off this CharacterController
+            // instead of hard-coding the ground at 0, so a bare transform left at the Unity default
+            // (0,0,0) now resolves as his capsule centre sitting AT ground level - feet a metre
+            // underground. Stand him on the lawn properly: capsule centre = height/2 above the floor.
+            var cc = _playerGo.GetComponent<CharacterController>();
+            _playerGo.transform.position = new Vector3(0f, cc.height * 0.5f - cc.center.y, 0f);
             _player = _playerGo.AddComponent<PlayerController>();
             Invoke(_player, "Awake");
 
