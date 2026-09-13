@@ -58,20 +58,70 @@ namespace MaxWorlds.Arena
         /// so the two clocks can never quietly disagree about how long a run is.</summary>
         public const float UnhurriedFillAtRunLength = 0.85f;
 
-        /// <summary>Fill added per live Replicator, per second — what finally makes the "REPLICATORS
-        /// n/25" counter mean something: the machines are why the water is rising.</summary>
-        public const float ReplicatorFillBonusPerSecond = 0.01f;
+        /// <summary>World 2's authored Replicator count (<c>world2_config.json</c> currently places
+        /// 25) — named here rather than re-derived from level data, because MV-794's tuning below is a
+        /// design floor for THIS authored count, not a formula that should silently retune itself the
+        /// day a level author adds a 26th Replicator.</summary>
+        private const int AuthoredReplicatorCount = 25;
+
+        /// <summary>MV-794's own design floor: with every authored Replicator alive, the flood must
+        /// take at least this long to fill — the opening minutes have to read as calm, not four seconds
+        /// to maximum.</summary>
+        private const float MinFillSecondsWithAllReplicatorsAlive = 480f; // 8 minutes
+
+        /// <summary>Fill added per live Replicator, per second (MV-794) — DERIVED, not hand-set, from
+        /// the design floor above rather than a magic 0.01f (the defect: at 25 live Replicators that
+        /// hand-set value filled the bar in ~4 s).
+        ///
+        /// The maths, so the next person can re-derive it: while the live Replicator count does not
+        /// change, the fill rate is constant, so
+        ///
+        ///   rate(N) = BaseFillPerSecond + N * ReplicatorFillBonusPerSecond
+        ///   timeToFull(N) = 1 / rate(N)
+        ///
+        /// Solving timeToFull(AuthoredReplicatorCount) == MinFillSecondsWithAllReplicatorsAlive for the
+        /// bonus term:
+        ///
+        ///   ReplicatorFillBonusPerSecond
+        ///     = (1 / MinFillSecondsWithAllReplicatorsAlive - UnhurriedFillAtRunLength / AuthoredRunLengthSeconds)
+        ///       / AuthoredReplicatorCount
+        ///     = (1 / 480 - 0.85 / 2820) / 25
+        ///     ~= 0.0000712766 per Replicator per second
+        ///
+        /// This also clears the ticket's "half destroyed takes >= 1.6x as long" constraint for free:
+        /// halving N only halves the N * ReplicatorFillBonusPerSecond term, never BaseFillPerSecond, so
+        /// the slowdown from losing Replicators is always MORE than proportional to how many died — at
+        /// 12 alive, timeToFull is ~865 s, ~1.80x the 480 s at 25 alive, comfortably over the 1.6x
+        /// floor.</summary>
+        public const float ReplicatorFillBonusPerSecond =
+            (1f / MinFillSecondsWithAllReplicatorsAlive
+                - UnhurriedFillAtRunLength / DifficultyDirector.AuthoredRunLengthSeconds)
+            / AuthoredReplicatorCount;
 
         /// <summary>Fill removed per live pump housing, per second, once <see cref="PumpDrainThreshold"/>
-        /// is crossed. No pump housing entity is authored into a world yet (a follow-up), so this is
-        /// always multiplied by 0 in the shipped game today — the hook exists so this ticket's own
-        /// "every live pump housing slows the bar" rule is already correct the day one is.</summary>
+        /// is crossed. Driven by <see cref="StormdrainDressing.PumpHousingsAlive"/> (MV-794) — the count
+        /// of pump housings World 2's dressing pass actually built, so the counterweight the design
+        /// depends on runs for real instead of always being multiplied by a hard-coded 0.</summary>
         public const float PumpHousingDrainPerSecond = 0.02f;
+
+        /// <summary>MV-794 Change 3: a deliberate pacing floor, not a safety hack. However the
+        /// Replicator/pump tuning above ever gets retuned, the opening minute of a run must always read
+        /// as calm — so the bar itself (not just the rate) is capped at <see cref="OpeningMinuteLevelCap"/>
+        /// for as long as the run clock is inside this many seconds.</summary>
+        private const float OpeningMinuteSeconds = 60f;
+
+        /// <summary>The cap <see cref="OpeningMinuteSeconds"/> enforces — see that constant's own
+        /// comment.</summary>
+        private const float OpeningMinuteLevelCap = 0.15f;
 
         private static float _level01;
         private static float _band1SurgeElapsed = -1f;
         private static float _band2SurgeElapsed = -1f;
         private static int _totalCombatAreas;
+
+        /// <summary>Scaled seconds ticked since <see cref="Reset"/> — what <see cref="OpeningMinuteSeconds"/>
+        /// measures against. Only used for the opening-minute floor; nothing else needs a run clock.</summary>
+        private static float _elapsedSeconds;
 
         /// <summary>0 (dry) .. 1 (Wet Well opens) — what the HUD's FLOOD bar shows for real now.</summary>
         public static float Level01 => _level01;
@@ -84,6 +134,7 @@ namespace MaxWorlds.Arena
             _band1SurgeElapsed = -1f;
             _band2SurgeElapsed = -1f;
             _totalCombatAreas = 0;
+            _elapsedSeconds = 0f;
         }
 
         /// <summary>This world's authored combat-area count (<c>WorldDials.areaCount</c>), so
@@ -109,6 +160,10 @@ namespace MaxWorlds.Arena
                 if (_level01 >= PumpDrainThreshold)
                     rate -= Mathf.Max(0, livePumpHousings) * PumpHousingDrainPerSecond;
                 _level01 = Mathf.Clamp01(_level01 + rate * dt);
+
+                _elapsedSeconds += dt;
+                if (_elapsedSeconds <= OpeningMinuteSeconds)
+                    _level01 = Mathf.Min(_level01, OpeningMinuteLevelCap);
             }
 
             TickSurge(ref _band1SurgeElapsed, _level01 >= Band1Threshold, dt);
