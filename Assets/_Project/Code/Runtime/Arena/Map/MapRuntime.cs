@@ -90,6 +90,12 @@ namespace MaxWorlds.Arena
             StormdrainFlood.Reset();
             StormdrainFlood.Configure(CountCombatAreas(map));
 
+            // Same reasoning, for the pump-housing count the flood's own drain term reads (MV-794) — a
+            // world with no drain dressing at all (World 1, World 3) must read 0, not the last World 2
+            // level's count. StormdrainDressing.Dress (called later, from this world's own dressing
+            // sweep) overwrites this for real when there is a drain to dress.
+            StormdrainDressing.Reset();
+
             // Same reasoning for the Blinker squad jump's cooldown (MV-366) — a fresh run starts its
             // own clock rather than inheriting whatever the last level left mid-countdown.
             BlinkerSquadDirector.Reset();

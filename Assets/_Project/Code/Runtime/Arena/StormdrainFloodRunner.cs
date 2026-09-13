@@ -38,7 +38,7 @@ namespace MaxWorlds.Arena
         private void Update()
         {
             float dt = Time.deltaTime;
-            StormdrainFlood.Tick(dt, FactoryCensus.ReplicatorsAlive, livePumpHousings: 0);
+            StormdrainFlood.Tick(dt, FactoryCensus.ReplicatorsAlive, StormdrainDressing.PumpHousingsAlive);
 
             if (_target == null)
             {

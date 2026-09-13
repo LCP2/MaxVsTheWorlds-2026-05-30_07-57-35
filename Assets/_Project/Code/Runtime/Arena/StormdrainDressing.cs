@@ -47,8 +47,26 @@ namespace MaxWorlds.Arena
             public int Total => Kerbs + Pipes + Lamps + Soffits + CoverProps + SludgeTiles;
         }
 
+        /// <summary>How many pump housings the last <see cref="Dress"/> call actually built (MV-794) —
+        /// what <see cref="StormdrainFloodRunner"/> reads instead of a hard-coded 0, so
+        /// <see cref="StormdrainFlood"/>'s pump counterweight runs off the real world instead of a
+        /// literal. Pump housings are cosmetic dressing with no destruction lifecycle yet (a follow-up,
+        /// the same status quo Replicators were in before <see cref="MaxWorlds.Factories.FactoryCensus"/>
+        /// gave them one) — so "alive" here means "built for this level," which today is every housing
+        /// that exists. Reset by <see cref="Reset"/> (called from <c>MapRuntime.Build</c>, same point
+        /// that resets <c>FactoryCensus</c>) so a world with no drain dressing at all — World 1, World 3
+        /// — reads 0, not the last World 2 level's count.</summary>
+        public static int PumpHousingsAlive { get; private set; }
+
+        /// <summary>Back to no pump housings. Called when a level starts building, same reasoning as
+        /// <c>FactoryCensus.Reset</c> — a fresh run must not inherit the last one's count. A World 2
+        /// level then overwrites this for real the moment its own <see cref="Dress"/> call runs.</summary>
+        public static void Reset() => PumpHousingsAlive = 0;
+
         /// <summary>Dresses the whole drain. Idempotent per load — it builds under one named host, and
-        /// a second call replaces that host rather than doubling every pipe in the world.</summary>
+        /// a second call replaces that host rather than doubling every pipe in the world (and, as of
+        /// MV-794, replaces <see cref="PumpHousingsAlive"/> rather than adding to it, for the same
+        /// reason).</summary>
         public static DressReport Dress(Transform host, MapData map, IReadOnlyList<CoverPiece> cover)
         {
             if (host == null || map == null) return default;
@@ -95,6 +113,7 @@ namespace MaxWorlds.Arena
             DressWallPanels(root, host, map);
 
             int coverProps = 0;
+            int pumpHousings = 0;
             var kinds = new HashSet<CoverDressing>();
             var props = new GameObject("Cover").transform;
             props.SetParent(root, false);
@@ -114,8 +133,16 @@ namespace MaxWorlds.Arena
 
                     kinds.Add(piece.Cover.Dressing);
                     coverProps++;
+
+                    // MV-794: Shed/Machinery is BuildFor's own "pump housing" case (see its switch) —
+                    // counted here rather than inferred later, so PumpHousingsAlive is never a second
+                    // formula that could drift from the one that actually built the housing.
+                    if (piece.Cover.Dressing == CoverDressing.Shed || piece.Cover.Dressing == CoverDressing.Machinery)
+                        pumpHousings++;
                 }
             }
+
+            PumpHousingsAlive = pumpHousings;
 
             int tiles = DressSludge(root, map);
 
