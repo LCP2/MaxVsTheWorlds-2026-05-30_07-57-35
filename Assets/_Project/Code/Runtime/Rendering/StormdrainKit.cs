@@ -202,6 +202,30 @@ namespace MaxWorlds.Rendering
         public const float SoffitOverhang = 1.2f;
         public const float SoffitThickness = 0.35f;
 
+        /// <summary>MV-802, "Pipes as structure" (design approved by Lee 2026-09-15, "Stormdrain Pass 4"
+        /// review). The camera is a fixed 60 degree top-down rig at 26.02 m, so anything overhead sits
+        /// ON the gameplay at that angle — an overhead main hugs the wall line and crosses a room only
+        /// at its far end, never over the playable middle. These numbers are the review's own; gated
+        /// behind the same <c>wallHeight &gt;= 2.2 m</c> threshold the existing "Pipe High" run already
+        /// uses (MV-765) — a wall too short to carry the run at this fixed height must not carry it at
+        /// all, the same low-wall invariant that ticket established.</summary>
+        public const float OverheadMainRadius = 0.32f;
+        public const float OverheadMainY = 2.35f;
+        public const float OverheadMainInset = 0.95f;
+        public const float OverheadCrossY = 2.62f;
+        public const float OverheadCrossRadius = 0.29f;
+
+        /// <summary>Overhead collars land roughly every this fraction of a run's own length (the
+        /// ticket's own "at roughly 0.24 of its length") rather than a fixed metre spacing — a run's
+        /// collars always divide it the same way regardless of how long the wall face is.</summary>
+        public const float OverheadCollarFraction = 0.24f;
+
+        public const float OverheadBracketSpacingMin = 4.0f;
+        public const float OverheadBracketSpacingMax = 6.0f;
+
+        /// <summary>MV-802, change 3: the floor-level main a "pipe"-dressed cover piece resolves to.</summary>
+        public const float FloorMainRadius = 0.40f;
+
         // ---------------------------------------------------------------- primitives
 
         /// <summary>A collider-free box in a flat tinted material. Every piece below is made of these
@@ -365,6 +389,122 @@ namespace MaxWorlds.Rendering
                 StormdrainLightKit.BuildBulkheadLamp(parent, "Bulkhead Lamp", at, n, along,
                     StormdrainLightKit.Amber, pulsing: false, mountHeight);
             }
+        }
+
+        // ---------------------------------------------------------------- overhead structure (MV-802)
+
+        /// <summary>The overhead main that hugs one wall face's own line (MV-802, change 1): a
+        /// <see cref="OverheadMainRadius"/> rust main the face's full length, inset
+        /// <see cref="OverheadMainInset"/> from the wall at <see cref="OverheadMainY"/>, with collars
+        /// dividing it every <see cref="OverheadCollarFraction"/> of its own length and a bracket
+        /// (change 2) tying it back to the wall every <see cref="OverheadBracketSpacingMin"/>-
+        /// <see cref="OverheadBracketSpacingMax"/> m. No-ops below a face this short (a doorway stub) or
+        /// below the wall-height threshold the run needs to clear the room without a MV-765 regression
+        /// (a wall too short to carry it at a fixed 2.35 m must not carry it at all).</summary>
+        public static void DressOverheadRun(Transform parent, Vector2 a, Vector2 b, Vector2 outward,
+                                            float wallHeight, int seed)
+        {
+            float length = (b - a).magnitude;
+            if (length < 1.2f || wallHeight < 2.2f) return;
+
+            Vector2 dir = (b - a) / length;
+            Vector3 mid = new Vector3((a.x + b.x) * 0.5f, 0f, (a.y + b.y) * 0.5f);
+            Vector3 n = new Vector3(outward.x, 0f, outward.y);
+            Vector3 along = new Vector3(dir.x, 0f, dir.y);
+            Quaternion lie = Quaternion.LookRotation(along, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+
+            Tube(parent, "Overhead Main", mid + n * OverheadMainInset + Vector3.up * OverheadMainY,
+                 OverheadMainRadius, length, lie, Rust);
+
+            int collars = Mathf.Max(1, Mathf.RoundToInt(1f / OverheadCollarFraction));
+            for (int i = 0; i < collars; i++)
+            {
+                float t = (i + 0.5f) / collars;
+                Vector3 at = new Vector3(Mathf.Lerp(a.x, b.x, t), OverheadMainY, Mathf.Lerp(a.y, b.y, t))
+                             + n * OverheadMainInset;
+                Tube(parent, $"Overhead Collar{i}", at, OverheadMainRadius * 1.2f, 0.20f, lie, RustDark);
+            }
+
+            float spacing = Mathf.Lerp(OverheadBracketSpacingMin, OverheadBracketSpacingMax,
+                Frac(seed * 0.7548776662f + 5f));
+            int brackets = Mathf.Max(1, Mathf.FloorToInt(length / spacing));
+            float phase = Frac(seed * 0.6180339887f + 5f);
+            for (int i = 0; i < brackets; i++)
+            {
+                float t = (i + 0.5f + phase * 0.5f) / brackets;
+                if (t <= 0.02f || t >= 0.98f) continue;
+                Vector3 wallAt = new Vector3(Mathf.Lerp(a.x, b.x, t), OverheadMainY, Mathf.Lerp(a.y, b.y, t));
+                BuildOverheadBracket(parent, wallAt + n * OverheadMainInset, n, lie);
+            }
+        }
+
+        /// <summary>One bracket (MV-802, change 2): a beam dropping from a point lower on the wall up to
+        /// the overhead main, plus a collar ring at the main itself — the same "arm plus collar" idiom
+        /// <see cref="StormdrainLightKit.BuildBulkheadLamp"/>'s own bracket already uses.</summary>
+        private static void BuildOverheadBracket(Transform parent, Vector3 pipeAt, Vector3 n, Quaternion pipeLie)
+        {
+            Vector3 wallPoint = pipeAt - n * OverheadMainInset + Vector3.up * -0.35f;
+            Vector3 d = pipeAt - wallPoint;
+            float len = d.magnitude;
+            if (len < 0.01f) return;
+
+            var beam = AddMeshPart(parent, "Bracket Beam", CharacterMeshes.Beam(len, 0.045f, 0.035f),
+                (wallPoint + pipeAt) * 0.5f, SurfaceKind.Metal, RustDark);
+            beam.transform.localRotation = Quaternion.FromToRotation(Vector3.up, d.normalized);
+
+            Tube(parent, "Bracket Collar", pipeAt, OverheadMainRadius * 1.2f, 0.16f, pipeLie, RustDark);
+        }
+
+        /// <summary>The one cross-main a room gets (MV-802, change 1): spans <paramref name="span"/>
+        /// along <paramref name="acrossDir"/>, centred on <paramref name="center"/> — the caller
+        /// (<see cref="MaxWorlds.Arena.StormdrainDressing"/>) has already resolved where that is: inset
+        /// from the room's own far wall, on the end furthest from its entry, never over the middle.</summary>
+        public static void BuildOverheadCrossMain(Transform parent, Vector3 center, float span, Vector3 acrossDir)
+        {
+            if (span < 0.5f) return;
+            Quaternion lie = Quaternion.LookRotation(acrossDir, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+            Tube(parent, "Overhead Cross Main", center, OverheadCrossRadius, span, lie, Rust);
+
+            int collars = Mathf.Max(1, Mathf.RoundToInt(1f / OverheadCollarFraction));
+            for (int i = 0; i < collars; i++)
+            {
+                float t = (i + 0.5f) / collars - 0.5f;
+                Vector3 at = center + acrossDir * (t * span);
+                Tube(parent, $"Overhead Cross Collar{i}", at, OverheadCrossRadius * 1.2f, 0.20f, lie, RustDark);
+            }
+        }
+
+        /// <summary>A junction box where two overhead runs meet (MV-802, change 4): a hexagonal steel
+        /// body, a rust valve wheel with four spokes on top, and one <see cref="StormdrainLightKit.BuildLedPanel"/>
+        /// face. Dressing only, same as everything else in this kit. <paramref name="at"/> is the
+        /// junction's own world position, already resolved by the caller (the shared corner of the two
+        /// wall faces, offset out to <see cref="OverheadMainInset"/> and up to <see cref="OverheadMainY"/>).</summary>
+        public static GameObject BuildOverheadJunctionBox(Transform parent, Vector3 at)
+        {
+            var root = new GameObject("Overhead Junction");
+            root.transform.SetParent(parent, false);
+            root.transform.position = at;
+
+            float bodyR = OverheadMainRadius * 1.7f;
+            float bodyH = OverheadMainRadius * 1.3f;
+            AddMeshPart(root.transform, "Body", CharacterMeshes.Prism(6, bodyR, bodyR, bodyH),
+                Vector3.zero, SurfaceKind.Metal, RustDark);
+
+            float wheelR = bodyR * 0.55f;
+            float wheelY = bodyH * 0.5f + 0.02f;
+            AddMeshPart(root.transform, "Valve Wheel", CharacterMeshes.Ring(wheelR * 0.55f, wheelR, 0.03f),
+                Vector3.up * wheelY, SurfaceKind.Metal, Rust);
+
+            for (int i = 0; i < 4; i++)
+            {
+                var spoke = AddMeshPart(root.transform, $"Spoke{i}", CharacterMeshes.Beam(wheelR * 1.8f, 0.02f, 0.02f),
+                    Vector3.up * wheelY, SurfaceKind.Metal, Rust);
+                spoke.transform.localRotation = Quaternion.Euler(0f, i * 90f, 0f) * Quaternion.Euler(0f, 0f, 90f);
+            }
+
+            StormdrainLightKit.BuildLedPanel(root.transform, new Vector3(0f, 0f, -bodyR * 0.9f));
+
+            return root;
         }
 
         /// <summary>How thick a coping cap is, and how far it overhangs each side of the wall it caps
@@ -624,6 +764,31 @@ namespace MaxWorlds.Rendering
                 CharacterMeshes.Ring(outerR * 1.02f, outerR * 1.24f, 0.10f),
                 along * (length * 0.5f) + Vector3.up * outerR, SurfaceKind.Metal, RustDark);
             collar.transform.localRotation = lie;
+
+            return root;
+        }
+
+        /// <summary>Pipe main (MV-802, "Pipes as structure", change 3) — replaces a cover class flagged
+        /// <see cref="CoverDressing.Pipe"/> with a floor-level main, not a freestanding placement: a
+        /// single <see cref="FloorMainRadius"/> lathed main lying along the cover piece's own longer XZ
+        /// axis, capped at each end by the same <see cref="Tube"/> profile every other pipe in this kit
+        /// already uses. Stays square — this is structure, not loose debris, the same reasoning
+        /// <see cref="BuildPumpHousing"/>'s own "stays square" already gives Shed/Machinery — so unlike
+        /// <see cref="BuildBurstMain"/> it is never yawed by <see cref="MaxWorlds.Arena.StormdrainDressing.BuildFor"/>.
+        /// Uses the cover piece's own existing collider and footprint: no collider is added, moved or
+        /// resized here.</summary>
+        public static GameObject BuildPipeMain(Transform parent, Vector3 at, Vector3 size)
+        {
+            var root = new GameObject("Pipe Main");
+            root.transform.SetParent(parent, false);
+            root.transform.position = at;
+
+            bool longX = size.x >= size.z;
+            float length = (longX ? size.x : size.z) * 0.92f;
+            Vector3 along = longX ? Vector3.right : Vector3.forward;
+            Quaternion lie = Quaternion.LookRotation(along, Vector3.up) * Quaternion.Euler(90f, 0f, 0f);
+
+            Tube(root.transform, "Main", Vector3.up * FloorMainRadius, FloorMainRadius, length, lie, Rust);
 
             return root;
         }
