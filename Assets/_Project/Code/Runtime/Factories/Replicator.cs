@@ -52,8 +52,11 @@ namespace MaxWorlds.Factories
         /// <see cref="HatchPosition"/>, never a flat centre-to-centre radius. A fixed centre-to-centre
         /// test (the box's old ArriveRadius 1.2f) could never be reached: half-extent 1.0 m plus a
         /// robot's own 0.3-0.6 m controller radius put the closest possible centre-to-centre distance
-        /// at 1.3-1.6 m, always outside a 1.2 m gate.</summary>
-        public const float ArriveTolerance = 0.35f;
+        /// at 1.3-1.6 m, always outside a 1.2 m gate. MV-812: widened 0.35 -> 0.9 m — a robot nudged off
+        /// its slot, or stopped short by MV-808's own ramp geometry, could never close the last 35 cm and
+        /// was never taken in; the Intake beat already draws an arrived robot the rest of the way, so a
+        /// tight gate bought nothing and cost the whole interaction.</summary>
+        public const float ArriveTolerance = 0.9f;
 
         /// <summary>MV-807: the queue a lured robot actually walks into. Two robots pressed against
         /// the same hatch point could never both close on it (see <see cref="QueueSlotPosition"/>'s
@@ -92,18 +95,21 @@ namespace MaxWorlds.Factories
         /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
         /// the Cycle beat. This is what keeps the robot's resolved position at the moment of removal
         /// pinned to the hatch face rather than wherever <see cref="ArriveTolerance"/> first let it
-        /// through — see <see cref="TickIntake"/>. MV-808: lengthened from 0.5 to 1.0 so the ramp
-        /// ascent this ticket adds is actually readable at the play camera — the only timing change
-        /// this ticket makes.</summary>
-        public const float IntakeSeconds = 1.0f;
+        /// through — see <see cref="TickIntake"/>. MV-808 lengthened this from 0.5 to 1.0 so the ramp
+        /// ascent it added was readable at the play camera; MV-812 cut it back to 0.35 — Lee, on build
+        /// 9751529: "they take ages to replicate" — the ramp is short enough that the walk still reads
+        /// at 0.35 s.</summary>
+        public const float IntakeSeconds = 0.35f;
 
         /// <summary>MV-775 Cycle beat: seconds from a robot being despawned into the box to the FIRST
-        /// of its doubled pair emerging.</summary>
-        public const float CycleSeconds = 3.0f;
+        /// of its doubled pair emerging. MV-812: cut 3.0 -> 0.9 — one robot's total occupancy (Intake +
+        /// Cycle + Output) drops from 4.4 s to 1.45 s.</summary>
+        public const float CycleSeconds = 0.9f;
 
         /// <summary>MV-775 Output beat: the gap between the first and second emitted robot — the
-        /// ticket's own "walk out one after the other, not simultaneously".</summary>
-        public const float EmitStaggerSeconds = 0.4f;
+        /// ticket's own "walk out one after the other, not simultaneously". MV-812: cut 0.4 -> 0.2,
+        /// scaled down with the rest of the cycle.</summary>
+        public const float EmitStaggerSeconds = 0.2f;
 
         /// <summary>Seconds a freshly doubled pair refuses the lure (MV-706's "can't immediately walk
         /// back in" rule).</summary>
