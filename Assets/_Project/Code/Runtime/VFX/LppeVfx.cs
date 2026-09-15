@@ -16,13 +16,14 @@ namespace MaxWorlds.VFX
     /// </summary>
     public sealed class LppeVfx : MonoBehaviour
     {
-        // Cool cyan-white, matching SeekerPulse's own bolt colour (spec: "cyan-white bolt") — pushed
-        // past 1.0 the same way CombatVfx.MissileFlashColor is (MV-351), so the flash actually clears
-        // the bloom threshold against World 2's dim, fog-heavy Stormdrain grade (MV-754) rather than
-        // sitting at the same brightness as everything else on screen.
-        private static readonly Color MuzzleColor = new Color(1.1f, 1.8f, 1.95f, 1f);
-        private static readonly Color ImpactColor = new Color(0.75f, 1.35f, 1.55f, 1f);
-        private static readonly Color SparkColor = new Color(0.6f, 1f, 1f, 1f);
+        // MV-805: retinted into the same orange family as SeekerPulse's own bolt colour (was a cool
+        // cyan-white matching the water-read bolt this ticket fixes) — pushed past 1.0 the same way
+        // CombatVfx.MissileFlashColor is (MV-351), so the flash actually clears the bloom threshold
+        // against World 2's dim, fog-heavy Stormdrain grade (MV-754) rather than sitting at the same
+        // brightness as everything else on screen. Each channel keeps its old over-1.0 headroom.
+        private static readonly Color MuzzleColor = new Color(1.95f, 1.05f, 0.30f, 1f);
+        private static readonly Color ImpactColor = new Color(1.55f, 0.85f, 0.26f, 1f);
+        private static readonly Color SparkColor = new Color(1.00f, 0.66f, 0.28f, 1f);
 
         // The Shock beat borrows RobotEnemy.ShockTell / ShockZigzagVfx.ZigzagColor's own yellow
         // exactly, so the extra flash reads as the SAME event the zigzag already tells, not a second,
@@ -31,8 +32,9 @@ namespace MaxWorlds.VFX
         private static readonly Color ShockSparkColor = new Color(1f, 0.95f, 0.45f, 1f);
 
         // MV-770: brighter than MuzzleColor — the windup has to read as the emitter charging UP to
-        // the shot, not just another muzzle flash at the wrong time.
-        private static readonly Color WindupColor = new Color(1.4f, 2.1f, 2.2f, 1f);
+        // the shot, not just another muzzle flash at the wrong time. MV-805: retinted to the same
+        // orange family as MuzzleColor above.
+        private static readonly Color WindupColor = new Color(2.20f, 1.30f, 0.42f, 1f);
 
         private VfxBurst _muzzleFlash;
         private VfxBurst _impactFlash;
