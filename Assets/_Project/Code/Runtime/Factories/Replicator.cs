@@ -34,11 +34,16 @@ namespace MaxWorlds.Factories
         /// Replicator takes exactly as much focused fire to kill as a shed does.</summary>
         private const float ReplicatorHealth = 474.75f;
 
-        /// <summary>How far a live-capacity Replicator can pull an eligible robot off Max (MV-706).</summary>
-        public const float LureRadius = 8f;
+        /// <summary>How far a live-capacity Replicator can pull an eligible robot off Max (MV-706).
+        /// 16 m (MV-798, up from the original 8 m) — sized against the authored World 2 area
+        /// footprints so a box's disc reaches across a whole area rather than a corner of it; see
+        /// MV-798's own area-coverage figures for why 8 m left most robots never lured at all.</summary>
+        public const float LureRadius = 16f;
 
-        /// <summary>A robot within this of Max is never pulled off him, whatever else is true.</summary>
-        public const float MaxMeleeExclusionRadius = 4f;
+        /// <summary>A robot within this of Max is never pulled off him, whatever else is true. 7 m
+        /// (MV-798, up from 4 m) — moved with <see cref="LureRadius"/> so the wider lure still can't
+        /// pull a robot out of a fight it's already in; 4 m was sized against the old 8 m lure.</summary>
+        public const float MaxMeleeExclusionRadius = 7f;
 
         /// <summary>How close a lured robot's surface must get to the hatch it's walking to before the
         /// Intake beat takes over (MV-756 original fix, MV-775 scoped to the hatch face specifically —
