@@ -91,20 +91,41 @@ namespace MaxWorlds.Tests.EditMode
                 UnityEngine.Object.DestroyImmediate(lipHost.gameObject);
             }
 
-            // ---- AC4: ticking a 22x4 tile's rig by 1s moves a band 0.35m along X, not Z ----
+            // ---- AC4: ticking a 22x4 tile's rig by 1s moves an unclipped band 0.35m along X, not Z ----
             var axisHost = new GameObject("MV792 axis host").transform;
             try
             {
                 SludgeFlowRig rig = StormdrainKit.DressSludgeTile(axisHost, Vector3.zero, 22f, 4f, Vector3.right, seed: 5);
-                Transform band0 = rig.transform.Find("Bands").GetChild(0);
-                Vector3 before = band0.localPosition;
-                rig.Tick(1.0f);
-                Vector3 after = band0.localPosition;
+                Transform bandsGroup = rig.transform.Find("Bands");
+                var before = new Vector3[bandsGroup.childCount];
+                var scaleBefore = new Vector3[bandsGroup.childCount];
+                for (int i = 0; i < bandsGroup.childCount; i++)
+                {
+                    before[i] = bandsGroup.GetChild(i).localPosition;
+                    scaleBefore[i] = bandsGroup.GetChild(i).localScale;
+                }
 
-                Assert.AreEqual(0.35f, Mathf.Abs(after.x - before.x), 0.01f,
-                    $"band 0 on a 22x4 tile must move 0.35m along X in 1.0s (from {before} to {after})");
-                Assert.AreEqual(0f, Mathf.Abs(after.z - before.z), 0.001f,
-                    $"band 0 on a 22x4 tile must NOT move along Z (from {before} to {after})");
+                rig.Tick(1.0f);
+
+                // MV-796: a band within its own half-extent of the tile edge is now clipped to fit
+                // rather than allowed to overhang, so it no longer moves at the raw scroll speed on the
+                // frames it's clipped on (proven directly by MV796SludgeBandContainmentTests). Its scale
+                // stays at its authored 1 while unclipped, so that's the signal used to prove the raw
+                // axis/speed on whichever band(s) stayed clear of the edge across this tick.
+                int checkedCount = 0;
+                for (int i = 0; i < bandsGroup.childCount; i++)
+                {
+                    Transform band = bandsGroup.GetChild(i);
+                    if (scaleBefore[i].x < 0.999f || band.localScale.x < 0.999f) continue;
+                    Vector3 after = band.localPosition;
+
+                    Assert.AreEqual(0.35f, Mathf.Abs(after.x - before[i].x), 0.01f,
+                        $"band {i} on a 22x4 tile must move 0.35m along X in 1.0s (from {before[i]} to {after})");
+                    Assert.AreEqual(0f, Mathf.Abs(after.z - before[i].z), 0.001f,
+                        $"band {i} on a 22x4 tile must NOT move along Z (from {before[i]} to {after})");
+                    checkedCount++;
+                }
+                Assert.Greater(checkedCount, 0, "at least one band on a 22x4 tile must remain unclipped to prove the raw scroll axis/speed");
             }
             finally
             {
