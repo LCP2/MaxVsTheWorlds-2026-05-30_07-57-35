@@ -42,12 +42,16 @@ namespace MaxWorlds.VFX
             /// the opposite side — where a doubled twin's out-ramp foot is measured from. A bare
             /// Transform, never a rendered part: there is no door to swing on this face.</summary>
             public readonly Transform OutputLip;
+            /// <summary>MV-813: the big top-face beacon — the same busy/idle/spent colour <see cref="Led"/>
+            /// already carries, just legible at the play camera's scale. See <see cref="Replicator"/>'s
+            /// own LateUpdate for what drives it.</summary>
+            public readonly MeshRenderer StatusRing;
 
             public ReplicatorParts(Transform hatch, MeshRenderer hatchGlow, MeshRenderer emitFlash, MeshRenderer led,
-                                   Transform fan, Transform outputLip)
+                                   Transform fan, Transform outputLip, MeshRenderer statusRing)
             {
                 Hatch = hatch; HatchGlow = hatchGlow; EmitFlash = emitFlash; Led = led; Fan = fan;
-                OutputLip = outputLip;
+                OutputLip = outputLip; StatusRing = statusRing;
             }
         }
 
@@ -138,8 +142,15 @@ namespace MaxWorlds.VFX
             BuildRamp(root, new Vector3(0f, groundLocalY, hd + 0.02f + run), new Vector3(0f, hatchAt.y, hd + 0.02f),
                 hatchHalfW, s_rust, "RampOut");
 
+            // MV-813: the status ring — centred on the top face, unlit additive so it reads as its own
+            // light source (StormdrainLightKit's own fitting material family), seeded green (idle);
+            // Replicator.LateUpdate repaints and pulses it every frame off the same colour the small
+            // LED above already takes.
+            MeshRenderer statusRing = StormdrainLightKit.BuildStatusRing(root, "StatusRing",
+                new Vector3(0f, hh + 0.01f, 0f), new Color(0.30f, 0.95f, 0.35f));
+
             return new ReplicatorParts(hatch, hatchGlow, emitFlash, led.GetComponent<MeshRenderer>(), fan,
-                outputLipGo.transform);
+                outputLipGo.transform, statusRing);
         }
 
         /// <summary>MV-808: one sloped deck plus a handful of cross-slats between <paramref name="footLocal"/>

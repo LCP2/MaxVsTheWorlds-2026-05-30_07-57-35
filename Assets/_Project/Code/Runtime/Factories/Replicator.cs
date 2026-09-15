@@ -120,6 +120,16 @@ namespace MaxWorlds.Factories
         /// a doubled pair.</summary>
         public const float TwinFlashSeconds = 0.6f;
 
+        /// <summary>MV-813: the status ring's pulse rate while busy — 2 Hz, so a red ring reads as
+        /// "working right now" rather than merely "a red thing". Idle and spent never pulse (see
+        /// LateUpdate); motion is what a 0.9 m disc needs to actually catch the eye at play scale.</summary>
+        public const float StatusRingPulseHz = 2f;
+
+        /// <summary>MV-813: the busy pulse's emissive multiplier range — the ring's own resolved base
+        /// colour (1.0x) up to 2.2x.</summary>
+        public const float StatusRingPulseMin = 1.0f;
+        public const float StatusRingPulseMax = 2.2f;
+
         [SerializeField] private int capacity;
 
         // MV-808: the LED now signals BUSY (a robot mid-Intake or mid-Cycle/Output), not just capacity
@@ -127,13 +137,20 @@ namespace MaxWorlds.Factories
         [SerializeField] private Color ledIdleColor = new Color(0.30f, 0.95f, 0.35f);    // green: idle, can take a robot
         [SerializeField] private Color ledBusyColor = new Color(1.00f, 0.18f, 0.14f);    // red: consuming/cycling a robot
         [SerializeField] private Color ledSpentColor = new Color(0.9f, 0.15f, 0.1f);     // red: spent, still a target
-        [SerializeField] private Color hatchGlowColor = new Color(1f, 0.82f, 0.45f);     // warm amber: mid-consume
 
         private DestructibleHealth _health;
         private EnemySpawner _spawner;
         private Transform _target; // Max
         private Renderer _led;
         private MaterialPropertyBlock _ledMpb;
+        /// <summary>MV-813: the top-face beacon — big enough to read at the play camera, taking the
+        /// same resolved colour <see cref="_led"/> does and pulsing while busy. See LateUpdate.</summary>
+        private Renderer _statusRing;
+        private MaterialPropertyBlock _statusRingMpb;
+        /// <summary>MV-813: free-running clock for <see cref="_statusRing"/>'s busy pulse, advanced by
+        /// <see cref="TickConsumption"/>'s own dt — never <see cref="Time.time"/>, so a test can drive
+        /// the pulse deterministically the same way it already drives every other beat in this file.</summary>
+        private float _statusRingPulseTime;
         private Renderer _hatchGlow;
         private MaterialPropertyBlock _hatchGlowMpb;
         private Renderer _emitFlash;
@@ -253,6 +270,11 @@ namespace MaxWorlds.Factories
             // (spent) once capacity hits 0, off once destroyed (OnDestroyed hides it).
             _led = parts.Led;
             _ledMpb = new MaterialPropertyBlock();
+
+            // MV-813: the big top-face beacon — same three-state colour as _led, just legible at
+            // the play camera's scale.
+            _statusRing = parts.StatusRing;
+            _statusRingMpb = new MaterialPropertyBlock();
 
             // MV-775: the hatch a lured robot actually walks to and is drawn into, and the fan this
             // box spins continuously to read as powered before anything ever reaches it.
@@ -437,6 +459,10 @@ namespace MaxWorlds.Factories
         public void TickConsumption(float dt)
         {
             if (!IsAlive) return;
+
+            // MV-813: free-running, independent of every other beat here — the status ring pulses off
+            // this alone, whether or not anything is actually happening.
+            _statusRingPulseTime += dt;
 
             // MV-807: a queued robot that died, got converted, or is otherwise no longer eligible is
             // dropped and every remaining slot behind it closes up — re-targeted onto its new slot.
@@ -653,17 +679,34 @@ namespace MaxWorlds.Factories
         {
             if (!IsAlive) return;
 
+            // MV-808: busy — a robot is mid-Intake or a doubled pair is mid-Cycle/Output — from the
+            // instant Intake begins until the second twin emits (removing the pending entry below).
+            // A merely-queued robot (still walking to slot 0) does NOT count; only Intake onward.
+            bool busy = _intakeRobot != null || _pending.Count > 0;
+            Color c = capacity > 0 ? (busy ? ledBusyColor : ledIdleColor) : ledSpentColor;
+
             if (_led != null)
             {
-                // MV-808: busy — a robot is mid-Intake or a doubled pair is mid-Cycle/Output — from the
-                // instant Intake begins until the second twin emits (removing the pending entry below).
-                // A merely-queued robot (still walking to slot 0) does NOT count; only Intake onward.
-                bool busy = _intakeRobot != null || _pending.Count > 0;
-                Color c = capacity > 0 ? (busy ? ledBusyColor : ledIdleColor) : ledSpentColor;
                 _led.GetPropertyBlock(_ledMpb);
                 _ledMpb.SetColor("_BaseColor", c);
                 _ledMpb.SetColor("_EmissionColor", c * 2f);
                 _led.SetPropertyBlock(_ledMpb);
+            }
+
+            // MV-813: the top-face beacon takes the exact same resolved colour as _led — Change 3's
+            // own "never disagree" rule — and additionally pulses its emissive strength 1.0x-2.2x at
+            // StatusRingPulseHz while busy; steady (1x) idle or spent, per the ticket's own Change 4.
+            if (_statusRing != null)
+            {
+                float multiplier = 1f;
+                if (capacity > 0 && busy)
+                {
+                    float phase = Mathf.Sin(_statusRingPulseTime * StatusRingPulseHz * Mathf.PI * 2f) * 0.5f + 0.5f;
+                    multiplier = Mathf.Lerp(StatusRingPulseMin, StatusRingPulseMax, phase);
+                }
+                _statusRing.GetPropertyBlock(_statusRingMpb);
+                _statusRingMpb.SetColor("_BaseColor", c * multiplier);
+                _statusRing.SetPropertyBlock(_statusRingMpb);
             }
 
             // Hatch-open glow (MV-693 Reads, MV-756 change 2): lit for as long as something is
@@ -672,11 +715,12 @@ namespace MaxWorlds.Factories
             // anything is actually consumed. Every other tell here was downstream of a consume that
             // could never happen (MV-756 Cause 2); this is the one that isn't. MV-775 adds
             // _intakeRobot: a robot mid-Intake has already left _queue but the hatch is still open
-            // on it.
+            // on it. MV-813 change 3: tinted from the same resolved colour the ring/LED take, rather
+            // than a fixed amber, so the box can never show a green ring over a red-lit hatch.
             bool hatchWanted = _pending.Count > 0 || _queue.Count > 0 || _intakeRobot != null;
             if (_hatchGlow != null)
             {
-                Color glow = hatchWanted ? hatchGlowColor : Color.clear;
+                Color glow = hatchWanted ? c : Color.clear;
                 _hatchGlow.GetPropertyBlock(_hatchGlowMpb);
                 _hatchGlowMpb.SetColor("_BaseColor", glow);
                 _hatchGlow.SetPropertyBlock(_hatchGlowMpb);
