@@ -62,8 +62,42 @@ namespace MaxWorlds.Enemies
         public static int GlobalMaxLiveEnemies =>
             Mathf.RoundToInt(DevTuning.Or(DevTuning.GlobalRobotBudget, RobotCompositionTuning.DefaultGlobalRobotBudget));
 
-        /// <summary>Room for one more robot ANYWHERE on the field, not just from this factory.</summary>
-        private static bool GlobalHasRoom => RobotEnemy.ActiveCount < GlobalMaxLiveEnemies;
+        /// <summary>MV-809: slots a Replicator cycle holds between despawning a consumed robot and
+        /// emitting its guaranteed replacement — see <see cref="MaxWorlds.Factories.Replicator"/>'s own
+        /// reservation contract. Field-wide, like the budget itself: shared by every Replicator box,
+        /// not per-instance.</summary>
+        private static int _replicatorReservedSlots;
+
+        /// <summary>Room for one more robot ANYWHERE on the field, not just from this factory. MV-809:
+        /// also treats every outstanding Replicator reservation as already spoken for, so an ordinary
+        /// spawn (or a second Replicator's own emission) can never steal the one slot a cycle in flight
+        /// is guaranteed to get back.</summary>
+        private static bool GlobalHasRoom =>
+            RobotEnemy.ActiveCount + _replicatorReservedSlots < GlobalMaxLiveEnemies;
+
+        /// <summary>MV-809: true if a Replicator may safely consume a robot right now. Consuming (which
+        /// drops <see cref="RobotEnemy.ActiveCount"/> by one) and reserving (which raises
+        /// <see cref="_replicatorReservedSlots"/> by one) change their sum by exactly zero, so this same
+        /// comparison also guarantees a slot will be free for at least the one-for-one replacement
+        /// later. Public so <see cref="MaxWorlds.Factories.Replicator"/>'s own intake gate reads this
+        /// rather than duplicating the ActiveCount/GlobalMaxLiveEnemies comparison.</summary>
+        public static bool HasRoomForReplicatorIntake() =>
+            RobotEnemy.ActiveCount + _replicatorReservedSlots <= GlobalMaxLiveEnemies;
+
+        /// <summary>MV-809: called the instant a Replicator despawns a consumed robot — holds that
+        /// robot's now-vacant slot until <see cref="ReleaseReplicatorReservation"/> spends it, so
+        /// nothing else can fill it out from under the guaranteed replacement.</summary>
+        public static void ReserveReplicatorSlot() => _replicatorReservedSlots++;
+
+        /// <summary>MV-809: releases one held reservation — call immediately before spending it (the
+        /// guaranteed replacement spawn), so that spawn's own <see cref="GlobalHasRoom"/> check sees the
+        /// slot as free again instead of double-counting it.</summary>
+        public static void ReleaseReplicatorReservation() =>
+            _replicatorReservedSlots = Mathf.Max(0, _replicatorReservedSlots - 1);
+
+        /// <summary>Test/level-reset hygiene for the static reservation counter (MV-809) — same pattern
+        /// as <see cref="RobotEnemy.ResetRegistry"/>. Never called by shipped gameplay.</summary>
+        public static void ResetReplicatorReservations() => _replicatorReservedSlots = 0;
 
         /// <summary>The live-count ceiling THIS factory actually enforces right now (YT-194): ramps
         /// from <see cref="startingRobots"/> up to the authored <see cref="maxLiveEnemies"/> as
