@@ -529,10 +529,32 @@ namespace MaxWorlds.Factories
                     // room check (inside SpawnExact) sees the slot as free rather than double-counting
                     // it against itself. HasRoomForReplicatorIntake already proved this always fits.
                     EnemySpawner.ReleaseReplicatorReservation();
-                    // MV-808: place the twin at the out-ramp foot itself — the spawner's own door/mouth
-                    // placement is for the ordinary emergence walk, not this box's own theatre.
-                    PlaceAtOutRamp(_spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds), twinIndex: 0);
-                    firstEmitted = true;
+                    // MV-817: ignorePerFactoryCap true — a Replicator's own EnemySpawner authors
+                    // maxLiveEnemies/startingRobots defaults meant for an ordinary factory stream, and
+                    // EffectiveMaxLiveEnemies ramps from 0 early in a run. Gating a doubled twin on that
+                    // silently ate every replication before the Invasion Level cleared ~6% (MV-817's own
+                    // root cause) — GlobalHasRoom (and the MV-809 reservation just released above) is
+                    // still the real gate.
+                    List<RobotEnemy> firstSpawn = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds, ignorePerFactoryCap: true);
+                    if (firstSpawn.Count > 0)
+                    {
+                        // MV-808: place the twin at the out-ramp foot itself — the spawner's own
+                        // door/mouth placement is for the ordinary emergence walk, not this box's own
+                        // theatre.
+                        PlaceAtOutRamp(firstSpawn, twinIndex: 0);
+                        firstEmitted = true;
+                    }
+                    else
+                    {
+                        // MV-817 change 2: the first twin is guaranteed and must never be dropped. The
+                        // global budget was genuinely full despite the reservation (e.g. it was spent
+                        // elsewhere) — reclaim the slot so nothing else can take it either, and retry on
+                        // every subsequent tick (timer stays >= CycleSeconds, so this branch re-runs next
+                        // frame) until room actually frees. firstEmitted stays false, so the pending
+                        // entry is kept (box stays busy — see LateUpdate's own busy check) instead of
+                        // being removed below.
+                        EnemySpawner.ReserveReplicatorSlot();
+                    }
                 }
 
                 if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds)
@@ -540,9 +562,10 @@ namespace MaxWorlds.Factories
                     // MV-809: the second twin is opportunistic, never guaranteed — only spawns if
                     // genuine room exists beyond what's already reserved elsewhere. Measured via
                     // Emitted (monotonic, this spawner only) rather than assuming success, since
-                    // SpawnExact silently emits 0 when GlobalHasRoom is false.
+                    // SpawnExact silently emits 0 when GlobalHasRoom is false. MV-817: ignorePerFactoryCap
+                    // true, same reasoning as the first twin above.
                     int emittedBefore = _spawner.Emitted;
-                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
+                    List<RobotEnemy> spawned = _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds, ignorePerFactoryCap: true);
                     if (_spawner.Emitted > emittedBefore)
                     {
                         PlaceAtOutRamp(spawned, twinIndex: 1); // MV-808
