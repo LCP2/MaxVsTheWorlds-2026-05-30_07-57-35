@@ -961,7 +961,8 @@ namespace MaxWorlds.Rendering
         /// <summary>A hairline crack in one bay (MV-784, change 3) — a <see cref="BuildBlobMesh"/> blob
         /// squashed and stretched into a long sliver, rotated by the same hash that decided the bay gets
         /// one at all, so a level always cracks the same bays the same way.</summary>
-        public static GameObject BuildCrack(Transform parent, Vector3 worldCenter, float hash, float floorTopY = 0f)
+        public static GameObject BuildCrack(Transform parent, Vector3 worldCenter, float hash, float floorTopY = 0f,
+                                            float toneScale = 1f)
         {
             var go = new GameObject("Crack");
             go.transform.SetParent(parent, false);
@@ -972,7 +973,9 @@ namespace MaxWorlds.Rendering
             Mesh mesh = BuildBlobMesh(CrackBaseRadius, 7, StainSegmentMinT, StainSegmentMaxT, hash * 97.13f);
             go.AddComponent<MeshFilter>().sharedMesh = mesh;
             go.AddComponent<MeshRenderer>();
-            Paint(go, SurfaceKind.Dirt, Crack);
+            // MV-799: a crack never floats brighter than the bay it sits on, so it carries that bay's
+            // own lit-ground multiplier (1 = unlit, the pre-MV-799 behaviour).
+            Paint(go, SurfaceKind.Dirt, Crack * toneScale);
             ZeroOutline(go);
             return go;
         }
@@ -982,17 +985,19 @@ namespace MaxWorlds.Rendering
         /// full <see cref="Silt"/> inside it. The two-step edge is what makes this read as soaked into
         /// the floor rather than cut out of it.</summary>
         public static GameObject BuildSiltStain(Transform parent, Vector3 worldCenter, float coreRadius,
-                                                float seed, float floorTopY = 0f)
+                                                float seed, float floorTopY = 0f, float toneScale = 1f)
         {
             var root = new GameObject("Silt");
             root.transform.SetParent(parent, false);
             root.transform.localPosition = new Vector3(worldCenter.x, floorTopY + StainLift, worldCenter.z);
 
-            Color haloTone = Color.Lerp(GroundBase, Silt, 0.5f);
+            // MV-799: same lit-ground multiplier as the bay underneath, so a silt drift never floats
+            // brighter than the floor it sits on (1 = unlit, the pre-MV-799 behaviour).
+            Color haloTone = Color.Lerp(GroundBase, Silt, 0.5f) * toneScale;
             BuildStainLayer(root.transform, "Halo", coreRadius * SiltHaloScale, SiltSegments, seed, 0f,
                 SurfaceKind.Dirt, haloTone);
             BuildStainLayer(root.transform, "Core", coreRadius, SiltSegments, seed + 11f, StainLayerGap,
-                SurfaceKind.Dirt, Silt);
+                SurfaceKind.Dirt, Silt * toneScale);
 
             return root;
         }
@@ -1004,17 +1009,19 @@ namespace MaxWorlds.Rendering
         /// the pool by its own <see cref="WaterMeniscusLift"/>, not below it, since a meniscus is the
         /// rim curling up at the water's edge.</summary>
         public static GameObject BuildWaterStain(Transform parent, Vector3 worldCenter, float coreRadius,
-                                                 float seed, float floorTopY = 0f)
+                                                 float seed, float floorTopY = 0f, float toneScale = 1f)
         {
             var root = new GameObject("Standing Water");
             root.transform.SetParent(parent, false);
             root.transform.localPosition = new Vector3(worldCenter.x, floorTopY + StainLift, worldCenter.z);
 
-            Color meniscusTone = GroundBase * WaterMeniscusLumaScale;
+            // MV-799: same lit-ground multiplier as the bay underneath (1 = unlit, the pre-MV-799
+            // behaviour).
+            Color meniscusTone = GroundBase * WaterMeniscusLumaScale * toneScale;
             BuildStainLayer(root.transform, "Meniscus", coreRadius + WaterMeniscusWidth, WaterSegments, seed,
                 WaterMeniscusLift, SurfaceKind.Prop, meniscusTone);
             GameObject core = BuildStainLayer(root.transform, "Water", coreRadius, WaterSegments, seed + 13f,
-                0f, SurfaceKind.Prop, StandingWater);
+                0f, SurfaceKind.Prop, StandingWater * toneScale);
 
             Material mat = core.GetComponent<Renderer>()?.sharedMaterial;
             if (mat != null && mat.HasProperty("_Smoothness"))

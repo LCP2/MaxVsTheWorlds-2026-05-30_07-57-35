@@ -39,8 +39,11 @@ namespace MaxWorlds.Rendering
         public const float LensRadius = 0.30f;
         public const float LensEmissive = 3.2f;
         public const float BloomStrength = 0.40f;
-        public const float PoolRadius = 1.0f;
-        public const float PoolStrength = 0.13f;
+
+        /// <summary>MV-799, change 3: widened so the lamp still reads as the pool's own source now
+        /// that the floor itself carries the room's light/dark structure.</summary>
+        public const float PoolRadius = 2.30f;
+        public const float PoolStrength = 0.17f;
         public const float BulkheadHeight = 2.05f;
         public const float BulkheadStandoff = 0.30f;
         public const float HazardPulsePeriod = 1.4f;
@@ -56,8 +59,11 @@ namespace MaxWorlds.Rendering
         public const float LedCellSize = 0.022f;
         public const float LedBrightness = 1.9f;
         public const float LedBrightCellBrightness = 3.4f;
-        public const float LedPoolRadius = 1.05f;
-        public const float LedPoolStrength = 0.09f;
+
+        /// <summary>MV-799, change 3: widened alongside <see cref="PoolRadius"/>/<see cref="PoolStrength"/>,
+        /// same reason.</summary>
+        public const float LedPoolRadius = 1.60f;
+        public const float LedPoolStrength = 0.12f;
         public const float LedBlinkPeriod = 0.9f;
 
         /// <summary>MV-813: a state beacon's own outer diameter, big enough to read at the play
