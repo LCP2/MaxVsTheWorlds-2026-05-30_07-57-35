@@ -151,12 +151,27 @@ namespace MaxWorlds.VFX
         /// same margin the Bolter and the Heavy already sit at.</summary>
         private static readonly Color BlinkerBody = new Color(0.55f, 0.162f, 0.55f);
 
-        /// <summary>World 2's "stormdrain" skin (MV-701) — the Rusher's Scrap Rat reskin: rust-orange,
-        /// the "uniform industrial finish" Tier-2 tell from the enemy design page. Pulled to the same
-        /// headroom every other kind's peak channel sits under (<see cref="SunlitAlbedo.Ceiling"/>,
-        /// 0.6) rather than repeating the MV-348/MV-328/MV-578/MV-584 clipped-then-washed defect on a
-        /// brand-new colour.</summary>
-        private static readonly Color StormdrainBody = new Color(0.55f, 0.28f, 0.10f);
+        /// <summary>World 2's "stormdrain" skin (MV-701/MV-800) — one colour per kind, eight total,
+        /// replacing the single flat rust-orange every non-Rusher kind used to fall through past (MV-800:
+        /// only the Rusher had ever been given an override, so Brute/Lurker/Turret rendered near-neutral
+        /// and read as silhouettes on the dark stormdrain ground). Every peak channel sits at or under
+        /// <see cref="SunlitAlbedo.Ceiling"/> (0.6), the same headroom every hand-authored kind colour in
+        /// this file already sits at, so none of these needs the MV-348/MV-328/MV-578/MV-584
+        /// clipped-then-washed correction.</summary>
+        private static readonly Color StormdrainRusher = new Color(0.600f, 0.330f, 0.090f);
+        private static readonly Color StormdrainBruiser = new Color(0.540f, 0.130f, 0.600f);
+        private static readonly Color StormdrainHeavy = new Color(0.600f, 0.110f, 0.190f);
+        private static readonly Color StormdrainBrute = new Color(0.170f, 0.330f, 0.600f);
+
+        /// <summary>MV-800: the Lurker moves off oil-black for World 2 — MV-688 made it oil-black
+        /// deliberately so an ambusher hides at its grate, but on the darker ground World 2 ships
+        /// alongside this, black is invisible rather than hidden. Put to Lee on 2026-09-15 and taken:
+        /// the ambush now reads from the grate shudder and the cyan eye instead. Its base-table
+        /// <see cref="LurkerBody"/> is untouched — this only ever applies under the "stormdrain" skin.</summary>
+        private static readonly Color StormdrainLurker = new Color(0.230f, 0.120f, 0.420f);
+        private static readonly Color StormdrainSludger = new Color(0.430f, 0.600f, 0.070f);
+        private static readonly Color StormdrainCharger = new Color(0.600f, 0.250f, 0.060f);
+        private static readonly Color StormdrainTurret = new Color(0.180f, 0.460f, 0.560f);
 
         /// <summary>World 3's "reef" skin (MV-715) — every one of its eight re-skins wears this one
         /// barnacled dark-teal metal, the same "one flat tint per world skin" idiom as
@@ -341,14 +356,39 @@ namespace MaxWorlds.VFX
         /// <see cref="RoleFor"/>/<see cref="BaseColorFor(CharacterRole)"/> mapping — a named
         /// <paramref name="skin"/> (World 2's <c>"stormdrain"</c>) wins over an unrecognised or absent
         /// one; a bare <paramref name="colourRole"/> (an escape hatch for "wear an existing role's
-        /// colour on a different kind") is the fallback before the kind's own default role.</summary>
-        private static Color ResolveBodyColor(CharacterRole role, string skin, string colourRole)
+        /// colour on a different kind") is the fallback before the kind's own default role.
+        ///
+        /// Public (MV-800): <see cref="RobotRig"/>'s generated-mesh bodies — what a spawned robot
+        /// actually renders as, once its greybox stand-in is destroyed — used to read straight off
+        /// <see cref="BaseColorFor(CharacterRole)"/> and never called this at all, so a world skin could
+        /// never reach the screen. RobotRig now resolves through this same method.</summary>
+        public static Color ResolveBodyColor(CharacterRole role, string skin, string colourRole)
         {
-            if (skin == "stormdrain") return StormdrainBody;
+            if (skin == "stormdrain") return StormdrainColorFor(role);
             if (skin == "reef") return ReefBody;
             if (!string.IsNullOrEmpty(colourRole) && Enum.TryParse(colourRole, ignoreCase: true, out CharacterRole r))
                 return BaseColorFor(r);
             return BaseColorFor(role);
+        }
+
+        /// <summary>MV-800: World 2's per-kind stormdrain table, keyed by the same
+        /// <see cref="CharacterRole"/> every other resolution in this file already uses. Falls back to
+        /// <see cref="StormdrainRusher"/> for any role outside World 2's eight authored kinds — never hit
+        /// today, since only those eight ever carry the "stormdrain" skin tag (<c>world2_config.json</c>
+        /// <c>enemyOverrides</c>).</summary>
+        private static Color StormdrainColorFor(CharacterRole role)
+        {
+            switch (role)
+            {
+                case CharacterRole.Bruiser: return StormdrainBruiser;
+                case CharacterRole.Heavy: return StormdrainHeavy;
+                case CharacterRole.Brute: return StormdrainBrute;
+                case CharacterRole.Lurker: return StormdrainLurker;
+                case CharacterRole.Sludger: return StormdrainSludger;
+                case CharacterRole.Charger: return StormdrainCharger;
+                case CharacterRole.Turret: return StormdrainTurret;
+                default: return StormdrainRusher;
+            }
         }
 
         /// <summary>Every role that is trying to kill Max. The hit flash is routed to these and only

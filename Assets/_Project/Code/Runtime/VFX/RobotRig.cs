@@ -95,6 +95,15 @@ namespace MaxWorlds.VFX
         /// that needs it" idiom <see cref="CharacterSkin"/> and <see cref="RobotEnemy"/> already use.</summary>
         private const string ReefSkinTag = "reef";
 
+        /// <summary>World 2's skin tag (MV-701/MV-800) — same "one literal per file" idiom as
+        /// <see cref="ReefSkinTag"/>.</summary>
+        private const string StormdrainSkinTag = "stormdrain";
+
+        /// <summary>MV-800: World 2's shared faction signature — hazard yellow, worn identically by
+        /// every stormdrain-skinned kind (see <see cref="RobotBodies.Build"/>'s shoulder band) so eight
+        /// different body hues still read as one faction assembled from one shed.</summary>
+        private static readonly Color StormdrainHazardBand = new Color(0.980f, 0.800f, 0.140f);
+
         /// <summary>How much bigger the Puffer Mine's inflatable core gets at the end of its telegraph
         /// than at the start (MV-746 AC5) — a visible inflate, not a subtle one, since it IS the tell
         /// for a kind whose whole gimmick is the wind-up.</summary>
@@ -150,6 +159,7 @@ namespace MaxWorlds.VFX
         private Material _coolMat;
         private Material _darkMat;
         private Material _goldMat;
+        private Material _hazardMat;
         private MaterialPropertyBlock _eyeMpb;
 
         private bool _built;
@@ -317,7 +327,15 @@ namespace MaxWorlds.VFX
             // Reef set, never from CharacterSkin — CharacterSkin's flat ReefBody tint only ever
             // reaches the disabled greybox renderer, not the parts built here.
             bool reef = _enemy.Skin == ReefSkinTag;
-            Color body = reef ? WorldMaterials.ReefHazard : CharacterSkin.BaseColorFor(role);
+            bool stormdrain = _enemy.Skin == StormdrainSkinTag;
+
+            // MV-800: this used to read BaseColorFor(role) directly, which ignores a world skin
+            // entirely — CharacterSkin.ResolveBodyColor is the one place a skin tag has ever been
+            // resolved, but nothing here ever called it, so World 2's per-kind stormdrain table could
+            // never reach the parts actually on screen (the greybox ResolveBodyColor tints IS
+            // destroyed the instant this rig builds — see EnsureBuilt).
+            Color body = reef ? WorldMaterials.ReefHazard
+                : CharacterSkin.ResolveBodyColor(role, _enemy.Skin, _enemy.ColourRole);
             Color cool = reef ? WorldMaterials.ReefCircuitCyan : CharacterSkin.RobotCool;
             Color dark = reef ? WorldMaterials.ReefMetalDark : CharacterSkin.RobotDark;
             Color gold = reef ? WorldMaterials.ReefBioGlow : CharacterSkin.RobotGold;
@@ -326,6 +344,17 @@ namespace MaxWorlds.VFX
             _coolMat = NewCharacterMaterial("Robot_Cool", cool);
             _darkMat = NewCharacterMaterial("Robot_Dark", dark);
             _goldMat = NewCharacterMaterial("Robot_Gold", gold);
+
+            // MV-800: the shared stormdrain shoulder band — one material, worn identically by every
+            // World 2 kind, so it never varies per-instance the way _bodyMat does. Null (no band) for
+            // every other skin/world; RobotBodies.Build only reaches for RobotPalette.Hazard when this
+            // robot's own skin is "stormdrain".
+            if (stormdrain)
+            {
+                _hazardMat = NewCharacterMaterial("Robot_Stormdrain_Band", StormdrainHazardBand);
+                if (_hazardMat.HasProperty(EmissionId))
+                    _hazardMat.SetColor(EmissionId, StormdrainHazardBand * 0.30f);
+            }
         }
 
         private static Material NewCharacterMaterial(string name, Color color)
@@ -364,7 +393,8 @@ namespace MaxWorlds.VFX
             feet.localPosition = new Vector3(0f, -spawnHeight, 0f);
 
             var body = RobotBodies.Build(_enemy.Kind, feet,
-                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat), _enemy.Skin);
+                                         new RobotPalette(_bodyMat, _coolMat, _darkMat, _goldMat, _hazardMat),
+                                         _enemy.Skin);
             _eyes = body.Eyes;
             _reefInflatable = body.Inflatable;
             _restModelScale = _model.localScale;
@@ -743,6 +773,7 @@ namespace MaxWorlds.VFX
             if (_coolMat != null) Destroy(_coolMat);
             if (_darkMat != null) Destroy(_darkMat);
             if (_goldMat != null) Destroy(_goldMat);
+            if (_hazardMat != null) Destroy(_hazardMat);
         }
     }
 }

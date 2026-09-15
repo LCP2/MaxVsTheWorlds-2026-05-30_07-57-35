@@ -84,6 +84,34 @@
    "moveSpeed": 2.4,
    "maxHealth": 28,
    "skin": "stormdrain"
+  },
+  {
+   "kind": "bruiser",
+   "skin": "stormdrain"
+  },
+  {
+   "kind": "heavy",
+   "skin": "stormdrain"
+  },
+  {
+   "kind": "brute",
+   "skin": "stormdrain"
+  },
+  {
+   "kind": "lurker",
+   "skin": "stormdrain"
+  },
+  {
+   "kind": "sludger",
+   "skin": "stormdrain"
+  },
+  {
+   "kind": "charger",
+   "skin": "stormdrain"
+  },
+  {
+   "kind": "turret",
+   "skin": "stormdrain"
   }
  ],
  "gates": [
