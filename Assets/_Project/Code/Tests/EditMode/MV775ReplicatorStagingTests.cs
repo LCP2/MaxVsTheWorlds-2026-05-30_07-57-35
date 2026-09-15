@@ -115,12 +115,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.Greater(glowMpb.GetColor("_BaseColor").a, 0f,
                 "with one robot seeking and nothing pending, the hatch glow must be lit");
 
-            // --- Intake: place the Rusher exactly at its arrive-gate boundary (ArriveTolerance +
-            // its own 0.4 m collider radius from the hatch) — a resolved position well outside 0.35 m
-            // of the hatch itself, so despawning it there (the pre-MV-775 behaviour) would fail the
-            // very next assertion. Ticking past IntakeSeconds must draw it the rest of the way in. ---
-            float robotRadius = EnemyArchetype.Of(EnemyKind.Rusher).ColliderRadius;
-            rusher.transform.position = replicator.HatchPosition + new Vector3(Replicator.ArriveTolerance + robotRadius, 0f, 0f);
+            // --- Intake: MV-807 measures arrival against the robot's own queue slot (slot 0), not a
+            // hatch-relative offset — place it exactly at its lured target to cross the gate. Ticking
+            // past IntakeSeconds must then draw it the rest of the way to the hatch itself. ---
+            rusher.transform.position = rusher.ReplicatorSeekTarget;
             replicator.TickConsumption(Replicator.IntakeSeconds + 0.01f);
 
             Assert.IsFalse(rusher.IsAlive, "the Rusher must be despawned once fully drawn into the hatch");

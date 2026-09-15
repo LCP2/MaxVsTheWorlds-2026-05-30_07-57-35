@@ -110,9 +110,10 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robot.Current,
                 "setup failure: the robot must be lured before this helper can drive a cycle");
 
-            float robotRadius = EnemyArchetype.Of(EnemyKind.Rusher).ColliderRadius;
-            robot.transform.position =
-                replicator.HatchPosition + new Vector3(Replicator.ArriveTolerance + robotRadius, 0f, 0f);
+            // MV-807: arrival is measured against the robot's own queue slot (slot 0), not a
+            // hand-computed hatch-relative offset — same staging change ReplicatorTests and
+            // MV775ReplicatorStagingTests make.
+            robot.transform.position = robot.ReplicatorSeekTarget;
 
             replicator.TickConsumption(Replicator.IntakeSeconds + 0.01f);
             Assert.IsFalse(robot.IsAlive, "setup failure: the robot must be despawned into the Cycle beat by now");

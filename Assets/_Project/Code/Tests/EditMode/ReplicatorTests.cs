@@ -124,10 +124,9 @@ namespace MaxWorlds.Tests.EditMode
                 "within the 8 m lure radius, capacity > 0, and clear of the 4 m Max-melee exclusion — " +
                 "this Brute must be lured off Max");
 
-            // Touching the hatch face, face-on: this Brute's own 0.6 m CharacterController radius is
-            // the closest a real SafeMove-driven robot could ever get to the exact hatch point.
-            float robotRadius = EnemyArchetype.Of(EnemyKind.Brute).ColliderRadius;
-            brute.transform.position = replicator.HatchPosition + new Vector3(0f, 0f, -robotRadius);
+            // MV-807: a lured robot's steering target is its own queue slot, not the hatch itself —
+            // the sole queued robot lands at slot 0. Placed exactly there satisfies ArriveTolerance.
+            brute.transform.position = brute.ReplicatorSeekTarget;
             replicator.TickConsumption(Replicator.IntakeSeconds + Replicator.CycleSeconds + Replicator.EmitStaggerSeconds + 0.01f);
 
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
@@ -161,11 +160,11 @@ namespace MaxWorlds.Tests.EditMode
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, rusher.Current,
                 "within the 8 m lure radius, capacity > 0, and clear of the 4 m Max-melee exclusion — " +
                 "this Rusher must be lured off Max");
-            Assert.AreEqual(replicator.HatchPosition, rusher.ReplicatorSeekTarget,
-                "the lured robot's steering target must be the Replicator's own hatch face, not the box's centre (MV-775)");
+            Assert.AreEqual(replicator.QueueSlotPosition(0), rusher.ReplicatorSeekTarget,
+                "the lured robot's steering target must be its own queue slot (MV-807), not the hatch itself (MV-775)");
 
-            // --- Move it to the hatch, advance through Intake+Cycle+stagger: consumed, then the doubled pair emerges ---
-            rusher.transform.position = replicator.HatchPosition;
+            // --- Move it to its slot, advance through Intake+Cycle+stagger: consumed, then the doubled pair emerges ---
+            rusher.transform.position = rusher.ReplicatorSeekTarget;
             replicator.TickConsumption(Replicator.IntakeSeconds + Replicator.CycleSeconds + Replicator.EmitStaggerSeconds + 0.01f);
 
             var spawner = _replicatorGo.GetComponent<EnemySpawner>();
