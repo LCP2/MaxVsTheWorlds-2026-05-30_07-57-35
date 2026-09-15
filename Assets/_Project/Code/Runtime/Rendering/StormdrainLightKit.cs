@@ -60,6 +60,11 @@ namespace MaxWorlds.Rendering
         public const float LedPoolStrength = 0.09f;
         public const float LedBlinkPeriod = 0.9f;
 
+        /// <summary>MV-813: a state beacon's own outer diameter, big enough to read at the play
+        /// camera's ~48 px/m — 43 px, against a 10 cm lamp's 5 px.</summary>
+        public const float StatusRingOuterDiameter = 0.9f;
+        public const float StatusRingWidth = 0.12f;
+
         // ---------------------------------------------------------------- Change 1: the fitting
 
         /// <summary>
@@ -246,6 +251,74 @@ namespace MaxWorlds.Rendering
                 LedPoolRadius, Vector3.up, Cyan * LedPoolStrength);
 
             return root;
+        }
+
+        // ---------------------------------------------------------------- MV-813: status ring
+
+        /// <summary>
+        /// A big, flat, additive status ring — a beacon, not a lamp, for a state that has to read at
+        /// play-camera scale rather than up close (MV-813). Lies flat with its face on local +Y, so
+        /// the fixed ~72° top-down camera sees its full disc; <paramref name="localPos"/> is the
+        /// ring's own centre in the parent's local space, and it never rotates — every call site
+        /// mounts it on a fixed top face, the same "no live which-way-is-out" reasoning
+        /// <see cref="BuildLedPanel"/>'s own doc comment gives for facing local -Z.
+        ///
+        /// <paramref name="tone"/> only seeds the shared additive material's cached colour
+        /// (<see cref="AdditiveUnlit"/>) — the caller drives the resolved colour and any pulse, per
+        /// frame, through the returned renderer's own MaterialPropertyBlock, the same pattern every
+        /// other fitting colour in this file already uses.
+        /// </summary>
+        public static MeshRenderer BuildStatusRing(Transform parent, string name, Vector3 localPos, Color tone)
+        {
+            float outerRadius = StatusRingOuterDiameter * 0.5f;
+            float innerRadius = outerRadius - StatusRingWidth;
+
+            var go = new GameObject(name);
+            go.transform.SetParent(parent, false);
+            go.transform.localPosition = localPos;
+            go.AddComponent<MeshFilter>().sharedMesh = BuildAnnulusMesh(innerRadius, outerRadius);
+            var rend = go.AddComponent<MeshRenderer>();
+            rend.sharedMaterial = AdditiveUnlit(tone, name);
+            return rend;
+        }
+
+        /// <summary>A flat washer: two concentric rings of vertices in the local XZ plane, no caps.
+        /// Unlike <see cref="CharacterMeshes.Lathe"/>'s revolve — built for a solid that closes to the
+        /// axis at both ends — a real hole has to stay open, so this only ever builds the band between
+        /// <paramref name="innerRadius"/> and <paramref name="outerRadius"/>. Winding doesn't matter:
+        /// <see cref="AdditiveUnlit"/> sets <c>_Cull</c> Off, so both faces always draw.</summary>
+        private static Mesh BuildAnnulusMesh(float innerRadius, float outerRadius, int segments = 32)
+        {
+            var verts = new Vector3[segments * 2];
+            var normals = new Vector3[segments * 2];
+            var tris = new int[segments * 6];
+
+            for (int s = 0; s < segments; s++)
+            {
+                float a = (float)s / segments * Mathf.PI * 2f;
+                float cx = Mathf.Cos(a), cz = Mathf.Sin(a);
+                verts[s * 2] = new Vector3(cx * innerRadius, 0f, cz * innerRadius);
+                verts[s * 2 + 1] = new Vector3(cx * outerRadius, 0f, cz * outerRadius);
+                normals[s * 2] = Vector3.up;
+                normals[s * 2 + 1] = Vector3.up;
+            }
+
+            int ti = 0;
+            for (int s = 0; s < segments; s++)
+            {
+                int a = s * 2, b = a + 1;
+                int next = (s + 1) % segments;
+                int c = next * 2, d = c + 1;
+                tris[ti++] = a; tris[ti++] = c; tris[ti++] = b;
+                tris[ti++] = b; tris[ti++] = c; tris[ti++] = d;
+            }
+
+            var mesh = new Mesh { name = "Annulus" };
+            mesh.SetVertices(verts);
+            mesh.SetNormals(normals);
+            mesh.SetTriangles(tris, 0);
+            mesh.RecalculateBounds();
+            return mesh;
         }
 
         // ---------------------------------------------------------------- additive material
