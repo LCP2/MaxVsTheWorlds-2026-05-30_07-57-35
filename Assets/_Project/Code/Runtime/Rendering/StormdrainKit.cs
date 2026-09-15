@@ -1150,6 +1150,7 @@ namespace MaxWorlds.Rendering
             var bandT = new Transform[SludgeBandCount];
             var bandExtra = new Vector3[SludgeBandCount];
             var bandPhase = new float[SludgeBandCount];
+            var bandHalfExtent = new float[SludgeBandCount];
             for (int i = 0; i < SludgeBandCount; i++)
             {
                 float hLen = Frac(seed * 1.91f + i * 3.17f);
@@ -1169,6 +1170,9 @@ namespace MaxWorlds.Rendering
                 bandT[i] = band.transform;
                 bandExtra[i] = extra;
                 bandPhase[i] = phase;
+                // A band's length axis is exactly aligned with the flow axis by yawRot, so its
+                // half-extent along the scroll axis is simply half its length (MV-796).
+                bandHalfExtent[i] = length * 0.5f;
             }
 
             // Twelve chevron pairs (24 strips) scrolling with the bands, in their own mid tone.
@@ -1177,13 +1181,20 @@ namespace MaxWorlds.Rendering
             var chevronT = new Transform[SludgeChevronPairs * 2];
             var chevronExtra = new Vector3[SludgeChevronPairs * 2];
             var chevronPhase = new float[SludgeChevronPairs * 2];
+            var chevronHalfExtent = new float[SludgeChevronPairs * 2];
+            const float chevronLegLength = 0.95f;
+            const float chevronLegThickness = 0.16f;
+            // A leg leans 45 degrees off the flow axis, so its footprint along that axis is the
+            // diagonal projection of both its length AND its thickness, not half its raw length
+            // (MV-796) — sin/cos of 45 degrees are equal, so both contribute via the same factor.
+            float chevronLegHalfExtent = (chevronLegLength * 0.5f + chevronLegThickness * 0.5f) * Mathf.Sin(45f * Mathf.Deg2Rad);
             for (int i = 0; i < SludgeChevronPairs; i++)
             {
                 float phase = Mathf.Repeat((i + 0.5f) / SludgeChevronPairs * run + globalPhase, run);
                 Vector3 pivotUp = Vector3.up * SludgeChevronY;
 
                 GameObject l = Box(chevronsGroup, $"Chevron{i}L", Vector3.zero,
-                    new Vector3(0.95f, 0.05f, 0.16f), SludgeChevronMid, SurfaceKind.Foliage);
+                    new Vector3(chevronLegLength, 0.05f, chevronLegThickness), SludgeChevronMid, SurfaceKind.Foliage);
                 l.transform.localRotation = yawRot * Quaternion.Euler(0f, 45f, 0f);
                 Vector3 extraL = yawRot * new Vector3(-0.30f, 0f, -0.30f) + pivotUp;
                 l.transform.localPosition = extraL;
@@ -1191,9 +1202,10 @@ namespace MaxWorlds.Rendering
                 chevronT[idxL] = l.transform;
                 chevronExtra[idxL] = extraL;
                 chevronPhase[idxL] = phase;
+                chevronHalfExtent[idxL] = chevronLegHalfExtent;
 
                 GameObject r = Box(chevronsGroup, $"Chevron{i}R", Vector3.zero,
-                    new Vector3(0.95f, 0.05f, 0.16f), SludgeChevronMid, SurfaceKind.Foliage);
+                    new Vector3(chevronLegLength, 0.05f, chevronLegThickness), SludgeChevronMid, SurfaceKind.Foliage);
                 r.transform.localRotation = yawRot * Quaternion.Euler(0f, -45f, 0f);
                 Vector3 extraR = yawRot * new Vector3(0.30f, 0f, -0.30f) + pivotUp;
                 r.transform.localPosition = extraR;
@@ -1201,6 +1213,7 @@ namespace MaxWorlds.Rendering
                 chevronT[idxR] = r.transform;
                 chevronExtra[idxR] = extraR;
                 chevronPhase[idxR] = phase;
+                chevronHalfExtent[idxR] = chevronLegHalfExtent;
             }
 
             // Nine foam clumps collecting along both banks, scrolling slower than the bands — the
@@ -1212,6 +1225,7 @@ namespace MaxWorlds.Rendering
             var foamT = new Transform[SludgeFoamCount];
             var foamExtra = new Vector3[SludgeFoamCount];
             var foamPhase = new float[SludgeFoamCount];
+            var foamHalfExtent = new float[SludgeFoamCount];
             for (int i = 0; i < SludgeFoamCount; i++)
             {
                 float hRadius = Frac(seed * 3.71f + i * 5.13f);
@@ -1229,22 +1243,29 @@ namespace MaxWorlds.Rendering
                 foamT[i] = clump.transform;
                 foamExtra[i] = extra;
                 foamPhase[i] = phase;
+                // Unrotated blob, so its radius bounds its extent along any axis — but BuildBlobMesh
+                // jitters each rim vertex out to StainSegmentMaxT (1.3x) of the nominal radius, so that
+                // authored ceiling, not the radius itself, is the true half-extent (MV-796).
+                foamHalfExtent[i] = radius * StainSegmentMaxT;
             }
 
             // Bands and chevrons scroll together at SludgeFlowSpeed; foam scrolls slower on its own timer.
             var fastT = new Transform[bandT.Length + chevronT.Length];
             var fastExtra = new Vector3[fastT.Length];
             var fastPhase = new float[fastT.Length];
+            var fastHalfExtent = new float[fastT.Length];
             System.Array.Copy(bandT, 0, fastT, 0, bandT.Length);
             System.Array.Copy(chevronT, 0, fastT, bandT.Length, chevronT.Length);
             System.Array.Copy(bandExtra, 0, fastExtra, 0, bandExtra.Length);
             System.Array.Copy(chevronExtra, 0, fastExtra, bandExtra.Length, chevronExtra.Length);
             System.Array.Copy(bandPhase, 0, fastPhase, 0, bandPhase.Length);
             System.Array.Copy(chevronPhase, 0, fastPhase, bandPhase.Length, chevronPhase.Length);
+            System.Array.Copy(bandHalfExtent, 0, fastHalfExtent, 0, bandHalfExtent.Length);
+            System.Array.Copy(chevronHalfExtent, 0, fastHalfExtent, bandHalfExtent.Length, chevronHalfExtent.Length);
 
             var rig = root.AddComponent<SludgeFlowRig>();
-            rig.Configure(flow, run, fastT, fastExtra, fastPhase,
-                          flow, run, foamT, foamExtra, foamPhase);
+            rig.Configure(flow, run, fastT, fastExtra, fastPhase, fastHalfExtent,
+                          flow, run, foamT, foamExtra, foamPhase, foamHalfExtent);
 
             // Reeds at the edges — the key art's one piece of organic silhouette, and the only thing
             // in the drain that breaks a horizon line.

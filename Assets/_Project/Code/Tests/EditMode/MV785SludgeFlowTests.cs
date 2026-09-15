@@ -56,25 +56,43 @@ namespace MaxWorlds.Tests.EditMode
 
                 // ---- AC2 (generic case): driving the flow by 1.0s of AnimSequence time ----
                 Vector3[] bandBefore = ReadLocalPositions(bands);
+                Vector3[] bandScaleBefore = ReadLocalScales(bands);
                 Vector3[] foamBefore = ReadLocalPositions(foam);
+                Vector3[] foamScaleBefore = ReadLocalScales(foam);
 
                 rig.Tick(1.0f);
 
                 Vector3[] bandAfter = ReadLocalPositions(bands);
+                Vector3[] bandScaleAfter = ReadLocalScales(bands);
                 Vector3[] foamAfter = ReadLocalPositions(foam);
+                Vector3[] foamScaleAfter = ReadLocalScales(foam);
 
+                // MV-796: a piece within its own half-extent of the tile edge is now clipped to fit
+                // rather than allowed to overhang, so its centre no longer moves at the raw scroll speed
+                // on the frames it's clipped on (proven directly by MV796SludgeBandContainmentTests).
+                // Its scale stays at its authored 1 while unclipped, so that's the signal used to skip
+                // clipped pieces here and still prove the raw speed on whichever pieces stayed clear.
+                int bandChecked = 0;
                 for (int i = 0; i < bandBefore.Length; i++)
                 {
+                    if (bandScaleBefore[i].x < 0.999f || bandScaleAfter[i].x < 0.999f) continue;
                     float moved = Vector3.Distance(bandBefore[i], bandAfter[i]);
                     Assert.AreEqual(0.35f, moved, 0.01f,
                         $"band {i} must move 0.35m +/- 0.01 along the channel axis in 1.0s (from {bandBefore[i]} to {bandAfter[i]})");
+                    bandChecked++;
                 }
+                Assert.Greater(bandChecked, 0, "at least one band must remain unclipped to prove the raw scroll speed");
+
+                int foamChecked = 0;
                 for (int i = 0; i < foamBefore.Length; i++)
                 {
+                    if (foamScaleBefore[i].x < 0.999f || foamScaleAfter[i].x < 0.999f) continue;
                     float moved = Vector3.Distance(foamBefore[i], foamAfter[i]);
                     Assert.AreEqual(0.12f, moved, 0.01f,
                         $"foam clump {i} must move 0.12m +/- 0.01 along the channel axis in 1.0s (from {foamBefore[i]} to {foamAfter[i]})");
+                    foamChecked++;
                 }
+                Assert.Greater(foamChecked, 0, "at least one foam clump must remain unclipped to prove the raw scroll speed");
 
                 // ---- AC3: the lip must resolve at least 2.5x the channel's own luminance ----
                 // Resolved via Color.linear (Unity's own sRGB decode), the same method the ticket's own
@@ -111,14 +129,15 @@ namespace MaxWorlds.Tests.EditMode
             {
                 var wrapBand = new GameObject("Wrap Band").transform;
                 wrapBand.SetParent(wrapHost, false);
+                wrapBand.gameObject.AddComponent<MeshRenderer>(); // MV-796: Apply toggles Renderer.enabled
                 var wrapRig = new GameObject("Wrap Rig").AddComponent<SludgeFlowRig>();
                 wrapRig.transform.SetParent(wrapHost, false);
 
                 const float run = 5f;
                 float startPhase = run - 0.1f; // 0.1m short of the wrap boundary
                 wrapRig.Configure(
-                    Vector3.forward, run, new[] { wrapBand }, new[] { Vector3.zero }, new[] { startPhase },
-                    Vector3.forward, run, Array.Empty<Transform>(), Array.Empty<Vector3>(), Array.Empty<float>());
+                    Vector3.forward, run, new[] { wrapBand }, new[] { Vector3.zero }, new[] { startPhase }, new[] { 0.1f },
+                    Vector3.forward, run, Array.Empty<Transform>(), Array.Empty<Vector3>(), Array.Empty<float>(), Array.Empty<float>());
 
                 float startCoord = wrapBand.localPosition.z;
                 Assert.AreEqual(startPhase - run * 0.5f, startCoord, 1e-4f,
@@ -179,6 +198,14 @@ namespace MaxWorlds.Tests.EditMode
             for (int i = 0; i < positions.Length; i++)
                 positions[i] = group.GetChild(i).localPosition;
             return positions;
+        }
+
+        private static Vector3[] ReadLocalScales(Transform group)
+        {
+            var scales = new Vector3[group.childCount];
+            for (int i = 0; i < scales.Length; i++)
+                scales[i] = group.GetChild(i).localScale;
+            return scales;
         }
 
         private static readonly string[] ForbiddenTypes =
