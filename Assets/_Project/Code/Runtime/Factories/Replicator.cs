@@ -293,6 +293,10 @@ namespace MaxWorlds.Factories
 
                 if (_intakeRobot != null) continue; // MV-775: the hatch only fits one robot at a time
                 if (DistanceToHatchFace(r) > ArriveTolerance) continue;
+                // MV-809: never consume a robot this box can't at least give back — see
+                // EnemySpawner.HasRoomForReplicatorIntake's reservation contract. The robot stays
+                // right where it arrived (still in _seeking) until room frees up.
+                if (!EnemySpawner.HasRoomForReplicatorIntake()) continue;
 
                 // At the hatch: hand its position over to the Intake beat rather than despawning it
                 // here outright — TickIntake is what actually draws it in and despawns it.
@@ -313,15 +317,29 @@ namespace MaxWorlds.Factories
 
                 if (!firstEmitted && timer >= CycleSeconds)
                 {
+                    // MV-809: spend the held reservation FIRST so this guaranteed replacement's own
+                    // room check (inside SpawnExact) sees the slot as free rather than double-counting
+                    // it against itself. HasRoomForReplicatorIntake already proved this always fits.
+                    EnemySpawner.ReleaseReplicatorReservation();
                     _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
                     firstEmitted = true;
                 }
 
                 if (firstEmitted && timer >= CycleSeconds + EmitStaggerSeconds)
                 {
+                    // MV-809: the second twin is opportunistic, never guaranteed — only spawns if
+                    // genuine room exists beyond what's already reserved elsewhere. Measured via
+                    // Emitted (monotonic, this spawner only) rather than assuming success, since
+                    // SpawnExact silently emits 0 when GlobalHasRoom is false.
+                    int emittedBefore = _spawner.Emitted;
                     _spawner.SpawnExact(p.Kind, 1, TwinNoReplicateSeconds);
-                    capacity = Mathf.Max(0, capacity - 1);
-                    _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
+                    if (_spawner.Emitted > emittedBefore)
+                    {
+                        // Capacity is spent only when the cycle actually gave back the full pair — a
+                        // cycle that could only manage the guaranteed replacement must not burn it.
+                        capacity = Mathf.Max(0, capacity - 1);
+                        _emitFlashTimer = TwinFlashSeconds; // MV-693 Reads: the twin flash, seeded here
+                    }
                     _pending.RemoveAt(i);
                     continue;
                 }
@@ -357,6 +375,11 @@ namespace MaxWorlds.Factories
             // Fully drawn in: gone, and the pair it becomes starts its Cycle beat now.
             EnemyKind kind = r.Kind;
             r.Despawn();
+            // MV-809: hold the slot this robot just vacated until the Cycle beat's first emission
+            // spends it (see TickConsumption's pending loop below) — otherwise an ordinary spawn (or
+            // another Replicator) could fill it during the 3 s Cycle beat, and this box's own
+            // "always return at least what it consumed" guarantee would have nothing left to spend.
+            EnemySpawner.ReserveReplicatorSlot();
             _intakeRobot = null;
             _pending.Add(new PendingEmission(kind, 0f, firstEmitted: false));
         }
@@ -396,6 +419,11 @@ namespace MaxWorlds.Factories
         private void OnDestroyed()
         {
             // A robot mid-consume when the box dies is destroyed WITH it — no emission (MV-706 change 5).
+            // MV-809: any not-yet-first-emitted entry is still holding its reservation — release it
+            // here or that slot leaks out of the global budget forever, since nothing else ever spends
+            // a reservation whose owning box no longer exists to reach the Cycle beat's emission.
+            for (int i = 0; i < _pending.Count; i++)
+                if (!_pending[i].FirstEmitted) EnemySpawner.ReleaseReplicatorReservation();
             _pending.Clear();
 
             // A robot still walking toward a box that no longer exists resumes chasing Max instead of
