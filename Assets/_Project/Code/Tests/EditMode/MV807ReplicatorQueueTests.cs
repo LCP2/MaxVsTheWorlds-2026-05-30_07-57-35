@@ -96,18 +96,34 @@ namespace MaxWorlds.Tests.EditMode
             _playerGo = new GameObject("Player") { tag = "Player" };
             _playerGo.transform.position = RigOrigin + new Vector3(0f, 0f, 50f); // well outside the 7 m melee exclusion
 
+            // MV-811: pad the field so its 25%-of-active-robots seeking ceiling doesn't interfere with
+            // this test's own two-deep queue coverage — 8 live robots total gives a ceiling of 2
+            // (Mathf.Max(1, Mathf.FloorToInt(8 * 0.25f))). Placed far outside LureRadius so they're
+            // never themselves eligible to be lured.
+            for (int i = 0; i < 4; i++)
+                NewRobot(RigOrigin + new Vector3(1000f + i, 0f, 1000f));
+
             var robots = new RobotEnemy[4];
             for (int i = 0; i < 4; i++)
                 robots[i] = NewRobot(RigOrigin + new Vector3(4f + i * 2f, 0f, 6f)); // all within the 16 m lure radius
 
+            // --- MV-811 change 4: an empty box lures one robot, not two — the first TickLure only
+            // fills slot 0. ---
+            replicator.TickLure();
+
+            Assert.AreEqual(1, CountSeeking(robots),
+                "an empty box must lure exactly one robot, not two, in a single TickLure (MV-811)");
+            Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, robots[0].Current,
+                "the first eligible robot scanned must take the queue's first slot");
+
+            // --- Slot 1 only opens once slot 0 has actually arrived there (MV-811 change 4). ---
+            robots[0].transform.position = robots[0].ReplicatorSeekTarget;
             replicator.TickLure();
 
             Assert.AreEqual(2, CountSeeking(robots),
                 "a queue two deep must lure exactly two of the four eligible robots, never all four");
 
             RobotEnemy slot0 = robots[0], slot1 = robots[1];
-            Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, slot0.Current,
-                "the first eligible robot scanned must take the queue's first slot");
             Assert.AreEqual(RobotEnemy.State.ReplicatorSeeking, slot1.Current,
                 "the second eligible robot scanned must take the queue's second slot");
             Assert.AreNotEqual(RobotEnemy.State.ReplicatorSeeking, robots[2].Current,
@@ -123,7 +139,9 @@ namespace MaxWorlds.Tests.EditMode
                 "a queued robot's target must be its own slot, never the hatch itself");
 
             // --- Consume the slot-0 robot fully (so "seeking" below can only mean "still queued"),
-            // then re-run the lure: the queue must close up AND refill. ---
+            // then re-run the lure: the queue must close up. It does NOT immediately refill this same
+            // tick (MV-811 change 4) — the promoted robot has been RE-TARGETED onto slot 0 but hasn't
+            // physically arrived there yet. ---
             Vector3 slot0Target = slot0.ReplicatorSeekTarget;
             slot0.transform.position = slot0Target;
             replicator.TickConsumption(Replicator.IntakeSeconds + 0.01f);
@@ -132,10 +150,18 @@ namespace MaxWorlds.Tests.EditMode
 
             replicator.TickLure();
 
-            Assert.AreEqual(2, CountSeeking(robots),
-                "once slot 0 empties, the lure must refill it — exactly two robots must again be queued");
+            Assert.AreEqual(1, CountSeeking(robots),
+                "the promoted robot hasn't arrived at its new slot 0 yet, so the box must not add a " +
+                "third robot this same tick (MV-811 change 4)");
             Assert.AreEqual(slot0Target, slot1.ReplicatorSeekTarget,
                 "the robot formerly at slot 1 must be promoted onto slot 0's own position, re-targeted the same tick it advances");
+
+            // --- Once the promoted robot actually reaches slot 0, the next TickLure refills slot 1. ---
+            slot1.transform.position = slot1.ReplicatorSeekTarget;
+            replicator.TickLure();
+
+            Assert.AreEqual(2, CountSeeking(robots),
+                "once the promoted robot arrives at slot 0, the lure must refill slot 1 — exactly two robots must again be queued");
         }
     }
 }

@@ -66,6 +66,28 @@ namespace MaxWorlds.Factories
         /// this is what keeps two queued robots from ever being steered at the same point.</summary>
         public const float QueueSlotSpacing = 1.2f;
 
+        /// <summary>MV-811: longest a lured robot may spend walking to its slot before it gives up —
+        /// the release valve for one that can't physically reach it (a jam, a wall, a route dead-end).
+        /// Checked by <see cref="RobotEnemy"/>'s own seeking tick, not here — this box only cares that
+        /// a robot which times out gets dropped from its queue on the next <see cref="TickConsumption"/>
+        /// pass, same as any other robot that's stopped seeking.</summary>
+        public const float LureTimeoutSeconds = 6f;
+
+        /// <summary>MV-811: how long a robot that timed out waiting refuses to immediately re-queue at
+        /// the same box. Same number as <see cref="TwinNoReplicateSeconds"/>, kept as its own named
+        /// constant since the two are conceptually different triggers that just happen to share a
+        /// duration.</summary>
+        public const float LureTimeoutNoReplicateSeconds = 8f;
+
+        /// <summary>MV-811: at most this fraction of the currently live robots, field-wide, may be in
+        /// <see cref="RobotEnemy.State.ReplicatorSeeking"/> at once — see
+        /// <see cref="RobotEnemy.ReplicatorSeekingCount"/> and <see cref="TickLure"/>'s own ceiling
+        /// check. Without this, MV-798's wider 16 m lure radius plus every box on a world authoring its
+        /// own two-deep queue could park most of the field's population out of the fight at once (up to
+        /// 22 of 24 on Lee's own build) — Change 1/2 (below) fix the immediate freeze; this is what
+        /// stops the same shape re-appearing at a bigger scale.</summary>
+        public const float MaxSeekingFraction = 0.25f;
+
         /// <summary>MV-775 Intake beat: seconds a consumed robot spends being drawn from its arrival
         /// point at the hatch's own arrive gate to the hatch mouth itself, before it is despawned into
         /// the Cycle beat. This is what keeps the robot's resolved position at the moment of removal
@@ -338,6 +360,28 @@ namespace MaxWorlds.Factories
             if (!IsAlive || capacity <= 0) return;
             if (_queue.Count >= MaxQueueSlots) return; // MV-807: a full queue lures nobody
 
+            // MV-811 change 5: a field-wide ceiling — at most MaxSeekingFraction of the currently live
+            // robots may be seeking at once. Max(1, ...) rather than a bare fraction: with only a
+            // handful of robots alive, a strict 25% floors to 0 and would forbid luring anyone at all —
+            // this ceiling exists to stop a large field from being parked wholesale, not to block the
+            // ordinary single-robot case a small population is.
+            int seekingCeiling = Mathf.Max(1, Mathf.FloorToInt(RobotEnemy.ActiveCount * MaxSeekingFraction));
+            if (RobotEnemy.ReplicatorSeekingCount >= seekingCeiling) return; // would cross the ceiling — lure nobody this tick
+
+            // MV-811 change 4: an empty box lures one robot, not two — slot 1 only opens once slot 0 is
+            // occupied by a robot that has actually arrived there, so a box never commits to serving a
+            // second robot it can't get to soon.
+            int queueCap = MaxQueueSlots;
+            if (_queue.Count == 0)
+            {
+                queueCap = 1;
+            }
+            else if (_queue.Count == 1)
+            {
+                bool slot0Arrived = HorizontalDistance(_queue[0].transform.position, QueueSlotPosition(0)) <= ArriveTolerance;
+                queueCap = slot0Arrived ? MaxQueueSlots : _queue.Count;
+            }
+
             if (_target == null)
             {
                 var p = GameObject.FindGameObjectWithTag("Player");
@@ -345,7 +389,7 @@ namespace MaxWorlds.Factories
             }
 
             IReadOnlyList<RobotEnemy> active = RobotEnemy.Active;
-            for (int i = 0; i < active.Count && _queue.Count < MaxQueueSlots; i++)
+            for (int i = 0; i < active.Count && _queue.Count < queueCap; i++)
             {
                 RobotEnemy r = active[i];
                 if (r == null || !r.IsAlive || r.IsDormant) continue;
@@ -365,8 +409,10 @@ namespace MaxWorlds.Factories
                 float distToMe = Vector3.Distance(r.transform.position, transform.position);
                 if (distToMe > LureRadius) continue;
 
-                // The 4 m rule: a robot already close enough to Max to be fighting him is never pulled
-                // off — checked at selection time only, never re-checked once seeking has started.
+                // The 7 m rule (MV-798): a robot already close enough to Max to be fighting him is never
+                // pulled off. MV-811: this is still only the SELECTION screen — RobotEnemy's own seeking
+                // tick re-checks the same radius every tick afterward, so a robot that closes on Max
+                // mid-walk-to-the-hatch is pulled back too, not just one that was already close here.
                 if (_target != null &&
                     Vector3.Distance(r.transform.position, _target.position) <= MaxMeleeExclusionRadius)
                     continue;
