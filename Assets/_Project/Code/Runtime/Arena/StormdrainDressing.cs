@@ -211,12 +211,13 @@ namespace MaxWorlds.Arena
 
             PumpHousingsAlive = pumpHousings;
 
-            int tiles = DressSludge(root, map);
+            var channelRects = new List<Rect>();
+            int tiles = DressSludge(root, map, channelRects);
 
             // MV-799: hazard bulkheads must build (and add to fittings) BEFORE the floor composition
             // post-pass runs, or a gate/outfall's own light would never lighten the bays around it.
             DressHazardBulkheads(root, host, map, fittings);
-            DressFloorComposition(root, map, fittings);
+            DressFloorComposition(root, map, fittings, channelRects);
             LowerMapFloor(host);
 
             return new DressReport(kerbs, pipes, lamps, soffits, coverProps, tiles, kinds.Count);
@@ -409,7 +410,8 @@ namespace MaxWorlds.Arena
         /// panel joints (change 2), and silt/standing-water stains (change 4) — skipped for a
         /// <see cref="MapZone.level"/> &gt; 0 zone (a deck overlay shares its target's floor, MV-697, so
         /// it never gets a second pass of it).</summary>
-        private static void DressFloorComposition(Transform root, MapData map, List<Fitting> fittings)
+        private static void DressFloorComposition(Transform root, MapData map, List<Fitting> fittings,
+                                                   IReadOnlyList<Rect> channelRects)
         {
             if (map.zones == null) return;
 
@@ -423,7 +425,7 @@ namespace MaxWorlds.Arena
                 if (zone == null || zone.level > 0) continue;
                 Rect zoneRect = zone.Footprint;
 
-                foreach (Bay bay in BayRects(zoneRect, zone.id))
+                foreach (Bay bay in BayRects(zoneRect, zone.id, channelRects))
                 {
                     // MV-799: the floor itself carries the lighting — a bay's authored tone is only the
                     // starting point, scaled by how close it sits to a fitting.
@@ -484,8 +486,14 @@ namespace MaxWorlds.Arena
         /// than a world-anchored grid that could clip a partial row/column at the zone edge. Each bay's
         /// tone and crack are both a hash of the bay's own grid coordinates AND the zone's id, so two
         /// zones never tile identically — never <see cref="UnityEngine.Random"/>, so the same map always
-        /// casts the same bays.</summary>
-        public static List<Bay> BayRects(Rect zone, string zoneId)
+        /// casts the same bays.
+        ///
+        /// <paramref name="channelObstacles"/> (MV-801) is the rect list of channel-eligible sludge
+        /// footprints only — NOT <see cref="FloorObstacles"/>'s full Grate/Deck/Ramp/Hatch/Sludge set,
+        /// which also holds every flat (non-channel) sludge rect. A flat sludge tile keeps its floor
+        /// exactly as it was before this ticket (its ooze sits ON the bay grid, unchanged); only a
+        /// channel gets its floor genuinely cut, so only channel rects may drop a bay here.</summary>
+        public static List<Bay> BayRects(Rect zone, string zoneId, IReadOnlyList<Rect> channelObstacles = null)
         {
             var result = new List<Bay>();
             int cols = Mathf.FloorToInt(zone.width / BayPitch);
@@ -501,6 +509,8 @@ namespace MaxWorlds.Arena
                 {
                     var rect = new Rect(zone.xMin + col * BayPitch + BayInset * 0.5f,
                                          zone.yMin + row * BayPitch + BayInset * 0.5f, size, size);
+
+                    if (channelObstacles != null && Overlaps(rect, channelObstacles)) continue;
 
                     float toneHash = BayHash(zoneSeed, col, row, 0);
                     Color tone = toneHash < BayDarkThreshold ? StormdrainKit.GroundDry
@@ -772,7 +782,7 @@ namespace MaxWorlds.Arena
         /// rather than disagreeing with it.</summary>
         private const string OutfallGateId = "outfall";
 
-        private static int DressSludge(Transform root, MapData map)
+        private static int DressSludge(Transform root, MapData map, List<Rect> channelRects)
         {
             if (map.entities == null) return 0;
 
@@ -789,11 +799,35 @@ namespace MaxWorlds.Arena
                 Vector3 center = new Vector3(e.x, 0f, e.z);
                 Vector3 flow = SludgeFlowDirection(map, e);
 
-                StormdrainKit.DressSludgeTile(host, center, e.width, e.depth, flow, seed);
+                var sludgeRect = new Rect(e.x - e.width * 0.5f, e.z - e.depth * 0.5f, e.width, e.depth);
+                MapZone zone = map.ZoneAt(e.x, e.z);
+                bool isChannel = zone != null && IsChannelEligible(sludgeRect, zone.Footprint);
+                if (isChannel) channelRects.Add(sludgeRect);
+
+                StormdrainKit.DressSludgeTile(host, center, e.width, e.depth, flow, seed, isChannel);
                 tiles++;
             }
 
             return tiles;
+        }
+
+        /// <summary>MV-801, "the second thing the level forces" — computed from the rect itself rather
+        /// than a hand-authored id list, so a level change re-derives the answer instead of drifting
+        /// from a table someone forgot to update. Against <c>world2_config.json</c> this gives a
+        /// channel for 17 of the 20 authored sludge rects and leaves <c>a8</c> (10 x 10, a sump basin —
+        /// its narrower dimension fails the 8 m test) and <c>a14</c>/<c>a18</c> (whole-area floods) flat.
+        /// A blocking trough is not on the table for ANY of these: <c>a14</c> is 44 x 12 with a
+        /// 44 x 12 sludge rect, <c>a18</c> is 26 x 26 with a 26 x 26 rect, and <c>a23</c>'s four rects
+        /// ring the arena — a collider here would either be impossible to route around or moat the
+        /// interior shut, which is exactly why this ticket is visual-only.</summary>
+        private const float ChannelMaxNarrowDimension = 8f;
+
+        private static bool IsChannelEligible(Rect sludgeRect, Rect zoneRect)
+        {
+            float narrower = Mathf.Min(sludgeRect.width, sludgeRect.height);
+            bool coversWholeArea = sludgeRect.width >= zoneRect.width - 0.01f
+                                 && sludgeRect.height >= zoneRect.height - 0.01f;
+            return narrower <= ChannelMaxNarrowDimension && !coversWholeArea;
         }
 
         /// <summary>MV-792: a rect's own shape, not a lookup that can fail, gives the flow AXIS — the

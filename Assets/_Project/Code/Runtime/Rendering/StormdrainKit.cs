@@ -226,6 +226,25 @@ namespace MaxWorlds.Rendering
         /// <summary>MV-802, change 3: the floor-level main a "pipe"-dressed cover piece resolves to.</summary>
         public const float FloorMainRadius = 0.40f;
 
+        /// <summary>MV-801, "Stormdrain Pass 4" review, approved by Lee 2026-09-15 — a channel-eligible
+        /// sludge rect's own numbers. The trough floor sits <see cref="ChannelTroughDepth"/> below the
+        /// pre-ticket floor (not deeper: 0.62 m was tested and rejected for hiding the ooze at the 60
+        /// degree camera); the ooze SURFACE itself only drops <see cref="ChannelOozeDrop"/>, so there is
+        /// visible headroom between the ooze and the trough floor beneath it.</summary>
+        public const float ChannelTroughDepth = 0.45f;
+        public const float ChannelOozeDrop = 0.18f;
+        private const float ChannelWallThickness = 0.10f;
+        private const float ChannelLipHeight = 0.10f;
+        private const float ChannelKerbWidth = 0.44f;
+        private const float ChannelKerbHeight = 0.20f;
+
+        private const float ChannelCrossingSpacingMin = 8f;
+        private const float ChannelCrossingSpacingMax = 12f;
+        private const float ChannelCrossingWidth = 1.5f;
+        private const float ChannelCrossingOverhang = 0.6f;
+        private const float ChannelCrossingSlatPitch = 0.34f;
+        private const float ChannelCrossingPostHeight = 0.75f;
+
         // ---------------------------------------------------------------- primitives
 
         /// <summary>A collider-free box in a flat tinted material. Every piece below is made of these
@@ -1113,7 +1132,7 @@ namespace MaxWorlds.Rendering
         /// chevrons and bands are for, and why this is dressing and not decoration.
         /// </summary>
         public static SludgeFlowRig DressSludgeTile(Transform parent, Vector3 center, float width, float depth,
-                                                     Vector3 flowDirection, int seed)
+                                                     Vector3 flowDirection, int seed, bool isChannel = false)
         {
             var root = new GameObject("Sludge Dressing");
             root.transform.SetParent(parent, false);
@@ -1288,7 +1307,137 @@ namespace MaxWorlds.Rendering
                 BuildReedCluster(root.transform, at, seed + i);
             }
 
+            // MV-801: the trough is cut and dressed at the tile's own pre-ticket floor level — it must
+            // NOT ride down with the ooze surface below, or the trough floor and the ooze would end up
+            // at the same depth. Built as a CHILD of `root` (MV-755's own per-tile chevron check walks
+            // "Sludge"'s direct children expecting each one to be a whole dressed tile, so a sibling
+            // object here would read as a tile with no chevron) with a local Y offset that cancels the
+            // shift `root` itself is about to take below — its resolved WORLD position ends up exactly
+            // where it would have been had `root` never moved.
+            if (isChannel)
+            {
+                BuildChannelTrough(root.transform, width, depth, flow, seed);
+                root.transform.position += Vector3.down * ChannelOozeDrop;
+            }
+
             return rig;
+        }
+
+        // ---------------------------------------------------------------- channel trough (MV-801)
+
+        /// <summary>The trough a channel-eligible sludge rect gets (MV-801, change 2, 4 and 5): a sunk
+        /// floor slab, two banks (a wall down to it capped by a dark lip just under the old floor line),
+        /// a kerb outboard of each lip, and grate-plank crossings along the dry route across it. Parented
+        /// under the tile's own <paramref name="root"/> at local Y = <see cref="ChannelOozeDrop"/> — the
+        /// caller drops <paramref name="root"/> by that same amount immediately after this call returns,
+        /// so this structure's resolved WORLD position lands back on the tile's pre-ticket floor datum,
+        /// never offset by the ooze surface built above it in <see cref="DressSludgeTile"/>.</summary>
+        private static void BuildChannelTrough(Transform root, float width, float depth, Vector3 flow, int seed)
+        {
+            bool alongZ = Mathf.Abs(Vector3.Dot(flow, Vector3.forward)) > 0.5f;
+
+            var trough = new GameObject("Channel Trough").transform;
+            trough.SetParent(root, false);
+            trough.localPosition = Vector3.up * ChannelOozeDrop;
+            root = trough;
+
+            Box(root, "Trough Floor", Vector3.up * (-ChannelTroughDepth - 0.05f),
+                new Vector3(width, 0.10f, depth), GroundDry);
+
+            float wallY = -ChannelTroughDepth * 0.5f;
+            float lipY = -ChannelLipHeight * 0.5f;
+            float kerbY = ChannelKerbHeight * 0.5f;
+
+            if (alongZ)
+            {
+                Box(root, "Trough Wall A", new Vector3(width * 0.5f, wallY, 0f),
+                    new Vector3(ChannelWallThickness, ChannelTroughDepth, depth), GroundDry);
+                Box(root, "Trough Wall B", new Vector3(-width * 0.5f, wallY, 0f),
+                    new Vector3(ChannelWallThickness, ChannelTroughDepth, depth), GroundDry);
+
+                Box(root, "Trough Lip A", new Vector3(width * 0.5f, lipY, 0f),
+                    new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
+                Box(root, "Trough Lip B", new Vector3(-width * 0.5f, lipY, 0f),
+                    new Vector3(ChannelWallThickness * 1.3f, ChannelLipHeight, depth), Soffit);
+
+                Box(root, "Channel Kerb A", new Vector3(width * 0.5f + ChannelKerbWidth * 0.5f, kerbY, 0f),
+                    new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth), KerbConcrete);
+                Box(root, "Channel Kerb B", new Vector3(-width * 0.5f - ChannelKerbWidth * 0.5f, kerbY, 0f),
+                    new Vector3(ChannelKerbWidth, ChannelKerbHeight, depth), KerbConcrete);
+            }
+            else
+            {
+                Box(root, "Trough Wall A", new Vector3(0f, wallY, depth * 0.5f),
+                    new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
+                Box(root, "Trough Wall B", new Vector3(0f, wallY, -depth * 0.5f),
+                    new Vector3(width, ChannelTroughDepth, ChannelWallThickness), GroundDry);
+
+                Box(root, "Trough Lip A", new Vector3(0f, lipY, depth * 0.5f),
+                    new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
+                Box(root, "Trough Lip B", new Vector3(0f, lipY, -depth * 0.5f),
+                    new Vector3(width, ChannelLipHeight, ChannelWallThickness * 1.3f), Soffit);
+
+                Box(root, "Channel Kerb A", new Vector3(0f, kerbY, depth * 0.5f + ChannelKerbWidth * 0.5f),
+                    new Vector3(width, ChannelKerbHeight, ChannelKerbWidth), KerbConcrete);
+                Box(root, "Channel Kerb B", new Vector3(0f, kerbY, -depth * 0.5f - ChannelKerbWidth * 0.5f),
+                    new Vector3(width, ChannelKerbHeight, ChannelKerbWidth), KerbConcrete);
+            }
+
+            BuildChannelCrossings(root, width, depth, alongZ, seed);
+        }
+
+        /// <summary>Grate-plank crossings (MV-801, change 5) — every
+        /// <see cref="ChannelCrossingSpacingMin"/>-<see cref="ChannelCrossingSpacingMax"/> m along the
+        /// channel, and at least one however short the channel is (a floor of 1, same idiom
+        /// <see cref="DressWallFace"/>'s own bulkhead-lamp count already uses). Each plank is
+        /// <see cref="ChannelCrossingWidth"/> wide along the direction of travel, spans the channel's
+        /// full width plus <see cref="ChannelCrossingOverhang"/> each side, slatted crosswise at
+        /// <see cref="ChannelCrossingSlatPitch"/>, with a rust handrail post at each of its four
+        /// corners. Dressing only — no collider, same contract every other piece in this kit keeps, so
+        /// this never changes where anything can walk.</summary>
+        private static void BuildChannelCrossings(Transform root, float width, float depth, bool alongZ, int seed)
+        {
+            float run = alongZ ? depth : width;
+            float span = alongZ ? width : depth;
+            float crossSpan = span + ChannelCrossingOverhang * 2f;
+
+            float spacing = Mathf.Lerp(ChannelCrossingSpacingMin, ChannelCrossingSpacingMax,
+                Frac(seed * 0.8123f));
+            int count = Mathf.Max(1, Mathf.FloorToInt(run / spacing));
+
+            for (int i = 0; i < count; i++)
+            {
+                float t = (i + 0.5f) / count;
+                float along = (t - 0.5f) * run;
+
+                var plank = new GameObject($"Crossing{i}").transform;
+                plank.SetParent(root, false);
+                plank.localPosition = alongZ ? new Vector3(0f, 0f, along) : new Vector3(along, 0f, 0f);
+
+                int slats = Mathf.Max(1, Mathf.RoundToInt(ChannelCrossingWidth / ChannelCrossingSlatPitch));
+                for (int s = 0; s < slats; s++)
+                {
+                    float slatOffset = ((s + 0.5f) / slats - 0.5f) * ChannelCrossingWidth;
+                    Vector3 slatLocal = alongZ ? new Vector3(0f, 0f, slatOffset) : new Vector3(slatOffset, 0f, 0f);
+                    Vector3 slatSize = alongZ
+                        ? new Vector3(crossSpan, 0.05f, ChannelCrossingSlatPitch * 0.8f)
+                        : new Vector3(ChannelCrossingSlatPitch * 0.8f, 0.05f, crossSpan);
+                    Box(plank, $"Slat{s}", slatLocal, slatSize, RustDark, SurfaceKind.Metal);
+                }
+
+                for (int corner = 0; corner < 4; corner++)
+                {
+                    float alongSign = corner < 2 ? -1f : 1f;
+                    float crossSign = corner % 2 == 0 ? -1f : 1f;
+                    float postAlong = alongSign * ChannelCrossingWidth * 0.5f;
+                    float postCross = crossSign * crossSpan * 0.5f;
+                    Vector3 postLocal = alongZ
+                        ? new Vector3(postCross, ChannelCrossingPostHeight * 0.5f, postAlong)
+                        : new Vector3(postAlong, ChannelCrossingPostHeight * 0.5f, postCross);
+                    Box(plank, $"Post{corner}", postLocal,
+                        new Vector3(0.08f, ChannelCrossingPostHeight, 0.08f), Rust, SurfaceKind.Metal);
+                }
+            }
         }
 
         /// <summary>A foam clump (MV-785) — the same flat, per-segment-jittered "Blob" every other
